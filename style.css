@@ -1,9 +1,347 @@
-body {
-  font-family: system-ui, sans-serif;
-  margin: 24px;
-  color: #101418;
+/* ==========================================================
+   Alpine Draft Room — stylesheet
+   Colours are defined once here, at the top, and reused
+   everywhere below by name. Change one line, change the
+   whole site.
+   ========================================================== */
+
+:root {
+  --navy:        #101C36;
+  --navy-soft:   #22314F;
+  --blue:        #2C6BED;
+  --blue-dark:   #1D53C4;
+  --blue-pale:   #EAF1FE;
+
+  --ink:         #16202C;
+  --ink-mid:     #5A6875;
+  --ink-light:   #94A1AC;
+
+  --page:        #F5F7FA;
+  --card:        #FFFFFF;
+  --line:        #E4E9EF;
+
+  --qb-bg:#FBE1E5;  --qb-fg:#B02A37;
+  --rb-bg:#D7EBF8;  --rb-fg:#15618F;
+  --wr-bg:#D9F2E1;  --wr-fg:#1B7343;
+  --te-bg:#FCEBD5;  --te-fg:#95580F;
+  --k-bg:#E9E2F8;   --k-fg:#59409F;
+  --dst-bg:#E2E8ED; --dst-fg:#46555F;
 }
-h1 { font-size: 22px; }
-table { border-collapse: collapse; width: 100%; max-width: 560px; }
-th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #e3e7ea; }
-th { font-size: 12px; text-transform: uppercase; color: #69747c; }
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--ink);
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 15px;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------- sticky header ---------- */
+
+.appbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--navy);
+  color: #fff;
+}
+
+.helmet {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--navy-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: Poppins, sans-serif;
+  font-weight: 700;
+  font-size: 18px;
+  color: #8FA6CC;
+}
+
+.appbar-text h1 {
+  margin: 0;
+  font-family: Poppins, sans-serif;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.appbar-text p {
+  margin: 1px 0 0;
+  font-size: 12.5px;
+  color: #9FB0CC;
+}
+
+.appbar-right {
+  margin-left: auto;
+  text-align: right;
+}
+
+.count-label {
+  display: block;
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #7B8FB2;
+  font-weight: 600;
+}
+
+.count-value {
+  display: block;
+  font-family: Poppins, sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+/* ---------- tab bar ---------- */
+
+.tabs {
+  position: sticky;
+  top: 64px;
+  z-index: 19;
+  display: flex;
+  gap: 6px;
+  padding: 10px 12px;
+  background: var(--card);
+  border-bottom: 1px solid var(--line);
+  overflow-x: auto;
+}
+
+.tabs button {
+  flex: none;
+  font-family: Inter, sans-serif;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink-mid);
+  background: none;
+  border: 0;
+  border-radius: 999px;
+  padding: 8px 16px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tabs button.on {
+  background: var(--blue);
+  color: #fff;
+}
+
+/* ---------- panels ---------- */
+
+.panel { display: none; padding: 14px 12px 40px; }
+.panel.on { display: block; }
+
+/* ---------- toolbar + filters ---------- */
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13.5px;
+  color: var(--ink-mid);
+  cursor: pointer;
+}
+
+.check input { width: 16px; height: 16px; accent-color: var(--blue); }
+
+.pos-filter {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 12px;
+  overflow-x: auto;
+}
+
+.pos-filter button {
+  flex: none;
+  font-family: Inter, sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-mid);
+  background: none;
+  border: 0;
+  padding: 7px 12px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+
+.pos-filter button.on {
+  color: var(--blue);
+  border-bottom-color: var(--blue);
+}
+
+/* ---------- player table ---------- */
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+th {
+  text-align: left;
+  font-size: 9.5px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-light);
+  font-weight: 700;
+  padding: 10px 12px;
+  background: #FAFBFC;
+  border-bottom: 1px solid var(--line);
+}
+
+td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #F1F4F7;
+  vertical-align: middle;
+}
+
+tr:last-child td { border-bottom: 0; }
+
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+th.num { text-align: right; }
+
+.nm {
+  display: block;
+  font-weight: 600;
+  font-size: 14.5px;
+  line-height: 1.25;
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--ink-mid);
+}
+
+/* position badges */
+.badge {
+  display: inline-block;
+  min-width: 30px;
+  text-align: center;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.badge.QB  { background: var(--qb-bg);  color: var(--qb-fg); }
+.badge.RB  { background: var(--rb-bg);  color: var(--rb-fg); }
+.badge.WR  { background: var(--wr-bg);  color: var(--wr-fg); }
+.badge.TE  { background: var(--te-bg);  color: var(--te-fg); }
+.badge.K   { background: var(--k-bg);   color: var(--k-fg); }
+.badge.DST { background: var(--dst-bg); color: var(--dst-fg); }
+
+.draft-btn {
+  font-family: Inter, sans-serif;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--blue);
+  border: 0;
+  border-radius: 6px;
+  padding: 7px 14px;
+  cursor: pointer;
+}
+
+.draft-btn:hover { background: var(--blue-dark); }
+
+/* a drafted row fades out but stays visible */
+tr.drafted { background: #FAFBFC; }
+tr.drafted .nm { color: var(--ink-light); text-decoration: line-through; }
+tr.drafted .meta, tr.drafted .num { opacity: 0.45; }
+tr.drafted .draft-btn {
+  background: #EDF0F3;
+  color: var(--ink-light);
+  cursor: default;
+}
+
+/* ---------- empty states ---------- */
+
+.empty {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 56px 24px;
+  text-align: center;
+}
+
+.empty-icon { font-size: 26px; color: #D3DAE2; }
+.empty-title { margin: 12px 0 4px; font-weight: 600; font-size: 15px; }
+.empty-sub { margin: 0 auto; max-width: 34ch; font-size: 13px; color: var(--ink-mid); line-height: 1.5; }
+
+/* ---------- roster ---------- */
+
+.section-label {
+  margin: 4px 0 8px;
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-light);
+  font-weight: 700;
+}
+
+.roster {
+  list-style: none;
+  margin: 0 0 22px;
+  padding: 0;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.roster li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 12px;
+  border-bottom: 1px solid #F1F4F7;
+}
+
+.roster li:last-child { border-bottom: 0; }
+
+.slot {
+  flex: none;
+  width: 46px;
+  text-align: center;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--ink-mid);
+  background: #F0F3F6;
+  border-radius: 5px;
+  padding: 5px 0;
+}
+
+.slot.bn { color: var(--ink-light); }
+
+.skeleton {
+  flex: 1;
+  height: 9px;
+  max-width: 190px;
+  border-radius: 5px;
+  background: #EDF1F5;
+}
