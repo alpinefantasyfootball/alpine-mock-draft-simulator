@@ -1,0 +1,9 @@
+body {
+  font-family: system-ui, sans-serif;
+  margin: 24px;
+  color: #101418;
+}
+h1 { font-size: 22px; }
+table { border-collapse: collapse; width: 100%; max-width: 560px; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #e3e7ea; }
+th { font-size: 12px; text-transform: uppercase; color: #69747c; }
