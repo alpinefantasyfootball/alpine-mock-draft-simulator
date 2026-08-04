@@ -24,6 +24,11 @@ const RULED_OUT = ["O", "IR", "SUS", "NFI", "DNR"];
 // Available, but carrying real risk. Everyone drafts them later.
 const RISKY = ["D", "PUP"];
 
+// Same idea as REPLACEMENT below, but used by the projection maths,
+// which has to run before the analysis section is reached.
+const REPLACEMENT_LEVEL = { QB: 11, RB: 25, WR: 28, TE: 11, K: 11, DST: 11 };
+const REPLACEMENT_PTS = {};
+
 const CPU_NAMES = [
   "Wild Goose Chase", "Bijan Mustard", "Nacua Matata", "The Gibbs Ultimatum",
   "Kupp of Joe", "Purdy Vacant", "Hurts So Good", "Saquon For The Team",
@@ -367,6 +372,105 @@ function suggestions() {
 }
 
 
+/* ---- 10a. Player stats and draft signals ---------------
+
+   Everything here is computed, not asserted. There is no
+   panel of experts behind it: it is projections, depth chart
+   position, age and injury status, weighted and shown.     */
+
+function statOf(player) {
+  if (typeof PLAYER_STATS === "undefined" || !player.id) return null;
+  return PLAYER_STATS[player.id] || null;
+}
+
+// Projected points under Alpine scoring, and each player's rank at
+// their position by projection rather than by ADP.
+(function buildProjections() {
+  board.forEach(function (p) {
+    const s = statOf(p);
+    // A projection of zero means Sleeper has no real forecast, not that the
+    // player will score nothing. Treating it as valid would drag replacement
+    // level toward zero and make every other player look elite.
+    p.projPts = s && s.p && s.p.pts > 0 ? s.p.pts : null;
+  });
+
+  Object.keys(REPLACEMENT_LEVEL).forEach(function (pos) {
+    const ranked = board
+      .filter((p) => p.pos === pos && p.projPts !== null)
+      .sort((a, b) => b.projPts - a.projPts);
+
+    ranked.forEach(function (p, i) { p.projPosRank = i + 1; });
+
+    const cut = Math.min(REPLACEMENT_LEVEL[pos], ranked.length) - 1;
+    REPLACEMENT_PTS[pos] = cut >= 0 && ranked[cut] ? ranked[cut].projPts : 0;
+    if (ranked.length < REPLACEMENT_LEVEL[pos] && ranked.length) {
+      REPLACEMENT_PTS[pos] = ranked[ranked.length - 1].projPts;
+    }
+  });
+})();
+
+function label(score) {
+  return score >= 75 ? "Very High" : score >= 55 ? "High"
+       : score >= 35 ? "Medium"    : score >= 18 ? "Low" : "Very Low";
+}
+
+function draftSignals(player) {
+  const s = statOf(player);
+  if (!s || player.projPts === null) return null;
+
+  const reasons = { overall: [], upside: [], bust: [] };
+
+  // ---- Overall: value over a replacement starter, in your scoring ----
+  const vor = player.projPts - (REPLACEMENT_PTS[player.pos] || 0);
+  const best = Math.max.apply(null, board.map((p) =>
+    p.projPts === null ? 0 : p.projPts - (REPLACEMENT_PTS[p.pos] || 0)));
+  const overall = Math.max(0, Math.min(100, (vor / (best || 1)) * 100));
+  reasons.overall.push(Math.round(player.projPts) + " projected points, " +
+    (vor >= 0 ? "+" : "") + Math.round(vor) + " vs a replacement " + player.pos);
+
+  // How far the projections disagree with the market, at his position.
+  const gap = player.projPosRank ? (player.posRank - player.projPosRank) : 0;
+
+  // ---- Upside ----
+  let upside = 20;
+  if (gap >= 4)  { upside += Math.min(35, gap * 2.5);
+                   reasons.upside.push("projects " + player.pos + player.projPosRank +
+                     " but drafted as " + player.pos + player.posRank); }
+  if (s.exp !== undefined && s.exp <= 3) { upside += 18; reasons.upside.push(
+      s.exp === 0 ? "rookie" : s.exp + " years in the league"); }
+  if (s.order === 1) { upside += 14; reasons.upside.push("first on the depth chart"); }
+  if (s.age && s.age <= 24) { upside += 10; reasons.upside.push("age " + s.age); }
+
+  const y24 = s.s && s.s["2024"], y25 = s.s && s.s["2025"];
+  if (y24 && y25 && y24.gp >= 6 && y25.gp >= 6) {
+    const a = y24.pts / y24.gp, b = y25.pts / y25.gp;
+    if (b > a * 1.2) { upside += 15;
+      reasons.upside.push("points per game up " + Math.round((b / a - 1) * 100) + "% year on year"); }
+  }
+  upside = Math.max(0, Math.min(100, upside));
+
+  // ---- Bust ----
+  let bust = 12;
+  if (gap <= -4) { bust += Math.min(35, Math.abs(gap) * 2.5);
+                   reasons.bust.push("drafted as " + player.pos + player.posRank +
+                     " but projects only " + player.pos + player.projPosRank); }
+  if (isRuledOut(player)) { bust += 40; reasons.bust.push("ruled out"); }
+  else if (isRisky(player)) { bust += 22; reasons.bust.push("carrying a " + player.inj + " designation"); }
+  else if (player.inj) { bust += 12; reasons.bust.push(player.inj + " designation"); }
+
+  if (s.age) {
+    if (player.pos === "RB" && s.age >= 28) { bust += 20; reasons.bust.push("age " + s.age + " at running back"); }
+    else if ((player.pos === "WR" || player.pos === "TE") && s.age >= 31) { bust += 15; reasons.bust.push("age " + s.age); }
+    else if (player.pos === "QB" && s.age >= 36) { bust += 12; reasons.bust.push("age " + s.age); }
+  }
+  if (s.order && s.order >= 2) { bust += 15; reasons.bust.push("number " + s.order + " on the depth chart"); }
+  if (y25 && y25.gp > 0 && y25.gp <= 12) { bust += 14; reasons.bust.push("only " + y25.gp + " games last season"); }
+  bust = Math.max(0, Math.min(100, bust));
+
+  return { overall: overall, upside: upside, bust: bust, reasons: reasons, stats: s };
+}
+
+
 /* ---- 10b. Draft analysis -------------------------------
 
    Four components, each computed the same way for all ten
@@ -592,7 +696,7 @@ function renderSuggestions() {
       <div class="sug ${i === 0 ? "top" : ""}">
         ${avatar(p)}
         <div class="sug-body">
-          <div class="sug-name">${p.name}</div>
+          <div class="sug-name name-link" data-player="${p.name}">${p.name}</div>
           <div class="sug-meta">
             <span class="badge ${p.pos}">${p.pos}</span> ${p.team} &middot; Bye ${p.bye} ${injBadge(p)}
           </div>
@@ -617,7 +721,7 @@ function renderPlayers() {
     return `
       <tr class="${p.drafted ? "drafted" : ""} ${adpConflict(p) ? "conflict" : ""}">
         <td>
-          <span class="nm">${p.name}</span>
+          <span class="nm name-link" data-player="${p.name}">${p.name}</span>
           <span class="meta"><span class="badge ${p.pos}">${p.pos}</span> ${p.team} &middot; Bye ${p.bye} ${injBadge(p)}</span>
         </td>
         <td class="num">${p.pos}${p.posRank}</td>
@@ -688,7 +792,7 @@ function rosterRow(slotName, player, isBench) {
       <span class="slot ${isBench ? "bn" : ""}">${slotName}</span>
       ${avatar(player, true)}
       <div>
-        <div class="rname">${player.name}</div>
+        <div class="rname name-link" data-player="${player.name}">${player.name}</div>
         <div class="rmeta"><span class="badge ${player.pos}">${player.pos}</span> ${player.team} &middot; Bye ${player.bye} ${injBadge(player)}</div>
       </div>
       <span class="rpick">${pickCode(pick.overall)}</span>
@@ -719,7 +823,7 @@ function renderPicks() {
         ${avatar(pick.player, true)}
         <div>
           <div class="pick-team">${teamLabel(pick.slot)}</div>
-          <div class="pick-name">${pick.player.name}</div>
+          <div class="pick-name name-link" data-player="${pick.player.name}">${pick.player.name}</div>
           <div class="pick-meta"><span class="badge ${pick.player.pos}">${pick.player.pos}</span> ${pick.player.team} &middot; Bye ${pick.player.bye}</div>
         </div>
       </div>`;
@@ -842,6 +946,184 @@ function renderGrades() {
   body.innerHTML = html;
 }
 
+/* ---- 11b. Player detail sheet -------------------------- */
+
+let sheetPlayer = null;
+
+function meter(name, score, tone, why) {
+  const filled = Math.round(score / 20);
+  let segs = "";
+  for (let i = 0; i < 5; i++) segs += `<i class="${i < filled ? "on" : ""}"></i>`;
+  return `<div class="sig ${tone}">
+      <div class="sig-head"><b>${name}</b><span>${label(score)}</span></div>
+      <div class="sig-seg">${segs}</div>
+      ${why.length ? `<p class="sig-why">${why.join(" &middot; ")}</p>` : ""}
+    </div>`;
+}
+
+function openSheet(player) {
+  sheetPlayer = player;
+  const s = statOf(player);
+  const sig = draftSignals(player);
+
+  $("sheetHead").innerHTML = `
+    ${avatar(player)}
+    <div>
+      <h3>${player.name}</h3>
+      <div class="sub">
+        <span class="badge ${player.pos}">${player.pos}</span>
+        ${player.team} &middot; Bye ${player.bye} ${injBadge(player)}
+      </div>
+      <div class="facts">
+        ADP ${player.adp.toFixed(1)} &middot; ${player.pos}${player.posRank}
+        ${s && s.age ? " &middot; age " + s.age : ""}
+        ${s && s.exp !== undefined ? " &middot; " + (s.exp === 0 ? "rookie" : s.exp + " yrs") : ""}
+        ${s && s.depth ? " &middot; " + s.depth + (s.order ? " #" + s.order : "") : ""}
+      </div>
+    </div>
+    <button class="sheet-close" id="sheetClose">&times;</button>`;
+
+  // ---------- overview ----------
+  let overview;
+  if (!sig) {
+    overview = `<div class="nodata">No projection or stat history for this player yet.
+      The data refresh fills this in for anyone Sleeper carries.</div>`;
+  } else {
+    const p = sig.stats.p || {};
+    overview = `
+      ${meter("Overall", sig.overall, sig.overall >= 55 ? "good" : "", sig.reasons.overall)}
+      ${meter("Upside",  sig.upside,  sig.upside  >= 55 ? "good" : "", sig.reasons.upside)}
+      ${meter("Bust risk", sig.bust,  sig.bust >= 55 ? "bad" : sig.bust >= 35 ? "warn" : "", sig.reasons.bust)}
+
+      <p class="section-label">2026 projection, Alpine scoring</p>
+      <div class="statgrid">
+        <div class="statbox"><div class="k">Points</div><div class="v">${Math.round(p.pts || 0)}</div></div>
+        <div class="statbox"><div class="k">Per game</div><div class="v">${p.gp ? (p.pts / p.gp).toFixed(1) : "&mdash;"}</div></div>
+        <div class="statbox"><div class="k">Pos rank</div><div class="v">${player.projPosRank ? player.pos + player.projPosRank : "&mdash;"}</div></div>
+        <div class="statbox"><div class="k">vs ADP</div><div class="v">${player.projPosRank ? (player.posRank - player.projPosRank >= 0 ? "+" : "") + (player.posRank - player.projPosRank) : "&mdash;"}</div></div>
+      </div>
+      <p class="method">Overall is projected points above the last startable player at this position
+      in a ten-team league. Upside and bust risk weigh how far the projection disagrees with ADP,
+      plus experience, age, depth chart position, injury designation and last season's availability.
+      This is one model, not a consensus of analysts.</p>`;
+  }
+
+  // ---------- game logs ----------
+  let logs;
+  if (!s || !s.w || !s.w.length) {
+    logs = `<div class="nodata">No week-by-week logs stored for this player.</div>`;
+  } else {
+    const played = s.w.filter((g) => g.pts !== 0 || g.rc || g.ra || g.pa);
+    const avg = played.length ? played.reduce((a, g) => a + g.pts, 0) / played.length : 0;
+    const isPasser = played.some((g) => g.pa);
+    const isKickerOrDef = player.pos === "K" || player.pos === "DST";
+
+    const head = isKickerOrDef
+      ? ["Wk", "Pts", "FG", "XP", "Sack", "INT"]
+      : isPasser
+        ? ["Wk", "Pts", "Att", "Cmp", "Yds", "TD", "INT", "RuYd", "RuTD"]
+        : ["Wk", "Pts", "Tgt", "Rec", "RcYd", "RcTD", "Att", "RuYd", "RuTD"];
+
+    const rows = s.w.map(function (g) {
+      const blank = g.pts === 0 && !g.rc && !g.ra && !g.pa && !g.fg && !g.sk;
+      const cells = isKickerOrDef
+        ? [g.pts, g.fg, g.xp, g.sk, g.in]
+        : isPasser
+          ? [g.pts, g.pa, g.pc, g.py, g.pt, g.pi, g.ry, g.rt]
+          : [g.pts, g.tg, g.rc, g.cy, g.ct, g.ra, g.ry, g.rt];
+
+      const tone = blank ? "" : g.pts >= avg * 1.4 ? "hi" : g.pts <= avg * 0.5 ? "lo" : "";
+      return `<tr class="${blank ? "bye" : ""}"><td>${g.w}</td>` +
+        cells.map((v, i) => `<td class="${i === 0 ? tone : ""}">${v === undefined ? "&mdash;" : v}</td>`).join("") +
+        `</tr>`;
+    }).join("");
+
+    logs = `<p class="section-label">2025 week by week &middot; ${avg.toFixed(1)} per game played</p>
+      <table class="logtbl"><thead><tr>${head.map((h) => `<th>${h}</th>`).join("")}</tr></thead>
+      <tbody>${rows}</tbody></table>`;
+  }
+
+  // ---------- seasons ----------
+  let seasons;
+  if (!s || (!s.s && !s.p)) {
+    seasons = `<div class="nodata">No season history stored for this player.</div>`;
+  } else {
+    const years = [];
+    ["2024", "2025"].forEach(function (y) { if (s.s && s.s[y]) years.push([y, s.s[y]]); });
+    if (s.p) years.push(["2026 proj", s.p]);
+
+    const isPasser = years.some((y) => y[1].pa);
+    const head = isPasser
+      ? ["Year", "G", "Pts", "PaYd", "PaTD", "INT", "RuYd", "RuTD"]
+      : player.pos === "K" || player.pos === "DST"
+        ? ["Year", "G", "Pts", "FG", "XP", "Sack", "INT"]
+        : ["Year", "G", "Pts", "Tgt", "Rec", "RcYd", "RcTD", "RuYd", "RuTD"];
+
+    const rows = years.map(function (entry) {
+      const y = entry[1];
+      const cells = isPasser ? [y.gp, Math.round(y.pts), y.py, y.pt, y.pi, y.ry, y.rt]
+        : player.pos === "K" || player.pos === "DST" ? [y.gp, Math.round(y.pts), y.fg, y.xp, y.sk, y.in]
+        : [y.gp, Math.round(y.pts), y.tg, y.rc, y.cy, y.ct, y.ry, y.rt];
+      return `<tr><td>${entry[0]}</td>` +
+        cells.map((v) => `<td>${v === undefined ? "&mdash;" : v}</td>`).join("") + `</tr>`;
+    }).join("");
+
+    seasons = `<p class="section-label">Scored under Alpine rules, not Sleeper's defaults</p>
+      <table class="logtbl"><thead><tr>${head.map((h) => `<th>${h}</th>`).join("")}</tr></thead>
+      <tbody>${rows}</tbody></table>`;
+  }
+
+  // ---------- depth chart ----------
+  const mates = board.filter(function (other) {
+    const os = statOf(other);
+    return other.team === player.team && os && os.depth;
+  });
+
+  let depth;
+  if (!mates.length) {
+    depth = `<div class="nodata">No depth chart data for ${player.team}.</div>`;
+  } else {
+    const groups = {};
+    mates.forEach(function (m) {
+      const g = statOf(m).depth;
+      (groups[g] = groups[g] || []).push(m);
+    });
+    depth = Object.keys(groups).sort().map(function (g) {
+      const list = groups[g].sort((a, b) => (statOf(a).order || 9) - (statOf(b).order || 9));
+      return `<div class="depthcol"><h5>${g}</h5>` + list.map(function (m) {
+        return `<div class="depthrow ${m === player ? "self" : ""}">
+            <span class="ord">${statOf(m).order || "&ndash;"}</span>
+            <span class="badge ${m.pos}">${m.pos}</span>
+            <span>${m.name}</span>
+            <span class="rpick">ADP ${m.adp.toFixed(1)}</span>
+          </div>`;
+      }).join("") + `</div>`;
+    }).join("");
+    depth += `<p class="method">Only players inside the draftable pool appear here,
+      so this is the fantasy-relevant depth chart rather than the full roster.</p>`;
+  }
+
+  $("sheetBody").innerHTML = `
+    <div class="sheet-view on" id="v-overview">${overview}</div>
+    <div class="sheet-view" id="v-logs">${logs}</div>
+    <div class="sheet-view" id="v-seasons">${seasons}</div>
+    <div class="sheet-view" id="v-depth">${depth}</div>`;
+
+  document.querySelectorAll("#sheetTabs button").forEach(function (b, i) {
+    b.classList.toggle("on", i === 0);
+  });
+
+  $("sheet").hidden = false;
+  $("sheetBackdrop").hidden = false;
+  $("sheetBody").scrollTop = 0;
+}
+
+function closeSheet() {
+  sheetPlayer = null;
+  $("sheet").hidden = true;
+  $("sheetBackdrop").hidden = true;
+}
+
 function render() {
   renderHeader();
   renderTicker();
@@ -908,6 +1190,20 @@ $("startBtn").addEventListener("click", function () {
   window.scrollTo(0, 0);
 });
 
+$("sheetBackdrop").addEventListener("click", closeSheet);
+
+document.addEventListener("keydown", function (e) {
+  if (e.key === "Escape") closeSheet();
+});
+
+$("sheetTabs").addEventListener("click", function (e) {
+  if (e.target.tagName !== "BUTTON") return;
+  this.querySelectorAll("button").forEach((b) => b.classList.remove("on"));
+  e.target.classList.add("on");
+  document.querySelectorAll(".sheet-view").forEach((v) => v.classList.remove("on"));
+  $(e.target.dataset.view).classList.add("on");
+});
+
 $("pauseBtn").addEventListener("click", togglePause);
 $("undoBtn").addEventListener("click", undo);
 $("autoBtn").addEventListener("click", autoDraftRest);
@@ -920,6 +1216,14 @@ $("hideDrafted").addEventListener("change", renderPlayers);
 // every redraw.
 document.addEventListener("click", function (event) {
   if (event.target.id === "skipBtn") { skipSim(); return; }
+  if (event.target.id === "sheetClose") { closeSheet(); return; }
+
+  const link = event.target.closest ? event.target.closest("[data-player]") : null;
+  if (link) {
+    const chosen = board.find((p) => p.name === link.dataset.player);
+    if (chosen) openSheet(chosen);
+    return;
+  }
   const name = event.target.dataset ? event.target.dataset.draft : null;
   if (!name || !isMyTurn()) return;
   const player = board.find((p) => p.name === name && !p.drafted);

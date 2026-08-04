@@ -173,6 +173,19 @@
 
   </main>
 
+  <!-- ============ PLAYER DETAIL ============ -->
+  <div class="sheet-backdrop" id="sheetBackdrop" hidden></div>
+  <div class="sheet" id="sheet" hidden>
+    <div class="sheet-head" id="sheetHead"></div>
+    <nav class="sheet-tabs" id="sheetTabs">
+      <button class="on" data-view="v-overview">Overview</button>
+      <button data-view="v-logs">Game Logs</button>
+      <button data-view="v-seasons">Seasons</button>
+      <button data-view="v-depth">Depth Chart</button>
+    </nav>
+    <div class="sheet-body" id="sheetBody"></div>
+  </div>
+
   <script src="players.js"></script>
   <script src="stats.js"></script>
   <script src="app.js"></script>
