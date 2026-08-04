@@ -2,8 +2,9 @@
    Alpine Draft Room - player data
    GENERATED FILE. Edit scripts/build_players.py instead.
 
-   Generated : 2026-08-04 13:04 UTC
+   Generated : 2026-08-04 13:13 UTC
    Players   : 203
+   Seasons   : 2018-2025
    Matched   : 203 carry a Sleeper id
    Flagged   : 14 carry an injury designation
    Projected : 203 have 2026 projections
@@ -12,7 +13,7 @@
    Player, injury and stat data: Sleeper.
    ========================================================== */
 
-const PLAYERS_META = { generated: "2026-08-04 13:04 UTC", count: 203, matched: 203, flagged: 14, projected: 203, unmatched: 0 };
+const PLAYERS_META = { generated: "2026-08-04 13:13 UTC", count: 203, matched: 203, flagged: 14, projected: 203, unmatched: 0 };
 
 const PLAYERS = [
   { id: "9221", name: "Jahmyr Gibbs", pos: "RB", team: "DET", bye: 6, adp: 1.5, inj: "Q" },

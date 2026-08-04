@@ -1,5 +1,5 @@
 FFC rows that did not join to a Sleeper player
-Generated 2026-08-04 13:04 UTC
+Generated 2026-08-04 13:13 UTC
 Add an entry to MANUAL_MATCHES in build_players.py to fix one.
 
 (none)
@@ -22,7 +22,9 @@ adp_idp_1qb
 adp_ppr
 adp_rookie
 adp_std
+blk_kick_ret_td
 blk_kick_ret_yd
+blk_pr_td
 cmp_pct
 def_2pt
 def_3_and_out
@@ -37,6 +39,7 @@ def_kr_ypa
 def_pass_def
 def_pr
 def_pr_lng
+def_pr_td
 def_pr_yd
 def_pr_ypa
 def_st_ff
@@ -78,6 +81,7 @@ idp_int
 idp_pass_def
 idp_tkl
 idp_tkl_ast
+idp_tkl_loss
 idp_tkl_solo
 int_ret_yd
 kick_pts
@@ -85,6 +89,7 @@ kr_lng
 kr_ypa
 misc_ret_yd
 misc_td
+pa
 pass_air_yd
 pass_cmp_40p
 pass_fd
@@ -107,6 +112,7 @@ pr_lng
 pr_ypa
 pts_allow
 pts_idp
+punt_in_20
 punt_net_yd
 punt_yds
 punts
@@ -142,6 +148,9 @@ rush_tkl_loss_yd
 rush_yac
 rush_ypa
 sack_yd
+sacks
+snp
+sp_fumble_recoveries
 st_ff
 st_fum_rec
 st_td
@@ -153,6 +162,7 @@ tkl_ast_misc
 tkl_loss
 tkl_solo
 tkl_solo_misc
+tm_snp
 xp_blkd
 xpa
 yds_allow
