@@ -378,6 +378,27 @@ function suggestions() {
    panel of experts behind it: it is projections, depth chart
    position, age and injury status, weighted and shown.     */
 
+// Season keys, oldest first. Nothing here assumes which years exist.
+function seasonKeys(stat) {
+  return stat && stat.s ? Object.keys(stat.s).sort() : [];
+}
+
+// The most recent season in which the player actually appeared.
+function lastSeason(stat) {
+  const keys = seasonKeys(stat).filter((y) => stat.s[y].gp > 0);
+  return keys.length ? stat.s[keys[keys.length - 1]] : null;
+}
+
+// The two most recent seasons with a real sample, used for the trend signal.
+// A player who missed all of last year still gets compared on the two years
+// he did play, rather than silently losing the signal.
+function trendPair(stat) {
+  const played = seasonKeys(stat)
+    .filter((y) => stat.s[y].gp >= 6)
+    .map((y) => stat.s[y]);
+  return played.length >= 2 ? played.slice(-2) : null;
+}
+
 function statOf(player) {
   if (typeof PLAYER_STATS === "undefined" || !player.id) return null;
   return PLAYER_STATS[player.id] || null;
@@ -441,11 +462,11 @@ function draftSignals(player) {
   if (s.order === 1) { upside += 14; reasons.upside.push("first on the depth chart"); }
   if (s.age && s.age <= 24) { upside += 10; reasons.upside.push("age " + s.age); }
 
-  const y24 = s.s && s.s["2024"], y25 = s.s && s.s["2025"];
-  if (y24 && y25 && y24.gp >= 6 && y25.gp >= 6) {
-    const a = y24.pts / y24.gp, b = y25.pts / y25.gp;
-    if (b > a * 1.2) { upside += 15;
-      reasons.upside.push("points per game up " + Math.round((b / a - 1) * 100) + "% year on year"); }
+  const pair = trendPair(s);
+  if (pair) {
+    const a = pair[0].pts / pair[0].gp, b = pair[1].pts / pair[1].gp;
+    if (a > 0 && b > a * 1.2) { upside += 15;
+      reasons.upside.push("points per game up " + Math.round((b / a - 1) * 100) + "% across his last two full seasons"); }
   }
   upside = Math.max(0, Math.min(100, upside));
 
@@ -464,7 +485,16 @@ function draftSignals(player) {
     else if (player.pos === "QB" && s.age >= 36) { bust += 12; reasons.bust.push("age " + s.age); }
   }
   if (s.order && s.order >= 2) { bust += 15; reasons.bust.push("number " + s.order + " on the depth chart"); }
-  if (y25 && y25.gp > 0 && y25.gp <= 12) { bust += 14; reasons.bust.push("only " + y25.gp + " games last season"); }
+  const recent = lastSeason(s);
+  if (recent && recent.gp <= 12) { bust += 14; reasons.bust.push("only " + recent.gp + " games in his last active season"); }
+
+  // A long record of missed time is worth more than one bad year.
+  const durable = seasonKeys(s).filter((y) => s.s[y].gp > 0);
+  if (durable.length >= 3) {
+    const missed = durable.filter((y) => s.s[y].gp <= 13).length;
+    if (missed >= durable.length / 2) { bust += 12;
+      reasons.bust.push("missed real time in " + missed + " of " + durable.length + " seasons"); }
+  }
   bust = Math.max(0, Math.min(100, bust));
 
   return { overall: overall, upside: upside, bust: bust, reasons: reasons, stats: s };
@@ -1097,8 +1127,7 @@ function openSheet(player) {
   if (!s || (!s.s && !s.p)) {
     seasons = `<div class="nodata">No season history stored for this player.</div>`;
   } else {
-    const years = [];
-    ["2024", "2025"].forEach(function (y) { if (s.s && s.s[y]) years.push([y, s.s[y]]); });
+    const years = seasonKeys(s).map((y) => [y, s.s[y]]);
     if (s.p) years.push(["2026 proj", s.p]);
 
     const sample = years.map((y) => y[1]);
@@ -1115,7 +1144,9 @@ function openSheet(player) {
       return `<tr>${cells}</tr>`;
     }).join("");
 
-    seasons = `<p class="section-label">Scored under Alpine rules, not Sleeper's defaults</p>
+    const span = seasonKeys(s);
+    seasons = `<p class="section-label">${span.length ? span[0] + " to " + span[span.length - 1] : "Career"}
+      &middot; scored under Alpine rules, not Sleeper's defaults</p>
       <div class="tblscroll"><table class="logtbl">
         <thead><tr>${cols.head.map((h) => `<th>${h}</th>`).join("")}</tr></thead>
         <tbody>${rows}</tbody>
