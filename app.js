@@ -77,11 +77,13 @@ const state = {
   timeLeft: 0,
   timerId: null,
   paused: false,
+  seed: 0,            // fixes the CPU wobble so a resumed draft behaves the same
   simTimer: null,     // handle for the CPU pick animation
   simulating: false,
   lastPick: null,     // the pick currently shown in the ticker
   filterSuggest: "ALL",
-  filterPlayers: "ALL"
+  filterPlayers: "ALL",
+  search: ""
 };
 
 
@@ -186,6 +188,14 @@ function makePick(player) {
 
 const CPU_DELAY = 750;   // milliseconds between CPU picks
 
+// Deterministic pseudo-random offset of roughly -3 to +3 ADP places.
+function applyJitter() {
+  board.forEach(function (p) {
+    const n = (p.overall * 7919 + state.seed * 104729) % 1000;
+    p.jitter = (n / 1000) * 6 - 3;
+  });
+}
+
 function stopSim() {
   if (state.simTimer) { clearTimeout(state.simTimer); state.simTimer = null; }
   state.simulating = false;
@@ -196,7 +206,8 @@ function cpuStep() {
     stopSim();
     state.lastPick = null;
     resetClock();
-    render();
+    showResumeBar();
+render();
     return;
   }
 
@@ -271,6 +282,7 @@ function autoDraftRest() {
 function restart() {
   stopSim();
   stopClock();
+  clearSave();
   state.lastPick = null;
   board.forEach((p) => { p.drafted = false; p.jitter = 0; });
   state.picks = [];
@@ -369,6 +381,47 @@ function suggestions() {
     .sort((a, b) => a.score - b.score)
     .slice(0, 6)
     .map((x) => x.player);
+}
+
+
+/* ---- 9b. Tiers -----------------------------------------
+
+   A tier is a run of players at one position with no
+   meaningful gap between them. The break is proportional to
+   ADP because gaps are tight at the top of the board and
+   wide at the bottom: two picks apart means something at
+   pick 5 and nothing at pick 120.                          */
+
+const MAX_TIER_SIZE = 6;
+
+(function buildTiers() {
+  ["QB", "RB", "WR", "TE", "K", "DST"].forEach(function (pos) {
+    const list = board.filter((p) => p.pos === pos);   // already ADP sorted
+    let tier = 1, sizeSoFar = 0;
+
+    list.forEach(function (p, i) {
+      if (i > 0) {
+        const gap = p.adp - list[i - 1].adp;
+        const threshold = Math.max(2, list[i - 1].adp * 0.13);
+        // Gaps between players stop growing as fast as ADP does, so deep in
+        // the board nothing ever clears the threshold and one tier swallows
+        // half the position. The size cap is what keeps a tier actionable.
+        if (gap >= threshold || sizeSoFar >= MAX_TIER_SIZE) { tier++; sizeSoFar = 0; }
+      }
+      p.tier = tier;
+      sizeSoFar++;
+    });
+  });
+})();
+
+// How many players are left in this player's tier at his position.
+function tierRemaining(player) {
+  return board.filter((p) => p.pos === player.pos && p.tier === player.tier && !p.drafted).length;
+}
+
+// How many players already on my roster share this bye week.
+function byeShare(player) {
+  return rosterOf(state.mySlot).filter((p) => p.bye === player.bye).length;
 }
 
 
@@ -704,6 +757,22 @@ function renderHeader() {
   }
 }
 
+// "Last one in the tier" is the most actionable thing a draft board can
+// tell you: it turns "take the best player" into "take him now or lose
+// the whole tier".
+function tierChip(player) {
+  const left = tierRemaining(player);
+  if (left === 1) return `<span class="chip last">Last in ${player.pos} tier ${player.tier}</span>`;
+  if (left === 2) return `<span class="chip thin">2 left in ${player.pos} tier ${player.tier}</span>`;
+  return `<span class="chip tier">${left} left in tier ${player.tier}</span>`;
+}
+
+function byeChip(player) {
+  const shared = byeShare(player);
+  if (shared < 2) return "";
+  return `<span class="chip bye">Would be your ${shared + 1}${shared + 1 === 3 ? "rd" : "th"} on bye ${player.bye}</span>`;
+}
+
 function renderSuggestions() {
   const list = suggestions();
   const holder = $("suggestList");
@@ -731,6 +800,10 @@ function renderSuggestions() {
             <span class="badge ${p.pos}">${p.pos}</span> ${p.team} &middot; Bye ${p.bye} ${injBadge(p)}
           </div>
           <div class="sug-stats">Overall ${p.overall} (${p.pos}${p.posRank}) &middot; ADP ${p.adp.toFixed(1)} &middot; ${valueText}</div>
+          <div class="sug-meta" style="margin-top:5px">
+            ${tierChip(p)}
+            ${byeChip(p)}
+          </div>
         </div>
         <button class="draft-btn" data-draft="${p.name}" ${isMyTurn() ? "" : "disabled"}>Draft</button>
       </div>`;
@@ -741,18 +814,29 @@ function renderPlayers() {
   const tbody = document.querySelector("#playerTable tbody");
   const hide  = $("hideDrafted").checked;
 
+  const term = state.search.trim().toLowerCase();
+
   const visible = board.filter(function (p) {
     if (state.filterPlayers !== "ALL" && p.pos !== state.filterPlayers) return false;
     if (hide && p.drafted) return false;
+    if (term && p.name.toLowerCase().indexOf(term) < 0
+             && p.team.toLowerCase().indexOf(term) < 0) return false;
     return true;
   });
+
+  if (!visible.length) {
+    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--ink-light);padding:26px">
+      No players match that search.</td></tr>`;
+    return;
+  }
 
   tbody.innerHTML = visible.map(function (p) {
     return `
       <tr class="${p.drafted ? "drafted" : ""} ${adpConflict(p) ? "conflict" : ""}">
         <td>
           <span class="nm name-link" data-player="${p.name}">${p.name}</span>
-          <span class="meta"><span class="badge ${p.pos}">${p.pos}</span> ${p.team} &middot; Bye ${p.bye} ${injBadge(p)}</span>
+          <span class="meta"><span class="badge ${p.pos}">${p.pos}</span> ${p.team} &middot; Bye ${p.bye}
+            ${injBadge(p)} <span class="chip tier">T${p.tier}</span></span>
         </td>
         <td class="num">${p.pos}${p.posRank}</td>
         <td class="num">${p.adp.toFixed(1)}</td>
@@ -1214,6 +1298,106 @@ function render() {
   renderBoard();
   renderTeam();
   renderPicks();
+  saveDraft();
+}
+
+
+/* ---- 11c. Saving and resuming --------------------------
+
+   The whole draft is a slot, a clock length, a random seed
+   and an ordered list of player names. That is small enough
+   to keep in the browser, so a refresh no longer destroys a
+   draft in progress.                                       */
+
+const SAVE_KEY = "alpine-draft-room-v1";
+
+function saveDraft() {
+  if (!state.started) return;
+  try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify({
+      v: 1,
+      mySlot: state.mySlot,
+      clockLength: state.clockLength,
+      paused: state.paused,
+      seed: state.seed,
+      picks: state.picks.map((p) => p.player.name),
+      savedAt: Date.now()
+    }));
+  } catch (err) {
+    // Private browsing and full quotas both land here. Losing the save is
+    // not worth breaking the draft over.
+  }
+}
+
+function readSave() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    return data && data.v === 1 && data.picks ? data : null;
+  } catch (err) {
+    return null;
+  }
+}
+
+function clearSave() {
+  try { localStorage.removeItem(SAVE_KEY); } catch (err) {}
+}
+
+function resumeDraft(data) {
+  // The player list is regenerated every morning. If a saved pick no longer
+  // resolves, the board would be corrupt, so refuse rather than half-restore.
+  const resolved = data.picks.map((name) => board.find((p) => p.name === name));
+  if (resolved.some((p) => !p)) {
+    clearSave();
+    alert("That draft could not be restored because the player list has been " +
+          "updated since it was saved. Starting fresh.");
+    showResumeBar();
+    return;
+  }
+
+  state.mySlot = data.mySlot;
+  state.clockLength = data.clockLength;
+  state.paused = !!data.paused;
+  state.seed = data.seed;
+  state.started = true;
+
+  applyJitter();
+  board.forEach((p) => { p.drafted = false; });
+  state.picks = [];
+  resolved.forEach(function (player) { makePick(player); });
+
+  tabsNav.hidden = false;
+  actionbar.hidden = false;
+  $("resumeBar").hidden = true;
+  showPanel("tab-suggest");
+  document.querySelectorAll(".tabs button").forEach((b, i) => b.classList.toggle("on", i === 0));
+
+  resetClock();
+  render();
+  window.scrollTo(0, 0);
+}
+
+function showResumeBar() {
+  const bar = $("resumeBar");
+  const data = readSave();
+  if (!data || !data.picks.length) { bar.hidden = true; return; }
+
+  const made = data.picks.length;
+  const round = Math.min(ROUNDS, Math.floor(made / TEAM_COUNT) + 1);
+  const when = new Date(data.savedAt);
+  const done = made >= TOTAL_PICKS;
+
+  bar.hidden = false;
+  bar.innerHTML = `
+    <h4>${done ? "Finished draft saved" : "Draft in progress"}</h4>
+    <p>Slot ${data.mySlot + 1} &middot; ${made} of ${TOTAL_PICKS} picks
+       ${done ? "" : "&middot; round " + round} &middot; saved
+       ${when.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</p>
+    <div class="btnrow">
+      <button class="primary" id="resumeBtn">${done ? "Reopen it" : "Resume"}</button>
+      <button class="ghost" id="discardBtn">Discard</button>
+    </div>`;
 }
 
 
@@ -1256,8 +1440,10 @@ $("startBtn").addEventListener("click", function () {
   state.clockLength = Number($("pickClock").value);
   state.started     = true;
 
-  // Give every player a small random wobble so no two mocks are identical.
-  board.forEach((p) => { p.jitter = (Math.random() - 0.5) * 6; });
+  // A seeded wobble, so no two mocks are identical but a resumed draft
+  // reproduces the one you were in.
+  state.seed = Math.floor(Math.random() * 1000000);
+  applyJitter();
 
   tabsNav.hidden   = false;
   actionbar.hidden = false;
@@ -1268,6 +1454,12 @@ $("startBtn").addEventListener("click", function () {
   render();
   runCPUs();
   window.scrollTo(0, 0);
+});
+
+// resume / discard live inside a re-rendered banner, so they are delegated
+document.addEventListener("click", function (e) {
+  if (e.target.id === "resumeBtn") { const d = readSave(); if (d) resumeDraft(d); }
+  if (e.target.id === "discardBtn") { clearSave(); showResumeBar(); }
 });
 
 $("sheetBackdrop").addEventListener("click", closeSheet);
@@ -1289,6 +1481,11 @@ $("undoBtn").addEventListener("click", undo);
 $("autoBtn").addEventListener("click", autoDraftRest);
 $("restartBtn").addEventListener("click", restart);
 $("hideDrafted").addEventListener("change", renderPlayers);
+
+$("playerSearch").addEventListener("input", function () {
+  state.search = this.value;
+  renderPlayers();
+});
 
 // One listener on the whole page catches every Draft button,
 // including buttons that don't exist yet. This is called
@@ -1334,4 +1531,5 @@ $("playerFilter").addEventListener("click", function (e) {
   renderPlayers();
 });
 
+showResumeBar();
 render();
