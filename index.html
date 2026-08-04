@@ -16,15 +16,10 @@
 
     <header class="appbar" id="appbar">
 
-      <!-- decorative ridge line, purely visual -->
-      <svg class="ridges" viewBox="0 0 1200 120" preserveAspectRatio="none" aria-hidden="true">
-        <path d="M0 120 L150 38 L285 92 L420 22 L590 120 Z" opacity=".20"/>
-        <path d="M360 120 L545 48 L690 98 L855 28 L1035 120 Z" opacity=".15"/>
-        <path d="M740 120 L930 60 L1075 104 L1200 50 L1200 120 Z" opacity=".11"/>
-      </svg>
-
-      <!-- Alpine mark, reversed to white the way it appears on your banner -->
-      <svg class="mark" viewBox="0 0 100 100" aria-hidden="true">
+      <!-- Alpine mark, reversed to white the way it appears on your banner.
+           width and height are set here as well as in the CSS so the shape
+           can never balloon if the stylesheet is slow, missing or cached. -->
+      <svg class="mark" width="34" height="34" viewBox="0 0 100 100" aria-hidden="true">
         <path d="M50 4 L97 96 L67 96 L50 54 L33 96 L3 96 Z" fill="currentColor"/>
         <path class="facet" d="M50 4 L21 96 M50 4 L79 96"/>
       </svg>

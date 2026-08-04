@@ -55,8 +55,8 @@ body {
 
 .appbar {
   position: relative; overflow: hidden;
-  display: flex; align-items: center; gap: 13px;
-  padding: 13px 16px;
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 14px;
   background: linear-gradient(120deg, var(--navy-deep) 0%, var(--navy) 52%, #10456F 100%);
   color: #fff;
   transition: background .35s ease;
@@ -66,17 +66,21 @@ body {
 .appbar.my-turn { background: linear-gradient(120deg, #0A548A 0%, var(--blue) 50%, var(--cyan) 130%); }
 .appbar.urgent  { background: linear-gradient(120deg, #7A1F1A 0%, #B43026 60%, #D0453A 100%); }
 
-/* mountain ridges behind everything */
-.ridges {
-  position: absolute; inset: auto 0 0 0;
-  width: 100%; height: 100%;
-  fill: #fff; pointer-events: none;
+/* Mountain ridges live in CSS rather than the markup, so a missing
+   stylesheet leaves a plain bar instead of a giant graphic. */
+.appbar::after {
+  content: "";
+  position: absolute; inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 120' preserveAspectRatio='none'%3E%3Cpath d='M0 120 L150 38 L285 92 L420 22 L590 120 Z' fill='%23fff' opacity='.20'/%3E%3Cpath d='M360 120 L545 48 L690 98 L855 28 L1035 120 Z' fill='%23fff' opacity='.15'/%3E%3Cpath d='M740 120 L930 60 L1075 104 L1200 50 L1200 120 Z' fill='%23fff' opacity='.11'/%3E%3C/svg%3E");
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  pointer-events: none;
 }
 
 /* the Alpine chevron, reversed to white */
 .mark {
   position: relative; z-index: 1;
-  width: 38px; height: 38px; flex: none;
+  width: 34px; height: 34px; min-width: 34px; flex: none;
   color: #fff;
   filter: drop-shadow(0 1px 3px rgba(0,0,0,.28));
 }
@@ -87,7 +91,7 @@ body {
 
 .brandline {
   margin: 0 0 1px;
-  font-size: 8.5px; font-weight: 700; letter-spacing: .18em;
+  font-size: 8px; font-weight: 700; letter-spacing: .16em;
   text-transform: uppercase; color: rgba(255,255,255,.62);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
@@ -95,10 +99,11 @@ body {
 .appbar-text h1 {
   margin: 0;
   font-family: Poppins, sans-serif;
-  font-size: 17px; font-weight: 700; letter-spacing: -0.01em;
+  font-size: 16px; font-weight: 700; letter-spacing: -0.01em;
+  white-space: nowrap;
 }
 
-.appbar-text p:not(.brandline) { margin: 1px 0 0; font-size: 12.5px; color: rgba(255,255,255,.78); }
+.appbar-text p:not(.brandline) { margin: 0; font-size: 12px; color: rgba(255,255,255,.78); white-space: nowrap; }
 
 .appbar-right { position: relative; z-index: 1; margin-left: auto; text-align: right; padding-left: 10px; }
 
