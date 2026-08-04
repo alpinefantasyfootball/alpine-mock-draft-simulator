@@ -65,6 +65,9 @@ const state = {
   timeLeft: 0,
   timerId: null,
   paused: false,
+  simTimer: null,     // handle for the CPU pick animation
+  simulating: false,
+  lastPick: null,     // the pick currently shown in the ticker
   filterSuggest: "ALL",
   filterPlayers: "ALL"
 };
@@ -161,7 +164,50 @@ function makePick(player) {
   state.picks.push({ overall: currentOverall(), round: c.round, slot: c.slot, player: player });
 }
 
+/* CPU picks are made one at a time on a timer instead of all at
+   once in a loop, so you can watch the board fill in. setTimeout
+   schedules a single future call; each step schedules the next
+   one, which is how you write a paced loop in a browser without
+   freezing the page.                                            */
+
+const CPU_DELAY = 750;   // milliseconds between CPU picks
+
+function stopSim() {
+  if (state.simTimer) { clearTimeout(state.simTimer); state.simTimer = null; }
+  state.simulating = false;
+}
+
+function cpuStep() {
+  if (draftOver() || isMyTurn()) {   // handing the clock back to you
+    stopSim();
+    state.lastPick = null;
+    resetClock();
+    render();
+    return;
+  }
+
+  const c = onTheClock();
+  const choice = cpuChoice(c.slot, c.round);
+  if (!choice) { stopSim(); render(); return; }
+
+  makePick(choice);
+  state.lastPick = state.picks[state.picks.length - 1];
+  render();
+
+  state.simTimer = setTimeout(cpuStep, CPU_DELAY);
+}
+
 function runCPUs() {
+  stopClock();
+  if (draftOver() || isMyTurn()) { resetClock(); render(); return; }
+  state.simulating = true;
+  render();
+  state.simTimer = setTimeout(cpuStep, CPU_DELAY);
+}
+
+// Jump straight to your turn without watching the rest.
+function skipSim() {
+  stopSim();
   let guard = 0;
   while (!draftOver() && !isMyTurn() && guard++ < TOTAL_PICKS) {
     const c = onTheClock();
@@ -169,16 +215,21 @@ function runCPUs() {
     if (!choice) break;
     makePick(choice);
   }
-}
-
-function draftAndAdvance(player) {
-  makePick(player);
-  runCPUs();
+  state.lastPick = null;
   resetClock();
   render();
 }
 
+function draftAndAdvance(player) {
+  makePick(player);
+  state.lastPick = state.picks[state.picks.length - 1];
+  render();
+  runCPUs();
+}
+
 function undo() {
+  stopSim();
+  state.lastPick = null;
   if (state.picks.length === 0) return;
   // Roll back past the CPU picks and my previous pick, so it's my turn again.
   do {
@@ -190,7 +241,9 @@ function undo() {
 }
 
 function autoDraftRest() {
+  stopSim();
   stopClock();
+  state.lastPick = null;
   let guard = 0;
   while (!draftOver() && guard++ < TOTAL_PICKS) {
     const c = onTheClock();
@@ -202,7 +255,9 @@ function autoDraftRest() {
 }
 
 function restart() {
+  stopSim();
   stopClock();
+  state.lastPick = null;
   board.forEach((p) => { p.drafted = false; p.jitter = 0; });
   state.picks = [];
   state.started = false;
@@ -521,8 +576,30 @@ function renderPicks() {
   holder.innerHTML = html;
 }
 
+function renderTicker() {
+  const ticker = $("ticker");
+  const pick = state.lastPick;
+
+  if (!pick) { ticker.hidden = true; return; }
+
+  ticker.hidden = false;
+  ticker.innerHTML = `
+    <span class="tick-pick">${pickCode(pick.overall)}</span>
+    ${avatar(pick.player, true)}
+    <div class="tick-body">
+      <div class="tick-team">${teamLabel(pick.slot)} selected</div>
+      <div class="tick-name">
+        ${pick.player.name}
+        <span class="badge ${pick.player.pos}">${pick.player.pos}</span>
+        <span class="tick-tm">${pick.player.team} &middot; Bye ${pick.player.bye}</span>
+      </div>
+    </div>
+    ${state.simulating ? '<button class="mini" id="skipBtn">Skip &raquo;</button>' : ""}`;
+}
+
 function render() {
   renderHeader();
+  renderTicker();
   if (state.started) renderPauseButton();
   renderSuggestions();
   renderPlayers();
@@ -568,9 +645,8 @@ $("startBtn").addEventListener("click", function () {
   document.querySelectorAll(".tabs button").forEach((b) => b.classList.remove("on"));
   document.querySelector('.tabs button[data-tab="tab-suggest"]').classList.add("on");
 
-  runCPUs();
-  resetClock();
   render();
+  runCPUs();
   window.scrollTo(0, 0);
 });
 
@@ -585,6 +661,7 @@ $("hideDrafted").addEventListener("change", renderPlayers);
 // event delegation and it saves re-attaching listeners on
 // every redraw.
 document.addEventListener("click", function (event) {
+  if (event.target.id === "skipBtn") { skipSim(); return; }
   const name = event.target.dataset ? event.target.dataset.draft : null;
   if (!name || !isMyTurn()) return;
   const player = board.find((p) => p.name === name && !p.drafted);
