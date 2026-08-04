@@ -11,32 +11,51 @@
 </head>
 <body>
 
-  <!-- ============ STICKY HEADER ============ -->
-  <header class="appbar" id="appbar">
-    <div class="helmet">A</div>
-    <div class="appbar-text">
-      <h1 id="statusLine">Alpine Draft Room</h1>
-      <p id="pickLabel">Set up your draft below</p>
-    </div>
-    <div class="appbar-right">
-      <span class="count-label" id="rightLabel">Players</span>
-      <span class="count-value" id="rightValue">117</span>
-    </div>
-  </header>
+  <!-- ============ EVERYTHING THAT STAYS PINNED TO THE TOP ============ -->
+  <div class="sticky-top">
 
-  <!-- ============ TABS (hidden until the draft starts) ============ -->
-  <nav class="tabs" id="tabs" hidden>
-    <button class="on" data-tab="tab-suggest">Suggestions</button>
-    <button data-tab="tab-players">Players</button>
-    <button data-tab="tab-board">Draft Board</button>
-    <button data-tab="tab-team">My Team</button>
-    <button data-tab="tab-picks">Picks</button>
-  </nav>
+    <header class="appbar" id="appbar">
 
-  <div class="actionbar" id="actionbar" hidden>
-    <button class="mini" id="undoBtn">Undo</button>
-    <button class="mini" id="autoBtn">Auto-draft the rest</button>
-    <button class="mini danger" id="restartBtn">Restart</button>
+      <!-- decorative ridge line, purely visual -->
+      <svg class="ridges" viewBox="0 0 1200 120" preserveAspectRatio="none" aria-hidden="true">
+        <path d="M0 120 L150 38 L285 92 L420 22 L590 120 Z" opacity=".20"/>
+        <path d="M360 120 L545 48 L690 98 L855 28 L1035 120 Z" opacity=".15"/>
+        <path d="M740 120 L930 60 L1075 104 L1200 50 L1200 120 Z" opacity=".11"/>
+      </svg>
+
+      <!-- Alpine mark, reversed to white the way it appears on your banner -->
+      <svg class="mark" viewBox="0 0 100 100" aria-hidden="true">
+        <path d="M50 4 L97 96 L67 96 L50 54 L33 96 L3 96 Z" fill="currentColor"/>
+        <path class="facet" d="M50 4 L21 96 M50 4 L79 96"/>
+      </svg>
+
+      <div class="appbar-text">
+        <p class="brandline">Alpine Consulting Partners</p>
+        <h1 id="statusLine">Draft Room</h1>
+        <p id="pickLabel">Set up your draft below</p>
+      </div>
+
+      <div class="appbar-right">
+        <span class="count-label" id="rightLabel">Players</span>
+        <span class="count-value" id="rightValue">166</span>
+      </div>
+    </header>
+
+    <nav class="tabs" id="tabs" hidden>
+      <button class="on" data-tab="tab-suggest">Suggestions</button>
+      <button data-tab="tab-players">Players</button>
+      <button data-tab="tab-board">Draft Board</button>
+      <button data-tab="tab-team">My Team</button>
+      <button data-tab="tab-picks">Picks</button>
+    </nav>
+
+    <div class="actionbar" id="actionbar" hidden>
+      <button class="mini" id="pauseBtn">Pause clock</button>
+      <button class="mini" id="undoBtn">Undo</button>
+      <button class="mini" id="autoBtn">Auto-draft the rest</button>
+      <button class="mini danger" id="restartBtn">Restart</button>
+    </div>
+
   </div>
 
   <main>
@@ -63,7 +82,7 @@
             <option value="60" selected>60 seconds</option>
             <option value="120">120 seconds</option>
           </select>
-          <p class="hint">When the clock runs out, the top suggestion is drafted for you.</p>
+          <p class="hint">When the clock runs out, the top suggestion is drafted for you. You can pause it at any time once the draft starts.</p>
         </div>
 
         <div class="locked">

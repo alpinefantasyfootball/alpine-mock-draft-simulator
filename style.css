@@ -6,11 +6,14 @@
    ========================================================== */
 
 :root {
-  --navy:        #101C36;
-  --navy-soft:   #22314F;
-  --blue:        #2C6BED;
-  --blue-dark:   #1D53C4;
-  --blue-pale:   #EAF1FE;
+  /* Alpine Consulting Partners brand */
+  --navy:        #232B5C;   /* wordmark navy   */
+  --navy-deep:   #171E45;   /* header gradient */
+  --navy-soft:   #333C74;
+  --blue:        #0E6BB0;   /* mid blue        */
+  --blue-dark:   #0A548A;
+  --blue-pale:   #E8F2FA;
+  --cyan:        #12A3DC;   /* bright accent   */
 
   --ink:         #16202C;
   --ink-mid:     #5A6875;
@@ -43,27 +46,50 @@ body {
 
 [hidden] { display: none !important; }
 
-/* ---------- sticky header ---------- */
+/* ---------- sticky header ----------
+   The header, tabs and action bar are wrapped in one sticky
+   container so they pin together and nothing has to guess
+   the height of the thing above it.                        */
+
+.sticky-top { position: sticky; top: 0; z-index: 30; }
 
 .appbar {
-  position: sticky; top: 0; z-index: 20;
-  display: flex; align-items: center; gap: 12px;
-  padding: 12px 16px;
-  background: var(--navy);
+  position: relative; overflow: hidden;
+  display: flex; align-items: center; gap: 13px;
+  padding: 13px 16px;
+  background: linear-gradient(120deg, var(--navy-deep) 0%, var(--navy) 52%, #10456F 100%);
   color: #fff;
+  transition: background .35s ease;
 }
 
-.appbar.live      { background: #123A6B; }
-.appbar.my-turn   { background: var(--blue); }
-.appbar.urgent    { background: #A82A22; }
+.appbar.live    { background: linear-gradient(120deg, #14224C 0%, #1B3A6B 55%, #0E5A93 100%); }
+.appbar.my-turn { background: linear-gradient(120deg, #0A548A 0%, var(--blue) 50%, var(--cyan) 130%); }
+.appbar.urgent  { background: linear-gradient(120deg, #7A1F1A 0%, #B43026 60%, #D0453A 100%); }
 
-.helmet {
-  width: 40px; height: 40px; flex: none;
-  border-radius: 50%;
-  background: rgba(255,255,255,.14);
-  display: flex; align-items: center; justify-content: center;
-  font-family: Poppins, sans-serif; font-weight: 700; font-size: 18px;
-  color: #C8D8EE;
+/* mountain ridges behind everything */
+.ridges {
+  position: absolute; inset: auto 0 0 0;
+  width: 100%; height: 100%;
+  fill: #fff; pointer-events: none;
+}
+
+/* the Alpine chevron, reversed to white */
+.mark {
+  position: relative; z-index: 1;
+  width: 38px; height: 38px; flex: none;
+  color: #fff;
+  filter: drop-shadow(0 1px 3px rgba(0,0,0,.28));
+}
+
+.mark .facet { stroke: var(--navy-deep); stroke-width: 2.2; opacity: .30; fill: none; }
+
+.appbar-text { position: relative; z-index: 1; min-width: 0; }
+
+.brandline {
+  margin: 0 0 1px;
+  font-size: 8.5px; font-weight: 700; letter-spacing: .18em;
+  text-transform: uppercase; color: rgba(255,255,255,.62);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
 .appbar-text h1 {
@@ -72,13 +98,13 @@ body {
   font-size: 17px; font-weight: 700; letter-spacing: -0.01em;
 }
 
-.appbar-text p { margin: 1px 0 0; font-size: 12.5px; color: #B8C8E0; }
+.appbar-text p:not(.brandline) { margin: 1px 0 0; font-size: 12.5px; color: rgba(255,255,255,.78); }
 
-.appbar-right { margin-left: auto; text-align: right; }
+.appbar-right { position: relative; z-index: 1; margin-left: auto; text-align: right; padding-left: 10px; }
 
 .count-label {
   display: block; font-size: 9.5px; letter-spacing: .1em;
-  text-transform: uppercase; color: #9BB0CE; font-weight: 600;
+  text-transform: uppercase; color: rgba(255,255,255,.60); font-weight: 600;
 }
 
 .count-value {
@@ -90,7 +116,6 @@ body {
 /* ---------- tabs ---------- */
 
 .tabs {
-  position: sticky; top: 64px; z-index: 19;
   display: flex; gap: 6px; padding: 10px 12px;
   background: var(--card); border-bottom: 1px solid var(--line);
   overflow-x: auto;
@@ -122,6 +147,9 @@ body {
 
 .mini:hover { background: #E6EBF1; }
 .mini.danger { color: var(--danger); }
+.mini:disabled { opacity: .45; cursor: default; }
+.mini.active { background: var(--navy); color: #fff; }
+.mini.active:hover { background: var(--navy-soft); }
 
 /* ---------- panels ---------- */
 
@@ -135,6 +163,8 @@ body {
   background: var(--card); border: 1px solid var(--line);
   border-radius: 12px; padding: 24px 22px 22px;
 }
+
+.setup { border-top: 3px solid var(--cyan); }
 
 .setup h2 {
   margin: 0 0 20px; font-family: Poppins, sans-serif;

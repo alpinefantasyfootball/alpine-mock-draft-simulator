@@ -64,6 +64,7 @@ const state = {
   picks: [],        // { overall, round, slot, player }
   timeLeft: 0,
   timerId: null,
+  paused: false,
   filterSuggest: "ALL",
   filterPlayers: "ALL"
 };
@@ -205,6 +206,7 @@ function restart() {
   board.forEach((p) => { p.drafted = false; p.jitter = 0; });
   state.picks = [];
   state.started = false;
+  state.paused = false;
   tabsNav.hidden = true;
   actionbar.hidden = true;
   showPanel("tab-setup");
@@ -221,11 +223,13 @@ function stopClock() {
   if (state.timerId) { clearInterval(state.timerId); state.timerId = null; }
 }
 
-function resetClock() {
-  stopClock();
-  if (state.clockLength === 0 || draftOver() || !isMyTurn()) return;
+function clockRunnable() {
+  return state.clockLength > 0 && !draftOver() && isMyTurn();
+}
 
-  state.timeLeft = state.clockLength;
+// Start counting down from whatever is on the clock right now.
+function startTicking() {
+  stopClock();
   state.timerId = setInterval(function () {
     state.timeLeft--;
     if (state.timeLeft <= 0) {
@@ -236,6 +240,34 @@ function resetClock() {
       renderHeader();
     }
   }, 1000);
+}
+
+// Put a fresh clock on the board. Called after every pick.
+function resetClock() {
+  stopClock();
+  if (!clockRunnable()) return;
+  state.timeLeft = state.clockLength;
+  if (!state.paused) startTicking();
+}
+
+// Pausing only stops the countdown. You can still draft while
+// paused, and the pause survives until you turn it back off.
+function togglePause() {
+  state.paused = !state.paused;
+  if (state.paused) {
+    stopClock();
+  } else if (clockRunnable()) {
+    startTicking();
+  }
+  renderPauseButton();
+  renderHeader();
+}
+
+function renderPauseButton() {
+  const button = $("pauseBtn");
+  button.textContent = state.paused ? "Resume clock" : "Pause clock";
+  button.classList.toggle("active", state.paused);
+  button.disabled = state.clockLength === 0;
 }
 
 function clockText() {
@@ -311,11 +343,12 @@ function renderHeader() {
   const overall = currentOverall();
 
   if (isMyTurn()) {
-    appbar.classList.add(state.clockLength && state.timeLeft <= 10 ? "urgent" : "my-turn");
+    const urgent = state.clockLength && !state.paused && state.timeLeft <= 10;
+    appbar.classList.add(urgent ? "urgent" : "my-turn");
     statusLine.textContent = "You're on the clock!";
     pickLabel.textContent  = "Pick " + pickCode(overall) + " (" + overall + " Overall)";
     if (state.clockLength) {
-      rightLabel.textContent = "Time left";
+      rightLabel.textContent = state.paused ? "Paused" : "Time left";
       rightValue.textContent = clockText();
     } else {
       rightLabel.textContent = "Available";
@@ -490,6 +523,7 @@ function renderPicks() {
 
 function render() {
   renderHeader();
+  if (state.started) renderPauseButton();
   renderSuggestions();
   renderPlayers();
   renderBoard();
@@ -540,6 +574,7 @@ $("startBtn").addEventListener("click", function () {
   window.scrollTo(0, 0);
 });
 
+$("pauseBtn").addEventListener("click", togglePause);
 $("undoBtn").addEventListener("click", undo);
 $("autoBtn").addEventListener("click", autoDraftRest);
 $("restartBtn").addEventListener("click", restart);
