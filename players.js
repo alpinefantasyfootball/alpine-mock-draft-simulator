@@ -1,19 +1,18 @@
 /* ==========================================================
    Alpine Draft Room - player data
-   GENERATED FILE. Do not edit by hand; the next scheduled
-   run will overwrite it. Change scripts/build_players.py
-   instead.
+   GENERATED FILE. Edit scripts/build_players.py instead.
 
-   Generated : 2026-08-04 04:08 UTC
+   Generated : 2026-08-04 04:17 UTC
    Players   : 202
-   Matched   : 202 of 202 carry a Sleeper id
+   Matched   : 202 carry a Sleeper id
    Flagged   : 13 carry an injury designation
+   Projected : 202 have 2026 projections
 
    ADP: Fantasy Football Calculator, 10-team half PPR.
-   Player and injury data: Sleeper.
+   Player, injury and stat data: Sleeper.
    ========================================================== */
 
-const PLAYERS_META = { generated: "2026-08-04 04:08 UTC", count: 202, matched: 202, flagged: 13, unmatched: 0 };
+const PLAYERS_META = { generated: "2026-08-04 04:17 UTC", count: 202, matched: 202, flagged: 13, projected: 202, unmatched: 0 };
 
 const PLAYERS = [
   { id: "9221", name: "Jahmyr Gibbs", pos: "RB", team: "DET", bye: 6, adp: 1.5, inj: "Q" },
