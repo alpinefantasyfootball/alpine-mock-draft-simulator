@@ -1,0 +1,5 @@
+Rows FFC returned that did not join to a Sleeper player
+Generated 2026-08-04 04:08 UTC
+Add an entry to MANUAL_MATCHES in build_players.py to fix one.
+
+(none)
