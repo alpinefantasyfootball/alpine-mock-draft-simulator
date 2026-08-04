@@ -367,6 +367,124 @@ function suggestions() {
 }
 
 
+/* ---- 10b. Draft analysis -------------------------------
+
+   Four components, each computed the same way for all ten
+   teams, then min-max scaled across the room so a grade is
+   always relative to the people you actually drafted with.
+
+   No black box: every number below is printed on the page.  */
+
+// The worst player at each position who would realistically start
+// somewhere in a 10-team league. RB and WR run past 20 because the
+// FLEX pulls extra starters from those two pools.
+const REPLACEMENT = { QB: 11, RB: 25, WR: 28, TE: 11, K: 11, DST: 11 };
+
+const WEIGHTS = { starters: 0.50, value: 0.25, build: 0.15, byes: 0.10 };
+
+const GRADE_SCALE = ["A+", "A", "A-", "B+", "B", "B-", "C+", "C", "C-", "D+"];
+
+// How much better than a replacement-level starter this player is,
+// measured in places up the positional board.
+function aboveReplacement(player) {
+  return Math.max(0, (REPLACEMENT[player.pos] || 11) - player.posRank);
+}
+
+// The best legal starting nine a roster can field.
+function bestLineup(roster) {
+  const used = [];
+  const slots = ["QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "DST", "K"];
+
+  return slots.map(function (slot) {
+    const eligible = roster.filter(function (p) {
+      if (used.indexOf(p) >= 0) return false;
+      return slot === "FLEX" ? ["RB", "WR", "TE"].indexOf(p.pos) >= 0 : p.pos === slot;
+    }).sort((a, b) => a.posRank - b.posRank);
+
+    const pick = eligible[0] || null;
+    if (pick) used.push(pick);
+    return { slot: slot, player: pick };
+  });
+}
+
+function analyseTeam(slot) {
+  const roster = rosterOf(slot);
+  const picks  = state.picks.filter((p) => p.slot === slot);
+  const lineup = bestLineup(roster);
+
+  // 1. starter strength
+  let starters = 0;
+  lineup.forEach(function (s) { if (s.player) starters += aboveReplacement(s.player); });
+
+  // 2. draft value: taken later than the board said = a bargain
+  let value = 0;
+  picks.forEach(function (p) { value += (p.player.overall - p.overall); });
+
+  // 3. roster construction
+  let build = 100;
+  lineup.forEach(function (s) { if (!s.player) build -= 14; });          // hole in the lineup
+  ["QB", "K", "DST"].forEach(function (pos) {
+    build -= Math.max(0, countAt(slot, pos) - 1) * 9;                    // wasted duplicate
+  });
+  if (countAt(slot, "RB") < 4) build -= 6;
+  if (countAt(slot, "WR") < 4) build -= 6;
+
+  // 4. bye week exposure, judged on the starting nine only
+  const byes = {};
+  lineup.forEach(function (s) { if (s.player) byes[s.player.bye] = (byes[s.player.bye] || 0) + 1; });
+  let worstBye = 0, worstWeek = null;
+  Object.keys(byes).forEach(function (week) {
+    if (byes[week] > worstBye) { worstBye = byes[week]; worstWeek = Number(week); }
+  });
+
+  // biggest bargain and biggest reach
+  let bargain = null, reach = null;
+  picks.forEach(function (p) {
+    const gap = p.player.overall - p.overall;
+    if (!bargain || gap > bargain.gap) bargain = { pick: p, gap: gap };
+    if (!reach   || gap < reach.gap)   reach   = { pick: p, gap: gap };
+  });
+
+  return { slot: slot, roster: roster, lineup: lineup, byes: byes,
+           starters: starters, value: value, build: build,
+           byePenalty: -Math.max(0, worstBye - 2) * 20,
+           worstBye: worstBye, worstWeek: worstWeek,
+           bargain: bargain, reach: reach };
+}
+
+// Scale a raw component onto 0-100 relative to the other nine teams.
+function scaleAcross(all, key) {
+  const values = all.map((t) => t[key]);
+  const low = Math.min.apply(null, values);
+  const high = Math.max.apply(null, values);
+  const span = high - low;
+  all.forEach(function (t) {
+    t[key + "Scaled"] = span === 0 ? 50 : ((t[key] - low) / span) * 100;
+  });
+}
+
+function analyseDraft() {
+  const all = [];
+  for (let i = 0; i < TEAM_COUNT; i++) all.push(analyseTeam(i));
+
+  ["starters", "value", "build", "byePenalty"].forEach((k) => scaleAcross(all, k));
+
+  all.forEach(function (t) {
+    t.total = t.startersScaled  * WEIGHTS.starters
+            + t.valueScaled     * WEIGHTS.value
+            + t.buildScaled     * WEIGHTS.build
+            + t.byePenaltyScaled * WEIGHTS.byes;
+  });
+
+  all.slice().sort((a, b) => b.total - a.total).forEach(function (t, i) {
+    t.rank = i + 1;
+    t.grade = GRADE_SCALE[i];
+  });
+
+  return all;
+}
+
+
 /* ---- 11. Rendering ------------------------------------- */
 
 function lastName(name) {
@@ -632,9 +750,102 @@ function renderTicker() {
     ${state.simulating ? '<button class="mini" id="skipBtn">Skip &raquo;</button>' : ""}`;
 }
 
+function bar(label, detail, percent, tone) {
+  const width = Math.max(2, Math.min(100, percent));
+  return `<div class="bar-row">
+      <div class="bar-head"><b>${label}</b><span>${detail}</span></div>
+      <div class="bar-track"><div class="bar-fill ${tone}" style="width:${width}%"></div></div>
+    </div>`;
+}
+
+function renderGrades() {
+  const body = $("gradesBody");
+
+  if (state.picks.length < TEAM_COUNT) {
+    body.innerHTML = `<div class="empty"><p class="empty-title">Nothing to grade yet</p>
+      <p class="empty-sub">Analysis appears once the first round is done, and updates after every pick.</p></div>`;
+    return;
+  }
+
+  const all = analyseDraft();
+  const me  = all[state.mySlot];
+  const done = draftOver();
+
+  const tone = (v) => v >= 66 ? "good" : v >= 33 ? "" : "bad";
+
+  let html = `
+    <div class="grade-hero">
+      <div class="grade-letter">${me.grade}</div>
+      <div>
+        <h3>${done ? "Final grade" : "Grade so far"} &mdash; ${me.rank} of ${TEAM_COUNT}</h3>
+        <p>${done ? "Draft complete." : "Updates after every pick."}
+           Graded against the nine teams in this room, not against the league at large.</p>
+      </div>
+    </div>
+
+    <div class="bars">
+      ${bar("Starter strength", Math.round(me.starters) + " pts above replacement",
+            me.startersScaled, tone(me.startersScaled))}
+      ${bar("Draft value", (me.value >= 0 ? "+" : "") + me.value + " picks of ADP value",
+            me.valueScaled, tone(me.valueScaled))}
+      ${bar("Roster construction", me.build + " / 100",
+            me.buildScaled, tone(me.buildScaled))}
+      ${bar("Bye week safety",
+            me.worstBye >= 3 ? me.worstBye + " starters off in week " + me.worstWeek : "no bad weeks",
+            me.byePenaltyScaled, tone(me.byePenaltyScaled))}
+    </div>`;
+
+  if (me.bargain && me.reach) {
+    html += `<div class="callouts">
+      <div class="callout good">
+        <div class="lbl">Best value</div>
+        <div class="val">${me.bargain.pick.player.name}</div>
+        <div class="sub">Taken at ${pickCode(me.bargain.pick.overall)}, board had him ${me.bargain.pick.player.overall}${me.bargain.gap > 0 ? " &mdash; " + me.bargain.gap + " picks late" : ""}</div>
+      </div>
+      <div class="callout ${me.reach.gap < -8 ? "bad" : ""}">
+        <div class="lbl">Biggest reach</div>
+        <div class="val">${me.reach.pick.player.name}</div>
+        <div class="sub">Taken at ${pickCode(me.reach.pick.overall)}, board had him ${me.reach.pick.player.overall}${me.reach.gap < 0 ? " &mdash; " + Math.abs(me.reach.gap) + " picks early" : ""}</div>
+      </div>
+    </div>`;
+  }
+
+  // bye week strip, weeks 5 to 14
+  let strip = "";
+  for (let w = 5; w <= 14; w++) {
+    const n = me.byes[w] || 0;
+    strip += `<i class="${n >= 4 ? "w4" : n === 3 ? "w3" : n === 2 ? "w2" : ""}">${w}</i>`;
+  }
+  html += `<p class="section-label">Starters on bye, by week</p><div class="byebar">${strip}</div>`;
+
+  // standings
+  html += `<p class="section-label" style="margin-top:20px">Room standings</p>
+    <table class="standings"><tbody>`;
+  all.slice().sort((a, b) => a.rank - b.rank).forEach(function (t) {
+    html += `<tr class="${t.slot === state.mySlot ? "me" : ""}">
+        <td class="rk">${t.rank}</td>
+        <td>${teamLabel(t.slot)}</td>
+        <td class="num">${Math.round(t.starters)}</td>
+        <td class="gr">${t.grade}</td>
+      </tr>`;
+  });
+  html += `</tbody></table>
+
+    <p class="method">Starter strength is 50% of the grade: every starter scored by how many
+    places above replacement level they rank at their position, where replacement is QB11, RB25,
+    WR28, TE11, K11 and D/ST11 for a ten-team league with a FLEX. Draft value is 25%: how far each
+    player fell past their ADP when you took them. Roster construction is 15%, docking unfilled
+    starting slots, duplicate quarterbacks, kickers or defenses, and thin running back or receiver
+    depth. Bye week safety is the last 10%, penalising any week with more than two starters off.
+    Each component is scaled against the other nine teams before weighting.</p>`;
+
+  body.innerHTML = html;
+}
+
 function render() {
   renderHeader();
   renderTicker();
+  renderGrades();
   if (state.started) renderPauseButton();
   renderSuggestions();
   renderPlayers();
