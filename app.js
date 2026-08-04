@@ -961,6 +961,60 @@ function meter(name, score, tone, why) {
     </div>`;
 }
 
+// Decide which columns a stat table shows. Driven by position, with two
+// extras that only appear when there is something in them: passing for a
+// non-quarterback trick play, and returns for anyone who runs kicks back.
+// Most keys map straight onto the stored data. Return touchdowns are the
+// exception: they are stored separately for kicks and punts and combined here.
+function cellValue(row, key) {
+  if (key === "rtd") {
+    const total = (row.krt || 0) + (row.prt || 0);
+    return total || undefined;
+  }
+  return row[key];
+}
+
+function logColumns(player, sample, isSeason) {
+  const firstHead = isSeason ? "Year" : "Wk";
+  const has = (k) => sample.some((row) => row && row[k]);
+
+  let head = [firstHead, "Pts"];
+  let keys = ["w", "pts"];
+
+  if (player.pos === "QB") {
+    head = head.concat(["Att", "Cmp", "PaYd", "PaTD", "INT", "RuAtt", "RuYd", "RuTD"]);
+    keys = keys.concat(["pa", "pc", "py", "pt", "pi", "ra", "ry", "rt"]);
+  } else if (player.pos === "K") {
+    head = head.concat(["FG", "XP"]);
+    keys = keys.concat(["fg", "xp"]);
+  } else if (player.pos === "DST") {
+    head = head.concat(["Sack", "INT", "FumRec"]);
+    keys = keys.concat(["sk", "in", "fr"]);
+  } else {
+    // RB, WR and TE all get the full receiving AND rushing line. A back who
+    // catches 80 passes and a receiver who takes jet sweeps both matter.
+    head = head.concat(["Tgt", "Rec", "RecYd", "RecTD", "RuAtt", "RuYd", "RuTD"]);
+    keys = keys.concat(["tg", "rc", "cy", "ct", "ra", "ry", "rt"]);
+
+    if (has("pa")) {   // the occasional trick-play pass
+      head = head.concat(["PaYd", "PaTD"]);
+      keys = keys.concat(["py", "pt"]);
+    }
+  }
+
+  if (player.pos !== "DST" && (has("kry") || has("pry") || has("krt") || has("prt"))) {
+    head = head.concat(["KRYd", "PRYd", "RetTD"]);
+    keys = keys.concat(["kry", "pry", "rtd"]);
+  }
+
+  if (player.pos !== "DST" && player.pos !== "K" && has("fl")) {
+    head = head.concat(["FumL"]);
+    keys = keys.concat(["fl"]);
+  }
+
+  return { head: head, keys: keys };
+}
+
 function openSheet(player) {
   sheetPlayer = player;
   const s = statOf(player);
@@ -1009,38 +1063,33 @@ function openSheet(player) {
   }
 
   // ---------- game logs ----------
+  // Column set is chosen from player.pos, never from whether a stat happens
+  // to be present. A running back who threw one trick-play pass is still a
+  // running back, and needs his receiving line.
   let logs;
   if (!s || !s.w || !s.w.length) {
     logs = `<div class="nodata">No week-by-week logs stored for this player.</div>`;
   } else {
-    const played = s.w.filter((g) => g.pts !== 0 || g.rc || g.ra || g.pa);
+    const played = s.w.filter((g) => g.pts !== 0 || g.rc || g.ra || g.pa || g.fg || g.sk);
     const avg = played.length ? played.reduce((a, g) => a + g.pts, 0) / played.length : 0;
-    const isPasser = played.some((g) => g.pa);
-    const isKickerOrDef = player.pos === "K" || player.pos === "DST";
-
-    const head = isKickerOrDef
-      ? ["Wk", "Pts", "FG", "XP", "Sack", "INT"]
-      : isPasser
-        ? ["Wk", "Pts", "Att", "Cmp", "Yds", "TD", "INT", "RuYd", "RuTD"]
-        : ["Wk", "Pts", "Tgt", "Rec", "RcYd", "RcTD", "Att", "RuYd", "RuTD"];
+    const cols = logColumns(player, s.w);
 
     const rows = s.w.map(function (g) {
-      const blank = g.pts === 0 && !g.rc && !g.ra && !g.pa && !g.fg && !g.sk;
-      const cells = isKickerOrDef
-        ? [g.pts, g.fg, g.xp, g.sk, g.in]
-        : isPasser
-          ? [g.pts, g.pa, g.pc, g.py, g.pt, g.pi, g.ry, g.rt]
-          : [g.pts, g.tg, g.rc, g.cy, g.ct, g.ra, g.ry, g.rt];
-
-      const tone = blank ? "" : g.pts >= avg * 1.4 ? "hi" : g.pts <= avg * 0.5 ? "lo" : "";
-      return `<tr class="${blank ? "bye" : ""}"><td>${g.w}</td>` +
-        cells.map((v, i) => `<td class="${i === 0 ? tone : ""}">${v === undefined ? "&mdash;" : v}</td>`).join("") +
-        `</tr>`;
+      const blank = g.pts === 0 && !g.rc && !g.ra && !g.pa && !g.fg && !g.sk && !g.kr;
+      const cells = cols.keys.map(function (k, i) {
+        const v = k === "w" ? g.w : k === "pts" ? g.pts : cellValue(g, k);
+        const tone = k === "pts" && !blank
+          ? (g.pts >= avg * 1.4 ? "hi" : g.pts <= avg * 0.5 ? "lo" : "") : "";
+        return `<td class="${tone}">${v === undefined ? "&mdash;" : v}</td>`;
+      }).join("");
+      return `<tr class="${blank ? "bye" : ""}">${cells}</tr>`;
     }).join("");
 
     logs = `<p class="section-label">2025 week by week &middot; ${avg.toFixed(1)} per game played</p>
-      <table class="logtbl"><thead><tr>${head.map((h) => `<th>${h}</th>`).join("")}</tr></thead>
-      <tbody>${rows}</tbody></table>`;
+      <div class="tblscroll"><table class="logtbl">
+        <thead><tr>${cols.head.map((h) => `<th>${h}</th>`).join("")}</tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div>`;
   }
 
   // ---------- seasons ----------
@@ -1052,25 +1101,25 @@ function openSheet(player) {
     ["2024", "2025"].forEach(function (y) { if (s.s && s.s[y]) years.push([y, s.s[y]]); });
     if (s.p) years.push(["2026 proj", s.p]);
 
-    const isPasser = years.some((y) => y[1].pa);
-    const head = isPasser
-      ? ["Year", "G", "Pts", "PaYd", "PaTD", "INT", "RuYd", "RuTD"]
-      : player.pos === "K" || player.pos === "DST"
-        ? ["Year", "G", "Pts", "FG", "XP", "Sack", "INT"]
-        : ["Year", "G", "Pts", "Tgt", "Rec", "RcYd", "RcTD", "RuYd", "RuTD"];
+    const sample = years.map((y) => y[1]);
+    if (s.w) sample.push.apply(sample, s.w);
+    const cols = logColumns(player, sample, true);
 
     const rows = years.map(function (entry) {
       const y = entry[1];
-      const cells = isPasser ? [y.gp, Math.round(y.pts), y.py, y.pt, y.pi, y.ry, y.rt]
-        : player.pos === "K" || player.pos === "DST" ? [y.gp, Math.round(y.pts), y.fg, y.xp, y.sk, y.in]
-        : [y.gp, Math.round(y.pts), y.tg, y.rc, y.cy, y.ct, y.ry, y.rt];
-      return `<tr><td>${entry[0]}</td>` +
-        cells.map((v) => `<td>${v === undefined ? "&mdash;" : v}</td>`).join("") + `</tr>`;
+      const cells = cols.keys.map(function (k) {
+        if (k === "w") return `<td>${entry[0]}</td>`;
+        const v = k === "pts" ? Math.round(y.pts || 0) : cellValue(y, k);
+        return `<td>${v === undefined ? "&mdash;" : v}</td>`;
+      }).join("");
+      return `<tr>${cells}</tr>`;
     }).join("");
 
     seasons = `<p class="section-label">Scored under Alpine rules, not Sleeper's defaults</p>
-      <table class="logtbl"><thead><tr>${head.map((h) => `<th>${h}</th>`).join("")}</tr></thead>
-      <tbody>${rows}</tbody></table>`;
+      <div class="tblscroll"><table class="logtbl">
+        <thead><tr>${cols.head.map((h) => `<th>${h}</th>`).join("")}</tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div>`;
   }
 
   // ---------- depth chart ----------

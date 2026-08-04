@@ -681,7 +681,12 @@ tr.drafted .meta, tr.drafted .num { opacity: .45; }
 .statbox .k { font-size: 9px; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-light); font-weight: 700; }
 .statbox .v { font-family: Poppins, sans-serif; font-weight: 700; font-size: 17px; margin-top: 2px; }
 
-.logtbl { width: 100%; min-width: 0; font-size: 12px; }
+/* Stat tables can outgrow a phone once receiving, rushing and returns
+   are all present, so they scroll sideways inside the sheet. */
+.tblscroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.tblscroll table { min-width: 100%; width: max-content; }
+
+.logtbl { font-size: 12px; }
 .logtbl th { padding: 7px 6px; font-size: 9px; }
 .logtbl td { padding: 6px; text-align: right; font-variant-numeric: tabular-nums; }
 .logtbl td:first-child, .logtbl th:first-child { text-align: left; }
