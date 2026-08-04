@@ -12,30 +12,89 @@
 <body>
 
   <!-- ============ STICKY HEADER ============ -->
-  <header class="appbar">
+  <header class="appbar" id="appbar">
     <div class="helmet">A</div>
     <div class="appbar-text">
-      <h1>Alpine Draft Room</h1>
-      <p id="pickLabel">Pick 1.01 &middot; 1 Overall</p>
+      <h1 id="statusLine">Alpine Draft Room</h1>
+      <p id="pickLabel">Set up your draft below</p>
     </div>
     <div class="appbar-right">
-      <span class="count-label">Available</span>
-      <span class="count-value" id="availCount">0</span>
+      <span class="count-label" id="rightLabel">Players</span>
+      <span class="count-value" id="rightValue">117</span>
     </div>
   </header>
 
-  <!-- ============ TABS ============ -->
-  <nav class="tabs">
-    <button class="on" data-tab="tab-players">Players</button>
+  <!-- ============ TABS (hidden until the draft starts) ============ -->
+  <nav class="tabs" id="tabs" hidden>
+    <button class="on" data-tab="tab-suggest">Suggestions</button>
+    <button data-tab="tab-players">Players</button>
     <button data-tab="tab-board">Draft Board</button>
     <button data-tab="tab-team">My Team</button>
     <button data-tab="tab-picks">Picks</button>
   </nav>
 
+  <div class="actionbar" id="actionbar" hidden>
+    <button class="mini" id="undoBtn">Undo</button>
+    <button class="mini" id="autoBtn">Auto-draft the rest</button>
+    <button class="mini danger" id="restartBtn">Restart</button>
+  </div>
+
   <main>
 
+    <!-- ---------- SETUP ---------- -->
+    <section class="panel on" id="tab-setup">
+      <div class="setup">
+        <h2>Draft setup</h2>
+
+        <div class="field">
+          <label for="draftSlot">Draft position</label>
+          <div class="field-row">
+            <select id="draftSlot"></select>
+            <button class="ghost" id="randomizeBtn">Randomize</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="pickClock">Pick clock</label>
+          <select id="pickClock">
+            <option value="0">None</option>
+            <option value="30">30 seconds</option>
+            <option value="45">45 seconds</option>
+            <option value="60" selected>60 seconds</option>
+            <option value="120">120 seconds</option>
+          </select>
+          <p class="hint">When the clock runs out, the top suggestion is drafted for you.</p>
+        </div>
+
+        <div class="locked">
+          <p class="locked-title">League settings</p>
+          <p class="locked-body">
+            10 teams &middot; 14 rounds &middot; snake &middot; half PPR &middot; 5-point passing TDs<br>
+            QB &middot; RB &middot; RB &middot; WR &middot; WR &middot; TE &middot; FLEX &middot; D/ST &middot; K &middot; 5 bench
+          </p>
+          <p class="locked-note">Fixed to the Alpine league, so there is nothing to configure.</p>
+        </div>
+
+        <button class="primary big" id="startBtn">Start Your Draft</button>
+      </div>
+    </section>
+
+    <!-- ---------- SUGGESTIONS ---------- -->
+    <section class="panel" id="tab-suggest">
+      <div class="pos-filter" id="suggestFilter">
+        <button class="on" data-pos="ALL">All</button>
+        <button data-pos="QB">QB</button>
+        <button data-pos="RB">RB</button>
+        <button data-pos="WR">WR</button>
+        <button data-pos="TE">TE</button>
+        <button data-pos="K">K</button>
+        <button data-pos="DST">DST</button>
+      </div>
+      <div id="suggestList"></div>
+    </section>
+
     <!-- ---------- PLAYERS ---------- -->
-    <section class="panel on" id="tab-players">
+    <section class="panel" id="tab-players">
       <div class="toolbar">
         <label class="check">
           <input type="checkbox" id="hideDrafted">
@@ -43,7 +102,7 @@
         </label>
       </div>
 
-      <div class="pos-filter">
+      <div class="pos-filter" id="playerFilter">
         <button class="on" data-pos="ALL">All</button>
         <button data-pos="QB">QB</button>
         <button data-pos="RB">RB</button>
@@ -68,44 +127,25 @@
 
     <!-- ---------- DRAFT BOARD ---------- -->
     <section class="panel" id="tab-board">
-      <div class="empty">
-        <div class="empty-icon">&#9632;</div>
-        <p class="empty-title">The board is empty</p>
-        <p class="empty-sub">Every pick in the draft will show up here, colour-coded by position.</p>
+      <div class="board-scroll"><div class="board" id="boardGrid"></div></div>
+      <div class="legend">
+        <span><i class="sw QB"></i>QB</span><span><i class="sw RB"></i>RB</span>
+        <span><i class="sw WR"></i>WR</span><span><i class="sw TE"></i>TE</span>
+        <span><i class="sw K"></i>K</span><span><i class="sw DST"></i>D/ST</span>
       </div>
     </section>
 
     <!-- ---------- MY TEAM ---------- -->
     <section class="panel" id="tab-team">
       <p class="section-label">Starters</p>
-      <ul class="roster">
-        <li><span class="slot">QB</span><span class="skeleton"></span></li>
-        <li><span class="slot">RB</span><span class="skeleton"></span></li>
-        <li><span class="slot">RB</span><span class="skeleton"></span></li>
-        <li><span class="slot">WR</span><span class="skeleton"></span></li>
-        <li><span class="slot">WR</span><span class="skeleton"></span></li>
-        <li><span class="slot">TE</span><span class="skeleton"></span></li>
-        <li><span class="slot">FLEX</span><span class="skeleton"></span></li>
-        <li><span class="slot">DST</span><span class="skeleton"></span></li>
-        <li><span class="slot">K</span><span class="skeleton"></span></li>
-      </ul>
+      <ul class="roster" id="startersList"></ul>
       <p class="section-label">Bench</p>
-      <ul class="roster">
-        <li><span class="slot bn">BN</span><span class="skeleton"></span></li>
-        <li><span class="slot bn">BN</span><span class="skeleton"></span></li>
-        <li><span class="slot bn">BN</span><span class="skeleton"></span></li>
-        <li><span class="slot bn">BN</span><span class="skeleton"></span></li>
-        <li><span class="slot bn">BN</span><span class="skeleton"></span></li>
-      </ul>
+      <ul class="roster" id="benchList"></ul>
     </section>
 
     <!-- ---------- PICKS ---------- -->
     <section class="panel" id="tab-picks">
-      <div class="empty">
-        <div class="empty-icon">&#9679;</div>
-        <p class="empty-title">No picks yet</p>
-        <p class="empty-sub">Each selection will appear here in draft order as the round unfolds.</p>
-      </div>
+      <div id="picksList"></div>
     </section>
 
   </main>

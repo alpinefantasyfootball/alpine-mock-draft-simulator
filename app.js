@@ -1,112 +1,583 @@
 /* ==========================================================
    Alpine Draft Room — behaviour
-   Read this top to bottom. It is deliberately short.
+
+   Read the section headers first. Each one does one job.
    ========================================================== */
 
-/* ---- 1. Grab the parts of the page we need to talk to ---- */
 
-const tbody       = document.querySelector("#playerTable tbody");
-const posButtons  = document.querySelectorAll(".pos-filter button");
-const tabButtons  = document.querySelectorAll(".tabs button");
-const hideDrafted = document.querySelector("#hideDrafted");
-const availCount  = document.querySelector("#availCount");
+/* ---- 1. League settings ---------------------------------
+   Hardcoded on purpose. FantasyPros needs four screens of
+   configuration because it serves every league on earth.
+   We serve one, so these are just constants.              */
+
+const TEAM_COUNT  = 10;
+const ROUNDS      = 14;
+const TOTAL_PICKS = TEAM_COUNT * ROUNDS;
+
+const STARTERS = { QB: 1, RB: 2, WR: 2, TE: 1, K: 1, DST: 1 };  // plus 1 FLEX
+const MAX_POS  = { QB: 4, RB: 8, WR: 8, TE: 3, K: 3, DST: 3 };
+
+const CPU_NAMES = [
+  "Wild Goose Chase", "Bijan Mustard", "Nacua Matata", "The Gibbs Ultimatum",
+  "Kupp of Joe", "Purdy Vacant", "Hurts So Good", "Saquon For The Team",
+  "Lambo No. 5", "Bone-Thugs-N-Montgomery"
+];
 
 
-/* ---- 2. Sort by ADP, then number each player at their position ----
-   After this loop every player has a posRank: the best running back
-   is RB1, the second best is RB2, and so on. Anaplan would give you
-   this with RANK grouped by position. Here you count it yourself.  */
+/* ---- 2. Page elements ---------------------------------- */
+
+const $ = (id) => document.getElementById(id);
+
+const appbar     = $("appbar");
+const statusLine = $("statusLine");
+const pickLabel  = $("pickLabel");
+const rightLabel = $("rightLabel");
+const rightValue = $("rightValue");
+const tabsNav    = $("tabs");
+const actionbar  = $("actionbar");
+
+
+/* ---- 3. The player board -------------------------------
+   One sorted copy of PLAYERS. Every player gets a position
+   rank (RB1, RB2...) and a small random jitter that stays
+   fixed for the whole draft, so undoing a pick doesn't
+   reshuffle how the CPUs think.                           */
 
 const board  = PLAYERS.slice().sort((a, b) => a.adp - b.adp);
 const counts = {};
 
-board.forEach(function (player) {
+board.forEach(function (player, i) {
   counts[player.pos] = (counts[player.pos] || 0) + 1;
   player.posRank = counts[player.pos];
+  player.overall = i + 1;
   player.drafted = false;
+  player.jitter  = 0;
 });
 
 
-/* ---- 3. Which position filter is active right now ---- */
+/* ---- 4. State ------------------------------------------ */
 
-let activePos = "ALL";
+const state = {
+  mySlot: 0,        // 0-indexed draft position
+  clockLength: 60,  // seconds, 0 means no clock
+  started: false,
+  picks: [],        // { overall, round, slot, player }
+  timeLeft: 0,
+  timerId: null,
+  filterSuggest: "ALL",
+  filterPlayers: "ALL"
+};
 
 
-/* ---- 4. Draw the player table ----
-   Called every time something changes. It always rebuilds the whole
-   table from scratch, which sounds wasteful and is completely fine
-   at this size.                                                    */
+/* ---- 5. Snake maths ------------------------------------
+   Overall pick 1 is round 1 slot 1. In even rounds the
+   order reverses, which is the only thing that makes a
+   snake draft a snake.                                     */
 
-function drawPlayers() {
-  tbody.innerHTML = "";
+function pickInfo(overall) {
+  const round   = Math.ceil(overall / TEAM_COUNT);
+  const inRound = overall - (round - 1) * TEAM_COUNT;
+  const slot    = (round % 2 === 0) ? (TEAM_COUNT + 1 - inRound) : inRound;
+  return { round: round, slot: slot - 1 };
+}
 
-  const visible = board.filter(function (player) {
-    if (activePos !== "ALL" && player.pos !== activePos) return false;
-    if (hideDrafted.checked && player.drafted) return false;
-    return true;
-  });
+function currentOverall() { return state.picks.length + 1; }
+function draftOver()      { return state.picks.length >= TOTAL_PICKS; }
+function onTheClock()     { return draftOver() ? null : pickInfo(currentOverall()); }
+function isMyTurn()       { const c = onTheClock(); return c !== null && c.slot === state.mySlot; }
 
-  visible.forEach(function (player) {
-    const row = document.createElement("tr");
-    if (player.drafted) row.className = "drafted";
+function teamLabel(slot) {
+  return slot === state.mySlot ? "Your Team" : CPU_NAMES[slot];
+}
 
-    row.innerHTML = `
-      <td>
-        <span class="nm">${player.name}</span>
-        <span class="meta">
-          <span class="badge ${player.pos}">${player.pos}</span>
-          ${player.team} &middot; Bye ${player.bye}
-        </span>
-      </td>
-      <td class="num">${player.pos}${player.posRank}</td>
-      <td class="num">${player.adp.toFixed(1)}</td>
-      <td><button class="draft-btn">${player.drafted ? "Taken" : "Draft"}</button></td>`;
+function pickCode(overall) {
+  const p = pickInfo(overall);
+  return p.round + "." + String(p.slot + 1).padStart(2, "0");
+}
 
-    row.querySelector(".draft-btn").addEventListener("click", function () {
-      player.drafted = true;
-      drawPlayers();
-    });
-
-    tbody.appendChild(row);
-  });
-
-  availCount.textContent = board.filter(function (p) { return !p.drafted; }).length;
+function picksUntilMyTurn() {
+  let n = currentOverall();
+  let gap = 0;
+  while (n <= TOTAL_PICKS && pickInfo(n).slot !== state.mySlot) { n++; gap++; }
+  return gap;
 }
 
 
-/* ---- 5. Position filter buttons ---- */
+/* ---- 6. Roster helpers --------------------------------- */
 
-posButtons.forEach(function (button) {
-  button.addEventListener("click", function () {
-    posButtons.forEach(function (b) { b.classList.remove("on"); });
-    button.classList.add("on");
-    activePos = button.dataset.pos;
-    drawPlayers();
+function rosterOf(slot) {
+  return state.picks.filter((p) => p.slot === slot).map((p) => p.player);
+}
+
+function countAt(slot, pos) {
+  return rosterOf(slot).filter((p) => p.pos === pos).length;
+}
+
+
+/* ---- 7. How a CPU team values a player -----------------
+   Lower score wins. We start from ADP and multiply it by
+   how badly the team needs that position. A team missing a
+   starting RB will reach for one; a team with four already
+   will not.                                                */
+
+function needMultiplier(slot, pos, round) {
+  const have = countAt(slot, pos);
+
+  if (have >= MAX_POS[pos])          return 999;   // roster limit
+  if (pos === "K"   && round < 13)   return 999;   // nobody drafts a kicker early
+  if (pos === "DST" && round < 12)   return 999;
+  if (pos === "QB"  && have >= 1)    return 999;   // one QB is enough in a 10-teamer
+  if (pos === "K"   && have >= 1)    return 999;   // never two kickers
+  if (pos === "DST" && have >= 1)    return 999;   // never two defenses
+
+  const need = STARTERS[pos] || 0;
+  if (have < need)       return 0.80;   // still filling a starting slot
+  if (have < need + 2)   return 1.00;   // sensible depth
+  return 1.45;                          // hoarding
+}
+
+function cpuChoice(slot, round) {
+  let best = null;
+  let bestScore = Infinity;
+
+  board.forEach(function (player) {
+    if (player.drafted) return;
+    const score = (player.adp + player.jitter) * needMultiplier(slot, player.pos, round);
+    if (score < bestScore) { bestScore = score; best = player; }
   });
-});
+
+  return best;
+}
 
 
-/* ---- 6. Hide drafted checkbox ---- */
+/* ---- 8. Actions ---------------------------------------- */
 
-hideDrafted.addEventListener("change", drawPlayers);
+function makePick(player) {
+  const c = onTheClock();
+  if (!c || player.drafted) return;
+
+  player.drafted = true;
+  state.picks.push({ overall: currentOverall(), round: c.round, slot: c.slot, player: player });
+}
+
+function runCPUs() {
+  let guard = 0;
+  while (!draftOver() && !isMyTurn() && guard++ < TOTAL_PICKS) {
+    const c = onTheClock();
+    const choice = cpuChoice(c.slot, c.round);
+    if (!choice) break;
+    makePick(choice);
+  }
+}
+
+function draftAndAdvance(player) {
+  makePick(player);
+  runCPUs();
+  resetClock();
+  render();
+}
+
+function undo() {
+  if (state.picks.length === 0) return;
+  // Roll back past the CPU picks and my previous pick, so it's my turn again.
+  do {
+    const last = state.picks.pop();
+    last.player.drafted = false;
+  } while (state.picks.length > 0 && !isMyTurn());
+  resetClock();
+  render();
+}
+
+function autoDraftRest() {
+  stopClock();
+  let guard = 0;
+  while (!draftOver() && guard++ < TOTAL_PICKS) {
+    const c = onTheClock();
+    const choice = cpuChoice(c.slot, c.round);
+    if (!choice) break;
+    makePick(choice);
+  }
+  render();
+}
+
+function restart() {
+  stopClock();
+  board.forEach((p) => { p.drafted = false; p.jitter = 0; });
+  state.picks = [];
+  state.started = false;
+  tabsNav.hidden = true;
+  actionbar.hidden = true;
+  showPanel("tab-setup");
+  render();
+}
 
 
-/* ---- 7. Tab bar ----
-   Switching tabs is nothing more than moving one CSS class around. */
+/* ---- 9. The pick clock ---------------------------------
+   setInterval runs a function once a second. When the clock
+   hits zero we draft the top suggestion, which is exactly
+   what FantasyPros does.                                   */
 
-tabButtons.forEach(function (button) {
-  button.addEventListener("click", function () {
-    tabButtons.forEach(function (b) { b.classList.remove("on"); });
-    button.classList.add("on");
+function stopClock() {
+  if (state.timerId) { clearInterval(state.timerId); state.timerId = null; }
+}
 
-    document.querySelectorAll(".panel").forEach(function (panel) {
-      panel.classList.remove("on");
+function resetClock() {
+  stopClock();
+  if (state.clockLength === 0 || draftOver() || !isMyTurn()) return;
+
+  state.timeLeft = state.clockLength;
+  state.timerId = setInterval(function () {
+    state.timeLeft--;
+    if (state.timeLeft <= 0) {
+      stopClock();
+      const auto = suggestions()[0];
+      if (auto) draftAndAdvance(auto);
+    } else {
+      renderHeader();
+    }
+  }, 1000);
+}
+
+function clockText() {
+  const m = Math.floor(state.timeLeft / 60);
+  const s = state.timeLeft % 60;
+  return m + ":" + String(s).padStart(2, "0");
+}
+
+
+/* ---- 10. Suggestions -----------------------------------
+   The same scoring the CPUs use, but applied to your roster
+   — so it recommends what your team actually needs.        */
+
+function suggestions() {
+  const c = onTheClock();
+  const round = c ? c.round : ROUNDS;
+
+  return board
+    .filter(function (p) {
+      if (p.drafted) return false;
+      if (state.filterSuggest !== "ALL" && p.pos !== state.filterSuggest) return false;
+      if (countAt(state.mySlot, p.pos) >= MAX_POS[p.pos]) return false;
+      return true;
+    })
+    .map(function (p) {
+      return { player: p, score: (p.adp + p.jitter) * needMultiplier(state.mySlot, p.pos, round) };
+    })
+    .sort((a, b) => a.score - b.score)
+    .slice(0, 6)
+    .map((x) => x.player);
+}
+
+
+/* ---- 11. Rendering ------------------------------------- */
+
+function lastName(name) {
+  const parts = name.split(" ").filter(function (w) {
+    return ["Jr.", "Sr.", "II", "III", "IV", "Defense"].indexOf(w) < 0;
+  });
+  return parts[parts.length - 1];
+}
+
+function initials(name) {
+  const parts = name.replace(/[^A-Za-z .'-]/g, "").split(" ");
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+function avatar(player, small) {
+  return `<div class="avatar ${player.pos}${small ? " sm" : ""}">${initials(player.name)}</div>`;
+}
+
+function renderHeader() {
+  appbar.className = "appbar";
+
+  if (!state.started) {
+    statusLine.textContent = "Alpine Draft Room";
+    pickLabel.textContent  = "Set up your draft below";
+    rightLabel.textContent = "Players";
+    rightValue.textContent = board.length;
+    return;
+  }
+
+  if (draftOver()) {
+    appbar.classList.add("live");
+    statusLine.textContent = "Draft complete";
+    pickLabel.textContent  = TOTAL_PICKS + " picks made";
+    rightLabel.textContent = "Rounds";
+    rightValue.textContent = ROUNDS;
+    return;
+  }
+
+  const overall = currentOverall();
+
+  if (isMyTurn()) {
+    appbar.classList.add(state.clockLength && state.timeLeft <= 10 ? "urgent" : "my-turn");
+    statusLine.textContent = "You're on the clock!";
+    pickLabel.textContent  = "Pick " + pickCode(overall) + " (" + overall + " Overall)";
+    if (state.clockLength) {
+      rightLabel.textContent = "Time left";
+      rightValue.textContent = clockText();
+    } else {
+      rightLabel.textContent = "Available";
+      rightValue.textContent = board.filter((p) => !p.drafted).length;
+    }
+  } else {
+    appbar.classList.add("live");
+    statusLine.textContent = teamLabel(pickInfo(overall).slot);
+    pickLabel.textContent  = "Pick " + pickCode(overall) + " (" + overall + " Overall)";
+    rightLabel.textContent = "Your turn in";
+    rightValue.textContent = picksUntilMyTurn();
+  }
+}
+
+function renderSuggestions() {
+  const list = suggestions();
+  const holder = $("suggestList");
+
+  if (draftOver()) {
+    holder.innerHTML = `<div class="empty"><p class="empty-title">Draft complete</p>
+      <p class="empty-sub">Check My Team to see how the roster came out.</p></div>`;
+    return;
+  }
+
+  const nextPick = currentOverall();
+
+  holder.innerHTML = list.map(function (p, i) {
+    const value = p.overall - nextPick;
+    const valueText = value > 3
+      ? `<span class="value-up">falling &mdash; ${value} picks past value</span>`
+      : `<span class="value-down">on the board at ${p.overall}</span>`;
+
+    return `
+      <div class="sug ${i === 0 ? "top" : ""}">
+        ${avatar(p)}
+        <div class="sug-body">
+          <div class="sug-name">${p.name}</div>
+          <div class="sug-meta">
+            <span class="badge ${p.pos}">${p.pos}</span> ${p.team} &middot; Bye ${p.bye}
+          </div>
+          <div class="sug-stats">Overall ${p.overall} (${p.pos}${p.posRank}) &middot; ADP ${p.adp.toFixed(1)} &middot; ${valueText}</div>
+        </div>
+        <button class="draft-btn" data-draft="${p.name}" ${isMyTurn() ? "" : "disabled"}>Draft</button>
+      </div>`;
+  }).join("");
+}
+
+function renderPlayers() {
+  const tbody = document.querySelector("#playerTable tbody");
+  const hide  = $("hideDrafted").checked;
+
+  const visible = board.filter(function (p) {
+    if (state.filterPlayers !== "ALL" && p.pos !== state.filterPlayers) return false;
+    if (hide && p.drafted) return false;
+    return true;
+  });
+
+  tbody.innerHTML = visible.map(function (p) {
+    return `
+      <tr class="${p.drafted ? "drafted" : ""}">
+        <td>
+          <span class="nm">${p.name}</span>
+          <span class="meta"><span class="badge ${p.pos}">${p.pos}</span> ${p.team} &middot; Bye ${p.bye}</span>
+        </td>
+        <td class="num">${p.pos}${p.posRank}</td>
+        <td class="num">${p.adp.toFixed(1)}</td>
+        <td><button class="draft-btn" data-draft="${p.name}"
+             ${p.drafted || !isMyTurn() ? "disabled" : ""}>${p.drafted ? "Taken" : "Draft"}</button></td>
+      </tr>`;
+  }).join("");
+}
+
+function renderBoard() {
+  const grid = $("boardGrid");
+  let html = `<div class="hd"></div>`;
+
+  for (let s = 0; s < TEAM_COUNT; s++) {
+    html += `<div class="hd ${s === state.mySlot ? "me" : ""}">${s === state.mySlot ? "YOU" : CPU_NAMES[s].split(" ")[0]}</div>`;
+  }
+
+  for (let r = 1; r <= ROUNDS; r++) {
+    html += `<div class="rd">${r}</div>`;
+    for (let s = 0; s < TEAM_COUNT; s++) {
+      const pick = state.picks.find((p) => p.round === r && p.slot === s);
+      if (pick) {
+        const last = lastName(pick.player.name);
+        html += `<div class="cell ${pick.player.pos} ${s === state.mySlot ? "mine" : ""}">
+                   <b>${last}</b><s>${pick.player.pos} &middot; ${pick.player.team}</s></div>`;
+      } else {
+        const c = onTheClock();
+        const isNow = c && c.round === r && c.slot === s;
+        html += `<div class="cell empty ${isNow ? "now" : ""}">${r}.${String(s + 1).padStart(2, "0")}</div>`;
+      }
+    }
+  }
+
+  grid.innerHTML = html;
+}
+
+function renderTeam() {
+  const mine = rosterOf(state.mySlot).slice();
+  const used = [];
+  const slots = [["QB", "QB"], ["RB", "RB"], ["RB", "RB"], ["WR", "WR"], ["WR", "WR"],
+                 ["TE", "TE"], ["FLEX", "FLEX"], ["DST", "DST"], ["K", "K"]];
+
+  const rows = slots.map(function (s) {
+    const eligible = mine.filter(function (p) {
+      if (used.indexOf(p) >= 0) return false;
+      return s[1] === "FLEX" ? ["RB", "WR", "TE"].indexOf(p.pos) >= 0 : p.pos === s[1];
     });
-    document.querySelector("#" + button.dataset.tab).classList.add("on");
+    const pick = eligible[0] || null;
+    if (pick) used.push(pick);
+    return rosterRow(s[0], pick, false);
+  });
+
+  $("startersList").innerHTML = rows.join("");
+
+  const bench = mine.filter((p) => used.indexOf(p) < 0);
+  const benchRows = [];
+  for (let i = 0; i < 5; i++) benchRows.push(rosterRow("BN", bench[i] || null, true));
+  $("benchList").innerHTML = benchRows.join("");
+}
+
+function rosterRow(slotName, player, isBench) {
+  if (!player) {
+    return `<li><span class="slot ${isBench ? "bn" : ""}">${slotName}</span><span class="skeleton"></span></li>`;
+  }
+  const pick = state.picks.find((p) => p.player === player);
+  return `<li>
+      <span class="slot ${isBench ? "bn" : ""}">${slotName}</span>
+      ${avatar(player, true)}
+      <div>
+        <div class="rname">${player.name}</div>
+        <div class="rmeta"><span class="badge ${player.pos}">${player.pos}</span> ${player.team} &middot; Bye ${player.bye}</div>
+      </div>
+      <span class="rpick">${pickCode(pick.overall)}</span>
+    </li>`;
+}
+
+function renderPicks() {
+  const holder = $("picksList");
+
+  if (state.picks.length === 0) {
+    holder.innerHTML = `<div class="empty"><p class="empty-title">No picks yet</p>
+      <p class="empty-sub">Each selection will appear here, most recent first.</p></div>`;
+    return;
+  }
+
+  const recent = state.picks.slice().reverse();
+  let html = "";
+  let lastRound = null;
+
+  recent.forEach(function (pick) {
+    if (pick.round !== lastRound) {
+      html += `<div class="round-divider">Round ${pick.round}</div>`;
+      lastRound = pick.round;
+    }
+    html += `
+      <div class="pick-card ${pick.slot === state.mySlot ? "mine" : ""}">
+        <span class="pick-no">${pickCode(pick.overall)}</span>
+        ${avatar(pick.player, true)}
+        <div>
+          <div class="pick-team">${teamLabel(pick.slot)}</div>
+          <div class="pick-name">${pick.player.name}</div>
+          <div class="pick-meta"><span class="badge ${pick.player.pos}">${pick.player.pos}</span> ${pick.player.team} &middot; Bye ${pick.player.bye}</div>
+        </div>
+      </div>`;
+  });
+
+  holder.innerHTML = html;
+}
+
+function render() {
+  renderHeader();
+  renderSuggestions();
+  renderPlayers();
+  renderBoard();
+  renderTeam();
+  renderPicks();
+}
+
+
+/* ---- 12. Tabs ------------------------------------------ */
+
+function showPanel(id) {
+  document.querySelectorAll(".panel").forEach((p) => p.classList.remove("on"));
+  $(id).classList.add("on");
+}
+
+
+/* ---- 13. Wiring ---------------------------------------- */
+
+// Fill the draft position dropdown with 1st through 10th.
+const suffix = ["th", "st", "nd", "rd"];
+const slotSelect = $("draftSlot");
+for (let i = 1; i <= TEAM_COUNT; i++) {
+  const s = (i % 100 > 10 && i % 100 < 14) ? "th" : (suffix[i % 10] || "th");
+  slotSelect.innerHTML += `<option value="${i - 1}">${i}${s}</option>`;
+}
+
+$("randomizeBtn").addEventListener("click", function () {
+  slotSelect.value = Math.floor(Math.random() * TEAM_COUNT);
+});
+
+$("startBtn").addEventListener("click", function () {
+  state.mySlot      = Number(slotSelect.value);
+  state.clockLength = Number($("pickClock").value);
+  state.started     = true;
+
+  // Give every player a small random wobble so no two mocks are identical.
+  board.forEach((p) => { p.jitter = (Math.random() - 0.5) * 6; });
+
+  tabsNav.hidden   = false;
+  actionbar.hidden = false;
+  showPanel("tab-suggest");
+  document.querySelectorAll(".tabs button").forEach((b) => b.classList.remove("on"));
+  document.querySelector('.tabs button[data-tab="tab-suggest"]').classList.add("on");
+
+  runCPUs();
+  resetClock();
+  render();
+  window.scrollTo(0, 0);
+});
+
+$("undoBtn").addEventListener("click", undo);
+$("autoBtn").addEventListener("click", autoDraftRest);
+$("restartBtn").addEventListener("click", restart);
+$("hideDrafted").addEventListener("change", renderPlayers);
+
+// One listener on the whole page catches every Draft button,
+// including buttons that don't exist yet. This is called
+// event delegation and it saves re-attaching listeners on
+// every redraw.
+document.addEventListener("click", function (event) {
+  const name = event.target.dataset ? event.target.dataset.draft : null;
+  if (!name || !isMyTurn()) return;
+  const player = board.find((p) => p.name === name && !p.drafted);
+  if (player) draftAndAdvance(player);
+});
+
+document.querySelectorAll(".tabs button").forEach(function (button) {
+  button.addEventListener("click", function () {
+    document.querySelectorAll(".tabs button").forEach((b) => b.classList.remove("on"));
+    button.classList.add("on");
+    showPanel(button.dataset.tab);
   });
 });
 
+$("suggestFilter").addEventListener("click", function (e) {
+  if (e.target.tagName !== "BUTTON") return;
+  this.querySelectorAll("button").forEach((b) => b.classList.remove("on"));
+  e.target.classList.add("on");
+  state.filterSuggest = e.target.dataset.pos;
+  renderSuggestions();
+});
 
-/* ---- 8. Draw it once on load ---- */
+$("playerFilter").addEventListener("click", function (e) {
+  if (e.target.tagName !== "BUTTON") return;
+  this.querySelectorAll("button").forEach((b) => b.classList.remove("on"));
+  e.target.classList.add("on");
+  state.filterPlayers = e.target.dataset.pos;
+  renderPlayers();
+});
 
-drawPlayers();
+render();
