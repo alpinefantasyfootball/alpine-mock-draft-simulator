@@ -2,18 +2,18 @@
    Alpine Draft Room - player data
    GENERATED FILE. Edit scripts/build_players.py instead.
 
-   Generated : 2026-08-04 13:13 UTC
+   Generated : 2026-08-04 17:14 UTC
    Players   : 203
    Seasons   : 2018-2025
    Matched   : 203 carry a Sleeper id
-   Flagged   : 14 carry an injury designation
+   Flagged   : 16 carry an injury designation
    Projected : 203 have 2026 projections
 
    ADP: Fantasy Football Calculator, 10-team half PPR.
    Player, injury and stat data: Sleeper.
    ========================================================== */
 
-const PLAYERS_META = { generated: "2026-08-04 13:13 UTC", count: 203, matched: 203, flagged: 14, projected: 203, unmatched: 0 };
+const PLAYERS_META = { generated: "2026-08-04 17:14 UTC", count: 203, matched: 203, flagged: 16, projected: 203, unmatched: 0 };
 
 const PLAYERS = [
   { id: "9221", name: "Jahmyr Gibbs", pos: "RB", team: "DET", bye: 6, adp: 1.5, inj: "Q" },
@@ -48,7 +48,7 @@ const PLAYERS = [
   { id: "8146", name: "Garrett Wilson", pos: "WR", team: "NYJ", bye: 13, adp: 29.9, inj: "" },
   { id: "8150", name: "Kyren Williams", pos: "RB", team: "LAR", bye: 11, adp: 31.3, inj: "" },
   { id: "12481", name: "Cam Skattebo", pos: "RB", team: "NYG", bye: 8, adp: 32.4, inj: "" },
-  { id: "7525", name: "DeVonta Smith", pos: "WR", team: "PHI", bye: 10, adp: 32.5, inj: "" },
+  { id: "7525", name: "DeVonta Smith", pos: "WR", team: "PHI", bye: 10, adp: 32.5, inj: "Q" },
   { id: "12514", name: "Emeka Egbuka", pos: "WR", team: "TB", bye: 10, adp: 32.7, inj: "" },
   { id: "7588", name: "Javonte Williams", pos: "RB", team: "DAL", bye: 14, adp: 35.4, inj: "" },
   { id: "11632", name: "Malik Nabers", pos: "WR", team: "NYG", bye: 8, adp: 35.7, inj: "Q" },
@@ -207,7 +207,7 @@ const PLAYERS = [
   { id: "7002", name: "Juwan Johnson", pos: "TE", team: "NO", bye: 8, adp: 160.8, inj: "" },
   { id: "11625", name: "Adonai Mitchell", pos: "WR", team: "NYJ", bye: 13, adp: 161.5, inj: "" },
   { id: "7839", name: "Evan McPherson", pos: "K", team: "CIN", bye: 6, adp: 163.0, inj: "" },
-  { id: "13330", name: "Kenyon Sadiq", pos: "TE", team: "NYJ", bye: 13, adp: 163.2, inj: "" },
+  { id: "13330", name: "Kenyon Sadiq", pos: "TE", team: "NYJ", bye: 13, adp: 163.2, inj: "Q" },
   { id: "11786", name: "Cam Little", pos: "K", team: "JAX", bye: 7, adp: 163.9, inj: "" },
   { id: "TEN", name: "Tennessee Defense", pos: "DST", team: "TEN", bye: 9, adp: 165.0, inj: "" },
   { id: "13417", name: "De'Zhaun Stribling", pos: "WR", team: "SF", bye: 8, adp: 165.0, inj: "Q" },
