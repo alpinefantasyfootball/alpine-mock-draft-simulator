@@ -17,6 +17,13 @@ const TOTAL_PICKS = TEAM_COUNT * ROUNDS;
 const STARTERS = { QB: 1, RB: 2, WR: 2, TE: 1, K: 1, DST: 1 };  // plus 1 FLEX
 const MAX_POS  = { QB: 4, RB: 8, WR: 8, TE: 3, K: 3, DST: 3 };
 
+// A player carrying one of these has been ruled out. CPU teams never
+// take them and they never appear in your suggestions.
+const RULED_OUT = ["O", "IR", "SUS", "NFI", "DNR"];
+
+// Available, but carrying real risk. Everyone drafts them later.
+const RISKY = ["D", "PUP"];
+
 const CPU_NAMES = [
   "Wild Goose Chase", "Bijan Mustard", "Nacua Matata", "The Gibbs Ultimatum",
   "Kupp of Joe", "Purdy Vacant", "Hurts So Good", "Saquon For The Team",
@@ -146,7 +153,9 @@ function cpuChoice(slot, round) {
 
   board.forEach(function (player) {
     if (player.drafted) return;
-    const score = (player.adp + player.jitter) * needMultiplier(slot, player.pos, round);
+    if (isRuledOut(player)) return;                    // never draft someone who is out
+    const risk = isRisky(player) ? 1.35 : 1;           // discount the questionable ones
+    const score = (player.adp + player.jitter) * needMultiplier(slot, player.pos, round) * risk;
     if (score < bestScore) { bestScore = score; best = player; }
   });
 
@@ -343,12 +352,14 @@ function suggestions() {
   return board
     .filter(function (p) {
       if (p.drafted) return false;
+      if (isRuledOut(p)) return false;
       if (state.filterSuggest !== "ALL" && p.pos !== state.filterSuggest) return false;
       if (countAt(state.mySlot, p.pos) >= MAX_POS[p.pos]) return false;
       return true;
     })
     .map(function (p) {
-      return { player: p, score: (p.adp + p.jitter) * needMultiplier(state.mySlot, p.pos, round) };
+      const risk = isRisky(p) ? 1.35 : 1;
+      return { player: p, score: (p.adp + p.jitter) * needMultiplier(state.mySlot, p.pos, round) * risk };
     })
     .sort((a, b) => a.score - b.score)
     .slice(0, 6)
@@ -371,9 +382,32 @@ function initials(name) {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-function avatar(player, small) {
-  return `<div class="avatar ${player.pos}${small ? " sm" : ""}">${initials(player.name)}</div>`;
+function photoUrl(player) {
+  if (!player.id) return "";
+  return player.pos === "DST"
+    ? "https://sleepercdn.com/images/team_logos/nfl/" + player.team.toLowerCase() + ".png"
+    : "https://sleepercdn.com/content/nfl/players/thumb/" + player.id + ".jpg";
 }
+
+function avatar(player, small) {
+  const url = photoUrl(player);
+  const photo = url
+    ? `<img src="${url}" alt="" loading="lazy" class="${player.pos === "DST" ? "logo" : ""}" onerror="this.remove()">`
+    : "";
+  return `<div class="avatar ${player.pos}${small ? " sm" : ""}">${initials(player.name)}${photo}</div>`;
+}
+
+// Renders the little O / Q / PUP chip, or nothing at all.
+function injBadge(player) {
+  return player.inj ? `<span class="inj ${player.inj}">${player.inj}</span>` : "";
+}
+
+function isRuledOut(player) { return RULED_OUT.indexOf(player.inj) >= 0; }
+function isRisky(player)    { return RISKY.indexOf(player.inj) >= 0; }
+
+// ADP feeds lag injury news by days. A player still going inside the
+// top 150 who has already been ruled out is worth shouting about.
+function adpConflict(player) { return isRuledOut(player) && player.adp <= 150; }
 
 function renderHeader() {
   appbar.className = "appbar";
@@ -442,7 +476,7 @@ function renderSuggestions() {
         <div class="sug-body">
           <div class="sug-name">${p.name}</div>
           <div class="sug-meta">
-            <span class="badge ${p.pos}">${p.pos}</span> ${p.team} &middot; Bye ${p.bye}
+            <span class="badge ${p.pos}">${p.pos}</span> ${p.team} &middot; Bye ${p.bye} ${injBadge(p)}
           </div>
           <div class="sug-stats">Overall ${p.overall} (${p.pos}${p.posRank}) &middot; ADP ${p.adp.toFixed(1)} &middot; ${valueText}</div>
         </div>
@@ -463,10 +497,10 @@ function renderPlayers() {
 
   tbody.innerHTML = visible.map(function (p) {
     return `
-      <tr class="${p.drafted ? "drafted" : ""}">
+      <tr class="${p.drafted ? "drafted" : ""} ${adpConflict(p) ? "conflict" : ""}">
         <td>
           <span class="nm">${p.name}</span>
-          <span class="meta"><span class="badge ${p.pos}">${p.pos}</span> ${p.team} &middot; Bye ${p.bye}</span>
+          <span class="meta"><span class="badge ${p.pos}">${p.pos}</span> ${p.team} &middot; Bye ${p.bye} ${injBadge(p)}</span>
         </td>
         <td class="num">${p.pos}${p.posRank}</td>
         <td class="num">${p.adp.toFixed(1)}</td>
@@ -537,7 +571,7 @@ function rosterRow(slotName, player, isBench) {
       ${avatar(player, true)}
       <div>
         <div class="rname">${player.name}</div>
-        <div class="rmeta"><span class="badge ${player.pos}">${player.pos}</span> ${player.team} &middot; Bye ${player.bye}</div>
+        <div class="rmeta"><span class="badge ${player.pos}">${player.pos}</span> ${player.team} &middot; Bye ${player.bye} ${injBadge(player)}</div>
       </div>
       <span class="rpick">${pickCode(pick.overall)}</span>
     </li>`;
@@ -592,6 +626,7 @@ function renderTicker() {
         ${pick.player.name}
         <span class="badge ${pick.player.pos}">${pick.player.pos}</span>
         <span class="tick-tm">${pick.player.team} &middot; Bye ${pick.player.bye}</span>
+        ${injBadge(pick.player)}
       </div>
     </div>
     ${state.simulating ? '<button class="mini" id="skipBtn">Skip &raquo;</button>' : ""}`;
@@ -626,6 +661,18 @@ for (let i = 1; i <= TEAM_COUNT; i++) {
   const s = (i % 100 > 10 && i % 100 < 14) ? "th" : (suffix[i % 10] || "th");
   slotSelect.innerHTML += `<option value="${i - 1}">${i}${s}</option>`;
 }
+
+// PLAYERS_META only exists once players.js has been generated, so
+// check for it rather than assuming.
+(function showFreshness() {
+  const note = $("freshness");
+  if (typeof PLAYERS_META === "undefined") { note.textContent = ""; return; }
+  const flagged = PLAYERS_META.flagged
+    ? " \u00b7 " + PLAYERS_META.flagged + " injury designations"
+    : "";
+  note.textContent = PLAYERS_META.count + " players \u00b7 data " +
+                     PLAYERS_META.generated + flagged;
+})();
 
 $("randomizeBtn").addEventListener("click", function () {
   slotSelect.value = Math.floor(Math.random() * TEAM_COUNT);

@@ -281,9 +281,32 @@ select {
 
 .pos-filter button.on { color: var(--blue); border-bottom-color: var(--blue); }
 
+/* ---------- injury designations ---------- */
+
+.inj {
+  display: inline-block;
+  font-size: 9px; font-weight: 700; letter-spacing: .04em;
+  padding: 2px 5px; border-radius: 3px;
+  background: #EDF0F3; color: var(--ink-mid);
+}
+
+.inj.Q   { background: #FCF0DC; color: #8A5A11; }
+.inj.D   { background: #FBE4D3; color: #9A4B14; }
+.inj.O   { background: #FBE1E5; color: #A32530; }
+.inj.IR  { background: #F6D5D8; color: #86202A; }
+.inj.PUP { background: #EDE7FB; color: #5B41A8; }
+.inj.NFI { background: #EDE7FB; color: #5B41A8; }
+.inj.SUS { background: #E4E8EC; color: #46555F; }
+
+/* a top-150 player who has already been ruled out — the ADP feed
+   always lags the injury feed by a few days */
+tr.conflict { background: #FEF6F7; }
+tr.conflict .nm { color: #A32530; }
+
 /* ---------- avatars ---------- */
 
 .avatar {
+  position: relative; overflow: hidden;
   width: 46px; height: 46px; flex: none;
   border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
@@ -299,6 +322,22 @@ select {
 .avatar.DST { background: var(--dst-bg); color: var(--dst-fg); }
 
 .avatar.sm { width: 34px; height: 34px; font-size: 12px; }
+
+/* The headshot sits on top of the initials. If it fails to load it
+   removes itself and the initials show through, so a missing photo
+   is never a broken image icon. */
+.avatar img {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover; object-position: top center;
+}
+
+.avatar img.logo { object-fit: contain; padding: 5px; }
+
+.freshness {
+  margin: 14px 0 0; text-align: center;
+  font-size: 11.5px; color: var(--ink-light);
+}
 
 /* ---------- suggestion cards ---------- */
 
