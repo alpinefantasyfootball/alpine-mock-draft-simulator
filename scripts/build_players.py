@@ -12,9 +12,9 @@ Sources (all free, no key, no account)
 Sleeper asks that these be called no more than once a day.
 FFC asks for attribution.
 
-Fantasy points are recomputed from raw components using the Alpine league's
-own scoring, NOT Sleeper's pts_half_ppr, which assumes 4-point passing
-touchdowns and flat kicker scoring.
+Fantasy points are recomputed from raw components using the SCORING table
+below, NOT Sleeper's pts_half_ppr, which assumes 4-point passing touchdowns
+and flat kicker scoring.
 
 Run by hand:  python scripts/build_players.py
 """
@@ -93,9 +93,11 @@ MANUAL_MATCHES = {
 }
 
 # ---------------------------------------------------------------- scoring
-# Straight from the league settings screen.
+# Deliberately generic, not one league's settings. Every touchdown is worth 6
+# whether it was thrown, run or caught, so no quirk of a particular league
+# leaks into projections, historical points, the suggestions or the grade.
 SCORING = {
-    "pass_yd": 0.04, "pass_td": 5, "pass_int": -2, "pass_2pt": 2,
+    "pass_yd": 0.04, "pass_td": 6, "pass_int": -2, "pass_2pt": 2,
     "rush_yd": 0.1, "rush_td": 6, "rush_2pt": 2,
     "rec": 0.5, "rec_yd": 0.1, "rec_td": 6, "rec_2pt": 2,
     "fum_lost": -2,
@@ -172,7 +174,7 @@ def injury_code(entry):
 
 
 def fantasy_points(row):
-    """Apply the Alpine scoring rules to one Sleeper stat line."""
+    """Apply the scoring rules above to one Sleeper stat line."""
     if not row:
         return 0.0
     total = 0.0
@@ -461,7 +463,8 @@ def main():
             "     s            season totals by year\n"
             "     p            projection for the coming season\n"
             "     w            week by week logs for last season\n\n"
-            "   Fantasy points use Alpine league scoring, not Sleeper's.\n"
+            "   Fantasy points are recomputed from raw components, not taken\n"
+            "   from Sleeper's own totals. 6 points per touchdown of any kind.\n"
             f"   Generated : {stamp}\n"
             "   ========================================================== */\n\n"
             "const PLAYER_STATS = " + json.dumps(stats, separators=(",", ":")) + ";\n")

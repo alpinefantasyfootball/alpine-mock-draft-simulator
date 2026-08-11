@@ -2,11 +2,11 @@
    Alpine Draft Room - player data
    GENERATED FILE. Edit scripts/build_players.py instead.
 
-   Generated : 2026-08-11 14:41 UTC
+   Generated : 2026-08-11 17:05 UTC
    Players   : standard 205 · half 208 · ppr 256
    Seasons   : 2018-2025
    Matched   : 208 of the half set carry a Sleeper id
-   Flagged   : 28 carry an injury designation
+   Flagged   : 26 carry an injury designation
    Projected : 258 have 2026 projections
 
    ADP: Fantasy Football Calculator, one set per scoring format.
@@ -15,7 +15,7 @@
    Player, injury and stat data: Sleeper.
    ========================================================== */
 
-const PLAYERS_META = { generated: "2026-08-11 14:41 UTC", count: 208, matched: 208, flagged: 28, projected: 258, unmatched: 0 };
+const PLAYERS_META = { generated: "2026-08-11 17:05 UTC", count: 208, matched: 208, flagged: 26, projected: 258, unmatched: 0 };
 
 /* One ordered list per scoring format. app.js picks the set that
    matches league.scoring when a draft starts, and works out every
@@ -108,7 +108,7 @@ const ADP_SETS = {
   { id: "7594", name: "Chuba Hubbard", pos: "RB", team: "CAR", bye: 5, adp: 82.0, inj: "" },
   { id: "13281", name: "Jordyn Tyson", pos: "WR", team: "NO", bye: 8, adp: 82.1, inj: "" },
   { id: "5872", name: "Deebo Samuel Sr.", pos: "WR", team: "SF", bye: 8, adp: 83.4, inj: "" },
-  { id: "10222", name: "Jayden Reed", pos: "WR", team: "GB", bye: 11, adp: 85.7, inj: "Q" },
+  { id: "10222", name: "Jayden Reed", pos: "WR", team: "GB", bye: 11, adp: 85.7, inj: "" },
   { id: "10232", name: "Michael Wilson", pos: "WR", team: "ARI", bye: 14, adp: 87.3, inj: "" },
   { id: "11624", name: "Xavier Worthy", pos: "WR", team: "KC", bye: 5, adp: 87.4, inj: "Q" },
   { id: "4037", name: "Chris Godwin Jr.", pos: "WR", team: "TB", bye: 10, adp: 87.8, inj: "" },
@@ -137,7 +137,7 @@ const ADP_SETS = {
   { id: "10859", name: "Sam LaPorta", pos: "TE", team: "DET", bye: 6, adp: 106.9, inj: "" },
   { id: "3163", name: "Jared Goff", pos: "QB", team: "DET", bye: 6, adp: 107.7, inj: "" },
   { id: "4981", name: "Calvin Ridley", pos: "WR", team: "TEN", bye: 9, adp: 108.4, inj: "" },
-  { id: "12501", name: "Matthew Golden", pos: "WR", team: "GB", bye: 11, adp: 109.5, inj: "Q" },
+  { id: "12501", name: "Matthew Golden", pos: "WR", team: "GB", bye: 11, adp: 109.5, inj: "" },
   { id: "11586", name: "Blake Corum", pos: "RB", team: "LAR", bye: 11, adp: 110.0, inj: "" },
   { id: "9500", name: "Josh Downs", pos: "WR", team: "IND", bye: 13, adp: 111.0, inj: "Q" },
   { id: "HOU", name: "Houston Defense", pos: "DST", team: "HOU", bye: 8, adp: 111.4, inj: "" },
@@ -324,7 +324,7 @@ const ADP_SETS = {
   { id: "2449", name: "Stefon Diggs", pos: "WR", team: "WAS", bye: 7, adp: 89.4, inj: "" },
   { id: "12489", name: "RJ Harvey", pos: "RB", team: "DEN", bye: 10, adp: 89.9, inj: "" },
   { id: "9756", name: "Jordan Addison", pos: "WR", team: "MIN", bye: 6, adp: 92.3, inj: "Q" },
-  { id: "10222", name: "Jayden Reed", pos: "WR", team: "GB", bye: 11, adp: 92.7, inj: "Q" },
+  { id: "10222", name: "Jayden Reed", pos: "WR", team: "GB", bye: 11, adp: 92.7, inj: "" },
   { id: "10859", name: "Sam LaPorta", pos: "TE", team: "DET", bye: 6, adp: 93.3, inj: "" },
   { id: "DEN", name: "Denver Defense", pos: "DST", team: "DEN", bye: 10, adp: 93.6, inj: "" },
   { id: "12508", name: "Jaxson Dart", pos: "QB", team: "NYG", bye: 8, adp: 93.8, inj: "" },
@@ -350,7 +350,7 @@ const ADP_SETS = {
   { id: "HOU", name: "Houston Defense", pos: "DST", team: "HOU", bye: 8, adp: 110.8, inj: "" },
   { id: "8676", name: "Rashid Shaheed", pos: "WR", team: "SEA", bye: 11, adp: 112.4, inj: "" },
   { id: "11583", name: "Jonathon Brooks", pos: "RB", team: "CAR", bye: 5, adp: 114.1, inj: "" },
-  { id: "12501", name: "Matthew Golden", pos: "WR", team: "GB", bye: 11, adp: 117.7, inj: "Q" },
+  { id: "12501", name: "Matthew Golden", pos: "WR", team: "GB", bye: 11, adp: 117.7, inj: "" },
   { id: "4217", name: "George Kittle", pos: "TE", team: "SF", bye: 8, adp: 119.1, inj: "PUP" },
   { id: "8408", name: "Jordan Mason", pos: "RB", team: "MIN", bye: 6, adp: 120.1, inj: "" },
   { id: "DET", name: "Detroit Defense", pos: "DST", team: "DET", bye: 6, adp: 120.1, inj: "" },
@@ -539,7 +539,7 @@ const ADP_SETS = {
   { id: "9500", name: "Josh Downs", pos: "WR", team: "IND", bye: 13, adp: 92.2, inj: "Q" },
   { id: "DEN", name: "Denver Defense", pos: "DST", team: "DEN", bye: 10, adp: 93.9, inj: "" },
   { id: "5872", name: "Deebo Samuel Sr.", pos: "WR", team: "SF", bye: 8, adp: 95.5, inj: "" },
-  { id: "10222", name: "Jayden Reed", pos: "WR", team: "GB", bye: 11, adp: 95.8, inj: "Q" },
+  { id: "10222", name: "Jayden Reed", pos: "WR", team: "GB", bye: 11, adp: 95.8, inj: "" },
   { id: "9754", name: "Quentin Johnston", pos: "WR", team: "LAC", bye: 7, adp: 96.3, inj: "" },
   { id: "4046", name: "Patrick Mahomes", pos: "QB", team: "KC", bye: 5, adp: 97.3, inj: "Q" },
   { id: "8136", name: "Rachaad White", pos: "RB", team: "WAS", bye: 7, adp: 99.3, inj: "" },
@@ -566,7 +566,7 @@ const ADP_SETS = {
   { id: "8147", name: "John Metchie III", pos: "WR", team: "CAR", bye: 5, adp: 119.6, inj: "" },
   { id: "11563", name: "Bo Nix", pos: "QB", team: "DEN", bye: 10, adp: 121.1, inj: "" },
   { id: "8676", name: "Rashid Shaheed", pos: "WR", team: "SEA", bye: 11, adp: 121.6, inj: "" },
-  { id: "12501", name: "Matthew Golden", pos: "WR", team: "GB", bye: 11, adp: 121.9, inj: "Q" },
+  { id: "12501", name: "Matthew Golden", pos: "WR", team: "GB", bye: 11, adp: 121.9, inj: "" },
   { id: "11586", name: "Blake Corum", pos: "RB", team: "LAR", bye: 11, adp: 122.4, inj: "" },
   { id: "8408", name: "Jordan Mason", pos: "RB", team: "MIN", bye: 6, adp: 122.7, inj: "" },
   { id: "DET", name: "Detroit Defense", pos: "DST", team: "DET", bye: 6, adp: 127.5, inj: "" },

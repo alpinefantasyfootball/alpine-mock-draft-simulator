@@ -555,7 +555,7 @@ function statOf(player) {
   return PLAYER_STATS[player.id] || null;
 }
 
-// Projected points under Alpine scoring, and each player's rank at
+// Projected points under this app's scoring, and each player's rank at
 // their position by projection rather than by ADP.
 function buildProjections() {
   board.forEach(function (p) {
@@ -1271,7 +1271,7 @@ function openSheet(player) {
       ${meter("Upside",  sig.upside,  sig.upside  >= 55 ? "good" : "", sig.reasons.upside)}
       ${meter("Bust risk", sig.bust,  sig.bust >= 55 ? "bad" : sig.bust >= 35 ? "warn" : "", sig.reasons.bust)}
 
-      <p class="section-label">2026 projection, Alpine scoring</p>
+      <p class="section-label">2026 projection</p>
       <div class="statgrid">
         <div class="statbox"><div class="k">Points</div><div class="v">${Math.round(p.pts || 0)}</div></div>
         <div class="statbox"><div class="k">Per game</div><div class="v">${p.gp ? (p.pts / p.gp).toFixed(1) : "&mdash;"}</div></div>
@@ -1339,7 +1339,7 @@ function openSheet(player) {
 
     const span = seasonKeys(s);
     seasons = `<p class="section-label">${span.length ? span[0] + " to " + span[span.length - 1] : "Career"}
-      &middot; scored under Alpine rules, not Sleeper's defaults</p>
+      &middot; 6 points per touchdown, recomputed rather than taken from Sleeper</p>
       <div class="tblscroll"><table class="logtbl">
         <thead><tr>${cols.head.map((h) => `<th>${h}</th>`).join("")}</tr></thead>
         <tbody>${rows}</tbody>
