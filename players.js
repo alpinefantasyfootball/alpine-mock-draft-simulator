@@ -2,7 +2,7 @@
    Alpine Draft Room - player data
    GENERATED FILE. Edit scripts/build_players.py instead.
 
-   Generated : 2026-08-11 16:54 UTC
+   Generated : 2026-08-11 17:05 UTC
    Players   : standard 205 · half 208 · ppr 256
    Seasons   : 2018-2025
    Matched   : 208 of the half set carry a Sleeper id
@@ -15,7 +15,7 @@
    Player, injury and stat data: Sleeper.
    ========================================================== */
 
-const PLAYERS_META = { generated: "2026-08-11 16:54 UTC", count: 208, matched: 208, flagged: 26, projected: 258, unmatched: 0 };
+const PLAYERS_META = { generated: "2026-08-11 17:05 UTC", count: 208, matched: 208, flagged: 26, projected: 258, unmatched: 0 };
 
 /* One ordered list per scoring format. app.js picks the set that
    matches league.scoring when a draft starts, and works out every
