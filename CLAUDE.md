@@ -36,9 +36,12 @@ weekly logs, projections, depth charts) and **Fantasy Football Calculator**
 (ADP, one set per scoring format, written to `players.js` as `ADP_SETS`).
 
 Fantasy points are **recomputed from raw components** in `build_players.py`
-using the league's own scoring — five-point passing touchdowns, distance-tiered
-field goals. Sleeper's own `pts_half_ppr` is deliberately discarded because it
-assumes four-point passing TDs.
+using the `SCORING` table — six points for a touchdown of any kind,
+distance-tiered field goals. Sleeper's own `pts_half_ppr` is deliberately
+discarded because it assumes four-point passing TDs.
+
+The scoring table is deliberately generic rather than one league's settings,
+so no local quirk leaks into projections, historical points or the grade.
 
 ## Conventions
 
