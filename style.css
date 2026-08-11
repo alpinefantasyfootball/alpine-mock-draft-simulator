@@ -647,7 +647,12 @@ tr.drafted .meta, tr.drafted .num { opacity: .45; }
 .bar-head span { color: var(--ink-light); font-size: 11.5px; font-variant-numeric: tabular-nums; }
 
 .bar-track { height: 8px; background: #EDF1F5; border-radius: 5px; overflow: hidden; }
-.bar-fill  { height: 100%; border-radius: 5px; background: var(--blue); }
+
+/* No radius on the fill. The track already rounds it by clipping, and giving
+   the fill its own curve as well means it gets anti-aliased against the grey
+   track and then clipped again — which leaves a full bar looking washed out
+   at the right end instead of solid. */
+.bar-fill  { height: 100%; background: var(--blue); }
 .bar-fill.good { background: #1B7343; }
 .bar-fill.warn { background: var(--te); }
 .bar-fill.bad  { background: #C0392F; }
