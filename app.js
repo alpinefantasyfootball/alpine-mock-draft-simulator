@@ -21,7 +21,8 @@ const league = {
   starters: { QB: 1, RB: 2, WR: 2, TE: 1, K: 1, DST: 1 },
   flex: 1,           // one FLEX, drawn from RB / WR / TE
   bench: 5,
-  scoring: "half"    // "standard" | "half" | "ppr" — also picks the ADP set
+  scoring: "half",   // "standard" | "half" | "ppr" — also picks the ADP set
+  rules: null        // the scoring table; filled in below, editable on setup
 };
 
 const POSITIONS = ["QB", "RB", "WR", "TE", "K", "DST"];
@@ -561,20 +562,46 @@ function byeShare(player) {
    panel of experts behind it: it is projections, depth chart
    position, age and injury status, weighted and shown.     */
 
-/* Points under the selected scoring format.
+/* ---- Scoring ------------------------------------------
 
-   stats.js stores one number per stat line, worked out by the pipeline at
-   half PPR. Receptions are the only part of that which the setup screen can
-   change, and the reception count is stored alongside the points, so the
-   other two formats are an exact adjustment rather than an approximation:
-   add half a point per catch for full PPR, take half away for standard.
+   stats.js holds raw components and no points total at all.
+   The rules live here, which is what makes them editable:
+   change a value and every projection, season and week
+   rescores on the next render, with no rebuild.
 
-   Everything that shows a points total goes through here. Read `pts`
-   directly and the Players tab will disagree with the player sheet the
-   moment somebody picks a format other than half.                        */
+   STAT_KEYS comes from stats.js and says which short key
+   holds which stat. It is generated from the pipeline's own
+   field list so the two can never drift apart.            */
 
-const REC_POINTS = { standard: 0, half: 0.5, ppr: 1 };
-const STORED_REC_POINTS = 0.5;        // what build_players.py scored with
+// Generic on purpose: six points for a touchdown however it was scored.
+// This is the starting point, not the law — the setup screen edits a copy.
+const DEFAULT_RULES = {
+  pass_yd: 0.04, pass_td: 6, pass_int: -2, pass_2pt: 2,
+  rush_yd: 0.1, rush_td: 6, rush_2pt: 2,
+  rec: 0.5, rec_yd: 0.1, rec_td: 6, rec_2pt: 2,
+  fum_lost: -2, kr_td: 6, pr_td: 6,
+  xpm: 1, xpmiss: -1, fgmiss: -1,
+  fgm_0_19: 3, fgm_20_29: 3, fgm_30_39: 3,
+  fgm_40_49: 4, fgm_50_59: 5, fgm_60p: 6,
+  sack: 1, int: 2, fum_rec: 2, safe: 2,
+  def_td: 6, def_st_td: 6, blk_kick: 2, def_2pt: 2,
+  pts_allow_0: 5, pts_allow_1_6: 4, pts_allow_7_13: 3,
+  pts_allow_14_20: 1, pts_allow_21_27: 0,
+  pts_allow_28_34: -1, pts_allow_35p: -4
+};
+
+// The format dropdown is a preset over one rule. Everything else it leaves
+// alone, so a custom table survives switching between standard and PPR.
+const REC_BY_FORMAT = { standard: 0, half: 0.5, ppr: 1 };
+
+function rulesForFormat(fmt) {
+  const rec = REC_BY_FORMAT[fmt];
+  return Object.assign({}, DEFAULT_RULES, { rec: rec === undefined ? 0.5 : rec });
+}
+
+// Seeded here rather than in the league object itself, because the defaults
+// are defined in this section and a const cannot be read before it exists.
+league.rules = rulesForFormat(league.scoring);
 
 // Defaults to the league on screen, but takes a format so a saved draft can
 // be described in its own terms.
@@ -583,12 +610,25 @@ function scoringLabel(scoring) {
   return s === "ppr" ? "full PPR" : s === "standard" ? "standard" : "half PPR";
 }
 
-function pointsOf(block) {
+// True when a stat line represents a game or season that actually happened.
+// Asked of the raw data rather than of a points total, because a real week
+// can legitimately score zero and a week that never happened cannot be told
+// apart from it any other way.
+function didPlay(block) {
+  if (!block) return false;
+  return Object.keys(block).some((k) => k !== "w" && k !== "gp" && block[k]);
+}
+
+function fantasyPoints(block) {
   if (!block) return 0;
-  const rate = REC_POINTS[league.scoring];
-  const delta = (rate === undefined ? STORED_REC_POINTS : rate) - STORED_REC_POINTS;
-  // A tenth of a point, same precision the pipeline writes.
-  return Math.round(((block.pts || 0) + delta * (block.rc || 0)) * 10) / 10;
+  let total = 0;
+  Object.keys(league.rules).forEach(function (rule) {
+    const key = STAT_KEYS[rule];
+    const value = key ? block[key] : 0;
+    if (value) total += value * league.rules[rule];
+  });
+  // A tenth of a point, the precision the raw data arrives in.
+  return Math.round(total * 10) / 10;
 }
 
 // Season keys, oldest first. Nothing here assumes which years exist.
@@ -622,12 +662,12 @@ function statOf(player) {
 function buildProjections() {
   board.forEach(function (p) {
     const s = statOf(p);
-    // A projection of zero means Sleeper has no real forecast, not that the
-    // player will score nothing. Treating it as valid would drag replacement
-    // level toward zero and make every other player look elite. The test is
-    // on the stored number, before any scoring adjustment, so that a format
-    // change can never turn a missing projection into a real one.
-    p.projPts = s && s.p && s.p.pts > 0 ? pointsOf(s.p) : null;
+    // Sleeper returns zero-filled rows for players it has no forecast for,
+    // and counting those as real projections once dragged replacement level
+    // toward zero and made everybody else look elite. Games projected is the
+    // marker, asked of the raw data — a scoring change must never be able to
+    // turn a missing projection into a real one, or the other way round.
+    p.projPts = s && s.p && s.p.gp > 0 ? fantasyPoints(s.p) : null;
   });
 
   POSITIONS.forEach(function (pos) {
@@ -680,7 +720,7 @@ function draftSignals(player) {
 
   const pair = trendPair(s);
   if (pair) {
-    const a = pointsOf(pair[0]) / pair[0].gp, b = pointsOf(pair[1]) / pair[1].gp;
+    const a = fantasyPoints(pair[0]) / pair[0].gp, b = fantasyPoints(pair[1]) / pair[1].gp;
     if (a > 0 && b > a * 1.2) { upside += 15;
       reasons.upside.push("points per game up " + Math.round((b / a - 1) * 100) + "% across his last two full seasons"); }
   }
@@ -1339,8 +1379,8 @@ function openSheet(player) {
 
       <p class="section-label">2026 projection &middot; ${scoringLabel()}</p>
       <div class="statgrid">
-        <div class="statbox"><div class="k">Points</div><div class="v">${Math.round(pointsOf(p))}</div></div>
-        <div class="statbox"><div class="k">Per game</div><div class="v">${p.gp ? (pointsOf(p) / p.gp).toFixed(1) : "&mdash;"}</div></div>
+        <div class="statbox"><div class="k">Points</div><div class="v">${Math.round(fantasyPoints(p))}</div></div>
+        <div class="statbox"><div class="k">Per game</div><div class="v">${p.gp ? (fantasyPoints(p) / p.gp).toFixed(1) : "&mdash;"}</div></div>
         <div class="statbox"><div class="k">Pos rank</div><div class="v">${player.projPosRank ? player.pos + player.projPosRank : "&mdash;"}</div></div>
         <div class="statbox"><div class="k">vs ADP</div><div class="v">${player.projPosRank ? (player.posRank - player.projPosRank >= 0 ? "+" : "") + (player.posRank - player.projPosRank) : "&mdash;"}</div></div>
       </div>
@@ -1359,15 +1399,17 @@ function openSheet(player) {
   if (!s || !s.w || !s.w.length) {
     logs = `<div class="nodata">No week-by-week logs stored for this player.</div>`;
   } else {
-    // Whether a week happened is a question about the raw data, so those two
-    // checks stay on the stored values. Only what gets shown is adjusted.
-    const played = s.w.filter((g) => g.pts !== 0 || g.rc || g.ra || g.pa || g.fg || g.sk);
-    const avg = played.length ? played.reduce((a, g) => a + pointsOf(g), 0) / played.length : 0;
+    // Whether a week happened is a question about the raw data, never about
+    // what it scored, so both checks go through didPlay(). The old version
+    // listed a handful of stats by hand and would have called a week blank
+    // for anyone whose only contribution was outside that list.
+    const played = s.w.filter(didPlay);
+    const avg = played.length ? played.reduce((a, g) => a + fantasyPoints(g), 0) / played.length : 0;
     const cols = logColumns(player, s.w);
 
     const rows = s.w.map(function (g) {
-      const blank = g.pts === 0 && !g.rc && !g.ra && !g.pa && !g.fg && !g.sk && !g.kr;
-      const points = pointsOf(g);
+      const blank = !didPlay(g);
+      const points = fantasyPoints(g);
       const cells = cols.keys.map(function (k, i) {
         const v = k === "w" ? g.w : k === "pts" ? points : cellValue(g, k);
         const tone = k === "pts" && !blank
@@ -1400,7 +1442,7 @@ function openSheet(player) {
       const y = entry[1];
       const cells = cols.keys.map(function (k) {
         if (k === "w") return `<td>${entry[0]}</td>`;
-        const v = k === "pts" ? Math.round(pointsOf(y)) : cellValue(y, k);
+        const v = k === "pts" ? Math.round(fantasyPoints(y)) : cellValue(y, k);
         return `<td>${v === undefined ? "&mdash;" : v}</td>`;
       }).join("");
       return `<tr>${cells}</tr>`;
@@ -1661,6 +1703,73 @@ function fillSlotOptions() {
 
 const SLOT_LIMITS = { QB: 2, RB: 4, WR: 5, TE: 3, K: 2, DST: 2 };
 
+/* ---- the scoring editor ----
+
+   Fields are generated from the rule table rather than written out in the
+   markup, so a rule added to DEFAULT_RULES appears here automatically and
+   the two can never disagree about what exists.                          */
+
+const RULE_GROUPS = [
+  ["Passing",  ["pass_yd", "pass_td", "pass_int", "pass_2pt"]],
+  ["Rushing",  ["rush_yd", "rush_td", "rush_2pt"]],
+  ["Receiving", ["rec", "rec_yd", "rec_td", "rec_2pt"]],
+  ["Turnovers and returns", ["fum_lost", "kr_td", "pr_td"]],
+  ["Kicking",  ["xpm", "xpmiss", "fgmiss", "fgm_0_19", "fgm_20_29",
+                "fgm_30_39", "fgm_40_49", "fgm_50_59", "fgm_60p"]],
+  ["Defence and special teams",
+               ["sack", "int", "fum_rec", "safe", "def_td", "def_st_td",
+                "blk_kick", "def_2pt"]],
+  ["Points allowed by a defence",
+               ["pts_allow_0", "pts_allow_1_6", "pts_allow_7_13",
+                "pts_allow_14_20", "pts_allow_21_27", "pts_allow_28_34",
+                "pts_allow_35p"]]
+];
+
+const RULE_LABELS = {
+  pass_yd: "Per passing yard", pass_td: "Passing TD",
+  pass_int: "Interception thrown", pass_2pt: "Passing 2-pt",
+  rush_yd: "Per rushing yard", rush_td: "Rushing TD", rush_2pt: "Rushing 2-pt",
+  rec: "Per reception", rec_yd: "Per receiving yard",
+  rec_td: "Receiving TD", rec_2pt: "Receiving 2-pt",
+  fum_lost: "Fumble lost", kr_td: "Kick return TD", pr_td: "Punt return TD",
+  xpm: "Extra point", xpmiss: "Extra point missed", fgmiss: "Field goal missed",
+  fgm_0_19: "FG 0–19", fgm_20_29: "FG 20–29", fgm_30_39: "FG 30–39",
+  fgm_40_49: "FG 40–49", fgm_50_59: "FG 50–59", fgm_60p: "FG 60+",
+  sack: "Sack", int: "Interception", fum_rec: "Fumble recovered",
+  safe: "Safety", def_td: "Defensive TD", def_st_td: "Special teams TD",
+  blk_kick: "Blocked kick", def_2pt: "2-pt return",
+  pts_allow_0: "Shutout", pts_allow_1_6: "1–6 allowed",
+  pts_allow_7_13: "7–13 allowed", pts_allow_14_20: "14–20 allowed",
+  pts_allow_21_27: "21–27 allowed", pts_allow_28_34: "28–34 allowed",
+  pts_allow_35p: "35+ allowed"
+};
+
+// Rebuilt only when the values change underneath the user — on load, on a
+// reset, and when the format preset moves the reception rule. Never on every
+// keystroke, because that would steal focus mid-edit.
+function renderScoringFields() {
+  $("scoringFields").innerHTML = RULE_GROUPS.map(function (group) {
+    const rows = group[1].map(function (rule) {
+      return `<label class="rule">
+          <span>${RULE_LABELS[rule] || rule}</span>
+          <input type="number" step="0.01" data-rule="${rule}" value="${league.rules[rule]}">
+        </label>`;
+    }).join("");
+    return `<p class="section-label">${group[0]}</p><div class="rulegrid">${rows}</div>`;
+  }).join("") +
+  `<p class="hint">Historical seasons and weeks carry every stat above.
+   Sleeper's projections are coarser: they do not forecast defensive
+   touchdowns, safeties or points allowed, so those rules move a player's
+   past far more than his 2026 projection.</p>`;
+}
+
+function scoringSummary() {
+  const r = league.rules;
+  const rec = r.rec === 1 ? "full PPR" : r.rec === 0.5 ? "half PPR"
+            : r.rec === 0 ? "no PPR" : r.rec + " per catch";
+  return `${rec} · ${r.pass_td} pt passing TD · ${r.rush_td} pt rushing TD`;
+}
+
 function fillSetupControls() {
   fillRange($("roundCount"), 8, 20, league.rounds, (i) => i + " rounds");
   POSITIONS.forEach(function (pos) {
@@ -1673,12 +1782,24 @@ function fillSetupControls() {
   fillSlotOptions();
 }
 
+// Tracks the format across reads, so the reception preset applies once when
+// the dropdown moves rather than on every refresh.
+let lastFormat = league.scoring;
+
 // Read every control into `league`. Called on any change, so the object is
 // the single description of the league from that moment on.
 function readSetup() {
   league.teams   = Number($("teamCount").value);
   league.rounds  = Number($("roundCount").value);
   league.scoring = $("scoring").value;
+  // The format preset owns exactly one rule, and only at the moment it
+  // changes. Applying it on every read would overwrite a hand-edited
+  // reception value the instant anything else on the screen moved.
+  if (league.scoring !== lastFormat) {
+    league.rules.rec = REC_BY_FORMAT[league.scoring];
+    lastFormat = league.scoring;
+    renderScoringFields();
+  }
   league.flex    = Number($("startFLEX").value);
   league.bench   = Number($("benchCount").value);
   POSITIONS.forEach(function (pos) {
@@ -1716,6 +1837,7 @@ function refreshSetup() {
     `= ${league.rounds} rounds, ${totalPicks()} picks.`;
   note.classList.toggle("bad", !!problem);
   $("startBtn").disabled = !!problem;
+  $("scoringSummary").textContent = scoringSummary();
 
   // Scoring decides which ADP set the board comes from, so it has to be
   // rebuilt here rather than only when the draft starts.
@@ -1725,6 +1847,23 @@ function refreshSetup() {
 }
 
 fillSetupControls();
+renderScoringFields();
+
+// Delegated, and on change rather than input, so the board is rebuilt when a
+// value is committed instead of on every keystroke.
+$("scoringFields").addEventListener("change", function (e) {
+  const rule = e.target.dataset && e.target.dataset.rule;
+  if (!rule) return;
+  const value = Number(e.target.value);
+  league.rules[rule] = isNaN(value) ? 0 : value;
+  refreshSetup();
+});
+
+$("resetScoring").addEventListener("click", function () {
+  league.rules = rulesForFormat(league.scoring);
+  renderScoringFields();
+  refreshSetup();
+});
 
 ["teamCount", "roundCount", "scoring", "startFLEX", "benchCount"]
   .concat(POSITIONS.map((pos) => "start" + pos))

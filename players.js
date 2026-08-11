@@ -2,11 +2,11 @@
    Alpine Draft Room - player data
    GENERATED FILE. Edit scripts/build_players.py instead.
 
-   Generated : 2026-08-11 17:05 UTC
+   Generated : 2026-08-11 20:21 UTC
    Players   : standard 205 · half 208 · ppr 256
    Seasons   : 2018-2025
    Matched   : 208 of the half set carry a Sleeper id
-   Flagged   : 26 carry an injury designation
+   Flagged   : 28 carry an injury designation
    Projected : 258 have 2026 projections
 
    ADP: Fantasy Football Calculator, one set per scoring format.
@@ -15,7 +15,7 @@
    Player, injury and stat data: Sleeper.
    ========================================================== */
 
-const PLAYERS_META = { generated: "2026-08-11 17:05 UTC", count: 208, matched: 208, flagged: 26, projected: 258, unmatched: 0 };
+const PLAYERS_META = { generated: "2026-08-11 20:21 UTC", count: 208, matched: 208, flagged: 28, projected: 258, unmatched: 0 };
 
 /* One ordered list per scoring format. app.js picks the set that
    matches league.scoring when a draft starts, and works out every
@@ -24,7 +24,7 @@ const ADP_SETS = {
   "standard": [
   { id: "9221", name: "Jahmyr Gibbs", pos: "RB", team: "DET", bye: 6, adp: 1.6, inj: "Q" },
   { id: "9509", name: "Bijan Robinson", pos: "RB", team: "ATL", bye: 11, adp: 2.4, inj: "" },
-  { id: "9493", name: "Puka Nacua", pos: "WR", team: "LAR", bye: 11, adp: 2.6, inj: "" },
+  { id: "9493", name: "Puka Nacua", pos: "WR", team: "LAR", bye: 11, adp: 2.6, inj: "Q" },
   { id: "6813", name: "Jonathan Taylor", pos: "RB", team: "IND", bye: 13, adp: 4.2, inj: "" },
   { id: "7564", name: "Ja'Marr Chase", pos: "WR", team: "CIN", bye: 6, adp: 5.2, inj: "" },
   { id: "9488", name: "Jaxon Smith-Njigba", pos: "WR", team: "SEA", bye: 11, adp: 5.4, inj: "" },
@@ -87,7 +87,7 @@ const ADP_SETS = {
   { id: "5892", name: "David Montgomery", pos: "RB", team: "HOU", bye: 8, adp: 60.6, inj: "" },
   { id: "3294", name: "Dak Prescott", pos: "QB", team: "DAL", bye: 14, adp: 62.5, inj: "" },
   { id: "5967", name: "Tony Pollard", pos: "RB", team: "TEN", bye: 9, adp: 62.8, inj: "" },
-  { id: "5846", name: "DK Metcalf", pos: "WR", team: "PIT", bye: 9, adp: 63.2, inj: "" },
+  { id: "5846", name: "DK Metcalf", pos: "WR", team: "PIT", bye: 9, adp: 63.2, inj: "Q" },
   { id: "11628", name: "Marvin Harrison Jr.", pos: "WR", team: "ARI", bye: 14, adp: 63.9, inj: "" },
   { id: "9487", name: "Parker Washington", pos: "WR", team: "JAX", bye: 7, adp: 65.8, inj: "" },
   { id: "11566", name: "Jayden Daniels", pos: "QB", team: "WAS", bye: 7, adp: 66.7, inj: "" },
@@ -232,7 +232,7 @@ const ADP_SETS = {
   "half": [
   { id: "9221", name: "Jahmyr Gibbs", pos: "RB", team: "DET", bye: 6, adp: 1.5, inj: "Q" },
   { id: "9509", name: "Bijan Robinson", pos: "RB", team: "ATL", bye: 11, adp: 2.2, inj: "" },
-  { id: "9493", name: "Puka Nacua", pos: "WR", team: "LAR", bye: 11, adp: 2.8, inj: "" },
+  { id: "9493", name: "Puka Nacua", pos: "WR", team: "LAR", bye: 11, adp: 2.8, inj: "Q" },
   { id: "7564", name: "Ja'Marr Chase", pos: "WR", team: "CIN", bye: 6, adp: 4.1, inj: "" },
   { id: "9488", name: "Jaxon Smith-Njigba", pos: "WR", team: "SEA", bye: 11, adp: 5.3, inj: "" },
   { id: "6813", name: "Jonathan Taylor", pos: "RB", team: "IND", bye: 13, adp: 6.0, inj: "" },
@@ -292,7 +292,7 @@ const ADP_SETS = {
   { id: "2216", name: "Mike Evans", pos: "WR", team: "SF", bye: 8, adp: 58.3, inj: "Q" },
   { id: "6770", name: "Joe Burrow", pos: "QB", team: "CIN", bye: 6, adp: 59.2, inj: "" },
   { id: "11628", name: "Marvin Harrison Jr.", pos: "WR", team: "ARI", bye: 14, adp: 62.1, inj: "" },
-  { id: "5846", name: "DK Metcalf", pos: "WR", team: "PIT", bye: 9, adp: 63.6, inj: "" },
+  { id: "5846", name: "DK Metcalf", pos: "WR", team: "PIT", bye: 9, adp: 63.6, inj: "Q" },
   { id: "5892", name: "David Montgomery", pos: "RB", team: "HOU", bye: 8, adp: 64.5, inj: "" },
   { id: "8167", name: "Christian Watson", pos: "WR", team: "GB", bye: 11, adp: 65.1, inj: "" },
   { id: "7021", name: "Rico Dowdle", pos: "RB", team: "PIT", bye: 9, adp: 65.7, inj: "" },
@@ -443,7 +443,7 @@ const ADP_SETS = {
   "ppr": [
   { id: "9221", name: "Jahmyr Gibbs", pos: "RB", team: "DET", bye: 6, adp: 1.7, inj: "Q" },
   { id: "9509", name: "Bijan Robinson", pos: "RB", team: "ATL", bye: 11, adp: 1.9, inj: "" },
-  { id: "9493", name: "Puka Nacua", pos: "WR", team: "LAR", bye: 11, adp: 2.9, inj: "" },
+  { id: "9493", name: "Puka Nacua", pos: "WR", team: "LAR", bye: 11, adp: 2.9, inj: "Q" },
   { id: "7564", name: "Ja'Marr Chase", pos: "WR", team: "CIN", bye: 6, adp: 3.9, inj: "" },
   { id: "4034", name: "Christian McCaffrey", pos: "RB", team: "SF", bye: 8, adp: 5.6, inj: "Q" },
   { id: "9488", name: "Jaxon Smith-Njigba", pos: "WR", team: "SEA", bye: 11, adp: 5.8, inj: "" },
@@ -505,7 +505,7 @@ const ADP_SETS = {
   { id: "13286", name: "Jadarian Price", pos: "RB", team: "SEA", bye: 11, adp: 63.0, inj: "Q" },
   { id: "11628", name: "Marvin Harrison Jr.", pos: "WR", team: "ARI", bye: 14, adp: 63.8, inj: "" },
   { id: "5967", name: "Tony Pollard", pos: "RB", team: "TEN", bye: 9, adp: 65.1, inj: "" },
-  { id: "5846", name: "DK Metcalf", pos: "WR", team: "PIT", bye: 9, adp: 65.4, inj: "" },
+  { id: "5846", name: "DK Metcalf", pos: "WR", team: "PIT", bye: 9, adp: 65.4, inj: "Q" },
   { id: "12518", name: "Tyler Warren", pos: "TE", team: "IND", bye: 13, adp: 65.4, inj: "" },
   { id: "5892", name: "David Montgomery", pos: "RB", team: "HOU", bye: 8, adp: 65.8, inj: "" },
   { id: "3294", name: "Dak Prescott", pos: "QB", team: "DAL", bye: 14, adp: 66.0, inj: "" },

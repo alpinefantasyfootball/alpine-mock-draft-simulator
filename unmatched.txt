@@ -1,5 +1,5 @@
 FFC rows that did not join to a Sleeper player
-Generated 2026-08-11 17:05 UTC
+Generated 2026-08-11 20:21 UTC
 Across every scoring format, each name listed once.
 Add an entry to MANUAL_MATCHES in build_players.py to fix one.
 
@@ -7,9 +7,11 @@ Add an entry to MANUAL_MATCHES in build_players.py to fix one.
 
 
 
-Sleeper stats we are neither scoring nor storing
-Check this list against the league scoring settings; anything
-that should count belongs in SCORING in build_players.py.
+Sleeper stats we are not storing
+The browser can only score what this pipeline records, so anything
+here is a scoring rule the app could never support. If a league
+counts it, add it to STAT_FIELDS and SCOREABLE in build_players.py
+and give it a default in app.js.
 
 adp_2qb
 adp_dynasty
@@ -27,7 +29,6 @@ blk_kick_ret_td
 blk_kick_ret_yd
 blk_pr_td
 cmp_pct
-def_2pt
 def_3_and_out
 def_4_and_stop
 def_forced_punts
@@ -58,8 +59,6 @@ ff_misc
 fg_blkd
 fg_ret_yd
 fga
-fgm_50_59
-fgm_60p
 fgm_lng
 fgm_pct
 fgm_yds
@@ -68,7 +67,6 @@ fgmiss_20_29
 fgmiss_30_39
 fgmiss_40_49
 fgmiss_50_59
-fgmiss_50p
 fgmiss_60p
 first_td
 fum
@@ -111,7 +109,6 @@ penalty
 penalty_yd
 pr_lng
 pr_ypa
-pts_allow
 pts_idp
 punt_in_20
 punt_net_yd
@@ -166,7 +163,6 @@ tkl_solo_misc
 tm_snp
 xp_blkd
 xpa
-yds_allow
 yds_allow_0_100
 yds_allow_100_199
 yds_allow_200_299
