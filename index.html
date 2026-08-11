@@ -139,6 +139,18 @@
           <p class="hint" id="rosterSum"></p>
         </div>
 
+        <!-- Collapsed by default. Thirty-eight numbers would swamp a setup
+             screen that most people never need to touch, but every one of
+             them is here for the leagues that do. -->
+        <details class="scoring" id="scoringBox">
+          <summary>
+            <span>Scoring</span>
+            <span class="scoring-sum" id="scoringSummary"></span>
+          </summary>
+          <div id="scoringFields"></div>
+          <button class="ghost" type="button" id="resetScoring">Reset to defaults</button>
+        </details>
+
         <button class="primary big" id="startBtn">Start Your Draft</button>
         <p class="freshness" id="freshness"></p>
         <p class="freshness"><a href="docs/draft-room-how-it-works.html">How the Draft Room works</a></p>

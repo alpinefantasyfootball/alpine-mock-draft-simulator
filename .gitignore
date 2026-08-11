@@ -1,0 +1,4 @@
+# Byte-compiled Python, created whenever the pipeline is imported
+# rather than run. Nothing here belongs in the repo.
+__pycache__/
+*.pyc

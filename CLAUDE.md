@@ -35,19 +35,20 @@ Two free feeds, no keys: **Sleeper** (players, injuries, stats back to 2018,
 weekly logs, projections, depth charts) and **Fantasy Football Calculator**
 (ADP, one set per scoring format, written to `players.js` as `ADP_SETS`).
 
-Fantasy points are **recomputed from raw components** in `build_players.py`
-using the `SCORING` table — six points for a touchdown of any kind,
-distance-tiered field goals. Sleeper's own `pts_half_ppr` is deliberately
-discarded because it assumes four-point passing TDs.
+**The pipeline stores raw components and no points total at all.** Scoring
+lives in `app.js` (`DEFAULT_RULES` and `fantasyPoints()`), so all 38 rules are
+editable on the setup screen and everything rescores with no rebuild.
+Sleeper's own `pts_half_ppr` is discarded, as it always was, because it bakes
+in assumptions we do not share.
 
-The scoring table is deliberately generic rather than one league's settings,
-so no local quirk leaks into projections, historical points or the grade.
+**Every points total must go through `fantasyPoints()`.** There is no `pts`
+field to read any more, so a direct read silently scores zero.
 
-Receptions are the exception: the pipeline scores them at half PPR and stores
-the reception count alongside the points, so `pointsOf()` in `app.js` adjusts
-to standard or full PPR exactly. **Every points total must go through
-`pointsOf()`** — read `pts` directly and two panels will disagree the moment
-somebody picks a format other than half.
+`STAT_KEYS` in `stats.js` maps each scoreable stat to its short key and is
+**generated from `STAT_FIELDS`**, so the Python and JavaScript sides cannot
+drift. Anything scoreable must be in `STAT_FIELDS` — a stat that was never
+stored can never be rescored, and `build_players.py` fails loudly if a
+`SCOREABLE` entry has nowhere to live.
 
 ## Conventions
 
@@ -85,6 +86,14 @@ meta, so it looks like it worked, but 8, 10, 12 and 14 all return the same
 rows, the same ADP and the same `total_drafts` — checked across 2024, 2025
 and 2026. Only the scoring format actually changes the data. Don't build a
 team-count axis on top of it without re-checking that first.
+
+**Sleeper's projections are coarser than its actuals, and the pipeline has to
+reconcile that.** Season and weekly lines carry `fgm_50_59` and `fgm_60p`;
+projections carry only the combined `fgm_50p`, and express misses solely as
+`fgmiss_50p`. Reading the fine-grained keys alone silently drops every
+projected 50-yard field goal — 183 of them — and makes kickers look far worse
+than they are. `reconcile()` folds the coarse keys in. Check any new stat
+across all three feeds before trusting it.
 
 **Anything an API gives us that we don't use should be visible, not silent.**
 Unmatched players and unscored stat keys both get written to `unmatched.txt`

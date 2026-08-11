@@ -12,9 +12,10 @@ Sources (all free, no key, no account)
 Sleeper asks that these be called no more than once a day.
 FFC asks for attribution.
 
-Fantasy points are recomputed from raw components using the SCORING table
-below, NOT Sleeper's pts_half_ppr, which assumes 4-point passing touchdowns
-and flat kicker scoring.
+This writes raw components only. Fantasy points are NOT computed here — app.js
+applies the scoring rules in the browser, so a league can change them without
+rebuilding this data. Sleeper's own pts_half_ppr is ignored for the same
+reason it always was: it bakes in assumptions we do not share.
 
 Run by hand:  python scripts/build_players.py
 """
@@ -93,42 +94,75 @@ MANUAL_MATCHES = {
 }
 
 # ---------------------------------------------------------------- scoring
-# Deliberately generic, not one league's settings. Every touchdown is worth 6
-# whether it was thrown, run or caught, so no quirk of a particular league
-# leaks into projections, historical points, the suggestions or the grade.
-SCORING = {
-    "pass_yd": 0.04, "pass_td": 6, "pass_int": -2, "pass_2pt": 2,
-    "rush_yd": 0.1, "rush_td": 6, "rush_2pt": 2,
-    "rec": 0.5, "rec_yd": 0.1, "rec_td": 6, "rec_2pt": 2,
-    "fum_lost": -2,
-    # Return touchdowns. The league pays 6 for kick and punt returns, and a
-    # receiver or back who returns kicks can pick up real points this way.
-    # def_td / def_st_td below already cover the defence side, so they are
-    # deliberately not repeated here.
-    "kr_td": 6, "pr_td": 6,
-    # Kicker: Sleeper lumps everything 50+ into one bucket, so 60-yarders
-    # score 5 here instead of 6. Every shorter band is exact.
-    "xpm": 1, "xpmiss": -1,
-    "fgm_0_19": 3, "fgm_20_29": 3, "fgm_30_39": 3,
-    "fgm_40_49": 4, "fgm_50p": 5, "fgmiss": -1,
-    # Defence. Sleeper's points-allowed buckets are 14-20 and 21-27 where
-    # the league uses 14-17 and 18-27, so those two bands are approximate.
-    "sack": 1, "int": 2, "fum_rec": 2, "safe": 2,
-    "def_td": 6, "def_st_td": 6, "blk_kick": 2,
-    "pts_allow_0": 5, "pts_allow_1_6": 4, "pts_allow_7_13": 3,
-    "pts_allow_14_20": 1, "pts_allow_21_27": 0,
-    "pts_allow_28_34": -1, "pts_allow_35p": -4,
-}
+#
+# There isn't any, and that is the point. This pipeline used to apply one
+# league's scoring and bake a points total into stats.js, which meant the
+# browser could never rescore anybody and every scoring question needed a
+# rebuild. A data pipeline should record facts, not opinions about how to
+# value them, so the rules now live in app.js and this file writes raw
+# components only.
+#
+# The one thing that does have to be shared is which short key holds which
+# raw stat. Rather than write that map out again in JavaScript and let the
+# two drift, it is generated into stats.js from STAT_FIELDS below.
+#
+# Anything scoreable must appear in STAT_FIELDS. A stat that was never
+# stored can never be rescored.
+
+# Scoring inputs, in the order the editor shows them. Values are not stored
+# here — app.js owns those — but the pipeline has to know which raw stats
+# are scoreable so it can emit the key map and flag anything unstored.
+SCOREABLE = [
+    "pass_yd", "pass_td", "pass_int", "pass_2pt",
+    "rush_yd", "rush_td", "rush_2pt",
+    "rec", "rec_yd", "rec_td", "rec_2pt",
+    "fum_lost", "kr_td", "pr_td",
+    "xpm", "xpmiss", "fgmiss",
+    "fgm_0_19", "fgm_20_29", "fgm_30_39", "fgm_40_49", "fgm_50_59", "fgm_60p",
+    "sack", "int", "fum_rec", "safe",
+    "def_td", "def_st_td", "blk_kick", "def_2pt",
+    "pts_allow_0", "pts_allow_1_6", "pts_allow_7_13", "pts_allow_14_20",
+    "pts_allow_21_27", "pts_allow_28_34", "pts_allow_35p",
+]
 
 # Raw counting stats worth keeping, and the short key used in stats.js.
+#
+# This is the whole point of the pipeline: record facts, not opinions about
+# how to value them. Anything the browser might need to score has to be here,
+# because a stat that was never stored can never be rescored. Sparse by
+# design — compact() drops every zero, so a running back carries no kicking
+# fields and a defence carries no receiving ones.
 STAT_FIELDS = {
+    # --- passing ---
     "pass_att": "pa", "pass_cmp": "pc", "pass_yd": "py", "pass_td": "pt",
-    "pass_int": "pi", "rush_att": "ra", "rush_yd": "ry", "rush_td": "rt",
+    "pass_int": "pi", "pass_2pt": "p2",
+    # --- rushing ---
+    "rush_att": "ra", "rush_yd": "ry", "rush_td": "rt", "rush_2pt": "r2",
+    # --- receiving ---
     "rec_tgt": "tg", "rec": "rc", "rec_yd": "cy", "rec_td": "ct",
+    "rec_2pt": "c2",
+    # --- returns and fumbles ---
     "kr": "kr", "kr_yd": "kry", "kr_td": "krt",
     "pr": "pr", "pr_yd": "pry", "pr_td": "prt",
     "fum_lost": "fl",
-    "fgm": "fg", "xpm": "xp", "sack": "sk", "int": "in", "fum_rec": "fr",
+    # --- kicking, by distance ---
+    # Sleeper does separate 50-59 from 60+, despite an older comment in this
+    # file claiming otherwise, so a league paying more for the long ones can
+    # be scored exactly rather than approximated.
+    "fgm": "fg", "xpm": "xp", "xpmiss": "xpx", "fgmiss": "fgx",
+    "fgm_0_19": "f19", "fgm_20_29": "f29", "fgm_30_39": "f39",
+    "fgm_40_49": "f49", "fgm_50_59": "f59", "fgm_60p": "f60",
+    # --- defence and special teams ---
+    "sack": "sk", "int": "in", "fum_rec": "fr", "safe": "sf",
+    "def_td": "dtd", "def_st_td": "sttd", "blk_kick": "bk", "def_2pt": "d2",
+    # Raw points and yards allowed, as well as Sleeper's own banded counts.
+    # The raw number lets a weekly line be banded any way a league likes;
+    # the banded counts are the only option for a season total, where the
+    # per-game bands have already been collapsed and cannot be recovered.
+    "pts_allow": "ptsa", "yds_allow": "ydsa",
+    "pts_allow_0": "d0", "pts_allow_1_6": "d1", "pts_allow_7_13": "d7",
+    "pts_allow_14_20": "d14", "pts_allow_21_27": "d21",
+    "pts_allow_28_34": "d28", "pts_allow_35p": "d35",
 }
 
 # Keys we knowingly ignore, so the diagnostic below stays useful.
@@ -137,6 +171,8 @@ IGNORED_KEYS = {
     "tm_st_snp", "def_snp", "st_snp", "pts_std", "pts_ppr", "pts_half_ppr",
     "rank_std", "rank_ppr", "rank_half_ppr", "pos_rank_std", "pos_rank_ppr",
     "pos_rank_half_ppr", "anytime_tds", "tm_st_snp_pct",
+    # Folded into the finer buckets by reconcile(), so not a gap.
+    "fgm_50p", "fgmiss_50p",
 }
 
 
@@ -173,24 +209,38 @@ def injury_code(entry):
     return ""
 
 
-def fantasy_points(row):
-    """Apply the scoring rules above to one Sleeper stat line."""
-    if not row:
-        return 0.0
-    total = 0.0
-    for key, weight in SCORING.items():
-        value = row.get(key)
-        if value:
-            total += float(value) * weight
-    return round(total, 1)
-
-
 SEEN_KEYS = set()
 
 
+def reconcile(row):
+    """Fold Sleeper's coarse projection keys into the shape its actuals use.
+
+    Projections are a coarser dataset than season and weekly lines. They carry
+    a combined fgm_50p where actuals carry fgm_50_59 and fgm_60p, and they
+    express misses only as fgmiss_50p. Left alone, a kicker's projection loses
+    every 50-yard field goal — 183 of them across 34 kickers — while his
+    history keeps them, which makes the projection look far worse than the
+    player.
+
+    Checked against 2025: fgm_50p equals fgm_50_59 + fgm_60p on every row that
+    carries both, so folding it in cannot double count. Everything 50+ is
+    attributed to 50-59 rather than split, because projected 60-yarders are
+    rare enough (10 all last season against 158 from 50-59) that splitting
+    would be inventing precision the feed does not have.
+    """
+    if row.get("fgm_50p") and not row.get("fgm_50_59") and not row.get("fgm_60p"):
+        row = dict(row)
+        row["fgm_50_59"] = row["fgm_50p"]
+    if row.get("fgmiss_50p") and not row.get("fgmiss"):
+        row = dict(row) if row is not None else {}
+        row["fgmiss"] = row["fgmiss_50p"]
+    return row
+
+
 def compact(row):
-    SEEN_KEYS.update(row.keys())
     """Keep the listed stats, and only where they are non-zero."""
+    SEEN_KEYS.update(row.keys())
+    row = reconcile(row)
     out = {}
     for source, short in STAT_FIELDS.items():
         value = row.get(source)
@@ -381,12 +431,13 @@ def main():
             if not line:
                 continue
             games = int(line.get("gp") or 0)
-            points = fantasy_points(line)
-            if games == 0 and points == 0:
-                continue          # a season the player was not in the league
             block = compact(line)
+            # A season the player was not in the league: no games, and not a
+            # single counting stat. Judged on the raw data now that there is
+            # no points total to judge it by.
+            if games == 0 and not block:
+                continue
             block["gp"] = games
-            block["pts"] = points
             seasons[str(season)] = block
         if seasons:
             record["s"] = seasons
@@ -394,8 +445,11 @@ def main():
         projection = projections.get(player_id)
         if projection:
             block = compact(projection)
+            # gp is what tells the app this is a real forecast rather than a
+            # zero-filled row. Sleeper returns those for players it has no
+            # opinion on, and counting them as real projections once dragged
+            # replacement level toward zero.
             block["gp"] = int(projection.get("gp") or 0)
-            block["pts"] = fantasy_points(projection)
             record["p"] = block
 
         if rank < WEEKLY_KEEP:
@@ -406,7 +460,6 @@ def main():
                     continue
                 block = compact(line)
                 block["w"] = week
-                block["pts"] = fantasy_points(line)
                 logs.append(block)
             if logs:
                 record["w"] = logs
@@ -416,6 +469,14 @@ def main():
 
     # ---- write the files ----
     stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
+    # Every scoreable stat has to have somewhere to live, or the app will
+    # silently score it as zero. Fail loudly instead.
+    unstored = [k for k in SCOREABLE if k not in STAT_FIELDS]
+    if unstored:
+        raise SystemExit("Scoreable stats missing from STAT_FIELDS, so app.js "
+                         f"could never score them: {', '.join(unstored)}")
+    key_map = {k: STAT_FIELDS[k] for k in SCOREABLE}
     matched = sum(1 for p in players if p["id"])
     flagged = sum(1 for p in players if p["inj"])
     projected = sum(1 for v in stats.values() if "p" in v)
@@ -463,10 +524,14 @@ def main():
             "     s            season totals by year\n"
             "     p            projection for the coming season\n"
             "     w            week by week logs for last season\n\n"
-            "   Fantasy points are recomputed from raw components, not taken\n"
-            "   from Sleeper's own totals. 6 points per touchdown of any kind.\n"
+            "   Raw components only. There is no points total in here: app.js\n"
+            "   applies the scoring rules, so a league can change them without\n"
+            "   this file being rebuilt.\n\n"
+            "   STAT_KEYS maps each scoreable stat to the short key holding it.\n"
+            "   Generated from STAT_FIELDS so the two cannot drift apart.\n"
             f"   Generated : {stamp}\n"
             "   ========================================================== */\n\n"
+            "const STAT_KEYS = " + json.dumps(key_map, separators=(",", ":")) + ";\n\n"
             "const PLAYER_STATS = " + json.dumps(stats, separators=(",", ":")) + ";\n")
 
     with open(UNMATCHED_FILE, "w", encoding="utf-8") as handle:
@@ -477,11 +542,13 @@ def main():
 
         unscored = sorted(
             key for key in SEEN_KEYS
-            if key not in SCORING and key not in STAT_FIELDS
+            if key not in STAT_FIELDS
             and key not in IGNORED_KEYS and not key.startswith("bonus_"))
-        handle.write("\n\n\nSleeper stats we are neither scoring nor storing\n")
-        handle.write("Check this list against the league scoring settings; anything\n"
-                     "that should count belongs in SCORING in build_players.py.\n\n")
+        handle.write("\n\n\nSleeper stats we are not storing\n")
+        handle.write("The browser can only score what this pipeline records, so anything\n"
+                     "here is a scoring rule the app could never support. If a league\n"
+                     "counts it, add it to STAT_FIELDS and SCOREABLE in build_players.py\n"
+                     "and give it a default in app.js.\n\n")
         handle.write("\n".join(unscored) if unscored else "(none)\n")
 
     print(f"\n{PLAYERS_FILE}: {counts}, {matched} matched, "
