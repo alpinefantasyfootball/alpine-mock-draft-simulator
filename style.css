@@ -78,6 +78,23 @@ body {
 }
 
 /* the Alpine chevron, reversed to white */
+/* The mark is a button now, so it needs to carry the flex sizing the SVG
+   used to, and to look pressable without becoming a box in the header. */
+.home {
+  position: relative; z-index: 1; flex: none;
+  display: flex; align-items: center;
+  border: 0; background: none;
+  color: inherit; cursor: pointer;
+  transition: opacity .15s ease;
+  /* The mark stays 34px, but a 34px tap target is under the 44px a thumb
+     needs. The padding grows the hit area and the negative margin takes the
+     space back, so nothing moves. */
+  padding: 5px; margin: -5px;
+}
+
+.home:hover { opacity: .78; }
+.home:focus-visible { outline: 2px solid #fff; outline-offset: 4px; border-radius: 6px; }
+
 .mark {
   position: relative; z-index: 1;
   width: 34px; height: 34px; min-width: 34px; flex: none;
@@ -152,6 +169,11 @@ body {
 
 .mini:hover { background: #E6EBF1; }
 .mini.danger { color: var(--danger); }
+
+/* The way on to the next mock. Reads as an invitation, next to a Discard
+   that reads as a warning, so the two are not mistaken for each other. */
+.mini.go { background: var(--blue); color: #fff; }
+.mini.go:hover { background: var(--blue-dark); }
 .mini:disabled { opacity: .45; cursor: default; }
 .mini.active { background: var(--navy); color: #fff; }
 .mini.active:hover { background: var(--navy-soft); }
@@ -726,3 +748,4 @@ tr.drafted .meta, tr.drafted .num { opacity: .45; }
 
 .empty-title { margin: 0 0 4px; font-weight: 600; font-size: 15px; }
 .empty-sub { margin: 0 auto; max-width: 34ch; font-size: 13px; color: var(--ink-mid); line-height: 1.5; }
+.empty .primary { margin-top: 18px; }

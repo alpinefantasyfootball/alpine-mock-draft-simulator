@@ -375,10 +375,14 @@ function autoDraftRest() {
   render();
 }
 
-function restart() {
+/* Leaving the draft room and throwing the draft away are two different
+   things, and the old single "Restart" did both. goHome() leaves the save
+   alone, so the setup screen offers the draft straight back — which is what
+   you want after a completed mock, when the finished board is worth keeping. */
+
+function goHome() {
   stopSim();
   stopClock();
-  clearSave();
   state.lastPick = null;
   board.forEach((p) => { p.drafted = false; p.jitter = 0; });
   state.picks = [];
@@ -390,6 +394,22 @@ function restart() {
   // Back to the setup screen, where the league can be changed again, so the
   // board is rebuilt rather than just redrawn.
   refreshSetup();
+  window.scrollTo(0, 0);
+}
+
+// The destructive one. Clear first, so the resume bar has nothing to offer.
+function restart() {
+  clearSave();
+  goHome();
+}
+
+// The mark in the header. Mid-draft this is a surprising place to land, so
+// it asks first; once the draft is over there is nothing to interrupt.
+function leaveForHome() {
+  if (state.started && !draftOver() &&
+      !confirm("Leave this draft?\n\nIt stays saved, and the setup screen will " +
+               "offer to resume it.")) return;
+  goHome();
 }
 
 
@@ -440,6 +460,18 @@ function togglePause() {
   }
   renderPauseButton();
   renderHeader();
+}
+
+// Pause, undo and auto-draft are all meaningless once the last pick is in.
+// Rather than leave four dead controls sitting there, the bar becomes the
+// one thing you actually want next.
+function renderActionBar() {
+  const done = draftOver();
+  $("newDraftBtn").hidden = !done;
+  $("pauseBtn").hidden    = done;
+  $("undoBtn").hidden     = done;
+  $("autoBtn").hidden     = done;
+  if (!done) renderPauseButton();
 }
 
 function renderPauseButton() {
@@ -912,7 +944,9 @@ function renderSuggestions() {
 
   if (draftOver()) {
     holder.innerHTML = `<div class="empty"><p class="empty-title">Draft complete</p>
-      <p class="empty-sub">Check My Team to see how the roster came out.</p></div>`;
+      <p class="empty-sub">Check My Team to see how the roster came out, or Analysis
+        for your grade. This board stays saved, so you can reopen it later.</p>
+      <button class="primary" data-action="new-draft">New mock draft</button></div>`;
     return;
   }
 
@@ -1436,7 +1470,7 @@ function render() {
   renderHeader();
   renderTicker();
   renderGrades();
-  if (state.started) renderPauseButton();
+  if (state.started) renderActionBar();
   renderSuggestions();
   renderPlayers();
   renderBoard();
@@ -1763,6 +1797,7 @@ $("sheetTabs").addEventListener("click", function (e) {
   $(e.target.dataset.view).classList.add("on");
 });
 
+$("homeBtn").addEventListener("click", leaveForHome);
 $("pauseBtn").addEventListener("click", togglePause);
 $("undoBtn").addEventListener("click", undo);
 $("autoBtn").addEventListener("click", autoDraftRest);
@@ -1781,6 +1816,14 @@ $("playerSearch").addEventListener("input", function () {
 document.addEventListener("click", function (event) {
   if (event.target.id === "skipBtn") { skipSim(); return; }
   if (event.target.id === "sheetClose") { closeSheet(); return; }
+
+  // Two buttons say "New mock draft": one in the action bar, one in the
+  // finished-draft panel. Delegated, because the second is rebuilt on
+  // every render and a directly attached listener would not survive it.
+  if (event.target.dataset && event.target.dataset.action === "new-draft") {
+    goHome();
+    return;
+  }
 
   const link = event.target.closest ? event.target.closest("[data-player]") : null;
   if (link) {

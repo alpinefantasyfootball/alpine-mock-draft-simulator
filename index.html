@@ -26,13 +26,17 @@
 
     <header class="appbar" id="appbar">
 
-      <!-- Alpine mark, reversed to white the way it appears on your banner.
+      <!-- The mark doubles as the way home, which is where every site puts it.
+           Alpine mark, reversed to white the way it appears on your banner.
            width and height are set here as well as in the CSS so the shape
            can never balloon if the stylesheet is slow, missing or cached. -->
-      <svg class="mark" width="34" height="34" viewBox="0 0 100 100" aria-hidden="true">
-        <path d="M50 4 L97 96 L67 96 L50 54 L33 96 L3 96 Z" fill="currentColor"/>
-        <path class="facet" d="M50 4 L21 96 M50 4 L79 96"/>
-      </svg>
+      <button class="home" id="homeBtn" type="button" title="Back to draft setup"
+              aria-label="Back to draft setup">
+        <svg class="mark" width="34" height="34" viewBox="0 0 100 100" aria-hidden="true">
+          <path d="M50 4 L97 96 L67 96 L50 54 L33 96 L3 96 Z" fill="currentColor"/>
+          <path class="facet" d="M50 4 L21 96 M50 4 L79 96"/>
+        </svg>
+      </button>
 
       <div class="appbar-text">
         <p class="brandline">Alpine Consulting Partners</p>
@@ -55,11 +59,14 @@
       <button data-tab="tab-grades">Analysis</button>
     </nav>
 
+    <!-- The first three only mean anything while a draft is running, so they
+         are swapped for the way out once it finishes. -->
     <div class="actionbar" id="actionbar" hidden>
+      <button class="mini go" data-action="new-draft" id="newDraftBtn" hidden>New mock draft</button>
       <button class="mini" id="pauseBtn">Pause clock</button>
       <button class="mini" id="undoBtn">Undo</button>
       <button class="mini" id="autoBtn">Auto-draft the rest</button>
-      <button class="mini danger" id="restartBtn">Restart</button>
+      <button class="mini danger" id="restartBtn">Discard draft</button>
     </div>
 
     <div class="ticker" id="ticker" hidden></div>
