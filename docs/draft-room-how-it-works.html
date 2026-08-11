@@ -168,7 +168,7 @@
     <table>
       <tr><td class="k">Passing</td><td>0.04 per yard, 6 per touchdown, &minus;2 per interception</td></tr>
       <tr><td class="k">Rushing</td><td>0.1 per yard, 6 per touchdown</td></tr>
-      <tr><td class="k">Receiving</td><td>0.1 per yard, 6 per touchdown, 0.5 per reception at half PPR</td></tr>
+      <tr><td class="k">Receiving</td><td>0.1 per yard, 6 per touchdown, and 0, 0.5 or 1 per reception depending on the format you pick</td></tr>
       <tr><td class="k">Kicking</td><td>3 inside 40, 4 from 40&ndash;49, 5 from 50+, 1 per extra point, &minus;1 per miss</td></tr>
       <tr><td class="k">Fumbles</td><td>&minus;2 per fumble lost</td></tr>
     </table>
@@ -195,14 +195,28 @@
       app keeps one list per format and says so.
     </div>
 
+    <h3>Receptions are rescored in the browser</h3>
+    <p>
+      The pipeline scores every stat line once, at half PPR. Receptions are
+      the only part of that the setup screen can change, and the reception
+      count is stored next to the points, so the other two formats are an
+      exact adjustment rather than an approximation: add half a point per
+      catch for full PPR, take half away for standard.
+    </p>
+    <p>
+      That flows through everything downstream &mdash; projected points,
+      historical seasons, the weekly logs, replacement level and the Overall
+      signal. A receiver who catches 100 passes is worth 50 more points in
+      full PPR than in half, and the app now says so.
+    </p>
+
     <div class="note">
-      <b>One honest limit.</b> Choosing a scoring format changes which ADP the
-      room drafts against, and that is all it changes. Projected points are
-      still calculated with one fixed set of rules &mdash; half PPR, six points
-      a touchdown &mdash; before the page ever loads, so picking full PPR does
-      not re-score anybody's projection. Doing that properly means storing
-      every raw scoring component and moving the rules into the browser, which
-      is a job of its own.
+      <b>One honest limit.</b> Receptions are the only scoring rule the setup
+      screen changes. Everything else &mdash; six points a touchdown, the
+      field goal distance bands, the defensive scoring &mdash; is applied by
+      the pipeline before the page loads and cannot be adjusted here. Making
+      all of it configurable means storing every raw scoring component and
+      moving the rules into the browser, which is a job of its own.
     </div>
 
 

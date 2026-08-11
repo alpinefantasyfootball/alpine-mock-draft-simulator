@@ -529,6 +529,36 @@ function byeShare(player) {
    panel of experts behind it: it is projections, depth chart
    position, age and injury status, weighted and shown.     */
 
+/* Points under the selected scoring format.
+
+   stats.js stores one number per stat line, worked out by the pipeline at
+   half PPR. Receptions are the only part of that which the setup screen can
+   change, and the reception count is stored alongside the points, so the
+   other two formats are an exact adjustment rather than an approximation:
+   add half a point per catch for full PPR, take half away for standard.
+
+   Everything that shows a points total goes through here. Read `pts`
+   directly and the Players tab will disagree with the player sheet the
+   moment somebody picks a format other than half.                        */
+
+const REC_POINTS = { standard: 0, half: 0.5, ppr: 1 };
+const STORED_REC_POINTS = 0.5;        // what build_players.py scored with
+
+// Defaults to the league on screen, but takes a format so a saved draft can
+// be described in its own terms.
+function scoringLabel(scoring) {
+  const s = scoring || league.scoring;
+  return s === "ppr" ? "full PPR" : s === "standard" ? "standard" : "half PPR";
+}
+
+function pointsOf(block) {
+  if (!block) return 0;
+  const rate = REC_POINTS[league.scoring];
+  const delta = (rate === undefined ? STORED_REC_POINTS : rate) - STORED_REC_POINTS;
+  // A tenth of a point, same precision the pipeline writes.
+  return Math.round(((block.pts || 0) + delta * (block.rc || 0)) * 10) / 10;
+}
+
 // Season keys, oldest first. Nothing here assumes which years exist.
 function seasonKeys(stat) {
   return stat && stat.s ? Object.keys(stat.s).sort() : [];
@@ -562,8 +592,10 @@ function buildProjections() {
     const s = statOf(p);
     // A projection of zero means Sleeper has no real forecast, not that the
     // player will score nothing. Treating it as valid would drag replacement
-    // level toward zero and make every other player look elite.
-    p.projPts = s && s.p && s.p.pts > 0 ? s.p.pts : null;
+    // level toward zero and make every other player look elite. The test is
+    // on the stored number, before any scoring adjustment, so that a format
+    // change can never turn a missing projection into a real one.
+    p.projPts = s && s.p && s.p.pts > 0 ? pointsOf(s.p) : null;
   });
 
   POSITIONS.forEach(function (pos) {
@@ -616,7 +648,7 @@ function draftSignals(player) {
 
   const pair = trendPair(s);
   if (pair) {
-    const a = pair[0].pts / pair[0].gp, b = pair[1].pts / pair[1].gp;
+    const a = pointsOf(pair[0]) / pair[0].gp, b = pointsOf(pair[1]) / pair[1].gp;
     if (a > 0 && b > a * 1.2) { upside += 15;
       reasons.upside.push("points per game up " + Math.round((b / a - 1) * 100) + "% across his last two full seasons"); }
   }
@@ -1271,10 +1303,10 @@ function openSheet(player) {
       ${meter("Upside",  sig.upside,  sig.upside  >= 55 ? "good" : "", sig.reasons.upside)}
       ${meter("Bust risk", sig.bust,  sig.bust >= 55 ? "bad" : sig.bust >= 35 ? "warn" : "", sig.reasons.bust)}
 
-      <p class="section-label">2026 projection</p>
+      <p class="section-label">2026 projection &middot; ${scoringLabel()}</p>
       <div class="statgrid">
-        <div class="statbox"><div class="k">Points</div><div class="v">${Math.round(p.pts || 0)}</div></div>
-        <div class="statbox"><div class="k">Per game</div><div class="v">${p.gp ? (p.pts / p.gp).toFixed(1) : "&mdash;"}</div></div>
+        <div class="statbox"><div class="k">Points</div><div class="v">${Math.round(pointsOf(p))}</div></div>
+        <div class="statbox"><div class="k">Per game</div><div class="v">${p.gp ? (pointsOf(p) / p.gp).toFixed(1) : "&mdash;"}</div></div>
         <div class="statbox"><div class="k">Pos rank</div><div class="v">${player.projPosRank ? player.pos + player.projPosRank : "&mdash;"}</div></div>
         <div class="statbox"><div class="k">vs ADP</div><div class="v">${player.projPosRank ? (player.posRank - player.projPosRank >= 0 ? "+" : "") + (player.posRank - player.projPosRank) : "&mdash;"}</div></div>
       </div>
@@ -1293,16 +1325,19 @@ function openSheet(player) {
   if (!s || !s.w || !s.w.length) {
     logs = `<div class="nodata">No week-by-week logs stored for this player.</div>`;
   } else {
+    // Whether a week happened is a question about the raw data, so those two
+    // checks stay on the stored values. Only what gets shown is adjusted.
     const played = s.w.filter((g) => g.pts !== 0 || g.rc || g.ra || g.pa || g.fg || g.sk);
-    const avg = played.length ? played.reduce((a, g) => a + g.pts, 0) / played.length : 0;
+    const avg = played.length ? played.reduce((a, g) => a + pointsOf(g), 0) / played.length : 0;
     const cols = logColumns(player, s.w);
 
     const rows = s.w.map(function (g) {
       const blank = g.pts === 0 && !g.rc && !g.ra && !g.pa && !g.fg && !g.sk && !g.kr;
+      const points = pointsOf(g);
       const cells = cols.keys.map(function (k, i) {
-        const v = k === "w" ? g.w : k === "pts" ? g.pts : cellValue(g, k);
+        const v = k === "w" ? g.w : k === "pts" ? points : cellValue(g, k);
         const tone = k === "pts" && !blank
-          ? (g.pts >= avg * 1.4 ? "hi" : g.pts <= avg * 0.5 ? "lo" : "") : "";
+          ? (points >= avg * 1.4 ? "hi" : points <= avg * 0.5 ? "lo" : "") : "";
         return `<td class="${tone}">${v === undefined ? "&mdash;" : v}</td>`;
       }).join("");
       return `<tr class="${blank ? "bye" : ""}">${cells}</tr>`;
@@ -1331,7 +1366,7 @@ function openSheet(player) {
       const y = entry[1];
       const cells = cols.keys.map(function (k) {
         if (k === "w") return `<td>${entry[0]}</td>`;
-        const v = k === "pts" ? Math.round(y.pts || 0) : cellValue(y, k);
+        const v = k === "pts" ? Math.round(pointsOf(y)) : cellValue(y, k);
         return `<td>${v === undefined ? "&mdash;" : v}</td>`;
       }).join("");
       return `<tr>${cells}</tr>`;
@@ -1339,7 +1374,7 @@ function openSheet(player) {
 
     const span = seasonKeys(s);
     seasons = `<p class="section-label">${span.length ? span[0] + " to " + span[span.length - 1] : "Career"}
-      &middot; 6 points per touchdown, recomputed rather than taken from Sleeper</p>
+      &middot; ${scoringLabel()}, 6 points per touchdown</p>
       <div class="tblscroll"><table class="logtbl">
         <thead><tr>${cols.head.map((h) => `<th>${h}</th>`).join("")}</tr></thead>
         <tbody>${rows}</tbody>
@@ -1431,8 +1466,7 @@ function settingsFingerprint(cfg) {
 
 // Turned back into something a human can read, for the refusal message.
 function settingsText(cfg) {
-  return `${cfg.teams} teams · ${cfg.rounds} rounds · ` +
-         `${cfg.scoring === "half" ? "half PPR" : cfg.scoring === "ppr" ? "full PPR" : "standard"}`;
+  return `${cfg.teams} teams · ${cfg.rounds} rounds · ${scoringLabel(cfg.scoring)}`;
 }
 
 function saveDraft() {

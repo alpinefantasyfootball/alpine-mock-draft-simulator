@@ -43,6 +43,12 @@ discarded because it assumes four-point passing TDs.
 The scoring table is deliberately generic rather than one league's settings,
 so no local quirk leaks into projections, historical points or the grade.
 
+Receptions are the exception: the pipeline scores them at half PPR and stores
+the reception count alongside the points, so `pointsOf()` in `app.js` adjusts
+to standard or full PPR exactly. **Every points total must go through
+`pointsOf()`** — read `pts` directly and two panels will disagree the moment
+somebody picks a format other than half.
+
 ## Conventions
 
 - `app.js` is organised in numbered sections. Keep new code in the right one.
