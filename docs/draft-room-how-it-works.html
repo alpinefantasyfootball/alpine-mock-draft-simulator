@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>How the Draft Room works &middot; Alpine</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- The app's stylesheet, for the brand colours, the fonts and the table
+       styling. Everything below is layout for a page of prose, which the app
+       has no use for, so it lives here rather than bloating style.css. -->
+  <link rel="stylesheet" href="../style.css">
+
+  <link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="../favicon-16.png">
+  <link rel="icon" href="../favicon.ico" sizes="any">
+
+  <style>
+    .doc { max-width: 720px; margin: 0 auto; padding: 26px 18px 70px; }
+
+    .doc-intro { font-size: 16.5px; line-height: 1.7; color: var(--ink-mid); margin: 0 0 10px; }
+
+    .doc h2 {
+      margin: 40px 0 12px; padding-top: 18px;
+      border-top: 1px solid var(--line);
+      font-family: Poppins, sans-serif; font-size: 19px;
+      font-weight: 700; letter-spacing: -0.01em;
+    }
+    .doc h2 .no {
+      display: block; margin-bottom: 5px;
+      font-family: Inter, sans-serif; font-size: 10px; font-weight: 700;
+      letter-spacing: .12em; color: var(--cyan);
+    }
+    .doc h3 {
+      margin: 22px 0 8px;
+      font-size: 13.5px; font-weight: 700; color: var(--ink);
+    }
+    .doc p  { line-height: 1.72; margin: 0 0 13px; }
+    .doc ul { line-height: 1.72; margin: 0 0 13px; padding-left: 20px; }
+    .doc li { margin-bottom: 5px; }
+
+    /* A derivation, set apart from the prose. The point of this page is that
+       these are formulas and not fixed numbers, so they get to look like it. */
+    .formula {
+      background: var(--card); border: 1px solid var(--line);
+      border-left: 3px solid var(--cyan); border-radius: 8px;
+      padding: 13px 15px; margin: 0 0 14px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12.5px; line-height: 1.75; color: var(--ink);
+      overflow-x: auto;
+    }
+    .formula b { color: var(--blue); font-weight: 700; }
+
+    /* A worked example at the league's own default settings. Labelled, so it
+       is never mistaken for a number the code actually hardcodes. */
+    .worked {
+      background: #F7F9FB; border: 1px solid var(--line);
+      border-radius: 8px; padding: 13px 15px; margin: 0 0 14px;
+    }
+    .worked-title {
+      margin: 0 0 7px; font-size: 10px; font-weight: 700;
+      letter-spacing: .07em; text-transform: uppercase; color: var(--ink-light);
+    }
+    .worked p, .worked ul { margin-bottom: 0; font-size: 13.5px; color: var(--ink-mid); }
+
+    .doc table { margin: 0 0 16px; }
+    .doc td { padding: 9px 12px; border-bottom: 1px solid var(--line); font-size: 13.5px; vertical-align: top; }
+    .doc tr:last-child td { border-bottom: 0; }
+    .doc td.k { font-weight: 600; white-space: nowrap; }
+    .doc td.n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+    .doc code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: .89em; background: #EEF2F6; border-radius: 4px; padding: 1px 5px;
+    }
+
+    .note {
+      border-left: 3px solid var(--te); background: #FDF6EC;
+      border-radius: 0 8px 8px 0; padding: 12px 15px; margin: 0 0 14px;
+      font-size: 13.5px; line-height: 1.65; color: var(--ink-mid);
+    }
+
+    .toc { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px; margin: 22px 0 6px; }
+    .toc ol { margin: 0; padding-left: 20px; line-height: 1.95; font-size: 14px; }
+    .toc a { color: var(--blue); text-decoration: none; }
+    .toc a:hover { text-decoration: underline; }
+
+    .backlink { display: inline-block; margin-top: 30px; font-size: 13.5px; color: var(--blue); text-decoration: none; }
+    .backlink:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+
+  <!-- Same header as the app. width and height are set on the SVG as well as
+       in the CSS, because a cached or missing stylesheet once let this shape
+       grow to fill the whole screen. -->
+  <header class="appbar">
+    <svg class="mark" width="34" height="34" viewBox="0 0 100 100" aria-hidden="true">
+      <path d="M50 4 L97 96 L67 96 L50 54 L33 96 L3 96 Z" fill="currentColor"/>
+      <path class="facet" d="M50 4 L21 96 M50 4 L79 96"/>
+    </svg>
+    <div class="appbar-text">
+      <p class="brandline">Alpine Consulting Partners</p>
+      <h1>How the Draft Room works</h1>
+      <p>Every number on the page, and where it comes from</p>
+    </div>
+  </header>
+
+  <main class="doc">
+
+    <p class="doc-intro">
+      There is no panel of experts behind this app. Every rating, grade and
+      suggestion is computed from public data by rules that fit on this page.
+      This is all of them.
+    </p>
+
+    <div class="toc">
+      <ol>
+        <li><a href="#s01">What this is</a></li>
+        <li><a href="#s02">Where the numbers come from</a></li>
+        <li><a href="#s03">The league, and everything derived from it</a></li>
+        <li><a href="#s04">How the CPU teams draft</a></li>
+        <li><a href="#s05">Tiers</a></li>
+        <li><a href="#s06">The draft grade</a></li>
+        <li><a href="#s07">The three signals on a player</a></li>
+        <li><a href="#s08">Saving and resuming</a></li>
+        <li><a href="#s09">What it deliberately does not do</a></li>
+      </ol>
+    </div>
+
+
+    <h2 id="s01"><span class="no">01</span>What this is</h2>
+
+    <p>
+      A mock draft simulator. You take one seat, seven to thirteen computer
+      opponents take the rest, and everyone drafts until the rounds run out.
+      Nothing is saved to a server and nobody else is in the room.
+    </p>
+    <p>
+      It was built for one ten-team league and still opens on those settings,
+      but the league shape is now yours to set: 8 to 14 teams, 8 to 20 rounds,
+      any starting lineup, and standard, half or full PPR scoring.
+    </p>
+
+
+    <h2 id="s02"><span class="no">02</span>Where the numbers come from</h2>
+
+    <p>Two free public feeds, no keys and no accounts:</p>
+    <ul>
+      <li><b>Sleeper</b> &mdash; the player list, injury designations, depth
+        charts, season statistics back to 2018, week-by-week game logs and
+        next-season projections.</li>
+      <li><b>Fantasy Football Calculator</b> &mdash; average draft position,
+        taken from real drafts, as one set per scoring format.</li>
+    </ul>
+
+    <h3>Fantasy points are recomputed, not copied</h3>
+    <p>
+      Sleeper publishes its own points total, and it is thrown away. It assumes
+      four-point passing touchdowns and flat kicker scoring, and this league
+      uses neither. Every point you see is recalculated from the raw components
+      &mdash; attempts, yards, touchdowns, field goals by distance &mdash; in
+      <code>scripts/build_players.py</code>:
+    </p>
+
+    <table>
+      <tr><td class="k">Passing</td><td>0.04 per yard, <b>5</b> per touchdown, &minus;2 per interception</td></tr>
+      <tr><td class="k">Rushing</td><td>0.1 per yard, 6 per touchdown</td></tr>
+      <tr><td class="k">Receiving</td><td>0.1 per yard, 6 per touchdown, 0.5 per reception at half PPR</td></tr>
+      <tr><td class="k">Kicking</td><td>3 inside 40, 4 from 40&ndash;49, 5 from 50+, 1 per extra point, &minus;1 per miss</td></tr>
+      <tr><td class="k">Fumbles</td><td>&minus;2 per fumble lost</td></tr>
+    </table>
+
+    <div class="note">
+      A projection of <code>0</code> from the feed means Sleeper has no forecast
+      for that player, not that he will score nothing. Those are treated as
+      missing. Counting them as real zeroes dragged replacement level toward
+      zero and made everybody else look elite.
+    </div>
+
+    <h3>Scoring format changes the board</h3>
+    <p>
+      Full PPR moves receivers up and running backs down, so each format has
+      its own ADP list. When a draft starts, the board is built from the list
+      matching your scoring, and every positional rank, tier and value figure
+      is computed from that list rather than from a fixed order.
+    </p>
+    <div class="note">
+      Team count is not a second axis. Fantasy Football Calculator accepts a
+      team-count parameter and repeats it back to you, but it returns the same
+      drafts and the same ADP whether you ask for 8 teams or 14. Rather than
+      store four identical copies and imply a precision that is not there, the
+      app keeps one list per format and says so.
+    </div>
+
+    <div class="note">
+      <b>One honest limit.</b> Choosing a scoring format changes which ADP the
+      room drafts against, and that is all it changes. Projected points are
+      still calculated with the league's own rules &mdash; half PPR, five-point
+      passing touchdowns &mdash; before the page ever loads, so picking full PPR
+      does not re-score anybody's projection. Doing that properly means storing
+      every raw scoring component and moving the rules into the browser, which
+      is a job of its own.
+    </div>
+
+
+    <h2 id="s03"><span class="no">03</span>The league, and everything derived from it</h2>
+
+    <p>
+      One object in <code>app.js</code> describes the league. Nothing else in
+      the app writes a league number down. Team count, round count, the
+      starting lineup, the FLEX and the bench all live here, and the setup
+      screen edits them:
+    </p>
+
+    <div class="formula">
+const <b>league</b> = {<br>
+&nbsp;&nbsp;teams: 10,<br>
+&nbsp;&nbsp;rounds: 14,<br>
+&nbsp;&nbsp;starters: { QB: 1, RB: 2, WR: 2, TE: 1, K: 1, DST: 1 },<br>
+&nbsp;&nbsp;flex: 1,<br>
+&nbsp;&nbsp;bench: 5,<br>
+&nbsp;&nbsp;scoring: "half"<br>
+};
+    </div>
+
+    <p>
+      That matters more than it looks. An earlier version had "ten teams"
+      typed into a dozen different places and a replacement level worked out
+      by hand for one particular league. Both were correct exactly once, and
+      quietly wrong the moment anything changed.
+    </p>
+
+    <h3>The setup screen refuses impossible leagues</h3>
+    <p>Two combinations are rejected before a draft can start:</p>
+    <ul>
+      <li><b>The roster does not fill the rounds.</b> Starters plus FLEX plus
+        bench has to equal the number of rounds, or teams would finish the
+        draft with seats unfilled or players with nowhere to sit.</li>
+      <li><b>The draft is bigger than the board.</b> Teams times rounds cannot
+        exceed the number of players in the ADP list. Fourteen teams over
+        sixteen rounds wants 224 players, and the half PPR list carries about
+        205, so that one is blocked rather than allowed to run out mid-draft.</li>
+    </ul>
+
+    <h3>Replacement level</h3>
+    <p>
+      This is the most important derived number in the app. It is the last
+      player at a position who would realistically start <em>somewhere</em> in
+      the league, and it feeds the draft grade, the Overall signal and every
+      value-over-replacement figure.
+    </p>
+    <p>
+      It is the number of starting slots the league creates at that position,
+      plus that position's share of the FLEX slots, plus one:
+    </p>
+
+    <div class="formula">
+base = <b>teams</b> &times; starters[pos]<br>
+flex = <b>teams</b> &times; <b>flex</b> &times; flexShare[pos]<br>
+rank = round(base + flex) + 1<br>
+<br>
+flexShare = { RB: 0.40, WR: 0.55, TE: 0.05 }
+    </div>
+
+    <p>
+      The FLEX shares are how often each position actually wins that slot,
+      which is why running backs and receivers run so much deeper than
+      quarterbacks.
+    </p>
+
+    <div class="worked">
+      <p class="worked-title">Worked through, at the default settings</p>
+      <p>
+        Ten teams, one FLEX. Receivers: 10 &times; 2 = 20 starting slots, plus
+        10 &times; 1 &times; 0.55 = 5.5 from the FLEX, giving 25.5, rounded to
+        26, plus one &rarr; <b>WR27</b>. Across the board that is QB11, RB25,
+        WR27, TE12, K11 and D/ST11.
+      </p>
+      <p style="margin-top:9px">
+        Move to twelve teams and the same formula gives QB13, RB30, WR32,
+        TE14, K13 and D/ST13. Nothing was retyped.
+      </p>
+    </div>
+
+    <h3>Roster limits</h3>
+    <p>
+      How many of a position a computer team will ever hold: its starters, its
+      share of the FLEX, and a fixed depth allowance of 3 for quarterbacks, 5
+      for backs and receivers, and 2 for tight ends, kickers and defences. At
+      the default settings that works out to 4 quarterbacks, 8 backs, 8
+      receivers, 3 tight ends, 3 kickers and 3 defences.
+    </p>
+
+
+    <h2 id="s04"><span class="no">04</span>How the CPU teams draft</h2>
+
+    <p>
+      Each computer team scores every available player and takes the lowest.
+      The score starts at average draft position and is multiplied by how badly
+      that team needs the position:
+    </p>
+
+    <div class="formula">
+score = (adp + jitter) &times; <b>need</b> &times; <b>risk</b>
+    </div>
+
+    <table>
+      <tr><td class="k">need</td><td class="n">0.80</td><td>still filling a starting slot</td></tr>
+      <tr><td class="k"></td><td class="n">1.00</td><td>sensible depth, up to two past the starters</td></tr>
+      <tr><td class="k"></td><td class="n">1.45</td><td>hoarding</td></tr>
+      <tr><td class="k"></td><td class="n">999</td><td>refuses to take the player at all</td></tr>
+      <tr><td class="k">risk</td><td class="n">1.35</td><td>doubtful, or physically unable to perform</td></tr>
+    </table>
+
+    <p>A team refuses a player outright when:</p>
+    <ul>
+      <li>it has hit the roster limit for that position;</li>
+      <li>the player is <b>ruled out</b> &mdash; out, on injured reserve,
+        suspended, non-football injury or did not report. These are never
+        drafted by anyone and never suggested to you;</li>
+      <li>it already has as many quarterbacks, kickers or defences as the
+        league starts. A superflex league that starts two quarterbacks gets
+        two;</li>
+      <li>it is too early for a kicker or a defence.</li>
+    </ul>
+
+    <h3>Kickers and defences go last</h3>
+    <p>
+      Measured back from the final round rather than pinned to a fixed number,
+      so it holds at any league length: kickers become available for the last
+      two rounds, defences for the last three.
+    </p>
+    <div class="worked">
+      <p class="worked-title">Worked through, at the default settings</p>
+      <p>
+        Fourteen rounds, so defences come off the board from round 12 and
+        kickers from round 13. Run a fifteen-round draft and both shift a round
+        later on their own.
+      </p>
+    </div>
+
+    <h3>The wobble</h3>
+    <p>
+      A draft where every computer team took the best available player would
+      be identical every time. Each player gets a fixed offset of roughly
+      &plusmn;3 draft places, generated from a seed chosen when the draft
+      starts. It is deterministic, not random: it stays put for the whole
+      draft, so undoing a pick does not reshuffle how the room thinks, and a
+      resumed draft behaves exactly like the one you left.
+    </p>
+    <p>
+      Picks are made one at a time on a three-quarter-second timer so you can
+      watch the board fill in. Skip jumps straight to your turn.
+    </p>
+
+
+    <h2 id="s05"><span class="no">05</span>Tiers</h2>
+
+    <p>
+      A tier is a run of players at one position with no meaningful gap between
+      them. The point is the sentence it lets the app say: not "take the best
+      player available" but "take him now or lose the whole tier".
+    </p>
+    <p>
+      A new tier starts when the gap to the previous player is large relative
+      to where you are on the board:
+    </p>
+
+    <div class="formula">
+threshold = max(2, previousPlayerAdp &times; 0.13)
+    </div>
+
+    <p>
+      Proportional, because two picks apart means something at pick 5 and
+      nothing at pick 120. A tier also breaks after six players regardless:
+      gaps stop growing as fast as ADP does, so deep in the board nothing ever
+      clears the threshold and a single tier would otherwise swallow half the
+      position.
+    </p>
+
+
+    <h2 id="s06"><span class="no">06</span>The draft grade</h2>
+
+    <p>
+      Four components. Each is computed the same way for every team in the
+      room, then scaled from 0 to 100 against the other teams, then weighted.
+      Your grade is a ranking against the people you actually drafted with, not
+      against the league at large &mdash; which is why somebody always gets the
+      top grade and somebody always gets the bottom one.
+    </p>
+
+    <table>
+      <tr><td class="k">Starter strength</td><td class="n">50%</td><td>Every player in your best legal starting lineup, scored by how many places above replacement level they rank at their position. Uses the replacement ranks derived in section 03.</td></tr>
+      <tr><td class="k">Draft value</td><td class="n">25%</td><td>How far each player fell past the board's own order when you took them. Taking a player later than his rank says is a bargain; taking him earlier is a reach.</td></tr>
+      <tr><td class="k">Roster construction</td><td class="n">15%</td><td>Starts at 100. Minus 14 for each unfilled starting slot, minus 9 for every quarterback, kicker or defence beyond what the league starts, minus 6 for being thin at running back or receiver.</td></tr>
+      <tr><td class="k">Bye week safety</td><td class="n">10%</td><td>Minus 20 for every starter beyond the second sharing the same bye week. Judged on the starting lineup only, because bench byes cost nothing.</td></tr>
+    </table>
+
+    <p>
+      The weighted total is ranked, and the ranks are handed letters from a
+      fourteen-step scale running A+ down to F, long enough to give every seat
+      in a fourteen-team room its own letter.
+    </p>
+
+    <div class="note">
+      Every input to this is printed on the Analysis tab while you draft. If a
+      grade looks wrong, the four bars will show you which component caused it.
+    </div>
+
+
+    <h2 id="s07"><span class="no">07</span>The three signals on a player</h2>
+
+    <p>
+      Open any player and there are three meters. They are model output, not a
+      consensus of analysts, and they disagree with the market on purpose
+      &mdash; that disagreement is most of what they measure.
+    </p>
+
+    <h3>Overall</h3>
+    <p>
+      Projected points above a replacement starter at that position, expressed
+      against the best such figure on the board. A player projected for exactly
+      replacement production scores zero regardless of name.
+    </p>
+
+    <h3>Upside</h3>
+    <p>
+      Starts at 20 and rises with: projecting at least four positional ranks
+      better than his draft position (up to +35), three years or less in the
+      league (+18), first on his depth chart (+14), age 24 or under (+10), and
+      points per game up more than 20% across his last two full seasons (+15).
+    </p>
+
+    <h3>Bust risk</h3>
+    <p>
+      Starts at 12 and rises with: being drafted at least four ranks ahead of
+      where he projects (up to +35), being ruled out (+40) or carrying a lesser
+      injury designation (+22 or +12), age (+20 for a back at 28 or older, +15
+      for a receiver or tight end at 31, +12 for a quarterback at 36), sitting
+      second or lower on the depth chart (+15), playing 12 games or fewer in
+      his last active season (+14), and having missed real time in at least
+      half of his seasons (+12).
+    </p>
+
+    <div class="note">
+      A player's position always comes from his listed position, never from
+      which statistics happen to be present. Christian McCaffrey threw one pass
+      in 2025, and an earlier version checked for passing data to decide what
+      somebody was &mdash; which rendered him as a quarterback with no receiving
+      line at all. Having data is not the same as being a thing.
+    </div>
+
+
+    <h2 id="s08"><span class="no">08</span>Saving and resuming</h2>
+
+    <p>
+      A draft in progress is stored in your own browser and nowhere else: your
+      seat, the clock length, the seed, the league settings and an ordered list
+      of player names. Refreshing the page no longer destroys a draft.
+    </p>
+    <p>It refuses to restore rather than restore something broken, in two cases:</p>
+    <ul>
+      <li><b>The settings no longer match.</b> Resuming a twelve-team draft into
+        a ten-team league would corrupt the board &mdash; the snake turns in
+        different places and the rounds run out at a different pick. The saved
+        draft is kept and the app tells you which settings it needs, because
+        setting the dropdowns back is all it takes.</li>
+      <li><b>A player no longer exists.</b> The player list is rebuilt every
+        morning. If a saved pick cannot be resolved the board would be corrupt,
+        so the draft is discarded rather than half-restored.</li>
+    </ul>
+
+
+    <h2 id="s09"><span class="no">09</span>What it deliberately does not do</h2>
+
+    <ul>
+      <li><b>No live multi-user drafting.</b> It roughly triples the project,
+        and even the large sites mostly do not do it.</li>
+      <li><b>No expert rankings, news or analyst commentary.</b> That content
+        belongs to the sites that produce it. Everything here is computed from
+        public statistics.</li>
+      <li><b>No trade or keeper handling.</b> This simulates one snake draft.</li>
+      <li><b>No build step.</b> Plain HTML, CSS and JavaScript. Open
+        <code>index.html</code> and it runs.</li>
+    </ul>
+
+    <p class="method">
+      ADP from Fantasy Football Calculator. Player, injury, statistical,
+      projection and depth chart data from Sleeper. Fantasy points recomputed
+      under this league's own scoring rules. The data files are regenerated
+      daily; the app shows you when, under the Start button.
+    </p>
+
+    <a class="backlink" href="../index.html">&larr; Back to the Draft Room</a>
+
+  </main>
+
+</body>
+</html>

@@ -6,16 +6,44 @@
 
 
 /* ---- 1. League settings ---------------------------------
-   Hardcoded on purpose. FantasyPros needs four screens of
-   configuration because it serves every league on earth.
-   We serve one, so these are just constants.              */
+   One object describes the league, and everything else in
+   this file is worked out from it. The setup screen writes
+   to it before a draft starts.
 
-const TEAM_COUNT  = 10;
-const ROUNDS      = 14;
-const TOTAL_PICKS = TEAM_COUNT * ROUNDS;
+   The rule to keep: never write a league number down twice.
+   The old code had ten teams spelled out in a dozen places
+   and a hand-picked replacement level that only made sense
+   for one of them.                                        */
 
-const STARTERS = { QB: 1, RB: 2, WR: 2, TE: 1, K: 1, DST: 1 };  // plus 1 FLEX
-const MAX_POS  = { QB: 4, RB: 8, WR: 8, TE: 3, K: 3, DST: 3 };
+const league = {
+  teams: 10,
+  rounds: 14,
+  starters: { QB: 1, RB: 2, WR: 2, TE: 1, K: 1, DST: 1 },
+  flex: 1,           // one FLEX, drawn from RB / WR / TE
+  bench: 5,
+  scoring: "half"    // "standard" | "half" | "ppr" — also picks the ADP set
+};
+
+const POSITIONS = ["QB", "RB", "WR", "TE", "K", "DST"];
+
+// The order starting slots are listed and filled, with FLEX after the
+// positions it draws from so the better player lands in the named slot.
+const SLOT_ORDER = ["QB", "RB", "WR", "TE", "FLEX", "DST", "K"];
+
+function totalPicks()   { return league.teams * league.rounds; }
+function starterCount() { return POSITIONS.reduce((n, pos) => n + league.starters[pos], 0); }
+function rosterSize()   { return starterCount() + league.flex + league.bench; }
+
+// The starting lineup, expanded into one entry per slot:
+// QB, RB, RB, WR, WR, TE, FLEX, DST, K for the Alpine settings.
+function lineupSlots() {
+  const slots = [];
+  SLOT_ORDER.forEach(function (slot) {
+    const n = slot === "FLEX" ? league.flex : (league.starters[slot] || 0);
+    for (let i = 0; i < n; i++) slots.push(slot);
+  });
+  return slots;
+}
 
 // A player carrying one of these has been ruled out. CPU teams never
 // take them and they never appear in your suggestions.
@@ -24,15 +52,47 @@ const RULED_OUT = ["O", "IR", "SUS", "NFI", "DNR"];
 // Available, but carrying real risk. Everyone drafts them later.
 const RISKY = ["D", "PUP"];
 
-// Same idea as REPLACEMENT below, but used by the projection maths,
-// which has to run before the analysis section is reached.
-const REPLACEMENT_LEVEL = { QB: 11, RB: 25, WR: 28, TE: 11, K: 11, DST: 11 };
+// How many of a position a CPU team will ever hold: its starters, its share
+// of the FLEX, and enough depth to look like a real roster. The tight numbers
+// on TE, K and DST are what stop a team hoarding them.
+const DEPTH_ALLOWANCE = { QB: 3, RB: 5, WR: 5, TE: 2, K: 2, DST: 2 };
+
+function maxAt(pos) {
+  const flexShare = (pos === "RB" || pos === "WR") ? league.flex : 0;
+  return league.starters[pos] + flexShare + DEPTH_ALLOWANCE[pos];
+}
+
+// Replacement level: the last player at a position who would realistically
+// start somewhere in the league. It has to be derived, because it moves with
+// team count and FLEX slots, and it feeds the draft grade, the Overall signal
+// and value over replacement. The FLEX shares are how often each position
+// actually wins that slot, which is why RB and WR run so much deeper.
+const FLEX_SHARE = { RB: 0.40, WR: 0.55, TE: 0.05 };
+
+function replacementRank(pos) {
+  const base = league.teams * (league.starters[pos] || 0);
+  const flex = league.teams * league.flex * (FLEX_SHARE[pos] || 0);
+  return Math.round(base + flex) + 1;
+}
+
+// The same ranks written out in prose, for the method notes on the page.
+// They used to be typed into the copy by hand, which is exactly how the copy
+// and the maths drifted apart.
+function replacementText() {
+  return POSITIONS
+    .map((pos) => (pos === "DST" ? "D/ST" : pos) + replacementRank(pos))
+    .join(", ")
+    .replace(/, ([^,]*)$/, " and $1");
+}
+
 const REPLACEMENT_PTS = {};
 
+// Fourteen, because a 14-team league needs a name for every seat.
 const CPU_NAMES = [
   "Wild Goose Chase", "Bijan Mustard", "Nacua Matata", "The Gibbs Ultimatum",
   "Kupp of Joe", "Purdy Vacant", "Hurts So Good", "Saquon For The Team",
-  "Lambo No. 5", "Bone-Thugs-N-Montgomery"
+  "Lambo No. 5", "Bone-Thugs-N-Montgomery", "Alvin and the Chipmunks",
+  "Better Call Saquon", "A League of Their Mahomes", "Tua Fast Tua Furious"
 ];
 
 
@@ -50,21 +110,51 @@ const actionbar  = $("actionbar");
 
 
 /* ---- 3. The player board -------------------------------
-   One sorted copy of PLAYERS. Every player gets a position
-   rank (RB1, RB2...) and a small random jitter that stays
-   fixed for the whole draft, so undoing a pick doesn't
-   reshuffle how the CPUs think.                           */
+   One sorted copy of the ADP set that matches the league's
+   scoring. Every player gets a position rank (RB1, RB2...)
+   and a small random jitter that stays fixed for the whole
+   draft, so undoing a pick doesn't reshuffle how the CPUs
+   think.
 
-const board  = PLAYERS.slice().sort((a, b) => a.adp - b.adp);
-const counts = {};
+   Full PPR moves receivers up and backs down, so the board
+   is rebuilt from the right set when a draft starts rather
+   than being fixed at load.                               */
 
-board.forEach(function (player, i) {
-  counts[player.pos] = (counts[player.pos] || 0) + 1;
-  player.posRank = counts[player.pos];
-  player.overall = i + 1;
-  player.drafted = false;
-  player.jitter  = 0;
-});
+let board = [];
+
+const DEFAULT_SET = "half";
+
+// players.js may predate ADP_SETS, or a set may be missing if Fantasy
+// Football Calculator was down when the pipeline ran. Fall back rather
+// than leaving the app with no players at all.
+function adpSet() {
+  if (typeof ADP_SETS === "undefined") return PLAYERS;
+  return ADP_SETS[league.scoring] || ADP_SETS[DEFAULT_SET] || PLAYERS;
+}
+
+// How many picks the selected set can actually support. A 14-team, 15-round
+// draft wants 210 players and the standard set only carries 205, so this is
+// what the setup screen validates against.
+function poolSize() { return adpSet().length; }
+
+function buildBoard() {
+  // Copied, not referenced: posRank, tier and drafted belong to this draft,
+  // not to the generated data, which gets read again on a restart.
+  board = adpSet().map((p) => Object.assign({}, p));
+  board.sort((a, b) => a.adp - b.adp);
+
+  const counts = {};
+  board.forEach(function (player, i) {
+    counts[player.pos] = (counts[player.pos] || 0) + 1;
+    player.posRank = counts[player.pos];
+    player.overall = i + 1;
+    player.drafted = false;
+    player.jitter  = 0;
+  });
+
+  buildTiers();
+  buildProjections();
+}
 
 
 /* ---- 4. State ------------------------------------------ */
@@ -93,14 +183,14 @@ const state = {
    snake draft a snake.                                     */
 
 function pickInfo(overall) {
-  const round   = Math.ceil(overall / TEAM_COUNT);
-  const inRound = overall - (round - 1) * TEAM_COUNT;
-  const slot    = (round % 2 === 0) ? (TEAM_COUNT + 1 - inRound) : inRound;
+  const round   = Math.ceil(overall / league.teams);
+  const inRound = overall - (round - 1) * league.teams;
+  const slot    = (round % 2 === 0) ? (league.teams + 1 - inRound) : inRound;
   return { round: round, slot: slot - 1 };
 }
 
 function currentOverall() { return state.picks.length + 1; }
-function draftOver()      { return state.picks.length >= TOTAL_PICKS; }
+function draftOver()      { return state.picks.length >= totalPicks(); }
 function onTheClock()     { return draftOver() ? null : pickInfo(currentOverall()); }
 function isMyTurn()       { const c = onTheClock(); return c !== null && c.slot === state.mySlot; }
 
@@ -116,7 +206,7 @@ function pickCode(overall) {
 function picksUntilMyTurn() {
   let n = currentOverall();
   let gap = 0;
-  while (n <= TOTAL_PICKS && pickInfo(n).slot !== state.mySlot) { n++; gap++; }
+  while (n <= totalPicks() && pickInfo(n).slot !== state.mySlot) { n++; gap++; }
   return gap;
 }
 
@@ -141,14 +231,20 @@ function countAt(slot, pos) {
 function needMultiplier(slot, pos, round) {
   const have = countAt(slot, pos);
 
-  if (have >= MAX_POS[pos])          return 999;   // roster limit
-  if (pos === "K"   && round < 13)   return 999;   // nobody drafts a kicker early
-  if (pos === "DST" && round < 12)   return 999;
-  if (pos === "QB"  && have >= 1)    return 999;   // one QB is enough in a 10-teamer
-  if (pos === "K"   && have >= 1)    return 999;   // never two kickers
-  if (pos === "DST" && have >= 1)    return 999;   // never two defenses
+  if (have >= maxAt(pos)) return 999;              // roster limit
 
-  const need = STARTERS[pos] || 0;
+  // Kickers and defences go at the very end of any draft, so the cutoffs are
+  // measured back from the last round rather than written down as 13 and 12.
+  if (pos === "K"   && round < league.rounds - 1) return 999;
+  if (pos === "DST" && round < league.rounds - 2) return 999;
+
+  // One of each is enough, whatever "enough" is set to. A superflex league
+  // that starts two quarterbacks gets two.
+  if (pos === "QB"  && have >= league.starters.QB)  return 999;
+  if (pos === "K"   && have >= league.starters.K)   return 999;
+  if (pos === "DST" && have >= league.starters.DST) return 999;
+
+  const need = league.starters[pos] || 0;
   if (have < need)       return 0.80;   // still filling a starting slot
   if (have < need + 2)   return 1.00;   // sensible depth
   return 1.45;                          // hoarding
@@ -234,7 +330,7 @@ function runCPUs() {
 function skipSim() {
   stopSim();
   let guard = 0;
-  while (!draftOver() && !isMyTurn() && guard++ < TOTAL_PICKS) {
+  while (!draftOver() && !isMyTurn() && guard++ < totalPicks()) {
     const c = onTheClock();
     const choice = cpuChoice(c.slot, c.round);
     if (!choice) break;
@@ -270,7 +366,7 @@ function autoDraftRest() {
   stopClock();
   state.lastPick = null;
   let guard = 0;
-  while (!draftOver() && guard++ < TOTAL_PICKS) {
+  while (!draftOver() && guard++ < totalPicks()) {
     const c = onTheClock();
     const choice = cpuChoice(c.slot, c.round);
     if (!choice) break;
@@ -291,7 +387,9 @@ function restart() {
   tabsNav.hidden = true;
   actionbar.hidden = true;
   showPanel("tab-setup");
-  render();
+  // Back to the setup screen, where the league can be changed again, so the
+  // board is rebuilt rather than just redrawn.
+  refreshSetup();
 }
 
 
@@ -364,14 +462,14 @@ function clockText() {
 
 function suggestions() {
   const c = onTheClock();
-  const round = c ? c.round : ROUNDS;
+  const round = c ? c.round : league.rounds;
 
   return board
     .filter(function (p) {
       if (p.drafted) return false;
       if (isRuledOut(p)) return false;
       if (state.filterSuggest !== "ALL" && p.pos !== state.filterSuggest) return false;
-      if (countAt(state.mySlot, p.pos) >= MAX_POS[p.pos]) return false;
+      if (countAt(state.mySlot, p.pos) >= maxAt(p.pos)) return false;
       return true;
     })
     .map(function (p) {
@@ -394,8 +492,8 @@ function suggestions() {
 
 const MAX_TIER_SIZE = 6;
 
-(function buildTiers() {
-  ["QB", "RB", "WR", "TE", "K", "DST"].forEach(function (pos) {
+function buildTiers() {
+  POSITIONS.forEach(function (pos) {
     const list = board.filter((p) => p.pos === pos);   // already ADP sorted
     let tier = 1, sizeSoFar = 0;
 
@@ -412,7 +510,7 @@ const MAX_TIER_SIZE = 6;
       sizeSoFar++;
     });
   });
-})();
+}
 
 // How many players are left in this player's tier at his position.
 function tierRemaining(player) {
@@ -459,7 +557,7 @@ function statOf(player) {
 
 // Projected points under Alpine scoring, and each player's rank at
 // their position by projection rather than by ADP.
-(function buildProjections() {
+function buildProjections() {
   board.forEach(function (p) {
     const s = statOf(p);
     // A projection of zero means Sleeper has no real forecast, not that the
@@ -468,20 +566,21 @@ function statOf(player) {
     p.projPts = s && s.p && s.p.pts > 0 ? s.p.pts : null;
   });
 
-  Object.keys(REPLACEMENT_LEVEL).forEach(function (pos) {
+  POSITIONS.forEach(function (pos) {
     const ranked = board
       .filter((p) => p.pos === pos && p.projPts !== null)
       .sort((a, b) => b.projPts - a.projPts);
 
     ranked.forEach(function (p, i) { p.projPosRank = i + 1; });
 
-    const cut = Math.min(REPLACEMENT_LEVEL[pos], ranked.length) - 1;
+    const rank = replacementRank(pos);
+    const cut = Math.min(rank, ranked.length) - 1;
     REPLACEMENT_PTS[pos] = cut >= 0 && ranked[cut] ? ranked[cut].projPts : 0;
-    if (ranked.length < REPLACEMENT_LEVEL[pos] && ranked.length) {
+    if (ranked.length < rank && ranked.length) {
       REPLACEMENT_PTS[pos] = ranked[ranked.length - 1].projPts;
     }
   });
-})();
+}
 
 function label(score) {
   return score >= 75 ? "Very High" : score >= 55 ? "High"
@@ -556,31 +655,29 @@ function draftSignals(player) {
 
 /* ---- 10b. Draft analysis -------------------------------
 
-   Four components, each computed the same way for all ten
-   teams, then min-max scaled across the room so a grade is
+   Four components, each computed the same way for every
+   team, then min-max scaled across the room so a grade is
    always relative to the people you actually drafted with.
 
    No black box: every number below is printed on the page.  */
 
-// The worst player at each position who would realistically start
-// somewhere in a 10-team league. RB and WR run past 20 because the
-// FLEX pulls extra starters from those two pools.
-const REPLACEMENT = { QB: 11, RB: 25, WR: 28, TE: 11, K: 11, DST: 11 };
-
 const WEIGHTS = { starters: 0.50, value: 0.25, build: 0.15, byes: 0.10 };
 
-const GRADE_SCALE = ["A+", "A", "A-", "B+", "B", "B-", "C+", "C", "C-", "D+"];
+// Long enough for a 14-team room. The first ten are unchanged, so a
+// ten-team draft grades exactly as it did before.
+const GRADE_SCALE = ["A+", "A", "A-", "B+", "B", "B-", "C+", "C", "C-",
+                     "D+", "D", "D-", "F+", "F"];
 
 // How much better than a replacement-level starter this player is,
 // measured in places up the positional board.
 function aboveReplacement(player) {
-  return Math.max(0, (REPLACEMENT[player.pos] || 11) - player.posRank);
+  return Math.max(0, replacementRank(player.pos) - player.posRank);
 }
 
-// The best legal starting nine a roster can field.
+// The best legal starting lineup a roster can field.
 function bestLineup(roster) {
   const used = [];
-  const slots = ["QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "DST", "K"];
+  const slots = lineupSlots();
 
   return slots.map(function (slot) {
     const eligible = roster.filter(function (p) {
@@ -611,10 +708,14 @@ function analyseTeam(slot) {
   let build = 100;
   lineup.forEach(function (s) { if (!s.player) build -= 14; });          // hole in the lineup
   ["QB", "K", "DST"].forEach(function (pos) {
-    build -= Math.max(0, countAt(slot, pos) - 1) * 9;                    // wasted duplicate
+    // A second kicker is wasted; a second quarterback is only wasted in a
+    // league that starts one, which is why this counts past the starters.
+    build -= Math.max(0, countAt(slot, pos) - league.starters[pos]) * 9;
   });
-  if (countAt(slot, "RB") < 4) build -= 6;
-  if (countAt(slot, "WR") < 4) build -= 6;
+  // Thin at the two positions you start most of, once the FLEX is counted.
+  ["RB", "WR"].forEach(function (pos) {
+    if (countAt(slot, pos) < league.starters[pos] + league.flex + 1) build -= 6;
+  });
 
   // 4. bye week exposure, judged on the starting nine only
   const byes = {};
@@ -639,7 +740,7 @@ function analyseTeam(slot) {
            bargain: bargain, reach: reach };
 }
 
-// Scale a raw component onto 0-100 relative to the other nine teams.
+// Scale a raw component onto 0-100 relative to the rest of the room.
 function scaleAcross(all, key) {
   const values = all.map((t) => t[key]);
   const low = Math.min.apply(null, values);
@@ -652,7 +753,7 @@ function scaleAcross(all, key) {
 
 function analyseDraft() {
   const all = [];
-  for (let i = 0; i < TEAM_COUNT; i++) all.push(analyseTeam(i));
+  for (let i = 0; i < league.teams; i++) all.push(analyseTeam(i));
 
   ["starters", "value", "build", "byePenalty"].forEach((k) => scaleAcross(all, k));
 
@@ -728,9 +829,9 @@ function renderHeader() {
   if (draftOver()) {
     appbar.classList.add("live");
     statusLine.textContent = "Draft complete";
-    pickLabel.textContent  = TOTAL_PICKS + " picks made";
+    pickLabel.textContent  = totalPicks() + " picks made";
     rightLabel.textContent = "Rounds";
-    rightValue.textContent = ROUNDS;
+    rightValue.textContent = league.rounds;
     return;
   }
 
@@ -848,15 +949,22 @@ function renderPlayers() {
 
 function renderBoard() {
   const grid = $("boardGrid");
+
+  // One column per team plus the round gutter. The stylesheet carries a
+  // ten-team default for the moment before this runs; the real count is
+  // only known once the league is set, so it is written here.
+  grid.style.gridTemplateColumns = `30px repeat(${league.teams}, minmax(74px, 1fr))`;
+  grid.style.minWidth = (30 + league.teams * 77) + "px";
+
   let html = `<div class="hd"></div>`;
 
-  for (let s = 0; s < TEAM_COUNT; s++) {
+  for (let s = 0; s < league.teams; s++) {
     html += `<div class="hd ${s === state.mySlot ? "me" : ""}">${s === state.mySlot ? "YOU" : CPU_NAMES[s].split(" ")[0]}</div>`;
   }
 
-  for (let r = 1; r <= ROUNDS; r++) {
+  for (let r = 1; r <= league.rounds; r++) {
     html += `<div class="rd">${r}</div>`;
-    for (let s = 0; s < TEAM_COUNT; s++) {
+    for (let s = 0; s < league.teams; s++) {
       const pick = state.picks.find((p) => p.round === r && p.slot === s);
       if (pick) {
         const last = lastName(pick.player.name);
@@ -876,24 +984,23 @@ function renderBoard() {
 function renderTeam() {
   const mine = rosterOf(state.mySlot).slice();
   const used = [];
-  const slots = [["QB", "QB"], ["RB", "RB"], ["RB", "RB"], ["WR", "WR"], ["WR", "WR"],
-                 ["TE", "TE"], ["FLEX", "FLEX"], ["DST", "DST"], ["K", "K"]];
 
-  const rows = slots.map(function (s) {
+  const rows = lineupSlots().map(function (slot) {
     const eligible = mine.filter(function (p) {
       if (used.indexOf(p) >= 0) return false;
-      return s[1] === "FLEX" ? ["RB", "WR", "TE"].indexOf(p.pos) >= 0 : p.pos === s[1];
+      return slot === "FLEX" ? ["RB", "WR", "TE"].indexOf(p.pos) >= 0 : p.pos === slot;
     });
     const pick = eligible[0] || null;
     if (pick) used.push(pick);
-    return rosterRow(s[0], pick, false);
+    return rosterRow(slot, pick, false);
   });
 
   $("startersList").innerHTML = rows.join("");
 
+  // The bench is however many seats are left once the starters are seated.
   const bench = mine.filter((p) => used.indexOf(p) < 0);
   const benchRows = [];
-  for (let i = 0; i < 5; i++) benchRows.push(rosterRow("BN", bench[i] || null, true));
+  for (let i = 0; i < league.bench; i++) benchRows.push(rosterRow("BN", bench[i] || null, true));
   $("benchList").innerHTML = benchRows.join("");
 }
 
@@ -979,7 +1086,7 @@ function bar(label, detail, percent, tone) {
 function renderGrades() {
   const body = $("gradesBody");
 
-  if (state.picks.length < TEAM_COUNT) {
+  if (state.picks.length < league.teams) {
     body.innerHTML = `<div class="empty"><p class="empty-title">Nothing to grade yet</p>
       <p class="empty-sub">Analysis appears once the first round is done, and updates after every pick.</p></div>`;
     return;
@@ -995,9 +1102,9 @@ function renderGrades() {
     <div class="grade-hero">
       <div class="grade-letter">${me.grade}</div>
       <div>
-        <h3>${done ? "Final grade" : "Grade so far"} &mdash; ${me.rank} of ${TEAM_COUNT}</h3>
+        <h3>${done ? "Final grade" : "Grade so far"} &mdash; ${me.rank} of ${league.teams}</h3>
         <p>${done ? "Draft complete." : "Updates after every pick."}
-           Graded against the nine teams in this room, not against the league at large.</p>
+           Graded against the ${league.teams - 1} teams in this room, not against the league at large.</p>
       </div>
     </div>
 
@@ -1050,12 +1157,13 @@ function renderGrades() {
   html += `</tbody></table>
 
     <p class="method">Starter strength is 50% of the grade: every starter scored by how many
-    places above replacement level they rank at their position, where replacement is QB11, RB25,
-    WR28, TE11, K11 and D/ST11 for a ten-team league with a FLEX. Draft value is 25%: how far each
+    places above replacement level they rank at their position, where replacement is
+    ${replacementText()} for this ${league.teams}-team league${league.flex ? " with a FLEX" : ""}.
+    Draft value is 25%: how far each
     player fell past their ADP when you took them. Roster construction is 15%, docking unfilled
     starting slots, duplicate quarterbacks, kickers or defenses, and thin running back or receiver
     depth. Bye week safety is the last 10%, penalising any week with more than two starters off.
-    Each component is scaled against the other nine teams before weighting.</p>`;
+    Each component is scaled against the other ${league.teams - 1} teams before weighting.</p>`;
 
   body.innerHTML = html;
 }
@@ -1171,7 +1279,8 @@ function openSheet(player) {
         <div class="statbox"><div class="k">vs ADP</div><div class="v">${player.projPosRank ? (player.posRank - player.projPosRank >= 0 ? "+" : "") + (player.posRank - player.projPosRank) : "&mdash;"}</div></div>
       </div>
       <p class="method">Overall is projected points above the last startable player at this position
-      in a ten-team league. Upside and bust risk weigh how far the projection disagrees with ADP,
+      in a ${league.teams}-team league, ${player.pos}${replacementRank(player.pos)} on this board.
+      Upside and bust risk weigh how far the projection disagrees with ADP,
       plus experience, age, depth chart position, injury designation and last season's availability.
       This is one model, not a consensus of analysts.</p>`;
   }
@@ -1311,15 +1420,34 @@ function render() {
 
 const SAVE_KEY = "alpine-draft-room-v1";
 
+// Every setting that changes the shape of the board, in one string. Two
+// drafts with the same fingerprint can be swapped; two without cannot,
+// because the snake maths, the round count and the ADP set all differ.
+function settingsFingerprint(cfg) {
+  return [cfg.teams, cfg.rounds, cfg.scoring, cfg.flex, cfg.bench]
+    .concat(POSITIONS.map((pos) => cfg.starters[pos]))
+    .join("-");
+}
+
+// Turned back into something a human can read, for the refusal message.
+function settingsText(cfg) {
+  return `${cfg.teams} teams · ${cfg.rounds} rounds · ` +
+         `${cfg.scoring === "half" ? "half PPR" : cfg.scoring === "ppr" ? "full PPR" : "standard"}`;
+}
+
 function saveDraft() {
   if (!state.started) return;
   try {
     localStorage.setItem(SAVE_KEY, JSON.stringify({
-      v: 1,
+      v: 2,
       mySlot: state.mySlot,
       clockLength: state.clockLength,
       paused: state.paused,
       seed: state.seed,
+      // Stored whole, not just as a fingerprint, so the resume banner can
+      // describe the saved league and the refusal can name what it wants.
+      league: JSON.parse(JSON.stringify(league)),
+      fingerprint: settingsFingerprint(league),
       picks: state.picks.map((p) => p.player.name),
       savedAt: Date.now()
     }));
@@ -1329,12 +1457,14 @@ function saveDraft() {
   }
 }
 
+// Version 1 saves carry no league at all and were all ten-team, fourteen
+// round, half PPR. Rather than guess, they are simply not resumable.
 function readSave() {
   try {
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) return null;
     const data = JSON.parse(raw);
-    return data && data.v === 1 && data.picks ? data : null;
+    return data && data.v === 2 && data.picks && data.league ? data : null;
   } catch (err) {
     return null;
   }
@@ -1345,6 +1475,17 @@ function clearSave() {
 }
 
 function resumeDraft(data) {
+  // Resuming into different settings would corrupt the board: the snake turns
+  // in different places, the rounds run out at a different pick, and a full
+  // PPR board is not in the same order. Refuse, but keep the save, because
+  // unlike a stale player list this one is fixed by setting the dropdowns back.
+  if (data.fingerprint !== settingsFingerprint(league)) {
+    alert("That draft was a " + settingsText(data.league) + " league, and the " +
+          "setup screen is currently set to " + settingsText(league) + ".\n\n" +
+          "Set it back to match and the draft will resume. Nothing has been lost.");
+    return;
+  }
+
   // The player list is regenerated every morning. If a saved pick no longer
   // resolves, the board would be corrupt, so refuse rather than half-restore.
   const resolved = data.picks.map((name) => board.find((p) => p.name === name));
@@ -1383,17 +1524,23 @@ function showResumeBar() {
   const data = readSave();
   if (!data || !data.picks.length) { bar.hidden = true; return; }
 
+  // Described in the saved league's own terms, not the one on screen, so a
+  // mismatch is visible before the Resume button is ever pressed.
+  const saved = data.league;
+  const total = saved.teams * saved.rounds;
   const made = data.picks.length;
-  const round = Math.min(ROUNDS, Math.floor(made / TEAM_COUNT) + 1);
+  const round = Math.min(saved.rounds, Math.floor(made / saved.teams) + 1);
   const when = new Date(data.savedAt);
-  const done = made >= TOTAL_PICKS;
+  const done = made >= total;
+  const matches = data.fingerprint === settingsFingerprint(league);
 
   bar.hidden = false;
   bar.innerHTML = `
     <h4>${done ? "Finished draft saved" : "Draft in progress"}</h4>
-    <p>Slot ${data.mySlot + 1} &middot; ${made} of ${TOTAL_PICKS} picks
+    <p>Slot ${data.mySlot + 1} &middot; ${made} of ${total} picks
        ${done ? "" : "&middot; round " + round} &middot; saved
        ${when.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</p>
+    <p>${settingsText(saved)}${matches ? "" : " &middot; does not match the settings below"}</p>
     <div class="btnrow">
       <button class="primary" id="resumeBtn">${done ? "Reopen it" : "Resume"}</button>
       <button class="ghost" id="discardBtn">Discard</button>
@@ -1409,15 +1556,113 @@ function showPanel(id) {
 }
 
 
-/* ---- 13. Wiring ---------------------------------------- */
+/* ---- 13. The setup screen ------------------------------
 
-// Fill the draft position dropdown with 1st through 10th.
+   The controls write into `league`, and everything else in
+   the file reads from it. The board is rebuilt on every
+   change so the player count in the header, and the ADP the
+   Players tab shows, always match what is selected.        */
+
 const suffix = ["th", "st", "nd", "rd"];
 const slotSelect = $("draftSlot");
-for (let i = 1; i <= TEAM_COUNT; i++) {
-  const s = (i % 100 > 10 && i % 100 < 14) ? "th" : (suffix[i % 10] || "th");
-  slotSelect.innerHTML += `<option value="${i - 1}">${i}${s}</option>`;
+
+// Fill a select with a range of numbers. The label carries the position, so
+// each control says what it is without needing a label of its own.
+function fillRange(select, from, to, chosen, labeller) {
+  let html = "";
+  for (let i = from; i <= to; i++) {
+    html += `<option value="${i}"${i === chosen ? " selected" : ""}>${labeller(i)}</option>`;
+  }
+  select.innerHTML = html;
 }
+
+function ordinal(i) {
+  const s = (i % 100 > 10 && i % 100 < 14) ? "th" : (suffix[i % 10] || "th");
+  return i + s;
+}
+
+// The draft position dropdown has to be rebuilt whenever the team count
+// changes, and the slot kept if it still exists in the smaller league.
+// Slots are 0-indexed everywhere else, so the option values are too, and
+// only the label is counted from one.
+function fillSlotOptions() {
+  const keep = Math.min(Number(slotSelect.value || 0), league.teams - 1);
+  fillRange(slotSelect, 0, league.teams - 1, keep, (i) => ordinal(i + 1));
+  slotSelect.value = keep;
+}
+
+const SLOT_LIMITS = { QB: 2, RB: 4, WR: 5, TE: 3, K: 2, DST: 2 };
+
+function fillSetupControls() {
+  fillRange($("roundCount"), 8, 20, league.rounds, (i) => i + " rounds");
+  POSITIONS.forEach(function (pos) {
+    const label = pos === "DST" ? "D/ST" : pos;
+    fillRange($("start" + pos), 0, SLOT_LIMITS[pos], league.starters[pos],
+              (i) => label + " " + i);
+  });
+  fillRange($("startFLEX"), 0, 3, league.flex, (i) => "FLEX " + i);
+  fillRange($("benchCount"), 0, 12, league.bench, (i) => "BN " + i);
+  fillSlotOptions();
+}
+
+// Read every control into `league`. Called on any change, so the object is
+// the single description of the league from that moment on.
+function readSetup() {
+  league.teams   = Number($("teamCount").value);
+  league.rounds  = Number($("roundCount").value);
+  league.scoring = $("scoring").value;
+  league.flex    = Number($("startFLEX").value);
+  league.bench   = Number($("benchCount").value);
+  POSITIONS.forEach(function (pos) {
+    league.starters[pos] = Number($("start" + pos).value);
+  });
+}
+
+/* Two ways a league can be impossible rather than merely unusual:
+   the roster does not add up to the rounds being drafted, or the draft
+   wants more players than the ADP set actually carries. Either one is
+   reported here and blocks the start rather than failing mid-draft. */
+function setupProblem() {
+  const filled = rosterSize();
+  if (filled !== league.rounds) {
+    return `${starterCount()} starters + ${league.flex} FLEX + ${league.bench} bench ` +
+           `= ${filled} roster spots, but the draft runs ${league.rounds} rounds.`;
+  }
+  if (totalPicks() > poolSize()) {
+    return `${league.teams} teams over ${league.rounds} rounds is ${totalPicks()} picks, ` +
+           `and the ${league.scoring === "half" ? "half PPR" : league.scoring} board only ` +
+           `carries ${poolSize()} players.`;
+  }
+  return "";
+}
+
+function refreshSetup() {
+  if (state.started) return;
+  readSetup();
+  fillSlotOptions();
+
+  const problem = setupProblem();
+  const note = $("rosterSum");
+  note.textContent = problem ||
+    `${starterCount()} starters + ${league.flex} FLEX + ${league.bench} bench ` +
+    `= ${league.rounds} rounds, ${totalPicks()} picks.`;
+  note.classList.toggle("bad", !!problem);
+  $("startBtn").disabled = !!problem;
+
+  // Scoring decides which ADP set the board comes from, so it has to be
+  // rebuilt here rather than only when the draft starts.
+  buildBoard();
+  showResumeBar();
+  render();
+}
+
+fillSetupControls();
+
+["teamCount", "roundCount", "scoring", "startFLEX", "benchCount"]
+  .concat(POSITIONS.map((pos) => "start" + pos))
+  .forEach(function (id) {
+    $(id).addEventListener("change", refreshSetup);
+  });
 
 // PLAYERS_META only exists once players.js has been generated, so
 // check for it rather than assuming.
@@ -1432,13 +1677,21 @@ for (let i = 1; i <= TEAM_COUNT; i++) {
 })();
 
 $("randomizeBtn").addEventListener("click", function () {
-  slotSelect.value = Math.floor(Math.random() * TEAM_COUNT);
+  slotSelect.value = Math.floor(Math.random() * league.teams);
 });
 
 $("startBtn").addEventListener("click", function () {
+  readSetup();
+  if (setupProblem()) { refreshSetup(); return; }   // belt and braces; the button is disabled too
+
   state.mySlot      = Number(slotSelect.value);
   state.clockLength = Number($("pickClock").value);
   state.started     = true;
+
+  // Built here as well as on every setup change, because this is the point
+  // the league stops moving and the ranks and tiers become the ones the
+  // whole draft is judged against.
+  buildBoard();
 
   // A seeded wobble, so no two mocks are identical but a resumed draft
   // reproduces the one you were in.
@@ -1531,5 +1784,6 @@ $("playerFilter").addEventListener("click", function (e) {
   renderPlayers();
 });
 
-showResumeBar();
-render();
+// Everything above this line is a definition. This reads the setup screen,
+// builds the board from the matching ADP set, and draws the page.
+refreshSetup();
