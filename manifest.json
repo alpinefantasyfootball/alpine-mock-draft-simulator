@@ -1,6 +1,6 @@
 {
   "name": "Alpine Mock Draft Simulator",
-  "short_name": "Mock Draft",
+  "short_name": "Draft Room",
   "start_url": "/alpine-mock-draft-simulator/",
   "scope": "/alpine-mock-draft-simulator/",
   "display": "standalone",
