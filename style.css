@@ -237,6 +237,10 @@ select {
 
 .hint { margin: 7px 0 0; font-size: 12px; color: var(--ink-light); }
 
+/* A roster that does not add up to the round count, or a league too big for
+   the player pool. The draft cannot start until it is fixed. */
+.hint.bad { color: var(--danger); font-weight: 600; }
+
 .ghost {
   flex: none; font-family: Inter, sans-serif;
   font-size: 13.5px; font-weight: 600; color: var(--blue);
@@ -266,6 +270,7 @@ select {
 }
 
 .primary:hover { background: var(--blue-dark); }
+.primary:disabled { background: var(--ink-light); cursor: not-allowed; }
 .primary.big { width: 100%; padding: 14px; font-size: 15.5px; }
 
 /* ---------- position filter ---------- */
@@ -338,6 +343,9 @@ tr.conflict .nm { color: #A32530; }
   margin: 14px 0 0; text-align: center;
   font-size: 11.5px; color: var(--ink-light);
 }
+
+.freshness a { color: var(--blue); text-decoration: none; }
+.freshness a:hover { text-decoration: underline; }
 
 /* ---------- tier and warning chips ---------- */
 
@@ -438,6 +446,8 @@ tr.drafted .meta, tr.drafted .num { opacity: .45; }
 
 .board-scroll { overflow-x: auto; padding-bottom: 6px; }
 
+/* Ten teams is only the default here. renderBoard() overwrites the column
+   count and the minimum width to match the league that is actually set. */
 .board {
   display: grid;
   grid-template-columns: 30px repeat(10, minmax(74px, 1fr));

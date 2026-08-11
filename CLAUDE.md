@@ -1,6 +1,9 @@
 # Alpine Draft Room
 
-A fantasy football mock draft simulator for one specific ten-team league.
+A fantasy football mock draft simulator, built for one specific ten-team
+league and now configurable from the setup screen: 8 to 14 teams, 8 to 20
+rounds, any starting lineup, and standard, half or full PPR. The Alpine
+league is still what every control defaults to.
 Live at `alpinefantasyfootball.github.io/alpine-mock-draft-simulator/`,
 hosted on GitHub Pages straight off `main`.
 
@@ -30,7 +33,7 @@ Python 3 standard library only in the pipeline. No pip dependencies.
 
 Two free feeds, no keys: **Sleeper** (players, injuries, stats back to 2018,
 weekly logs, projections, depth charts) and **Fantasy Football Calculator**
-(ADP, currently 10-team half-PPR only).
+(ADP, one set per scoring format, written to `players.js` as `ADP_SETS`).
 
 Fantasy points are **recomputed from raw components** in `build_players.py`
 using the league's own scoring — five-point passing touchdowns, distance-tiered
@@ -61,6 +64,19 @@ player look elite.
 **Never hand-edit `players.js` or `stats.js`.** The next scheduled run
 overwrites them. Change `build_players.py` instead.
 
+**Nothing about the league shape may be written down twice.** `app.js` has
+one `league` object and everything else derives from it — replacement level,
+roster limits, the starting lineup, the round a kicker becomes legal, even
+the prose in the method notes. The old code spelled "ten teams" out in a
+dozen places and carried a hand-picked replacement level that was only
+correct for one of them.
+
+**FFC's `teams=` parameter does nothing.** It is echoed back in the response
+meta, so it looks like it worked, but 8, 10, 12 and 14 all return the same
+rows, the same ADP and the same `total_drafts` — checked across 2024, 2025
+and 2026. Only the scoring format actually changes the data. Don't build a
+team-count axis on top of it without re-checking that first.
+
 **Anything an API gives us that we don't use should be visible, not silent.**
 Unmatched players and unscored stat keys both get written to `unmatched.txt`
 rather than dropped.
@@ -71,11 +87,19 @@ A cached stylesheet once let the logo expand to fill the entire screen.
 ## Testing
 
 - Pipeline: `python scripts/build_players.py` — prints counts and writes the
-  generated files. Check `unmatched.txt` afterwards.
+  generated files. Check `unmatched.txt` afterwards. On Windows run it as
+  `py scripts/build_players.py`. A bare `python` reaches the Microsoft Store
+  stub and fails with "Python was not found" unless the installer's
+  "Add python.exe to PATH" box was ticked, which it usually isn't.
 - App: open `index.html` directly in a browser. `file://` works because the
   data files load via `<script src>` rather than fetch.
 - Before claiming a change works, run a full simulated draft and confirm
   140 picks, no duplicate players, 14 per team, no kicker before round 13.
+  Then run one at a different shape — 12 teams, 15 rounds, full PPR — and
+  confirm 180 picks, 15 per team, one QB each and no kicker before round 14.
+  If the console reports an error naming something the source no longer
+  contains, you are looking at a cached `app.js`, not a real failure. Hard
+  reload, or serve the folder over `python -m http.server` and use that.
 
 ## Don't
 
