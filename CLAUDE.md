@@ -87,7 +87,10 @@ A cached stylesheet once let the logo expand to fill the entire screen.
 ## Testing
 
 - Pipeline: `python scripts/build_players.py` — prints counts and writes the
-  generated files. Check `unmatched.txt` afterwards.
+  generated files. Check `unmatched.txt` afterwards. On Windows run it as
+  `py scripts/build_players.py`. A bare `python` reaches the Microsoft Store
+  stub and fails with "Python was not found" unless the installer's
+  "Add python.exe to PATH" box was ticked, which it usually isn't.
 - App: open `index.html` directly in a browser. `file://` works because the
   data files load via `<script src>` rather than fetch.
 - Before claiming a change works, run a full simulated draft and confirm
