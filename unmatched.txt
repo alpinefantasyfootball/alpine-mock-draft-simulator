@@ -1,5 +1,5 @@
 FFC rows that did not join to a Sleeper player
-Generated 2026-08-11 20:21 UTC
+Generated 2026-08-12 14:42 UTC
 Across every scoring format, each name listed once.
 Add an entry to MANUAL_MATCHES in build_players.py to fix one.
 
