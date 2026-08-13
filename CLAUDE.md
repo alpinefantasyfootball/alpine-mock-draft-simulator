@@ -21,7 +21,7 @@ Python 3 standard library only in the pipeline. No pip dependencies.
 | File | Role |
 |---|---|
 | `index.html` | Markup. Sticky header, tabs, action bar, panels, player sheet. |
-| `style.css` | All styling. Colours defined once in `:root`, reused by name. |
+| `style.css` | All styling. Colours defined once at the top, reused by name. |
 | `app.js` | Everything else: draft engine, CPU logic, analysis, rendering. |
 | `players.js` | **GENERATED.** 260 players by ADP. Never edit by hand. |
 | `stats.js` | **GENERATED.** Stats, projections, depth charts by Sleeper ID. |
@@ -58,6 +58,13 @@ stored can never be rescored, and `build_players.py` fails loudly if a
 - Click handling is delegated from `document`, because the DOM is constantly
   rebuilt. Don't attach listeners to elements inside a render function.
 - Comments explain *why*, not *what*. The owner reads this code to learn.
+- **Two themes, one set of names.** `:root` holds the dark values and is
+  therefore the default; `:root[data-theme="light"]` overrides them. A new
+  rule may only name a colour that is the same under both themes — brand
+  navy, a position solid, or white on top of one of those. Anything else
+  has to become a token in both blocks, or it will be invisible in one of
+  them. Blue is two tokens for this reason: `--blue` always sits under
+  white text, `--link` is blue *as* text on a surface.
 
 ## Hard-won rules — do not undo these
 

@@ -2,3 +2,7 @@
 # rather than run. Nothing here belongs in the repo.
 __pycache__/
 *.pyc
+
+# Local editor and assistant settings. Machine-specific, so they would only
+# ever cause conflicts if they were shared.
+.claude/

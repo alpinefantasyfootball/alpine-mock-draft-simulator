@@ -4,6 +4,22 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>How the Draft Room works &middot; Alpine</title>
+
+  <!-- The same pre-paint theme switch the app uses. This page has no
+       JavaScript of its own and no toggle, but it shares the stylesheet, so
+       it has to honour a choice made next door rather than reverting to
+       light halfway through a visit. -->
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem("draftroom.theme");
+        if (saved === "light" || saved === "dark") {
+          document.documentElement.setAttribute("data-theme", saved);
+        }
+      } catch (err) {}
+    })();
+  </script>
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -51,12 +67,12 @@
       font-size: 12.5px; line-height: 1.75; color: var(--ink);
       overflow-x: auto;
     }
-    .formula b { color: var(--blue); font-weight: 700; }
+    .formula b { color: var(--link); font-weight: 700; }
 
     /* A worked example at the league's own default settings. Labelled, so it
        is never mistaken for a number the code actually hardcodes. */
     .worked {
-      background: #F7F9FB; border: 1px solid var(--line);
+      background: var(--sunken); border: 1px solid var(--line);
       border-radius: 8px; padding: 13px 15px; margin: 0 0 14px;
     }
     .worked-title {
@@ -73,21 +89,21 @@
 
     .doc code {
       font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      font-size: .89em; background: #EEF2F6; border-radius: 4px; padding: 1px 5px;
+      font-size: .89em; background: var(--fill); border-radius: 4px; padding: 1px 5px;
     }
 
     .note {
-      border-left: 3px solid var(--te); background: #FDF6EC;
+      border-left: 3px solid var(--te); background: var(--t-bye-bg);
       border-radius: 0 8px 8px 0; padding: 12px 15px; margin: 0 0 14px;
       font-size: 13.5px; line-height: 1.65; color: var(--ink-mid);
     }
 
     .toc { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px; margin: 22px 0 6px; }
     .toc ol { margin: 0; padding-left: 20px; line-height: 1.95; font-size: 14px; }
-    .toc a { color: var(--blue); text-decoration: none; }
+    .toc a { color: var(--link); text-decoration: none; }
     .toc a:hover { text-decoration: underline; }
 
-    .backlink { display: inline-block; margin-top: 30px; font-size: 13.5px; color: var(--blue); text-decoration: none; }
+    .backlink { display: inline-block; margin-top: 30px; font-size: 13.5px; color: var(--link); text-decoration: none; }
     .backlink:hover { text-decoration: underline; }
   </style>
 </head>
@@ -97,12 +113,23 @@
        in the CSS, because a cached or missing stylesheet once let this shape
        grow to fill the whole screen. -->
   <header class="appbar">
-    <svg class="mark" width="34" height="34" viewBox="0 0 100 100" aria-hidden="true">
-      <path d="M50 4 L97 96 L67 96 L50 54 L33 96 L3 96 Z" fill="currentColor"/>
-      <path class="facet" d="M50 4 L21 96 M50 4 L79 96"/>
+    <svg class="mark" width="34" height="34" viewBox="56 72 400 400"
+         aria-hidden="true" focusable="false">
+      <clipPath id="peakClip"><path d="M256 102 L447 441 L65 441 Z"/></clipPath>
+      <g clip-path="url(#peakClip)">
+        <rect x="56"  y="72"  width="200" height="219" fill="#FFFFFF"/>
+        <rect x="256" y="72"  width="200" height="219" fill="#DFE7EF"/>
+        <rect x="56"  y="291" width="200" height="181" fill="#ECEAE3"/>
+        <rect x="256" y="291" width="200" height="181" fill="#B9C5D3"/>
+      </g>
+      <g fill="#D8622C">
+        <rect x="250" y="250" width="12"  height="166" rx="6"/>
+        <rect x="214" y="273" width="84"  height="12"  rx="6"/>
+        <rect x="209" y="319" width="94"  height="12"  rx="6"/>
+        <rect x="204" y="365" width="104" height="12"  rx="6"/>
+      </g>
     </svg>
     <div class="appbar-text">
-      <p class="brandline">Alpine Consulting Partners</p>
       <h1>How the Draft Room works</h1>
       <p>Every number on the page, and where it comes from</p>
     </div>
