@@ -104,10 +104,52 @@ const $ = (id) => document.getElementById(id);
 const appbar     = $("appbar");
 const statusLine = $("statusLine");
 const pickLabel  = $("pickLabel");
+const countBlock = $("countBlock");
 const rightLabel = $("rightLabel");
 const rightValue = $("rightValue");
+const themeBtn   = $("themeBtn");
 const tabsNav    = $("tabs");
 const actionbar  = $("actionbar");
+
+
+/* ---- 2b. Light and dark ---------------------------------
+   Dark is the default, and it is the default in the
+   stylesheet rather than here: :root carries the dark
+   values and only data-theme="light" overrides them. So a
+   reader who has never touched the toggle gets a dark page
+   even before this file has loaded, and nothing has to be
+   applied on boot.
+
+   The head of index.html re-applies a saved choice before
+   the first paint. All this section does is flip it and
+   write it down.                                          */
+
+const THEME_KEY = "draftroom.theme";
+
+function currentTheme() {
+  return document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
+}
+
+function setTheme(theme) {
+  // The dark theme is the absence of an attribute, not a value of it, so
+  // that a saved choice and the default can never disagree.
+  if (theme === "light") document.documentElement.setAttribute("data-theme", "light");
+  else                   document.documentElement.removeAttribute("data-theme");
+
+  try { localStorage.setItem(THEME_KEY, theme); } catch (err) {}   // private browsing
+  syncThemeButton();
+}
+
+// The button says what it will do, not what is on screen, because that is
+// what a screen reader user needs to hear before pressing it.
+function syncThemeButton() {
+  const dark = currentTheme() === "dark";
+  themeBtn.setAttribute("aria-pressed", String(dark));
+  themeBtn.setAttribute("aria-label", dark ? "Switch to the light theme" : "Switch to the dark theme");
+  themeBtn.title = themeBtn.getAttribute("aria-label");
+}
+
+syncThemeButton();
 
 
 /* ---- 3. The player board -------------------------------
@@ -283,7 +325,13 @@ function makePick(player) {
    one, which is how you write a paced loop in a browser without
    freezing the page.                                            */
 
-const CPU_DELAY = 750;   // milliseconds between CPU picks
+/* Milliseconds between CPU picks. This was 750, which put nearly seven
+   seconds between your turns in a ten-team league and made the wait the
+   most noticeable thing about the draft. 350 halves that without turning
+   the board into a blur: the ticker's own entrance animation runs for
+   280ms, so a pick still finishes announcing itself before the next one
+   lands. Below about 300 they start treading on each other. */
+const CPU_DELAY = 350;
 
 // Deterministic pseudo-random offset of roughly -3 to +3 ADP places.
 function applyJitter() {
@@ -314,6 +362,14 @@ render();
 
   makePick(choice);
   state.lastPick = state.picks[state.picks.length - 1];
+
+  // If that pick handed the turn back, put the clock on the board before
+  // drawing rather than waiting for the next step to do it. Otherwise this
+  // render paints "You're on the clock" with a stale timeLeft of 0, which
+  // the header reads as ten seconds left and turns red — a warning flash on
+  // a clock that has not started. It lasted a full CPU_DELAY.
+  if (isMyTurn()) resetClock();
+
   render();
 
   state.simTimer = setTimeout(cpuStep, CPU_DELAY);
@@ -922,11 +978,15 @@ function adpConflict(player) { return isRuledOut(player) && player.adp <= 150; }
 function renderHeader() {
   appbar.className = "appbar";
 
+  // The pick line and the counter both describe a draft in progress, so
+  // before one starts the header is just the name and the theme toggle.
+  // The player count lives under the setup card, on the freshness line,
+  // which is where the rest of the data's provenance already is.
+  pickLabel.hidden  = !state.started;
+  countBlock.hidden = !state.started;
+
   if (!state.started) {
-    statusLine.textContent = "Alpine Draft Room";
-    pickLabel.textContent  = "Set up your draft below";
-    rightLabel.textContent = "Players";
-    rightValue.textContent = board.length;
+    statusLine.textContent = "The Draft Room";
     return;
   }
 
@@ -1936,7 +1996,12 @@ $("sheetTabs").addEventListener("click", function (e) {
   $(e.target.dataset.view).classList.add("on");
 });
 
+// The header is never rebuilt by render(), so these two can hold a direct
+// listener rather than going through the delegated handler below.
 $("homeBtn").addEventListener("click", leaveForHome);
+themeBtn.addEventListener("click", function () {
+  setTheme(currentTheme() === "dark" ? "light" : "dark");
+});
 $("pauseBtn").addEventListener("click", togglePause);
 $("undoBtn").addEventListener("click", undo);
 $("autoBtn").addEventListener("click", autoDraftRest);

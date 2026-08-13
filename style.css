@@ -1,19 +1,114 @@
 /* ==========================================================
-   Alpine Draft Room — stylesheet
+   The Draft Room — stylesheet
    Colours are defined once here, at the top, and reused
    everywhere below by name. Change one line, change the
    whole site.
+
+   There are two sets of them. The dark set lives on :root
+   and is therefore what you get by default, including on a
+   page that never runs a line of JavaScript. The light set
+   overrides it only when the reader has asked for light and
+   the toggle has written data-theme="light" onto <html>.
+
+   The rule that keeps this honest: no rule below may name a
+   colour that changes between the two themes. If a literal
+   hex appears past this block it is either brand navy, which
+   is dark in both themes, or a position colour, which is a
+   mid tone that works on either.
    ========================================================== */
 
 :root {
-  /* Alpine Consulting Partners brand */
-  --navy:        #232B5C;   /* wordmark navy   */
-  --navy-deep:   #171E45;   /* header gradient */
-  --navy-soft:   #333C74;
-  --blue:        #0E6BB0;   /* mid blue        */
+  /* ---- dark: the default ---- */
+
+  /* Brand navy. The app icon sits on #16283C, and so does the
+     header, so the mark needs no plate of its own. These do not
+     change with the theme — the header is dark either way. */
+  --navy-deep:   #0E1D2E;   /* header gradient, dark end */
+  --navy:        #16283C;   /* the icon's own navy        */
+  --navy-soft:   #24384F;
+  --navy-mid:    #1B3A6B;   /* the lift in a live header  */
+  --navy-lift:   #10456F;   /* the blue end of a gradient */
+  --navy-glow:   #0E5A93;
+
+  /* The header changes colour with the state of the draft, not with the
+     theme, so it keeps its own blues and reds. The ones below named
+     --blue and --danger do move, which is why these are separate. */
+  --hdr-blue-deep: #0A548A;
+  --hdr-blue:      #0E6BB0;
+  --hdr-cyan:      #12A3DC;
+  --hdr-red-deep:  #7A1F1A;
+  --hdr-red:       #B43026;
+  --hdr-red-lift:  #D0453A;
+
+  /* Blue as a filled button always carries white text, so it can only go so
+     light before that text stops being readable. It brightens a little from
+     the light theme's blue, to lift off a dark card, and no further.
+     Blue as *text* has the opposite problem and needs --link instead. */
+  --blue:        #1776BE;
+  --blue-dark:   #125F9C;   /* hover: deeper, the same way round as in light */
+  --blue-pale:   #16334C;
+  --blue-line:   #2C567D;
+  --cyan:        #35BDEE;
+  --link:        #62B8F2;   /* blue on a surface, rather than under white text */
+
+  --ink:         #E6ECF3;
+  --ink-mid:     #A2B0BE;
+  --ink-light:   #76838F;
+
+  --page:        #0E151E;
+  --card:        #18212D;
+  --line:        #2A3441;
+  --hairline:    #222C38;   /* the rules between rows inside a card */
+  --sunken:      #131C26;   /* a panel set into a card: stat boxes, table heads */
+  --well:        #1E2836;   /* slot chips, round numbers */
+  --fill:        #232E3C;   /* empty board cells, small buttons */
+  --fill-hi:     #2D3948;   /* those buttons, hovered */
+  --track:       #242F3D;   /* the unfilled part of a bar or meter */
+  --board-hd:    #212B38;
+
+  --danger:      #F0837A;
+  --good:        #4FBF7F;
+
+  --row-bad:     #2A171B;   /* a whole row tinted with bad news */
+  --row-blue:    #16222F;   /* a whole row tinted as yours      */
+
+  /* Tints: a soft background with a legible foreground on it. Used by
+     the injury chips, the tier chips, the bye bars and the callouts. */
+  --t-good-bg:#12301F;   --t-good-fg:#6FD79E;
+  --t-bad-bg:#3A1D22;    --t-bad-fg:#F2909A;
+  --t-ir-bg:#431A20;     --t-ir-fg:#EE8590;
+  --t-warn-bg:#33270F;   --t-warn-fg:#E3B268;
+  --t-bye-bg:#33240F;    --t-bye-fg:#E4AC63;
+  --t-info-bg:#16293C;   --t-info-fg:#75BAE8;
+  --t-purple-bg:#251E3C; --t-purple-fg:#B7A4EE;
+  --t-orange-bg:#38230F; --t-orange-fg:#E79A62;
+  --t-neutral-bg:#232D38; --t-neutral-fg:#A5B3BF;
+
+  /* Position colours. The -bg / -fg pair is a chip or an avatar; the bare
+     name is a solid block on the draft board, which always carries white
+     text and so is the same in both themes. */
+  --qb-bg:#3A1D22;  --qb-fg:#F0929B;  --qb:#D9534F;
+  --rb-bg:#12293A;  --rb-fg:#74B9E6;  --rb:#2E86C1;
+  --wr-bg:#12301F;  --wr-fg:#6ED79C;  --wr:#28A667;
+  --te-bg:#33240F;  --te-fg:#E9AE63;  --te:#E08A2C;
+  --k-bg:#251E3C;   --k-fg:#B4A0EC;   --k:#8064CF;
+  --dst-bg:#232B33; --dst-fg:#A8B7C2; --dst:#607483;
+
+  /* Tells the browser to draw the parts we don't control — select popups,
+     checkboxes, scrollbars — to match. Without it a dark page gets white
+     dropdowns. */
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  /* ---- light: only when it is asked for ---- */
+
+  --blue:        #0E6BB0;
   --blue-dark:   #0A548A;
   --blue-pale:   #E8F2FA;
-  --cyan:        #12A3DC;   /* bright accent   */
+  --blue-line:   #C9DCF9;
+  --cyan:        #12A3DC;
+  --link:        #0E6BB0;
 
   --ink:         #16202C;
   --ink-mid:     #5A6875;
@@ -22,15 +117,38 @@
   --page:        #F5F7FA;
   --card:        #FFFFFF;
   --line:        #E4E9EF;
+  --hairline:    #F1F4F7;
+  --sunken:      #F7F9FB;
+  --well:        #F0F3F6;
+  --fill:        #EDF0F3;
+  --fill-hi:     #E6EBF1;
+  --track:       #EDF1F5;
+  --board-hd:    #E9EDF1;
 
   --danger:      #C0392F;
+  --good:        #1B7343;
 
-  --qb-bg:#FBE1E5;  --qb-fg:#B02A37;  --qb:#D9534F;
-  --rb-bg:#D7EBF8;  --rb-fg:#15618F;  --rb:#2E86C1;
-  --wr-bg:#D9F2E1;  --wr-fg:#1B7343;  --wr:#28A667;
-  --te-bg:#FCEBD5;  --te-fg:#95580F;  --te:#E08A2C;
-  --k-bg:#E9E2F8;   --k-fg:#59409F;   --k:#8064CF;
-  --dst-bg:#E2E8ED; --dst-fg:#46555F; --dst:#607483;
+  --row-bad:     #FEF6F7;
+  --row-blue:    #F7FAFF;
+
+  --t-good-bg:#E6F5EC;   --t-good-fg:#1B7343;
+  --t-bad-bg:#FBE1E5;    --t-bad-fg:#A32530;
+  --t-ir-bg:#F6D5D8;     --t-ir-fg:#86202A;
+  --t-warn-bg:#FCF0DC;   --t-warn-fg:#8A5A11;
+  --t-bye-bg:#FCEBD5;    --t-bye-fg:#95580F;
+  --t-info-bg:#DCE9F7;   --t-info-fg:#15618F;
+  --t-purple-bg:#EDE7FB; --t-purple-fg:#5B41A8;
+  --t-orange-bg:#FBE4D3; --t-orange-fg:#9A4B14;
+  --t-neutral-bg:#E4E8EC; --t-neutral-fg:#46555F;
+
+  --qb-bg:#FBE1E5;  --qb-fg:#B02A37;
+  --rb-bg:#D7EBF8;  --rb-fg:#15618F;
+  --wr-bg:#D9F2E1;  --wr-fg:#1B7343;
+  --te-bg:#FCEBD5;  --te-fg:#95580F;
+  --k-bg:#E9E2F8;   --k-fg:#59409F;
+  --dst-bg:#E2E8ED; --dst-fg:#46555F;
+
+  color-scheme: light;
 }
 
 * { box-sizing: border-box; }
@@ -57,14 +175,14 @@ body {
   position: relative; overflow: hidden;
   display: flex; align-items: center; gap: 12px;
   padding: 10px 14px;
-  background: linear-gradient(120deg, var(--navy-deep) 0%, var(--navy) 52%, #10456F 100%);
+  background: linear-gradient(120deg, var(--navy-deep) 0%, var(--navy) 52%, var(--navy-lift) 100%);
   color: #fff;
   transition: background .35s ease;
 }
 
-.appbar.live    { background: linear-gradient(120deg, #14224C 0%, #1B3A6B 55%, #0E5A93 100%); }
-.appbar.my-turn { background: linear-gradient(120deg, #0A548A 0%, var(--blue) 50%, var(--cyan) 130%); }
-.appbar.urgent  { background: linear-gradient(120deg, #7A1F1A 0%, #B43026 60%, #D0453A 100%); }
+.appbar.live    { background: linear-gradient(120deg, var(--navy-deep) 0%, var(--navy-mid) 55%, var(--navy-glow) 100%); }
+.appbar.my-turn { background: linear-gradient(120deg, var(--hdr-blue-deep) 0%, var(--hdr-blue) 50%, var(--hdr-cyan) 130%); }
+.appbar.urgent  { background: linear-gradient(120deg, var(--hdr-red-deep) 0%, var(--hdr-red) 60%, var(--hdr-red-lift) 100%); }
 
 /* Mountain ridges live in CSS rather than the markup, so a missing
    stylesheet leaves a plain bar instead of a giant graphic. */
@@ -77,7 +195,7 @@ body {
   pointer-events: none;
 }
 
-/* the Alpine chevron, reversed to white */
+/* the app icon's peak, on the navy it was drawn for */
 /* The mark is a button now, so it needs to carry the flex sizing the SVG
    used to, and to look pressable without becoming a box in the header. */
 .home {
@@ -95,34 +213,39 @@ body {
 .home:hover { opacity: .78; }
 .home:focus-visible { outline: 2px solid #fff; outline-offset: 4px; border-radius: 6px; }
 
+/* The peak carries its own colours, so this only sizes it and lifts it off
+   the ridge texture behind. */
 .mark {
   position: relative; z-index: 1;
   width: 34px; height: 34px; min-width: 34px; flex: none;
-  color: #fff;
-  filter: drop-shadow(0 1px 3px rgba(0,0,0,.28));
+  filter: drop-shadow(0 1px 3px rgba(0,0,0,.32));
 }
-
-.mark .facet { stroke: var(--navy-deep); stroke-width: 2.2; opacity: .30; fill: none; }
 
 .appbar-text { position: relative; z-index: 1; min-width: 0; }
 
-.brandline {
-  margin: 0 0 1px;
-  font-size: 8px; font-weight: 700; letter-spacing: .16em;
-  text-transform: uppercase; color: rgba(255,255,255,.62);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-
+/* Team names run to "Bone-Thugs-N-Montgomery", and on a narrow phone the
+   header cannot hold that next to the counter and the toggle. It has to end
+   in an ellipsis rather than be sliced through a letter by the bar's own
+   overflow, which is what happens if only nowrap is set. */
 .appbar-text h1 {
   margin: 0;
   font-family: Poppins, sans-serif;
   font-size: 16px; font-weight: 700; letter-spacing: -0.01em;
-  white-space: nowrap;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
-.appbar-text p:not(.brandline) { margin: 0; font-size: 12px; color: rgba(255,255,255,.78); white-space: nowrap; }
+.appbar-text p {
+  margin: 0; font-size: 12px; color: rgba(255,255,255,.78);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 
-.appbar-right { position: relative; z-index: 1; margin-left: auto; text-align: right; padding-left: 10px; }
+.appbar-right {
+  position: relative; z-index: 1; margin-left: auto;
+  display: flex; align-items: center; gap: 12px;
+  padding-left: 10px;
+}
+
+.count { text-align: right; }
 
 .count-label {
   display: block; font-size: 9.5px; letter-spacing: .1em;
@@ -134,6 +257,29 @@ body {
   font-size: 22px; font-weight: 700; line-height: 1.1;
   font-variant-numeric: tabular-nums;
 }
+
+/* ---------- theme toggle ----------
+   It lives on the header, which is dark under both themes, so it is
+   styled once against navy rather than switching with everything else. */
+
+.theme-toggle {
+  flex: none;
+  display: flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px;
+  border: 1px solid rgba(255,255,255,.22); border-radius: 50%;
+  background: rgba(255,255,255,.10); color: #fff;
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease;
+}
+
+.theme-toggle:hover { background: rgba(255,255,255,.20); border-color: rgba(255,255,255,.38); }
+.theme-toggle:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+
+/* One icon each way round: the sun offers the light theme, so it shows
+   while the page is dark, and the moon shows while it is light. */
+.theme-toggle .i-moon { display: none; }
+:root[data-theme="light"] .theme-toggle .i-sun  { display: none; }
+:root[data-theme="light"] .theme-toggle .i-moon { display: block; }
 
 /* ---------- tabs ---------- */
 
@@ -163,11 +309,11 @@ body {
 .mini {
   flex: none; font-family: Inter, sans-serif;
   font-size: 12px; font-weight: 600; color: var(--ink-mid);
-  background: #F1F4F7; border: 0; border-radius: 6px;
+  background: var(--fill); border: 0; border-radius: 6px;
   padding: 6px 12px; cursor: pointer; white-space: nowrap;
 }
 
-.mini:hover { background: #E6EBF1; }
+.mini:hover { background: var(--fill-hi); }
 .mini.danger { color: var(--danger); }
 
 /* The way on to the next mock. Reads as an invitation, next to a Discard
@@ -183,7 +329,7 @@ body {
 .ticker {
   display: flex; align-items: center; gap: 11px;
   padding: 8px 13px;
-  background: linear-gradient(90deg, var(--navy) 0%, #1B3A6B 100%);
+  background: linear-gradient(90deg, var(--navy) 0%, var(--navy-mid) 100%);
   color: #fff;
   animation: tickIn .28s ease;
 }
@@ -253,7 +399,7 @@ body {
 select {
   flex: 1; width: 100%;
   font-family: Inter, sans-serif; font-size: 14.5px; color: var(--ink);
-  background: #fff; border: 1px solid var(--line);
+  background: var(--card); border: 1px solid var(--line);
   border-radius: 8px; padding: 10px 12px; cursor: pointer;
 }
 
@@ -265,19 +411,19 @@ select {
 
 .ghost {
   flex: none; font-family: Inter, sans-serif;
-  font-size: 13.5px; font-weight: 600; color: var(--blue);
-  background: #fff; border: 1px solid var(--line);
+  font-size: 13.5px; font-weight: 600; color: var(--link);
+  background: var(--card); border: 1px solid var(--line);
   border-radius: 8px; padding: 10px 16px; cursor: pointer;
 }
 
-.ghost:hover { background: var(--blue-pale); border-color: #C9DCF9; }
+.ghost:hover { background: var(--blue-pale); border-color: var(--blue-line); }
 
 /* ---------- the scoring editor ----------
    A native <details>, so open and closed cost no JavaScript and keyboard
    and screen reader behaviour come for free. */
 
 .scoring {
-  background: #F7F9FB; border: 1px solid var(--line);
+  background: var(--sunken); border: 1px solid var(--line);
   border-radius: 8px; margin-bottom: 20px;
 }
 
@@ -309,7 +455,7 @@ select {
 .rule input {
   flex: none; width: 66px; text-align: right;
   font-family: Inter, sans-serif; font-size: 13px; color: var(--ink);
-  background: #fff; border: 1px solid var(--line);
+  background: var(--card); border: 1px solid var(--line);
   border-radius: 6px; padding: 5px 7px;
 }
 
@@ -343,7 +489,7 @@ select {
   cursor: pointer; border-bottom: 2px solid transparent;
 }
 
-.pos-filter button.on { color: var(--blue); border-bottom-color: var(--blue); }
+.pos-filter button.on { color: var(--link); border-bottom-color: var(--link); }
 
 /* ---------- injury designations ---------- */
 
@@ -351,21 +497,21 @@ select {
   display: inline-block;
   font-size: 9px; font-weight: 700; letter-spacing: .04em;
   padding: 2px 5px; border-radius: 3px;
-  background: #EDF0F3; color: var(--ink-mid);
+  background: var(--fill); color: var(--ink-mid);
 }
 
-.inj.Q   { background: #FCF0DC; color: #8A5A11; }
-.inj.D   { background: #FBE4D3; color: #9A4B14; }
-.inj.O   { background: #FBE1E5; color: #A32530; }
-.inj.IR  { background: #F6D5D8; color: #86202A; }
-.inj.PUP { background: #EDE7FB; color: #5B41A8; }
-.inj.NFI { background: #EDE7FB; color: #5B41A8; }
-.inj.SUS { background: #E4E8EC; color: #46555F; }
+.inj.Q   { background: var(--t-warn-bg);    color: var(--t-warn-fg); }
+.inj.D   { background: var(--t-orange-bg);  color: var(--t-orange-fg); }
+.inj.O   { background: var(--t-bad-bg);     color: var(--t-bad-fg); }
+.inj.IR  { background: var(--t-ir-bg);      color: var(--t-ir-fg); }
+.inj.PUP { background: var(--t-purple-bg);  color: var(--t-purple-fg); }
+.inj.NFI { background: var(--t-purple-bg);  color: var(--t-purple-fg); }
+.inj.SUS { background: var(--t-neutral-bg); color: var(--t-neutral-fg); }
 
 /* a top-150 player who has already been ruled out — the ADP feed
    always lags the injury feed by a few days */
-tr.conflict { background: #FEF6F7; }
-tr.conflict .nm { color: #A32530; }
+tr.conflict { background: var(--row-bad); }
+tr.conflict .nm { color: var(--t-bad-fg); }
 
 /* ---------- avatars ---------- */
 
@@ -403,7 +549,7 @@ tr.conflict .nm { color: #A32530; }
   font-size: 11.5px; color: var(--ink-light);
 }
 
-.freshness a { color: var(--blue); text-decoration: none; }
+.freshness a { color: var(--link); text-decoration: none; }
 .freshness a:hover { text-decoration: underline; }
 
 /* ---------- tier and warning chips ---------- */
@@ -412,13 +558,13 @@ tr.conflict .nm { color: #A32530; }
   display: inline-block;
   font-size: 10px; font-weight: 700; letter-spacing: .02em;
   padding: 2px 7px; border-radius: 999px;
-  background: #EDF1F5; color: var(--ink-mid);
+  background: var(--track); color: var(--ink-mid);
 }
 
-.chip.tier   { background: #E9EEF3; color: #46555F; }
-.chip.thin   { background: #FCF0DC; color: #8A5A11; }
-.chip.last   { background: #FBE1E5; color: #A32530; }
-.chip.bye    { background: #FCEBD5; color: #95580F; }
+.chip.tier   { background: var(--t-neutral-bg); color: var(--t-neutral-fg); }
+.chip.thin   { background: var(--t-warn-bg);    color: var(--t-warn-fg); }
+.chip.last   { background: var(--t-bad-bg);     color: var(--t-bad-fg); }
+.chip.bye    { background: var(--t-bye-bg);     color: var(--t-bye-fg); }
 
 /* ---------- suggestion cards ---------- */
 
@@ -428,7 +574,7 @@ tr.conflict .nm { color: #A32530; }
   border-radius: 10px; padding: 12px 14px; margin-bottom: 9px;
 }
 
-.sug.top { border-color: #C9DCF9; box-shadow: 0 2px 10px rgba(44,107,237,.09); }
+.sug.top { border-color: var(--blue-line); box-shadow: 0 2px 10px rgba(44,107,237,.09); }
 
 .sug-body { flex: 1; min-width: 0; }
 
@@ -445,7 +591,7 @@ tr.conflict .nm { color: #A32530; }
 
 .sug-stats { margin-top: 3px; font-size: 11.5px; color: var(--ink-light); }
 
-.value-up   { color: #1B7343; font-weight: 600; }
+.value-up   { color: var(--good); font-weight: 600; }
 .value-down { color: var(--ink-light); }
 
 /* ---------- player table ---------- */
@@ -459,10 +605,10 @@ table {
 th {
   text-align: left; font-size: 9.5px; letter-spacing: .09em;
   text-transform: uppercase; color: var(--ink-light); font-weight: 700;
-  padding: 10px 12px; background: #FAFBFC; border-bottom: 1px solid var(--line);
+  padding: 10px 12px; background: var(--sunken); border-bottom: 1px solid var(--line);
 }
 
-td { padding: 10px 12px; border-bottom: 1px solid #F1F4F7; vertical-align: middle; }
+td { padding: 10px 12px; border-bottom: 1px solid var(--hairline); vertical-align: middle; }
 tr:last-child td { border-bottom: 0; }
 
 .num { text-align: right; font-variant-numeric: tabular-nums; }
@@ -495,9 +641,9 @@ th.num { text-align: right; }
 }
 
 .draft-btn:hover { background: var(--blue-dark); }
-.draft-btn:disabled { background: #EDF0F3; color: var(--ink-light); cursor: default; }
+.draft-btn:disabled { background: var(--fill); color: var(--ink-light); cursor: default; }
 
-tr.drafted { background: #FAFBFC; }
+tr.drafted { background: var(--sunken); }
 tr.drafted .nm { color: var(--ink-light); text-decoration: line-through; }
 tr.drafted .meta, tr.drafted .num { opacity: .45; }
 
@@ -514,7 +660,7 @@ tr.drafted .meta, tr.drafted .num { opacity: .45; }
 }
 
 .board .hd {
-  background: #E9EDF1; color: var(--ink-mid);
+  background: var(--board-hd); color: var(--ink-mid);
   font-size: 8.5px; font-weight: 700; text-align: center;
   padding: 5px 2px; border-radius: 4px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -523,20 +669,21 @@ tr.drafted .meta, tr.drafted .num { opacity: .45; }
 .board .hd.me { background: var(--navy); color: #fff; }
 
 .board .rd {
-  background: #F0F3F6; color: var(--ink-light);
+  background: var(--well); color: var(--ink-light);
   font-size: 10px; font-weight: 700;
   display: flex; align-items: center; justify-content: center; border-radius: 4px;
 }
 
 .board .cell {
-  background: #EDF0F3; border-radius: 4px;
+  background: var(--fill); border-radius: 4px;
   padding: 5px 6px; min-height: 42px;
   font-size: 10px; line-height: 1.25; color: #fff;
 }
 
 .board .cell.empty { color: var(--ink-light); font-variant-numeric: tabular-nums; }
-.board .cell.now   { background: #fff; border: 2px dashed var(--blue); color: var(--blue); font-weight: 700; }
-.board .cell.mine  { outline: 2px solid var(--navy); outline-offset: -2px; }
+/* Blue text on a card, not blue under white, so it takes the lighter --link. */
+.board .cell.now   { background: var(--card); border: 2px dashed var(--blue); color: var(--link); font-weight: 700; }
+.board .cell.mine  { outline: 2px solid var(--blue); outline-offset: -2px; }
 
 .board .cell.QB  { background: var(--qb); }
 .board .cell.RB  { background: var(--rb); }
@@ -573,7 +720,7 @@ tr.drafted .meta, tr.drafted .num { opacity: .45; }
 
 .roster li {
   display: flex; align-items: center; gap: 12px;
-  padding: 11px 12px; border-bottom: 1px solid #F1F4F7;
+  padding: 11px 12px; border-bottom: 1px solid var(--hairline);
 }
 
 .roster li:last-child { border-bottom: 0; }
@@ -581,12 +728,12 @@ tr.drafted .meta, tr.drafted .num { opacity: .45; }
 .slot {
   flex: none; width: 46px; text-align: center;
   font-size: 10.5px; font-weight: 700; color: var(--ink-mid);
-  background: #F0F3F6; border-radius: 5px; padding: 5px 0;
+  background: var(--well); border-radius: 5px; padding: 5px 0;
 }
 
 .slot.bn { color: var(--ink-light); }
 
-.skeleton { flex: 1; height: 9px; max-width: 190px; border-radius: 5px; background: #EDF1F5; }
+.skeleton { flex: 1; height: 9px; max-width: 190px; border-radius: 5px; background: var(--track); }
 
 .rname { font-weight: 600; font-size: 14px; line-height: 1.25; }
 .rmeta { font-size: 11.5px; color: var(--ink-mid); margin-top: 2px; }
@@ -610,7 +757,7 @@ tr.drafted .meta, tr.drafted .num { opacity: .45; }
   border-radius: 10px; padding: 10px 12px; margin-bottom: 8px;
 }
 
-.pick-card.mine { border-color: var(--blue); background: #F7FAFF; }
+.pick-card.mine { border-color: var(--blue); background: var(--row-blue); }
 .pick-no { flex: none; width: 38px; font-family: Poppins, sans-serif; font-weight: 700; font-size: 13px; color: var(--ink-mid); }
 .pick-team { font-size: 11px; color: var(--ink-light); margin-bottom: 2px; }
 .pick-name { font-weight: 600; font-size: 14px; line-height: 1.2; }
@@ -620,7 +767,7 @@ tr.drafted .meta, tr.drafted .num { opacity: .45; }
 
 .grade-hero {
   display: flex; align-items: center; gap: 16px;
-  background: linear-gradient(120deg, var(--navy-deep), var(--navy) 60%, #10456F);
+  background: linear-gradient(120deg, var(--navy-deep), var(--navy) 60%, var(--navy-lift));
   color: #fff; border-radius: 12px; padding: 18px 20px; margin-bottom: 16px;
 }
 
@@ -646,16 +793,16 @@ tr.drafted .meta, tr.drafted .num { opacity: .45; }
 .bar-head b { font-weight: 600; }
 .bar-head span { color: var(--ink-light); font-size: 11.5px; font-variant-numeric: tabular-nums; }
 
-.bar-track { height: 8px; background: #EDF1F5; border-radius: 5px; overflow: hidden; }
+.bar-track { height: 8px; background: var(--track); border-radius: 5px; overflow: hidden; }
 
 /* No radius on the fill. The track already rounds it by clipping, and giving
    the fill its own curve as well means it gets anti-aliased against the grey
    track and then clipped again — which leaves a full bar looking washed out
    at the right end instead of solid. */
 .bar-fill  { height: 100%; background: var(--blue); }
-.bar-fill.good { background: #1B7343; }
+.bar-fill.good { background: var(--good); }
 .bar-fill.warn { background: var(--te); }
-.bar-fill.bad  { background: #C0392F; }
+.bar-fill.bad  { background: var(--danger); }
 
 .callouts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
 @media (max-width: 620px) { .callouts { grid-template-columns: 1fr; } }
@@ -664,8 +811,8 @@ tr.drafted .meta, tr.drafted .num { opacity: .45; }
   background: var(--card); border: 1px solid var(--line);
   border-left: 3px solid var(--blue); border-radius: 8px; padding: 11px 13px;
 }
-.callout.good { border-left-color: #1B7343; }
-.callout.bad  { border-left-color: #C0392F; }
+.callout.good { border-left-color: var(--good); }
+.callout.bad  { border-left-color: var(--danger); }
 .callout .lbl { font-size: 9.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-light); font-weight: 700; }
 .callout .val { font-weight: 600; font-size: 14px; margin-top: 3px; }
 .callout .sub { font-size: 11.5px; color: var(--ink-mid); margin-top: 2px; }
@@ -678,13 +825,13 @@ tr.drafted .meta, tr.drafted .num { opacity: .45; }
 
 .byebar { display: flex; gap: 3px; margin-top: 4px; }
 .byebar i {
-  flex: 1; height: 22px; border-radius: 3px; background: #EDF1F5;
+  flex: 1; height: 22px; border-radius: 3px; background: var(--track);
   font-style: normal; font-size: 9px; color: var(--ink-light);
   display: flex; align-items: center; justify-content: center;
 }
-.byebar i.w2 { background: #DCE9F7; color: #15618F; }
-.byebar i.w3 { background: #FCEBD5; color: #95580F; font-weight: 700; }
-.byebar i.w4 { background: #FBE1E5; color: #A32530; font-weight: 700; }
+.byebar i.w2 { background: var(--t-info-bg); color: var(--t-info-fg); }
+.byebar i.w3 { background: var(--t-bye-bg);  color: var(--t-bye-fg); font-weight: 700; }
+.byebar i.w4 { background: var(--t-bad-bg);  color: var(--t-bad-fg); font-weight: 700; }
 
 .method { font-size: 11.5px; color: var(--ink-light); line-height: 1.6; margin-top: 14px; }
 
@@ -692,7 +839,7 @@ tr.drafted .meta, tr.drafted .num { opacity: .45; }
 
 .sheet-backdrop {
   position: fixed; inset: 0; z-index: 40;
-  background: rgba(16,28,54,.55);
+  background: rgba(6,12,22,.62);
 }
 
 .sheet {
@@ -702,7 +849,7 @@ tr.drafted .meta, tr.drafted .num { opacity: .45; }
   max-height: calc(100vh - 60px);
   display: flex; flex-direction: column;
   background: var(--card); border-radius: 14px; overflow: hidden;
-  box-shadow: 0 24px 60px rgba(16,28,54,.35);
+  box-shadow: 0 24px 60px rgba(6,12,22,.45);
 }
 
 @media (max-width: 620px) {
@@ -713,7 +860,7 @@ tr.drafted .meta, tr.drafted .num { opacity: .45; }
 .sheet-head {
   display: flex; align-items: center; gap: 14px;
   padding: 16px 18px;
-  background: linear-gradient(120deg, var(--navy-deep), var(--navy) 65%, #10456F);
+  background: linear-gradient(120deg, var(--navy-deep), var(--navy) 65%, var(--navy-lift));
   color: #fff;
 }
 
@@ -741,7 +888,7 @@ tr.drafted .meta, tr.drafted .num { opacity: .45; }
   padding: 7px 14px; cursor: pointer; white-space: nowrap;
 }
 
-.sheet-tabs button.on { background: var(--blue-pale); color: var(--blue); }
+.sheet-tabs button.on { background: var(--blue-pale); color: var(--link); }
 
 .sheet-body { overflow-y: auto; padding: 16px 18px 26px; }
 .sheet-view { display: none; }
@@ -753,19 +900,19 @@ tr.drafted .meta, tr.drafted .num { opacity: .45; }
 .sig-head b { font-size: 13px; font-weight: 600; }
 .sig-head span { font-size: 12px; font-weight: 700; }
 .sig-seg { display: flex; gap: 3px; }
-.sig-seg i { flex: 1; height: 7px; border-radius: 4px; background: #EDF1F5; }
+.sig-seg i { flex: 1; height: 7px; border-radius: 4px; background: var(--track); }
 .sig-seg i.on { background: var(--blue); }
-.sig.good .sig-seg i.on { background: #1B7343; }
-.sig.good .sig-head span { color: #1B7343; }
+.sig.good .sig-seg i.on { background: var(--good); }
+.sig.good .sig-head span { color: var(--good); }
 .sig.warn .sig-seg i.on { background: var(--te); }
-.sig.warn .sig-head span { color: #95580F; }
-.sig.bad  .sig-seg i.on { background: #C0392F; }
-.sig.bad  .sig-head span { color: #C0392F; }
+.sig.warn .sig-head span { color: var(--t-warn-fg); }
+.sig.bad  .sig-seg i.on { background: var(--danger); }
+.sig.bad  .sig-head span { color: var(--danger); }
 .sig-why { margin: 6px 0 0; font-size: 11.5px; color: var(--ink-light); line-height: 1.55; }
 
 .statgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 4px 0 18px; }
 @media (max-width: 520px) { .statgrid { grid-template-columns: repeat(2, 1fr); } }
-.statbox { background: #F7F9FB; border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; text-align: center; }
+.statbox { background: var(--sunken); border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; text-align: center; }
 .statbox .k { font-size: 9px; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-light); font-weight: 700; }
 .statbox .v { font-family: Poppins, sans-serif; font-weight: 700; font-size: 17px; margin-top: 2px; }
 
@@ -779,18 +926,18 @@ tr.drafted .meta, tr.drafted .num { opacity: .45; }
 .logtbl td { padding: 6px; text-align: right; font-variant-numeric: tabular-nums; }
 .logtbl td:first-child, .logtbl th:first-child { text-align: left; }
 .logtbl tr.bye td { color: var(--ink-light); font-style: italic; }
-.logtbl td.hi { background: #E6F5EC; font-weight: 600; }
-.logtbl td.lo { background: #FCEEEF; }
+.logtbl td.hi { background: var(--t-good-bg); font-weight: 600; }
+.logtbl td.lo { background: var(--row-bad); }
 
 .depthcol { margin-bottom: 16px; }
 .depthcol h5 { margin: 0 0 6px; font-size: 10.5px; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-light); font-weight: 700; }
-.depthrow { display: flex; align-items: center; gap: 9px; padding: 7px 0; border-bottom: 1px solid #F1F4F7; font-size: 13px; }
+.depthrow { display: flex; align-items: center; gap: 9px; padding: 7px 0; border-bottom: 1px solid var(--hairline); font-size: 13px; }
 .depthrow:last-child { border-bottom: 0; }
 .depthrow .ord { width: 20px; font-family: Poppins, sans-serif; font-weight: 700; color: var(--ink-light); font-size: 11px; }
-.depthrow.self { font-weight: 600; color: var(--blue); }
+.depthrow.self { font-weight: 600; color: var(--link); }
 
 .name-link { cursor: pointer; }
-.name-link:hover { color: var(--blue); text-decoration: underline; }
+.name-link:hover { color: var(--link); text-decoration: underline; }
 
 .nodata { padding: 30px 10px; text-align: center; font-size: 13px; color: var(--ink-light); }
 
