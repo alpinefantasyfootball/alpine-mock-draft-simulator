@@ -17,12 +17,27 @@
 (function (root) {
   "use strict";
 
-  /* Where the room lives. Localhost while wrangler dev is running, the
-     deployed worker otherwise. Kept as a plain constant rather than a build
-     flag, because this project has no build. */
-  const WORKER = /^(localhost|127\.0\.0\.1)$/.test(location.hostname)
-    ? "ws://127.0.0.1:8787"
-    : "wss://juke-draft-room.playjukeff.workers.dev";
+  /* Where the room lives.
+
+     Localhost is detected rather than configured, so `wrangler dev` and a
+     local server work together with nothing to change.
+
+     Anywhere else needs the deployed worker's host, which is
+     <worker-name>.<your-subdomain>.workers.dev and is printed by
+     `wrangler deploy`. It is blank until that has happened, and blank is
+     treated as "not set up" rather than guessed at — a wrong host fails as a
+     socket that never opens, which looks exactly like a bug.
+
+     A plain constant rather than a build flag, because this project has no
+     build. */
+  const WORKER_HOST = "";    // e.g. "juke-draft-room.chase.workers.dev"
+
+  const LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
+  const WORKER = LOCAL ? "ws://127.0.0.1:8787" : "wss://" + WORKER_HOST;
+
+  // False when there is nowhere to connect to, so the invite box can say so
+  // instead of offering a button that opens a socket into nothing.
+  function configured() { return LOCAL || !!WORKER_HOST; }
 
   /* Who you are, to a room. Not an account: a random id kept in this
      browser so a refresh returns you to your own seat rather than taking a
@@ -163,6 +178,7 @@
 
   return root.Live = {
     WORKER: WORKER,
+    configured: configured,
     memberId: memberId,
     newCode: newCode,
     codeInUrl: codeInUrl,

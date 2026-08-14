@@ -2928,6 +2928,19 @@ const REJECT_TEXT = {
 function renderInvite() {
   const box = $("inviteLive");
   const startRow = $("inviteStart");
+
+  /* No worker to talk to yet. Better to say so than to offer a button
+     that opens a socket into nothing, which fails as a connection that
+     never arrives and reads exactly like a bug. */
+  if (typeof Live === "undefined" || !Live.configured()) {
+    box.hidden = true;
+    startRow.hidden = true;
+    $("inviteHint").textContent =
+      "Not set up yet. Drafting with friends needs the room deployed once — " +
+      "see worker/README.md. Solo mock drafts are unaffected.";
+    return;
+  }
+
   const room = typeof Live === "undefined" ? null : Live.room();
   const status = typeof Live === "undefined" ? "off" : Live.status();
 
