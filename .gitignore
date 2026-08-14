@@ -6,3 +6,9 @@ __pycache__/
 # Local editor and assistant settings. Machine-specific, so they would only
 # ever cause conflicts if they were shared.
 .claude/
+
+# wrangler's local state: the Durable Object storage it fakes for
+# `wrangler dev`, its bundle cache and its temp files. 18MB of machine-local
+# scratch that is rebuilt on demand, and a checked-in copy would be someone
+# else's half-finished draft.
+worker/.wrangler/

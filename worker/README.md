@@ -25,21 +25,35 @@ the same code, not because two implementations were kept in step by hand.
 right host, that file is what gets rewritten; the rules and the room move
 unchanged.
 
-## Deploying it
+## Running and testing it
 
 Needs Node, which this project otherwise does not — the *site* has no build
-step and never will, but a server is a thing you deploy.
+step and never will, but a server is a thing you deploy. Node is installed
+via winget as a user-scope package, so a **new** terminal picks it up; one
+that was already open will not.
 
 ```bash
 npm install -g wrangler
-wrangler login
 cd worker
-wrangler deploy
+wrangler dev --port 8787 --local
 ```
 
-`wrangler dev` runs it locally against a real Durable Object, which is the
-only way to exercise the socket and alarm paths. The room logic itself does
-not need any of this: it is pure, and `scripts/test_engine.py` covers it.
+That runs the real Durable Object runtime locally, with no Cloudflare
+account. In another terminal:
+
+```bash
+node worker/test-sockets.mjs
+```
+
+Thirty assertions over real sockets: two managers joining, seats, host-only
+start, wrong-seat refusal, chat, a reconnect mid-draft, a stale build being
+turned away — and the one that matters, two submits of the same player on
+one turn producing exactly one pick.
+
+`wrangler deploy --dry-run --outdir=<dir>` compiles without an account and is
+the quickest check that the bundle is still valid.
+
+Deploying for real needs `wrangler login` and a free Cloudflare account.
 
 ## Decisions worth knowing before changing anything
 

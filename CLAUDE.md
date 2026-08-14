@@ -208,10 +208,17 @@ A cached stylesheet once let the logo expand to fill the entire screen.
 
 ## Testing
 
+- Room over sockets: `cd worker && wrangler dev --port 8787 --local`, then
+  `node worker/test-sockets.mjs` in another terminal. Thirty assertions
+  against the real Durable Object runtime, no Cloudflare account needed.
+  This is the only thing that covers sockets, storage and the alarm; the
+  room logic itself is pure and covered below.
 - Engine: `py scripts/test_engine.py` — runs `draft-engine.js` outside a
   browser and asserts the snake maths, the turn order, the legality checks
   and the determinism of the CPU wobble. It needs node, deno or bun on PATH
   and says so plainly if none is there rather than looking like a failure.
+  Node is installed user-scope via winget, so a new terminal sees it and an
+  already-open one does not.
 - Pipeline: `python scripts/build_players.py` — prints counts and writes the
   generated files. Check `unmatched.txt` afterwards. On Windows run it as
   `py scripts/build_players.py`. A bare `python` reaches the Microsoft Store
