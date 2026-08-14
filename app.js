@@ -365,7 +365,7 @@ function cachedScores() {
 
 function renderScores(games) {
   const strip = $("scoreStrip");
-  if (!games || !games.length) { strip.hidden = true; return; }
+  if (!games || !games.length) { $("scoreWrap").hidden = true; return; }
 
   strip.innerHTML = games.map(function (g) {
     // Before kickoff there is nothing to lead by, so no side is emphasised.
@@ -384,7 +384,28 @@ function renderScores(games) {
     "</div>";
   }).join("");
 
-  strip.hidden = false;
+  $("scoreWrap").hidden = false;
+  updateScoreEnds();
+}
+
+// Which end has more behind it. Drives the fades and the arrows, so the
+// row never claims there is more to see when there is not.
+function updateScoreEnds() {
+  const strip = $("scoreStrip");
+  const max = strip.scrollWidth - strip.clientWidth;
+  $("scoreWrap").classList.toggle("more-left", strip.scrollLeft > 4);
+  $("scoreWrap").classList.toggle("more-right", strip.scrollLeft < max - 4);
+}
+
+function nudgeScores(direction) {
+  const strip = $("scoreStrip");
+  // scrollBy's own behavior beats the stylesheet, so the reduced-motion
+  // guard on .scores would not apply here unless it is asked for again.
+  const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  strip.scrollBy({
+    left: direction * strip.clientWidth * 0.8,
+    behavior: still ? "auto" : "smooth"
+  });
 }
 
 function loadScores() {
@@ -404,7 +425,7 @@ function loadScores() {
       renderScores(games);
     })
     .catch(function () {
-      $("scoreStrip").hidden = true;
+      $("scoreWrap").hidden = true;
     });
 }
 
@@ -2257,6 +2278,11 @@ themeBtns.forEach(function (btn) {
     setTheme(currentTheme() === "dark" ? "light" : "dark");
   });
 });
+$("scoreStrip").addEventListener("scroll", updateScoreEnds, { passive: true });
+window.addEventListener("resize", updateScoreEnds);
+$("scoreLeft").addEventListener("click", function () { nudgeScores(-1); });
+$("scoreRight").addEventListener("click", function () { nudgeScores(1); });
+
 $("roomsBtn").addEventListener("click", toggleRooms);
 
 // A panel that opens on click should close the same way, from anywhere.
