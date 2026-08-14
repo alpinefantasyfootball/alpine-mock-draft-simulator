@@ -237,6 +237,35 @@
     return ok(applyPick(clone(state), c, key, opts.now));
   }
 
+  /* The host's browser stands in for the empty chairs.
+
+     The CPU's opinion needs the board — a megabyte of generated data the
+     room has no business holding — so it is worked out where the board
+     already is and submitted like any other pick. The room still decides
+     whether to accept it: only the host may send one, and only for a seat
+     that is genuinely nobody's or whose clock has run out. Authority stays
+     here; the knowledge stays there.
+
+     The cost is that CPU seats stall if the host closes the tab. Better
+     than shipping a megabyte to a Durable Object, and visible rather than
+     silent: the board simply stops. */
+  function hostPick(state, opts) {
+    if (state.status !== "drafting") return fail(state, ERR.NOT_DRAFTING);
+    if (!state.host || opts.member !== state.host) return fail(state, ERR.NOT_YOUR_SEAT);
+
+    const c = onTheClock(state);
+    if (!c) return fail(state, ERR.NOT_DRAFTING);
+
+    const mayPick = seatIsAuto(state, c.slot) || expired(state, opts.now);
+    if (!mayPick) return fail(state, ERR.NOT_YOUR_SEAT);
+
+    const reject = Engine.rejectPick(
+      state.league, state.picks.length, c.slot, opts.key, takenKeys(state));
+    if (reject) return fail(state, reject);
+
+    return ok(applyPick(clone(state), c, opts.key, opts.now));
+  }
+
   function applyPick(next, c, key, now) {
     next.picks.push({
       overall: next.picks.length + 1,
@@ -329,6 +358,7 @@
     start: start,
     submitPick: submitPick,
     autoPick: autoPick,
+    hostPick: hostPick,
     pause: pause,
     onTheClock: onTheClock,
     seatOf: seatOf,

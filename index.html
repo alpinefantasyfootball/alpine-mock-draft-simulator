@@ -315,6 +315,30 @@
           <button class="ghost" type="button" id="resetScoring">Reset to defaults</button>
         </details>
 
+        <!-- ---------- DRAFT WITH FRIENDS ----------
+             Off by default and completely optional. A solo mock draft never
+             touches the network, which is the first term the multi-user work
+             happens on — see CLAUDE.md. -->
+        <div class="field invite" id="inviteBox">
+          <label>Draft with friends</label>
+          <p class="hint" id="inviteHint">Create a room and send the link. Anyone who opens
+            it takes a seat; the rest are drafted by the CPU.</p>
+
+          <div class="field-row" id="inviteStart">
+            <button class="ghost" type="button" id="createRoomBtn">Create a room</button>
+          </div>
+
+          <div id="inviteLive" hidden>
+            <div class="linkrow">
+              <input type="text" id="inviteLink" readonly aria-label="Invite link">
+              <button class="ghost" type="button" id="copyLinkBtn">Copy</button>
+            </div>
+            <p class="hint" id="inviteStatus"></p>
+            <div class="seatlist" id="seatList"></div>
+            <button class="ghost" type="button" id="leaveRoomBtn">Leave the room</button>
+          </div>
+        </div>
+
         <button class="primary big" id="startBtn">Start Your Draft</button>
         <p class="freshness" id="freshness"></p>
         <p class="freshness"><a href="docs/draft-room-how-it-works.html">How the Draft Room works</a></p>
@@ -475,6 +499,9 @@
        before app.js because app.js is a caller, and it is a separate file
        because a server will eventually have to run the same one. -->
   <script src="draft-engine.js"></script>
+  <!-- The socket to a shared room. Loaded always, connected never unless a
+       manager asks for it: a solo draft touches nothing. -->
+  <script src="live.js"></script>
   <!-- Before app.js, which calls backToTop() on the last line of its setup. -->
   <script src="back-to-top.js"></script>
   <script src="app.js"></script>

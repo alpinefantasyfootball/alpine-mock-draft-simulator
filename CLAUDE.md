@@ -34,7 +34,8 @@ Python 3 standard library only in the pipeline. No pip dependencies.
 | `app.js` | Everything else: draft engine, CPU logic, analysis, rendering. |
 | `back-to-top.js` | The back-to-top button. Its own file because the how-it-works page uses it and has no reason to load `app.js`. |
 | `draft-engine.js` | The rules of a snake draft — turn order, legality, the CPU wobble. No DOM, no globals, no dependencies, so a server can run the identical file. |
-| `room.js` | One shared draft: seats, picks, the clock. Pure, and time is always passed in rather than read. Loaded by the worker, not yet by the page. |
+| `room.js` | One shared draft: seats, picks, the clock. Pure, and time is always passed in rather than read. Loaded by the worker only; the page consumes the view it sends. |
+| `live.js` | The client end of a room: one socket, the invite code, and the messages. Knows nothing about the board or how anything is drawn. |
 | `worker/` | The Cloudflare Durable Object behind an invite link, plus its `wrangler.toml`. Not deployed. See `worker/README.md`. |
 | `scripts/test_engine.py` | Runs `draft-engine.js` and `room.js` in node/deno/bun and asserts the rules from outside a browser. |
 | `players.js` | **GENERATED.** 260 players by ADP. Never edit by hand. |
@@ -259,6 +260,19 @@ with. With ten people the server has to decide, and the server and every
 client have to reach the same verdict, or two managers take the same player
 milliseconds apart and the room forks. That is why the engine has no DOM, no
 globals and no imports: so both sides can run the identical file.
+
+**The host's browser is the CPU.** The worker has no board — a megabyte of
+generated data — so the opinion for an empty chair is worked out where the
+board already is and submitted as a normal pick. `Room.hostPick()` still
+checks it really is the host and really an auto seat, so authority stays on
+the server while the knowledge stays on the client. The cost: CPU seats stall
+if the host closes the tab. Visible rather than silent, and better than
+shipping the board to a Durable Object.
+
+**In a room the browser stops deciding.** `draftAndAdvance()` sends the intent
+and returns; the board only moves when the room broadcasts. The local clock
+and the CPU animation loop both switch off, because a second timer counting
+locally disagrees with the room within seconds.
 
 **The CPU wobble is arithmetic, not randomness,** for the same reason —
 `DraftEngine.jitter()` must give every participant the same answer. It reads

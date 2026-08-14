@@ -1599,3 +1599,34 @@ a.room:hover { border-color: var(--blue-line); }
   .boardpane .board-scroll { max-height: 30vh; }
   .rail { flex-direction: column; }
 }
+
+/* ---------- draft with friends ---------- */
+
+.invite { border-top: 1px solid var(--line); padding-top: 18px; }
+
+.linkrow { display: flex; gap: 6px; margin-bottom: 8px; }
+
+.linkrow input {
+  flex: 1; min-width: 0;
+  font-family: Inter, sans-serif; font-size: 12.5px;
+  color: var(--ink-mid); background: var(--sunken);
+  border: 1px solid var(--line); border-radius: 7px; padding: 8px 10px;
+}
+
+/* Every seat in the room at a glance, so it is obvious how many friends have
+   actually arrived before anyone starts. */
+.seatlist { display: flex; flex-wrap: wrap; gap: 4px; margin: 10px 0 12px; }
+
+.seat {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11px; color: var(--ink-light);
+  background: var(--fill); border-radius: 6px; padding: 3px 8px;
+}
+.seat b { font-weight: 700; color: var(--ink-light); font-variant-numeric: tabular-nums; }
+
+/* A chair with a person in it, and the one that is yours. Both use tint
+   pairs that carry legible text under either theme. */
+.seat.human { background: var(--t-info-bg); color: var(--t-info-fg); }
+.seat.human b { color: var(--t-info-fg); }
+.seat.you { background: var(--t-good-bg); color: var(--t-good-fg); }
+.seat.you b { color: var(--t-good-fg); }

@@ -21,7 +21,8 @@
    Deploying needs Node and wrangler. See worker/README.md.
    ========================================================== */
 
-import Engine from "../draft-engine.js";
+// Only the room; the engine reaches the worker through it. Both are pure,
+// and the browser loads the same two files.
 import Room from "../room.js";
 
 /* How long after the last socket closes before the room is forgotten. Long
@@ -29,11 +30,6 @@ import Room from "../room.js";
    not destroy a draft; short enough that abandoned rooms do not accumulate
    forever. */
 const IDLE_MS = 6 * 60 * 60 * 1000;   // six hours
-
-/* The gap between a CPU pick and the next, so a room with empty seats fills
-   in at a readable pace rather than resolving forty picks in one frame. It
-   matches the single-player CPU_DELAY, because the two should feel the same. */
-const AUTO_MS = 350;
 
 export class DraftRoom {
   constructor(ctx, env) {
@@ -146,6 +142,11 @@ export class DraftRoom {
       case "pick":
         result = Room.submitPick(this.room, { member, key: msg.key, now });
         break;
+      case "auto":
+        // The host standing in for an empty chair or an expired clock. The
+        // room checks it is really the host and really an auto seat.
+        result = Room.hostPick(this.room, { member, key: msg.key, now });
+        break;
       case "pause":
         result = Room.pause(this.room, !!msg.on);
         break;
@@ -166,7 +167,6 @@ export class DraftRoom {
     this.room = result.state;
     await this.save();
     this.broadcast();
-    await this.runAutoPicks();
     await this.scheduleAlarm();
   }
 
@@ -199,40 +199,16 @@ export class DraftRoom {
     this.room = Room.leave(this.room, { member }).state;
     await this.save();
     this.broadcast();
-    await this.runAutoPicks();
   }
 
-  /* Empty seats and expired clocks, one pick at a time so the board fills in
-     at a pace a person can follow. Bounded by the number of picks left, so a
-     bug here cannot spin. */
-  async runAutoPicks() {
-    let guard = 0;
-    const limit = Engine.totalPicks(this.room.league);
+  /* No CPU picking happens here. The host's browser does it, because the
+     board is a megabyte of generated data and shipping it to a Durable
+     Object to reproduce an opinion the host already has would be paying
+     twice. The worker's job is to say no when the host gets it wrong.
 
-    while (Room.needsAutoPick(this.room, Date.now()) && guard++ < limit) {
-      const result = Room.autoPick(this.room, {
-        now: Date.now(),
-        choose: (room, seat) => this.chooseFor(room, seat)
-      });
-      if (result.error) break;
-
-      this.room = result.state;
-      await this.save();
-      this.broadcast();
-
-      if (Room.needsAutoPick(this.room, Date.now())) await sleep(AUTO_MS);
-    }
-    await this.scheduleAlarm();
-  }
-
-  /* TODO(5c): the CPU's actual opinion. It needs the board, which is a
-     megabyte of generated data, so the worker will either be given it at
-     deploy time or ask the first connected client for it. Until then an
-     empty seat takes the best undrafted player by ADP, which the room can
-     work out from the pick list alone. */
-  chooseFor(room, seat) {
-    return null;
-  }
+     What the alarm still earns its place for: waking the room when a clock
+     expires so every client is told, and forgetting rooms nobody came back
+     to. */
 
   /* One alarm, set for whichever comes first: the current pick expiring, or
      the room going idle. Durable Objects get exactly one, so it is
@@ -256,7 +232,6 @@ export class DraftRoom {
       return;
     }
 
-    await this.runAutoPicks();
     this.broadcast();
   }
 
@@ -307,8 +282,4 @@ function json(body, status) {
 
 function safeJson(text) {
   try { return JSON.parse(text); } catch (err) { return null; }
-}
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
