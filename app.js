@@ -56,7 +56,7 @@ function slotCount(slot) {
   return league.starters[slot] || 0;
 }
 
-function totalPicks()   { return league.teams * league.rounds; }
+function totalPicks()   { return DraftEngine.totalPicks(league); }
 function starterCount() { return POSITIONS.reduce((n, pos) => n + league.starters[pos], 0); }
 function flexCount()    { return league.flex + league.superflex; }
 function rosterSize()   { return starterCount() + flexCount() + league.bench; }
@@ -296,8 +296,12 @@ function toggleRooms() {
 
 /* ---- the route ---- */
 
+/* The hash can now carry an invite code — #/draft?room=ABC — so the path
+   is read up to the query rather than compared whole. #/draft on its own
+   still means what it always did. */
 function route() {
-  return location.hash.replace(/^#\/?/, "") === "draft" ? "draft" : "home";
+  const path = location.hash.replace(/^#\/?/, "").split("?")[0];
+  return path === "draft" ? "draft" : "home";
 }
 
 function go(where) { location.hash = where === "draft" ? "#/draft" : "#/"; }
@@ -593,32 +597,26 @@ const state = {
    order reverses, which is the only thing that makes a
    snake draft a snake.                                     */
 
-function pickInfo(overall) {
-  const round   = Math.ceil(overall / league.teams);
-  const inRound = overall - (round - 1) * league.teams;
-  const slot    = (round % 2 === 0) ? (league.teams + 1 - inRound) : inRound;
-  return { round: round, slot: slot - 1 };
-}
+/* These are wrappers over draft-engine.js, which holds the rules with no
+   reference to `league` or `state`. The wrappers exist so every call site in
+   this file reads the way it always did, while there is exactly one
+   implementation of what a snake draft is — the same one a server will run
+   when a room has more than one person in it. */
 
-function currentOverall() { return state.picks.length + 1; }
-function draftOver()      { return state.picks.length >= totalPicks(); }
-function onTheClock()     { return draftOver() ? null : pickInfo(currentOverall()); }
-function isMyTurn()       { const c = onTheClock(); return c !== null && c.slot === state.mySlot; }
+function pickInfo(overall)  { return DraftEngine.pickInfo(overall, league.teams); }
+function currentOverall()   { return state.picks.length + 1; }
+function draftOver()        { return DraftEngine.draftOver(league, state.picks.length); }
+function onTheClock()       { return DraftEngine.onTheClock(league, state.picks.length); }
+function isMyTurn()         { const c = onTheClock(); return c !== null && c.slot === state.mySlot; }
 
 function teamLabel(slot) {
   return slot === state.mySlot ? "Your Team" : cpuName(slot);
 }
 
-function pickCode(overall) {
-  const p = pickInfo(overall);
-  return p.round + "." + String(p.slot + 1).padStart(2, "0");
-}
+function pickCode(overall) { return DraftEngine.pickCode(overall, league.teams); }
 
 function picksUntilMyTurn() {
-  let n = currentOverall();
-  let gap = 0;
-  while (n <= totalPicks() && pickInfo(n).slot !== state.mySlot) { n++; gap++; }
-  return gap;
+  return DraftEngine.picksUntil(league, state.picks.length, state.mySlot);
 }
 
 
@@ -679,12 +677,22 @@ function cpuChoice(slot, round) {
 
 /* ---- 8. Actions ---------------------------------------- */
 
+/* Every pick goes through the engine's legality check, including the ones
+   this app makes for itself. With one drafter the answer is never a
+   surprise, but a rule the client only enforces when it feels like it is a
+   rule the server cannot trust, and the whole point of the engine is that
+   both sides reach the same verdict. */
 function makePick(player) {
   const c = onTheClock();
-  if (!c || player.drafted) return;
+  const taken = state.picks.map((p) => p.player.name);
+  const reject = DraftEngine.rejectPick(
+    league, state.picks.length, c ? c.slot : -1,
+    player && player.name, taken);
+  if (reject) return reject;
 
   player.drafted = true;
   state.picks.push({ overall: currentOverall(), round: c.round, slot: c.slot, player: player });
+  return null;
 }
 
 /* CPU picks are made one at a time on a timer instead of all at
@@ -704,8 +712,7 @@ const CPU_DELAY = 350;
 // Deterministic pseudo-random offset of roughly -3 to +3 ADP places.
 function applyJitter() {
   board.forEach(function (p) {
-    const n = (p.overall * 7919 + state.seed * 104729) % 1000;
-    p.jitter = (n / 1000) * 6 - 3;
+    p.jitter = DraftEngine.jitter(p.overall, state.seed);
   });
 }
 
@@ -744,6 +751,7 @@ render();
 }
 
 function runCPUs() {
+  if (inRoom()) return;
   stopClock();
   if (draftOver() || isMyTurn()) { resetClock(); render(); return; }
   state.simulating = true;
@@ -764,6 +772,103 @@ function skipSim() {
   state.lastPick = null;
   resetClock();
   render();
+}
+
+/* ---- 8b. A shared room ----------------------------------
+
+   Everything above works with no network at all, and that does
+   not change: a solo draft never opens a socket. This section
+   is what happens when a manager asks for a room.
+
+   The one idea worth holding on to is that the browser stops
+   deciding. Solo, draftAndAdvance() takes the player and moves
+   on. In a room it sends the intent and waits, and the board
+   only moves when the room says it did. That is the whole
+   reason two people cannot take the same player.            */
+
+function inRoom() { return typeof Live !== "undefined" && Live.active(); }
+
+/* The host's browser is the CPU for every empty chair. The worker has no
+   board, so the opinion is worked out here, where it already lives, and sent
+   like any other pick — the room checks it really is the host and really an
+   empty seat before accepting it.
+
+   Guarded so only one pick is in flight at a time: the room broadcasts after
+   each one, and reacting to that broadcast by sending another before the
+   first was confirmed would put a queue of stale picks on the wire. */
+let autoInFlight = false;
+
+function driveRoomCPUs() {
+  const room = Live.room();
+  if (!room || !room.isHost || room.status !== "drafting" || autoInFlight) return;
+
+  const c = DraftEngine.onTheClock(room.league, room.picks.length);
+  if (!c) return;
+
+  const chair = room.seats[c.slot];
+  const mine = chair && chair.you;
+  const expired = room.msLeft !== null && room.msLeft <= 0;
+
+  // An empty chair, or anyone whose clock has run out — including me.
+  if (chair && chair.taken && !chair.auto && !expired) return;
+
+  const choice = mine ? autoPickForMe() : cpuChoice(c.slot, c.round);
+  if (!choice) return;
+
+  autoInFlight = true;
+  Live.autoPick(choice.name);
+  // Cleared on the next state rather than a timer, so a rejected pick does
+  // not wedge the room: the broadcast that follows any outcome releases it.
+  setTimeout(function () { autoInFlight = false; }, 2000);
+}
+
+/* Take the room's word for it. The room sends a pick list of names; this
+   turns them back into board players. Rebuilt only when the count differs,
+   because a state arrives on every seat change and every chat message too. */
+function adoptRoom(room) {
+  if (!room) return;
+
+  // Joining someone else's room means drafting their league, not yours.
+  if (room.league && room.league.teams !== league.teams) {
+    Object.assign(league, room.league);
+    buildBoard();
+  }
+
+  if (room.yourSeat >= 0) state.mySlot = room.yourSeat;
+  state.clockLength = room.clockLength;
+  state.seed = room.seed;
+  state.started = room.status !== "lobby";
+
+  if (state.picks.length !== room.picks.length) {
+    applyJitter();
+    board.forEach(function (p) { p.drafted = false; });
+    state.picks = [];
+
+    room.picks.forEach(function (rp) {
+      const player = board.find((p) => p.name === rp.key);
+      if (!player) return;      // a name the local build does not carry
+      player.drafted = true;
+      state.picks.push({
+        overall: rp.overall, round: rp.round, slot: rp.slot, player: player
+      });
+    });
+
+    pruneQueue();
+    state.lastPick = state.picks.length ? state.picks[state.picks.length - 1] : null;
+    autoInFlight = false;
+  }
+
+  // The room owns the countdown, so the local clock only mirrors it. Nothing
+  // here starts a timer: renderHeader() reads state.timeLeft.
+  state.timeLeft = room.msLeft === null ? 0 : Math.ceil(room.msLeft / 1000);
+}
+
+function onRoomChange() {
+  const room = Live.room();
+  adoptRoom(room);
+  renderInvite();
+  render();
+  driveRoomCPUs();
 }
 
 /* ---- the queue ------------------------------------------
@@ -819,6 +924,11 @@ function autoPickForMe() {
 }
 
 function draftAndAdvance(player) {
+  // In a room this is a request, not a decision. Nothing changes locally:
+  // the board moves when the room broadcasts, which is what stops two
+  // managers ending up with different boards.
+  if (inRoom()) { Live.pick(player.name); return; }
+
   makePick(player);
   state.lastPick = state.picks[state.picks.length - 1];
   pruneQueue();
@@ -935,6 +1045,9 @@ function tickBoardClock() {
 // Put a fresh clock on the board. Called after every pick.
 function resetClock() {
   stopClock();
+  // The room counts for everyone in a shared draft, and a second timer
+  // ticking locally would disagree with it within a few seconds.
+  if (inRoom()) return;
   if (!clockRunnable()) return;
   state.timeLeft = state.clockLength;
   if (!state.paused) startTicking();
@@ -2793,6 +2906,137 @@ $("resetScoring").addEventListener("click", function () {
                      PLAYERS_META.generated + flagged;
 })();
 
+/* ---- the invite panel ----------------------------------- */
+
+/* The controls a room owns once you are in one. Named here so locking and
+   unlocking cannot drift apart — the bug that shipped first was exactly
+   that: one path set them, the other returned before clearing them. */
+const LOCKABLE = ["teamCount", "roundCount", "scoring", "pickClock", "draftSlot"];
+
+const STATUS_TEXT = {
+  connecting: "Connecting…",
+  closed:     "Lost the connection. Reopen the link to rejoin — your seat is held.",
+  rejected:   "Could not join."
+};
+
+const REJECT_TEXT = {
+  "stale-data": "This room started on an older player list than the one you have. " +
+                "Whoever created it should reload the page and make a new room.",
+  "bad-league": "That room could not be created. Check the league settings and try again."
+};
+
+function renderInvite() {
+  const box = $("inviteLive");
+  const startRow = $("inviteStart");
+
+  /* No worker to talk to yet. Better to say so than to offer a button
+     that opens a socket into nothing, which fails as a connection that
+     never arrives and reads exactly like a bug. */
+  if (typeof Live === "undefined" || !Live.configured()) {
+    box.hidden = true;
+    startRow.hidden = true;
+    $("inviteHint").textContent =
+      "Not set up yet. Drafting with friends needs the room deployed once — " +
+      "see worker/README.md. Solo mock drafts are unaffected.";
+    return;
+  }
+
+  const room = typeof Live === "undefined" ? null : Live.room();
+  const status = typeof Live === "undefined" ? "off" : Live.status();
+
+  // Locking is undone here as well as set below, because leaving a room
+  // comes through this branch and an early return left every control
+  // disabled with nothing on screen explaining why.
+  if (status === "off") {
+    box.hidden = true;
+    startRow.hidden = false;
+    LOCKABLE.forEach(function (id) { $(id).disabled = false; });
+    $("startBtn").disabled = false;
+    $("startBtn").textContent = "Start Your Draft";
+    return;
+  }
+
+  startRow.hidden = true;
+  box.hidden = false;
+  $("inviteLink").value = Live.link() || "";
+
+  const reason = Live.reason();
+  let text = STATUS_TEXT[status] || "";
+  if (reason && REJECT_TEXT[reason]) text = REJECT_TEXT[reason];
+
+  if (status === "open" && room) {
+    const taken = room.seats.filter((s) => s.taken).length;
+    text = taken === 1
+      ? "You are the only one here. The other " + (room.seats.length - 1) +
+        " seats will be drafted by the CPU unless somebody takes them."
+      : taken + " of " + room.seats.length + " seats taken. The rest are CPU.";
+    if (room.status !== "lobby") text = "Drafting. " + text;
+  }
+  $("inviteStatus").textContent = text;
+
+  $("seatList").innerHTML = !room ? "" : room.seats.map(function (s) {
+    const who = s.you ? "You" : s.taken ? (s.name || "Manager") : "CPU";
+    return `<span class="seat ${s.you ? "you" : s.taken ? "human" : ""}">
+        <b>${s.index + 1}</b>${who}</span>`;
+  }).join("");
+
+  // The room owns the shape once you are in one, so the controls that would
+  // change it out from under everybody are locked rather than lying.
+  const locked = status === "open" && !!room;
+  LOCKABLE.forEach(function (id) { $(id).disabled = locked; });
+  $("startBtn").textContent = locked
+    ? (room && room.isHost ? "Start the draft for everyone" : "Waiting for the host…")
+    : "Start Your Draft";
+  $("startBtn").disabled = locked && !(room && room.isHost);
+}
+
+function joinRoom(code, asHost) {
+  Live.onChange(onRoomChange);
+  Live.connect(code, {
+    name: null,
+    league: asHost ? JSON.parse(JSON.stringify(league)) : {},
+    clock: asHost ? league.clockLength || Number($("pickClock").value) : 0,
+    dataVersion: (typeof PLAYERS_META !== "undefined" && PLAYERS_META.generated) || ""
+  });
+  renderInvite();
+}
+
+$("createRoomBtn").addEventListener("click", function () {
+  readSetup();
+  if (setupProblem()) { refreshSetup(); return; }
+  const code = Live.newCode();
+  // The code goes in the address bar as well as the box, so the browser's
+  // own share and bookmark both do the right thing.
+  location.hash = "#/draft?room=" + code;
+  joinRoom(code, true);
+});
+
+$("copyLinkBtn").addEventListener("click", function () {
+  const field = $("inviteLink");
+  const button = this;
+  const done = function () {
+    button.textContent = "Copied";
+    setTimeout(function () { button.textContent = "Copy"; }, 1600);
+  };
+  // The clipboard API needs a secure context, which file:// is not, so the
+  // old selection trick stays as the fallback rather than the button doing
+  // nothing for anyone who opened the page from disk.
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(field.value).then(done, function () {
+      field.select(); document.execCommand("copy"); done();
+    });
+  } else {
+    field.select(); document.execCommand("copy"); done();
+  }
+});
+
+$("leaveRoomBtn").addEventListener("click", function () {
+  Live.disconnect();
+  location.hash = "#/draft";
+  renderInvite();
+  refreshSetup();
+});
+
 $("randomizeBtn").addEventListener("click", function () {
   slotSelect.value = Math.floor(Math.random() * league.teams);
 });
@@ -2800,6 +3044,10 @@ $("randomizeBtn").addEventListener("click", function () {
 $("startBtn").addEventListener("click", function () {
   readSetup();
   if (setupProblem()) { refreshSetup(); return; }   // belt and braces; the button is disabled too
+
+  // In a room the host asks and everyone starts together; the state that
+  // comes back is what actually begins the draft.
+  if (inRoom()) { Live.start(); return; }
 
   state.mySlot      = Number(slotSelect.value);
   state.clockLength = Number($("pickClock").value);
@@ -3000,6 +3248,16 @@ refreshSetup();
 // setup screen has been built rather than before.
 renderRooms();
 applyRoute();
+
+/* An invite code in the address bar means someone followed a link, so the
+   room is joined before anything else happens. Not the host: the room
+   already exists and already has a shape, and this browser's setup screen
+   has no say in it. */
+(function () {
+  const code = Live.codeInUrl();
+  if (code) joinRoom(code, false);
+  renderInvite();
+})();
 
 // Back to top, twice: once for the page, which is what the landing view and
 // every draft panel scroll, and once for the player sheet, which is the only
