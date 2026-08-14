@@ -1,0 +1,22 @@
+name = "juke-draft-room"
+main = "draft-room.js"
+compatibility_date = "2026-08-14"
+
+# One Durable Object per draft room. The invite link carries the room's
+# name, idFromName() turns that name into the same object for everyone who
+# follows the link, and that object is the only thing that decides what
+# happened in the draft.
+[[durable_objects.bindings]]
+name = "DRAFT_ROOM"
+class_name = "DraftRoom"
+
+# Durable Objects have to be introduced in a migration the first time.
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["DraftRoom"]
+
+# The site stays on GitHub Pages. This worker is only the room, so the
+# static app keeps working with no backend at all — which is the point:
+# a solo mock draft must not depend on anything being up.
+[observability]
+enabled = true

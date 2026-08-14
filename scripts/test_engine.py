@@ -1,4 +1,4 @@
-"""Run draft-engine.js outside a browser and check it against the rules.
+"""Run draft-engine.js and room.js outside a browser and check them.
 
 The engine's whole claim is that a server and every client reach the same
 verdict about a draft. A claim like that is worth testing somewhere other
@@ -22,6 +22,7 @@ import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ENGINE = os.path.join(ROOT, "draft-engine.js")
+ROOM = os.path.join(ROOT, "room.js")
 
 # In preference order. Deno and bun both run a plain script the same way node
 # does, so any of them proves the point: the file did not need a browser.
@@ -38,6 +39,7 @@ def find_runtime():
 
 HARNESS = r"""
 const E = require(ENGINE_PATH);
+const R = require(ROOM_PATH);
 
 let failures = [];
 function check(name, got, want) {
@@ -125,6 +127,57 @@ check("jitter differs by seed", E.jitter(42, 1) === E.jitter(42, 2), false);
   check("nothing legal after the last", E.onTheClock(cfg, 180), null);
 })();
 
+// ---- the room ----
+(function () {
+  const L = { teams: 4, rounds: 3 }, T0 = 1000000;
+  let r = R.create({ league: L, seed: 7, clockLength: 60, host: "alice" });
+  check("room starts in lobby", r.status, "lobby");
+  check("one chair per team", r.seats.length, 4);
+
+  r = R.join(r, { member: "alice", name: "Alice" }, T0).state;
+  r = R.join(r, { member: "bob", name: "Bob" }, T0).state;
+  check("seats fill in order", [R.seatOf(r, "alice"), R.seatOf(r, "bob")], [0, 1]);
+
+  r = R.join(r, { member: "alice", name: "Alice" }, T0 + 5).state;
+  check("a refresh is not a second seat",
+        r.seats.filter((s) => s.member === "alice").length, 1);
+
+  check("only the host may start", R.start(r, { member: "bob" }, T0).error, R.ERR.NOT_YOUR_SEAT);
+  r = R.start(r, { member: "alice" }, T0).state;
+  check("drafting", r.status, "drafting");
+
+  check("wrong seat is refused",
+        R.submitPick(r, { member: "bob", key: "x", now: T0 }).error, R.ERR.NOT_YOUR_SEAT);
+
+  check("countdown from the pick", R.msLeft(r, T0 + 30000), 30000);
+  check("expiry", R.expired(r, T0 + 60001), true);
+
+  // a whole draft: two managers, two empty chairs
+  let pool = 0, guard = 0, now = T0;
+  const key = () => "player-" + (pool++);
+  while (r.status === "drafting" && guard++ < 50) {
+    const c = R.onTheClock(r);
+    now += 10;
+    const res = R.seatIsAuto(r, c.slot)
+      ? R.autoPick(r, { now: now, choose: key })
+      : R.submitPick(r, { member: r.seats[c.slot].member, key: key(), now: now });
+    if (res.error) { failures.push("draft stalled: " + res.error); break; }
+    r = res.state;
+  }
+  check("room draft finishes", [r.status, r.picks.length, new Set(r.picks.map((p) => p.key)).size],
+        ["done", 12, 12]);
+  check("snake order", r.picks.slice(0, 8).map((p) => p.slot), [0, 1, 2, 3, 3, 2, 1, 0]);
+
+  const view = R.viewFor(r, "alice", now);
+  check("view hides other member ids", JSON.stringify(view).indexOf('"bob"') < 0, true);
+  check("view names your seat", view.yourSeat, 0);
+
+  const snapshot = JSON.stringify(r);
+  R.submitPick(r, { member: "alice", key: "z", now: now });
+  R.leave(r, { member: "alice" });
+  check("actions do not mutate", JSON.stringify(r), snapshot);
+})();
+
 if (failures.length) {
   console.log("FAIL " + failures.length);
   failures.forEach((f) => console.log("  x " + f));
@@ -145,8 +198,9 @@ def main():
         print("exercise it through the app instead.")
         return 2
 
-    harness = HARNESS.replace(
-        "ENGINE_PATH", json.dumps(ENGINE.replace("\\", "/")))
+    harness = (HARNESS
+               .replace("ENGINE_PATH", json.dumps(ENGINE.replace("\\", "/")))
+               .replace("ROOM_PATH", json.dumps(ROOM.replace("\\", "/"))))
 
     with tempfile.TemporaryDirectory() as tmp:
         script = os.path.join(tmp, "harness.js")

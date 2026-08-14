@@ -34,7 +34,9 @@ Python 3 standard library only in the pipeline. No pip dependencies.
 | `app.js` | Everything else: draft engine, CPU logic, analysis, rendering. |
 | `back-to-top.js` | The back-to-top button. Its own file because the how-it-works page uses it and has no reason to load `app.js`. |
 | `draft-engine.js` | The rules of a snake draft — turn order, legality, the CPU wobble. No DOM, no globals, no dependencies, so a server can run the identical file. |
-| `scripts/test_engine.py` | Runs `draft-engine.js` in node/deno/bun and asserts the rules from outside a browser. |
+| `room.js` | One shared draft: seats, picks, the clock. Pure, and time is always passed in rather than read. Loaded by the worker, not yet by the page. |
+| `worker/` | The Cloudflare Durable Object behind an invite link, plus its `wrangler.toml`. Not deployed. See `worker/README.md`. |
+| `scripts/test_engine.py` | Runs `draft-engine.js` and `room.js` in node/deno/bun and asserts the rules from outside a browser. |
 | `players.js` | **GENERATED.** 260 players by ADP. Never edit by hand. |
 | `stats.js` | **GENERATED.** Stats, projections, depth charts by Sleeper ID. |
 | `scripts/build_players.py` | The pipeline that writes the two generated files. |
