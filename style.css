@@ -182,35 +182,57 @@ body {
 
 .sticky-top { position: sticky; top: 0; z-index: 30; }
 
+/* The draft header and the site header are the same bar wearing different
+   content: same surface, same centred column, same border. The Alpine mountain
+   ridges that used to sit on top of this are gone with the rest of that brand.
+
+   The two states that need your attention still take colour, because a bar
+   that turns red at ten seconds is doing real work. Everything else, a CPU
+   being on the clock included, is the resting state and matches the homepage. */
 .appbar {
   position: relative; overflow: hidden;
-  display: flex; align-items: center; gap: 12px;
-  padding: 10px 14px;
-  background: linear-gradient(120deg, var(--navy-deep) 0%, var(--navy) 52%, var(--navy-lift) 100%);
-  color: #fff;
-  transition: background .35s ease;
+  background: var(--card);
+  border-bottom: 1px solid var(--line);
+  color: var(--ink);
+  transition: background .35s ease, color .35s ease, border-color .35s ease;
 }
 
-.appbar.live    { background: linear-gradient(120deg, var(--navy-deep) 0%, var(--navy-mid) 55%, var(--navy-glow) 100%); }
+.appbar-inner {
+  max-width: 1120px; margin: 0 auto; width: 100%;
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 18px;
+}
+
+.appbar.my-turn,
+.appbar.urgent { color: #fff; border-bottom-color: transparent; }
+
 .appbar.my-turn { background: linear-gradient(120deg, var(--hdr-blue-deep) 0%, var(--hdr-blue) 50%, var(--hdr-cyan) 130%); }
 .appbar.urgent  { background: linear-gradient(120deg, var(--hdr-red-deep) 0%, var(--hdr-red) 60%, var(--hdr-red-lift) 100%); }
 
-/* Mountain ridges live in CSS rather than the markup, so a missing
-   stylesheet leaves a plain bar instead of a giant graphic. */
-.appbar::after {
-  content: "";
-  position: absolute; inset: 0;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 120' preserveAspectRatio='none'%3E%3Cpath d='M0 120 L150 38 L285 92 L420 22 L590 120 Z' fill='%23fff' opacity='.20'/%3E%3Cpath d='M360 120 L545 48 L690 98 L855 28 L1035 120 Z' fill='%23fff' opacity='.15'/%3E%3Cpath d='M740 120 L930 60 L1075 104 L1200 50 L1200 120 Z' fill='%23fff' opacity='.11'/%3E%3C/svg%3E");
-  background-size: 100% 100%;
-  background-repeat: no-repeat;
-  pointer-events: none;
+/* On a coloured bar the mark reverses and the toggle goes translucent white,
+   the way both did on navy. */
+.appbar.my-turn .mark,
+.appbar.urgent .mark { --mark-ink: #fff; }
+
+.appbar.my-turn .theme-toggle,
+.appbar.urgent .theme-toggle {
+  border-color: rgba(255,255,255,.22);
+  background: rgba(255,255,255,.10); color: #fff;
 }
+
+.appbar.my-turn .theme-toggle:hover,
+.appbar.urgent .theme-toggle:hover { background: rgba(255,255,255,.20); border-color: rgba(255,255,255,.38); }
+
+.appbar.my-turn .theme-toggle:focus-visible,
+.appbar.urgent .theme-toggle:focus-visible,
+.appbar.my-turn .home:focus-visible,
+.appbar.urgent .home:focus-visible { outline-color: #fff; }
 
 /* the app icon's peak, on the navy it was drawn for */
 /* The mark is a button now, so it needs to carry the flex sizing the SVG
    used to, and to look pressable without becoming a box in the header. */
 .home {
-  position: relative; z-index: 1; flex: none;
+  flex: none;
   display: flex; align-items: center;
   border: 0; background: none;
   color: inherit; cursor: pointer;
@@ -222,19 +244,15 @@ body {
 }
 
 .home:hover { opacity: .78; }
-.home:focus-visible { outline: 2px solid #fff; outline-offset: 4px; border-radius: 6px; }
+.home:focus-visible { outline: 2px solid var(--blue); outline-offset: 4px; border-radius: 6px; }
 
 /* The shield is taller than it is wide — 662 by 774 in the artwork — so it
-   cannot be sized as a square without squashing it. */
+   cannot be sized as a square without squashing it. The drop shadow it used to
+   carry existed to lift it off the mountain texture, which is gone. */
 .mark {
-  position: relative; z-index: 1;
   width: 31px; height: 36px; min-width: 31px; flex: none;
-  filter: drop-shadow(0 1px 3px rgba(0,0,0,.32));
 }
 
-/* The logo is drawn navy-on-light. The header is navy, so the navy half of
-   it would simply disappear; reversed to white is the second colourway, not
-   a bodge. The swoosh keeps its own orange, which reads on either ground. */
 /* The logo is drawn navy-on-light. On a light surface it needs its navy
    back or it is white-on-white and only the swoosh survives; on the draft
    header, which is navy under both themes, it stays reversed. */
@@ -243,11 +261,10 @@ body {
 
 /* The mark is drawn once in a <symbol> and cloned by <use>, and CSS cannot
    select into the shadow tree that creates — ".appbar .mark-body" would match
-   nothing. Custom properties do inherit into it, so the override is set on the
-   <svg> instead of on the path. */
-.appbar .mark { --mark-ink: #fff; }
+   nothing. Custom properties do inherit into it, so any per-header override
+   sets a variable on the <svg> rather than a fill on the path. */
 
-.appbar-text { position: relative; z-index: 1; min-width: 0; }
+.appbar-text { min-width: 0; }
 
 /* Team names run to "Bone-Thugs-N-Montgomery", and on a narrow phone the
    header cannot hold that next to the counter and the toggle. It has to end
@@ -261,12 +278,15 @@ body {
 }
 
 .appbar-text p {
-  margin: 0; font-size: 12px; color: rgba(255,255,255,.78);
+  margin: 0; font-size: 12px; color: var(--ink-mid);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
+.appbar.my-turn .appbar-text p,
+.appbar.urgent .appbar-text p { color: rgba(255,255,255,.82); }
+
 .appbar-right {
-  position: relative; z-index: 1; margin-left: auto;
+  margin-left: auto;
   display: flex; align-items: center; gap: 12px;
   padding-left: 10px;
 }
@@ -275,8 +295,11 @@ body {
 
 .count-label {
   display: block; font-size: 9.5px; letter-spacing: .1em;
-  text-transform: uppercase; color: rgba(255,255,255,.60); font-weight: 600;
+  text-transform: uppercase; color: var(--ink-light); font-weight: 600;
 }
+
+.appbar.my-turn .count-label,
+.appbar.urgent .count-label { color: rgba(255,255,255,.68); }
 
 .count-value {
   display: block; font-family: Poppins, sans-serif;
@@ -303,12 +326,6 @@ body {
 .theme-toggle:hover { background: var(--fill-hi); color: var(--ink); }
 .theme-toggle:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
 
-.appbar .theme-toggle {
-  border-color: rgba(255,255,255,.22);
-  background: rgba(255,255,255,.10); color: #fff;
-}
-.appbar .theme-toggle:hover { background: rgba(255,255,255,.20); border-color: rgba(255,255,255,.38); }
-.appbar .theme-toggle:focus-visible { outline-color: #fff; }
 
 /* One icon each way round: the sun offers the light theme, so it shows
    while the page is dark, and the moon shows while it is light. */
@@ -1010,9 +1027,12 @@ tr.drafted .meta, tr.drafted .num { opacity: .45; }
 
 /* Poppins, not Montserrat. Poppins is already loaded for the rest of the app,
    so the wordmark costs no extra font request. */
+/* --mark-ink, not --ink: the word is half the logo, and --ink is a slightly
+   different near-black, which made the shield read navy next to a black
+   wordmark. One colour, one lockup. */
 .wordmark {
   font-family: Poppins, sans-serif; font-weight: 700; font-size: 20px;
-  letter-spacing: -0.01em; color: var(--ink); line-height: 1;
+  letter-spacing: -0.01em; color: var(--mark-ink); line-height: 1;
 }
 
 .navbtn, .navlink {

@@ -36,6 +36,7 @@ Python 3 standard library only in the pipeline. No pip dependencies.
 | `stats.js` | **GENERATED.** Stats, projections, depth charts by Sleeper ID. |
 | `scripts/build_players.py` | The pipeline that writes the two generated files. |
 | `.github/workflows/update-players.yml` | Runs the pipeline daily at 11:00 UTC. |
+| `og-image.png` | **GENERATED.** 1200x630 link-preview card. Rebuild by opening `scripts/build_og.html` in a browser and clicking download. |
 | `unmatched.txt` | **GENERATED.** Feed rows that failed to join, plus unscored stat keys. |
 
 ## Data
@@ -77,6 +78,12 @@ stored can never be rescored, and `build_players.py` fails loudly if a
   same reason: `--orange` (#ED6011) is the brand, and it is only 3.34:1
   against white, so anything putting white text on it uses `--orange-cta`
   (#C2410C, 5.18:1) instead.
+- **One header, two sets of content.** `.shellbar` and `.appbar` share a
+  surface, a border and a 1120px centred column, so the Draft Room and the
+  landing page read as the same site. Only `.my-turn` and `.urgent` take
+  colour, and they carry their own reversed mark and white text. A CPU being
+  on the clock is the resting state and must look like the homepage.
+
 - **Two views, one hash route.** `#/` is the landing page, `#/draft` is the
   Draft Room. Hash routing because GitHub Pages has no rewrite to send a real
   `/draft` path back to `index.html`, and because it keeps the back button
@@ -132,6 +139,11 @@ projections carry only the combined `fgm_50p`, and express misses solely as
 projected 50-yard field goal — 183 of them — and makes kickers look far worse
 than they are. `reconcile()` folds the coarse keys in. Check any new stat
 across all three feeds before trusting it.
+
+**`og:image` must be an absolute URL, and it is baked to `jukeff.com`.**
+Link previews are fetched by Slack, iMessage and Twitter from their own
+servers, so a relative path resolves to nothing. If the domain ever changes,
+`index.html` and `manifest.json` both need updating.
 
 **Scores come from ESPN, and nothing else does.** Sleeper's schedule feed
 carries no scores at all — only home, away, date and status — so the strip
