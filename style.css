@@ -1010,9 +1010,12 @@ tr.drafted .meta, tr.drafted .num { opacity: .45; }
 
 /* Poppins, not Montserrat. Poppins is already loaded for the rest of the app,
    so the wordmark costs no extra font request. */
+/* --mark-ink, not --ink: the word is half the logo, and --ink is a slightly
+   different near-black, which made the shield read navy next to a black
+   wordmark. One colour, one lockup. */
 .wordmark {
   font-family: Poppins, sans-serif; font-weight: 700; font-size: 20px;
-  letter-spacing: -0.01em; color: var(--ink); line-height: 1;
+  letter-spacing: -0.01em; color: var(--mark-ink); line-height: 1;
 }
 
 .navbtn, .navlink {

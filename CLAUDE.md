@@ -36,6 +36,7 @@ Python 3 standard library only in the pipeline. No pip dependencies.
 | `stats.js` | **GENERATED.** Stats, projections, depth charts by Sleeper ID. |
 | `scripts/build_players.py` | The pipeline that writes the two generated files. |
 | `.github/workflows/update-players.yml` | Runs the pipeline daily at 11:00 UTC. |
+| `og-image.png` | **GENERATED.** 1200x630 link-preview card. Rebuild by opening `scripts/build_og.html` in a browser and clicking download. |
 | `unmatched.txt` | **GENERATED.** Feed rows that failed to join, plus unscored stat keys. |
 
 ## Data
@@ -132,6 +133,11 @@ projections carry only the combined `fgm_50p`, and express misses solely as
 projected 50-yard field goal — 183 of them — and makes kickers look far worse
 than they are. `reconcile()` folds the coarse keys in. Check any new stat
 across all three feeds before trusting it.
+
+**`og:image` must be an absolute URL, and it is baked to `jukeff.com`.**
+Link previews are fetched by Slack, iMessage and Twitter from their own
+servers, so a relative path resolves to nothing. If the domain ever changes,
+`index.html` and `manifest.json` both need updating.
 
 **Scores come from ESPN, and nothing else does.** Sleeper's schedule feed
 carries no scores at all — only home, away, date and status — so the strip
