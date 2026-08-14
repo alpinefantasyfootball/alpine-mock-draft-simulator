@@ -162,6 +162,25 @@ const withMarkup = await until("markup message arrives", () => {
 check("markup is stored verbatim, escaping is the client's job",
       withMarkup.text, "<img src=x onerror=alert(1)>");
 
+// a GIF from GIPHY survives; anything else is dropped before it is stored
+alice.send(JSON.stringify({ type: "chat", text: "look",
+  gif: "https://media1.giphy.com/media/abc/giphy.gif" }));
+const withGif = await until("gif message arrives", () => {
+  const c = (lastState(bob) || {}).chat || [];
+  const last = c[c.length - 1];
+  return last && last.text === "look" ? last : false;
+}) || {};
+check("giphy media kept", withGif.gif, "https://media1.giphy.com/media/abc/giphy.gif");
+
+alice.send(JSON.stringify({ type: "chat", text: "sneaky",
+  gif: "https://giphy.com.evil.example/x.gif" }));
+const spoofed = await until("spoofed gif message arrives", () => {
+  const c = (lastState(bob) || {}).chat || [];
+  const last = c[c.length - 1];
+  return last && last.text === "sneaky" ? last : false;
+}) || {};
+check("lookalike host dropped, message kept", spoofed.gif, null);
+
 // an empty message is refused rather than filling the log with blanks
 const beforeBlank = lastState(bob).chat.length;
 alice.send(JSON.stringify({ type: "chat", text: "   " }));

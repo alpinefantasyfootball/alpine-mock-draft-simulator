@@ -199,6 +199,15 @@
     autoPick: function (key) { return send({ type: "auto", key: key }); },
     claimSeat:function (seat){ return send({ type: "claim-seat", seat: seat }); },
     start:    function ()    { return send({ type: "start" }); },
-    chat:     function (text){ return send({ type: "chat", text: text }); }
+    chat: function (text, gif) { return send({ type: "chat", text: text, gif: gif || null }); },
+
+    /* GIPHY search, through the worker. The key is server-side, so this
+       is a plain fetch to our own origin rather than a call to GIPHY. */
+    gifSearch: function (q) {
+      const http = WORKER.replace(/^ws/, "http");
+      return fetch(http + "/giphy?q=" + encodeURIComponent(q))
+        .then((r) => r.json())
+        .catch(() => ({ configured: false, results: [] }));
+    }
   };
 })(window);

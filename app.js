@@ -872,6 +872,24 @@ function adoptRoom(room) {
    manager a script tag in your draft.
 
    Names too. A name is typed by a person and is no safer than the message. */
+/* Only GIPHY's own media may be put in an img src. Same check the room
+   makes, kept here as well because the room is the authority and this is
+   what actually asks a browser to fetch the address. Parsed rather than
+   pattern-matched: "https://evil.com/?x=giphy.com" contains the string and
+   is not GIPHY. */
+function safeGif(value) {
+  if (!value) return null;
+  try {
+    const url = new URL(String(value));
+    if (url.protocol !== "https:") return null;
+    const host = url.hostname.toLowerCase();
+    if (host !== "giphy.com" && !host.endsWith(".giphy.com")) return null;
+    return url.href;
+  } catch (err) {
+    return null;
+  }
+}
+
 function renderChat() {
   const card = $("chatCard");
   const room = typeof Live === "undefined" ? null : Live.room();
@@ -893,8 +911,19 @@ function renderChat() {
                 : m.seat >= 0 ? "Seat " + (m.seat + 1)
                 : "Someone";
       const mine = m.seat >= 0 && m.seat === room.yourSeat;
+
+      /* The room already refused anything that is not GIPHY's own media, so
+         this is the second of two checks rather than the only one. It is
+         here because the room is the authority and this is the thing that
+         actually asks a browser to fetch the address — and an old room, or a
+         future one, should not be able to talk this page into loading from
+         somewhere else. */
+      const gif = safeGif(m.gif);
+
       return `<p class="chatline${mine ? " mine" : ""}">
-          <b>${who}</b>${escHtml(m.text)}</p>`;
+          <b>${who}</b>${escHtml(m.text)}${
+            gif ? `<img class="chatgif" src="${escHtml(gif)}" alt="" loading="lazy">` : ""
+          }</p>`;
     }).join("");
   }
 
@@ -3078,6 +3107,68 @@ $("leaveRoomBtn").addEventListener("click", function () {
   renderInvite();
   renderChat();
   refreshSetup();
+});
+
+/* ---- the GIF picker ----
+   Searched through the worker, because the GIPHY key is server-side. With no
+   key set the worker answers configured:false and this says so rather than
+   showing an empty grid that looks like a search with no results. */
+let gifTimer = null;
+
+function renderGifs(payload) {
+  const holder = $("gifResults");
+
+  if (!payload.configured) {
+    holder.innerHTML = `<p class="chatempty">GIFs are not set up for this room yet.</p>`;
+    return;
+  }
+  if (payload.error) {
+    holder.innerHTML = `<p class="chatempty">GIPHY did not answer. Try again in a moment.</p>`;
+    return;
+  }
+  if (!payload.results.length) {
+    holder.innerHTML = `<p class="chatempty">Nothing found.</p>`;
+    return;
+  }
+
+  // Every address is checked before it becomes an img src, exactly as the
+  // ones arriving over chat are: a reply from the worker is still data.
+  holder.innerHTML = payload.results.map(function (g) {
+    const url = safeGif(g.url);
+    if (!url) return "";
+    return `<button type="button" class="gifpick" data-gif="${escHtml(url)}">
+        <img src="${escHtml(url)}" alt="${escHtml(g.alt || "GIF")}" loading="lazy">
+      </button>`;
+  }).join("");
+}
+
+$("gifBtn").addEventListener("click", function () {
+  const box = $("gifBox");
+  box.hidden = !box.hidden;
+  if (!box.hidden) {
+    $("gifQuery").focus();
+    $("gifResults").innerHTML = `<p class="chatempty">Type to search.</p>`;
+  }
+});
+
+$("gifClose").addEventListener("click", function () { $("gifBox").hidden = true; });
+
+$("gifQuery").addEventListener("input", function () {
+  const q = this.value.trim();
+  // Debounced, so typing "touchdown" is one search rather than nine.
+  if (gifTimer) clearTimeout(gifTimer);
+  if (!q) { $("gifResults").innerHTML = `<p class="chatempty">Type to search.</p>`; return; }
+  gifTimer = setTimeout(function () {
+    Live.gifSearch(q).then(renderGifs);
+  }, 350);
+});
+
+$("gifResults").addEventListener("click", function (e) {
+  const button = e.target.closest ? e.target.closest("[data-gif]") : null;
+  if (!button || !inRoom()) return;
+  Live.chat($("chatInput").value.trim(), button.dataset.gif);
+  $("chatInput").value = "";
+  $("gifBox").hidden = true;
 });
 
 $("chatForm").addEventListener("submit", function (e) {

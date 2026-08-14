@@ -394,9 +394,21 @@
               <button type="button" data-say="🤬">🤬</button>
               <button type="button" data-say="Nice pick">Nice pick</button>
             </div>
+            <!-- Hidden until the GIF button is pressed, so the card stays a
+                 chat box rather than a search engine. -->
+            <div class="gifbox" id="gifBox" hidden>
+              <div class="chatform">
+                <input type="text" id="gifQuery" maxlength="60" autocomplete="off"
+                       placeholder="Search GIFs" aria-label="Search GIFs">
+                <button class="ghost" type="button" id="gifClose">Close</button>
+              </div>
+              <div class="gifresults" id="gifResults"></div>
+            </div>
+
             <form class="chatform" id="chatForm">
               <input type="text" id="chatInput" maxlength="500" autocomplete="off"
                      placeholder="Say something" aria-label="Message the room">
+              <button class="ghost" type="button" id="gifBtn" aria-label="Add a GIF">GIF</button>
               <button class="ghost" type="submit">Send</button>
             </form>
           </section>

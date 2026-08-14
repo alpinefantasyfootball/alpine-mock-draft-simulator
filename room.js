@@ -333,9 +333,31 @@
   const CHAT_KEEP = 50;
   const CHAT_MAX = 500;
 
+  /* A GIF address is a claim, not a fact. It arrives from a manager the same
+     way a message does, and the client puts it in an img src — so anything
+     that is not GIPHY's own media is dropped here, before it is stored and
+     before anybody else's browser is asked to fetch it.
+
+     Checked with URL rather than a substring test: "https://evil.com/?x=giphy.com"
+     contains the string and is not GIPHY. The host has to actually be theirs. */
+  function cleanGif(value) {
+    if (!value) return null;
+    try {
+      const url = new URL(String(value));
+      if (url.protocol !== "https:") return null;
+      const host = url.hostname.toLowerCase();
+      if (host !== "giphy.com" && !host.endsWith(".giphy.com")) return null;
+      return url.href.slice(0, CHAT_MAX);
+    } catch (err) {
+      return null;
+    }
+  }
+
   function say(state, opts) {
     const text = String(opts.text == null ? "" : opts.text).trim().slice(0, CHAT_MAX);
-    if (!text) return fail(state, ERR.EMPTY_MESSAGE);
+    const gif = cleanGif(opts.gif);
+    // A GIF on its own is a message; empty with nothing attached is not.
+    if (!text && !gif) return fail(state, ERR.EMPTY_MESSAGE);
 
     const next = clone(state);
     const seat = seatOf(next, opts.member);
@@ -346,6 +368,7 @@
       seat: seat,
       name: (next.members[opts.member] || {}).name || null,
       text: text,
+      gif: gif,
       at: opts.now
     });
 
@@ -407,6 +430,7 @@
     hostPick: hostPick,
     pause: pause,
     say: say,
+    cleanGif: cleanGif,
     announce: announce,
     onTheClock: onTheClock,
     seatOf: seatOf,

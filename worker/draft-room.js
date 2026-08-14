@@ -161,7 +161,7 @@ export class DraftRoom {
         result = Room.pause(this.room, !!msg.on);
         break;
       case "chat":
-        result = Room.say(this.room, { member, text: msg.text, now });
+        result = Room.say(this.room, { member, text: msg.text, gif: msg.gif, now });
         break;
       default:
         return;
@@ -259,9 +259,81 @@ export class DraftRoom {
 /* The routing worker. Everything under /room/<name> goes to the one object
    with that name, which is what makes an invite link work: the name is the
    only thing the link carries. */
+/* Origins allowed to call the search below. The room itself does not need
+   this — a WebSocket is not subject to CORS — but a plain fetch is, and an
+   open proxy is somebody else's GIF quota being spent on your key. */
+const ALLOWED = [
+  "https://jukeff.com",
+  "https://www.jukeff.com"
+];
+
+function corsFor(request) {
+  const origin = request.headers.get("Origin") || "";
+  const ok = ALLOWED.indexOf(origin) >= 0 || /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin);
+  return ok ? { "access-control-allow-origin": origin, "vary": "Origin" } : {};
+}
+
+/* GIPHY search, proxied.
+
+   The key lives here and only here. In the page it would be readable by
+   anyone who opened dev tools, which is the whole reason this route exists
+   rather than the client calling GIPHY directly.
+
+   With no key set it answers honestly rather than erroring: the client shows
+   "GIFs are not set up" instead of a search that silently returns nothing. */
+async function giphySearch(request, env) {
+  const cors = corsFor(request);
+  const headers = Object.assign({ "content-type": "application/json" }, cors);
+
+  if (!env.GIPHY_KEY) {
+    return new Response(JSON.stringify({ configured: false, results: [] }), { headers });
+  }
+
+  const q = (new URL(request.url).searchParams.get("q") || "").trim().slice(0, 60);
+  if (!q) return new Response(JSON.stringify({ configured: true, results: [] }), { headers });
+
+  const api = "https://api.giphy.com/v1/gifs/search?api_key=" +
+              encodeURIComponent(env.GIPHY_KEY) +
+              "&q=" + encodeURIComponent(q) +
+              "&limit=12&rating=pg-13&bundle=messaging_non_clips";
+
+  try {
+    const res = await fetch(api);
+    if (!res.ok) throw new Error("giphy " + res.status);
+    const body = await res.json();
+
+    // Only what the client draws. Passing GIPHY's whole payload through
+    // would hand the page a lot of fields nobody reads and one more thing
+    // to keep escaping.
+    const results = (body.data || []).map(function (g) {
+      const img = (g.images || {}).fixed_height_small ||
+                  (g.images || {}).fixed_height || {};
+      return { id: g.id, url: img.url || "", w: img.width, h: img.height,
+               alt: g.title || "GIF" };
+    }).filter((g) => g.url);
+
+    return new Response(JSON.stringify({ configured: true, results }), { headers });
+  } catch (err) {
+    // A GIF failing is not worth breaking a draft over.
+    return new Response(JSON.stringify({ configured: true, results: [], error: true }),
+                        { headers });
+  }
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+
+    if (url.pathname === "/giphy") {
+      if (request.method === "OPTIONS") {
+        return new Response(null, { headers: Object.assign({
+          "access-control-allow-methods": "GET",
+          "access-control-max-age": "86400"
+        }, corsFor(request)) });
+      }
+      return giphySearch(request, env);
+    }
+
     const match = url.pathname.match(/^\/room\/([A-Za-z0-9_-]{4,40})/);
     if (!match) return new Response("Not found", { status: 404 });
 

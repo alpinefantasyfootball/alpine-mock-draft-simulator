@@ -1683,3 +1683,33 @@ a.room:hover { border-color: var(--blue-line); }
 }
 .chatform input:focus { outline: 2px solid var(--blue); outline-offset: 1px; border-color: var(--blue); }
 .chatform button { flex: none; font-size: 12px; padding: 7px 11px; }
+
+/* ---------- GIFs in chat ----------
+   Every address here has been through safeGif() twice — once in the room,
+   once in renderChat() — so nothing below is doing any of the safety work. */
+
+.chatgif {
+  display: block; margin-top: 5px;
+  max-width: 100%; max-height: 130px;
+  border-radius: 7px;
+}
+
+.gifbox { margin-bottom: 8px; }
+
+.gifresults {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px;
+  max-height: 170px; overflow-y: auto; overscroll-behavior: contain;
+  margin-top: 6px;
+}
+
+.gifpick {
+  padding: 0; border: 1px solid var(--line); border-radius: 6px;
+  background: var(--sunken); cursor: pointer; overflow: hidden;
+  aspect-ratio: 1 / 1;
+}
+.gifpick:hover { border-color: var(--blue); }
+.gifpick img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* The grid is the only child when a message replaces it, so the empty and
+   error lines have to span it rather than sit in the first cell. */
+.gifresults .chatempty { grid-column: 1 / -1; }
