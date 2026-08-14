@@ -1,8 +1,8 @@
 {
   "name": "The Draft Room",
   "short_name": "The Draft Room",
-  "start_url": "/alpine-mock-draft-simulator/",
-  "scope": "/alpine-mock-draft-simulator/",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#16283C",
