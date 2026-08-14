@@ -1408,3 +1408,69 @@ a.room:hover { border-color: var(--blue-line); }
     bottom: calc(18px + env(safe-area-inset-bottom));
   }
 }
+
+/* ---------- the queue ----------
+
+   Your own order, as distinct from the model's. It reuses the suggestion
+   row's shape rather than inventing a third kind of player row, so the
+   three lists on this site read as one family. */
+
+.qrow {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: 10px; padding: 9px 12px; margin-bottom: 7px;
+}
+
+/* The one at the front is what the clock takes if it runs out while you are
+   away, so it is worth marking as different from the rest of the list. */
+.qrow.next { border-color: var(--orange); }
+.qrow.next .qn { color: var(--orange-cta); }
+
+.qn {
+  font-family: Inter, sans-serif; font-size: 12px; font-weight: 700;
+  color: var(--ink-light); width: 16px; flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.qbody { flex: 1; min-width: 0; }
+.qname { font-size: 14px; font-weight: 600; }
+.qmeta { display: flex; align-items: center; gap: 6px; margin-top: 2px; font-size: 11.5px; color: var(--ink-mid); }
+
+.qmoves { display: flex; flex-direction: column; gap: 2px; flex: none; }
+
+.qmove {
+  width: 22px; height: 17px; padding: 0; cursor: pointer;
+  font-size: 10px; line-height: 1;
+  color: var(--ink-mid); background: var(--fill);
+  border: 1px solid var(--line); border-radius: 4px;
+}
+.qmove:hover:not(:disabled) { background: var(--fill-hi); color: var(--ink); }
+.qmove:disabled { opacity: .35; cursor: default; }
+
+/* The star that puts a player in the queue. Off is an outline in muted ink,
+   on is the brand orange filled — both legible on either theme, since
+   --orange is a brand colour rather than a themed one. */
+.rowacts { display: flex; align-items: center; gap: 6px; justify-content: flex-end; }
+
+.star {
+  flex: none; width: 26px; height: 26px; padding: 0; cursor: pointer;
+  font-size: 14px; line-height: 1;
+  color: var(--ink-light); background: none;
+  border: 1px solid var(--line); border-radius: 6px;
+}
+.star:hover { color: var(--orange); border-color: var(--orange); }
+.star.on { color: #fff; background: var(--orange-cta); border-color: var(--orange-cta); }
+
+#playerTable.compact .star { width: 22px; height: 22px; font-size: 12px; }
+
+/* A positional run, in the strip that already says what just happened. */
+.run {
+  margin-left: auto; flex: none;
+  font-size: 12px; color: var(--t-warn-fg);
+  background: var(--t-warn-bg); border-radius: 999px; padding: 4px 11px;
+}
+.run b { color: inherit; font-weight: 700; }
+
+/* The on-the-clock cell counts down in place. It is already dashed blue and
+   bold from .cell.now; this only stops the digits jittering as they change. */
+.board .cell.now { font-variant-numeric: tabular-nums; }
