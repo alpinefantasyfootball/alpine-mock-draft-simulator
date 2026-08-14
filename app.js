@@ -56,7 +56,7 @@ function slotCount(slot) {
   return league.starters[slot] || 0;
 }
 
-function totalPicks()   { return league.teams * league.rounds; }
+function totalPicks()   { return DraftEngine.totalPicks(league); }
 function starterCount() { return POSITIONS.reduce((n, pos) => n + league.starters[pos], 0); }
 function flexCount()    { return league.flex + league.superflex; }
 function rosterSize()   { return starterCount() + flexCount() + league.bench; }
@@ -593,32 +593,26 @@ const state = {
    order reverses, which is the only thing that makes a
    snake draft a snake.                                     */
 
-function pickInfo(overall) {
-  const round   = Math.ceil(overall / league.teams);
-  const inRound = overall - (round - 1) * league.teams;
-  const slot    = (round % 2 === 0) ? (league.teams + 1 - inRound) : inRound;
-  return { round: round, slot: slot - 1 };
-}
+/* These are wrappers over draft-engine.js, which holds the rules with no
+   reference to `league` or `state`. The wrappers exist so every call site in
+   this file reads the way it always did, while there is exactly one
+   implementation of what a snake draft is — the same one a server will run
+   when a room has more than one person in it. */
 
-function currentOverall() { return state.picks.length + 1; }
-function draftOver()      { return state.picks.length >= totalPicks(); }
-function onTheClock()     { return draftOver() ? null : pickInfo(currentOverall()); }
-function isMyTurn()       { const c = onTheClock(); return c !== null && c.slot === state.mySlot; }
+function pickInfo(overall)  { return DraftEngine.pickInfo(overall, league.teams); }
+function currentOverall()   { return state.picks.length + 1; }
+function draftOver()        { return DraftEngine.draftOver(league, state.picks.length); }
+function onTheClock()       { return DraftEngine.onTheClock(league, state.picks.length); }
+function isMyTurn()         { const c = onTheClock(); return c !== null && c.slot === state.mySlot; }
 
 function teamLabel(slot) {
   return slot === state.mySlot ? "Your Team" : cpuName(slot);
 }
 
-function pickCode(overall) {
-  const p = pickInfo(overall);
-  return p.round + "." + String(p.slot + 1).padStart(2, "0");
-}
+function pickCode(overall) { return DraftEngine.pickCode(overall, league.teams); }
 
 function picksUntilMyTurn() {
-  let n = currentOverall();
-  let gap = 0;
-  while (n <= totalPicks() && pickInfo(n).slot !== state.mySlot) { n++; gap++; }
-  return gap;
+  return DraftEngine.picksUntil(league, state.picks.length, state.mySlot);
 }
 
 
@@ -679,12 +673,22 @@ function cpuChoice(slot, round) {
 
 /* ---- 8. Actions ---------------------------------------- */
 
+/* Every pick goes through the engine's legality check, including the ones
+   this app makes for itself. With one drafter the answer is never a
+   surprise, but a rule the client only enforces when it feels like it is a
+   rule the server cannot trust, and the whole point of the engine is that
+   both sides reach the same verdict. */
 function makePick(player) {
   const c = onTheClock();
-  if (!c || player.drafted) return;
+  const taken = state.picks.map((p) => p.player.name);
+  const reject = DraftEngine.rejectPick(
+    league, state.picks.length, c ? c.slot : -1,
+    player && player.name, taken);
+  if (reject) return reject;
 
   player.drafted = true;
   state.picks.push({ overall: currentOverall(), round: c.round, slot: c.slot, player: player });
+  return null;
 }
 
 /* CPU picks are made one at a time on a timer instead of all at
@@ -704,8 +708,7 @@ const CPU_DELAY = 350;
 // Deterministic pseudo-random offset of roughly -3 to +3 ADP places.
 function applyJitter() {
   board.forEach(function (p) {
-    const n = (p.overall * 7919 + state.seed * 104729) % 1000;
-    p.jitter = (n / 1000) * 6 - 3;
+    p.jitter = DraftEngine.jitter(p.overall, state.seed);
   });
 }
 

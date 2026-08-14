@@ -471,6 +471,10 @@
 
   <script src="players.js"></script>
   <script src="stats.js"></script>
+  <!-- The rules of a snake draft, with no reference to this page. It loads
+       before app.js because app.js is a caller, and it is a separate file
+       because a server will eventually have to run the same one. -->
+  <script src="draft-engine.js"></script>
   <!-- Before app.js, which calls backToTop() on the last line of its setup. -->
   <script src="back-to-top.js"></script>
   <script src="app.js"></script>
