@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>The Draft Room</title>
+  <title>Juke &middot; The Draft Room</title>
 
   <!-- The theme is set before anything paints, rather than in app.js at the
        foot of the body, because by then the page has already been drawn: a
@@ -30,7 +30,7 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="The Draft Room">
+<meta name="apple-mobile-web-app-title" content="Juke">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
@@ -44,30 +44,17 @@
     <header class="appbar" id="appbar">
 
       <!-- The mark doubles as the way home, which is where every site puts it.
-           This is the app icon itself — the same peak, the same four facets
-           and the same laces someone would have tapped to open the app — so
-           the header and the home screen agree on what this thing is. The
-           header sits on the icon's own navy, which is why the mark needs no
-           background of its own.
-           width and height are set here as well as in the CSS so the shape
-           can never balloon if the stylesheet is slow, missing or cached. -->
+           Traced from the logo artwork, so the curves are the real ones rather
+           than a redraw. The shield is 662 by 774, not square, so it cannot be
+           sized as a square without squashing it.
+           width and height are set here as well as in the CSS, because a cached
+           or missing stylesheet once let this shape fill the whole screen. -->
       <button class="home" id="homeBtn" type="button" title="Back to draft setup"
               aria-label="Back to draft setup">
-        <svg class="mark" width="34" height="34" viewBox="56 72 400 400"
+        <svg class="mark" width="31" height="36" viewBox="0 0 662 774"
              aria-hidden="true" focusable="false">
-          <clipPath id="peakClip"><path d="M256 102 L447 441 L65 441 Z"/></clipPath>
-          <g clip-path="url(#peakClip)">
-            <rect x="56"  y="72"  width="200" height="219" fill="#FFFFFF"/>
-            <rect x="256" y="72"  width="200" height="219" fill="#DFE7EF"/>
-            <rect x="56"  y="291" width="200" height="181" fill="#ECEAE3"/>
-            <rect x="256" y="291" width="200" height="181" fill="#B9C5D3"/>
-          </g>
-          <g fill="#D8622C">
-            <rect x="250" y="250" width="12"  height="166" rx="6"/>
-            <rect x="214" y="273" width="84"  height="12"  rx="6"/>
-            <rect x="209" y="319" width="94"  height="12"  rx="6"/>
-            <rect x="204" y="365" width="104" height="12"  rx="6"/>
-          </g>
+          <path class="mark-body" fill-rule="evenodd" d="M 330 0 L 661 95 L 662 262 L 661 313 L 658 351 L 651 396 L 642 434 L 628 477 L 613 513 L 580 573 L 555 608 L 537 628 L 537 630 L 514 653 L 511 658 L 509 658 L 478 688 L 476 688 L 463 700 L 439 716 L 437 719 L 402 741 L 364 761 L 332 774 L 328 774 L 304 764 L 263 743 L 202 703 L 177 681 L 175 681 L 167 672 L 165 672 L 133 640 L 133 638 L 118 623 L 118 621 L 114 618 L 114 616 L 110 613 L 89 585 L 67 550 L 47 511 L 23 448 L 12 406 L 6 373 L 0 307 L 0 95 Z M 331 42 L 40 126 L 40 299 L 44 352 L 52 398 L 59 426 L 70 460 L 85 496 L 105 534 L 127 568 L 146 591 L 146 593 L 151 597 L 151 599 L 182 632 L 184 632 L 197 646 L 199 646 L 216 662 L 259 693 L 285 707 L 286 709 L 300 715 L 301 717 L 330 730 L 353 721 L 356 718 L 381 706 L 420 681 L 444 663 L 447 659 L 449 659 L 493 618 L 493 616 L 510 599 L 510 597 L 515 593 L 515 591 L 519 588 L 537 564 L 540 557 L 543 555 L 544 551 L 556 534 L 577 494 L 601 430 L 615 367 L 621 307 L 620 125 Z M 328 101 L 331 102 L 332 126 L 331 178 L 277 180 L 230 186 L 227 187 L 227 185 L 240 170 L 240 168 L 273 134 L 299 115 Z M 308 216 L 331 216 L 331 263 L 292 263 L 292 284 L 320 284 L 320 306 L 318 308 L 292 308 L 292 329 L 320 330 L 320 352 L 292 353 L 293 374 L 320 375 L 320 396 L 292 397 L 292 419 L 319 419 L 320 442 L 292 443 L 292 463 L 331 463 L 331 505 L 331 514 L 308 514 L 252 510 L 200 503 L 185 472 L 176 446 L 168 411 L 165 386 L 165 344 L 170 310 L 182 268 L 200 228 L 255 220 Z M 244 226 L 242 227 L 230 250 L 217 286 L 210 317 L 206 354 L 207 395 L 213 433 L 224 467 L 235 488 L 241 499 L 243 499 L 237 475 L 229 422 L 226 386 L 226 340 L 233 283 Z M 343 284 L 369 284 L 372 291 L 372 301 L 371 305 L 367 307 L 342 307 L 341 287 Z M 342 329 L 368 329 L 372 336 L 372 346 L 369 350 L 368 352 L 342 352 Z M 343 374 L 368 374 L 371 377 L 372 382 L 372 391 L 369 396 L 343 397 L 341 393 L 341 377 Z M 343 419 L 369 419 L 372 426 L 372 436 L 369 442 L 342 442 L 341 422 Z M 225 545 L 278 551 L 332 553 L 332 565 L 313 578 L 297 588 L 273 598 L 240 565 Z"/>
+          <path class="mark-accent" fill-rule="evenodd" d="M 582 156 L 584 161 L 585 179 L 583 255 L 579 294 L 571 339 L 561 378 L 542 431 L 523 472 L 521 473 L 503 507 L 471 552 L 427 599 L 425 599 L 417 608 L 415 608 L 410 614 L 408 614 L 404 619 L 402 619 L 383 635 L 332 667 L 326 666 L 287 647 L 254 625 L 255 623 L 287 614 L 310 603 L 334 589 L 336 586 L 352 576 L 368 561 L 370 561 L 400 531 L 400 529 L 406 524 L 406 522 L 422 504 L 449 463 L 466 430 L 479 399 L 495 350 L 506 297 L 511 244 L 443 255 L 410 258 L 402 257 L 472 227 L 513 206 L 550 182 Z"/>
         </svg>
       </button>
 

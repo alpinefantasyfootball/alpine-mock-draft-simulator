@@ -1,5 +1,5 @@
 /* ==========================================================
-   The Draft Room — stylesheet
+   Juke — stylesheet
    Colours are defined once here, at the top, and reused
    everywhere below by name. Change one line, change the
    whole site.
@@ -20,15 +20,21 @@
 :root {
   /* ---- dark: the default ---- */
 
-  /* Brand navy. The app icon sits on #16283C, and so does the
-     header, so the mark needs no plate of its own. These do not
-     change with the theme — the header is dark either way. */
-  --navy-deep:   #0E1D2E;   /* header gradient, dark end */
-  --navy:        #16283C;   /* the icon's own navy        */
-  --navy-soft:   #24384F;
-  --navy-mid:    #1B3A6B;   /* the lift in a live header  */
-  --navy-lift:   #10456F;   /* the blue end of a gradient */
+  /* Juke navy and Juke orange, both sampled from the logo artwork itself
+     rather than typed from memory. The header is dark under both themes,
+     so these do not move when the theme does. */
+  --navy-deep:   #0C1A2E;   /* header gradient, dark end */
+  --navy:        #152A49;   /* the logo's own navy        */
+  --navy-soft:   #24405F;
+  --navy-mid:    #1E3E68;   /* the lift in a live header  */
+  --navy-lift:   #13497A;   /* the blue end of a gradient */
   --navy-glow:   #0E5A93;
+
+  /* The one warm colour in the brand. It is the swoosh, and it is strong
+     enough to carry dark text but not white — see the note on --orange-cta,
+     which is the same hue pushed dark enough to sit under white. */
+  --orange:      #ED6011;
+  --orange-cta:  #C2410C;
 
   /* The header changes colour with the state of the draft, not with the
      theme, so it keeps its own blues and reds. The ones below named
@@ -213,13 +219,19 @@ body {
 .home:hover { opacity: .78; }
 .home:focus-visible { outline: 2px solid #fff; outline-offset: 4px; border-radius: 6px; }
 
-/* The peak carries its own colours, so this only sizes it and lifts it off
-   the ridge texture behind. */
+/* The shield is taller than it is wide — 662 by 774 in the artwork — so it
+   cannot be sized as a square without squashing it. */
 .mark {
   position: relative; z-index: 1;
-  width: 34px; height: 34px; min-width: 34px; flex: none;
+  width: 31px; height: 36px; min-width: 31px; flex: none;
   filter: drop-shadow(0 1px 3px rgba(0,0,0,.32));
 }
+
+/* The logo is drawn navy-on-light. The header is navy, so the navy half of
+   it would simply disappear; reversed to white is the second colourway, not
+   a bodge. The swoosh keeps its own orange, which reads on either ground. */
+.mark-body   { fill: #fff; }
+.mark-accent { fill: var(--orange); }
 
 .appbar-text { position: relative; z-index: 1; min-width: 0; }
 
@@ -379,7 +391,7 @@ body {
   border-radius: 12px; padding: 24px 22px 22px;
 }
 
-.setup { border-top: 3px solid var(--cyan); }
+.setup { border-top: 3px solid var(--orange); }
 
 .setup h2 {
   margin: 0 0 20px; font-family: Poppins, sans-serif;

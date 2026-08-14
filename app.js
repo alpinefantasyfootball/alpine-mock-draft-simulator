@@ -1,5 +1,5 @@
 /* ==========================================================
-   Alpine Draft Room — behaviour
+   Juke — The Draft Room, behaviour
 
    Read the section headers first. Each one does one job.
    ========================================================== */
@@ -36,7 +36,7 @@ function starterCount() { return POSITIONS.reduce((n, pos) => n + league.starter
 function rosterSize()   { return starterCount() + league.flex + league.bench; }
 
 // The starting lineup, expanded into one entry per slot:
-// QB, RB, RB, WR, WR, TE, FLEX, DST, K for the Alpine settings.
+// QB, RB, RB, WR, WR, TE, FLEX, DST, K for the default settings.
 function lineupSlots() {
   const slots = [];
   SLOT_ORDER.forEach(function (slot) {

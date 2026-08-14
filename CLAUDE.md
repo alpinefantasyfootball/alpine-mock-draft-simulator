@@ -1,11 +1,20 @@
-# Alpine Draft Room
+# Juke
+
+Juke is the brand. **The Draft Room** is the first of several planned rooms
+(Waiver, Prospect, Trade, League, Strategy), and the only one that exists —
+so for now the site and the Draft Room are the same thing. Name the room in
+the app, not the brand: the header says "The Draft Room", Juke sits above it
+in the page title and the manifest.
 
 A fantasy football mock draft simulator, built for one specific ten-team
 league and now configurable from the setup screen: 8 to 14 teams, 8 to 20
-rounds, any starting lineup, and standard, half or full PPR. The Alpine
+rounds, any starting lineup, and standard, half or full PPR. That original
 league is still what every control defaults to.
-Live at `alpinefantasyfootball.github.io/alpine-mock-draft-simulator/`,
-hosted on GitHub Pages straight off `main`.
+
+Live at `jukeff.com`, hosted on GitHub Pages straight off `main` via the
+`CNAME` file. **It serves from the domain root, not a project path** — which
+is why `manifest.json` uses `start_url: "/"`. A path-scoped `start_url` here
+makes the installed app launch into a 404.
 
 ## Stack
 
@@ -64,7 +73,14 @@ stored can never be rescored, and `build_players.py` fails loudly if a
   navy, a position solid, or white on top of one of those. Anything else
   has to become a token in both blocks, or it will be invisible in one of
   them. Blue is two tokens for this reason: `--blue` always sits under
-  white text, `--link` is blue *as* text on a surface.
+  white text, `--link` is blue *as* text on a surface. Orange is two for the
+  same reason: `--orange` (#ED6011) is the brand, and it is only 3.34:1
+  against white, so anything putting white text on it uses `--orange-cta`
+  (#C2410C, 5.18:1) instead.
+- **The logo is navy-on-light, and the header is navy.** The mark is inlined
+  rather than an `<img>` so the navy half can be reversed to white on the
+  header (`.mark-body`) while the swoosh keeps its orange (`.mark-accent`).
+  It is 662 × 774, not square — sizing it as a square squashes it.
 
 ## Hard-won rules — do not undo these
 
