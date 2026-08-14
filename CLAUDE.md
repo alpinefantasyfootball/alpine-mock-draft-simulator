@@ -176,21 +176,24 @@ than they are. `reconcile()` folds the coarse keys in. Check any new stat
 across all three feeds before trusting it.
 
 **Bump `?v=` in `index.html` on every deploy that changes a file it loads.**
-`index.html` comes back with a ten minute cache and everything it asks for
-comes back with four hours, so without a version in the address a returning
-visitor runs today's HTML against Tuesday's JavaScript for the rest of the
-afternoon. That does not fail as a blank page. It fails as a page that half
-works: the shared room shipped with `renderChat` in the new `app.js` and the
-chat panel hidden in the markup, so anyone who had visited before got a room
-with no chat window at all and nothing in the console to say why. One number,
-changed in `index.html` and `docs/draft-room-how-it-works.html`, in every
-`?v=` on the page. A query string rather than renamed files, because renaming
-needs a manifest and a manifest is a build step.
+Everything the page asks for is cached, so without a version in the address a
+returning visitor runs today's HTML against Tuesday's JavaScript. That does
+not fail as a blank page. It fails as a page that half works: the shared room
+shipped with `renderChat` in the new `app.js` and the chat panel hidden in
+the markup, so anyone who had visited before got a room with no chat window
+at all and nothing in the console to say why. One number, changed in
+`index.html` and `docs/draft-room-how-it-works.html`, in every `?v=` on the
+page. A query string rather than renamed files, because renaming needs a
+manifest and a manifest is a build step. The daily workflow bumps it too,
+when it commits new player data — a nightly rebuild behind a cache is a
+rebuild nobody sees.
 
-The four hours is Cloudflare's browser cache TTL, not GitHub Pages, which
-sends ten minutes. Setting it to "Respect Existing Headers" in the Cloudflare
-dashboard would shorten the window, but the `?v=` is what actually closes it
-and it works whoever is serving the file.
+That window used to be four hours. It was Cloudflare's Browser Cache TTL
+overriding GitHub Pages, which sends ten minutes; the zone is now set to
+**Respect Existing Headers**, so `Cache-Control: max-age=600` reaches the
+browser unchanged. If a stale asset ever reappears, check that setting first
+— but the `?v=` is what actually closes the hole, and it works whoever is
+serving the file.
 
 **`og:image` must be an absolute URL, and it is baked to `jukeff.com`.**
 Link previews are fetched by Slack, iMessage and Twitter from their own

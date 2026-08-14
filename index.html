@@ -45,13 +45,15 @@
   <!-- ?v= on every local file below, and it has to be bumped on any deploy
        that changes one of them.
 
-       This page comes back with a ten minute cache; the files it asks for
-       come back with four hours. So without a version in the address, a
-       returning visitor spends up to four hours running today's HTML against
-       Tuesday's JavaScript — which is not a blank page but something worse:
-       a page that half works. It is how the room lost its chat window
-       entirely, because the markup hides the panel and only the newer app.js
-       knows to show it.
+       Without a version in the address a returning visitor runs today's HTML
+       against last week's JavaScript — which is not a blank page but
+       something worse: a page that half works. It is how the room lost its
+       chat window entirely, because the markup hides the panel and only the
+       newer app.js knows to show it.
+
+       The window was four hours until the Cloudflare zone was set to respect
+       our own headers; it is ten minutes now, which is better and is still
+       not zero. This is what makes it zero.
 
        A query string rather than a renamed file, because renaming means a
        manifest and a manifest means a build step. This costs one number. -->
