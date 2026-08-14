@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Juke &middot; The Draft Room</title>
+  <title>Juke</title>
 
   <!-- The theme is set before anything paints, rather than in app.js at the
        foot of the body, because by then the page has already been drawn: a
@@ -168,7 +168,13 @@
       <!-- Scores are fetched after the page renders and stay hidden unless
            there are games, so the offseason shows nothing at all rather than
            an empty frame. -->
-      <div class="scores" id="scoreStrip" hidden></div>
+      <div class="scores-wrap" id="scoreWrap" hidden>
+        <button class="scores-arrow left" id="scoreLeft" type="button"
+                aria-label="Scroll scores left">&#8249;</button>
+        <div class="scores" id="scoreStrip"></div>
+        <button class="scores-arrow right" id="scoreRight" type="button"
+                aria-label="Scroll scores right">&#8250;</button>
+      </div>
 
       <div class="hero">
         <h1>Draft with the numbers already done.</h1>

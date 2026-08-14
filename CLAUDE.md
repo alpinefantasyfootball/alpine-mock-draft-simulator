@@ -151,6 +151,21 @@ strip is the exception, so team names and status text run through
 Unmatched players and unscored stat keys both get written to `unmatched.txt`
 rather than dropped.
 
+**CSS cannot reach inside `<use>`.** The mark is one `<symbol>` cloned into
+each header, and `<use>` builds a shadow tree that descendant selectors do
+not match — `.appbar .mark-body` silently matches nothing. Custom properties
+*do* inherit into it, so per-header overrides set a variable on the `<svg>`
+(`.appbar .mark { --mark-ink: #fff }`), never a `fill` on the path.
+
+**The logo is navy-on-light, so it needs `--mark-ink`, not a fixed fill.**
+Hardcoding white made it invisible on every light surface, with only the
+orange swoosh showing. The token is brand navy in light, white in dark, and
+forced white on the navy draft bar.
+
+**`scrollBy({behavior})` beats the stylesheet.** A `prefers-reduced-motion`
+rule on the container does not apply to a programmatic scroll that asks for
+`smooth`, so the score arrows check the media query themselves.
+
 **Inline SVG needs explicit `width` and `height` attributes**, not just CSS.
 A cached stylesheet once let the logo expand to fill the entire screen.
 

@@ -34,6 +34,9 @@
      enough to carry dark text but not white — see the note on --orange-cta,
      which is the same hue pushed dark enough to sit under white. */
   --orange:      #ED6011;
+  /* The navy half of the logo, on a normal surface. White here because the
+     default theme is dark; the light theme puts the real brand navy back. */
+  --mark-ink:    #FFFFFF;
   --orange-cta:  #C2410C;
 
   /* The header changes colour with the state of the draft, not with the
@@ -130,6 +133,8 @@
   --fill-hi:     #E6EBF1;
   --track:       #EDF1F5;
   --board-hd:    #E9EDF1;
+
+  --mark-ink:    #152A49;
 
   --danger:      #C0392F;
   --good:        #1B7343;
@@ -230,8 +235,17 @@ body {
 /* The logo is drawn navy-on-light. The header is navy, so the navy half of
    it would simply disappear; reversed to white is the second colourway, not
    a bodge. The swoosh keeps its own orange, which reads on either ground. */
-.mark-body   { fill: #fff; }
+/* The logo is drawn navy-on-light. On a light surface it needs its navy
+   back or it is white-on-white and only the swoosh survives; on the draft
+   header, which is navy under both themes, it stays reversed. */
+.mark-body   { fill: var(--mark-ink); }
 .mark-accent { fill: var(--orange); }
+
+/* The mark is drawn once in a <symbol> and cloned by <use>, and CSS cannot
+   select into the shadow tree that creates — ".appbar .mark-body" would match
+   nothing. Custom properties do inherit into it, so the override is set on the
+   <svg> instead of on the path. */
+.appbar .mark { --mark-ink: #fff; }
 
 .appbar-text { position: relative; z-index: 1; min-width: 0; }
 
@@ -1127,12 +1141,52 @@ a.room:hover { border-color: var(--blue-line); }
    the only part of the site that depends on a third party being up, so it
    fails by disappearing rather than by showing an error. */
 
+.scores-wrap { position: relative; border-bottom: 1px solid var(--line); margin-bottom: 2px; }
+
+/* No scrollbar. A native horizontal bar under a score row is the loudest
+   thing on the page and it is pure chrome, so the affordance moves to a fade
+   at each end plus arrows for anyone on a mouse. Touch still swipes. */
 .scores {
   display: flex; gap: 8px; overflow-x: auto;
-  padding: 12px 0 14px; margin-bottom: 2px;
-  border-bottom: 1px solid var(--line);
+  padding: 12px 0 14px;
+  scroll-behavior: smooth;
+  scrollbar-width: none; -ms-overflow-style: none;
   -webkit-overflow-scrolling: touch;
 }
+
+.scores::-webkit-scrollbar { display: none; }
+
+@media (prefers-reduced-motion: reduce) { .scores { scroll-behavior: auto; } }
+
+/* The fades only appear on the side that has more to show, so at either end
+   the row reads as finished rather than clipped. */
+.scores-wrap::before, .scores-wrap::after {
+  content: ""; position: absolute; top: 0; bottom: 1px; width: 44px; z-index: 1;
+  pointer-events: none; opacity: 0; transition: opacity .18s ease;
+}
+.scores-wrap::before { left: 0;  background: linear-gradient(to right, var(--page), transparent); }
+.scores-wrap::after  { right: 0; background: linear-gradient(to left,  var(--page), transparent); }
+.scores-wrap.more-left::before  { opacity: 1; }
+.scores-wrap.more-right::after { opacity: 1; }
+
+.scores-arrow {
+  position: absolute; top: calc(50% - 1px); transform: translateY(-50%); z-index: 2;
+  display: flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border-radius: 50%;
+  border: 1px solid var(--line); background: var(--card); color: var(--ink-mid);
+  font-size: 16px; line-height: 1; cursor: pointer;
+  opacity: 0; pointer-events: none; transition: opacity .18s ease;
+}
+
+.scores-arrow.left  { left: -4px; }
+.scores-arrow.right { right: -4px; }
+.scores-arrow:hover { background: var(--fill-hi); color: var(--ink); }
+.scores-wrap.more-left  .scores-arrow.left  { opacity: 1; pointer-events: auto; }
+.scores-wrap.more-right .scores-arrow.right { opacity: 1; pointer-events: auto; }
+
+/* A finger scrolls the row directly and never hovers, so the arrows are for
+   pointers only. */
+@media (hover: none) { .scores-arrow { display: none; } }
 
 .game {
   flex: none; min-width: 132px;
