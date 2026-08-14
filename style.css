@@ -504,6 +504,20 @@ select {
 .rule { display: flex; align-items: center; gap: 8px; justify-content: space-between; }
 .rule span { font-size: 12.5px; color: var(--ink-mid); }
 
+/* A yardage rule takes the divisor a league says out loud and shows the
+   multiplier the engine uses underneath it, so neither number is a mystery.
+   It spans both grid columns because it carries three controls, not one. */
+.rule.per-yard { grid-column: 1 / -1; align-items: flex-start; }
+
+.divisor { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.divisor i { font-style: normal; font-size: 11.5px; color: var(--ink-light); }
+.divisor input { width: 62px; }
+.divisor b {
+  flex-basis: 100%; font-weight: 500;
+  font-size: 10.5px; color: var(--ink-light);
+  font-variant-numeric: tabular-nums;
+}
+
 /* A rule Sleeper does not forecast. It is information, not a warning: the
    rule works, it just cannot move a projection that never carried the stat.
    So it takes the muted ink rather than a colour that reads as an error. */
@@ -648,6 +662,12 @@ tr.conflict .nm { color: var(--t-bad-fg); }
 .chip.thin   { background: var(--t-warn-bg);    color: var(--t-warn-fg); }
 .chip.last   { background: var(--t-bad-bg);     color: var(--t-bad-fg); }
 .chip.bye    { background: var(--t-bye-bg);     color: var(--t-bye-fg); }
+
+/* Where this app's model and the market disagree. Green is not "good player",
+   it is "cheaper than he projects"; orange is the reverse. Both are already
+   tint pairs that carry legible text under either theme. */
+.chip.val    { background: var(--t-good-bg);    color: var(--t-good-fg); }
+.chip.reach  { background: var(--t-orange-bg);  color: var(--t-orange-fg); }
 
 /* ---------- suggestion cards ---------- */
 

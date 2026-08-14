@@ -20,6 +20,7 @@ const league = {
   rounds: 14,
   starters: { QB: 1, RB: 2, WR: 2, TE: 1, K: 1, DST: 1 },
   flex: 1,           // one FLEX, drawn from RB / WR / TE
+  superflex: 0,      // a FLEX a quarterback may also fill; 1 makes it 2QB
   bench: 5,
   scoring: "half",   // "standard" | "half" | "ppr" — also picks the ADP set
   rules: null        // the scoring table; filled in below, editable on setup
@@ -29,18 +30,43 @@ const POSITIONS = ["QB", "RB", "WR", "TE", "K", "DST"];
 
 // The order starting slots are listed and filled, with FLEX after the
 // positions it draws from so the better player lands in the named slot.
-const SLOT_ORDER = ["QB", "RB", "WR", "TE", "FLEX", "DST", "K"];
+const SLOT_ORDER = ["QB", "RB", "WR", "TE", "FLEX", "SFLEX", "DST", "K"];
+
+// Which positions can fill a slot. FLEX is the classic RB/WR/TE; SFLEX adds
+// the quarterback, and that one extra entry is the whole of what a superflex
+// league is. Written down once because the starting lineup, the draft grade
+// and the CPU all ask the question, and three answers that could drift apart
+// is exactly the kind of quiet bug this file is organised to avoid.
+const SLOT_ELIGIBLE = {
+  FLEX:  ["RB", "WR", "TE"],
+  SFLEX: ["QB", "RB", "WR", "TE"]
+};
+
+function fillsSlot(player, slot) {
+  const eligible = SLOT_ELIGIBLE[slot];
+  return eligible ? eligible.indexOf(player.pos) >= 0 : player.pos === slot;
+}
+
+// How many of a slot the league starts. Flex kinds live beside the named
+// positions rather than inside league.starters, because they are not
+// positions and counting them as one breaks every per-position sum.
+function slotCount(slot) {
+  if (slot === "FLEX")  return league.flex;
+  if (slot === "SFLEX") return league.superflex;
+  return league.starters[slot] || 0;
+}
 
 function totalPicks()   { return league.teams * league.rounds; }
 function starterCount() { return POSITIONS.reduce((n, pos) => n + league.starters[pos], 0); }
-function rosterSize()   { return starterCount() + league.flex + league.bench; }
+function flexCount()    { return league.flex + league.superflex; }
+function rosterSize()   { return starterCount() + flexCount() + league.bench; }
 
 // The starting lineup, expanded into one entry per slot:
 // QB, RB, RB, WR, WR, TE, FLEX, DST, K for the default settings.
 function lineupSlots() {
   const slots = [];
   SLOT_ORDER.forEach(function (slot) {
-    const n = slot === "FLEX" ? league.flex : (league.starters[slot] || 0);
+    const n = slotCount(slot);
     for (let i = 0; i < n; i++) slots.push(slot);
   });
   return slots;
@@ -60,7 +86,11 @@ const DEPTH_ALLOWANCE = { QB: 3, RB: 5, WR: 5, TE: 2, K: 2, DST: 2 };
 
 function maxAt(pos) {
   const flexShare = (pos === "RB" || pos === "WR") ? league.flex : 0;
-  return league.starters[pos] + flexShare + DEPTH_ALLOWANCE[pos];
+  // A superflex is a second startable quarterback, so it lifts the ceiling on
+  // how many a team will hold. Without this a CPU stops at one and a
+  // superflex league drafts like a normal one.
+  const superShare = pos === "QB" ? league.superflex : 0;
+  return league.starters[pos] + flexShare + superShare + DEPTH_ALLOWANCE[pos];
 }
 
 // Replacement level: the last player at a position who would realistically
@@ -70,10 +100,16 @@ function maxAt(pos) {
 // actually wins that slot, which is why RB and WR run so much deeper.
 const FLEX_SHARE = { RB: 0.40, WR: 0.55, TE: 0.05 };
 
+// A superflex is won by a quarterback almost every time — that is the point
+// of the format, and it is why quarterbacks go two rounds earlier in one.
+// The remainder is the handful of managers who take the better skill player.
+const SFLEX_SHARE = { QB: 0.85, RB: 0.05, WR: 0.09, TE: 0.01 };
+
 function replacementRank(pos) {
   const base = league.teams * (league.starters[pos] || 0);
   const flex = league.teams * league.flex * (FLEX_SHARE[pos] || 0);
-  return Math.round(base + flex) + 1;
+  const sflex = league.teams * league.superflex * (SFLEX_SHARE[pos] || 0);
+  return Math.round(base + flex + sflex) + 1;
 }
 
 // The same ranks written out in prose, for the method notes on the page.
@@ -594,7 +630,7 @@ function needMultiplier(slot, pos, round) {
 
   // One of each is enough, whatever "enough" is set to. A superflex league
   // that starts two quarterbacks gets two.
-  if (pos === "QB"  && have >= league.starters.QB)  return 999;
+  if (pos === "QB"  && have >= league.starters.QB + league.superflex) return 999;
   if (pos === "K"   && have >= league.starters.K)   return 999;
   if (pos === "DST" && have >= league.starters.DST) return 999;
 
@@ -1114,6 +1150,39 @@ function overallScore(player) {
   return Math.max(0, Math.min(100, (vor / (BEST_VOR || 1)) * 100));
 }
 
+/* The reasoning behind a score, said in one line. Built from figures already
+   sitting on the player after buildProjections() rather than by calling
+   draftSignals(), which would run the upside and bust models and allocate
+   three arrays of prose for every row on the board.
+
+   This is the thing the app has that a projection feed does not, and until
+   now it was only readable by opening a player — which meant opening a
+   player to find out whether he was worth opening. */
+function overallReason(player) {
+  if (player.projPts === null) {
+    return "No 2026 projection for this player yet, so there is nothing to score him on.";
+  }
+
+  const vor = Math.round(player.projPts - (REPLACEMENT_PTS[player.pos] || 0));
+  const parts = [Math.round(player.projPts) + " projected points, " +
+                 (vor >= 0 ? "+" : "") + vor + " against a replacement " + player.pos];
+
+  if (player.projPosRank) {
+    parts.push("projects " + player.pos + player.projPosRank +
+               ", drafted as " + player.pos + player.posRank);
+  }
+  return parts.join(". ") + ".";
+}
+
+// How far the projection disagrees with the market. Four places at a position
+// is the same threshold draftSignals() treats as meaningful, kept in one place
+// so the row and the sheet cannot tell different stories about a player.
+const MARKET_GAP = 4;
+
+function marketGap(player) {
+  return player.projPosRank ? player.posRank - player.projPosRank : 0;
+}
+
 function draftSignals(player) {
   const s = statOf(player);
   if (!s || player.projPts === null) return null;
@@ -1207,7 +1276,7 @@ function bestLineup(roster) {
   return slots.map(function (slot) {
     const eligible = roster.filter(function (p) {
       if (used.indexOf(p) >= 0) return false;
-      return slot === "FLEX" ? ["RB", "WR", "TE"].indexOf(p.pos) >= 0 : p.pos === slot;
+      return fillsSlot(p, slot);
     }).sort((a, b) => a.posRank - b.posRank);
 
     const pick = eligible[0] || null;
@@ -1239,7 +1308,7 @@ function analyseTeam(slot) {
   });
   // Thin at the two positions you start most of, once the FLEX is counted.
   ["RB", "WR"].forEach(function (pos) {
-    if (countAt(slot, pos) < league.starters[pos] + league.flex + 1) build -= 6;
+    if (countAt(slot, pos) < league.starters[pos] + flexCount() + 1) build -= 6;
   });
 
   // 4. bye week exposure, judged on the starting nine only
@@ -1507,17 +1576,28 @@ function renderPlayers() {
     const score = overallScore(p);
     const scoreCell = score === null ? "&mdash;" : Math.round(score);
 
+    // Where the model and the market disagree enough to be worth saying out
+    // loud. Only shown at the threshold, because a chip on every row is a
+    // chip on no row.
+    const gap = marketGap(p);
+    const gapChip = gap >= MARKET_GAP
+      ? `<span class="chip val">Value &middot; projects ${p.pos}${p.projPosRank}</span>`
+      : gap <= -MARKET_GAP
+        ? `<span class="chip reach">Reach &middot; projects ${p.pos}${p.projPosRank}</span>`
+        : "";
+
     return `
       <tr class="${p.drafted ? "drafted" : ""} ${adpConflict(p) ? "conflict" : ""}">
         <td>
           <span class="nm name-link" data-player="${p.name}">${p.name}</span>
           <span class="meta"><span class="badge ${p.pos}">${p.pos}</span> ${p.team} &middot; Bye ${p.bye}
-            ${injBadge(p)} <span class="chip tier">T${p.tier}</span></span>
+            ${injBadge(p)} <span class="chip tier">T${p.tier}</span>${gapChip}</span>
         </td>
         <td class="num">${p.pos}${p.posRank}</td>
         <td class="num">${p.adp.toFixed(1)}</td>
         <td class="num">${p.projPts === null ? "&mdash;" : Math.round(p.projPts)}</td>
-        <td class="num ovr ${score !== null && score >= 55 ? "good" : ""}">${scoreCell}</td>
+        <td class="num ovr ${score !== null && score >= 55 ? "good" : ""}"
+            title="${overallReason(p)}">${scoreCell}</td>
         <td><button class="draft-btn" data-draft="${p.name}"
              ${p.drafted || !isMyTurn() ? "disabled" : ""}>${p.drafted ? "Taken" : "Draft"}</button></td>
       </tr>`;
@@ -1565,7 +1645,7 @@ function renderTeam() {
   const rows = lineupSlots().map(function (slot) {
     const eligible = mine.filter(function (p) {
       if (used.indexOf(p) >= 0) return false;
-      return slot === "FLEX" ? ["RB", "WR", "TE"].indexOf(p.pos) >= 0 : p.pos === slot;
+      return fillsSlot(p, slot);
     });
     const pick = eligible[0] || null;
     if (pick) used.push(pick);
@@ -1735,7 +1815,7 @@ function renderGrades() {
 
     <p class="method">Starter strength is 50% of the grade: every starter scored by how many
     places above replacement level they rank at their position, where replacement is
-    ${replacementText()} for this ${league.teams}-team league${league.flex ? " with a FLEX" : ""}.
+    ${replacementText()} for this ${league.teams}-team league${flexCount() ? " with a FLEX" : ""}${league.superflex ? " and a superflex" : ""}.
     Draft value is 25%: how far each
     player fell past their ADP when you took them. Roster construction is 15%, docking unfilled
     starting slots, duplicate quarterbacks, kickers or defenses, and thin running back or receiver
@@ -2009,7 +2089,10 @@ const SAVE_KEY = "alpine-draft-room-v1";
 // drafts with the same fingerprint can be swapped; two without cannot,
 // because the snake maths, the round count and the ADP set all differ.
 function settingsFingerprint(cfg) {
-  return [cfg.teams, cfg.rounds, cfg.scoring, cfg.flex, cfg.bench]
+  // `|| 0` rather than the bare value: a draft saved before superflex existed
+  // has no such key, and it was a league with no superflex, so reading it as
+  // zero is both the correct shape and what keeps that save resumable.
+  return [cfg.teams, cfg.rounds, cfg.scoring, cfg.flex, cfg.superflex || 0, cfg.bench]
     .concat(POSITIONS.map((pos) => cfg.starters[pos]))
     .join("-");
 }
@@ -2048,7 +2131,12 @@ function readSave() {
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) return null;
     const data = JSON.parse(raw);
-    return data && data.v === 2 && data.picks && data.league ? data : null;
+    if (!(data && data.v === 2 && data.picks && data.league)) return null;
+    // A save written before superflex existed has no such key, and every
+    // sum that reads it would come out NaN. It was a league without one,
+    // so fill in what it actually was rather than refusing the save.
+    if (data.league.superflex === undefined) data.league.superflex = 0;
+    return data;
   } catch (err) {
     return null;
   }
@@ -2236,6 +2324,31 @@ function movesProjection(rule) {
   return PROJECTED_KEYS.indexOf(rule) >= 0;
 }
 
+/* Yardage rules are the ones nobody thinks about as a multiplier. A league
+   says "a point every 25 yards", not "0.04 a yard", and asking for 0.04 is
+   how you get 0.4 typed by mistake and a quarterback projected for three
+   thousand points. So these three take the divisor and show the multiplier
+   underneath, which is the number the scoring engine actually uses. */
+const PER_YARD_RULES = ["pass_yd", "rush_yd", "rec_yd"];
+
+// 25 yards a point reads back as 0.04 exactly; a third of a yard does not.
+// Four decimals is past the precision the raw data arrives in, so rounding
+// there cannot lose a rule anyone would write.
+function pointsFromDivisor(yards) {
+  const n = Number(yards);
+  if (!n || n <= 0 || !isFinite(n)) return 0;
+  return Math.round((1 / n) * 10000) / 10000;
+}
+
+// The divisor that produced a multiplier, for redrawing the control. Blank
+// rather than Infinity when the rule scores nothing, because "every 0 yards"
+// is not a thing a person can read.
+function divisorFromPoints(points) {
+  const n = Number(points);
+  if (!n || n <= 0 || !isFinite(n)) return "";
+  return Math.round((1 / n) * 100) / 100;
+}
+
 function renderScoringFields() {
   $("scoringFields").innerHTML = RULE_GROUPS.map(function (group) {
     const rows = group[1].map(function (rule) {
@@ -2245,9 +2358,26 @@ function renderScoringFields() {
       // says so on the rule itself rather than in a paragraph underneath
       // that nobody reads while they are editing a number.
       const history = !movesProjection(rule);
-      return `<label class="rule${history ? " history-only" : ""}"
-                 ${history ? 'title="Sleeper does not forecast this stat. The rule scores past seasons and weekly logs, but adds nothing to the 2026 projection the board is ranked on."' : ""}>
-          <span>${RULE_LABELS[rule] || rule}${history ? '<i class="past">past only</i>' : ""}</span>
+      const tip = history
+        ? ' title="Sleeper does not forecast this stat. The rule scores past seasons and weekly logs, but adds nothing to the 2026 projection the board is ranked on."'
+        : "";
+      const mark = history ? '<i class="past">past only</i>' : "";
+
+      if (PER_YARD_RULES.indexOf(rule) >= 0) {
+        return `<label class="rule per-yard${history ? " history-only" : ""}"${tip}>
+            <span>${RULE_LABELS[rule] || rule}${mark}</span>
+            <span class="divisor">
+              <i>1 pt every</i>
+              <input type="number" step="1" min="1" data-divisor="${rule}"
+                     value="${divisorFromPoints(league.rules[rule])}">
+              <i>yds</i>
+              <b>${league.rules[rule] || 0} per yard</b>
+            </span>
+          </label>`;
+      }
+
+      return `<label class="rule${history ? " history-only" : ""}"${tip}>
+          <span>${RULE_LABELS[rule] || rule}${mark}</span>
           <input type="number" step="0.01" data-rule="${rule}" value="${league.rules[rule]}">
         </label>`;
     }).join("");
@@ -2274,6 +2404,7 @@ function fillSetupControls() {
               (i) => label + " " + i);
   });
   fillRange($("startFLEX"), 0, 3, league.flex, (i) => "FLEX " + i);
+  fillRange($("startSFLEX"), 0, 2, league.superflex, (i) => "SFLEX " + i);
   fillRange($("benchCount"), 0, 12, league.bench, (i) => "BN " + i);
   fillSlotOptions();
 }
@@ -2296,7 +2427,8 @@ function readSetup() {
     lastFormat = league.scoring;
     renderScoringFields();
   }
-  league.flex    = Number($("startFLEX").value);
+  league.flex      = Number($("startFLEX").value);
+  league.superflex = Number($("startSFLEX").value);
   league.bench   = Number($("benchCount").value);
   POSITIONS.forEach(function (pos) {
     league.starters[pos] = Number($("start" + pos).value);
@@ -2310,7 +2442,7 @@ function readSetup() {
 function setupProblem() {
   const filled = rosterSize();
   if (filled !== league.rounds) {
-    return `${starterCount()} starters + ${league.flex} FLEX + ${league.bench} bench ` +
+    return `${starterCount()} starters + ${flexCount()} FLEX + ${league.bench} bench ` +
            `= ${filled} roster spots, but the draft runs ${league.rounds} rounds.`;
   }
   if (totalPicks() > poolSize()) {
@@ -2329,7 +2461,7 @@ function refreshSetup() {
   const problem = setupProblem();
   const note = $("rosterSum");
   note.textContent = problem ||
-    `${starterCount()} starters + ${league.flex} FLEX + ${league.bench} bench ` +
+    `${starterCount()} starters + ${flexCount()} FLEX + ${league.bench} bench ` +
     `= ${league.rounds} rounds, ${totalPicks()} picks.`;
   note.classList.toggle("bad", !!problem);
   $("startBtn").disabled = !!problem;
@@ -2348,10 +2480,22 @@ renderScoringFields();
 // Delegated, and on change rather than input, so the board is rebuilt when a
 // value is committed instead of on every keystroke.
 $("scoringFields").addEventListener("change", function (e) {
-  const rule = e.target.dataset && e.target.dataset.rule;
-  if (!rule) return;
+  const data = e.target.dataset;
+  if (!data) return;
+
+  // A yardage field carries the divisor a league actually says out loud;
+  // the engine wants the multiplier, so it is converted on the way in and
+  // the fields are redrawn so the "per yard" line under it stays true.
+  if (data.divisor) {
+    league.rules[data.divisor] = pointsFromDivisor(e.target.value);
+    renderScoringFields();
+    refreshSetup();
+    return;
+  }
+
+  if (!data.rule) return;
   const value = Number(e.target.value);
-  league.rules[rule] = isNaN(value) ? 0 : value;
+  league.rules[data.rule] = isNaN(value) ? 0 : value;
   refreshSetup();
 });
 
@@ -2361,7 +2505,7 @@ $("resetScoring").addEventListener("click", function () {
   refreshSetup();
 });
 
-["teamCount", "roundCount", "scoring", "startFLEX", "benchCount"]
+["teamCount", "roundCount", "scoring", "startFLEX", "startSFLEX", "benchCount"]
   .concat(POSITIONS.map((pos) => "start" + pos))
   .forEach(function (id) {
     $(id).addEventListener("change", refreshSetup);
