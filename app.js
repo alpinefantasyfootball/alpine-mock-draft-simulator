@@ -129,13 +129,29 @@ const REPLACEMENT_PTS = {};
 // buildProjections() rather than per player.
 let BEST_VOR = 0;
 
-// Fourteen, because a 14-team league needs a name for every seat.
+// One per seat, up to the largest league the setup screen offers. The list
+// used to stop at fourteen, which was exactly the old maximum — so raising
+// the cap without extending it here would have handed CPU_NAMES[s] an
+// undefined and thrown on .split() while drawing the board.
 const CPU_NAMES = [
   "Wild Goose Chase", "Bijan Mustard", "Nacua Matata", "The Gibbs Ultimatum",
   "Kupp of Joe", "Purdy Vacant", "Hurts So Good", "Saquon For The Team",
   "Lambo No. 5", "Bone-Thugs-N-Montgomery", "Alvin and the Chipmunks",
-  "Better Call Saquon", "A League of Their Mahomes", "Tua Fast Tua Furious"
+  "Better Call Saquon", "A League of Their Mahomes", "Tua Fast Tua Furious",
+  "Kelce Grammer", "Show Me Your TDs", "Breece Lightning", "Chubb Rock",
+  "Waddle I Do", "Jeanty's Inferno", "Bowers to the People", "Hall of a Guy",
+  "Jefferson Airplane", "London Calling", "McConkey Business",
+  "Achane Reaction", "Odunze the Road Again", "Higgins Boson",
+  "Pitts and Pieces", "Burrow Deep", "The Fresh Prince of Bel-Aiyuk",
+  "Nix on the Beach"
 ];
+
+// Never indexes past the end. The list is long enough for every league the
+// screen offers, but a seat without a name should read plainly rather than
+// take the board render down with it.
+function cpuName(slot) {
+  return CPU_NAMES[slot] || "Team " + (slot + 1);
+}
 
 
 /* ---- 2. Page elements ---------------------------------- */
@@ -585,7 +601,7 @@ function onTheClock()     { return draftOver() ? null : pickInfo(currentOverall(
 function isMyTurn()       { const c = onTheClock(); return c !== null && c.slot === state.mySlot; }
 
 function teamLabel(slot) {
-  return slot === state.mySlot ? "Your Team" : CPU_NAMES[slot];
+  return slot === state.mySlot ? "Your Team" : cpuName(slot);
 }
 
 function pickCode(overall) {
@@ -1616,7 +1632,7 @@ function renderBoard() {
   let html = `<div class="hd"></div>`;
 
   for (let s = 0; s < league.teams; s++) {
-    html += `<div class="hd ${s === state.mySlot ? "me" : ""}">${s === state.mySlot ? "YOU" : CPU_NAMES[s].split(" ")[0]}</div>`;
+    html += `<div class="hd ${s === state.mySlot ? "me" : ""}">${s === state.mySlot ? "YOU" : cpuName(s).split(" ")[0]}</div>`;
   }
 
   for (let r = 1; r <= league.rounds; r++) {
@@ -2238,15 +2254,29 @@ function showPanel(id) {
 const suffix = ["th", "st", "nd", "rd"];
 const slotSelect = $("draftSlot");
 
-// Fill a select with a range of numbers. The label carries the position, so
+// Fill a select from a list of values. The label carries the position, so
 // each control says what it is without needing a label of its own.
-function fillRange(select, from, to, chosen, labeller) {
-  let html = "";
-  for (let i = from; i <= to; i++) {
-    html += `<option value="${i}"${i === chosen ? " selected" : ""}>${labeller(i)}</option>`;
-  }
-  select.innerHTML = html;
+function fillList(select, values, chosen, labeller) {
+  select.innerHTML = values.map((v) =>
+    `<option value="${v}"${v === chosen ? " selected" : ""}>${labeller(v)}</option>`
+  ).join("");
 }
+
+// Every contiguous range in the setup screen goes through the list version,
+// so there is one place that knows how to build an option.
+function fillRange(select, from, to, chosen, labeller) {
+  const values = [];
+  for (let i = from; i <= to; i++) values.push(i);
+  fillList(select, values, chosen, labeller);
+}
+
+// Team counts are even, because a snake draft with an odd number of seats is
+// a shape no real league uses and every one of these adds a column to the
+// board. Sleeper offers the same set up to 24 and then jumps to 32; ours
+// stops at 24 for a reason the setup screen explains when you get there —
+// the ADP feed carries roughly 210 to 260 players, and 32 seats cannot fill
+// even eight rounds out of that.
+const TEAM_COUNTS = [4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24];
 
 function ordinal(i) {
   const s = (i % 100 > 10 && i % 100 < 14) ? "th" : (suffix[i % 10] || "th");
@@ -2397,6 +2427,7 @@ function scoringSummary() {
 }
 
 function fillSetupControls() {
+  fillList($("teamCount"), TEAM_COUNTS, league.teams, (i) => i + " teams");
   fillRange($("roundCount"), 8, 20, league.rounds, (i) => i + " rounds");
   POSITIONS.forEach(function (pos) {
     const label = pos === "DST" ? "D/ST" : pos;
