@@ -1264,3 +1264,76 @@ a.room:hover { border-color: var(--blue-line); }
   .rooms-extra .navlink { padding-left: 0; }
   .rooms-extra .theme-toggle { margin-left: auto; }
 }
+
+/* ---------- back to top ---------- */
+
+/* One control, two homes: over the viewport for a page that scrolls, and
+   inside the player sheet for the one container that scrolls on its own.
+   The button is created by back-to-top.js, so nothing here assumes markup.
+
+   Colours: --navy is dark under both themes and white sits on it, so this
+   needs no light-theme override. See the note at the top of this file. */
+.to-top {
+  position: fixed; z-index: 35;
+  right: calc(18px + env(safe-area-inset-right));
+  /* The iOS home indicator sits in the bottom inset. Without this the button
+     lands under it in the installed app, where there is no browser chrome
+     holding it clear. */
+  bottom: calc(18px + env(safe-area-inset-bottom));
+  width: 44px; height: 44px;      /* a full touch target, not a decoration */
+  display: flex; align-items: center; justify-content: center;
+  border: 0; border-radius: 50%;
+  background: var(--navy); color: #fff;
+  box-shadow: 0 6px 20px rgba(6,12,22,.38);
+  cursor: pointer;
+  /* Out of the way when it is not wanted: invisible, unclickable, and
+     untabbable — the tabIndex is handled in JavaScript alongside this. */
+  opacity: 0; pointer-events: none; transform: translateY(8px);
+  transition: opacity .18s ease, transform .18s ease, background .15s ease;
+}
+
+.to-top.on { opacity: 1; pointer-events: auto; transform: none; }
+.to-top:hover { background: var(--navy-lift); }
+
+/* Focus has to be visible on a round button floating over arbitrary content,
+   so it gets a ring with a gap rather than relying on the border. */
+.to-top:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
+
+/* The arrow is a rotated corner, the same shape the rooms chevron uses. */
+.to-top-arrow {
+  width: 9px; height: 9px; margin-top: 3px;
+  border-top: 2px solid currentColor; border-left: 2px solid currentColor;
+  transform: rotate(45deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* The fade stays — it is an opacity change, not motion — but the slide up
+     goes, and so does any easing that would make the button feel like it
+     travelled. The scroll itself is switched to "auto" in JavaScript, since
+     a rule here cannot reach a programmatic smooth scroll. */
+  .to-top { transform: none; transition: opacity .01s linear; }
+}
+
+/* With the sheet open the page behind it is not the thing being read, and a
+   button showing through the backdrop is just noise. The sibling combinator
+   works because back-to-top.js appends to <body>, after the sheet markup;
+   the sheet's own copy is a child of #sheet, so it is untouched. */
+#sheet:not([hidden]) ~ .to-top { opacity: 0; pointer-events: none; }
+
+/* Inside the player sheet the button belongs to the sheet, not the viewport:
+   .sheet is already position:fixed, so absolute anchors to it. It also has to
+   clear the sheet's own rounded corner, hence the tighter offsets. */
+.to-top.in-sheet {
+  position: absolute; z-index: 1;
+  right: 14px; bottom: calc(14px + env(safe-area-inset-bottom));
+  width: 40px; height: 40px;
+}
+
+/* Full-screen sheet on a phone: the sheet is the viewport, so the offsets
+   go back to matching the page-level button. */
+@media (max-width: 620px) {
+  .to-top.in-sheet {
+    right: calc(18px + env(safe-area-inset-right));
+    bottom: calc(18px + env(safe-area-inset-bottom));
+  }
+}
