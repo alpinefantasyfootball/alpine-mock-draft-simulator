@@ -79,7 +79,8 @@
         <div class="shell-side">
           <button class="navbtn" id="roomsBtn" type="button"
                   aria-expanded="false" aria-controls="roomsPanel">
-            Rooms <span class="chev" aria-hidden="true"></span>
+            <span class="burger" aria-hidden="true"><i></i><i></i><i></i></span>
+            <span class="rooms-label">Rooms <span class="chev" aria-hidden="true"></span></span>
           </button>
           <a class="navlink" href="docs/draft-room-how-it-works.html">How it works</a>
         </div>
@@ -93,8 +94,8 @@
         <div class="shell-side end">
           <!-- Hidden until the browser actually offers an install, so it is
                never a control that does nothing. -->
-          <button class="navbtn" id="installBtn" type="button" hidden>Install</button>
-          <button class="navlink" id="loginBtn" type="button">Log in</button>
+          <button class="navbtn js-install" id="installBtn" type="button" hidden>Install</button>
+          <button class="navlink js-login" id="loginBtn" type="button">Log in</button>
           <button class="cta" id="signupBtn" type="button">Sign up</button>
           <button class="theme-toggle" type="button" aria-pressed="true">
             <svg class="i-sun" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"
