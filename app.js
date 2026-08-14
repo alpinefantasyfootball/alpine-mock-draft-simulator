@@ -577,6 +577,11 @@ const state = {
   simTimer: null,     // handle for the CPU pick animation
   simulating: false,
   lastPick: null,     // the pick currently shown in the ticker
+  // Players you want, in the order you want them. Names rather than objects
+  // for the same reason picks are: the board is rebuilt from the generated
+  // data on every restart, so a held reference would go stale while a name
+  // can be re-resolved or honestly reported as gone.
+  queue: [],
   filterSuggest: "ALL",
   filterPlayers: "ALL",
   search: ""
@@ -761,9 +766,62 @@ function skipSim() {
   render();
 }
 
+/* ---- the queue ------------------------------------------
+
+   Suggestions are what the model thinks. The queue is what you
+   think, which is a different thing and worth somewhere to
+   put it: between your turns is when a drafter actually makes
+   a plan, and until now there was nowhere to record one.     */
+
+function queueIndex(name) { return state.queue.indexOf(name); }
+
+function queued(player) { return queueIndex(player.name) >= 0; }
+
+function queueToggle(name) {
+  const at = queueIndex(name);
+  if (at >= 0) state.queue.splice(at, 1);
+  else state.queue.push(name);
+}
+
+// Up is toward the front, which is the way the list reads.
+function queueMove(name, delta) {
+  const at = queueIndex(name);
+  const to = at + delta;
+  if (at < 0 || to < 0 || to >= state.queue.length) return;
+  state.queue.splice(to, 0, state.queue.splice(at, 1)[0]);
+}
+
+// Someone else taking your man is the normal case, not an error, so he
+// leaves quietly rather than sitting there as a row you cannot draft.
+function pruneQueue() {
+  state.queue = state.queue.filter(function (name) {
+    const player = board.find((p) => p.name === name);
+    return player && !player.drafted;
+  });
+}
+
+// The first player in your queue still on the board. This is what the clock
+// takes when it runs out, in preference to the computed suggestion — being
+// away from the screen should not throw away the plan you made before you
+// left it.
+function queueTop() {
+  for (let i = 0; i < state.queue.length; i++) {
+    const player = board.find((p) => p.name === state.queue[i]);
+    if (player && !player.drafted && !isRuledOut(player)) return player;
+  }
+  return null;
+}
+
+// What to take on my behalf when I am not the one choosing. Order matters:
+// my own list first, the model's opinion second.
+function autoPickForMe() {
+  return queueTop() || suggestions()[0] || null;
+}
+
 function draftAndAdvance(player) {
   makePick(player);
   state.lastPick = state.picks[state.picks.length - 1];
+  pruneQueue();
   render();
   runCPUs();
 }
@@ -777,6 +835,7 @@ function undo() {
     const last = state.picks.pop();
     last.player.drafted = false;
   } while (state.picks.length > 0 && !isMyTurn());
+  pruneQueue();
   resetClock();
   render();
 }
@@ -788,9 +847,15 @@ function autoDraftRest() {
   let guard = 0;
   while (!draftOver() && guard++ < totalPicks()) {
     const c = onTheClock();
-    const choice = cpuChoice(c.slot, c.round);
+    // My seats follow my queue before the model's opinion, exactly as the
+    // clock does. Auto-drafting the rest should not quietly throw away the
+    // plan I made. Every other seat is still the CPU's own choice.
+    const choice = c.slot === state.mySlot
+      ? autoPickForMe()
+      : cpuChoice(c.slot, c.round);
     if (!choice) break;
     makePick(choice);
+    pruneQueue();
   }
   render();
 }
@@ -847,12 +912,24 @@ function startTicking() {
     state.timeLeft--;
     if (state.timeLeft <= 0) {
       stopClock();
-      const auto = suggestions()[0];
+      const auto = autoPickForMe();
       if (auto) draftAndAdvance(auto);
     } else {
       renderHeader();
+      tickBoardClock();
     }
   }, 1000);
+}
+
+/* One cell, once a second. This is the same exception renderHeader() already
+   is: render() rebuilds everything on a change, and a clock tick is not a
+   change to the draft — it is the same board with a different number on it.
+   Rebuilding a 24-by-20 grid every second to move one digit would be a lot
+   of work to say the same thing. Silently does nothing when the board is not
+   the panel on screen, because getElementById simply will not find it. */
+function tickBoardClock() {
+  const cell = $("boardClock");
+  if (cell && clockRunnable()) cell.textContent = clockText();
 }
 
 // Put a fresh clock on the board. Called after every pick.
@@ -1562,6 +1639,48 @@ function renderPlayerFilter() {
   });
 }
 
+function renderQueue() {
+  const holder = $("queueList");
+  const tab = $("queueTab");
+
+  // The tab carries the count, so the plan is legible without opening it.
+  tab.textContent = state.queue.length ? "Queue (" + state.queue.length + ")" : "Queue";
+
+  if (!state.queue.length) {
+    holder.innerHTML = `<div class="empty">
+      <p class="empty-title">Nothing queued yet</p>
+      <p class="empty-sub">Star a player on the Players tab to line him up. The queue is
+        your own order, not the model's &mdash; and if the clock runs out while you are
+        away, the top of it is what gets drafted for you.</p></div>`;
+    return;
+  }
+
+  holder.innerHTML = state.queue.map(function (name, i) {
+    const p = board.find((x) => x.name === name);
+    if (!p) return "";
+    const score = overallScore(p);
+    return `
+      <div class="qrow${i === 0 ? " next" : ""}">
+        <span class="qn">${i + 1}</span>
+        ${avatar(p, true)}
+        <div class="qbody">
+          <div class="qname name-link" data-player="${p.name}">${p.name}</div>
+          <div class="qmeta">
+            <span class="badge ${p.pos}">${p.pos}</span> ${p.team} &middot; ADP ${p.adp.toFixed(1)}
+            &middot; Overall ${score === null ? "&mdash;" : Math.round(score)} ${injBadge(p)}
+          </div>
+        </div>
+        <div class="qmoves">
+          <button class="qmove" data-qup="${p.name}" ${i === 0 ? "disabled" : ""}
+                  aria-label="Move ${p.name} up">&uarr;</button>
+          <button class="qmove" data-qdown="${p.name}" ${i === state.queue.length - 1 ? "disabled" : ""}
+                  aria-label="Move ${p.name} down">&darr;</button>
+        </div>
+        <button class="draft-btn" data-draft="${p.name}" ${isMyTurn() ? "" : "disabled"}>Draft</button>
+      </div>`;
+  }).join("");
+}
+
 function renderPlayers() {
   const tbody = document.querySelector("#playerTable tbody");
   const hide  = $("hideDrafted").checked;
@@ -1614,8 +1733,14 @@ function renderPlayers() {
         <td class="num">${p.projPts === null ? "&mdash;" : Math.round(p.projPts)}</td>
         <td class="num ovr ${score !== null && score >= 55 ? "good" : ""}"
             title="${overallReason(p)}">${scoreCell}</td>
-        <td><button class="draft-btn" data-draft="${p.name}"
-             ${p.drafted || !isMyTurn() ? "disabled" : ""}>${p.drafted ? "Taken" : "Draft"}</button></td>
+        <td class="rowacts">
+          ${p.drafted ? "" : `<button class="star${queued(p) ? " on" : ""}" data-queue="${p.name}"
+            aria-pressed="${queued(p)}"
+            aria-label="${queued(p) ? "Remove " + p.name + " from your queue" : "Add " + p.name + " to your queue"}"
+            title="${queued(p) ? "In your queue" : "Add to your queue"}">&#9733;</button>`}
+          <button class="draft-btn" data-draft="${p.name}"
+             ${p.drafted || !isMyTurn() ? "disabled" : ""}>${p.drafted ? "Taken" : "Draft"}</button>
+        </td>
       </tr>`;
   }).join("");
 }
@@ -1646,7 +1771,11 @@ function renderBoard() {
       } else {
         const c = onTheClock();
         const isNow = c && c.round === r && c.slot === s;
-        html += `<div class="cell empty ${isNow ? "now" : ""}">${r}.${String(s + 1).padStart(2, "0")}</div>`;
+        // The cell on the clock is the clock. Looking away from where the
+        // pick lands to find out how long is left is the thing this removes.
+        html += `<div class="cell empty ${isNow ? "now" : ""}"${isNow ? ' id="boardClock"' : ""}>${
+          isNow && clockRunnable() ? clockText() : r + "." + String(s + 1).padStart(2, "0")
+        }</div>`;
       }
     }
   }
@@ -1726,11 +1855,47 @@ function renderPicks() {
   holder.innerHTML = html;
 }
 
+/* A run is the thing that changes a draft plan, and it is entirely readable
+   from picks already stored: if the last seven picks were five backs, the
+   backs are going, and waiting a round costs you one.
+
+   Seven is a window wide enough to be a trend and short enough to still be
+   happening. Five of it is a clear majority without needing a near-sweep,
+   which at these sizes almost never occurs. Under a third of the window
+   there is nothing to say, so it says nothing. */
+const RUN_WINDOW = 7;
+const RUN_THRESHOLD = 5;
+
+const RUN_NOUNS = {
+  QB: "quarterbacks", RB: "backs", WR: "receivers",
+  TE: "tight ends", K: "kickers", DST: "defenses"
+};
+
+function currentRun() {
+  if (state.picks.length < RUN_WINDOW) return null;
+
+  const recent = state.picks.slice(-RUN_WINDOW);
+  const counts = {};
+  recent.forEach(function (p) {
+    counts[p.player.pos] = (counts[p.player.pos] || 0) + 1;
+  });
+
+  const top = Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0];
+  if (!top || counts[top] < RUN_THRESHOLD) return null;
+  return { pos: top, count: counts[top] };
+}
+
 function renderTicker() {
   const ticker = $("ticker");
   const pick = state.lastPick;
 
   if (!pick) { ticker.hidden = true; return; }
+
+  const run = currentRun();
+  const runNote = run
+    ? `<span class="run"><b>${run.count} of the last ${RUN_WINDOW}</b> were ` +
+      `${RUN_NOUNS[run.pos] || run.pos}</span>`
+    : "";
 
   ticker.hidden = false;
   ticker.innerHTML = `
@@ -1745,6 +1910,7 @@ function renderTicker() {
         ${injBadge(pick.player)}
       </div>
     </div>
+    ${runNote}
     ${state.simulating ? '<button class="mini" id="skipBtn">Skip &raquo;</button>' : ""}`;
 }
 
@@ -2084,6 +2250,7 @@ function render() {
   renderGrades();
   if (state.started) renderActionBar();
   renderSuggestions();
+  renderQueue();
   renderPlayers();
   renderBoard();
   renderTeam();
@@ -2132,6 +2299,7 @@ function saveDraft() {
       league: JSON.parse(JSON.stringify(league)),
       fingerprint: settingsFingerprint(league),
       picks: state.picks.map((p) => p.player.name),
+      queue: state.queue.slice(),
       savedAt: Date.now()
     }));
   } catch (err) {
@@ -2195,6 +2363,12 @@ function resumeDraft(data) {
   board.forEach((p) => { p.drafted = false; });
   state.picks = [];
   resolved.forEach(function (player) { makePick(player); });
+
+  // Saves written before the queue existed have no such key, and a plan is
+  // worth restoring rather than refusing a draft over. pruneQueue() drops
+  // anyone taken while the tab was closed, or dropped from the feed since.
+  state.queue = Array.isArray(data.queue) ? data.queue.slice() : [];
+  pruneQueue();
 
   tabsNav.hidden = false;
   actionbar.hidden = false;
@@ -2694,6 +2868,17 @@ document.addEventListener("click", function (event) {
     goHome();
     return;
   }
+
+  // Queue controls, delegated because the rows they sit in are rebuilt on
+  // every render and a directly attached listener would not survive it.
+  const q = event.target.closest ? event.target.closest("[data-queue]") : null;
+  if (q) { queueToggle(q.dataset.queue); render(); return; }
+
+  const up = event.target.closest ? event.target.closest("[data-qup]") : null;
+  if (up) { queueMove(up.dataset.qup, -1); render(); return; }
+
+  const down = event.target.closest ? event.target.closest("[data-qdown]") : null;
+  if (down) { queueMove(down.dataset.qdown, 1); render(); return; }
 
   const link = event.target.closest ? event.target.closest("[data-player]") : null;
   if (link) {

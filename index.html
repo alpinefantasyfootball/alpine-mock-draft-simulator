@@ -162,6 +162,7 @@
     <nav class="tabs" id="tabs" hidden>
       <button class="on" data-tab="tab-suggest">Suggestions</button>
       <button data-tab="tab-players">Players</button>
+      <button data-tab="tab-queue" id="queueTab">Queue</button>
       <button data-tab="tab-board">Draft Board</button>
       <button data-tab="tab-team">My Team</button>
       <button data-tab="tab-picks">Picks</button>
@@ -320,6 +321,14 @@
         <p class="freshness" id="freshness"></p>
         <p class="freshness"><a href="docs/draft-room-how-it-works.html">How the Draft Room works</a></p>
       </div>
+    </section>
+
+    <!-- ---------- QUEUE ----------
+         Your own opinion, ranked, as distinct from the model's. It sits in
+         its own panel for now; Phase 4 moves it onto the rail beside the
+         board, where it can be read without leaving the player list. -->
+    <section class="panel" id="tab-queue">
+      <div id="queueList"></div>
     </section>
 
     <!-- ---------- SUGGESTIONS ---------- -->
