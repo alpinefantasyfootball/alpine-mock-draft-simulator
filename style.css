@@ -1630,3 +1630,56 @@ a.room:hover { border-color: var(--blue-line); }
 .seat.human b { color: var(--t-info-fg); }
 .seat.you { background: var(--t-good-bg); color: var(--t-good-fg); }
 .seat.you b { color: var(--t-good-fg); }
+
+/* ---------- room chat ----------
+
+   The only text on this page written by somebody other than us. It is
+   escaped in renderChat() before it ever reaches innerHTML — see the note
+   there — and everything below is only about making it readable. */
+
+.chatcard { min-height: 0; }
+
+.chatlog {
+  max-height: 220px; overflow-y: auto; overscroll-behavior: contain;
+  display: flex; flex-direction: column; gap: 5px;
+  margin-bottom: 8px;
+}
+
+.chatline {
+  margin: 0; font-size: 12px; line-height: 1.45; color: var(--ink-mid);
+  /* A long unbroken string typed by someone else must not widen the rail. */
+  overflow-wrap: anywhere;
+}
+.chatline b { color: var(--ink); font-weight: 650; margin-right: 5px; }
+
+/* Your own lines, so a fast conversation is readable without reading names. */
+.chatline.mine b { color: var(--link); }
+
+/* The room talking about itself: arrivals, the start. Quieter than a person,
+   because it is furniture rather than conversation. */
+.chatline.system {
+  font-size: 11px; color: var(--ink-light); font-style: italic;
+}
+
+.chatempty { margin: 0; font-size: 11.5px; color: var(--ink-light); font-style: italic; }
+
+.reactions { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 7px; }
+
+.reactions button {
+  font-family: Inter, sans-serif; font-size: 12px; line-height: 1;
+  color: var(--ink-mid); background: var(--fill);
+  border: 1px solid var(--line); border-radius: 6px;
+  padding: 5px 8px; cursor: pointer;
+}
+.reactions button:hover { background: var(--fill-hi); color: var(--ink); }
+
+.chatform { display: flex; gap: 5px; }
+
+.chatform input {
+  flex: 1; min-width: 0;
+  font-family: Inter, sans-serif; font-size: 12.5px;
+  color: var(--ink); background: var(--sunken);
+  border: 1px solid var(--line); border-radius: 7px; padding: 7px 9px;
+}
+.chatform input:focus { outline: 2px solid var(--blue); outline-offset: 1px; border-color: var(--blue); }
+.chatform button { flex: none; font-size: 12px; padding: 7px 11px; }

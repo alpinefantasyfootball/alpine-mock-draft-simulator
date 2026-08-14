@@ -49,6 +49,25 @@ function connect(member, name, extra) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/* Wait for a thing to become true rather than for a number of milliseconds.
+
+   The first version slept 400ms after each send, which is generous against
+   localhost and not always enough against a worker at the other end of a real
+   network — the suite failed once on production and passed on a retry, which
+   is the worst kind of test. Polling a condition makes it as fast as the
+   connection allows and as patient as it needs to be. */
+async function until(label, test, ms = 8000) {
+  const started = Date.now();
+  while (Date.now() - started < ms) {
+    let got;
+    try { got = test(); } catch (err) { got = undefined; }
+    if (got !== undefined && got !== false && got !== null) return got;
+    await sleep(60);
+  }
+  fails.push(label + " timed out after " + ms + "ms");
+  return undefined;
+}
+
 function lastState(ws) {
   for (let i = ws.inbox.length - 1; i >= 0; i--) {
     if (ws.inbox[i].type === "state") return ws.inbox[i].room;
@@ -122,10 +141,32 @@ check("a duplicate submit adds exactly one pick", s.picks.length - before, 1);
 check("second submit was rejected", lastOfType(bob, "rejected")?.code !== undefined, true);
 check("no duplicate keys anywhere", new Set(s.picks.map((p) => p.key)).size, s.picks.length);
 
-// chat relays to the other socket
+// chat lives in the room, not a relay, so it arrives in the state and a
+// late joiner gets the history rather than silence
 alice.send(JSON.stringify({ type: "chat", text: "hello room" }));
+const chat = await until("chat arrives at bob", () => {
+  const c = (lastState(bob) || {}).chat || [];
+  return c.length && c[c.length - 1].text === "hello room" ? c : false;
+}) || [];
+check("chat reached bob", chat[chat.length - 1]?.text, "hello room");
+check("chat carries a seat, never a member id",
+      JSON.stringify(chat).includes("alice") === false, true);
+
+// markup typed by a manager stays a string all the way through
+alice.send(JSON.stringify({ type: "chat", text: "<img src=x onerror=alert(1)>" }));
+const withMarkup = await until("markup message arrives", () => {
+  const c = (lastState(bob) || {}).chat || [];
+  const last = c[c.length - 1];
+  return last && last.text.startsWith("<img") ? last : false;
+}) || {};
+check("markup is stored verbatim, escaping is the client's job",
+      withMarkup.text, "<img src=x onerror=alert(1)>");
+
+// an empty message is refused rather than filling the log with blanks
+const beforeBlank = lastState(bob).chat.length;
+alice.send(JSON.stringify({ type: "chat", text: "   " }));
 await sleep(300);
-check("chat reached bob", lastOfType(bob, "chat")?.text, "hello room");
+check("blank message ignored", lastState(bob).chat.length, beforeBlank);
 
 // storage survives a reconnect: alice drops and comes back
 alice.close();
@@ -136,6 +177,12 @@ s = lastState(alice2);
 check("room survived a reconnect", s?.picks.length >= 2, true);
 check("alice keeps her seat mid-draft", s?.yourSeat, 0);
 check("still drafting", s?.status, "drafting");
+
+// somebody arriving late reads what the room already said
+const lateChat = lastState(alice2).chat || [];
+check("a late joiner gets the history", lateChat.length > 0, true);
+check("history includes the arrival lines",
+      lateChat.some((m) => m.system === true), true);
 
 // a client on a different data build is turned away
 const stale = await connect("carol", "Carol", { data: "v2-different" });

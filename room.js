@@ -42,6 +42,7 @@
     SEAT_TAKEN:    "seat-taken",
     NOT_YOUR_SEAT: "not-your-seat",
     ALREADY_SEATED:"already-seated",
+    EMPTY_MESSAGE: "empty-message",
     NOT_STARTED:   "not-started"
   };
 
@@ -78,6 +79,7 @@
       clockLength: opts.clockLength === undefined ? 60 : opts.clockLength,
       pickStartedAt: null,
       paused: false,
+      chat: [],
       members: {}          // member id -> { name, seat|null, seen }
     };
   }
@@ -318,6 +320,49 @@
     return ok(next);
   }
 
+  /* ---- talking --------------------------------------------
+
+     Chat lives in the room rather than being relayed straight through, so
+     somebody who joins in round four can read what the room has been saying
+     rather than arriving into silence. It costs a broadcast either way.
+
+     Fifty messages, because the whole room is written to storage on every
+     action and an unbounded log would grow until that write is the slowest
+     thing in the draft. Older lines fall off; nobody scrolls back through a
+     mock draft. */
+  const CHAT_KEEP = 50;
+  const CHAT_MAX = 500;
+
+  function say(state, opts) {
+    const text = String(opts.text == null ? "" : opts.text).trim().slice(0, CHAT_MAX);
+    if (!text) return fail(state, ERR.EMPTY_MESSAGE);
+
+    const next = clone(state);
+    const seat = seatOf(next, opts.member);
+
+    next.chat.push({
+      // The seat, not the member id: a client is never told anyone else's
+      // id and a chat line is no reason to start.
+      seat: seat,
+      name: (next.members[opts.member] || {}).name || null,
+      text: text,
+      at: opts.now
+    });
+
+    if (next.chat.length > CHAT_KEEP) next.chat = next.chat.slice(-CHAT_KEEP);
+    return ok(next);
+  }
+
+  /* Said by the room itself: who arrived, who left, when it started. The
+     same shape as a person's line with no seat, so one renderer draws both
+     and the transcript reads in order. */
+  function announce(state, text, now) {
+    const next = clone(state);
+    next.chat.push({ seat: -1, name: null, text: text, at: now, system: true });
+    if (next.chat.length > CHAT_KEEP) next.chat = next.chat.slice(-CHAT_KEEP);
+    return next;
+  }
+
   /* ---- what a client sees ---------------------------------
 
      Deliberately not the whole room. Members carry ids that are nobody
@@ -334,6 +379,7 @@
       clockLength: state.clockLength,
       paused: state.paused,
       msLeft: msLeft(state, now),
+      chat: state.chat || [],
       isHost: !!state.host && state.host === member,
       yourSeat: seatOf(state, member),
       seats: state.seats.map(function (chair, i) {
@@ -360,6 +406,8 @@
     autoPick: autoPick,
     hostPick: hostPick,
     pause: pause,
+    say: say,
+    announce: announce,
     onTheClock: onTheClock,
     seatOf: seatOf,
     freeSeat: freeSeat,

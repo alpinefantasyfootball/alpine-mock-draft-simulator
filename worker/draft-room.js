@@ -107,8 +107,17 @@ export class DraftRoom {
 
     this.sockets.set(socket, member);
 
+    const before = Room.seatOf(this.room, member);
     const joined = Room.join(this.room, { member, name }, Date.now());
     this.room = joined.state;
+
+    // Only for somebody actually new. A refresh reconnects and would
+    // otherwise announce the same person every time their train moved.
+    const seat = Room.seatOf(this.room, member);
+    if (before < 0 && seat >= 0) {
+      this.room = Room.announce(this.room,
+        (name || "A manager") + " took seat " + (seat + 1), Date.now());
+    }
     await this.save();
 
     socket.addEventListener("message", (event) => this.onMessage(socket, event));
@@ -138,6 +147,7 @@ export class DraftRoom {
         break;
       case "start":
         result = Room.start(this.room, { member }, now);
+        if (!result.error) result.state = Room.announce(result.state, "The draft has begun.", now);
         break;
       case "pick":
         result = Room.submitPick(this.room, { member, key: msg.key, now });
@@ -151,7 +161,8 @@ export class DraftRoom {
         result = Room.pause(this.room, !!msg.on);
         break;
       case "chat":
-        return this.onChat(member, msg);
+        result = Room.say(this.room, { member, text: msg.text, now });
+        break;
       default:
         return;
     }
@@ -168,20 +179,6 @@ export class DraftRoom {
     await this.save();
     this.broadcast();
     await this.scheduleAlarm();
-  }
-
-  onChat(member, msg) {
-    const text = String(msg.text || "").slice(0, 500);
-    if (!text.trim()) return;
-    const seat = Room.seatOf(this.room, member);
-    this.send({
-      type: "chat",
-      seat: seat,
-      name: (this.room.members[member] || {}).name || null,
-      text: text,
-      gif: msg.gif ? String(msg.gif).slice(0, 500) : null,
-      at: Date.now()
-    });
   }
 
   async onClose(socket) {

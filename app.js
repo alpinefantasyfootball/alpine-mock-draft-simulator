@@ -863,10 +863,52 @@ function adoptRoom(room) {
   state.timeLeft = room.msLeft === null ? 0 : Math.ceil(room.msLeft / 1000);
 }
 
+/* Chat is the only thing on this page written by somebody else.
+
+   Everything else — every player name, every team, every label — comes out of
+   our own pipeline and goes into innerHTML as it is. A message does not, and
+   the same rule the score strip follows applies here with far more force:
+   escape it. This is the one place where not doing so would hand another
+   manager a script tag in your draft.
+
+   Names too. A name is typed by a person and is no safer than the message. */
+function renderChat() {
+  const card = $("chatCard");
+  const room = typeof Live === "undefined" ? null : Live.room();
+
+  if (!room) { card.hidden = true; return; }
+  card.hidden = false;
+
+  const log = $("chatLog");
+  const lines = room.chat || [];
+
+  if (!lines.length) {
+    log.innerHTML = `<p class="chatempty">Nobody has said anything yet.</p>`;
+  } else {
+    log.innerHTML = lines.map(function (m) {
+      if (m.system) {
+        return `<p class="chatline system">${escHtml(m.text)}</p>`;
+      }
+      const who = m.name ? escHtml(m.name)
+                : m.seat >= 0 ? "Seat " + (m.seat + 1)
+                : "Someone";
+      const mine = m.seat >= 0 && m.seat === room.yourSeat;
+      return `<p class="chatline${mine ? " mine" : ""}">
+          <b>${who}</b>${escHtml(m.text)}</p>`;
+    }).join("");
+  }
+
+  // Pinned to the newest line. Checked first, so someone reading back through
+  // the log is not yanked to the bottom every time anyone speaks.
+  const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
+  if (atBottom) log.scrollTop = log.scrollHeight;
+}
+
 function onRoomChange() {
   const room = Live.room();
   adoptRoom(room);
   renderInvite();
+  renderChat();
   render();
   driveRoomCPUs();
 }
@@ -3034,7 +3076,28 @@ $("leaveRoomBtn").addEventListener("click", function () {
   Live.disconnect();
   location.hash = "#/draft";
   renderInvite();
+  renderChat();
   refreshSetup();
+});
+
+$("chatForm").addEventListener("submit", function (e) {
+  e.preventDefault();
+  const field = $("chatInput");
+  const text = field.value.trim();
+  if (!text || !inRoom()) return;
+  Live.chat(text);
+  field.value = "";
+  // Kept focused, because a draft chat is a conversation and reaching back
+  // for the box between every line is how people stop bothering.
+  field.focus();
+});
+
+// One-tap lines. A draft moves fast enough that typing "nice pick" is often
+// more effort than the thought deserves.
+$("chatReactions").addEventListener("click", function (e) {
+  const button = e.target.closest ? e.target.closest("[data-say]") : null;
+  if (!button || !inRoom()) return;
+  Live.chat(button.dataset.say);
 });
 
 $("randomizeBtn").addEventListener("click", function () {

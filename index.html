@@ -380,6 +380,26 @@
             <h3 class="railhead" id="railQueueHead">Your queue</h3>
             <div id="queueList"></div>
           </section>
+
+          <!-- Only present in a shared room. A solo draft has nobody to
+               talk to, and an empty chat box would just be furniture. -->
+          <section class="railcard chatcard" id="chatCard" hidden>
+            <h3 class="railhead">Room chat</h3>
+            <div class="chatlog" id="chatLog" aria-live="polite" aria-label="Room chat"></div>
+            <div class="reactions" id="chatReactions">
+              <button type="button" data-say="👍">👍</button>
+              <button type="button" data-say="😂">😂</button>
+              <button type="button" data-say="😱">😱</button>
+              <button type="button" data-say="🔥">🔥</button>
+              <button type="button" data-say="🤬">🤬</button>
+              <button type="button" data-say="Nice pick">Nice pick</button>
+            </div>
+            <form class="chatform" id="chatForm">
+              <input type="text" id="chatInput" maxlength="500" autocomplete="off"
+                     placeholder="Say something" aria-label="Message the room">
+              <button class="ghost" type="submit">Send</button>
+            </form>
+          </section>
         </aside>
       </div>
     </div>
