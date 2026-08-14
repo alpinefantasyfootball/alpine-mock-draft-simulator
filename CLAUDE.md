@@ -78,6 +78,12 @@ stored can never be rescored, and `build_players.py` fails loudly if a
   same reason: `--orange` (#ED6011) is the brand, and it is only 3.34:1
   against white, so anything putting white text on it uses `--orange-cta`
   (#C2410C, 5.18:1) instead.
+- **One header, two sets of content.** `.shellbar` and `.appbar` share a
+  surface, a border and a 1120px centred column, so the Draft Room and the
+  landing page read as the same site. Only `.my-turn` and `.urgent` take
+  colour, and they carry their own reversed mark and white text. A CPU being
+  on the clock is the resting state and must look like the homepage.
+
 - **Two views, one hash route.** `#/` is the landing page, `#/draft` is the
   Draft Room. Hash routing because GitHub Pages has no rewrite to send a real
   `/draft` path back to `index.html`, and because it keeps the back button

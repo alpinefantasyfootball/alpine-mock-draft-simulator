@@ -113,46 +113,49 @@
     </header>
 
     <header class="appbar" id="appbar" hidden>
+      <div class="appbar-inner">
 
-      <!-- The mark doubles as the way home, which is where every site puts it.
-           Traced from the logo artwork, so the curves are the real ones rather
-           than a redraw. The shield is 662 by 774, not square, so it cannot be
-           sized as a square without squashing it.
-           width and height are set here as well as in the CSS, because a cached
-           or missing stylesheet once let this shape fill the whole screen. -->
-      <button class="home" id="homeBtn" type="button" title="Back to draft setup"
-              aria-label="Back to draft setup">
-        <svg class="mark" width="31" height="36" viewBox="0 0 662 774"
-             aria-hidden="true" focusable="false"><use href="#jukeMark"/></svg>
-      </button>
+        <!-- The mark doubles as the way home, which is where every site puts it.
+             Traced from the logo artwork, so the curves are the real ones rather
+             than a redraw. The shield is 662 by 774, not square, so it cannot be
+             sized as a square without squashing it.
+             width and height are set here as well as in the CSS, because a cached
+             or missing stylesheet once let this shape fill the whole screen. -->
+        <button class="home" id="homeBtn" type="button" title="Back to draft setup"
+                aria-label="Back to draft setup">
+          <svg class="mark" width="31" height="36" viewBox="0 0 662 774"
+               aria-hidden="true" focusable="false"><use href="#jukeMark"/></svg>
+        </button>
 
-      <div class="appbar-text">
-        <h1 id="statusLine">The Draft Room</h1>
-        <p id="pickLabel" hidden></p>
-      </div>
-
-      <!-- The counter carries the pick clock and the wait until your turn, so
-           it is worth its place once a draft is running and worth nothing
-           before one. It stays hidden on the setup screen; the theme toggle
-           does not, because that is the one header control that is always
-           useful. -->
-      <div class="appbar-right">
-        <div class="count" id="countBlock" hidden>
-          <span class="count-label" id="rightLabel">Players</span>
-          <span class="count-value" id="rightValue"></span>
+        <div class="appbar-text">
+          <h1 id="statusLine">The Draft Room</h1>
+          <p id="pickLabel" hidden></p>
         </div>
 
-        <button class="theme-toggle" id="themeBtn" type="button" aria-pressed="true">
-          <svg class="i-sun" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"
-               fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-            <circle cx="12" cy="12" r="4.2"/>
-            <path d="M12 2.4v2.2M12 19.4v2.2M4.2 12H2M22 12h-2.2M6.5 6.5 4.9 4.9M19.1 19.1l-1.6-1.6M17.5 6.5l1.6-1.6M4.9 19.1l1.6-1.6"/>
-          </svg>
-          <svg class="i-moon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M20.5 14.9A8.7 8.7 0 0 1 9.1 3.5a8.7 8.7 0 1 0 11.4 11.4Z" fill="currentColor"/>
-          </svg>
-        </button>
+        <!-- The counter carries the pick clock and the wait until your turn, so
+             it is worth its place once a draft is running and worth nothing
+             before one. It stays hidden on the setup screen; the theme toggle
+             does not, because that is the one header control that is always
+             useful. -->
+        <div class="appbar-right">
+          <div class="count" id="countBlock" hidden>
+            <span class="count-label" id="rightLabel">Players</span>
+            <span class="count-value" id="rightValue"></span>
+          </div>
+
+          <button class="theme-toggle" id="themeBtn" type="button" aria-pressed="true">
+            <svg class="i-sun" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"
+                 fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <circle cx="12" cy="12" r="4.2"/>
+              <path d="M12 2.4v2.2M12 19.4v2.2M4.2 12H2M22 12h-2.2M6.5 6.5 4.9 4.9M19.1 19.1l-1.6-1.6M17.5 6.5l1.6-1.6M4.9 19.1l1.6-1.6"/>
+            </svg>
+            <svg class="i-moon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M20.5 14.9A8.7 8.7 0 0 1 9.1 3.5a8.7 8.7 0 1 0 11.4 11.4Z" fill="currentColor"/>
+            </svg>
+          </button>
+        </div>
       </div>
+
     </header>
 
     <nav class="tabs" id="tabs" hidden>
