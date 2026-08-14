@@ -504,6 +504,23 @@ select {
 .rule { display: flex; align-items: center; gap: 8px; justify-content: space-between; }
 .rule span { font-size: 12.5px; color: var(--ink-mid); }
 
+/* A rule Sleeper does not forecast. It is information, not a warning: the
+   rule works, it just cannot move a projection that never carried the stat.
+   So it takes the muted ink rather than a colour that reads as an error. */
+.rule .past {
+  display: inline-block; margin-left: 6px;
+  font-style: normal; font-size: 9.5px; font-weight: 700;
+  letter-spacing: .05em; text-transform: uppercase;
+  color: var(--ink-light);
+  background: var(--fill); border-radius: 3px; padding: 1px 5px;
+}
+
+.hint .past {
+  font-style: normal; font-weight: 700; font-size: 9.5px;
+  letter-spacing: .05em; text-transform: uppercase;
+  background: var(--fill); border-radius: 3px; padding: 1px 5px;
+}
+
 .rule input {
   flex: none; width: 66px; text-align: right;
   font-family: Inter, sans-serif; font-size: 13px; color: var(--ink);

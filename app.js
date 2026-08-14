@@ -938,8 +938,12 @@ function byeShare(player) {
 // This is the starting point, not the law — the setup screen edits a copy.
 const DEFAULT_RULES = {
   pass_yd: 0.04, pass_td: 6, pass_int: -2, pass_2pt: 2,
-  rush_yd: 0.1, rush_td: 6, rush_2pt: 2,
-  rec: 0.5, rec_yd: 0.1, rec_td: 6, rec_2pt: 2,
+  // Every rule added since the original 38 defaults to zero, so the board a
+  // returning drafter sees is identical until they choose otherwise. What
+  // they buy is the ability to describe their league, not a changed one.
+  pass_att: 0, pass_cmp: 0, pass_fd: 0,
+  rush_yd: 0.1, rush_td: 6, rush_2pt: 2, rush_fd: 0,
+  rec: 0.5, rec_yd: 0.1, rec_td: 6, rec_2pt: 2, rec_fd: 0, rec_40p: 0,
   fum_lost: -2, kr_td: 6, pr_td: 6,
   xpm: 1, xpmiss: -1, fgmiss: -1,
   fgm_0_19: 3, fgm_20_29: 3, fgm_30_39: 3,
@@ -2180,9 +2184,10 @@ const SLOT_LIMITS = { QB: 2, RB: 4, WR: 5, TE: 3, K: 2, DST: 2 };
    the two can never disagree about what exists.                          */
 
 const RULE_GROUPS = [
-  ["Passing",  ["pass_yd", "pass_td", "pass_int", "pass_2pt"]],
-  ["Rushing",  ["rush_yd", "rush_td", "rush_2pt"]],
-  ["Receiving", ["rec", "rec_yd", "rec_td", "rec_2pt"]],
+  ["Passing",  ["pass_yd", "pass_td", "pass_int", "pass_2pt",
+                "pass_att", "pass_cmp", "pass_fd"]],
+  ["Rushing",  ["rush_yd", "rush_td", "rush_2pt", "rush_fd"]],
+  ["Receiving", ["rec", "rec_yd", "rec_td", "rec_2pt", "rec_fd", "rec_40p"]],
   ["Turnovers and returns", ["fum_lost", "kr_td", "pr_td"]],
   ["Kicking",  ["xpm", "xpmiss", "fgmiss", "fgm_0_19", "fgm_20_29",
                 "fgm_30_39", "fgm_40_49", "fgm_50_59", "fgm_60p"]],
@@ -2198,9 +2203,13 @@ const RULE_GROUPS = [
 const RULE_LABELS = {
   pass_yd: "Per passing yard", pass_td: "Passing TD",
   pass_int: "Interception thrown", pass_2pt: "Passing 2-pt",
+  pass_att: "Per pass attempt", pass_cmp: "Per completion",
+  pass_fd: "Passing first down",
   rush_yd: "Per rushing yard", rush_td: "Rushing TD", rush_2pt: "Rushing 2-pt",
+  rush_fd: "Rushing first down",
   rec: "Per reception", rec_yd: "Per receiving yard",
   rec_td: "Receiving TD", rec_2pt: "Receiving 2-pt",
+  rec_fd: "Receiving first down", rec_40p: "Catch of 40+ yards",
   fum_lost: "Fumble lost", kr_td: "Kick return TD", pr_td: "Punt return TD",
   xpm: "Extra point", xpmiss: "Extra point missed", fgmiss: "Field goal missed",
   fgm_0_19: "FG 0–19", fgm_20_29: "FG 20–29", fgm_30_39: "FG 30–39",
@@ -2217,20 +2226,37 @@ const RULE_LABELS = {
 // Rebuilt only when the values change underneath the user — on load, on a
 // reset, and when the format preset moves the reception rule. Never on every
 // keystroke, because that would steal focus mid-edit.
+// True when the 2026 forecast actually carries this stat. The set is measured
+// by the pipeline rather than written down here, so it stays honest the
+// season Sleeper starts or stops projecting something. Missing file, or an
+// older stats.js without the list, means we cannot tell — and claiming a rule
+// is history-only when it is not would be worse than saying nothing.
+function movesProjection(rule) {
+  if (typeof PROJECTED_KEYS === "undefined") return true;
+  return PROJECTED_KEYS.indexOf(rule) >= 0;
+}
+
 function renderScoringFields() {
   $("scoringFields").innerHTML = RULE_GROUPS.map(function (group) {
     const rows = group[1].map(function (rule) {
-      return `<label class="rule">
-          <span>${RULE_LABELS[rule] || rule}</span>
+      // A rule Sleeper does not forecast still scores every past season and
+      // every week-by-week line correctly. It just adds nothing to the 2026
+      // projection, which is what the board is ranked on — so the editor
+      // says so on the rule itself rather than in a paragraph underneath
+      // that nobody reads while they are editing a number.
+      const history = !movesProjection(rule);
+      return `<label class="rule${history ? " history-only" : ""}"
+                 ${history ? 'title="Sleeper does not forecast this stat. The rule scores past seasons and weekly logs, but adds nothing to the 2026 projection the board is ranked on."' : ""}>
+          <span>${RULE_LABELS[rule] || rule}${history ? '<i class="past">past only</i>' : ""}</span>
           <input type="number" step="0.01" data-rule="${rule}" value="${league.rules[rule]}">
         </label>`;
     }).join("");
     return `<p class="section-label">${group[0]}</p><div class="rulegrid">${rows}</div>`;
   }).join("") +
   `<p class="hint">Historical seasons and weeks carry every stat above.
-   Sleeper's projections are coarser: they do not forecast defensive
-   touchdowns, safeties or points allowed, so those rules move a player's
-   past far more than his 2026 projection.</p>`;
+   Sleeper's projections are coarser, so anything marked <i class="past">past only</i>
+   scores a player's record correctly and adds nothing to his 2026 projection
+   &mdash; which is what this board is ranked on.</p>`;
 }
 
 function scoringSummary() {
