@@ -1641,17 +1641,18 @@ function renderPlayerFilter() {
 
 function renderQueue() {
   const holder = $("queueList");
-  const tab = $("queueTab");
 
-  // The tab carries the count, so the plan is legible without opening it.
-  tab.textContent = state.queue.length ? "Queue (" + state.queue.length + ")" : "Queue";
+  // The rail heading carries the count, now that the queue lives there and
+  // no longer has a tab of its own to put it on.
+  $("railQueueHead").textContent =
+    state.queue.length ? `Your queue · ${state.queue.length}` : "Your queue";
 
   if (!state.queue.length) {
     holder.innerHTML = `<div class="empty">
-      <p class="empty-title">Nothing queued yet</p>
-      <p class="empty-sub">Star a player on the Players tab to line him up. The queue is
-        your own order, not the model's &mdash; and if the clock runs out while you are
-        away, the top of it is what gets drafted for you.</p></div>`;
+      <p class="empty-title">Nothing queued</p>
+      <p class="empty-sub">Star a player to line him up. This is your order, not the
+        model's &mdash; and if the clock runs out while you are away, the top of it is
+        what gets drafted for you.</p></div>`;
     return;
   }
 
@@ -1781,29 +1782,88 @@ function renderBoard() {
   }
 
   grid.innerHTML = html;
+  scrollBoardToLive();
 }
 
-function renderTeam() {
+/* A persistent board is only useful if it is showing the round being drafted.
+   Fourteen rounds do not fit above the working area, so the pane scrolls and
+   this keeps the live pick in the middle of it.
+
+   The media query is asked here rather than left to the stylesheet, because
+   a prefers-reduced-motion rule does not apply to a programmatic scroll that
+   asks for "smooth" — the same reason the score arrows check it themselves. */
+function scrollBoardToLive() {
+  const scroller = $("boardScroll");
+  if (!scroller) return;
+
+  const cell = scroller.querySelector(".cell.now") ||
+               scroller.querySelector(".cell.mine:last-of-type");
+  if (!cell) return;
+
+  const smooth = !(window.matchMedia &&
+                   window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  scroller.scrollTo({
+    top: Math.max(0, cell.offsetTop - (scroller.clientHeight - cell.offsetHeight) / 2),
+    behavior: smooth ? "smooth" : "auto"
+  });
+}
+
+/* The starting lineup, with the best eligible player seated in each slot,
+   and whoever is left over. Written once because the rail and the full
+   My Team view both need it and two answers to "who is starting" that could
+   drift apart is exactly the bug this file is organised to avoid.
+
+   Roster order is draft order, so the first eligible player wins the slot —
+   which is why the FLEX ends up holding whoever was taken later rather than
+   whoever is worse. */
+function seatedLineup() {
   const mine = rosterOf(state.mySlot).slice();
   const used = [];
 
-  const rows = lineupSlots().map(function (slot) {
-    const eligible = mine.filter(function (p) {
-      if (used.indexOf(p) >= 0) return false;
-      return fillsSlot(p, slot);
-    });
-    const pick = eligible[0] || null;
+  const seats = lineupSlots().map(function (slot) {
+    const pick = mine.find(function (p) {
+      return used.indexOf(p) < 0 && fillsSlot(p, slot);
+    }) || null;
     if (pick) used.push(pick);
-    return rosterRow(slot, pick, false);
+    return { slot: slot, player: pick };
   });
 
-  $("startersList").innerHTML = rows.join("");
+  return { seats: seats, bench: mine.filter((p) => used.indexOf(p) < 0) };
+}
+
+function renderTeam() {
+  const lineup = seatedLineup();
+
+  $("startersList").innerHTML =
+    lineup.seats.map((s) => rosterRow(s.slot, s.player, false)).join("");
 
   // The bench is however many seats are left once the starters are seated.
-  const bench = mine.filter((p) => used.indexOf(p) < 0);
   const benchRows = [];
-  for (let i = 0; i < league.bench; i++) benchRows.push(rosterRow("BN", bench[i] || null, true));
+  for (let i = 0; i < league.bench; i++) {
+    benchRows.push(rosterRow("BN", lineup.bench[i] || null, true));
+  }
   $("benchList").innerHTML = benchRows.join("");
+}
+
+/* The rail: the two things you check between picks, never more than a glance
+   away. It is the starting lineup only — the bench is a full-view question,
+   and a rail that lists twenty rows stops being scannable. */
+function renderRail() {
+  const lineup = seatedLineup();
+  const held = rosterOf(state.mySlot).length;
+
+  $("railRosterHead").textContent = `Your roster · ${held} of ${rosterSize()}`;
+
+  $("railRoster").innerHTML = lineup.seats.map(function (s) {
+    const label = s.slot === "DST" ? "D/ST" : s.slot;
+    if (!s.player) {
+      return `<li class="empty"><span class="rslot ${s.slot}">${label}</span>
+                <span class="rfill none">Empty</span></li>`;
+    }
+    return `<li><span class="rslot ${s.slot}">${label}</span>
+        <span class="rfill name-link" data-player="${s.player.name}">${lastName(s.player.name)}</span>
+        <span class="rtm">${s.player.pos} &middot; ${s.player.team}</span></li>`;
+  }).join("");
 }
 
 function rosterRow(slotName, player, isBench) {
@@ -2249,8 +2309,13 @@ function render() {
   renderTicker();
   renderGrades();
   if (state.started) renderActionBar();
+  // The shell is the board and the rail, which only mean anything once a
+  // draft is running. Before that the setup screen has the page to itself.
+  $("draftShell").hidden = !(route() === "draft" && state.started);
+
   renderSuggestions();
   renderQueue();
+  renderRail();
   renderPlayers();
   renderBoard();
   renderTeam();
@@ -2919,6 +2984,13 @@ $("playerFilter").addEventListener("click", function (e) {
   state.filterPlayers = button.dataset.pos;
   renderPlayers();
 });
+
+/* The working panels move inside the split, so the rail can sit beside them
+   rather than under them. Done here rather than in the markup because the
+   setup screen is a panel too and has to stay outside it: setup is the page
+   before a draft, not a column within one. */
+["tab-suggest", "tab-players", "tab-team", "tab-picks", "tab-grades"]
+  .forEach(function (id) { $("workMain").appendChild($(id)); });
 
 // Everything above this line is a definition. This reads the setup screen,
 // builds the board from the matching ADP set, and draws the page.

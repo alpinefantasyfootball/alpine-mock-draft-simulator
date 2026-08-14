@@ -162,8 +162,6 @@
     <nav class="tabs" id="tabs" hidden>
       <button class="on" data-tab="tab-suggest">Suggestions</button>
       <button data-tab="tab-players">Players</button>
-      <button data-tab="tab-queue" id="queueTab">Queue</button>
-      <button data-tab="tab-board">Draft Board</button>
       <button data-tab="tab-team">My Team</button>
       <button data-tab="tab-picks">Picks</button>
       <button data-tab="tab-grades">Analysis</button>
@@ -323,13 +321,44 @@
       </div>
     </section>
 
-    <!-- ---------- QUEUE ----------
-         Your own opinion, ranked, as distinct from the model's. It sits in
-         its own panel for now; Phase 4 moves it onto the rail beside the
-         board, where it can be read without leaving the player list. -->
-    <section class="panel" id="tab-queue">
-      <div id="queueList"></div>
-    </section>
+    <!-- ============ THE PERSISTENT DRAFT SHELL ============
+         Everything below this point is on screen at once while a draft is
+         running. The board never leaves, because the board is what tells you
+         whether to reach; the rail carries the two things you check between
+         picks. Only the middle column changes.
+
+         Hidden until a draft starts, so the setup screen keeps the page to
+         itself. -->
+    <div class="draftshell" id="draftShell" hidden>
+
+      <!-- The board, always. Scrolled to the live round by renderBoard(). -->
+      <div class="boardpane">
+        <div class="board-scroll" id="boardScroll">
+          <div class="board" id="boardGrid"></div>
+        </div>
+        <div class="legend">
+          <span><i class="sw QB"></i>QB</span><span><i class="sw RB"></i>RB</span>
+          <span><i class="sw WR"></i>WR</span><span><i class="sw TE"></i>TE</span>
+          <span><i class="sw K"></i>K</span><span><i class="sw DST"></i>D/ST</span>
+        </div>
+      </div>
+
+      <div class="worksplit">
+        <div class="workmain" id="workMain"><!-- panels are moved in here by app.js --></div>
+
+        <aside class="rail" id="rail">
+          <section class="railcard">
+            <h3 class="railhead" id="railRosterHead">Your roster</h3>
+            <ul class="railslots" id="railRoster"></ul>
+          </section>
+
+          <section class="railcard">
+            <h3 class="railhead" id="railQueueHead">Your queue</h3>
+            <div id="queueList"></div>
+          </section>
+        </aside>
+      </div>
+    </div>
 
     <!-- ---------- SUGGESTIONS ---------- -->
     <section class="panel" id="tab-suggest">
@@ -372,32 +401,34 @@
         <button data-pos="DST">DST</button>
       </div>
 
-      <table id="playerTable" class="compact">
-        <thead>
-          <tr>
-            <th>Player</th>
-            <th class="num">Rank</th>
-            <th class="num">ADP</th>
-            <th class="num">Proj</th>
-            <th class="num" title="Projected points above the last startable player at this position, scored out of 100">Ovr</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-    </section>
-
-    <!-- ---------- DRAFT BOARD ---------- -->
-    <section class="panel" id="tab-board">
-      <div class="board-scroll"><div class="board" id="boardGrid"></div></div>
-      <div class="legend">
-        <span><i class="sw QB"></i>QB</span><span><i class="sw RB"></i>RB</span>
-        <span><i class="sw WR"></i>WR</span><span><i class="sw TE"></i>TE</span>
-        <span><i class="sw K"></i>K</span><span><i class="sw DST"></i>D/ST</span>
+      <!-- Six columns do not fit a phone, and a table that pushes the page
+           sideways is worse than one that scrolls inside itself. Same
+           container the player sheet's tables already use. -->
+      <div class="tblscroll">
+        <table id="playerTable" class="compact">
+          <thead>
+            <tr>
+              <th>Player</th>
+              <th class="num">Rank</th>
+              <th class="num">ADP</th>
+              <th class="num">Proj</th>
+              <th class="num" title="Projected points above the last startable player at this position, scored out of 100">Ovr</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
       </div>
     </section>
 
-    <!-- ---------- MY TEAM ---------- -->
+    <!-- The Draft Board panel is gone: the board is persistent above, so a
+         tab that scrolled to the same grid was a trip to somewhere you were
+         already looking. -->
+
+    <!-- ---------- MY TEAM ----------
+         The rail carries the starting lineup; this stays for the full view,
+         which is the only place the bench is listed. -->
+
     <section class="panel" id="tab-team">
       <p class="section-label">Starters</p>
       <ul class="roster" id="startersList"></ul>
