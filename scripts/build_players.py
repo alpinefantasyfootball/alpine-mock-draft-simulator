@@ -114,8 +114,9 @@ MANUAL_MATCHES = {
 # are scoreable so it can emit the key map and flag anything unstored.
 SCOREABLE = [
     "pass_yd", "pass_td", "pass_int", "pass_2pt",
-    "rush_yd", "rush_td", "rush_2pt",
-    "rec", "rec_yd", "rec_td", "rec_2pt",
+    "pass_att", "pass_cmp", "pass_fd",
+    "rush_yd", "rush_td", "rush_2pt", "rush_fd",
+    "rec", "rec_yd", "rec_td", "rec_2pt", "rec_fd", "rec_40p",
     "fum_lost", "kr_td", "pr_td",
     "xpm", "xpmiss", "fgmiss",
     "fgm_0_19", "fgm_20_29", "fgm_30_39", "fgm_40_49", "fgm_50_59", "fgm_60p",
@@ -135,12 +136,15 @@ SCOREABLE = [
 STAT_FIELDS = {
     # --- passing ---
     "pass_att": "pa", "pass_cmp": "pc", "pass_yd": "py", "pass_td": "pt",
-    "pass_int": "pi", "pass_2pt": "p2",
+    "pass_int": "pi", "pass_2pt": "p2", "pass_fd": "pfd",
     # --- rushing ---
     "rush_att": "ra", "rush_yd": "ry", "rush_td": "rt", "rush_2pt": "r2",
+    "rush_fd": "rfd",
     # --- receiving ---
+    # rec_40p is a catch of 40 or more yards, not a bonus on one. Sleeper
+    # forecasts it, unlike every other big-play key it carries.
     "rec_tgt": "tg", "rec": "rc", "rec_yd": "cy", "rec_td": "ct",
-    "rec_2pt": "c2",
+    "rec_2pt": "c2", "rec_fd": "cfd", "rec_40p": "c40",
     # --- returns and fumbles ---
     "kr": "kr", "kr_yd": "kry", "kr_td": "krt",
     "pr": "pr", "pr_yd": "pry", "pr_td": "prt",
@@ -467,6 +471,29 @@ def main():
         if record:
             stats[player_id] = record
 
+    # ---- which scoreable stats the forecast actually carries ----
+    #
+    # Sleeper's projections are far coarser than its actuals: it forecasts
+    # first downs but not a single 40-yard-touchdown bonus, forced fumble or
+    # target. A rule over a stat it never projects still scores history and
+    # week-by-week logs correctly, but contributes exactly zero to the 2026
+    # numbers the draft board is built from.
+    #
+    # That is the kind of silent nothing this project refuses to ship, so the
+    # set is measured here rather than written down, and the scoring editor
+    # labels every rule with whether it moves the projection. Measured, so it
+    # self-corrects the season Sleeper starts or stops forecasting something.
+    # Measured through reconcile(), not off the raw feed: the coarse kicking
+    # keys only become fgm_50_59 and fgmiss after folding, and reading the raw
+    # rows marked both history-only when the app scores them from a real
+    # projected value. A wrong label here is worse than no label.
+    reconciled = [reconcile(line) for line in projections.values()]
+    projected_keys = sorted(
+        stat for stat in SCOREABLE
+        if any((line.get(stat) or 0) for line in reconciled)
+    )
+    print(f"  {len(projected_keys)} of {len(SCOREABLE)} scoreable stats are forecast")
+
     # ---- write the files ----
     stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
@@ -528,10 +555,15 @@ def main():
             "   applies the scoring rules, so a league can change them without\n"
             "   this file being rebuilt.\n\n"
             "   STAT_KEYS maps each scoreable stat to the short key holding it.\n"
-            "   Generated from STAT_FIELDS so the two cannot drift apart.\n"
+            "   Generated from STAT_FIELDS so the two cannot drift apart.\n\n"
+            "   PROJECTED_KEYS is the subset Sleeper actually forecasts. A rule\n"
+            "   over anything outside it scores history correctly and adds\n"
+            "   nothing to the 2026 projection, which is what the draft board\n"
+            "   is ranked on. The scoring editor says so on each rule.\n"
             f"   Generated : {stamp}\n"
             "   ========================================================== */\n\n"
             "const STAT_KEYS = " + json.dumps(key_map, separators=(",", ":")) + ";\n\n"
+            "const PROJECTED_KEYS = " + json.dumps(projected_keys, separators=(",", ":")) + ";\n\n"
             "const PLAYER_STATS = " + json.dumps(stats, separators=(",", ":")) + ";\n")
 
     with open(UNMATCHED_FILE, "w", encoding="utf-8") as handle:

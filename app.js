@@ -20,6 +20,7 @@ const league = {
   rounds: 14,
   starters: { QB: 1, RB: 2, WR: 2, TE: 1, K: 1, DST: 1 },
   flex: 1,           // one FLEX, drawn from RB / WR / TE
+  superflex: 0,      // a FLEX a quarterback may also fill; 1 makes it 2QB
   bench: 5,
   scoring: "half",   // "standard" | "half" | "ppr" — also picks the ADP set
   rules: null        // the scoring table; filled in below, editable on setup
@@ -29,18 +30,43 @@ const POSITIONS = ["QB", "RB", "WR", "TE", "K", "DST"];
 
 // The order starting slots are listed and filled, with FLEX after the
 // positions it draws from so the better player lands in the named slot.
-const SLOT_ORDER = ["QB", "RB", "WR", "TE", "FLEX", "DST", "K"];
+const SLOT_ORDER = ["QB", "RB", "WR", "TE", "FLEX", "SFLEX", "DST", "K"];
+
+// Which positions can fill a slot. FLEX is the classic RB/WR/TE; SFLEX adds
+// the quarterback, and that one extra entry is the whole of what a superflex
+// league is. Written down once because the starting lineup, the draft grade
+// and the CPU all ask the question, and three answers that could drift apart
+// is exactly the kind of quiet bug this file is organised to avoid.
+const SLOT_ELIGIBLE = {
+  FLEX:  ["RB", "WR", "TE"],
+  SFLEX: ["QB", "RB", "WR", "TE"]
+};
+
+function fillsSlot(player, slot) {
+  const eligible = SLOT_ELIGIBLE[slot];
+  return eligible ? eligible.indexOf(player.pos) >= 0 : player.pos === slot;
+}
+
+// How many of a slot the league starts. Flex kinds live beside the named
+// positions rather than inside league.starters, because they are not
+// positions and counting them as one breaks every per-position sum.
+function slotCount(slot) {
+  if (slot === "FLEX")  return league.flex;
+  if (slot === "SFLEX") return league.superflex;
+  return league.starters[slot] || 0;
+}
 
 function totalPicks()   { return league.teams * league.rounds; }
 function starterCount() { return POSITIONS.reduce((n, pos) => n + league.starters[pos], 0); }
-function rosterSize()   { return starterCount() + league.flex + league.bench; }
+function flexCount()    { return league.flex + league.superflex; }
+function rosterSize()   { return starterCount() + flexCount() + league.bench; }
 
 // The starting lineup, expanded into one entry per slot:
 // QB, RB, RB, WR, WR, TE, FLEX, DST, K for the default settings.
 function lineupSlots() {
   const slots = [];
   SLOT_ORDER.forEach(function (slot) {
-    const n = slot === "FLEX" ? league.flex : (league.starters[slot] || 0);
+    const n = slotCount(slot);
     for (let i = 0; i < n; i++) slots.push(slot);
   });
   return slots;
@@ -60,7 +86,11 @@ const DEPTH_ALLOWANCE = { QB: 3, RB: 5, WR: 5, TE: 2, K: 2, DST: 2 };
 
 function maxAt(pos) {
   const flexShare = (pos === "RB" || pos === "WR") ? league.flex : 0;
-  return league.starters[pos] + flexShare + DEPTH_ALLOWANCE[pos];
+  // A superflex is a second startable quarterback, so it lifts the ceiling on
+  // how many a team will hold. Without this a CPU stops at one and a
+  // superflex league drafts like a normal one.
+  const superShare = pos === "QB" ? league.superflex : 0;
+  return league.starters[pos] + flexShare + superShare + DEPTH_ALLOWANCE[pos];
 }
 
 // Replacement level: the last player at a position who would realistically
@@ -70,10 +100,16 @@ function maxAt(pos) {
 // actually wins that slot, which is why RB and WR run so much deeper.
 const FLEX_SHARE = { RB: 0.40, WR: 0.55, TE: 0.05 };
 
+// A superflex is won by a quarterback almost every time — that is the point
+// of the format, and it is why quarterbacks go two rounds earlier in one.
+// The remainder is the handful of managers who take the better skill player.
+const SFLEX_SHARE = { QB: 0.85, RB: 0.05, WR: 0.09, TE: 0.01 };
+
 function replacementRank(pos) {
   const base = league.teams * (league.starters[pos] || 0);
   const flex = league.teams * league.flex * (FLEX_SHARE[pos] || 0);
-  return Math.round(base + flex) + 1;
+  const sflex = league.teams * league.superflex * (SFLEX_SHARE[pos] || 0);
+  return Math.round(base + flex + sflex) + 1;
 }
 
 // The same ranks written out in prose, for the method notes on the page.
@@ -88,13 +124,34 @@ function replacementText() {
 
 const REPLACEMENT_PTS = {};
 
-// Fourteen, because a 14-team league needs a name for every seat.
+// The best value over replacement anywhere on the board. Every Overall score
+// is a percentage of it, so it is worked out once per build in
+// buildProjections() rather than per player.
+let BEST_VOR = 0;
+
+// One per seat, up to the largest league the setup screen offers. The list
+// used to stop at fourteen, which was exactly the old maximum — so raising
+// the cap without extending it here would have handed CPU_NAMES[s] an
+// undefined and thrown on .split() while drawing the board.
 const CPU_NAMES = [
   "Wild Goose Chase", "Bijan Mustard", "Nacua Matata", "The Gibbs Ultimatum",
   "Kupp of Joe", "Purdy Vacant", "Hurts So Good", "Saquon For The Team",
   "Lambo No. 5", "Bone-Thugs-N-Montgomery", "Alvin and the Chipmunks",
-  "Better Call Saquon", "A League of Their Mahomes", "Tua Fast Tua Furious"
+  "Better Call Saquon", "A League of Their Mahomes", "Tua Fast Tua Furious",
+  "Kelce Grammer", "Show Me Your TDs", "Breece Lightning", "Chubb Rock",
+  "Waddle I Do", "Jeanty's Inferno", "Bowers to the People", "Hall of a Guy",
+  "Jefferson Airplane", "London Calling", "McConkey Business",
+  "Achane Reaction", "Odunze the Road Again", "Higgins Boson",
+  "Pitts and Pieces", "Burrow Deep", "The Fresh Prince of Bel-Aiyuk",
+  "Nix on the Beach"
 ];
+
+// Never indexes past the end. The list is long enough for every league the
+// screen offers, but a seat without a name should read plainly rather than
+// take the board render down with it.
+function cpuName(slot) {
+  return CPU_NAMES[slot] || "Team " + (slot + 1);
+}
 
 
 /* ---- 2. Page elements ---------------------------------- */
@@ -544,7 +601,7 @@ function onTheClock()     { return draftOver() ? null : pickInfo(currentOverall(
 function isMyTurn()       { const c = onTheClock(); return c !== null && c.slot === state.mySlot; }
 
 function teamLabel(slot) {
-  return slot === state.mySlot ? "Your Team" : CPU_NAMES[slot];
+  return slot === state.mySlot ? "Your Team" : cpuName(slot);
 }
 
 function pickCode(overall) {
@@ -589,7 +646,7 @@ function needMultiplier(slot, pos, round) {
 
   // One of each is enough, whatever "enough" is set to. A superflex league
   // that starts two quarterbacks gets two.
-  if (pos === "QB"  && have >= league.starters.QB)  return 999;
+  if (pos === "QB"  && have >= league.starters.QB + league.superflex) return 999;
   if (pos === "K"   && have >= league.starters.K)   return 999;
   if (pos === "DST" && have >= league.starters.DST) return 999;
 
@@ -933,8 +990,12 @@ function byeShare(player) {
 // This is the starting point, not the law — the setup screen edits a copy.
 const DEFAULT_RULES = {
   pass_yd: 0.04, pass_td: 6, pass_int: -2, pass_2pt: 2,
-  rush_yd: 0.1, rush_td: 6, rush_2pt: 2,
-  rec: 0.5, rec_yd: 0.1, rec_td: 6, rec_2pt: 2,
+  // Every rule added since the original 38 defaults to zero, so the board a
+  // returning drafter sees is identical until they choose otherwise. What
+  // they buy is the ability to describe their league, not a changed one.
+  pass_att: 0, pass_cmp: 0, pass_fd: 0,
+  rush_yd: 0.1, rush_td: 6, rush_2pt: 2, rush_fd: 0,
+  rec: 0.5, rec_yd: 0.1, rec_td: 6, rec_2pt: 2, rec_fd: 0, rec_40p: 0,
   fum_lost: -2, kr_td: 6, pr_td: 6,
   xpm: 1, xpmiss: -1, fgmiss: -1,
   fgm_0_19: 3, fgm_20_29: 3, fgm_30_39: 3,
@@ -1081,11 +1142,61 @@ function buildProjections() {
       REPLACEMENT_PTS[pos] = ranked[ranked.length - 1].projPts;
     }
   });
+
+  // The best value-over-replacement on the board, which is the denominator
+  // every Overall score is measured against. It is computed once here rather
+  // than inside draftSignals(), because the player list now asks for a score
+  // on every row: recomputing it per call made that O(n^2) over the pool.
+  // It has to come after the loop above, since it reads REPLACEMENT_PTS.
+  BEST_VOR = Math.max.apply(null, board.map((p) =>
+    p.projPts === null ? 0 : p.projPts - (REPLACEMENT_PTS[p.pos] || 0)));
 }
 
 function label(score) {
   return score >= 75 ? "Very High" : score >= 55 ? "High"
        : score >= 35 ? "Medium"    : score >= 18 ? "Low" : "Very Low";
+}
+
+// Value over replacement, as a score out of 100. Split out of draftSignals()
+// because the player list wants this on every row, where the reasons, the
+// upside model and the bust model would all be work thrown away.
+function overallScore(player) {
+  if (!player || player.projPts === null || player.projPts === undefined) return null;
+  const vor = player.projPts - (REPLACEMENT_PTS[player.pos] || 0);
+  return Math.max(0, Math.min(100, (vor / (BEST_VOR || 1)) * 100));
+}
+
+/* The reasoning behind a score, said in one line. Built from figures already
+   sitting on the player after buildProjections() rather than by calling
+   draftSignals(), which would run the upside and bust models and allocate
+   three arrays of prose for every row on the board.
+
+   This is the thing the app has that a projection feed does not, and until
+   now it was only readable by opening a player — which meant opening a
+   player to find out whether he was worth opening. */
+function overallReason(player) {
+  if (player.projPts === null) {
+    return "No 2026 projection for this player yet, so there is nothing to score him on.";
+  }
+
+  const vor = Math.round(player.projPts - (REPLACEMENT_PTS[player.pos] || 0));
+  const parts = [Math.round(player.projPts) + " projected points, " +
+                 (vor >= 0 ? "+" : "") + vor + " against a replacement " + player.pos];
+
+  if (player.projPosRank) {
+    parts.push("projects " + player.pos + player.projPosRank +
+               ", drafted as " + player.pos + player.posRank);
+  }
+  return parts.join(". ") + ".";
+}
+
+// How far the projection disagrees with the market. Four places at a position
+// is the same threshold draftSignals() treats as meaningful, kept in one place
+// so the row and the sheet cannot tell different stories about a player.
+const MARKET_GAP = 4;
+
+function marketGap(player) {
+  return player.projPosRank ? player.posRank - player.projPosRank : 0;
 }
 
 function draftSignals(player) {
@@ -1096,9 +1207,7 @@ function draftSignals(player) {
 
   // ---- Overall: value over a replacement starter, in your scoring ----
   const vor = player.projPts - (REPLACEMENT_PTS[player.pos] || 0);
-  const best = Math.max.apply(null, board.map((p) =>
-    p.projPts === null ? 0 : p.projPts - (REPLACEMENT_PTS[p.pos] || 0)));
-  const overall = Math.max(0, Math.min(100, (vor / (best || 1)) * 100));
+  const overall = overallScore(player);
   reasons.overall.push(Math.round(player.projPts) + " projected points, " +
     (vor >= 0 ? "+" : "") + Math.round(vor) + " vs a replacement " + player.pos);
 
@@ -1183,7 +1292,7 @@ function bestLineup(roster) {
   return slots.map(function (slot) {
     const eligible = roster.filter(function (p) {
       if (used.indexOf(p) >= 0) return false;
-      return slot === "FLEX" ? ["RB", "WR", "TE"].indexOf(p.pos) >= 0 : p.pos === slot;
+      return fillsSlot(p, slot);
     }).sort((a, b) => a.posRank - b.posRank);
 
     const pick = eligible[0] || null;
@@ -1215,7 +1324,7 @@ function analyseTeam(slot) {
   });
   // Thin at the two positions you start most of, once the FLEX is counted.
   ["RB", "WR"].forEach(function (pos) {
-    if (countAt(slot, pos) < league.starters[pos] + league.flex + 1) build -= 6;
+    if (countAt(slot, pos) < league.starters[pos] + flexCount() + 1) build -= 6;
   });
 
   // 4. bye week exposure, judged on the starting nine only
@@ -1418,9 +1527,46 @@ function renderSuggestions() {
   }).join("");
 }
 
+/* The position filter doubles as the roster-need display: the control you
+   already reach for to narrow the list is also the one that tells you what
+   you are still missing. It saves a trip to My Team on every pick.
+
+   Both numbers are derived, never written down — the need comes from
+   league.starters and the total from rosterSize(), so an unusual lineup
+   reports itself correctly with no extra code.
+
+   It only carries counts once a draft is running. Before that there is no
+   roster to be short of, and showing pool sizes here would give one control
+   two different meanings. */
+function renderPlayerFilter() {
+  const filled = rosterOf(state.mySlot).length;
+
+  $("playerFilter").querySelectorAll("button").forEach(function (button) {
+    const pos = button.dataset.pos;
+    const label = pos === "ALL" ? "All" : pos;
+
+    if (!state.started) {
+      button.innerHTML = label;
+      button.classList.remove("short", "met");
+      return;
+    }
+
+    const have = pos === "ALL" ? filled : countAt(state.mySlot, pos);
+    const need = pos === "ALL" ? rosterSize() : (league.starters[pos] || 0);
+
+    button.innerHTML = `${label}<span class="need">${have}/${need}</span>`;
+    // Short of a starting slot is the actionable state, so it is the only
+    // one that takes a colour. "Met" is just the absence of a warning.
+    button.classList.toggle("short", have < need);
+    button.classList.toggle("met", have >= need);
+  });
+}
+
 function renderPlayers() {
   const tbody = document.querySelector("#playerTable tbody");
   const hide  = $("hideDrafted").checked;
+
+  renderPlayerFilter();
 
   const term = state.search.trim().toLowerCase();
 
@@ -1433,21 +1579,41 @@ function renderPlayers() {
   });
 
   if (!visible.length) {
-    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--ink-light);padding:26px">
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--ink-light);padding:26px">
       No players match that search.</td></tr>`;
     return;
   }
 
   tbody.innerHTML = visible.map(function (p) {
+    // Overall was only ever visible inside the player sheet, which meant
+    // opening a player to find out whether he was worth opening. It is the
+    // one number this app has that the ADP feed does not, so it belongs on
+    // the row. A dash where there is no projection, never a zero.
+    const score = overallScore(p);
+    const scoreCell = score === null ? "&mdash;" : Math.round(score);
+
+    // Where the model and the market disagree enough to be worth saying out
+    // loud. Only shown at the threshold, because a chip on every row is a
+    // chip on no row.
+    const gap = marketGap(p);
+    const gapChip = gap >= MARKET_GAP
+      ? `<span class="chip val">Value &middot; projects ${p.pos}${p.projPosRank}</span>`
+      : gap <= -MARKET_GAP
+        ? `<span class="chip reach">Reach &middot; projects ${p.pos}${p.projPosRank}</span>`
+        : "";
+
     return `
       <tr class="${p.drafted ? "drafted" : ""} ${adpConflict(p) ? "conflict" : ""}">
         <td>
           <span class="nm name-link" data-player="${p.name}">${p.name}</span>
           <span class="meta"><span class="badge ${p.pos}">${p.pos}</span> ${p.team} &middot; Bye ${p.bye}
-            ${injBadge(p)} <span class="chip tier">T${p.tier}</span></span>
+            ${injBadge(p)} <span class="chip tier">T${p.tier}</span>${gapChip}</span>
         </td>
         <td class="num">${p.pos}${p.posRank}</td>
         <td class="num">${p.adp.toFixed(1)}</td>
+        <td class="num">${p.projPts === null ? "&mdash;" : Math.round(p.projPts)}</td>
+        <td class="num ovr ${score !== null && score >= 55 ? "good" : ""}"
+            title="${overallReason(p)}">${scoreCell}</td>
         <td><button class="draft-btn" data-draft="${p.name}"
              ${p.drafted || !isMyTurn() ? "disabled" : ""}>${p.drafted ? "Taken" : "Draft"}</button></td>
       </tr>`;
@@ -1466,7 +1632,7 @@ function renderBoard() {
   let html = `<div class="hd"></div>`;
 
   for (let s = 0; s < league.teams; s++) {
-    html += `<div class="hd ${s === state.mySlot ? "me" : ""}">${s === state.mySlot ? "YOU" : CPU_NAMES[s].split(" ")[0]}</div>`;
+    html += `<div class="hd ${s === state.mySlot ? "me" : ""}">${s === state.mySlot ? "YOU" : cpuName(s).split(" ")[0]}</div>`;
   }
 
   for (let r = 1; r <= league.rounds; r++) {
@@ -1495,7 +1661,7 @@ function renderTeam() {
   const rows = lineupSlots().map(function (slot) {
     const eligible = mine.filter(function (p) {
       if (used.indexOf(p) >= 0) return false;
-      return slot === "FLEX" ? ["RB", "WR", "TE"].indexOf(p.pos) >= 0 : p.pos === slot;
+      return fillsSlot(p, slot);
     });
     const pick = eligible[0] || null;
     if (pick) used.push(pick);
@@ -1665,7 +1831,7 @@ function renderGrades() {
 
     <p class="method">Starter strength is 50% of the grade: every starter scored by how many
     places above replacement level they rank at their position, where replacement is
-    ${replacementText()} for this ${league.teams}-team league${league.flex ? " with a FLEX" : ""}.
+    ${replacementText()} for this ${league.teams}-team league${flexCount() ? " with a FLEX" : ""}${league.superflex ? " and a superflex" : ""}.
     Draft value is 25%: how far each
     player fell past their ADP when you took them. Roster construction is 15%, docking unfilled
     starting slots, duplicate quarterbacks, kickers or defenses, and thin running back or receiver
@@ -1939,7 +2105,10 @@ const SAVE_KEY = "alpine-draft-room-v1";
 // drafts with the same fingerprint can be swapped; two without cannot,
 // because the snake maths, the round count and the ADP set all differ.
 function settingsFingerprint(cfg) {
-  return [cfg.teams, cfg.rounds, cfg.scoring, cfg.flex, cfg.bench]
+  // `|| 0` rather than the bare value: a draft saved before superflex existed
+  // has no such key, and it was a league with no superflex, so reading it as
+  // zero is both the correct shape and what keeps that save resumable.
+  return [cfg.teams, cfg.rounds, cfg.scoring, cfg.flex, cfg.superflex || 0, cfg.bench]
     .concat(POSITIONS.map((pos) => cfg.starters[pos]))
     .join("-");
 }
@@ -1978,7 +2147,12 @@ function readSave() {
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) return null;
     const data = JSON.parse(raw);
-    return data && data.v === 2 && data.picks && data.league ? data : null;
+    if (!(data && data.v === 2 && data.picks && data.league)) return null;
+    // A save written before superflex existed has no such key, and every
+    // sum that reads it would come out NaN. It was a league without one,
+    // so fill in what it actually was rather than refusing the save.
+    if (data.league.superflex === undefined) data.league.superflex = 0;
+    return data;
   } catch (err) {
     return null;
   }
@@ -2080,15 +2254,29 @@ function showPanel(id) {
 const suffix = ["th", "st", "nd", "rd"];
 const slotSelect = $("draftSlot");
 
-// Fill a select with a range of numbers. The label carries the position, so
+// Fill a select from a list of values. The label carries the position, so
 // each control says what it is without needing a label of its own.
-function fillRange(select, from, to, chosen, labeller) {
-  let html = "";
-  for (let i = from; i <= to; i++) {
-    html += `<option value="${i}"${i === chosen ? " selected" : ""}>${labeller(i)}</option>`;
-  }
-  select.innerHTML = html;
+function fillList(select, values, chosen, labeller) {
+  select.innerHTML = values.map((v) =>
+    `<option value="${v}"${v === chosen ? " selected" : ""}>${labeller(v)}</option>`
+  ).join("");
 }
+
+// Every contiguous range in the setup screen goes through the list version,
+// so there is one place that knows how to build an option.
+function fillRange(select, from, to, chosen, labeller) {
+  const values = [];
+  for (let i = from; i <= to; i++) values.push(i);
+  fillList(select, values, chosen, labeller);
+}
+
+// Team counts are even, because a snake draft with an odd number of seats is
+// a shape no real league uses and every one of these adds a column to the
+// board. Sleeper offers the same set up to 24 and then jumps to 32; ours
+// stops at 24 for a reason the setup screen explains when you get there —
+// the ADP feed carries roughly 210 to 260 players, and 32 seats cannot fill
+// even eight rounds out of that.
+const TEAM_COUNTS = [4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24];
 
 function ordinal(i) {
   const s = (i % 100 > 10 && i % 100 < 14) ? "th" : (suffix[i % 10] || "th");
@@ -2114,9 +2302,10 @@ const SLOT_LIMITS = { QB: 2, RB: 4, WR: 5, TE: 3, K: 2, DST: 2 };
    the two can never disagree about what exists.                          */
 
 const RULE_GROUPS = [
-  ["Passing",  ["pass_yd", "pass_td", "pass_int", "pass_2pt"]],
-  ["Rushing",  ["rush_yd", "rush_td", "rush_2pt"]],
-  ["Receiving", ["rec", "rec_yd", "rec_td", "rec_2pt"]],
+  ["Passing",  ["pass_yd", "pass_td", "pass_int", "pass_2pt",
+                "pass_att", "pass_cmp", "pass_fd"]],
+  ["Rushing",  ["rush_yd", "rush_td", "rush_2pt", "rush_fd"]],
+  ["Receiving", ["rec", "rec_yd", "rec_td", "rec_2pt", "rec_fd", "rec_40p"]],
   ["Turnovers and returns", ["fum_lost", "kr_td", "pr_td"]],
   ["Kicking",  ["xpm", "xpmiss", "fgmiss", "fgm_0_19", "fgm_20_29",
                 "fgm_30_39", "fgm_40_49", "fgm_50_59", "fgm_60p"]],
@@ -2132,9 +2321,13 @@ const RULE_GROUPS = [
 const RULE_LABELS = {
   pass_yd: "Per passing yard", pass_td: "Passing TD",
   pass_int: "Interception thrown", pass_2pt: "Passing 2-pt",
+  pass_att: "Per pass attempt", pass_cmp: "Per completion",
+  pass_fd: "Passing first down",
   rush_yd: "Per rushing yard", rush_td: "Rushing TD", rush_2pt: "Rushing 2-pt",
+  rush_fd: "Rushing first down",
   rec: "Per reception", rec_yd: "Per receiving yard",
   rec_td: "Receiving TD", rec_2pt: "Receiving 2-pt",
+  rec_fd: "Receiving first down", rec_40p: "Catch of 40+ yards",
   fum_lost: "Fumble lost", kr_td: "Kick return TD", pr_td: "Punt return TD",
   xpm: "Extra point", xpmiss: "Extra point missed", fgmiss: "Field goal missed",
   fgm_0_19: "FG 0–19", fgm_20_29: "FG 20–29", fgm_30_39: "FG 30–39",
@@ -2151,20 +2344,79 @@ const RULE_LABELS = {
 // Rebuilt only when the values change underneath the user — on load, on a
 // reset, and when the format preset moves the reception rule. Never on every
 // keystroke, because that would steal focus mid-edit.
+// True when the 2026 forecast actually carries this stat. The set is measured
+// by the pipeline rather than written down here, so it stays honest the
+// season Sleeper starts or stops projecting something. Missing file, or an
+// older stats.js without the list, means we cannot tell — and claiming a rule
+// is history-only when it is not would be worse than saying nothing.
+function movesProjection(rule) {
+  if (typeof PROJECTED_KEYS === "undefined") return true;
+  return PROJECTED_KEYS.indexOf(rule) >= 0;
+}
+
+/* Yardage rules are the ones nobody thinks about as a multiplier. A league
+   says "a point every 25 yards", not "0.04 a yard", and asking for 0.04 is
+   how you get 0.4 typed by mistake and a quarterback projected for three
+   thousand points. So these three take the divisor and show the multiplier
+   underneath, which is the number the scoring engine actually uses. */
+const PER_YARD_RULES = ["pass_yd", "rush_yd", "rec_yd"];
+
+// 25 yards a point reads back as 0.04 exactly; a third of a yard does not.
+// Four decimals is past the precision the raw data arrives in, so rounding
+// there cannot lose a rule anyone would write.
+function pointsFromDivisor(yards) {
+  const n = Number(yards);
+  if (!n || n <= 0 || !isFinite(n)) return 0;
+  return Math.round((1 / n) * 10000) / 10000;
+}
+
+// The divisor that produced a multiplier, for redrawing the control. Blank
+// rather than Infinity when the rule scores nothing, because "every 0 yards"
+// is not a thing a person can read.
+function divisorFromPoints(points) {
+  const n = Number(points);
+  if (!n || n <= 0 || !isFinite(n)) return "";
+  return Math.round((1 / n) * 100) / 100;
+}
+
 function renderScoringFields() {
   $("scoringFields").innerHTML = RULE_GROUPS.map(function (group) {
     const rows = group[1].map(function (rule) {
-      return `<label class="rule">
-          <span>${RULE_LABELS[rule] || rule}</span>
+      // A rule Sleeper does not forecast still scores every past season and
+      // every week-by-week line correctly. It just adds nothing to the 2026
+      // projection, which is what the board is ranked on — so the editor
+      // says so on the rule itself rather than in a paragraph underneath
+      // that nobody reads while they are editing a number.
+      const history = !movesProjection(rule);
+      const tip = history
+        ? ' title="Sleeper does not forecast this stat. The rule scores past seasons and weekly logs, but adds nothing to the 2026 projection the board is ranked on."'
+        : "";
+      const mark = history ? '<i class="past">past only</i>' : "";
+
+      if (PER_YARD_RULES.indexOf(rule) >= 0) {
+        return `<label class="rule per-yard${history ? " history-only" : ""}"${tip}>
+            <span>${RULE_LABELS[rule] || rule}${mark}</span>
+            <span class="divisor">
+              <i>1 pt every</i>
+              <input type="number" step="1" min="1" data-divisor="${rule}"
+                     value="${divisorFromPoints(league.rules[rule])}">
+              <i>yds</i>
+              <b>${league.rules[rule] || 0} per yard</b>
+            </span>
+          </label>`;
+      }
+
+      return `<label class="rule${history ? " history-only" : ""}"${tip}>
+          <span>${RULE_LABELS[rule] || rule}${mark}</span>
           <input type="number" step="0.01" data-rule="${rule}" value="${league.rules[rule]}">
         </label>`;
     }).join("");
     return `<p class="section-label">${group[0]}</p><div class="rulegrid">${rows}</div>`;
   }).join("") +
   `<p class="hint">Historical seasons and weeks carry every stat above.
-   Sleeper's projections are coarser: they do not forecast defensive
-   touchdowns, safeties or points allowed, so those rules move a player's
-   past far more than his 2026 projection.</p>`;
+   Sleeper's projections are coarser, so anything marked <i class="past">past only</i>
+   scores a player's record correctly and adds nothing to his 2026 projection
+   &mdash; which is what this board is ranked on.</p>`;
 }
 
 function scoringSummary() {
@@ -2175,6 +2427,7 @@ function scoringSummary() {
 }
 
 function fillSetupControls() {
+  fillList($("teamCount"), TEAM_COUNTS, league.teams, (i) => i + " teams");
   fillRange($("roundCount"), 8, 20, league.rounds, (i) => i + " rounds");
   POSITIONS.forEach(function (pos) {
     const label = pos === "DST" ? "D/ST" : pos;
@@ -2182,6 +2435,7 @@ function fillSetupControls() {
               (i) => label + " " + i);
   });
   fillRange($("startFLEX"), 0, 3, league.flex, (i) => "FLEX " + i);
+  fillRange($("startSFLEX"), 0, 2, league.superflex, (i) => "SFLEX " + i);
   fillRange($("benchCount"), 0, 12, league.bench, (i) => "BN " + i);
   fillSlotOptions();
 }
@@ -2204,7 +2458,8 @@ function readSetup() {
     lastFormat = league.scoring;
     renderScoringFields();
   }
-  league.flex    = Number($("startFLEX").value);
+  league.flex      = Number($("startFLEX").value);
+  league.superflex = Number($("startSFLEX").value);
   league.bench   = Number($("benchCount").value);
   POSITIONS.forEach(function (pos) {
     league.starters[pos] = Number($("start" + pos).value);
@@ -2218,7 +2473,7 @@ function readSetup() {
 function setupProblem() {
   const filled = rosterSize();
   if (filled !== league.rounds) {
-    return `${starterCount()} starters + ${league.flex} FLEX + ${league.bench} bench ` +
+    return `${starterCount()} starters + ${flexCount()} FLEX + ${league.bench} bench ` +
            `= ${filled} roster spots, but the draft runs ${league.rounds} rounds.`;
   }
   if (totalPicks() > poolSize()) {
@@ -2237,7 +2492,7 @@ function refreshSetup() {
   const problem = setupProblem();
   const note = $("rosterSum");
   note.textContent = problem ||
-    `${starterCount()} starters + ${league.flex} FLEX + ${league.bench} bench ` +
+    `${starterCount()} starters + ${flexCount()} FLEX + ${league.bench} bench ` +
     `= ${league.rounds} rounds, ${totalPicks()} picks.`;
   note.classList.toggle("bad", !!problem);
   $("startBtn").disabled = !!problem;
@@ -2256,10 +2511,22 @@ renderScoringFields();
 // Delegated, and on change rather than input, so the board is rebuilt when a
 // value is committed instead of on every keystroke.
 $("scoringFields").addEventListener("change", function (e) {
-  const rule = e.target.dataset && e.target.dataset.rule;
-  if (!rule) return;
+  const data = e.target.dataset;
+  if (!data) return;
+
+  // A yardage field carries the divisor a league actually says out loud;
+  // the engine wants the multiplier, so it is converted on the way in and
+  // the fields are redrawn so the "per yard" line under it stays true.
+  if (data.divisor) {
+    league.rules[data.divisor] = pointsFromDivisor(e.target.value);
+    renderScoringFields();
+    refreshSetup();
+    return;
+  }
+
+  if (!data.rule) return;
   const value = Number(e.target.value);
-  league.rules[rule] = isNaN(value) ? 0 : value;
+  league.rules[data.rule] = isNaN(value) ? 0 : value;
   refreshSetup();
 });
 
@@ -2269,7 +2536,7 @@ $("resetScoring").addEventListener("click", function () {
   refreshSetup();
 });
 
-["teamCount", "roundCount", "scoring", "startFLEX", "benchCount"]
+["teamCount", "roundCount", "scoring", "startFLEX", "startSFLEX", "benchCount"]
   .concat(POSITIONS.map((pos) => "start" + pos))
   .forEach(function (id) {
     $(id).addEventListener("change", refreshSetup);
@@ -2401,6 +2668,12 @@ $("autoBtn").addEventListener("click", autoDraftRest);
 $("restartBtn").addEventListener("click", restart);
 $("hideDrafted").addEventListener("change", renderPlayers);
 
+// Density is a class on the table rather than a re-render: the rows do not
+// change, only how much air they sit in.
+$("roomyRows").addEventListener("change", function () {
+  $("playerTable").classList.toggle("compact", !this.checked);
+});
+
 $("playerSearch").addEventListener("input", function () {
   state.search = this.value;
   renderPlayers();
@@ -2451,10 +2724,14 @@ $("suggestFilter").addEventListener("click", function (e) {
 });
 
 $("playerFilter").addEventListener("click", function (e) {
-  if (e.target.tagName !== "BUTTON") return;
+  // closest(), not tagName: these buttons now hold a <span> with the
+  // have/need count, and a click landing on that text is still a click on
+  // the button as far as the person doing it is concerned.
+  const button = e.target.closest ? e.target.closest("button") : null;
+  if (!button || !this.contains(button)) return;
   this.querySelectorAll("button").forEach((b) => b.classList.remove("on"));
-  e.target.classList.add("on");
-  state.filterPlayers = e.target.dataset.pos;
+  button.classList.add("on");
+  state.filterPlayers = button.dataset.pos;
   renderPlayers();
 });
 

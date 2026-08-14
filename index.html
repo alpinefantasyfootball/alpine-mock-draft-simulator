@@ -268,12 +268,10 @@
         <div class="field">
           <label for="teamCount">League</label>
           <div class="field-row">
-            <select id="teamCount">
-              <option value="8">8 teams</option>
-              <option value="10" selected>10 teams</option>
-              <option value="12">12 teams</option>
-              <option value="14">14 teams</option>
-            </select>
+            <!-- Filled by fillSetupControls(), like every other setup
+                 control, so the range lives in app.js beside the league it
+                 describes rather than being written down twice. -->
+            <select id="teamCount"></select>
             <select id="roundCount"></select>
             <select id="scoring">
               <option value="standard">Standard</option>
@@ -297,6 +295,10 @@
           </div>
           <div class="field-row" style="margin-top:8px">
             <select id="startK"></select>
+            <!-- A FLEX a quarterback may also fill. One of these is what
+                 makes a league superflex, which is the most common way a
+                 modern league starts two. -->
+            <select id="startSFLEX"></select>
             <select id="benchCount"></select>
           </div>
           <p class="hint" id="rosterSum"></p>
@@ -342,6 +344,13 @@
           <input type="checkbox" id="hideDrafted">
           <span>Hide drafted</span>
         </label>
+        <!-- Drafting is comparison, and comparison needs rows next to each
+             other. Compact is the default for that reason; the roomier rows
+             stay one click away for anyone who wants them. -->
+        <label class="check">
+          <input type="checkbox" id="roomyRows">
+          <span>Roomy rows</span>
+        </label>
       </div>
 
       <div class="pos-filter" id="playerFilter">
@@ -354,12 +363,14 @@
         <button data-pos="DST">DST</button>
       </div>
 
-      <table id="playerTable">
+      <table id="playerTable" class="compact">
         <thead>
           <tr>
             <th>Player</th>
             <th class="num">Rank</th>
             <th class="num">ADP</th>
+            <th class="num">Proj</th>
+            <th class="num" title="Projected points above the last startable player at this position, scored out of 100">Ovr</th>
             <th></th>
           </tr>
         </thead>

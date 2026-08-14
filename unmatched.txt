@@ -1,5 +1,5 @@
 FFC rows that did not join to a Sleeper player
-Generated 2026-08-14 14:32 UTC
+Generated 2026-08-14 19:02 UTC
 Across every scoring format, each name listed once.
 Add an entry to MANUAL_MATCHES in build_players.py to fix one.
 
@@ -91,7 +91,6 @@ misc_td
 pa
 pass_air_yd
 pass_cmp_40p
-pass_fd
 pass_inc
 pass_int_td
 pass_lng
@@ -119,11 +118,9 @@ rec_0_4
 rec_10_19
 rec_20_29
 rec_30_39
-rec_40p
 rec_5_9
 rec_air_yd
 rec_drop
-rec_fd
 rec_lng
 rec_rz_tgt
 rec_td_40p
@@ -134,7 +131,6 @@ rec_ypr
 rec_ypt
 rush_40p
 rush_btkl
-rush_fd
 rush_lng
 rush_rec_yd
 rush_rz_att
