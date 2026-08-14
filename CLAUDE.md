@@ -78,6 +78,17 @@ stored can never be rescored, and `build_players.py` fails loudly if a
   same reason: `--orange` (#ED6011) is the brand, and it is only 3.34:1
   against white, so anything putting white text on it uses `--orange-cta`
   (#C2410C, 5.18:1) instead.
+- **The centred wordmark needs a breakpoint.** `.shell-inner` is
+  `1fr auto 1fr`, so each side gets the same width. Below about 540px the
+  sides need ~191px of links and get ~110px, and because the links are
+  `nowrap` they do not shrink — they spill straight over the wordmark. Under
+  700px the header keeps only the burger, the brand and Sign up; How it works,
+  Log in, Install and the theme toggle move into the rooms panel.
+- **The rooms panel is inside `#shellbar`.** Scope mobile hide rules to
+  `.shell-inner`, not the header, or they hide the panel's copies too.
+- **Nothing caches `.theme-toggle`.** There are up to three of them and one is
+  rendered, so clicks are delegated and `syncThemeButton()` re-queries.
+
 - **One header, two sets of content.** `.shellbar` and `.appbar` share a
   surface, a border and a 1120px centred column, so the Draft Room and the
   landing page read as the same site. Only `.my-turn` and `.urgent` take

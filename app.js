@@ -111,8 +111,10 @@ const shellbar   = $("shellbar");
 const tabsNav    = $("tabs");
 const actionbar  = $("actionbar");
 
-// One toggle per header, so everything here works on the set rather than one.
-const themeBtns  = document.querySelectorAll(".theme-toggle");
+// Toggles live in both headers and, on a phone, inside the rooms panel, which
+// is rendered rather than static. So nothing caches the set: it is queried when
+// it is needed and clicks are delegated.
+const themeBtns = () => document.querySelectorAll(".theme-toggle");
 
 
 /* ---- 2b. Light and dark ---------------------------------
@@ -148,7 +150,7 @@ function setTheme(theme) {
 function syncThemeButton() {
   const dark = currentTheme() === "dark";
   const label = dark ? "Switch to the light theme" : "Switch to the dark theme";
-  themeBtns.forEach(function (btn) {
+  themeBtns().forEach(function (btn) {
     btn.setAttribute("aria-pressed", String(dark));
     btn.setAttribute("aria-label", label);
     btn.title = label;
@@ -196,8 +198,31 @@ function roomCard(room) {
 // page, so the two can never disagree about what exists.
 function renderRooms() {
   const html = ROOMS.map(roomCard).join("");
-  $("roomsPanel").innerHTML = '<div class="rooms-inner">' + html + "</div>";
+
+  // Below the breakpoint the header cannot hold How it works, Log in, Install
+  // and the theme toggle without them landing on top of the wordmark, so they
+  // move in here. The stylesheet decides when this row is visible; the markup
+  // is the same either way.
+  $("roomsPanel").innerHTML =
+    '<div class="rooms-inner">' + html + "</div>" +
+    '<div class="rooms-extra">' +
+      '<a class="navlink" href="docs/draft-room-how-it-works.html">How it works</a>' +
+      '<button class="navbtn js-install" type="button" hidden>Install</button>' +
+      '<button class="navlink js-login" type="button">Log in</button>' +
+      '<button class="theme-toggle" type="button" aria-pressed="true">' +
+        '<svg class="i-sun" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true" ' +
+             'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">' +
+          '<circle cx="12" cy="12" r="4.2"/>' +
+          '<path d="M12 2.4v2.2M12 19.4v2.2M4.2 12H2M22 12h-2.2M6.5 6.5 4.9 4.9M19.1 19.1l-1.6-1.6M17.5 6.5l1.6-1.6M4.9 19.1l1.6-1.6"/>' +
+        "</svg>" +
+        '<svg class="i-moon" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true">' +
+          '<path d="M20.5 14.9A8.7 8.7 0 0 1 9.1 3.5a8.7 8.7 0 1 0 11.4 11.4Z" fill="currentColor"/>' +
+        "</svg>" +
+      "</button>" +
+    "</div>";
+
   $("homeRooms").innerHTML = html;
+  syncThemeButton();                 // the panel just gained a toggle
 }
 
 function closeRooms() {
@@ -287,15 +312,19 @@ function renderHome() {
 // never does, so there the button simply never appears rather than lying.
 let installPrompt = null;
 
+function showInstall(on) {
+  document.querySelectorAll(".js-install").forEach(function (b) { b.hidden = !on; });
+}
+
 window.addEventListener("beforeinstallprompt", function (e) {
   e.preventDefault();
   installPrompt = e;
-  $("installBtn").hidden = false;
+  showInstall(true);
 });
 
 window.addEventListener("appinstalled", function () {
   installPrompt = null;
-  $("installBtn").hidden = true;
+  showInstall(false);
 });
 
 function notYet(title, body) {
@@ -2273,10 +2302,12 @@ $("sheetTabs").addEventListener("click", function (e) {
 // stays in memory and in the save, and the route change is what goes back.
 $("homeBtn").addEventListener("click", function () { go("home"); });
 
-themeBtns.forEach(function (btn) {
-  btn.addEventListener("click", function () {
+// Delegated, because the panel's toggle does not exist until the rooms are
+// rendered, and the same goes for its Log in and Install.
+document.addEventListener("click", function (e) {
+  if (e.target.closest(".theme-toggle")) {
     setTheme(currentTheme() === "dark" ? "light" : "dark");
-  });
+  }
 });
 $("scoreStrip").addEventListener("scroll", updateScoreEnds, { passive: true });
 window.addEventListener("resize", updateScoreEnds);
@@ -2294,18 +2325,19 @@ document.addEventListener("keydown", function (e) {
   if (e.key === "Escape") closeRooms();
 });
 
-$("installBtn").addEventListener("click", function () {
-  if (!installPrompt) return;
+document.addEventListener("click", function (e) {
+  if (!e.target.closest(".js-install") || !installPrompt) return;
   installPrompt.prompt();
   installPrompt.userChoice.finally(function () {
     installPrompt = null;
-    $("installBtn").hidden = true;
+    showInstall(false);
   });
 });
 
 // Honest rather than absent: the buttons are part of where this is going, and
 // saying so beats a dead click or a form that posts into the void.
-$("loginBtn").addEventListener("click", function () {
+document.addEventListener("click", function (e) {
+  if (!e.target.closest(".js-login")) return;
   notYet("Accounts are not live yet",
          "There is nothing to log into so far. Your drafts save to this device, " +
          "so you can close the tab and pick up where you left off.");

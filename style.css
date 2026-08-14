@@ -1226,3 +1226,41 @@ a.room:hover { border-color: var(--blue-line); }
 
 .game-st { margin-top: 5px; font-size: 10.5px; color: var(--ink-light); white-space: nowrap; }
 .game-st.live { color: var(--orange); font-weight: 700; }
+
+/* ---------- the header on a narrow screen ----------
+   The three columns are 1fr auto 1fr, so each side gets the same width and
+   the brand sits dead centre. That stops working around 540px: the sides
+   need about 191px of links each and only get 110px, and because the links
+   are nowrap they do not shrink, they spill straight over the wordmark.
+
+   So below the breakpoint the header keeps only what it must — a way into
+   the rooms, the brand, and one action — and everything else moves into the
+   panel that the burger opens. */
+
+.burger { display: none; flex-direction: column; gap: 4px; width: 18px; }
+.burger i { display: block; height: 2px; background: currentColor; border-radius: 2px; }
+
+.rooms-extra { display: none; }
+
+@media (max-width: 700px) {
+  /* .shell-inner, not #shellbar: the rooms panel is inside the header too,
+     and scoping to the header hid the panel's own toggle along with it. */
+  .shell-inner .navlink,
+  .shell-inner .js-install,
+  .shell-inner .theme-toggle { display: none; }
+
+  .rooms-label { display: none; }
+  .burger { display: flex; }
+  #roomsBtn { padding: 9px 12px; }
+
+  .shell-inner { gap: 10px; padding: 10px 14px; }
+
+  .rooms-extra {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 14px 18px 18px; margin-top: 2px;
+    border-top: 1px solid var(--line);
+  }
+
+  .rooms-extra .navlink { padding-left: 0; }
+  .rooms-extra .theme-toggle { margin-left: auto; }
+}
