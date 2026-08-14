@@ -1474,3 +1474,128 @@ a.room:hover { border-color: var(--blue-line); }
 /* The on-the-clock cell counts down in place. It is already dashed blue and
    bold from .cell.now; this only stops the digits jittering as they change. */
 .board .cell.now { font-variant-numeric: tabular-nums; }
+
+/* ==========================================================
+   The persistent draft shell
+
+   The board never leaves the screen, because the board is what
+   tells you whether to reach: a receiver run three picks away
+   is a shape you can see, and only if you are looking at it.
+   The rail carries the two things checked between picks.
+
+   Only the middle column changes. That is the whole idea.
+   ========================================================== */
+
+.draftshell { padding: 10px 12px 48px; }
+
+/* ---------- the board pane ---------- */
+
+/* Fourteen rounds do not fit above a working area, so the pane is capped and
+   scrolls, and renderBoard() keeps the live round in the middle of it. The
+   cap is in vh rather than pixels because the useful trade is against the
+   height of the screen, not against a number. */
+.boardpane {
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: 12px; padding: 10px 12px; margin-bottom: 10px;
+}
+
+.boardpane .board-scroll {
+  max-height: min(38vh, 340px);
+  overflow: auto;
+  overscroll-behavior: contain;   /* the page does not move when this ends */
+}
+
+/* The header row has to stay put, or a scrolled board is a grid of names
+   with no way to tell whose column is whose. */
+.boardpane .board .hd { position: sticky; top: 0; z-index: 2; }
+.boardpane .board .rd { position: sticky; left: 0; z-index: 1; }
+
+.boardpane .legend { margin-top: 9px; }
+
+/* ---------- the split ---------- */
+
+.worksplit { display: grid; grid-template-columns: minmax(0, 1fr) 268px; gap: 10px; align-items: start; }
+
+.workmain { min-width: 0; }
+
+/* Panels no longer own the page, so they lose the page's padding. */
+.workmain .panel { padding: 0; }
+
+/* ---------- the rail ---------- */
+
+.rail { display: flex; flex-direction: column; gap: 10px; position: sticky; top: 8px; }
+
+.railcard {
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: 12px; padding: 11px 13px;
+}
+
+.railhead {
+  margin: 0 0 8px; font-family: Inter, sans-serif;
+  font-size: 9.5px; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--ink-light); font-weight: 700;
+}
+
+.railslots { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+
+.railslots li {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--sunken); border-radius: 6px; padding: 5px 8px;
+  font-size: 12px; min-width: 0;
+}
+
+.rslot {
+  flex: none; width: 34px;
+  font-size: 9px; font-weight: 700; letter-spacing: .04em;
+  color: var(--ink-light);
+}
+
+/* The slot label takes its position colour, so an empty starting slot is
+   readable as "no quarterback" without reading the word. */
+.rslot.QB { color: var(--qb-fg); }  .rslot.RB { color: var(--rb-fg); }
+.rslot.WR { color: var(--wr-fg); }  .rslot.TE { color: var(--te-fg); }
+.rslot.K  { color: var(--k-fg); }   .rslot.DST { color: var(--dst-fg); }
+
+.rfill {
+  flex: 1; min-width: 0; font-weight: 600; color: var(--ink);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.rfill.none { font-weight: 400; font-style: italic; color: var(--ink-light); }
+.rtm { flex: none; font-size: 10px; color: var(--ink-light); letter-spacing: .02em; }
+
+/* An unfilled starting slot is the actionable state, so it is the one that
+   takes a tint rather than every filled row taking one. */
+.railslots li.empty { background: var(--well); }
+
+/* The queue in the rail is narrower than it was as a panel, so the avatar
+   goes — it is decoration next to a name. The move buttons stay, because
+   with the Queue tab gone this is the only place a queue can be reordered,
+   and a list you cannot reorder is not a queue. The row wraps rather than
+   squeezing the name to nothing. */
+.rail .qrow { padding: 6px 8px; gap: 6px; margin-bottom: 5px; flex-wrap: wrap; }
+.rail .qrow .avatar { display: none; }
+.rail .qbody { flex: 1 1 130px; }
+.rail .qname { font-size: 12.5px; }
+.rail .qmeta { font-size: 10.5px; gap: 5px; }
+.rail .qrow .draft-btn { flex: none; font-size: 11px; padding: 4px 9px; }
+.rail .empty { padding: 6px 2px; }
+.rail .empty-title { font-size: 13px; }
+.rail .empty-sub { font-size: 11px; }
+
+/* ---------- narrow ---------- */
+
+/* Below this the rail cannot hold a name and a position without wrapping, so
+   it stops being a column and becomes two cards under the list. The board
+   stays: it is the thing worth keeping, and it is already scrollable. */
+@media (max-width: 900px) {
+  .worksplit { grid-template-columns: minmax(0, 1fr); }
+  .rail { position: static; flex-direction: row; flex-wrap: wrap; }
+  .rail .railcard { flex: 1 1 260px; }
+}
+
+@media (max-width: 560px) {
+  .draftshell { padding: 8px 8px 40px; }
+  .boardpane { padding: 8px; }
+  .boardpane .board-scroll { max-height: 30vh; }
+  .rail { flex-direction: column; }
+}
