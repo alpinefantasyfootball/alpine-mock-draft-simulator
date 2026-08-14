@@ -274,18 +274,27 @@ body {
    It lives on the header, which is dark under both themes, so it is
    styled once against navy rather than switching with everything else. */
 
+/* There is one toggle per header, so the base is styled for a normal surface
+   and the draft header — which is navy under both themes — overrides it. */
 .theme-toggle {
   flex: none;
   display: flex; align-items: center; justify-content: center;
   width: 34px; height: 34px;
-  border: 1px solid rgba(255,255,255,.22); border-radius: 50%;
-  background: rgba(255,255,255,.10); color: #fff;
+  border: 1px solid var(--line); border-radius: 50%;
+  background: var(--fill); color: var(--ink-mid);
   cursor: pointer;
-  transition: background .15s ease, border-color .15s ease;
+  transition: background .15s ease, border-color .15s ease, color .15s ease;
 }
 
-.theme-toggle:hover { background: rgba(255,255,255,.20); border-color: rgba(255,255,255,.38); }
-.theme-toggle:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+.theme-toggle:hover { background: var(--fill-hi); color: var(--ink); }
+.theme-toggle:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+
+.appbar .theme-toggle {
+  border-color: rgba(255,255,255,.22);
+  background: rgba(255,255,255,.10); color: #fff;
+}
+.appbar .theme-toggle:hover { background: rgba(255,255,255,.20); border-color: rgba(255,255,255,.38); }
+.appbar .theme-toggle:focus-visible { outline-color: #fff; }
 
 /* One icon each way round: the sun offers the light theme, so it shows
    while the page is dark, and the moon shows while it is light. */
@@ -963,3 +972,183 @@ tr.drafted .meta, tr.drafted .num { opacity: .45; }
 .empty-title { margin: 0 0 4px; font-weight: 600; font-size: 15px; }
 .empty-sub { margin: 0 auto; max-width: 34ch; font-size: 13px; color: var(--ink-mid); line-height: 1.5; }
 .empty .primary { margin-top: 18px; }
+
+/* ==========================================================
+   The site shell — everything outside a running draft
+   ========================================================== */
+
+.shellbar { background: var(--card); border-bottom: 1px solid var(--line); }
+
+/* Three zones with the brand in the middle. The centre only holds its place
+   if the two sides carry similar weight, which is why the left has a second
+   link rather than the Rooms button on its own. */
+.shell-inner {
+  max-width: 1120px; margin: 0 auto;
+  display: grid; grid-template-columns: 1fr auto 1fr;
+  align-items: center; gap: 14px;
+  padding: 10px 18px;
+}
+
+.shell-side { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.shell-side.end { justify-content: flex-end; gap: 8px; }
+
+.shell-brand { display: flex; align-items: center; gap: 9px; text-decoration: none; }
+
+/* Poppins, not Montserrat. Poppins is already loaded for the rest of the app,
+   so the wordmark costs no extra font request. */
+.wordmark {
+  font-family: Poppins, sans-serif; font-weight: 700; font-size: 20px;
+  letter-spacing: -0.01em; color: var(--ink); line-height: 1;
+}
+
+.navbtn, .navlink {
+  font-family: Inter, sans-serif; font-size: 13.5px; font-weight: 600;
+  border: 0; border-radius: 8px; padding: 8px 12px;
+  cursor: pointer; text-decoration: none; white-space: nowrap;
+}
+
+.navbtn { background: var(--fill); color: var(--ink); }
+.navbtn:hover { background: var(--fill-hi); }
+.navlink { background: none; color: var(--ink-mid); }
+.navlink:hover { color: var(--ink); }
+
+/* Brand orange is only 3.34:1 against white, so a filled button that carries
+   white text uses the darker --orange-cta. */
+.cta {
+  font-family: Inter, sans-serif; font-size: 13.5px; font-weight: 700;
+  color: #fff; background: var(--orange-cta); border: 0; border-radius: 8px;
+  padding: 9px 16px; cursor: pointer; text-decoration: none; white-space: nowrap;
+}
+.cta:hover { background: #A8380A; }
+.cta.lg { font-size: 15px; padding: 13px 26px; }
+.navlink.lg { font-size: 14.5px; padding: 13px 10px; }
+
+.chev {
+  display: inline-block; width: 6px; height: 6px; opacity: .65;
+  border-right: 2px solid currentColor; border-bottom: 2px solid currentColor;
+  transform: rotate(45deg); margin: -3px 0 0 4px;
+}
+[aria-expanded="true"] .chev { transform: rotate(-135deg); margin-top: 2px; }
+
+/* ---------- rooms ---------- */
+
+.rooms-panel { border-top: 1px solid var(--line); background: var(--sunken); }
+
+.rooms-inner {
+  max-width: 1120px; margin: 0 auto; padding: 16px 18px 20px;
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+}
+
+.roomgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 46px; }
+
+@media (max-width: 860px) { .rooms-inner, .roomgrid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 560px) { .rooms-inner, .roomgrid { grid-template-columns: 1fr; } }
+
+.room {
+  display: block; text-decoration: none;
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: 10px; padding: 13px 15px;
+  transition: border-color .15s ease;
+}
+
+a.room:hover { border-color: var(--blue-line); }
+.room.soon { opacity: .66; }
+.room b { display: block; font-size: 14px; font-weight: 700; color: var(--ink); }
+.room .blurb { display: block; font-size: 12.5px; color: var(--ink-mid); margin-top: 4px; line-height: 1.5; }
+
+.pill {
+  display: inline-block; margin-top: 9px;
+  font-size: 9.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  padding: 3px 7px; border-radius: 999px;
+  background: var(--t-orange-bg); color: var(--t-orange-fg);
+}
+.pill.grey { background: var(--t-neutral-bg); color: var(--t-neutral-fg); }
+
+/* ---------- landing ---------- */
+
+/* Not ".home" — that is already the header's home button, and the collision
+   collapsed this section to zero width. */
+.landing { max-width: 1120px; margin: 0 auto; padding: 0 18px 64px; }
+
+.hero { max-width: 720px; margin: 0 auto; text-align: center; padding: 66px 0 42px; }
+
+.hero h1 {
+  margin: 0 0 16px; font-family: Poppins, sans-serif;
+  font-size: 42px; font-weight: 700; letter-spacing: -0.03em; line-height: 1.12;
+}
+
+.hero-sub { margin: 0 0 26px; font-size: 17px; line-height: 1.65; color: var(--ink-mid); }
+.hero-cta { display: flex; gap: 12px; justify-content: center; align-items: center; flex-wrap: wrap; }
+
+@media (max-width: 620px) {
+  .hero { padding: 42px 0 32px; }
+  .hero h1 { font-size: 31px; }
+  .hero-sub { font-size: 15.5px; }
+}
+
+.landing-resume {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  background: var(--card); border: 1px solid var(--blue-line);
+  border-radius: 10px; padding: 14px 16px; margin: 0 0 36px;
+}
+.landing-resume p { margin: 0; font-size: 13.5px; }
+.landing-resume .sub { font-size: 12px; color: var(--ink-mid); margin-top: 3px; }
+.landing-resume .btnrow { margin-left: auto; display: flex; gap: 8px; }
+
+.pillars {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;
+  border-top: 1px solid var(--line); padding-top: 30px;
+}
+@media (max-width: 760px) { .pillars { grid-template-columns: 1fr; } }
+
+.pillar b { display: block; font-size: 14px; font-weight: 700; margin-bottom: 5px; }
+.pillar span { font-size: 13px; color: var(--ink-mid); line-height: 1.6; }
+
+.landing-foot { margin: 38px 0 0; text-align: center; font-size: 12px; color: var(--ink-light); }
+.landing-foot p { margin: 0 0 4px; }
+.landing-foot p:last-child { margin-bottom: 0; }
+
+/* ---------- the "not yet" dialog ----------
+   A native <dialog>, so Escape, focus trapping and the backdrop are free. */
+
+.dlg {
+  border: 0; border-radius: 14px; padding: 24px 26px;
+  width: min(420px, calc(100vw - 32px));
+  background: var(--card); color: var(--ink);
+  box-shadow: 0 24px 60px rgba(6,12,22,.45);
+}
+
+.dlg::backdrop { background: rgba(6,12,22,.55); }
+.dlg h3 { margin: 0 0 8px; font-family: Poppins, sans-serif; font-size: 18px; font-weight: 700; }
+.dlg p { margin: 0 0 18px; font-size: 14px; line-height: 1.6; color: var(--ink-mid); }
+
+/* ---------- the score strip ----------
+   One row, horizontally scrolling, never taller than it needs to be. It is
+   the only part of the site that depends on a third party being up, so it
+   fails by disappearing rather than by showing an error. */
+
+.scores {
+  display: flex; gap: 8px; overflow-x: auto;
+  padding: 12px 0 14px; margin-bottom: 2px;
+  border-bottom: 1px solid var(--line);
+  -webkit-overflow-scrolling: touch;
+}
+
+.game {
+  flex: none; min-width: 132px;
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: 9px; padding: 8px 11px;
+}
+
+.game-row {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+  font-size: 12.5px; line-height: 1.55; color: var(--ink-mid);
+}
+
+.game-row .tm { font-weight: 600; }
+.game-row .sc { font-variant-numeric: tabular-nums; }
+.game-row.lead { color: var(--ink); }
+.game-row.lead .tm, .game-row.lead .sc { font-weight: 700; }
+
+.game-st { margin-top: 5px; font-size: 10.5px; color: var(--ink-light); white-space: nowrap; }
+.game-st.live { color: var(--orange); font-weight: 700; }

@@ -107,9 +107,12 @@ const pickLabel  = $("pickLabel");
 const countBlock = $("countBlock");
 const rightLabel = $("rightLabel");
 const rightValue = $("rightValue");
-const themeBtn   = $("themeBtn");
+const shellbar   = $("shellbar");
 const tabsNav    = $("tabs");
 const actionbar  = $("actionbar");
+
+// One toggle per header, so everything here works on the set rather than one.
+const themeBtns  = document.querySelectorAll(".theme-toggle");
 
 
 /* ---- 2b. Light and dark ---------------------------------
@@ -144,13 +147,266 @@ function setTheme(theme) {
 // what a screen reader user needs to hear before pressing it.
 function syncThemeButton() {
   const dark = currentTheme() === "dark";
-  themeBtn.setAttribute("aria-pressed", String(dark));
-  themeBtn.setAttribute("aria-label", dark ? "Switch to the light theme" : "Switch to the dark theme");
-  themeBtn.title = themeBtn.getAttribute("aria-label");
+  const label = dark ? "Switch to the light theme" : "Switch to the dark theme";
+  themeBtns.forEach(function (btn) {
+    btn.setAttribute("aria-pressed", String(dark));
+    btn.setAttribute("aria-label", label);
+    btn.title = label;
+  });
 }
 
 syncThemeButton();
 
+
+/* ---- 2c. The site shell ---------------------------------
+   Two views behind one hash route: the landing page at "#/"
+   and the Draft Room at "#/draft".
+
+   Hash routing rather than real paths, because GitHub Pages
+   serves static files and has no rewrite to send /draft back
+   to index.html. It also keeps the back button working, which
+   matters most to the person pressing it mid-draft.        */
+
+const ROOMS = [
+  { name: "The Draft Room", href: "#/draft", live: true,
+    blurb: "Mock drafts against a board that knows ADP, tiers and replacement level." },
+  { name: "The Waiver Room", live: false,
+    blurb: "Claim priority, FAAB budgets, and who is actually worth a bid." },
+  { name: "The Prospect Room", live: false,
+    blurb: "Rookies and dynasty value, worked out the same way." },
+  { name: "The Trade Room", live: false,
+    blurb: "Value both sides of a deal before you send it." },
+  { name: "The League Room", live: false,
+    blurb: "Your league, tracked from week one to the playoffs." },
+  { name: "The Strategy Room", live: false,
+    blurb: "Targets and a plan before you are on the clock." }
+];
+
+function roomCard(room) {
+  const body = "<b>" + room.name + "</b>" +
+               '<span class="blurb">' + room.blurb + "</span>" +
+               '<span class="pill' + (room.live ? "" : " grey") + '">' +
+               (room.live ? "Open" : "Planned") + "</span>";
+  return room.live
+    ? '<a class="room" href="' + room.href + '">' + body + "</a>"
+    : '<div class="room soon">' + body + "</div>";
+}
+
+// Written down once and rendered into both the header panel and the landing
+// page, so the two can never disagree about what exists.
+function renderRooms() {
+  const html = ROOMS.map(roomCard).join("");
+  $("roomsPanel").innerHTML = '<div class="rooms-inner">' + html + "</div>";
+  $("homeRooms").innerHTML = html;
+}
+
+function closeRooms() {
+  $("roomsPanel").hidden = true;
+  $("roomsBtn").setAttribute("aria-expanded", "false");
+}
+
+function toggleRooms() {
+  const opening = $("roomsPanel").hidden;
+  $("roomsPanel").hidden = !opening;
+  $("roomsBtn").setAttribute("aria-expanded", String(opening));
+}
+
+
+/* ---- the route ---- */
+
+function route() {
+  return location.hash.replace(/^#\/?/, "") === "draft" ? "draft" : "home";
+}
+
+function go(where) { location.hash = where === "draft" ? "#/draft" : "#/"; }
+
+function applyRoute() {
+  const onDraft = route() === "draft";
+
+  shellbar.hidden = onDraft;
+  appbar.hidden   = !onDraft;
+  $("view-home").hidden = onDraft;
+  $("view-app").hidden  = !onDraft;
+  tabsNav.hidden   = !(onDraft && state.started);
+  actionbar.hidden = !(onDraft && state.started);
+
+  if (!onDraft) {
+    // Leaving is not discarding. The draft stays in memory and in the save;
+    // only the clock and the CPU timer stop, so nothing advances off-screen
+    // while you are reading the landing page.
+    closeRooms();
+    stopSim();
+    stopClock();
+    state.lastPick = null;
+    renderHome();
+  } else if (state.started && !draftOver()) {
+    // Coming back: either hand you the clock, or let the room carry on.
+    if (isMyTurn()) resetClock(); else runCPUs();
+  }
+
+  render();
+  window.scrollTo(0, 0);
+}
+
+
+/* ---- the landing page ---- */
+
+function renderHome() {
+  // Provenance, not a sales line. "Free" and "no account" are already in the
+  // hero sentence, and the rooms section already says the data refreshes.
+  $("homeMeta").textContent = typeof PLAYERS_META === "undefined" ? "" :
+    PLAYERS_META.count + " players · ADP and projections refreshed " +
+    PLAYERS_META.generated;
+
+  // A saved draft is the most useful thing this page can offer someone, so it
+  // sits above the rooms rather than being buried on the setup screen.
+  loadScores();
+
+  const bar = $("homeResume");
+  const data = readSave();
+  if (!data || !data.picks.length) { bar.hidden = true; return; }
+
+  const saved = data.league;
+  const total = saved.teams * saved.rounds;
+  const made  = data.picks.length;
+  const done  = made >= total;
+
+  bar.hidden = false;
+  bar.innerHTML =
+    "<div><p><b>" + (done ? "Your finished draft" : "You have a draft in progress") + "</b></p>" +
+    '<p class="sub">' + settingsText(saved) + " \u00b7 " + made + " of " + total + " picks</p></div>" +
+    '<div class="btnrow"><a class="cta" href="#/draft">' +
+    (done ? "Reopen it" : "Resume") + "</a></div>";
+}
+
+
+/* ---- installing, and the things that do not exist yet ---- */
+
+// The browser decides whether an install is on offer; we only stash the event
+// and reveal the button once it is. Chrome and Edge fire this, iOS Safari
+// never does, so there the button simply never appears rather than lying.
+let installPrompt = null;
+
+window.addEventListener("beforeinstallprompt", function (e) {
+  e.preventDefault();
+  installPrompt = e;
+  $("installBtn").hidden = false;
+});
+
+window.addEventListener("appinstalled", function () {
+  installPrompt = null;
+  $("installBtn").hidden = true;
+});
+
+function notYet(title, body) {
+  $("soonTitle").textContent = title;
+  $("soonBody").textContent = body;
+  $("soonDlg").showModal();
+}
+
+
+
+/* ---- 2d. The score strip --------------------------------
+   The only part of Juke that depends on a third party at
+   run time. Two rules follow from that:
+
+   It fails silently. If the feed is down, slow, blocked or
+   has changed shape, the strip hides and the page is exactly
+   what it was before. A scoreboard is not worth an error.
+
+   It renders nothing in the offseason. No games means no
+   strip, rather than an empty frame for the five months
+   between February and August.
+
+   ESPN rather than Sleeper because Sleeper's schedule feed
+   carries no scores at all — only home, away, date and
+   status. Checked, not assumed. ESPN's endpoint is public
+   and permissive about CORS, but it is undocumented, so
+   treat a shape change as expected rather than surprising. */
+
+const SCORES_URL = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard";
+
+// The response is ~220KB, which is more than the whole app. Once a minute is
+// plenty for a strip you glance at, and it keeps route changes free.
+const SCORES_TTL = 60000;
+
+// Everything below comes from someone else's server, so it is escaped before
+// it goes anywhere near innerHTML. Nothing else in this file needs this,
+// because every other string is generated by our own pipeline.
+function escHtml(value) {
+  return String(value == null ? "" : value)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function gameFrom(event) {
+  const c = event && event.competitions && event.competitions[0];
+  if (!c || !c.competitors) return null;
+  const status = (c.status && c.status.type) || {};
+  const away = c.competitors.filter((x) => x.homeAway === "away")[0];
+  const home = c.competitors.filter((x) => x.homeAway === "home")[0];
+  if (!away || !home) return null;
+  return {
+    away: away.team && away.team.abbreviation,
+    home: home.team && home.team.abbreviation,
+    awayScore: away.score,
+    homeScore: home.score,
+    state: status.state,                       // "pre" | "in" | "post"
+    detail: status.shortDetail || ""
+  };
+}
+
+function cachedScores() {
+  try {
+    const raw = JSON.parse(sessionStorage.getItem("juke.scores"));
+    return raw && (Date.now() - raw.at) < SCORES_TTL ? raw.games : null;
+  } catch (err) { return null; }
+}
+
+function renderScores(games) {
+  const strip = $("scoreStrip");
+  if (!games || !games.length) { strip.hidden = true; return; }
+
+  strip.innerHTML = games.map(function (g) {
+    // Before kickoff there is nothing to lead by, so no side is emphasised.
+    const live = g.state !== "pre";
+    const a = Number(g.awayScore), h = Number(g.homeScore);
+    const row = (team, score, lead) =>
+      '<div class="game-row' + (lead ? " lead" : "") + '">' +
+        '<span class="tm">' + escHtml(team) + "</span>" +
+        '<span class="sc">' + (live ? escHtml(score) : "") + "</span>" +
+      "</div>";
+    return '<div class="game">' +
+      row(g.away, g.awayScore, live && a > h) +
+      row(g.home, g.homeScore, live && h > a) +
+      '<div class="game-st' + (g.state === "in" ? " live" : "") + '">' +
+        escHtml(g.detail) + "</div>" +
+    "</div>";
+  }).join("");
+
+  strip.hidden = false;
+}
+
+function loadScores() {
+  const cached = cachedScores();
+  if (cached) { renderScores(cached); return; }
+
+  fetch(SCORES_URL, { mode: "cors" })
+    .then(function (res) {
+      if (!res.ok) throw new Error("scores " + res.status);
+      return res.json();
+    })
+    .then(function (data) {
+      const games = (data.events || []).map(gameFrom).filter(Boolean);
+      try {
+        sessionStorage.setItem("juke.scores", JSON.stringify({ at: Date.now(), games }));
+      } catch (err) {}                          // private mode, or a full quota
+      renderScores(games);
+    })
+    .catch(function () {
+      $("scoreStrip").hidden = true;
+    });
+}
 
 /* ---- 3. The player board -------------------------------
    One sorted copy of the ADP set that matches the league's
@@ -462,12 +718,6 @@ function restart() {
 
 // The mark in the header. Mid-draft this is a surprising place to land, so
 // it asks first; once the draft is over there is nothing to interrupt.
-function leaveForHome() {
-  if (state.started && !draftOver() &&
-      !confirm("Leave this draft?\n\nIt stays saved, and the setup screen will " +
-               "offer to resume it.")) return;
-  goHome();
-}
 
 
 /* ---- 9. The pick clock ---------------------------------
@@ -1996,12 +2246,53 @@ $("sheetTabs").addEventListener("click", function (e) {
   $(e.target.dataset.view).classList.add("on");
 });
 
-// The header is never rebuilt by render(), so these two can hold a direct
-// listener rather than going through the delegated handler below.
-$("homeBtn").addEventListener("click", leaveForHome);
-themeBtn.addEventListener("click", function () {
-  setTheme(currentTheme() === "dark" ? "light" : "dark");
+// Neither header is rebuilt by render(), so these can hold direct listeners
+// rather than going through the delegated handler below.
+// The mark now leaves for the landing page rather than discarding: the draft
+// stays in memory and in the save, and the route change is what goes back.
+$("homeBtn").addEventListener("click", function () { go("home"); });
+
+themeBtns.forEach(function (btn) {
+  btn.addEventListener("click", function () {
+    setTheme(currentTheme() === "dark" ? "light" : "dark");
+  });
 });
+$("roomsBtn").addEventListener("click", toggleRooms);
+
+// A panel that opens on click should close the same way, from anywhere.
+document.addEventListener("click", function (e) {
+  if (!$("roomsPanel").hidden && !e.target.closest("#roomsPanel, #roomsBtn")) closeRooms();
+});
+
+document.addEventListener("keydown", function (e) {
+  if (e.key === "Escape") closeRooms();
+});
+
+$("installBtn").addEventListener("click", function () {
+  if (!installPrompt) return;
+  installPrompt.prompt();
+  installPrompt.userChoice.finally(function () {
+    installPrompt = null;
+    $("installBtn").hidden = true;
+  });
+});
+
+// Honest rather than absent: the buttons are part of where this is going, and
+// saying so beats a dead click or a form that posts into the void.
+$("loginBtn").addEventListener("click", function () {
+  notYet("Accounts are not live yet",
+         "There is nothing to log into so far. Your drafts save to this device, " +
+         "so you can close the tab and pick up where you left off.");
+});
+
+$("signupBtn").addEventListener("click", function () {
+  notYet("Sign-up is coming",
+         "Juke does not have accounts yet. Everything here is free and needs no " +
+         "sign-up, and your drafts already save to this device.");
+});
+
+window.addEventListener("hashchange", applyRoute);
+
 $("pauseBtn").addEventListener("click", togglePause);
 $("undoBtn").addEventListener("click", undo);
 $("autoBtn").addEventListener("click", autoDraftRest);
@@ -2068,3 +2359,8 @@ $("playerFilter").addEventListener("click", function (e) {
 // Everything above this line is a definition. This reads the setup screen,
 // builds the board from the matching ADP set, and draws the page.
 refreshSetup();
+
+// The route has the last word on what is visible, so it runs after the
+// setup screen has been built rather than before.
+renderRooms();
+applyRoute();
