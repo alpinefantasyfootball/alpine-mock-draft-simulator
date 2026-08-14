@@ -15,6 +15,8 @@
    Needs Node 22 or newer for WebSocket and fetch as globals. */
 
 const BASE = process.env.JUKE_WORKER || "ws://127.0.0.1:8787";
+// The same host over plain HTTP, for the one route that is not a socket.
+const HTTP = BASE.replace(/^ws/, "http");
 const ROOM = "testroom" + Math.floor(Math.random() * 100000);
 
 const LEAGUE = { teams: 4, rounds: 3 };
@@ -144,7 +146,7 @@ check("refusal names both versions",
       !!(rej?.detail?.roomVersion && rej?.detail?.yourVersion), true);
 
 // the /state route works without a socket
-const res = await fetch(`http://127.0.0.1:8787/room/${ROOM}/state`);
+const res = await fetch(`${HTTP}/room/${ROOM}/state`);
 const view = await res.json();
 check("state route responds", res.status, 200);
 check("state route agrees on the pick count", view.picks.length, s.picks.length);

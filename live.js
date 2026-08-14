@@ -30,7 +30,7 @@
 
      A plain constant rather than a build flag, because this project has no
      build. */
-  const WORKER_HOST = "";    // e.g. "juke-draft-room.chase.workers.dev"
+  const WORKER_HOST = "juke-draft-room.jukeff.workers.dev";
 
   const LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
   const WORKER = LOCAL ? "ws://127.0.0.1:8787" : "wss://" + WORKER_HOST;

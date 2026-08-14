@@ -53,7 +53,23 @@ one turn producing exactly one pick.
 `wrangler deploy --dry-run --outdir=<dir>` compiles without an account and is
 the quickest check that the bundle is still valid.
 
-Deploying for real needs `wrangler login` and a free Cloudflare account.
+Deployed at **https://juke-draft-room.jukeff.workers.dev**, on the free plan.
+SQLite-backed Durable Objects turned out not to need the paid one — that is
+what `new_sqlite_classes` in the migration buys, and it is why the binding is
+declared that way rather than as `new_classes`.
+
+```bash
+wrangler deploy
+JUKE_WORKER="wss://juke-draft-room.jukeff.workers.dev" node worker/test-sockets.mjs
+```
+
+The same thirty assertions run against production by setting `JUKE_WORKER`.
+
+A freshly registered workers.dev subdomain has no certificate for a few
+minutes. Until it is issued the symptom is a TLS handshake failure, which
+reads like a broken deploy and is not: DNS resolves, the worker is up, and
+the certificate simply has not arrived. Wait and retry before debugging
+anything.
 
 ## Decisions worth knowing before changing anything
 
