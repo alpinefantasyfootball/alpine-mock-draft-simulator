@@ -32,6 +32,7 @@ Python 3 standard library only in the pipeline. No pip dependencies.
 | `index.html` | Markup. Sticky header, tabs, action bar, panels, player sheet. |
 | `style.css` | All styling. Colours defined once at the top, reused by name. |
 | `app.js` | Everything else: draft engine, CPU logic, analysis, rendering. |
+| `back-to-top.js` | The back-to-top button. Its own file because the how-it-works page uses it and has no reason to load `app.js`. |
 | `players.js` | **GENERATED.** 260 players by ADP. Never edit by hand. |
 | `stats.js` | **GENERATED.** Stats, projections, depth charts by Sleeper ID. |
 | `scripts/build_players.py` | The pipeline that writes the two generated files. |
@@ -142,6 +143,15 @@ meta, so it looks like it worked, but 8, 10, 12 and 14 all return the same
 rows, the same ADP and the same `total_drafts` — checked across 2024, 2025
 and 2026. Only the scoring format actually changes the data. Don't build a
 team-count axis on top of it without re-checking that first.
+
+**`gp` on a projection is not a games count for every position.** Sleeper
+forecasts a team defense as one aggregate row stamped `gp: 1`, where every
+other position carries the real projected week count. Dividing by it made
+every DST's per-game figure identical to its season total — Pittsburgh read
+93 points and 93.0 per game. Per-game figures go through `perGame(points,
+games)`, which takes the denominator explicitly and prints a dash rather
+than dividing by a fallback, and DST rows get theirs from `projGames()`.
+Kickers were never affected: they carry the same `gp` as skill players.
 
 **Sleeper's projections are coarser than its actuals, and the pipeline has to
 reconcile that.** Season and weekly lines carry `fgm_50_59` and `fgm_60p`;

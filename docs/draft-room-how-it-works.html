@@ -5,10 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>How the Draft Room works &middot; Juke</title>
 
-  <!-- The same pre-paint theme switch the app uses. This page has no
-       JavaScript of its own and no toggle, but it shares the stylesheet, so
-       it has to honour a choice made next door rather than reverting to
-       light halfway through a visit. -->
+  <!-- The same pre-paint theme switch the app uses. This page has no toggle
+       of its own, but it shares the stylesheet, so it has to honour a choice
+       made next door rather than reverting to light halfway through a
+       visit. The only other script here is the back-to-top control, at the
+       foot of the page. -->
   <script>
     (function () {
       try {
@@ -327,9 +328,9 @@ flexShare = { RB: 0.40, WR: 0.55, TE: 0.05 }
     <p>
       How many of a position a computer team will ever hold: its starters, its
       share of the FLEX, and a fixed depth allowance of 3 for quarterbacks, 5
-      for backs and receivers, and 2 for tight ends, kickers and defences. At
+      for backs and receivers, and 2 for tight ends, kickers and defenses. At
       the default settings that works out to 4 quarterbacks, 8 backs, 8
-      receivers, 3 tight ends, 3 kickers and 3 defences.
+      receivers, 3 tight ends, 3 kickers and 3 defenses.
     </p>
 
 
@@ -359,22 +360,22 @@ score = (adp + jitter) &times; <b>need</b> &times; <b>risk</b>
       <li>the player is <b>ruled out</b> &mdash; out, on injured reserve,
         suspended, non-football injury or did not report. These are never
         drafted by anyone and never suggested to you;</li>
-      <li>it already has as many quarterbacks, kickers or defences as the
+      <li>it already has as many quarterbacks, kickers or defenses as the
         league starts. A superflex league that starts two quarterbacks gets
         two;</li>
-      <li>it is too early for a kicker or a defence.</li>
+      <li>it is too early for a kicker or a defense.</li>
     </ul>
 
-    <h3>Kickers and defences go last</h3>
+    <h3>Kickers and defenses go last</h3>
     <p>
       Measured back from the final round rather than pinned to a fixed number,
       so it holds at any league length: kickers become available for the last
-      two rounds, defences for the last three.
+      two rounds, defenses for the last three.
     </p>
     <div class="worked">
       <p class="worked-title">Worked through, at the default settings</p>
       <p>
-        Fourteen rounds, so defences come off the board from round 12 and
+        Fourteen rounds, so defenses come off the board from round 12 and
         kickers from round 13. Run a fifteen-round draft and both shift a round
         later on their own.
       </p>
@@ -433,7 +434,7 @@ threshold = max(2, previousPlayerAdp &times; 0.13)
     <table>
       <tr><td class="k">Starter strength</td><td class="n">50%</td><td>Every player in your best legal starting lineup, scored by how many places above replacement level they rank at their position. Uses the replacement ranks derived in section 03.</td></tr>
       <tr><td class="k">Draft value</td><td class="n">25%</td><td>How far each player fell past the board's own order when you took them. Taking a player later than his rank says is a bargain; taking him earlier is a reach.</td></tr>
-      <tr><td class="k">Roster construction</td><td class="n">15%</td><td>Starts at 100. Minus 14 for each unfilled starting slot, minus 9 for every quarterback, kicker or defence beyond what the league starts, minus 6 for being thin at running back or receiver.</td></tr>
+      <tr><td class="k">Roster construction</td><td class="n">15%</td><td>Starts at 100. Minus 14 for each unfilled starting slot, minus 9 for every quarterback, kicker or defense beyond what the league starts, minus 6 for being thin at running back or receiver.</td></tr>
       <tr><td class="k">Bye week safety</td><td class="n">10%</td><td>Minus 20 for every starter beyond the second sharing the same bye week. Judged on the starting lineup only, because bench byes cost nothing.</td></tr>
     </table>
 
@@ -535,6 +536,12 @@ threshold = max(2, previousPlayerAdp &times; 0.13)
     <a class="backlink" href="../index.html">&larr; Back to the Draft Room</a>
 
   </main>
+
+  <!-- This page is long enough that getting back to the contents is a real
+       scroll. Same control and same stylesheet as the app, so it looks and
+       behaves like one thing rather than a page that grew its own button. -->
+  <script src="../back-to-top.js"></script>
+  <script>backToTop();</script>
 
 </body>
 </html>

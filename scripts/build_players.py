@@ -131,7 +131,7 @@ SCOREABLE = [
 # how to value them. Anything the browser might need to score has to be here,
 # because a stat that was never stored can never be rescored. Sparse by
 # design — compact() drops every zero, so a running back carries no kicking
-# fields and a defence carries no receiving ones.
+# fields and a defense carries no receiving ones.
 STAT_FIELDS = {
     # --- passing ---
     "pass_att": "pa", "pass_cmp": "pc", "pass_yd": "py", "pass_td": "pt",
@@ -152,7 +152,7 @@ STAT_FIELDS = {
     "fgm": "fg", "xpm": "xp", "xpmiss": "xpx", "fgmiss": "fgx",
     "fgm_0_19": "f19", "fgm_20_29": "f29", "fgm_30_39": "f39",
     "fgm_40_49": "f49", "fgm_50_59": "f59", "fgm_60p": "f60",
-    # --- defence and special teams ---
+    # --- defense and special teams ---
     "sack": "sk", "int": "in", "fum_rec": "fr", "safe": "sf",
     "def_td": "dtd", "def_st_td": "sttd", "blk_kick": "bk", "def_2pt": "d2",
     # Raw points and yards allowed, as well as Sleeper's own banded counts.

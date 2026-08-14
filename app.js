@@ -582,7 +582,7 @@ function needMultiplier(slot, pos, round) {
 
   if (have >= maxAt(pos)) return 999;              // roster limit
 
-  // Kickers and defences go at the very end of any draft, so the cutoffs are
+  // Kickers and defenses go at the very end of any draft, so the cutoffs are
   // measured back from the last round rather than written down as 13 and 12.
   if (pos === "K"   && round < league.rounds - 1) return 999;
   if (pos === "DST" && round < league.rounds - 2) return 999;
@@ -987,6 +987,15 @@ function fantasyPoints(block) {
   return Math.round(total * 10) / 10;
 }
 
+// Points per game, formatted, from a games count the caller has to supply.
+// It is deliberately impossible to call this without naming the denominator:
+// the DST bug was a divisor picked up implicitly from whatever the feed had
+// put in gp. No games means no per-game figure, so it prints a dash rather
+// than dividing by a fallback of one and echoing the season total back.
+function perGame(points, games) {
+  return games > 0 ? (points / games).toFixed(1) : "&mdash;";
+}
+
 // Season keys, oldest first. Nothing here assumes which years exist.
 function seasonKeys(stat) {
   return stat && stat.s ? Object.keys(stat.s).sort() : [];
@@ -1013,9 +1022,41 @@ function statOf(player) {
   return PLAYER_STATS[player.id] || null;
 }
 
+// How many games a projection covers. Sleeper forecasts a team defense as
+// one aggregate row and stamps it gp:1, where every other position carries
+// the real projected week count — so dividing by gp made a DST's per-game
+// figure identical to its season total. Pittsburgh read 93 and 93.0.
+//
+// Which number applies is a question about the position, never about the
+// value the feed happened to send: a skill player really can be projected
+// for one game, and a defense with gp:1 is not playing one game.
+let PROJ_WEEKS = 0;
+
+// The horizon is read back off the rows that do carry it rather than written
+// down here, because Sleeper has used both 17 and 18 across seasons and a
+// number hardcoded now would silently drift from every other row later.
+function findProjectionWeeks() {
+  const counts = {};
+  board.forEach(function (p) {
+    const s = statOf(p);
+    const gp = p.pos !== "DST" && s && s.p ? s.p.gp : 0;
+    if (gp > 1) counts[gp] = (counts[gp] || 0) + 1;
+  });
+  const common = Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0];
+  // Nothing usable leaves this at 0, which perGame() renders as a dash.
+  PROJ_WEEKS = common ? Number(common) : 0;
+}
+
+function projGames(pos, block) {
+  if (!block || !block.gp) return 0;
+  return pos === "DST" ? PROJ_WEEKS : block.gp;
+}
+
 // Projected points under this app's scoring, and each player's rank at
 // their position by projection rather than by ADP.
 function buildProjections() {
+  findProjectionWeeks();
+
   board.forEach(function (p) {
     const s = statOf(p);
     // Sleeper returns zero-filled rows for players it has no forecast for,
@@ -1740,7 +1781,7 @@ function openSheet(player) {
       <p class="section-label">2026 projection &middot; ${scoringLabel()}</p>
       <div class="statgrid">
         <div class="statbox"><div class="k">Points</div><div class="v">${Math.round(fantasyPoints(p))}</div></div>
-        <div class="statbox"><div class="k">Per game</div><div class="v">${p.gp ? (fantasyPoints(p) / p.gp).toFixed(1) : "&mdash;"}</div></div>
+        <div class="statbox"><div class="k">Per game</div><div class="v">${perGame(fantasyPoints(p), projGames(player.pos, p))}</div></div>
         <div class="statbox"><div class="k">Pos rank</div><div class="v">${player.projPosRank ? player.pos + player.projPosRank : "&mdash;"}</div></div>
         <div class="statbox"><div class="k">vs ADP</div><div class="v">${player.projPosRank ? (player.posRank - player.projPosRank >= 0 ? "+" : "") + (player.posRank - player.projPosRank) : "&mdash;"}</div></div>
       </div>
@@ -1764,7 +1805,10 @@ function openSheet(player) {
     // listed a handful of stats by hand and would have called a week blank
     // for anyone whose only contribution was outside that list.
     const played = s.w.filter(didPlay);
-    const avg = played.length ? played.reduce((a, g) => a + fantasyPoints(g), 0) / played.length : 0;
+    const scored = played.reduce((a, g) => a + fantasyPoints(g), 0);
+    // The heading goes through perGame() so an all-bye log reads as a dash
+    // rather than a confident 0.0; avg stays a number for the cell tones.
+    const avg = played.length ? scored / played.length : 0;
     const cols = logColumns(player, s.w);
 
     const rows = s.w.map(function (g) {
@@ -1779,7 +1823,7 @@ function openSheet(player) {
       return `<tr class="${blank ? "bye" : ""}">${cells}</tr>`;
     }).join("");
 
-    logs = `<p class="section-label">2025 week by week &middot; ${avg.toFixed(1)} per game played</p>
+    logs = `<p class="section-label">2025 week by week &middot; ${perGame(scored, played.length)} per game played</p>
       <div class="tblscroll"><table class="logtbl">
         <thead><tr>${cols.head.map((h) => `<th>${h}</th>`).join("")}</tr></thead>
         <tbody>${rows}</tbody>
@@ -2076,10 +2120,10 @@ const RULE_GROUPS = [
   ["Turnovers and returns", ["fum_lost", "kr_td", "pr_td"]],
   ["Kicking",  ["xpm", "xpmiss", "fgmiss", "fgm_0_19", "fgm_20_29",
                 "fgm_30_39", "fgm_40_49", "fgm_50_59", "fgm_60p"]],
-  ["Defence and special teams",
+  ["Defense and special teams",
                ["sack", "int", "fum_rec", "safe", "def_td", "def_st_td",
                 "blk_kick", "def_2pt"]],
-  ["Points allowed by a defence",
+  ["Points allowed by a defense",
                ["pts_allow_0", "pts_allow_1_6", "pts_allow_7_13",
                 "pts_allow_14_20", "pts_allow_21_27", "pts_allow_28_34",
                 "pts_allow_35p"]]
@@ -2422,3 +2466,18 @@ refreshSetup();
 // setup screen has been built rather than before.
 renderRooms();
 applyRoute();
+
+// Back to top, twice: once for the page, which is what the landing view and
+// every draft panel scroll, and once for the player sheet, which is the only
+// thing in here that scrolls inside itself. The sheet's copy is mounted on
+// .sheet rather than on the scrolling body, so it stays put instead of
+// riding the content up. Both survive a render() because neither lives
+// inside a panel that render() rebuilds.
+backToTop();
+backToTop({
+  target: $("sheetBody"), mount: $("sheet"), className: "in-sheet",
+  // The sheet has a few hundred pixels of travel at most, never the page's
+  // several thousand, so it earns the button sooner. The default threshold
+  // is measured for a full page and would sit past the end of most sheets.
+  showAfter: 200
+});
