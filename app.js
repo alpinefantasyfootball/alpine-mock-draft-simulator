@@ -88,6 +88,11 @@ function replacementText() {
 
 const REPLACEMENT_PTS = {};
 
+// The best value over replacement anywhere on the board. Every Overall score
+// is a percentage of it, so it is worked out once per build in
+// buildProjections() rather than per player.
+let BEST_VOR = 0;
+
 // Fourteen, because a 14-team league needs a name for every seat.
 const CPU_NAMES = [
   "Wild Goose Chase", "Bijan Mustard", "Nacua Matata", "The Gibbs Ultimatum",
@@ -1081,11 +1086,28 @@ function buildProjections() {
       REPLACEMENT_PTS[pos] = ranked[ranked.length - 1].projPts;
     }
   });
+
+  // The best value-over-replacement on the board, which is the denominator
+  // every Overall score is measured against. It is computed once here rather
+  // than inside draftSignals(), because the player list now asks for a score
+  // on every row: recomputing it per call made that O(n^2) over the pool.
+  // It has to come after the loop above, since it reads REPLACEMENT_PTS.
+  BEST_VOR = Math.max.apply(null, board.map((p) =>
+    p.projPts === null ? 0 : p.projPts - (REPLACEMENT_PTS[p.pos] || 0)));
 }
 
 function label(score) {
   return score >= 75 ? "Very High" : score >= 55 ? "High"
        : score >= 35 ? "Medium"    : score >= 18 ? "Low" : "Very Low";
+}
+
+// Value over replacement, as a score out of 100. Split out of draftSignals()
+// because the player list wants this on every row, where the reasons, the
+// upside model and the bust model would all be work thrown away.
+function overallScore(player) {
+  if (!player || player.projPts === null || player.projPts === undefined) return null;
+  const vor = player.projPts - (REPLACEMENT_PTS[player.pos] || 0);
+  return Math.max(0, Math.min(100, (vor / (BEST_VOR || 1)) * 100));
 }
 
 function draftSignals(player) {
@@ -1096,9 +1118,7 @@ function draftSignals(player) {
 
   // ---- Overall: value over a replacement starter, in your scoring ----
   const vor = player.projPts - (REPLACEMENT_PTS[player.pos] || 0);
-  const best = Math.max.apply(null, board.map((p) =>
-    p.projPts === null ? 0 : p.projPts - (REPLACEMENT_PTS[p.pos] || 0)));
-  const overall = Math.max(0, Math.min(100, (vor / (best || 1)) * 100));
+  const overall = overallScore(player);
   reasons.overall.push(Math.round(player.projPts) + " projected points, " +
     (vor >= 0 ? "+" : "") + Math.round(vor) + " vs a replacement " + player.pos);
 
@@ -1418,9 +1438,46 @@ function renderSuggestions() {
   }).join("");
 }
 
+/* The position filter doubles as the roster-need display: the control you
+   already reach for to narrow the list is also the one that tells you what
+   you are still missing. It saves a trip to My Team on every pick.
+
+   Both numbers are derived, never written down — the need comes from
+   league.starters and the total from rosterSize(), so an unusual lineup
+   reports itself correctly with no extra code.
+
+   It only carries counts once a draft is running. Before that there is no
+   roster to be short of, and showing pool sizes here would give one control
+   two different meanings. */
+function renderPlayerFilter() {
+  const filled = rosterOf(state.mySlot).length;
+
+  $("playerFilter").querySelectorAll("button").forEach(function (button) {
+    const pos = button.dataset.pos;
+    const label = pos === "ALL" ? "All" : pos;
+
+    if (!state.started) {
+      button.innerHTML = label;
+      button.classList.remove("short", "met");
+      return;
+    }
+
+    const have = pos === "ALL" ? filled : countAt(state.mySlot, pos);
+    const need = pos === "ALL" ? rosterSize() : (league.starters[pos] || 0);
+
+    button.innerHTML = `${label}<span class="need">${have}/${need}</span>`;
+    // Short of a starting slot is the actionable state, so it is the only
+    // one that takes a colour. "Met" is just the absence of a warning.
+    button.classList.toggle("short", have < need);
+    button.classList.toggle("met", have >= need);
+  });
+}
+
 function renderPlayers() {
   const tbody = document.querySelector("#playerTable tbody");
   const hide  = $("hideDrafted").checked;
+
+  renderPlayerFilter();
 
   const term = state.search.trim().toLowerCase();
 
@@ -1433,12 +1490,19 @@ function renderPlayers() {
   });
 
   if (!visible.length) {
-    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:var(--ink-light);padding:26px">
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--ink-light);padding:26px">
       No players match that search.</td></tr>`;
     return;
   }
 
   tbody.innerHTML = visible.map(function (p) {
+    // Overall was only ever visible inside the player sheet, which meant
+    // opening a player to find out whether he was worth opening. It is the
+    // one number this app has that the ADP feed does not, so it belongs on
+    // the row. A dash where there is no projection, never a zero.
+    const score = overallScore(p);
+    const scoreCell = score === null ? "&mdash;" : Math.round(score);
+
     return `
       <tr class="${p.drafted ? "drafted" : ""} ${adpConflict(p) ? "conflict" : ""}">
         <td>
@@ -1448,6 +1512,8 @@ function renderPlayers() {
         </td>
         <td class="num">${p.pos}${p.posRank}</td>
         <td class="num">${p.adp.toFixed(1)}</td>
+        <td class="num">${p.projPts === null ? "&mdash;" : Math.round(p.projPts)}</td>
+        <td class="num ovr ${score !== null && score >= 55 ? "good" : ""}">${scoreCell}</td>
         <td><button class="draft-btn" data-draft="${p.name}"
              ${p.drafted || !isMyTurn() ? "disabled" : ""}>${p.drafted ? "Taken" : "Draft"}</button></td>
       </tr>`;
@@ -2401,6 +2467,12 @@ $("autoBtn").addEventListener("click", autoDraftRest);
 $("restartBtn").addEventListener("click", restart);
 $("hideDrafted").addEventListener("change", renderPlayers);
 
+// Density is a class on the table rather than a re-render: the rows do not
+// change, only how much air they sit in.
+$("roomyRows").addEventListener("change", function () {
+  $("playerTable").classList.toggle("compact", !this.checked);
+});
+
 $("playerSearch").addEventListener("input", function () {
   state.search = this.value;
   renderPlayers();
@@ -2451,10 +2523,14 @@ $("suggestFilter").addEventListener("click", function (e) {
 });
 
 $("playerFilter").addEventListener("click", function (e) {
-  if (e.target.tagName !== "BUTTON") return;
+  // closest(), not tagName: these buttons now hold a <span> with the
+  // have/need count, and a click landing on that text is still a click on
+  // the button as far as the person doing it is concerned.
+  const button = e.target.closest ? e.target.closest("button") : null;
+  if (!button || !this.contains(button)) return;
   this.querySelectorAll("button").forEach((b) => b.classList.remove("on"));
-  e.target.classList.add("on");
-  state.filterPlayers = e.target.dataset.pos;
+  button.classList.add("on");
+  state.filterPlayers = button.dataset.pos;
   renderPlayers();
 });
 

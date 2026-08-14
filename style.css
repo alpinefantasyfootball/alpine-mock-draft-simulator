@@ -543,6 +543,20 @@ select {
 
 .pos-filter button.on { color: var(--link); border-bottom-color: var(--link); }
 
+/* The have/need count that turns the filter into a roster-need display.
+   Written by renderPlayerFilter(), and absent before a draft starts. */
+.pos-filter .need {
+  display: inline-block; margin-left: 5px;
+  font-size: 11px; font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-light);
+}
+
+/* Short of a starting slot is the only state worth colouring. A filled slot
+   is the normal case and does not need to shout about itself. */
+.pos-filter button.short .need { color: var(--t-warn-fg); }
+.pos-filter button.met   .need { color: var(--good); }
+
 /* ---------- injury designations ---------- */
 
 .inj {
@@ -698,6 +712,26 @@ th.num { text-align: right; }
 tr.drafted { background: var(--sunken); }
 tr.drafted .nm { color: var(--ink-light); text-decoration: line-through; }
 tr.drafted .meta, tr.drafted .num { opacity: .45; }
+
+/* Overall: this app's own number, not the feed's, so it is the one figure in
+   the row set in the ink colour rather than the muted one. */
+.ovr { font-weight: 700; color: var(--ink); }
+.ovr.good { color: var(--good); }
+tr.drafted .ovr { color: var(--ink-light); }
+
+/* ---------- compact rows ----------
+   Drafting is comparison, and comparison needs rows adjacent. Compact is the
+   default on the player table; the toolbar toggle removes the class rather
+   than adding one, so the roomy version is the plain table styling above and
+   nothing here has to be undone twice. */
+
+#playerTable.compact td { padding: 5px 12px; }
+#playerTable.compact .nm { font-size: 13.5px; }
+#playerTable.compact .meta { margin-top: 1px; font-size: 11px; gap: 5px; }
+#playerTable.compact .badge { min-width: 26px; font-size: 9px; padding: 1px 5px; }
+#playerTable.compact .chip { font-size: 9px; padding: 1px 5px; }
+#playerTable.compact .inj { font-size: 8.5px; padding: 1px 4px; }
+#playerTable.compact .draft-btn { font-size: 11.5px; padding: 5px 11px; }
 
 /* ---------- draft board ---------- */
 

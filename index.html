@@ -342,6 +342,13 @@
           <input type="checkbox" id="hideDrafted">
           <span>Hide drafted</span>
         </label>
+        <!-- Drafting is comparison, and comparison needs rows next to each
+             other. Compact is the default for that reason; the roomier rows
+             stay one click away for anyone who wants them. -->
+        <label class="check">
+          <input type="checkbox" id="roomyRows">
+          <span>Roomy rows</span>
+        </label>
       </div>
 
       <div class="pos-filter" id="playerFilter">
@@ -354,12 +361,14 @@
         <button data-pos="DST">DST</button>
       </div>
 
-      <table id="playerTable">
+      <table id="playerTable" class="compact">
         <thead>
           <tr>
             <th>Player</th>
             <th class="num">Rank</th>
             <th class="num">ADP</th>
+            <th class="num">Proj</th>
+            <th class="num" title="Projected points above the last startable player at this position, scored out of 100">Ovr</th>
             <th></th>
           </tr>
         </thead>
