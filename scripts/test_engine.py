@@ -178,6 +178,87 @@ check("jitter differs by seed", E.jitter(42, 1) === E.jitter(42, 2), false);
   check("actions do not mutate", JSON.stringify(r), snapshot);
 })();
 
+/* ---- names, and the things hanging off a message ----
+
+   All of this is drawn on somebody else's screen from something somebody
+   else typed, which is why it is checked here rather than only through the
+   page: the page is one of two things that has to agree about it. */
+(function () {
+  const league = { teams: 4, rounds: 2, starters: { QB: 1, RB: 1 },
+                   flex: 0, superflex: 0, bench: 0 };
+  const T0 = 1000000;
+  let r = R.create({ league: league, seed: 1, host: "alice", clockLength: 30 });
+
+  // ---- a name is cleaned, not trusted ----
+  check("control characters are stripped from a name",
+        R.cleanName("Ch" + String.fromCharCode(0) + "a" + String.fromCharCode(31) + "se" + String.fromCharCode(127)), "Chase");
+  check("a newline cannot break the line a name sits on",
+        R.cleanName("Chase\nCantwell"), "Chase Cantwell");
+  check("runs of space collapse", R.cleanName("Sam    Reyes"), "Sam Reyes");
+  check("a name is capped", R.cleanName("x".repeat(60)).length, R.NAME_MAX);
+  check("a name of only spaces is no name", R.cleanName("   "), null);
+  check("no name is no name", R.cleanName(null), null);
+
+  r = R.join(r, { member: "alice", name: "  Chase   Cantwell " }, T0).state;
+  r = R.join(r, { member: "bob", name: "Sam" }, T0).state;
+  check("the name lands on the chair", r.seats[0].name, "Chase Cantwell");
+
+  // ---- renaming moves everywhere at once ----
+  r = R.say(r, { member: "alice", text: "morning", now: T0 }).state;
+  r = R.rename(r, { member: "alice", name: "Coach" }).state;
+  check("rename moves the chair", r.seats[0].name, "Coach");
+  check("rename rewrites what was already said",
+        r.chat.filter((m) => !m.system).map((m) => m.name), ["Coach"]);
+
+  r = R.join(r, { member: "alice", name: null }, T0 + 1).state;
+  check("a nameless rejoin keeps the name", r.seats[0].name, "Coach");
+
+  // ---- reactions ----
+  const line = r.chat.filter((m) => !m.system)[0];
+  check("a message carries an id", typeof line.id, "number");
+  check("an unlisted reaction is refused",
+        R.react(r, { member: "bob", id: line.id, emoji: "not-an-emoji" }).error,
+        R.ERR.BAD_REACTION);
+  check("a reaction to a line that has fallen off is refused",
+        R.react(r, { member: "bob", id: 99999, emoji: R.REACTIONS[0] }).error,
+        R.ERR.NO_SUCH_LINE);
+
+  r = R.react(r, { member: "bob", id: line.id, emoji: R.REACTIONS[0] }).state;
+  const mine = R.viewFor(r, "bob", T0).chat.filter((m) => !m.system)[0];
+  const theirs = R.viewFor(r, "alice", T0).chat.filter((m) => !m.system)[0];
+  check("the reactor is told it was them", mine.reacts,
+        [{ emoji: R.REACTIONS[0], count: 1, you: true }]);
+  check("everyone else gets the count and not the name", theirs.reacts,
+        [{ emoji: R.REACTIONS[0], count: 1, you: false }]);
+
+  /* The whole reason reactions are stored as member ids and projected: a
+     client that has never been told another member's id cannot impersonate
+     them by echoing it back. */
+  check("a reaction leaks no member id",
+        JSON.stringify(R.viewFor(r, "alice", T0)).indexOf('"bob"') < 0, true);
+
+  r = R.react(r, { member: "bob", id: line.id, emoji: R.REACTIONS[0] }).state;
+  check("the same reaction twice takes it back",
+        R.viewFor(r, "bob", T0).chat.filter((m) => !m.system)[0].reacts, null);
+
+  // ---- the log is bounded, in lines and in bytes ----
+  let big = R.join(R.create({ league: league, seed: 1, host: "alice" }),
+                   { member: "alice", name: "A" }, T0).state;
+  for (let i = 0; i < 400; i++) {
+    big = R.say(big, { member: "alice", text: "x".repeat(500), now: T0 + i }).state;
+  }
+  check("the log is capped in lines", big.chat.length <= 200, true);
+  /* The room is written to Durable Object storage whole, on every action, and
+     a value there has a hard ceiling. Five hundred characters is a legal
+     message, so a line count alone does not bound the write. */
+  check("the log is capped in bytes", JSON.stringify(big.chat).length <= 60000, true);
+
+  const ids = big.chat.map((m) => m.id);
+  check("ids keep climbing as lines fall off the front",
+        ids[0] < ids[ids.length - 1], true);
+  check("ids are unique", new Set(ids).size, ids.length);
+})();
+
 if (failures.length) {
   console.log("FAIL " + failures.length);
   failures.forEach((f) => console.log("  x " + f));

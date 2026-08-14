@@ -890,47 +890,293 @@ function safeGif(value) {
   }
 }
 
+/* ---- room chat ------------------------------------------
+
+   What the room stores is a flat list of things people said. What a draft
+   chat has to read like is a conversation with a draft happening in it, so
+   this is where the two are put back together:
+
+   - picks are merged in from room.picks rather than stored as messages,
+     because the room already has every one of them and writing them down
+     twice would push the actual conversation out of a fixed-length log by
+     about the third round;
+   - consecutive lines from one person collapse under one name, the way every
+     chat written since about 2013 does it;
+   - reactions hang off a message instead of becoming six more messages.
+
+   Everything a person typed still goes through escHtml() on the way in. That
+   is not a style choice here — see the note above safeGif(). */
+
+const chatUI = {
+  seenId: 0,          // the newest line drawn while the log was at the bottom
+  unread: 0,
+  pinned: true,       // is the log sitting on the newest line
+  open: false,        // the mobile sheet
+  typing: {},         // seat -> when we stop believing it
+  sweep: null,
+  sentTypingAt: 0
+};
+
+/* Two minutes of silence, or a change of speaker, starts a new block. Short
+   enough that "ok" ten minutes later is not filed under the same breath as
+   the sentence before it. */
+const GROUP_MS = 2 * 60 * 1000;
+
+/* Believed for four seconds and then not. The sender re-sends while they are
+   still typing, so this lapses on its own if they close the tab mid-word
+   rather than leaving a ghost typing forever. */
+const TYPING_MS = 4000;
+
+/* The most recent slice of the stream, not all of it. A full room carries up
+   to two hundred messages and a hundred and eighty picks, and render()
+   rebuilds every panel on every state change — including one per pick. */
+const CHAT_DRAW = 140;
+
+function chatTime(at) {
+  if (!at) return "";
+  const d = new Date(at);
+  let h = d.getHours();
+  const suffix = h < 12 ? "am" : "pm";
+  h = h % 12 || 12;
+  return h + ":" + String(d.getMinutes()).padStart(2, "0") + suffix;
+}
+
+/* A seat's name, preferred live over the one recorded on the message, so
+   somebody who renames themselves is renamed everywhere the moment they do
+   it rather than only on what they say next.
+
+   Null when nobody has typed one, rather than "Seat 4". The caller decides
+   what to show — and the avatar wants the seat number rather than the
+   initials of the words "Seat 4", which is how it briefly read as "S4". */
+function seatName(room, seat, fallback) {
+  if (seat < 0) return fallback || null;
+  const chair = room.seats && room.seats[seat];
+  return (chair && chair.name) || fallback || null;
+}
+
+function seatLabel(room, seat, fallback) {
+  return seatName(room, seat, fallback) ||
+         (seat >= 0 ? "Seat " + (seat + 1) : "Someone");
+}
+
+/* Initials for the avatar. Two words give two letters, one gives one, and a
+   seat with nobody's name on it gives its number — which is still an
+   identity, and is what a chair in an invite link has until someone types
+   into the name box.
+
+   Not initials(). There is already one of those for player photos, it is
+   declared later in this file, and a second function declaration with the
+   same name silently wins — so this was quietly calling the player one,
+   which throws on a null name. Check a new name against the file. */
+function seatInitials(name, seat) {
+  if (!name) return String(seat + 1);
+  const parts = String(name).trim().split(/\s+/).slice(0, 2);
+  return parts.map(function (w) { return w[0].toUpperCase(); }).join("");
+}
+
+/* One list, in the order things actually happened. Picks carry `at` already,
+   which is what makes this possible without the room storing anything new. */
+function chatStream(room) {
+  const out = [];
+
+  (room.chat || []).forEach(function (m) {
+    out.push({
+      kind: m.system ? "system" : "said",
+      id: m.id, seat: m.seat, name: m.name, text: m.text,
+      gif: m.gif, at: m.at, reacts: m.reacts
+    });
+  });
+
+  (room.picks || []).forEach(function (p) {
+    out.push({
+      kind: "pick", seat: p.slot, at: p.at,
+      round: p.round, overall: p.overall, player: p.key
+    });
+  });
+
+  out.sort(function (a, b) { return (a.at || 0) - (b.at || 0); });
+  return out.length > CHAT_DRAW ? out.slice(-CHAT_DRAW) : out;
+}
+
+function chatReactRow(entry, room) {
+  if (!entry.reacts || !entry.reacts.length) return "";
+  const buttons = entry.reacts.map(function (r) {
+    return `<button type="button" class="reactchip${r.you ? " on" : ""}"
+        data-react="${entry.id}" data-emoji="${escHtml(r.emoji)}"
+        aria-label="${r.count} reacted ${escHtml(r.emoji)}"
+      >${escHtml(r.emoji)}<b>${r.count}</b></button>`;
+  }).join("");
+  return `<div class="reactrow">${buttons}</div>`;
+}
+
+function chatSaidHtml(entry, room, grouped) {
+  const mine = entry.seat >= 0 && entry.seat === room.yourSeat;
+  const named = seatName(room, entry.seat, entry.name);
+  const who = seatLabel(room, entry.seat, entry.name);
+
+  /* The room already refused anything that is not GIPHY's own media, so this
+     is the second of two checks rather than the only one. It is here because
+     the room is the authority and this is the thing that actually asks a
+     browser to fetch the address — and an old room, or a future one, should
+     not be able to talk this page into loading from somewhere else. */
+  const gif = safeGif(entry.gif);
+
+  const body =
+    (entry.text ? `<span class="msgtext">${escHtml(entry.text)}</span>` : "") +
+    (gif ? `<img class="chatgif" src="${escHtml(gif)}" alt="" loading="lazy">` : "") +
+    chatReactRow(entry, room);
+
+  // The picker is opened from the message, so it needs somewhere to hang.
+  const tools = `<button type="button" class="reactadd" data-addreact="${entry.id}"
+      aria-label="React to this message">+</button>`;
+
+  if (grouped) {
+    return `<div class="msg grouped${mine ? " mine" : ""}" data-line="${entry.id}">
+        <span class="msgwhen">${escHtml(chatTime(entry.at))}</span>
+        <div class="msgbody">${body}</div>${tools}
+      </div>`;
+  }
+
+  return `<div class="msg${mine ? " mine" : ""}" data-line="${entry.id}">
+      <span class="chatav av${entry.seat >= 0 ? entry.seat % 8 : 0}"
+            aria-hidden="true">${escHtml(seatInitials(named, entry.seat))}</span>
+      <div class="msgbody">
+        <p class="msgwho">${escHtml(who)}<span class="msgwhen">${escHtml(chatTime(entry.at))}</span></p>
+        ${body}
+      </div>${tools}
+    </div>`;
+}
+
+function chatPickHtml(entry, room) {
+  const who = seatLabel(room, entry.seat, null);
+  const mine = entry.seat >= 0 && entry.seat === room.yourSeat;
+
+  /* A player name is ours, out of the generated board, so it is the one
+     string here that does not strictly need escaping. It gets it anyway —
+     the alternative is a reader having to know which of two adjacent
+     interpolations is the safe one. */
+  return `<div class="pickline${mine ? " mine" : ""}">
+      <span class="pickno">${entry.round}.${String(entry.overall).padStart(2, "0")}</span>
+      <span class="picktext"><b>${escHtml(who)}</b> drafted ${escHtml(entry.player)}</span>
+      <span class="msgwhen">${escHtml(chatTime(entry.at))}</span>
+    </div>`;
+}
+
 function renderChat() {
-  const card = $("chatCard");
+  const dock = $("chatDock");
   const room = typeof Live === "undefined" ? null : Live.room();
 
-  if (!room) { card.hidden = true; return; }
-  card.hidden = false;
+  if (!room) {
+    dock.hidden = true;
+    $("chatFab").hidden = true;
+    return;
+  }
+  dock.hidden = false;
+  placeChat();
 
   const log = $("chatLog");
-  const lines = room.chat || [];
+  const stream = chatStream(room);
 
-  if (!lines.length) {
+  // Measured before the rebuild, because the rebuild is what destroys it.
+  const wasPinned = log.scrollHeight - log.scrollTop - log.clientHeight < 48;
+
+  if (!stream.length) {
     log.innerHTML = `<p class="chatempty">Nobody has said anything yet.</p>`;
   } else {
-    log.innerHTML = lines.map(function (m) {
-      if (m.system) {
-        return `<p class="chatline system">${escHtml(m.text)}</p>`;
+    let lastSeat = null;
+    let lastAt = 0;
+    let lastKind = null;
+
+    log.innerHTML = stream.map(function (entry) {
+      if (entry.kind === "system") {
+        lastSeat = null; lastKind = "system";
+        return `<p class="chatline system">${escHtml(entry.text)}</p>`;
       }
-      const who = m.name ? escHtml(m.name)
-                : m.seat >= 0 ? "Seat " + (m.seat + 1)
-                : "Someone";
-      const mine = m.seat >= 0 && m.seat === room.yourSeat;
+      if (entry.kind === "pick") {
+        lastSeat = null; lastKind = "pick";
+        return chatPickHtml(entry, room);
+      }
 
-      /* The room already refused anything that is not GIPHY's own media, so
-         this is the second of two checks rather than the only one. It is
-         here because the room is the authority and this is the thing that
-         actually asks a browser to fetch the address — and an old room, or a
-         future one, should not be able to talk this page into loading from
-         somewhere else. */
-      const gif = safeGif(m.gif);
-
-      return `<p class="chatline${mine ? " mine" : ""}">
-          <b>${who}</b>${escHtml(m.text)}${
-            gif ? `<img class="chatgif" src="${escHtml(gif)}" alt="" loading="lazy">` : ""
-          }</p>`;
+      const grouped = lastKind === "said" && entry.seat === lastSeat &&
+                      entry.at - lastAt < GROUP_MS;
+      lastSeat = entry.seat; lastAt = entry.at; lastKind = "said";
+      return chatSaidHtml(entry, room, grouped);
     }).join("");
   }
 
-  // Pinned to the newest line. Checked first, so someone reading back through
-  // the log is not yanked to the bottom every time anyone speaks.
-  const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
-  if (atBottom) log.scrollTop = log.scrollHeight;
+  const newest = stream.reduce(function (top, e) {
+    return e.id && e.id > top ? e.id : top;
+  }, 0);
+
+  /* Pinned to the newest line, but only if it was pinned already. Yanking
+     somebody to the bottom while they are reading back is how a chat becomes
+     a thing people stop opening. What arrives while they are up there is
+     counted instead, and offered. */
+  if (wasPinned || chatUI.pinned) {
+    log.scrollTop = log.scrollHeight;
+    chatUI.pinned = true;
+    chatUI.seenId = newest;
+    chatUI.unread = 0;
+  } else {
+    chatUI.unread = stream.filter(function (e) {
+      return e.kind === "said" && e.id > chatUI.seenId &&
+             e.seat !== room.yourSeat;
+    }).length;
+  }
+
+  renderChatMeta(room);
+}
+
+/* The bits around the log: who is here, who is typing, what you have missed.
+   Separate from the log itself because a typing indicator changes several
+   times a second and rebuilding a hundred messages for it would be silly. */
+function renderChatMeta(room) {
+  if (!room) return;
+
+  const taken = room.seats.filter(function (s) { return s.taken; }).length;
+  $("chatPresence").textContent =
+    taken + (taken === 1 ? " manager" : " managers") + " here";
+
+  // Only people we still believe. The sweep below expires them.
+  const now = Date.now();
+  const names = Object.keys(chatUI.typing)
+    .filter(function (seat) { return chatUI.typing[seat] > now; })
+    .map(function (seat) { return seatLabel(room, Number(seat), null); });
+
+  $("chatTyping").textContent =
+    names.length === 0 ? "" :
+    names.length === 1 ? names[0] + " is typing…" :
+    names.length === 2 ? names[0] + " and " + names[1] + " are typing…" :
+    "Several managers are typing…";
+
+  const jump = $("chatJump");
+  jump.hidden = chatUI.unread === 0;
+  jump.textContent = chatUI.unread + " new " +
+    (chatUI.unread === 1 ? "message" : "messages") + " ↓";
+
+  const badge = $("chatBadge");
+  badge.hidden = chatUI.unread === 0;
+  badge.textContent = chatUI.unread > 9 ? "9+" : String(chatUI.unread);
+
+  /* The launcher is only ever for the draft, and only ever on a narrow
+     screen — CSS decides the second part. Not in the lobby, where the dock is
+     a plain block in the setup form and a button to open something already
+     open is just a button that appears to do nothing. */
+  $("chatFab").hidden = !(state.started && route() === "draft");
+}
+
+/* One dock, two homes. Moved rather than duplicated, because it holds a
+   scroll position, a half-typed message and possibly an open GIF search, and
+   two copies would mean deciding which of those is the real one every time
+   the draft starts.
+
+   Only ever moved when the destination actually changes: appendChild on the
+   parent a focused input is inside blurs it, and re-blurring the chat box on
+   every broadcast would make it unusable. */
+function placeChat() {
+  const dock = $("chatDock");
+  const slot = $(state.started && route() === "draft" ? "draftChatSlot" : "lobbyChatSlot");
+  if (slot && dock.parentNode !== slot) slot.appendChild(dock);
 }
 
 function onRoomChange() {
@@ -940,6 +1186,36 @@ function onRoomChange() {
   renderChat();
   render();
   driveRoomCPUs();
+}
+
+/* Somebody is typing. Recorded with an expiry rather than a flag, so a
+   manager who starts a sentence and then locks their phone stops being
+   described as typing four seconds later instead of forever. */
+function onRoomTyping(msg) {
+  if (msg.seat < 0) return;
+
+  if (msg.on) chatUI.typing[msg.seat] = Date.now() + TYPING_MS;
+  else delete chatUI.typing[msg.seat];
+
+  renderChatMeta(Live.room());
+  startTypingSweep();
+}
+
+/* One timer, running only while somebody is actually typing. The expiry
+   above is what makes a stale indicator impossible; this is only what makes
+   it disappear on time rather than at the next broadcast. */
+function startTypingSweep() {
+  if (chatUI.sweep) return;
+  chatUI.sweep = setInterval(function () {
+    const now = Date.now();
+    let live = 0;
+    Object.keys(chatUI.typing).forEach(function (seat) {
+      if (chatUI.typing[seat] > now) live++;
+      else delete chatUI.typing[seat];
+    });
+    renderChatMeta(Live.room());
+    if (!live) { clearInterval(chatUI.sweep); chatUI.sweep = null; }
+  }, 1000);
 }
 
 /* ---- the queue ------------------------------------------
@@ -2500,6 +2776,10 @@ function render() {
   renderSuggestions();
   renderQueue();
   renderRail();
+  // In here rather than only on a broadcast, because the dock has to follow
+  // the route: it lives beside the setup screen in the lobby and beside the
+  // board once the draft is running. Cheap when there is no room at all.
+  renderChat();
   renderPlayers();
   renderBoard();
   renderTeam();
@@ -3045,8 +3325,13 @@ function renderInvite() {
   }
   $("inviteStatus").textContent = text;
 
+  /* A seat's name is typed by a person, so it is escaped exactly as a chat
+     message is. This list used to be safe by accident — every chair said
+     "Manager" or "CPU", both of which we wrote — and stopped being the moment
+     names became real. Names are not a display detail; they are the second
+     piece of text on this page that somebody else wrote. */
   $("seatList").innerHTML = !room ? "" : room.seats.map(function (s) {
-    const who = s.you ? "You" : s.taken ? (s.name || "Manager") : "CPU";
+    const who = s.you ? "You" : s.taken ? escHtml(s.name || "Manager") : "CPU";
     return `<span class="seat ${s.you ? "you" : s.taken ? "human" : ""}">
         <b>${s.index + 1}</b>${who}</span>`;
   }).join("");
@@ -3063,7 +3348,10 @@ function renderInvite() {
 
 function joinRoom(code, asHost) {
   Live.onChange(onRoomChange);
+  Live.onTyping(onRoomTyping);
   Live.connect(code, {
+    // Null means "use the stored one", which live.js does. Typing a name into
+    // the setup screen before creating a room is the normal way round.
     name: null,
     league: asHost ? JSON.parse(JSON.stringify(league)) : {},
     clock: asHost ? league.clockLength || Number($("pickClock").value) : 0,
@@ -3178,9 +3466,30 @@ $("chatForm").addEventListener("submit", function (e) {
   if (!text || !inRoom()) return;
   Live.chat(text);
   field.value = "";
+  // Sending is the clearest possible signal that you have stopped typing.
+  chatUI.sentTypingAt = 0;
+  Live.typing(false);
   // Kept focused, because a draft chat is a conversation and reaching back
   // for the box between every line is how people stop bothering.
   field.focus();
+});
+
+/* Typing, told to the room on a leading edge and then not again for two
+   seconds. A message per keystroke would be a message per keystroke for
+   everybody else in the room as well, and the thing it conveys — somebody is
+   mid-sentence — does not get truer for being repeated. */
+$("chatInput").addEventListener("input", function () {
+  if (!inRoom()) return;
+
+  if (!this.value) {
+    if (chatUI.sentTypingAt) { chatUI.sentTypingAt = 0; Live.typing(false); }
+    return;
+  }
+
+  const now = Date.now();
+  if (now - chatUI.sentTypingAt < 2000) return;
+  chatUI.sentTypingAt = now;
+  Live.typing(true);
 });
 
 // One-tap lines. A draft moves fast enough that typing "nice pick" is often
@@ -3189,6 +3498,127 @@ $("chatReactions").addEventListener("click", function (e) {
   const button = e.target.closest ? e.target.closest("[data-say]") : null;
   if (!button || !inRoom()) return;
   Live.chat(button.dataset.say);
+});
+
+/* ---- reacting to a message ------------------------------
+
+   Delegated from the log, because renderChat() rebuilds all of it on every
+   broadcast and a listener attached to a message would not survive the next
+   thing anybody said. */
+$("chatLog").addEventListener("click", function (e) {
+  if (!e.target.closest || !inRoom()) return;
+
+  /* An existing chip, or one in the picker: pressing it adds yours, pressing
+     it again takes it back. Closing here rather than leaving it to the
+     rebuild, because the click that chose the emoji is inside the picker and
+     so does not reach the dismiss handler below. */
+  const chip = e.target.closest("[data-react]");
+  if (chip) {
+    Live.react(Number(chip.dataset.react), chip.dataset.emoji);
+    closeReactPicker();
+    return;
+  }
+
+  const add = e.target.closest("[data-addreact]");
+  if (add) { openReactPicker(add); return; }
+});
+
+/* The little row of faces that opens off a message. Built on demand and
+   thrown away on the next click anywhere, rather than rendered into every
+   message — a hundred and forty messages would mean eight hundred buttons
+   nobody has asked for yet. */
+function openReactPicker(anchor) {
+  closeReactPicker();
+
+  const room = Live.room();
+  const list = (room && room.reactions) || [];
+  const id = anchor.dataset.addreact;
+
+  const pop = document.createElement("div");
+  pop.className = "reactpicker";
+  pop.id = "reactPicker";
+  pop.innerHTML = list.map(function (emoji) {
+    return `<button type="button" data-react="${escHtml(id)}"
+        data-emoji="${escHtml(emoji)}">${escHtml(emoji)}</button>`;
+  }).join("");
+
+  anchor.parentNode.appendChild(pop);
+}
+
+function closeReactPicker() {
+  const open = $("reactPicker");
+  if (open && open.parentNode) open.parentNode.removeChild(open);
+}
+
+// Anywhere else closes it. Registered on document because the picker is
+// inside a log that is rebuilt from scratch several times a minute.
+document.addEventListener("click", function (e) {
+  if (e.target.closest && e.target.closest("#reactPicker, [data-addreact]")) return;
+  closeReactPicker();
+});
+
+/* ---- reading back, and what you missed ------------------ */
+
+$("chatLog").addEventListener("scroll", function () {
+  const atBottom = this.scrollHeight - this.scrollTop - this.clientHeight < 48;
+  if (atBottom === chatUI.pinned) return;
+
+  chatUI.pinned = atBottom;
+  if (!atBottom) return;
+
+  // Catching up is the same as having read it.
+  const room = Live.room();
+  if (room) {
+    chatUI.seenId = (room.chat || []).reduce(function (top, m) {
+      return m.id > top ? m.id : top;
+    }, 0);
+  }
+  chatUI.unread = 0;
+  renderChatMeta(room);
+});
+
+$("chatJump").addEventListener("click", function () {
+  const log = $("chatLog");
+  log.scrollTop = log.scrollHeight;   // the scroll handler does the rest
+});
+
+/* ---- the mobile sheet -----------------------------------
+
+   On a phone the dock covers the board rather than sitting beside it, so it
+   needs a way in and a way out. Both are inert on a desktop, where CSS keeps
+   the dock docked and the launcher hidden. */
+function openChatSheet(on) {
+  chatUI.open = on;
+  document.body.classList.toggle("chat-open", on);
+  if (!on) return;
+
+  const log = $("chatLog");
+  log.scrollTop = log.scrollHeight;
+  chatUI.pinned = true;
+  chatUI.unread = 0;
+  renderChatMeta(Live.room());
+}
+
+$("chatFab").addEventListener("click", function () { openChatSheet(!chatUI.open); });
+$("chatDismiss").addEventListener("click", function () { openChatSheet(false); });
+
+/* ---- your name ------------------------------------------
+
+   Stored on the way past, so the next room already knows it. Sent to the
+   room as well when there is one, which is what moves it onto the chair and
+   onto everything already said. */
+$("displayName").addEventListener("change", function () {
+  this.value = Live.setName(this.value);
+});
+
+/* Enter in the name box means "that's my name", not "submit the setup
+   screen" — which, on a form-less div, would otherwise do nothing at all and
+   read as the field being broken. */
+$("displayName").addEventListener("keydown", function (e) {
+  if (e.key !== "Enter") return;
+  e.preventDefault();
+  this.value = Live.setName(this.value);
+  this.blur();
 });
 
 $("randomizeBtn").addEventListener("click", function () {
@@ -3408,6 +3838,10 @@ applyRoute();
    already exists and already has a shape, and this browser's setup screen
    has no say in it. */
 (function () {
+  // Filled before anything connects, so a link followed from a text message
+  // arrives in the room already wearing the name from last time.
+  $("displayName").value = Live.name();
+
   const code = Live.codeInUrl();
   if (code) joinRoom(code, false);
   renderInvite();

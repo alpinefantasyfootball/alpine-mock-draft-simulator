@@ -36,7 +36,7 @@ Python 3 standard library only in the pipeline. No pip dependencies.
 | `draft-engine.js` | The rules of a snake draft — turn order, legality, the CPU wobble. No DOM, no globals, no dependencies, so a server can run the identical file. |
 | `room.js` | One shared draft: seats, picks, the clock. Pure, and time is always passed in rather than read. Loaded by the worker only; the page consumes the view it sends. |
 | `live.js` | The client end of a room: one socket, the invite code, and the messages. Knows nothing about the board or how anything is drawn. |
-| `worker/` | The Cloudflare Durable Object behind an invite link, plus its `wrangler.toml`. Not deployed. See `worker/README.md`. |
+| `worker/` | The Cloudflare Durable Object behind an invite link, plus its `wrangler.toml`. Deployed to `juke-draft-room.jukeff.workers.dev`; a change here needs `wrangler deploy` before the page can use it. See `worker/README.md`. |
 | `scripts/test_engine.py` | Runs `draft-engine.js` and `room.js` in node/deno/bun and asserts the rules from outside a browser. |
 | `players.js` | **GENERATED.** 260 players by ADP. Never edit by hand. |
 | `stats.js` | **GENERATED.** Stats, projections, depth charts by Sleeper ID. |
@@ -114,7 +114,16 @@ stored can never be rescored, and `build_players.py` fails loudly if a
   into both the header panel and the landing grid. Adding a room is one entry.
 - **Check a new class name against the existing sheet before using it.**
   The landing section was first called `.home`, which is already the header's
-  home button; it inherited `display:flex` and collapsed to zero width.
+  home button; it inherited `display:flex` and collapsed to zero width. The
+  chat avatar was first called `.avatar`, which is the player photo and is
+  hidden outright inside the rail.
+
+- **The same goes for function names, and it fails more quietly.** `app.js`
+  is one scope, so a second `function initials()` does not shadow the first —
+  it replaces it, whichever is declared last, with no warning anywhere. The
+  chat's version was silently calling the player one, which happened to
+  return something plausible for a real name and threw on an empty seat.
+  `grep -n "function <name>"` before adding one.
 
 - **The logo is navy-on-light, and the header is navy.** The mark is inlined
   rather than an `<img>` so the navy half can be reversed to white on the
@@ -166,6 +175,23 @@ projected 50-yard field goal — 183 of them — and makes kickers look far wors
 than they are. `reconcile()` folds the coarse keys in. Check any new stat
 across all three feeds before trusting it.
 
+**Bump `?v=` in `index.html` on every deploy that changes a file it loads.**
+`index.html` comes back with a ten minute cache and everything it asks for
+comes back with four hours, so without a version in the address a returning
+visitor runs today's HTML against Tuesday's JavaScript for the rest of the
+afternoon. That does not fail as a blank page. It fails as a page that half
+works: the shared room shipped with `renderChat` in the new `app.js` and the
+chat panel hidden in the markup, so anyone who had visited before got a room
+with no chat window at all and nothing in the console to say why. One number,
+changed in `index.html` and `docs/draft-room-how-it-works.html`, in every
+`?v=` on the page. A query string rather than renamed files, because renaming
+needs a manifest and a manifest is a build step.
+
+The four hours is Cloudflare's browser cache TTL, not GitHub Pages, which
+sends ten minutes. Setting it to "Respect Existing Headers" in the Cloudflare
+dashboard would shorten the window, but the `?v=` is what actually closes it
+and it works whoever is serving the file.
+
 **`og:image` must be an absolute URL, and it is baked to `jukeff.com`.**
 Link previews are fetched by Slack, iMessage and Twitter from their own
 servers, so a relative path resolves to nothing. If the domain ever changes,
@@ -187,6 +213,54 @@ pipeline, and `renderChat()` puts it in `innerHTML`. It all goes through
 can put a script tag in everyone else's draft. Verified by sending
 `<img src=x onerror=...>` through a real room and checking no image element
 is created and nothing runs.
+
+**A name is the second thing on the page somebody else wrote.** Chat was the
+first, and for a while it was the only one, which made the seat list safe by
+accident: every chair said "Manager" or "CPU" and we wrote both. The moment
+names became real, `renderInvite()` was putting a person's typing straight
+into `innerHTML`. Anywhere a name is drawn — the seat list, a message header,
+an avatar, the typing line, the "took seat 4" announcement — it is escaped,
+and the room cleans it first: control characters out, tabs and line breaks to
+a space (dropping a newline turns "Chase\nCantwell" into one word, which is a
+different name, not a safer one), collapsed, trimmed, then cut to 20.
+
+**Reactions are stored as member ids and never sent as them.** A chat line
+keeps `reacts: { "🔥": [memberId, ...] }`, and `viewFor()` turns that into
+`{ emoji, count, you }` before it leaves. That is the same rule the rest of
+the view follows and the reason it exists: a client that has never been told
+another member's id cannot impersonate them by echoing it back. The emoji is
+checked against `REACTIONS` for the same reason a GIF host is — otherwise it
+is an arbitrary string, per person, per message, in a room strangers can be
+invited into.
+
+**Typing never touches state.** It is relayed to the other sockets and
+forgotten. Storing it would mean a Durable Object write per keystroke to
+record something that is true for two seconds, and it is a lie the instant a
+connection drops. The seat comes from the socket, never from the message, so
+"seat 4 is typing" about somebody else is not a claim the room honours.
+
+**Picks are not chat messages; the client merges them in.** `room.picks`
+already carries every pick with a timestamp, so `chatStream()` interleaves
+them by `at` rather than the room storing them twice. The version that stored
+them looked fine for a round and then wasn't: 140 picks through a
+fixed-length log pushes every real message out by about round three.
+
+**The chat log is bounded in bytes as well as lines.** The whole room is
+written to storage on every action and a Durable Object value has a hard
+ceiling. Five hundred characters is a legal message, so 200 of them do not
+fit beside the picks and the league — a line count alone does not bound the
+write.
+
+**An author `display` beats `[hidden]`.** The chat dock is hidden from
+JavaScript and given `display: flex` by CSS, and the CSS wins — a solo draft
+grew a chat panel for a room it was not in. Anything that is both toggled by
+the `hidden` property and given a display in the stylesheet needs
+`[hidden] { display: none }` or `:not([hidden])` on the display rule.
+
+**`top` survives when a sticky column becomes a fixed sheet.** The docked
+chat sets `top: 8px`; the mobile rule sets `bottom: 0` and a height. Top plus
+height is a complete answer, so the browser took it and ignored `bottom`, and
+the sheet opened at the top of the screen. `top: auto` is the fix.
 
 **A GIF address from chat is a claim, not a fact.** It arrives from another
 manager exactly as a message does, and it ends up in an `img src`. Only
@@ -232,13 +306,18 @@ A cached stylesheet once let the logo expand to fill the entire screen.
 ## Testing
 
 - Room over sockets: `cd worker && wrangler dev --port 8787 --local`, then
-  `node worker/test-sockets.mjs` in another terminal. Thirty assertions
+  `node worker/test-sockets.mjs` in another terminal. Fifty-two assertions
   against the real Durable Object runtime, no Cloudflare account needed.
-  This is the only thing that covers sockets, storage and the alarm; the
-  room logic itself is pure and covered below.
-- Engine: `py scripts/test_engine.py` — runs `draft-engine.js` outside a
-  browser and asserts the snake maths, the turn order, the legality checks
-  and the determinism of the CPU wobble. It needs node, deno or bun on PATH
+  This is the only thing that covers sockets, storage, the alarm and the
+  messages that never reach storage at all — typing is relayed, so a suite
+  that only inspects state cannot see it. The room logic itself is pure and
+  covered below. `npx --yes wrangler@4 dev …` works if wrangler is not
+  installed globally and leaves nothing in the repo.
+- Engine: `py scripts/test_engine.py` — runs `draft-engine.js` and `room.js`
+  outside a browser and asserts the snake maths, the turn order, the legality
+  checks, the determinism of the CPU wobble, and the parts of a room that a
+  person types into: name cleaning, renaming, reaction privacy and the two
+  bounds on the chat log. It needs node, deno or bun on PATH
   and says so plainly if none is there rather than looking like a failure.
   Node is installed user-scope via winget, so a new terminal sees it and an
   already-open one does not.

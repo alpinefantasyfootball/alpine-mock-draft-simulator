@@ -43,7 +43,9 @@
     NOT_YOUR_SEAT: "not-your-seat",
     ALREADY_SEATED:"already-seated",
     EMPTY_MESSAGE: "empty-message",
-    NOT_STARTED:   "not-started"
+    NOT_STARTED:   "not-started",
+    NO_SUCH_LINE:  "no-such-line",
+    BAD_REACTION:  "bad-reaction"
   };
 
   function fail(state, code) { return { state: state, error: code }; }
@@ -80,11 +82,49 @@
       pickStartedAt: null,
       paused: false,
       chat: [],
+      chatSeq: 0,          // see nextId(): ids outlive their position
       members: {}          // member id -> { name, seat|null, seen }
     };
   }
 
-  /* ---- people --------------------------------------------- */
+  /* ---- people ---------------------------------------------
+
+     A name is the one thing in a room that a person types about themselves,
+     and it is drawn beside every message they send and on their chair. So it
+     is cleaned here, on the server, rather than trusted from the client:
+     the page that submitted it is not the only page that will draw it.
+
+     Control characters go first. They are invisible, they survive HTML
+     escaping — which is about `<` and `&`, not about a backspace — and a
+     newline in a name breaks the line it sits on for everybody in the room. */
+  const NAME_MAX = 20;
+
+  function cleanName(value) {
+    if (value == null) return null;
+
+    // Read a bounded amount before doing any work. The name arrives on a
+    // query string, and nothing says it has to be short.
+    const raw = String(value).slice(0, NAME_MAX * 10);
+    let out = "";
+
+    for (let i = 0; i < raw.length; i++) {
+      const code = raw.charCodeAt(i);
+
+      /* Tabs and line breaks become a space rather than vanishing. Dropping
+         them turns "Chase\nCantwell" into "ChaseCantwell", which is not a
+         sanitised name — it is a different one. */
+      if (code === 9 || (code >= 10 && code <= 13)) { out += " "; continue; }
+
+      // Everything else invisible is simply not part of a name.
+      if (code < 32 || (code >= 127 && code < 160)) continue;
+
+      out += raw.charAt(i);
+    }
+
+    // Collapsed and trimmed before the cut, so the limit counts characters
+    // somebody will actually see.
+    return out.replace(/\s+/g, " ").trim().slice(0, NAME_MAX) || null;
+  }
 
   function seatOf(state, member) {
     for (let i = 0; i < state.seats.length; i++) {
@@ -108,25 +148,53 @@
   function join(state, opts, now) {
     const next = clone(state);
     const existing = next.members[opts.member];
+    const name = cleanName(opts.name);
 
     if (existing) {                       // a refresh, not a new person
       existing.seen = now;
-      existing.name = opts.name || existing.name;
+      existing.name = name || existing.name;
+      // A reconnect carries the name the browser has, which may be newer than
+      // the one the chair is wearing — someone renamed themselves and then
+      // went through a tunnel. The chair follows the member, always.
+      const seat = seatOf(next, opts.member);
+      if (seat >= 0) next.seats[seat].name = existing.name;
       return ok(next);
     }
 
     const seat = next.status === "lobby" ? freeSeat(next) : -1;
 
     next.members[opts.member] = {
-      name: opts.name || null,
+      name: name,
       seat: seat >= 0 ? seat : null,
       seen: now
     };
 
     if (seat >= 0) {
       next.seats[seat].member = opts.member;
-      next.seats[seat].name = opts.name || null;
+      next.seats[seat].name = name;
       next.seats[seat].auto = false;
+    }
+    return ok(next);
+  }
+
+  /* Changing your name mid-draft is allowed, and it moves everywhere at once:
+     the chair, and every line already in the log. The alternative — leaving
+     old messages under the old name — reads as two different people talking,
+     which is worse than the small dishonesty of rewriting history. */
+  function rename(state, opts) {
+    const name = cleanName(opts.name);
+    const next = clone(state);
+
+    if (!next.members[opts.member]) return fail(state, ERR.NOT_YOUR_SEAT);
+    next.members[opts.member].name = name;
+
+    const seat = seatOf(next, opts.member);
+    if (seat >= 0) next.seats[seat].name = name;
+
+    if (seat >= 0) {
+      next.chat.forEach(function (m) {
+        if (!m.system && m.seat === seat) m.name = name;
+      });
     }
     return ok(next);
   }
@@ -326,12 +394,51 @@
      somebody who joins in round four can read what the room has been saying
      rather than arriving into silence. It costs a broadcast either way.
 
-     Fifty messages, because the whole room is written to storage on every
-     action and an unbounded log would grow until that write is the slowest
-     thing in the draft. Older lines fall off; nobody scrolls back through a
-     mock draft. */
-  const CHAT_KEEP = 50;
+     Bounded twice, because the whole room is written to storage on every
+     action and a Durable Object value has a hard ceiling. A count alone is
+     not enough: five hundred characters is a legal message and two hundred of
+     those would not fit beside the picks and the league. So lines fall off
+     the front on whichever limit bites first.
+
+     Picks are deliberately not in here. They arrive in the stream on the
+     client, merged out of room.picks by timestamp, which already carries all
+     of them — a hundred and forty in a normal draft. Storing them as chat
+     would double the record and, worse, would push every real message out of
+     a fixed-length log by the third round. */
+  const CHAT_KEEP = 200;
+  const CHAT_BYTES = 60000;
   const CHAT_MAX = 500;
+
+  /* A reaction is one of these and nothing else.
+
+     An allowlist rather than "any emoji", because the alternative is storing
+     an arbitrary string per person per message, and a room is a thing
+     strangers can be invited into. Six is also about as many as anybody
+     picks from without thinking, which is the whole point of a reaction. */
+  const REACTIONS = ["👍", "😂", "😱",
+                     "🔥", "💀", "🏈"];
+
+  /* Ids come from a counter on the room, not from the timestamp or the
+     position in the array. Two people can send in the same millisecond, and
+     the array shifts every time a line falls off the front — either would
+     mean a reaction landing on somebody else's message. */
+  function nextId(next) {
+    next.chatSeq = (next.chatSeq || 0) + 1;
+    return next.chatSeq;
+  }
+
+  function trimChat(next) {
+    if (next.chat.length > CHAT_KEEP) next.chat = next.chat.slice(-CHAT_KEEP);
+
+    // Measured once and decremented, rather than re-stringifying the whole
+    // log per line dropped, which is the difference between O(n) and O(n²) on
+    // the hot path of every message anybody sends.
+    let bytes = JSON.stringify(next.chat).length;
+    while (next.chat.length > 1 && bytes > CHAT_BYTES) {
+      bytes -= JSON.stringify(next.chat.shift()).length + 1;
+    }
+    return next;
+  }
 
   /* A GIF address is a claim, not a fact. It arrives from a manager the same
      way a message does, and the client puts it in an img src — so anything
@@ -363,6 +470,7 @@
     const seat = seatOf(next, opts.member);
 
     next.chat.push({
+      id: nextId(next),
       // The seat, not the member id: a client is never told anyone else's
       // id and a chat line is no reason to start.
       seat: seat,
@@ -372,8 +480,7 @@
       at: opts.now
     });
 
-    if (next.chat.length > CHAT_KEEP) next.chat = next.chat.slice(-CHAT_KEEP);
-    return ok(next);
+    return ok(trimChat(next));
   }
 
   /* Said by the room itself: who arrived, who left, when it started. The
@@ -381,9 +488,61 @@
      and the transcript reads in order. */
   function announce(state, text, now) {
     const next = clone(state);
-    next.chat.push({ seat: -1, name: null, text: text, at: now, system: true });
-    if (next.chat.length > CHAT_KEEP) next.chat = next.chat.slice(-CHAT_KEEP);
-    return next;
+    next.chat.push({
+      id: nextId(next), seat: -1, name: null, text: text, at: now, system: true
+    });
+    return trimChat(next);
+  }
+
+  /* Reactions hang off the message rather than being messages of their own,
+     which is the difference between a room where six people agree and a room
+     where six people each say "👍" and the conversation is gone.
+
+     Stored as member ids so that pressing the same one twice takes it back,
+     and so nobody can react twice by reconnecting. Those ids never leave the
+     server — viewFor() turns them into a count and a flag. */
+  function react(state, opts) {
+    if (REACTIONS.indexOf(opts.emoji) < 0) return fail(state, ERR.BAD_REACTION);
+
+    const next = clone(state);
+    const line = next.chat.filter(function (m) { return m.id === opts.id; })[0];
+    // A line that has already fallen off the front of the log. Nothing to
+    // attach to, and nothing worth interrupting anybody about.
+    if (!line) return fail(state, ERR.NO_SUCH_LINE);
+
+    if (!line.reacts) line.reacts = {};
+    const who = line.reacts[opts.emoji] || [];
+    const at = who.indexOf(opts.member);
+
+    if (at >= 0) who.splice(at, 1);
+    else who.push(opts.member);
+
+    if (who.length) line.reacts[opts.emoji] = who;
+    else delete line.reacts[opts.emoji];
+    if (!Object.keys(line.reacts).length) delete line.reacts;
+
+    return ok(next);
+  }
+
+  /* Counts and whether it was you, never who. A client that has never been
+     told another member's id cannot impersonate them by echoing it back, and
+     a reaction is no reason to start handing them out. */
+  function reactsFor(line, member) {
+    if (!line.reacts) return null;
+
+    const out = [];
+    // REACTIONS order rather than insertion order, so the row does not
+    // reshuffle under somebody's finger as other people press things.
+    REACTIONS.forEach(function (emoji) {
+      const who = line.reacts[emoji];
+      if (!who || !who.length) return;
+      out.push({
+        emoji: emoji,
+        count: who.length,
+        you: !!member && who.indexOf(member) >= 0
+      });
+    });
+    return out.length ? out : null;
   }
 
   /* ---- what a client sees ---------------------------------
@@ -402,7 +561,22 @@
       clockLength: state.clockLength,
       paused: state.paused,
       msLeft: msLeft(state, now),
-      chat: state.chat || [],
+      /* Rebuilt rather than handed over. The stored line carries the member
+         ids of everyone who reacted to it, and those are exactly the thing
+         this function exists to keep in. */
+      chat: (state.chat || []).map(function (m) {
+        return {
+          id: m.id,
+          seat: m.seat,
+          name: m.name,
+          text: m.text,
+          gif: m.gif,
+          at: m.at,
+          system: m.system,
+          reacts: reactsFor(m, member)
+        };
+      }),
+      reactions: REACTIONS,
       isHost: !!state.host && state.host === member,
       yourSeat: seatOf(state, member),
       seats: state.seats.map(function (chair, i) {
@@ -420,17 +594,22 @@
   return {
     VERSION: VERSION,
     ERR: ERR,
+    REACTIONS: REACTIONS,
+    NAME_MAX: NAME_MAX,
     create: create,
     join: join,
     claimSeat: claimSeat,
     leave: leave,
+    rename: rename,
     start: start,
     submitPick: submitPick,
     autoPick: autoPick,
     hostPick: hostPick,
     pause: pause,
     say: say,
+    react: react,
     cleanGif: cleanGif,
+    cleanName: cleanName,
     announce: announce,
     onTheClock: onTheClock,
     seatOf: seatOf,

@@ -115,8 +115,10 @@ export class DraftRoom {
     // otherwise announce the same person every time their train moved.
     const seat = Room.seatOf(this.room, member);
     if (before < 0 && seat >= 0) {
+      // The cleaned name, not the one off the query string: this goes into a
+      // stored line that everybody's browser will draw.
       this.room = Room.announce(this.room,
-        (name || "A manager") + " took seat " + (seat + 1), Date.now());
+        (Room.cleanName(name) || "A manager") + " took seat " + (seat + 1), Date.now());
     }
     await this.save();
 
@@ -141,6 +143,25 @@ export class DraftRoom {
     const now = Date.now();
     let result;
 
+    /* Typing is the one thing that does not go through the room.
+
+       It is true for about two seconds and then it is a lie, so storing it
+       would mean a Durable Object write per keystroke to record something
+       nobody will ever want to replay. It is relayed to the other sockets and
+       forgotten — which also means it simply does not exist for anyone whose
+       connection has dropped, and that is the right answer.
+
+       The seat is looked up here rather than taken from the message, because
+       a client saying "seat 4 is typing" about somebody else is not a claim
+       worth honouring. */
+    if (msg.type === "typing") {
+      const seat = Room.seatOf(this.room, member);
+      if (seat < 0) return;
+      const name = (this.room.seats[seat] || {}).name || null;
+      this.relay(socket, { type: "typing", seat, name, on: msg.on !== false });
+      return;
+    }
+
     switch (msg.type) {
       case "claim-seat":
         result = Room.claimSeat(this.room, { member, seat: Number(msg.seat) });
@@ -162,6 +183,12 @@ export class DraftRoom {
         break;
       case "chat":
         result = Room.say(this.room, { member, text: msg.text, gif: msg.gif, now });
+        break;
+      case "rename":
+        result = Room.rename(this.room, { member, name: msg.name });
+        break;
+      case "react":
+        result = Room.react(this.room, { member, id: Number(msg.id), emoji: msg.emoji });
         break;
       default:
         return;
@@ -251,6 +278,16 @@ export class DraftRoom {
   send(payload) {
     const text = JSON.stringify(payload);
     this.sockets.forEach((member, socket) => {
+      try { socket.send(text); } catch (err) { this.sockets.delete(socket); }
+    });
+  }
+
+  // Everyone but the sender. Being told that you are typing is noise, and
+  // with two tabs open it is noise that argues with itself.
+  relay(from, payload) {
+    const text = JSON.stringify(payload);
+    this.sockets.forEach((member, socket) => {
+      if (socket === from) return;
       try { socket.send(text); } catch (err) { this.sockets.delete(socket); }
     });
   }

@@ -35,7 +35,23 @@ jobs:
           git config user.name  "alpine-draft-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add players.js stats.js unmatched.txt
-          # --quiet exits non-zero when there ARE changes, so the || is what
-          # lets the job succeed on a day when nothing moved.
-          git diff --staged --quiet || git commit -m "Update player data ($(date -u +%Y-%m-%d))"
+
+          # --quiet exits non-zero when there ARE changes, so this is the
+          # early exit on a day when nothing moved.
+          if git diff --staged --quiet; then
+            echo "No change in the feeds today; nothing to commit."
+            exit 0
+          fi
+
+          # The generated files are cached for four hours by the CDN, so new
+          # data behind an unchanged address is data nobody sees until the
+          # afternoon. Bumping the stamp is what actually ships the rebuild —
+          # see the note beside ?v= in index.html. Down to the minute, because
+          # this workflow also has a Run button and can fire twice in a day.
+          STAMP=$(date -u +%Y%m%d%H%M)
+          sed -i -E "s/\?v=[0-9A-Za-z._-]+/?v=$STAMP/g" \
+            index.html docs/draft-room-how-it-works.html
+          git add index.html docs/draft-room-how-it-works.html
+
+          git commit -m "Update player data ($(date -u +%Y-%m-%d))"
           git push

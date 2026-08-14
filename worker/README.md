@@ -4,9 +4,14 @@ What sits behind an invite link. One Cloudflare Durable Object per draft:
 everyone who follows `jukeff.com/#/draft?room=E8jeVeL` is routed to the same
 object, and that object is the only thing that decides what happened.
 
-**Nothing here is deployed yet.** The static site does not load it and does
-not need it. A solo mock draft still opens from `file://` with no backend at
-all, and that is deliberate — see the multi-user section of `CLAUDE.md`.
+**This is deployed**, to `juke-draft-room.jukeff.workers.dev`, and `live.js`
+points at it by name. So a change to `draft-room.js` or to `../room.js` is not
+live until `wrangler deploy` has run, and a client that expects it will fail
+against the old one — check both sides ship together.
+
+**The site still does not need it.** A solo mock draft opens from `file://`
+with no backend at all and never opens a socket, and that is deliberate — see
+the multi-user section of `CLAUDE.md`.
 
 ## What is where
 

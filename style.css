@@ -96,6 +96,15 @@
   /* Position colours. The -bg / -fg pair is a chip or an avatar; the bare
      name is a solid block on the draft board, which always carries white
      text and so is the same in both themes. */
+  /* Seat colours, for the avatar beside a chat message. Solids under white
+     text, exactly like the position blocks below and defined here for the
+     same reason: they are the same value under both themes, so a rule may
+     name one without needing a light override. Eight, cycled, because a
+     fourteen-team room has more chairs than there are hues worth telling
+     apart at eighteen pixels across. */
+  --seat-0:#2E86C1; --seat-1:#28A667; --seat-2:#D9534F; --seat-3:#8064CF;
+  --seat-4:#E08A2C; --seat-5:#12879B; --seat-6:#B5427F; --seat-7:#607483;
+
   --qb-bg:#3A1D22;  --qb-fg:#F0929B;  --qb:#D9534F;
   --rb-bg:#12293A;  --rb-fg:#74B9E6;  --rb:#2E86C1;
   --wr-bg:#12301F;  --wr-fg:#6ED79C;  --wr:#28A667;
@@ -1486,7 +1495,23 @@ a.room:hover { border-color: var(--blue-line); }
    Only the middle column changes. That is the whole idea.
    ========================================================== */
 
-.draftshell { padding: 10px 12px 48px; }
+/* The board and the work under it are one column; the chat, when there is
+   one, is the other. Grid rather than a float or a flex row because the chat
+   has to be able to run the full height of both without either of them
+   knowing it is there — and because in a solo draft the second column simply
+   does not exist and the first takes the whole width with no rule needed. */
+.draftshell {
+  padding: 10px 12px 48px;
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px;
+  align-items: start;
+}
+
+.draftmain { min-width: 0; }
+
+/* The slot is nothing until the dock is moved into it. Empty in a solo
+   draft, and `auto` above means an empty column takes no width at all. */
+.chatslot { min-width: 0; }
+.draftshell > .chatslot:not(:empty) { width: 330px; }
 
 /* ---------- the board pane ---------- */
 
@@ -1635,54 +1660,340 @@ a.room:hover { border-color: var(--blue-line); }
 
    The only text on this page written by somebody other than us. It is
    escaped in renderChat() before it ever reaches innerHTML — see the note
-   there — and everything below is only about making it readable. */
+   there — and everything below is only about making it readable.
 
-.chatcard { min-height: 0; }
+   It used to be a card in the rail with a 220px log, under the roster and
+   the queue, and it read like an afterthought because it was one: four lines
+   visible, no names, nothing to tell you anything had been said. This is the
+   same content given the room to be a conversation. */
 
-.chatlog {
-  max-height: 220px; overflow-y: auto; overscroll-behavior: contain;
-  display: flex; flex-direction: column; gap: 5px;
-  margin-bottom: 8px;
+.chatdock {
+  display: flex; flex-direction: column;
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: 12px; overflow: hidden;
+  /* Sticky and tall, so reading the chat is not a thing you scroll away from
+     the board to do. The viewport minus the header and a margin. */
+  position: sticky; top: 8px;
+  height: calc(100vh - 90px);
+  min-height: 320px;
 }
 
-.chatline {
-  margin: 0; font-size: 12px; line-height: 1.45; color: var(--ink-mid);
-  /* A long unbroken string typed by someone else must not widen the rail. */
-  overflow-wrap: anywhere;
+/* An author `display` beats the browser's own rule for [hidden], so every
+   element below that is both hidden from JavaScript and given a display here
+   has to say this as well. Without it a solo draft grows a chat dock for a
+   room it is not in — the attribute is set correctly and simply loses. */
+.chatdock[hidden], .chatbadge[hidden] { display: none; }
+
+/* In the lobby it is under the setup form rather than beside a board, so it
+   sizes to its content instead of to the screen and stops being sticky —
+   there is nothing to stay level with. */
+/* Relative rather than static: the jump-to-latest pill is absolutely
+   positioned inside the dock, and with no positioned ancestor it would go
+   looking for the page and land somewhere else entirely. */
+#lobbyChatSlot .chatdock {
+  position: relative; height: 420px; min-height: 0; margin-top: 14px;
 }
-.chatline b { color: var(--ink); font-weight: 650; margin-right: 5px; }
 
-/* Your own lines, so a fast conversation is readable without reading names. */
-.chatline.mine b { color: var(--link); }
+.chathead {
+  display: flex; align-items: baseline; gap: 8px;
+  padding: 10px 13px; border-bottom: 1px solid var(--hairline);
+  background: var(--sunken); flex: none;
+}
 
-/* The room talking about itself: arrivals, the start. Quieter than a person,
-   because it is furniture rather than conversation. */
+.chathead h3 {
+  margin: 0; font-family: Inter, sans-serif;
+  font-size: 9.5px; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--ink-light); font-weight: 700;
+}
+
+.chatpresence { font-size: 11px; color: var(--ink-light); margin-left: auto; }
+
+/* Only ever in the mobile sheet. Hidden here rather than not rendered, so
+   the same dock is the same dock in both places. */
+.chatdismiss { display: none; }
+
+/* The log takes whatever height is left, which is what makes the dock a
+   column rather than a card with a scrollbar in it. */
+.chatscroll {
+  flex: 1; min-height: 0;
+  overflow-y: auto; overscroll-behavior: contain;
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 10px 12px;
+}
+
+/* ---- a message ---- */
+
+.msg {
+  display: grid; grid-template-columns: 26px minmax(0, 1fr) auto;
+  gap: 8px; align-items: start;
+  padding: 3px 0; position: relative;
+}
+
+/* A follow-up from the same person inside two minutes. The avatar column is
+   kept but left empty, so the text stays on the same left edge as the line
+   above it rather than stepping in and out as people take turns. */
+.msg.grouped { padding-top: 0; }
+.msg.grouped .msgwhen {
+  grid-column: 1; text-align: right; font-size: 9.5px;
+  /* Only on hover, because a timestamp against every line of a fast
+     conversation is nine columns of noise to find one useful number. */
+  opacity: 0; transition: opacity .12s;
+}
+.msg.grouped:hover .msgwhen { opacity: 1; }
+
+.chatav {
+  grid-column: 1; width: 26px; height: 26px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 700; letter-spacing: .02em;
+  color: #fff;                     /* white on a solid, the same in both themes */
+  flex: none; user-select: none;
+}
+
+.av0 { background: var(--seat-0); } .av1 { background: var(--seat-1); }
+.av2 { background: var(--seat-2); } .av3 { background: var(--seat-3); }
+.av4 { background: var(--seat-4); } .av5 { background: var(--seat-5); }
+.av6 { background: var(--seat-6); } .av7 { background: var(--seat-7); }
+
+.msgbody { grid-column: 2; min-width: 0; }
+
+.msgwho {
+  margin: 0 0 1px; font-size: 12px; font-weight: 650; color: var(--ink);
+  display: flex; align-items: baseline; gap: 6px;
+}
+
+.msgwhen { font-size: 10px; font-weight: 400; color: var(--ink-light); }
+
+.msgtext {
+  font-size: 12.5px; line-height: 1.45; color: var(--ink-mid);
+  /* A long unbroken string typed by someone else must not widen the dock. */
+  overflow-wrap: anywhere; white-space: pre-wrap;
+}
+
+/* Your own lines. A tint on the name only — a whole bubble in a second
+   colour would fight the pick rows for the eye, and the pick rows are the
+   ones carrying information. */
+.msg.mine .msgwho { color: var(--link); }
+
+/* ---- the room talking about itself ---- */
+
+.chatline { margin: 0; overflow-wrap: anywhere; }
+
 .chatline.system {
   font-size: 11px; color: var(--ink-light); font-style: italic;
+  padding: 3px 0 3px 34px;
 }
+
+/* ---- a pick, merged into the conversation ----
+
+   Not stored as a message — see chatStream(). It reads as a different kind
+   of thing from somebody talking, because it is one, and a draft chat where
+   the picks are invisible is a chat you have to look away from to follow the
+   draft. */
+.pickline {
+  display: flex; align-items: baseline; gap: 8px;
+  margin: 3px 0; padding: 5px 9px;
+  background: var(--sunken); border-radius: 7px;
+  border-left: 2px solid var(--line);
+  font-size: 11.5px; color: var(--ink-mid);
+}
+
+.pickline.mine { border-left-color: var(--blue); background: var(--row-blue); }
+
+.pickno {
+  flex: none; font-size: 10px; font-weight: 700;
+  color: var(--ink-light); font-variant-numeric: tabular-nums;
+}
+
+.picktext { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.picktext b { color: var(--ink); font-weight: 650; }
 
 .chatempty { margin: 0; font-size: 11.5px; color: var(--ink-light); font-style: italic; }
 
-.reactions { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 7px; }
+/* ---- reactions ---- */
 
-.reactions button {
-  font-family: Inter, sans-serif; font-size: 12px; line-height: 1;
+.reactrow { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 3px; }
+
+.reactchip {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-family: Inter, sans-serif; font-size: 11px; line-height: 1;
   color: var(--ink-mid); background: var(--fill);
-  border: 1px solid var(--line); border-radius: 6px;
-  padding: 5px 8px; cursor: pointer;
+  border: 1px solid var(--line); border-radius: 10px;
+  padding: 2px 6px; cursor: pointer;
 }
-.reactions button:hover { background: var(--fill-hi); color: var(--ink); }
+.reactchip b { font-size: 10px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.reactchip:hover { background: var(--fill-hi); }
+
+/* Yours, so a count of four is readable as "including me" without counting. */
+.reactchip.on {
+  background: var(--t-info-bg); color: var(--t-info-fg); border-color: var(--blue-line);
+}
+
+/* The way to add one. Held back until the message is hovered, because a
+   button on every line is a column of buttons down the whole log. It stays
+   put on a touch screen, where there is no hover to reveal it. */
+.reactadd {
+  grid-column: 3; align-self: start;
+  width: 20px; height: 20px; padding: 0;
+  font-size: 13px; line-height: 1;
+  color: var(--ink-light); background: var(--fill);
+  border: 1px solid var(--line); border-radius: 50%;
+  cursor: pointer; opacity: 0; transition: opacity .12s;
+}
+.msg:hover .reactadd, .reactadd:focus-visible { opacity: 1; }
+.reactadd:hover { color: var(--ink); background: var(--fill-hi); }
+
+@media (hover: none) {
+  .reactadd { opacity: .5; }
+}
+
+.reactpicker {
+  position: absolute; right: 0; top: 22px; z-index: 5;
+  display: flex; gap: 2px; padding: 4px;
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: 9px; box-shadow: 0 6px 18px rgba(0, 0, 0, .28);
+}
+
+.reactpicker button {
+  font-size: 15px; line-height: 1; padding: 3px 4px;
+  background: none; border: 0; border-radius: 6px; cursor: pointer;
+}
+.reactpicker button:hover { background: var(--fill-hi); }
+
+/* ---- what you missed ---- */
+
+/* Sits over the foot of the log rather than pushing it, so arriving at a
+   message does not move the thing you were reading. */
+.chatjump {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  bottom: 96px; z-index: 4;
+  font-family: Inter, sans-serif; font-size: 11px; font-weight: 600;
+  color: #fff; background: var(--blue);
+  border: 0; border-radius: 20px; padding: 5px 12px;
+  cursor: pointer; box-shadow: 0 4px 12px rgba(0, 0, 0, .3);
+}
+
+.chattyping {
+  flex: none; margin: 0; padding: 0 13px 4px;
+  font-size: 10.5px; font-style: italic; color: var(--ink-light);
+  /* Reserved whether or not anybody is typing, so the composer does not
+     jump up and down every time somebody starts a sentence. */
+  min-height: 15px;
+}
+
+/* ---- the composer ---- */
+
+.chatfoot {
+  flex: none; padding: 8px 12px 10px;
+  border-top: 1px solid var(--hairline); background: var(--sunken);
+}
+
+.quicksay { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+
+.quicksay button {
+  font-family: Inter, sans-serif; font-size: 11px; line-height: 1;
+  color: var(--ink-mid); background: var(--fill);
+  border: 1px solid var(--line); border-radius: 11px;
+  padding: 5px 9px; cursor: pointer;
+}
+.quicksay button:hover { background: var(--fill-hi); color: var(--ink); }
 
 .chatform { display: flex; gap: 5px; }
 
 .chatform input {
   flex: 1; min-width: 0;
   font-family: Inter, sans-serif; font-size: 12.5px;
-  color: var(--ink); background: var(--sunken);
-  border: 1px solid var(--line); border-radius: 7px; padding: 7px 9px;
+  color: var(--ink); background: var(--card);
+  border: 1px solid var(--line); border-radius: 7px; padding: 8px 10px;
 }
 .chatform input:focus { outline: 2px solid var(--blue); outline-offset: 1px; border-color: var(--blue); }
-.chatform button { flex: none; font-size: 12px; padding: 7px 11px; }
+.chatform button { flex: none; font-size: 11.5px; padding: 8px 11px; }
+.chatform .sendbtn { font-size: 12px; }
+
+/* ---- your name ---- */
+
+.namerow { margin-bottom: 8px; }
+
+.namerow input {
+  width: 100%; box-sizing: border-box;
+  font-family: Inter, sans-serif; font-size: 13px;
+  color: var(--ink); background: var(--sunken);
+  border: 1px solid var(--line); border-radius: 7px; padding: 9px 11px;
+}
+.namerow input:focus { outline: 2px solid var(--blue); outline-offset: 1px; border-color: var(--blue); }
+
+/* ---- the launcher, and the sheet it opens ----
+
+   Both are for the narrow layout only. On a desktop the dock is a column and
+   neither of these has anything to do, so they are hidden here and turned on
+   inside the media query rather than the other way round. */
+.chatfab { display: none; }
+.chatbadge {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 17px; height: 17px; padding: 0 4px;
+  font-size: 10px; font-weight: 700; color: #fff;
+  background: var(--orange-cta); border-radius: 9px;
+}
+
+/* ---------- chat on a narrow screen ----------
+
+   Below this the board and a 330px column cannot both be readable, and the
+   honest answer is not a narrower column — it is that on a phone the chat is
+   somewhere you go, not something you watch out of the corner of your eye.
+   So it becomes a sheet over the board with a launcher, and the launcher
+   carries the unread count, because a closed sheet and a quiet room look
+   exactly the same otherwise. */
+@media (max-width: 1000px) {
+  .draftshell { grid-template-columns: minmax(0, 1fr); }
+  .draftshell > .chatslot:not(:empty) { width: auto; }
+
+  /* :not([hidden]) rather than trusting the attribute, for the reason given
+     beside .chatdock[hidden] above. */
+  .chatfab:not([hidden]) {
+    display: flex; align-items: center; gap: 7px;
+    position: fixed; right: 14px; z-index: 60;
+    /* Above the action bar, which is itself pinned to the bottom, and clear
+       of the home indicator on a phone with no bezel. */
+    bottom: calc(74px + env(safe-area-inset-bottom, 0px));
+    font-family: Inter, sans-serif; font-size: 13px; font-weight: 600;
+    color: #fff; background: var(--navy);
+    border: 1px solid var(--navy-soft); border-radius: 22px;
+    padding: 10px 16px; cursor: pointer;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, .35);
+  }
+
+  /* Out of the layout entirely until it is asked for, so the dock does not
+     leave a hole under the board where it used to be. */
+  .chatdock { display: none; }
+
+  body.chat-open .chatdock:not([hidden]) {
+    display: flex;
+    /* top: auto matters. The docked rule sets top: 8px for the sticky
+       column, and top + an explicit height is a complete answer — the
+       browser takes it and ignores bottom, which put the sheet at the top of
+       the screen with a gap under it. */
+    position: fixed; top: auto; left: 0; right: 0; bottom: 0; z-index: 70;
+    height: 78vh; max-height: 78vh; width: auto;
+    border-radius: 14px 14px 0 0;
+    border-left: 0; border-right: 0; border-bottom: 0;
+    box-shadow: 0 -8px 28px rgba(0, 0, 0, .4);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  /* The sheet covers the board, so it needs its own way out. */
+  body.chat-open .chatdismiss {
+    display: block; margin-left: 6px;
+    font-size: 20px; line-height: 1; padding: 0 4px;
+    color: var(--ink-light); background: none; border: 0; cursor: pointer;
+  }
+
+  body.chat-open .chatfab { display: none; }
+
+  /* The lobby copy is a plain block in the form either way — there is no
+     board for it to cover and nothing to launch it from. */
+  #lobbyChatSlot .chatdock:not([hidden]) {
+    display: flex; position: relative; height: 360px;
+  }
+}
 
 /* ---------- GIFs in chat ----------
    Every address here has been through safeGif() twice — once in the room,

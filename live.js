@@ -56,6 +56,32 @@
     return id;
   }
 
+  /* What you are called, to a room. Kept here rather than asked for every
+     time, because typing your own name into every draft is the kind of small
+     tax that ends with everybody called "Seat 4".
+
+     Still not an account. It travels with the member id, it is only ever sent
+     to the room you are in, and the room cleans it before anybody sees it —
+     the length limit below is a courtesy to the field, not the check. */
+  const NAME_KEY = "juke.name";
+  const NAME_MAX = 20;
+
+  function myName() {
+    try { return localStorage.getItem(NAME_KEY) || ""; } catch (err) { return ""; }
+  }
+
+  function setMyName(value) {
+    const name = String(value == null ? "" : value).trim().slice(0, NAME_MAX);
+    try {
+      if (name) localStorage.setItem(NAME_KEY, name);
+      else localStorage.removeItem(NAME_KEY);
+    } catch (err) {}
+    // Only if there is a room to tell. Setting it on the setup screen before
+    // creating one is normal, and connect() sends it.
+    send({ type: "rename", name: name });
+    return name;
+  }
+
   /* Room codes are short enough to read out over the phone and long enough
      that guessing one is not worth anyone's afternoon. No vowels, so it
      cannot accidentally spell something, and no characters that argue with
@@ -79,7 +105,8 @@
     status: "off",     // off | connecting | open | closed | rejected
     reason: null,
     onchange: null,    // app.js sets this
-    onchat: null
+    onchat: null,
+    ontyping: null
   };
 
   function announce() {
@@ -115,7 +142,9 @@
 
     const params = new URLSearchParams({
       member: memberId(),
-      name: (opts && opts.name) || "",
+      // The stored name unless the caller has a better one, so following an
+      // invite link lands you in the room already called something.
+      name: (opts && opts.name) || myName(),
       league: JSON.stringify((opts && opts.league) || {}),
       clock: String((opts && opts.clock) || 0),
       data: (opts && opts.dataVersion) || ""
@@ -138,6 +167,11 @@
         announce();
       } else if (msg.type === "chat") {
         if (typeof live.onchat === "function") live.onchat(msg);
+      } else if (msg.type === "typing") {
+        /* Never part of the room view, and deliberately. Somebody typing is
+           true for about two seconds; putting it in the state everybody
+           stores would mean writing a keystroke to disk. */
+        if (typeof live.ontyping === "function") live.ontyping(msg);
       } else if (msg.type === "rejected") {
         /* A rejection on connect is fatal and worth showing; one during a
            draft is usually a click that lost a race, and the state that
@@ -193,6 +227,11 @@
 
     onChange: function (fn) { live.onchange = fn; },
     onChat: function (fn) { live.onchat = fn; },
+    onTyping: function (fn) { live.ontyping = fn; },
+
+    name: myName,
+    setName: setMyName,
+    NAME_MAX: NAME_MAX,
 
     // Intent, not action. The board changes when the room says so.
     pick:     function (key) { return send({ type: "pick", key: key }); },
@@ -200,6 +239,12 @@
     claimSeat:function (seat){ return send({ type: "claim-seat", seat: seat }); },
     start:    function ()    { return send({ type: "start" }); },
     chat: function (text, gif) { return send({ type: "chat", text: text, gif: gif || null }); },
+    react: function (id, emoji) { return send({ type: "react", id: id, emoji: emoji }); },
+
+    /* Sent on a leading edge and then not again until it lapses — see
+       app.js. A message per keystroke would be a message per keystroke for
+       everybody else in the room too. */
+    typing: function (on) { return send({ type: "typing", on: !!on }); },
 
     /* GIPHY search, through the worker. The key is server-side, so this
        is a plain fetch to our own origin rather than a call to GIPHY. */

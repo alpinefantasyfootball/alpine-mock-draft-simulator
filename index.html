@@ -42,7 +42,20 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css">
+  <!-- ?v= on every local file below, and it has to be bumped on any deploy
+       that changes one of them.
+
+       This page comes back with a ten minute cache; the files it asks for
+       come back with four hours. So without a version in the address, a
+       returning visitor spends up to four hours running today's HTML against
+       Tuesday's JavaScript — which is not a blank page but something worse:
+       a page that half works. It is how the room lost its chat window
+       entirely, because the markup hides the panel and only the newer app.js
+       knows to show it.
+
+       A query string rather than a renamed file, because renaming means a
+       manifest and a manifest means a build step. This costs one number. -->
+  <link rel="stylesheet" href="style.css?v=202608141">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -324,6 +337,15 @@
           <p class="hint" id="inviteHint">Create a room and send the link. Anyone who opens
             it takes a seat; the rest are drafted by the CPU.</p>
 
+          <!-- Asked once and remembered, because a room where everybody is
+               "Seat 4" is a room nobody talks in. Above the button rather
+               than after it: by the time the link is copied the name is
+               already on the chair somebody else is looking at. -->
+          <div class="namerow">
+            <input type="text" id="displayName" maxlength="20" autocomplete="nickname"
+                   placeholder="Your name" aria-label="Your name in the room">
+          </div>
+
           <div class="field-row" id="inviteStart">
             <button class="ghost" type="button" id="createRoomBtn">Create a room</button>
           </div>
@@ -338,6 +360,13 @@
             <button class="ghost" type="button" id="leaveRoomBtn">Leave the room</button>
           </div>
         </div>
+
+        <!-- Where the chat sits while the room is still filling up. This is
+             the moment people most want to talk — waiting to find out who
+             actually turned up — and until now there was nowhere to do it,
+             because the chat lived inside a shell that stays hidden until
+             the first pick. -->
+        <div class="chatslot" id="lobbyChatSlot"></div>
 
         <button class="primary big" id="startBtn">Start Your Draft</button>
         <p class="freshness" id="freshness"></p>
@@ -355,66 +384,105 @@
          itself. -->
     <div class="draftshell" id="draftShell" hidden>
 
-      <!-- The board, always. Scrolled to the live round by renderBoard(). -->
-      <div class="boardpane">
-        <div class="board-scroll" id="boardScroll">
-          <div class="board" id="boardGrid"></div>
+      <!-- The board and the work below it are one column; the chat is the
+           other. Wrapped rather than left as siblings so the chat can run the
+           full height of both without the board reflowing around it. -->
+      <div class="draftmain">
+        <!-- The board, always. Scrolled to the live round by renderBoard(). -->
+        <div class="boardpane">
+          <div class="board-scroll" id="boardScroll">
+            <div class="board" id="boardGrid"></div>
+          </div>
+          <div class="legend">
+            <span><i class="sw QB"></i>QB</span><span><i class="sw RB"></i>RB</span>
+            <span><i class="sw WR"></i>WR</span><span><i class="sw TE"></i>TE</span>
+            <span><i class="sw K"></i>K</span><span><i class="sw DST"></i>D/ST</span>
+          </div>
         </div>
-        <div class="legend">
-          <span><i class="sw QB"></i>QB</span><span><i class="sw RB"></i>RB</span>
-          <span><i class="sw WR"></i>WR</span><span><i class="sw TE"></i>TE</span>
-          <span><i class="sw K"></i>K</span><span><i class="sw DST"></i>D/ST</span>
+
+        <div class="worksplit">
+          <div class="workmain" id="workMain"><!-- panels are moved in here by app.js --></div>
+
+          <aside class="rail" id="rail">
+            <section class="railcard">
+              <h3 class="railhead" id="railRosterHead">Your roster</h3>
+              <ul class="railslots" id="railRoster"></ul>
+            </section>
+
+            <section class="railcard">
+              <h3 class="railhead" id="railQueueHead">Your queue</h3>
+              <div id="queueList"></div>
+            </section>
+          </aside>
         </div>
       </div>
 
-      <div class="worksplit">
-        <div class="workmain" id="workMain"><!-- panels are moved in here by app.js --></div>
-
-        <aside class="rail" id="rail">
-          <section class="railcard">
-            <h3 class="railhead" id="railRosterHead">Your roster</h3>
-            <ul class="railslots" id="railRoster"></ul>
-          </section>
-
-          <section class="railcard">
-            <h3 class="railhead" id="railQueueHead">Your queue</h3>
-            <div id="queueList"></div>
-          </section>
-
-          <!-- Only present in a shared room. A solo draft has nobody to
-               talk to, and an empty chat box would just be furniture. -->
-          <section class="railcard chatcard" id="chatCard" hidden>
-            <h3 class="railhead">Room chat</h3>
-            <div class="chatlog" id="chatLog" aria-live="polite" aria-label="Room chat"></div>
-            <div class="reactions" id="chatReactions">
-              <button type="button" data-say="👍">👍</button>
-              <button type="button" data-say="😂">😂</button>
-              <button type="button" data-say="😱">😱</button>
-              <button type="button" data-say="🔥">🔥</button>
-              <button type="button" data-say="🤬">🤬</button>
-              <button type="button" data-say="Nice pick">Nice pick</button>
-            </div>
-            <!-- Hidden until the GIF button is pressed, so the card stays a
-                 chat box rather than a search engine. -->
-            <div class="gifbox" id="gifBox" hidden>
-              <div class="chatform">
-                <input type="text" id="gifQuery" maxlength="60" autocomplete="off"
-                       placeholder="Search GIFs" aria-label="Search GIFs">
-                <button class="ghost" type="button" id="gifClose">Close</button>
-              </div>
-              <div class="gifresults" id="gifResults"></div>
-            </div>
-
-            <form class="chatform" id="chatForm">
-              <input type="text" id="chatInput" maxlength="500" autocomplete="off"
-                     placeholder="Say something" aria-label="Message the room">
-              <button class="ghost" type="button" id="gifBtn" aria-label="Add a GIF">GIF</button>
-              <button class="ghost" type="submit">Send</button>
-            </form>
-          </section>
-        </aside>
-      </div>
+      <!-- Where the chat sits once a draft is running. It is not written here
+           — placeChat() moves the one dock into whichever slot is live. -->
+      <div class="chatslot" id="draftChatSlot"></div>
     </div>
+
+    <!-- ---------- ROOM CHAT ----------
+         One of these, moved between the lobby slot and the draft slot by
+         placeChat(). One rather than two because it holds a scroll position,
+         a draft message and an open GIF search, and a second copy would mean
+         deciding which of them is the real one every time the draft starts.
+
+         Hidden outright in a solo draft: there is nobody to talk to and an
+         empty chat box is just furniture. -->
+    <section class="chatdock" id="chatDock" hidden aria-label="Room chat">
+      <header class="chathead">
+        <h3>Room chat</h3>
+        <span class="chatpresence" id="chatPresence"></span>
+        <!-- Only ever visible in the mobile sheet, where the dock covers the
+             board and there is otherwise no way back to it. -->
+        <button class="chatdismiss" id="chatDismiss" type="button"
+                aria-label="Close chat">&times;</button>
+      </header>
+
+      <div class="chatscroll" id="chatLog" aria-live="polite" aria-label="Messages"></div>
+
+      <!-- Shown only when you have scrolled up and missed something, so the
+           log never yanks you to the bottom mid-sentence. -->
+      <button class="chatjump" id="chatJump" type="button" hidden></button>
+
+      <p class="chattyping" id="chatTyping" aria-live="polite"></p>
+
+      <!-- Hidden until the GIF button is pressed, so the dock stays a chat
+           box rather than a search engine. -->
+      <div class="gifbox" id="gifBox" hidden>
+        <div class="chatform">
+          <input type="text" id="gifQuery" maxlength="60" autocomplete="off"
+                 placeholder="Search GIFs" aria-label="Search GIFs">
+          <button class="ghost" type="button" id="gifClose">Close</button>
+        </div>
+        <div class="gifresults" id="gifResults"></div>
+      </div>
+
+      <div class="chatfoot">
+        <div class="quicksay" id="chatReactions">
+          <button type="button" data-say="Nice pick">Nice pick</button>
+          <button type="button" data-say="Reach.">Reach.</button>
+          <button type="button" data-say="Wow.">Wow.</button>
+        </div>
+
+        <form class="chatform" id="chatForm">
+          <input type="text" id="chatInput" maxlength="500" autocomplete="off"
+                 placeholder="Say something" aria-label="Message the room">
+          <button class="ghost gifbtn" type="button" id="gifBtn" aria-label="Add a GIF">GIF</button>
+          <button class="primary sendbtn" type="submit" aria-label="Send">Send</button>
+        </form>
+      </div>
+    </section>
+
+    <!-- The way back to the chat on a phone, where the dock is a sheet over
+         the board rather than a column beside it. Carries the unread count,
+         because a closed sheet is otherwise indistinguishable from a quiet
+         room. -->
+    <button class="chatfab" id="chatFab" type="button" hidden>
+      <span>Chat</span>
+      <span class="chatbadge" id="chatBadge" hidden></span>
+    </button>
 
     <!-- ---------- SUGGESTIONS ---------- -->
     <section class="panel" id="tab-suggest">
@@ -525,17 +593,19 @@
     <form method="dialog"><button class="primary">Got it</button></form>
   </dialog>
 
-  <script src="players.js"></script>
-  <script src="stats.js"></script>
+  <!-- Every one of these carries the same ?v= as the stylesheet. See the note
+       beside it in <head>: bump them together or don't bump them at all. -->
+  <script src="players.js?v=202608141"></script>
+  <script src="stats.js?v=202608141"></script>
   <!-- The rules of a snake draft, with no reference to this page. It loads
        before app.js because app.js is a caller, and it is a separate file
        because a server will eventually have to run the same one. -->
-  <script src="draft-engine.js"></script>
+  <script src="draft-engine.js?v=202608141"></script>
   <!-- The socket to a shared room. Loaded always, connected never unless a
        manager asks for it: a solo draft touches nothing. -->
-  <script src="live.js"></script>
+  <script src="live.js?v=202608141"></script>
   <!-- Before app.js, which calls backToTop() on the last line of its setup. -->
-  <script src="back-to-top.js"></script>
-  <script src="app.js"></script>
+  <script src="back-to-top.js?v=202608141"></script>
+  <script src="app.js?v=202608141"></script>
 </body>
 </html>

@@ -187,6 +187,85 @@ alice.send(JSON.stringify({ type: "chat", text: "   " }));
 await sleep(300);
 check("blank message ignored", lastState(bob).chat.length, beforeBlank);
 
+/* ---- names ----
+
+   The name is what everything else in the chat hangs off. It arrives on the
+   query string at connect and can be changed at any point after. */
+check("the name from the query string reached the chair",
+      lastState(bob).seats[0].name, "Alice");
+
+alice.send(JSON.stringify({ type: "rename", name: "  Coach   Al  " }));
+const renamed = await until("rename reaches bob", () => {
+  const st = lastState(bob);
+  return st && st.seats[0].name === "Coach Al" ? st : false;
+}) || {};
+check("a name is cleaned server-side", renamed.seats?.[0].name, "Coach Al");
+check("renaming rewrites what was already said",
+      (renamed.chat || []).filter((m) => !m.system && m.seat === 0)
+        .every((m) => m.name === "Coach Al"), true);
+
+/* ---- reactions ----
+
+   Stored against a message id and reported as a count plus whether it was
+   you. The count is the point; who reacted is nobody's business, because
+   telling anyone would mean handing out member ids. */
+const target = lastState(bob).chat.filter((m) => !m.system)[0];
+check("a stored message carries an id", typeof target?.id, "number");
+
+bob.send(JSON.stringify({ type: "react", id: target.id, emoji: "\u{1F525}" }));
+const reacted = await until("reaction reaches alice", () => {
+  const line = (lastState(alice) || {}).chat?.find((m) => m.id === target.id);
+  return line && line.reacts ? line : false;
+}) || {};
+check("alice sees the count and that it was not her",
+      reacted.reacts, [{ emoji: "\u{1F525}", count: 1, you: false }]);
+check("bob sees that it was him",
+      lastState(bob).chat.find((m) => m.id === target.id).reacts,
+      [{ emoji: "\u{1F525}", count: 1, you: true }]);
+check("a reaction leaks no member id",
+      JSON.stringify(lastState(alice)).includes("bob") === false, true);
+
+bob.send(JSON.stringify({ type: "react", id: target.id, emoji: "not-an-emoji" }));
+await sleep(300);
+check("an unlisted reaction is refused", lastOfType(bob, "rejected")?.code, "bad-reaction");
+
+bob.send(JSON.stringify({ type: "react", id: target.id, emoji: "\u{1F525}" }));
+const unreacted = await until("reaction is taken back", () => {
+  const line = (lastState(alice) || {}).chat?.find((m) => m.id === target.id);
+  return line && !line.reacts ? line : false;
+}) || {};
+check("pressing the same reaction twice removes it", unreacted.reacts, null);
+
+/* ---- typing ----
+
+   The one message that never touches state. It is relayed to the other
+   sockets and forgotten, because storing it would mean a Durable Object
+   write per keystroke to record something true for two seconds. */
+const chatLenBeforeTyping = lastState(bob).chat.length;
+const bobInboxBefore = bob.inbox.length;
+
+alice.send(JSON.stringify({ type: "typing", on: true }));
+const typing = await until("typing reaches bob", () => lastOfType(bob, "typing")) || {};
+check("typing carries the sender's seat", typing.seat, 0);
+check("typing carries the name, so it can be drawn", typing.name, "Coach Al");
+check("typing is not stored in the room", lastState(bob).chat.length, chatLenBeforeTyping);
+check("typing did not cause a state broadcast",
+      bob.inbox.slice(bobInboxBefore).some((m) => m.type === "state"), false);
+
+// and it does not come back to the person doing it
+const aliceInboxBefore = alice.inbox.length;
+alice.send(JSON.stringify({ type: "typing", on: true }));
+await sleep(300);
+check("the typist is not told about themselves",
+      alice.inbox.slice(aliceInboxBefore).some((m) => m.type === "typing"), false);
+
+/* A client claiming somebody else is typing gets its own seat used anyway.
+   The seat is looked up from the socket, never taken from the message. */
+bob.send(JSON.stringify({ type: "typing", on: true, seat: 0 }));
+const claimed = await until("bob's typing reaches alice",
+  () => lastOfType(alice, "typing")) || {};
+check("the seat comes from the socket, not the message", claimed.seat, 1);
+
 // storage survives a reconnect: alice drops and comes back
 alice.close();
 await sleep(400);

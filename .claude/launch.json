@@ -6,6 +6,16 @@
       "runtimeExecutable": "py",
       "runtimeArgs": ["-m", "http.server", "8765"],
       "port": 8765
+    },
+    {
+      "name": "room",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "--yes", "wrangler@4", "dev",
+        "-c", "worker/wrangler.toml",
+        "--port", "8787", "--local"
+      ],
+      "port": 8787
     }
   ]
 }
