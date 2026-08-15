@@ -2977,11 +2977,19 @@ function renderGrades() {
   // standings
   html += `<p class="section-label" style="margin-top:20px">Room standings</p>
     <table class="standings"><tbody>`;
+  /* The number between the rank and the letter is the weighted total, which
+     is what the room is ordered by and what the letter is handed out for.
+     It used to print starter strength — one component of four — so the
+     column climbed and fell down a table that was strictly ranked, and four
+     teams sharing a starter strength of 90 sat at ranks 1, 4, 5 and 7 with
+     four different grades. It read as a sorting bug. The other three
+     components are on the bars above; this column is the answer they add up
+     to. */
   all.slice().sort((a, b) => a.rank - b.rank).forEach(function (t) {
     html += `<tr class="${t.slot === state.mySlot ? "me" : ""}">
         <td class="rk">${t.rank}</td>
         <td>${teamLabel(t.slot)}</td>
-        <td class="num">${Math.round(t.starters)}</td>
+        <td class="num">${Math.round(t.total)}</td>
         <td class="gr">${t.grade}</td>
       </tr>`;
   });
