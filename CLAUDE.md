@@ -92,6 +92,16 @@ stored can never be rescored, and `build_players.py` fails loudly if a
   Log in, Install and the theme toggle move into the rooms panel.
 - **The rooms panel is inside `#shellbar`.** Scope mobile hide rules to
   `.shell-inner`, not the header, or they hide the panel's copies too.
+- **A `<select>` draws its arrow inside the padding, so padding cannot buy
+  room for the text.** Three dropdowns across a `.field-row` is comfortable
+  while the options are `QB 1` and `RB 2`. The league row's options are words,
+  and at 375px each select gets 96px: `14 rounds` wants 67px of it and the
+  arrow wants about 16 more, so the text finishes hard against the arrow.
+  Widening `padding-right` looks like the fix and does nothing — the arrow
+  moves with it. The row needs *width*, so `.field-row.wordy` wraps to two
+  lines under 480px. 481px still fits three across with 25px to spare, which
+  is where that number came from. The class says `wordy` rather than
+  `league-row` because the shape of the options is the reason, not the row.
 - **Nothing caches `.theme-toggle`.** There are up to three of them and one is
   rendered, so clicks are delegated and `syncThemeButton()` re-queries.
 
@@ -279,6 +289,27 @@ the `hidden` property and given a display in the stylesheet needs
 chat sets `top: 8px`; the mobile rule sets `bottom: 0` and a height. Top plus
 height is a complete answer, so the browser took it and ignored `bottom`, and
 the sheet opened at the top of the screen. `top: auto` is the fix.
+
+**`scrollWidth > clientWidth` is what correct truncation looks like too.**
+Sweeping the page for elements wider than their box is a good way to find a
+phone layout that leaks, but on its own it reports every properly ellipsised
+label as a fault. A board header for a team called
+"Bone-Thugs-N-Montgomery" is 123px of name in a 74px cell and is behaving
+perfectly: `overflow: hidden`, `text-overflow: ellipsis`, `white-space:
+nowrap`. The question is not whether an element overflows, it is whether it
+can either **scroll** (`overflow-x` is `auto` or `scroll`) or **ellipsise**.
+Anything that overflows and can do neither is the real leak. Filtered that
+way, the whole app comes back clean at 375px and the board's three inner
+scrollers — the tab strip, the action bar and the grid — show up as the
+scrollers they are.
+
+**A monospace box stops being code the moment its lines become sentences.**
+The formulas on the how-it-works page are prose now, which made them long
+enough to wrap on a phone, and a wrapped line starting hard against the left
+edge reads as the next step of the sum rather than the rest of the current
+one — three steps looking like five. Each line is its own `div` inside
+`.formula` with a hanging indent, so a continuation sits in from the margin.
+Nothing wraps at desktop width, so the indent never shows there.
 
 **A GIF address from chat is a claim, not a fact.** It arrives from another
 manager exactly as a message does, and it ends up in an `img src`. Only
