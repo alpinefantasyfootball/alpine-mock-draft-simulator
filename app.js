@@ -2082,7 +2082,18 @@ function analyseTeam(slot) {
     const past = best ? best.posRank - replacementRank(pos) : COVER_NONE;
     build -= COVER_COST * Math.min(1, Math.max(0, past) / COVER_NONE);
   });
-  build = Math.round(build);
+  /* Floored, because it is printed as "x / 100" and a negative score out of
+     a hundred reads as a broken number rather than a bad roster. Three rounds
+     in, with six lineup slots still empty, it was showing "-8 / 100".
+
+     Nothing is lost by it. Measured across a draft at every twenty picks, the
+     only negatives are in the opening rounds, and there the score separates
+     teams by whether their third pick has come round yet — snake position,
+     not construction. From round four on it never goes near zero, and
+     clamping changes the number of distinct scores in the room at no stage of
+     the draft. A team that ends with seven starting slots unfilled floors at
+     zero, which is the right end of the scale for it anyway. */
+  build = Math.max(0, Math.round(build));
 
   /* 4. bye week exposure, judged on the starting lineup only, because a
      bench player on a bye costs nothing.
