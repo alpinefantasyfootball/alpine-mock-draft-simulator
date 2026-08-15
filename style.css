@@ -731,6 +731,53 @@ tr.conflict .nm { color: var(--t-bad-fg); }
 .value-up   { color: var(--good); font-weight: 600; }
 .value-down { color: var(--ink-light); }
 
+/* ---------- the players toolbar ----------
+
+   Both of these class names were in the markup with nothing behind them, and
+   an unstyled rule fails quietly: the search box came out as a raw browser
+   widget — Arial, an inset border, a grey the theme never chose — and the two
+   toggles flowed as loose inline text. On a phone the second label broke
+   across lines, stranding its checkbox on the row above and leaving "Roomy
+   rows" sitting under the search box looking like a heading.
+
+   A label must never break, which is why .check is inline-flex and nowrap:
+   a checkbox on one line and its words on the next is not a control any
+   more, it is two pieces of furniture. */
+.toolbar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+  margin-bottom: 12px;
+}
+
+/* Matches the select on the setup screen, because they are the same kind of
+   thing and were the same kind of thing before this rule existed. */
+.toolbar input[type="search"] {
+  flex: 1 1 190px; min-width: 0;
+  font-family: Inter, sans-serif; font-size: 14px; color: var(--ink);
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: 8px; padding: 9px 12px;
+  -webkit-appearance: none; appearance: none;
+}
+.toolbar input[type="search"]::placeholder { color: var(--ink-light); }
+.toolbar input[type="search"]:focus-visible {
+  outline: 2px solid var(--blue); outline-offset: 1px; border-color: var(--blue);
+}
+
+.check {
+  display: inline-flex; align-items: center; gap: 6px;
+  white-space: nowrap; cursor: pointer;
+  font-size: 13px; color: var(--ink-mid); flex: none;
+}
+.check input { cursor: pointer; flex: none; margin: 0; }
+
+/* On a phone the search and one toggle just fit, which put "Hide drafted"
+   hard against the right edge and "Roomy rows" alone underneath. The search
+   takes its own row instead and the two toggles sit together, which is the
+   pairing they read as anyway. */
+@media (max-width: 560px) {
+  .toolbar input[type="search"] { flex-basis: 100%; }
+}
+
+
 /* ---------- player table ---------- */
 
 table {
@@ -1241,11 +1288,25 @@ tr.drafted .ovr { color: var(--ink-light); }
   #playerTable.stats .stick.name .nm {
     display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-  /* The line may break between chips, never inside one. Left to wrap freely
-     a "Reach · projects WR10" chip folds into three stacked lines and the
-     row stops looking like a row. */
-  #playerTable.stats .stick.name .meta { white-space: normal; }
-  #playerTable.stats .stick.name .meta > * { white-space: nowrap; }
+  /* The line may break between chips, never inside one.
+
+     This has to be block rather than the flex it is on a wide screen. Two
+     things were fighting it. A flex row does not wrap unless it is told to,
+     so "display: block" on the chip below could never give it a line of its
+     own — flex items sit in a line whatever their display says. And the
+     items that stayed on the line were squeezed instead, which is what broke
+     the text inside them: "ATL · WR5" came apart into three stacked lines
+     while a chip that would not shrink pushed out past the column and, being
+     in a sticky cell that paints above the scrolling ones, drew itself
+     straight over the ADP and OVR numbers.
+
+     Block layout, one width-capped column, and the pieces below wrap between
+     themselves and never inside. `.meta > *` is also finally true: the team
+     and rank used to be a bare text node, which is an anonymous box that no
+     selector can reach, so the nowrap it needed never applied to it. */
+  #playerTable.stats .stick.name { overflow: hidden; }
+  #playerTable.stats .stick.name .meta { display: block; white-space: normal; }
+  #playerTable.stats .stick.name .meta > * { white-space: nowrap; margin-right: 5px; }
 
   /* The value/reach chip is the widest thing on the line and the only one
      that is a sentence. Given its own row it reads; left to wrap in with the
@@ -1253,7 +1314,7 @@ tr.drafted .ovr { color: var(--ink-light); }
      look like a row. */
   #playerTable.stats .stick.name .meta .chip.val,
   #playerTable.stats .stick.name .meta .chip.reach {
-    display: block; width: fit-content; margin-top: 3px;
+    display: block; width: fit-content; margin: 3px 0 0;
   }
 }
 
@@ -1858,6 +1919,12 @@ a.room:hover { border-color: var(--blue-line); }
 /* An unfilled starting slot is the actionable state, so it is the one that
    takes a tint rather than every filled row taking one. */
 .railslots li.empty { background: var(--well); }
+
+/* The bench summary, so the nine rows above it add up to the number in the
+   heading. Quieter than a real roster row, because it is a count rather than
+   somebody you drafted. */
+.railslots li.benchsum { background: var(--well); color: var(--ink-light); }
+.railslots li.benchsum .rtm { color: var(--link); }
 
 /* The queue in the rail is narrower than it was as a panel, so the avatar
    goes — it is decoration next to a name. The move buttons stay, because

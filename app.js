@@ -1993,9 +1993,17 @@ function analyseTeam(slot) {
   let starters = 0;
   lineup.forEach(function (s) { if (s.player) starters += aboveReplacement(s.player); });
 
-  // 2. draft value: taken later than the board said = a bargain
+  /* 2. draft value: taken later than the board said = a bargain.
+
+     The subtraction is pick number minus board rank, and it has to be that
+     way round. `p.overall` is where the pick happened, `p.player.overall` is
+     where the board had him, so a player still there at 121 whom the board
+     ranked 106 gives +15: he fell fifteen picks and that is the bargain the
+     comment describes. Reversed, as this was, every bargain scored negative
+     and every reach scored positive — a quarter of the grade rewarding
+     exactly what it was written to punish. */
   let value = 0;
-  picks.forEach(function (p) { value += (p.player.overall - p.overall); });
+  picks.forEach(function (p) { value += (p.overall - p.player.overall); });
 
   // 3. roster construction
   let build = 100;
@@ -2018,10 +2026,15 @@ function analyseTeam(slot) {
     if (byes[week] > worstBye) { worstBye = byes[week]; worstWeek = Number(week); }
   });
 
-  // biggest bargain and biggest reach
+  /* Biggest bargain and biggest reach, on the same signed gap as above:
+     positive means he was still there long after the board said he would be
+     gone, negative means you went and got him early. The two callouts that
+     print these already say "picks late" for a positive gap and "picks
+     early" for a negative one, so they have been describing this convention
+     correctly the whole time the arithmetic was inverted underneath them. */
   let bargain = null, reach = null;
   picks.forEach(function (p) {
-    const gap = p.player.overall - p.overall;
+    const gap = p.overall - p.player.overall;
     if (!bargain || gap > bargain.gap) bargain = { pick: p, gap: gap };
     if (!reach   || gap < reach.gap)   reach   = { pick: p, gap: gap };
   });
@@ -2472,9 +2485,13 @@ function renderPlayers() {
 
     const cells = PLAYER_COLS.map(function (c) {
       if (c.text) {
+        // Team and positional rank are one idea and wrap as one. As a bare
+        // text node they were an anonymous box no selector could reach, so
+        // the stylesheet's "never break inside a piece" rule silently missed
+        // them and "ATL · WR5" folded into three stacked lines on a phone.
         return `<td class="stick name">
             <span class="nm name-link" data-player="${p.name}">${p.name}</span>
-            <span class="meta"><span class="badge ${p.pos}">${posLabel(p.pos)}</span> ${p.team} &middot; ${posLabel(p.pos)}${p.posRank}
+            <span class="meta"><span class="badge ${p.pos}">${posLabel(p.pos)}</span> <span class="ident">${p.team} &middot; ${posLabel(p.pos)}${p.posRank}</span>
               ${injBadge(p)} <span class="chip tier">T${p.tier}</span>${gapChip}</span>
           </td>`;
       }
@@ -2639,12 +2656,25 @@ function renderTeam() {
 
 /* The rail: the two things you check between picks, never more than a glance
    away. It is the starting lineup only — the bench is a full-view question,
-   and a rail that lists twenty rows stops being scannable. */
+   and a rail that lists twenty rows stops being scannable.
+
+   Which is a good rule that was telling a lie. The heading counts the whole
+   roster, so it read "Your roster · 14 of 14" above a list of nine, and the
+   five it did not mention looked like five it had lost. The last row now
+   says how many are on the bench, so the list adds up to the number above
+   it without the rail growing the twenty rows this comment is about. */
 function renderRail() {
   const lineup = seatedLineup();
   const held = rosterOf(state.mySlot).length;
 
   $("railRosterHead").textContent = `Your roster · ${held} of ${rosterSize()}`;
+
+  const benched = lineup.bench.length;
+  const benchRow = benched
+    ? `<li class="benchsum"><span class="rslot BN">BN</span>
+         <span class="rfill">${benched} on the bench</span>
+         <span class="rtm">My Team</span></li>`
+    : "";
 
   $("railRoster").innerHTML = lineup.seats.map(function (s) {
     const label = posLabel(s.slot);
@@ -2655,7 +2685,7 @@ function renderRail() {
     return `<li><span class="rslot ${s.slot}">${label}</span>
         <span class="rfill name-link" data-player="${s.player.name}">${lastName(s.player.name)}</span>
         <span class="rtm">${s.player.pos} &middot; ${s.player.team}</span></li>`;
-  }).join("");
+  }).join("") + benchRow;
 }
 
 function rosterRow(slotName, player, isBench) {
