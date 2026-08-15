@@ -66,6 +66,74 @@ drift. Anything scoreable must be in `STAT_FIELDS` — a stat that was never
 stored can never be rescored, and `build_players.py` fails loudly if a
 `SCOREABLE` entry has nowhere to live.
 
+## The draft grade
+
+Four components, weighted 50/25/15/10: starter strength, draft value, roster
+construction, bye week safety. Each is computed for every team, scaled 0–100
+against the rest of the room by `scaleAcross()`, then weighted. The grade is
+a ranking inside the room, which is why somebody always gets an A+.
+
+Three of the four were wrong at once, found in one sitting in August 2026,
+and they were wrong in the same direction: they all flattered picks nobody
+chose to make. Starter strength was correct throughout. What follows is why
+each was wrong, because none of them announced themselves.
+
+**A component that is the same for every team is not in the grade.** This is
+the check to run first on anything in here. `scaleAcross()` hands every team
+50 when the span is zero, so a constant contributes a constant and the weight
+beside it is a lie. Roster construction sat at exactly 100 for all ten teams
+and had presumably done so for every draft the app had ever graded. Print the
+spread of a component across the room before believing it works.
+
+**The draft value gap is pick number minus board rank, in that order.**
+`p.overall` is where the pick happened, `p.player.overall` is where the board
+had him, so a player still there at 121 whom the board ranked 106 scores
+**+15** — he fell fifteen picks, and that is a bargain. It was subtracting the
+other way, which swapped the two callouts and, worse, meant a quarter of the
+grade spent every draft rewarding reaches and punishing bargains.
+
+It survived because everything around it was right: both callouts already
+printed "picks late" for a positive gap, and the how-it-works page already
+said a player taken later than his rank is a bargain. Correct prose over
+inverted arithmetic reads as correct until somebody knows enough football to
+notice the answer is absurd.
+
+**Kickers and defenses are excluded from draft value and from both
+callouts.** `cpuScore()` refuses a kicker before the last two rounds and a
+defense before the last three, and the suggestions never offer one earlier —
+so the app picks the timing, not the manager. Their ADP comes from drafts
+that run more rounds than most leagues here, which routinely puts a kicker's
+board rank past the last pick that exists, so taking one at all reads as
+early. Measured over a ten-team, fourteen-round draft, the mean gap ran
+WR +6, RB −2, QB −9, DST −12, TE −22, **K −35**, and every one of the ten
+kickers scored as a reach with none neutral. Grading somebody for obeying a
+rule the app enforces is not a judgement about drafting. Dropping them moved
+no team more than two places, because every team drafts the same forced pair.
+
+**Roster construction measures cover, and it has to be graded rather than a
+threshold.** The old test was "fewer than starters + FLEX + 1 at the
+position", which is four running backs in the default league — and the CPU's
+depth allowance puts every team at exactly four. The cliff sat precisely
+where the CPU stops, so it never fired once. It now asks how far from
+startable the best benched player at each of RB and WR is, in places past
+replacement: nothing if he could start today, the full 12 at `COVER_NONE`
+places past it or with nobody there at all.
+
+**Bye week safety counts every bad week, squared.** It used to read the worst
+week and stop, so three starters out in week 6 *and* three more in week 8
+scored what a single bad week scored — everything after the first was
+invisible. Squared because the weeks are not interchangeable: four out at
+once is a week you probably lose, three out twice is two weeks you patch from
+the bench. One week of four (−80) therefore outranks two weeks of three
+(−40), and two bad weeks always beat one.
+
+**`GRADE_SCALE` is fourteen long and `TEAM_COUNTS` goes to twenty-four.** The
+index is clamped. Without it a sixteen-team room printed the literal word
+"undefined" in the room standings against fifteenth and sixteenth. Anything
+indexing that array by finishing position needs the same clamp. Stretching
+the scale to fit the room was the alternative and was rejected: it would
+quietly regrade every ten-team draft, which is a bigger change than the bug.
+
 ## Conventions
 
 - `app.js` is organised in numbered sections. Keep new code in the right one.
@@ -590,6 +658,26 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   If the console reports an error naming something the source no longer
   contains, you are looking at a cached `app.js`, not a real failure. Hard
   reload, or serve the folder over `python -m http.server` and use that.
+
+- Grade: after any change to `analyseTeam()`, count the distinct values each
+  component takes across the room, not just your own card. Three of the four
+  were broken at once and every one of them still rendered a plausible bar on
+  a plausible-looking grade — the tell was in the spread, where roster
+  construction was the same number for all ten teams. Reconcile a total
+  against its own parts too; both are two lines in the console:
+
+  ```js
+  const all = analyseDraft(), w = WEIGHTS;
+  ["startersScaled","valueScaled","buildScaled","byePenaltyScaled"]
+    .forEach(k => console.log(k, new Set(all.map(t => Math.round(t[k]))).size));
+  console.log("totals reconcile", all.every(t => Math.abs(
+    t.startersScaled*w.starters + t.valueScaled*w.value +
+    t.buildScaled*w.build + t.byePenaltyScaled*w.byes - t.total) < 1e-9));
+  ```
+
+  And run one draft at more than fourteen teams. The grade scale is fourteen
+  long, the team count goes to twenty-four, and that is a shape nothing else
+  in the routine covers.
 
 ## Don't
 
