@@ -1820,8 +1820,11 @@ function draftSignals(player) {
                    reasons.bust.push("drafted as " + player.pos + player.posRank +
                      " but projects only " + player.pos + player.projPosRank); }
   if (isRuledOut(player)) { bust += 40; reasons.bust.push("ruled out"); }
-  else if (isRisky(player)) { bust += 22; reasons.bust.push("carrying a " + player.inj + " designation"); }
-  else if (player.inj) { bust += 12; reasons.bust.push(player.inj + " designation"); }
+  // Through injuryWords() so the meters agree with the prose above them.
+  // "Q designation" and "listed questionable" on the same screen read as two
+  // different facts about the same player.
+  else if (isRisky(player)) { bust += 22; reasons.bust.push("listed " + injuryWords(player.inj)); }
+  else if (player.inj) { bust += 12; reasons.bust.push("listed " + injuryWords(player.inj)); }
 
   if (s.age) {
     if (player.pos === "RB" && s.age >= 28) { bust += 20; reasons.bust.push("age " + s.age + " at running back"); }
@@ -2839,12 +2842,17 @@ function heightText(inches) {
 /* Injury codes as words. The badge on the row has room for two letters and
    the profile has room for the meaning, and "Carrying an Q designation" is
    not a sentence. */
-const INJURY_WORDS = { Q: "questionable", D: "doubtful", O: "out",
-                       IR: "injured reserve", PUP: "physically unable to perform",
-                       SUS: "suspended", NA: "not active" };
-
+/* The table lives inside the function rather than beside it, and that is
+   deliberate. draftSignals() calls this from line 1784 and the top-level
+   render() runs at line 730 — both before this point in the file. A function
+   declaration hoists and is callable from anywhere; a `const` beside it
+   would still be in the temporal dead zone at that moment and would throw.
+   Rebuilding six keys per call costs nothing at this rate. */
 function injuryWords(code) {
-  return INJURY_WORDS[code] || String(code);
+  const words = { Q: "questionable", D: "doubtful", O: "out",
+                  IR: "injured reserve", PUP: "physically unable to perform",
+                  SUS: "suspended", NA: "not active" };
+  return words[code] || String(code);
 }
 
 function bioLine(player, s) {

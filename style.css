@@ -1195,11 +1195,41 @@ tr.drafted .ovr { color: var(--ink-light); }
 /* The rank is a quiet number: it is the row's address, not a stat. */
 #playerTable.stats td.stick.rk { color: var(--ink-light); font-size: 11px; }
 
-@media (max-width: 560px) {
-  /* On a phone the pinned pair would eat most of the width, so only the
-     name stays and the rank scrolls away with everything else. */
+@media (max-width: 700px) {
+  /* On a phone the pinned pair would eat the screen. Measured at 375px:
+     rank plus name came to 336 of the 359 visible, leaving twenty-three
+     pixels for the numbers — a grid you could only read one column at a
+     time, from behind a name column that never moved.
+
+     So the rank scrolls away with everything else, the name is capped, and
+     every cell loses padding. That buys back about 180px of scroll width
+     and puts three or four stat columns beside the name instead of none. */
   #playerTable.stats .stick.rk { position: static; }
-  #playerTable.stats .stick.name { left: 0; --rk-w: 0px; }
+  #playerTable.stats .stick.name { left: 0; --rk-w: 0px; max-width: 160px; }
+
+  #playerTable.stats th, #playerTable.stats td { padding-left: 7px; padding-right: 7px; }
+
+  /* The name truncates rather than wrapping, so rows stay one height and
+     the list stays scannable. The meta line under it is allowed to wrap —
+     losing the tier or a Reach chip off the side would be losing the
+     reason to look at the row. */
+  #playerTable.stats .stick.name .nm {
+    display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  /* The line may break between chips, never inside one. Left to wrap freely
+     a "Reach · projects WR10" chip folds into three stacked lines and the
+     row stops looking like a row. */
+  #playerTable.stats .stick.name .meta { white-space: normal; }
+  #playerTable.stats .stick.name .meta > * { white-space: nowrap; }
+
+  /* The value/reach chip is the widest thing on the line and the only one
+     that is a sentence. Given its own row it reads; left to wrap in with the
+     badge and the team it drags them into three ragged lines that no longer
+     look like a row. */
+  #playerTable.stats .stick.name .meta .chip.val,
+  #playerTable.stats .stick.name .meta .chip.reach {
+    display: block; width: fit-content; margin-top: 3px;
+  }
 }
 
 .logtbl { font-size: 12px; }
