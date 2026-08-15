@@ -2027,7 +2027,28 @@ function analyseTeam(slot) {
   let value = 0;
   judged.forEach(function (p) { value += (p.overall - p.player.overall); });
 
-  // 3. roster construction
+  /* 3. roster construction.
+
+     Three ways a roster can be badly built: a starting slot you cannot fill,
+     a spot spent on somebody you can never start, and no cover behind the
+     positions you start most of.
+
+     The third one used to be a threshold — "fewer than starters + FLEX + 1"
+     — and it never once fired, because it sits exactly where the CPU's own
+     depth allowance lands every team. Measured across a full room: all ten
+     teams held four running backs, one quarterback, one kicker, one defense,
+     and every one of them scored a flat 100. Fifteen per cent of the grade
+     was a constant, which is the same as not being in the grade at all.
+
+     So cover is graded rather than a cliff, and it asks the question a
+     manager actually has: if a starter goes down, how far from startable is
+     the next man up? That is the best benched player at the position,
+     measured in places past replacement — nought if he could start today,
+     the full penalty if there is nobody there at all. Across the same room
+     it separated ten teams into nine distinct scores. */
+  const COVER_NONE = 15;   // places past replacement at which cover is no cover
+  const COVER_COST = 12;   // most that one uncovered position can cost
+
   let build = 100;
   lineup.forEach(function (s) { if (!s.player) build -= 14; });          // hole in the lineup
   ["QB", "K", "DST"].forEach(function (pos) {
@@ -2035,10 +2056,20 @@ function analyseTeam(slot) {
     // league that starts one, which is why this counts past the starters.
     build -= Math.max(0, countAt(slot, pos) - league.starters[pos]) * 9;
   });
-  // Thin at the two positions you start most of, once the FLEX is counted.
-  ["RB", "WR"].forEach(function (pos) {
-    if (countAt(slot, pos) < league.starters[pos] + flexCount() + 1) build -= 6;
+
+  const benched = roster.filter(function (p) {
+    return !lineup.some(function (s) { return s.player === p; });
   });
+  ["RB", "WR"].forEach(function (pos) {
+    if (!league.starters[pos]) return;      // a league that starts none needs none
+    const best = benched
+      .filter(function (p) { return p.pos === pos; })
+      .sort(function (a, b) { return a.posRank - b.posRank; })[0];
+    // Nobody behind them is the same as cover that could never play.
+    const past = best ? best.posRank - replacementRank(pos) : COVER_NONE;
+    build -= COVER_COST * Math.min(1, Math.max(0, past) / COVER_NONE);
+  });
+  build = Math.round(build);
 
   // 4. bye week exposure, judged on the starting nine only
   const byes = {};
@@ -2925,8 +2956,10 @@ function renderGrades() {
     time &mdash; kickers and defenses are left out, because the room will not let anyone take
     one before the closing rounds and their ADP is set by longer drafts than this one.
     Roster construction is 15%, docking unfilled
-    starting slots, duplicate quarterbacks, kickers or defenses, and thin running back or receiver
-    depth. Bye week safety is the last 10%, penalising any week with more than two starters off.
+    starting slots, spots spent on a quarterback, kicker or defense you can never start, and how
+    far from startable your best benched running back and receiver are &mdash; nothing if either
+    could start today. Bye week safety is the last 10%, penalising any week with more than two
+    starters off.
     Each component is scaled against the other ${league.teams - 1} teams before weighting.</p>`;
 
   body.innerHTML = html;

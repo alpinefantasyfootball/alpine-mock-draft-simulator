@@ -10,7 +10,7 @@
        made next door rather than reverting to light halfway through a
        visit. The only other script here is the back-to-top control, at the
        foot of the page. -->
-  <script src="../theme.js?v=202608151300"></script>
+  <script src="../theme.js?v=202608151313"></script>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -20,7 +20,7 @@
        styling. Everything below is layout for a page of prose, which the app
        has no use for, so it lives here rather than bloating style.css. -->
   <!-- Same ?v= as index.html, and bumped with it. See the note there. -->
-  <link rel="stylesheet" href="../style.css?v=202608151300">
+  <link rel="stylesheet" href="../style.css?v=202608151313">
 
   <link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="../favicon-16.png">
@@ -452,7 +452,7 @@
     <table>
       <tr><td class="k">Starter strength</td><td class="n">50%</td><td>Every player in your best legal starting lineup, scored by how many places above replacement level they rank at their position. Uses the replacement ranks derived in section 03.</td></tr>
       <tr><td class="k">Draft value</td><td class="n">25%</td><td>How far each player fell past the board's own order when you took them. Taking a player later than his rank says is a bargain; taking him earlier is a reach. Kickers and defenses are left out &mdash; see below.</td></tr>
-      <tr><td class="k">Roster construction</td><td class="n">15%</td><td>Starts at 100. Minus 14 for each unfilled starting slot, minus 9 for every quarterback, kicker or defense beyond what the league starts, minus 6 for being thin at running back or receiver.</td></tr>
+      <tr><td class="k">Roster construction</td><td class="n">15%</td><td>Starts at 100. Minus 14 for each unfilled starting slot, minus 9 for every quarterback, kicker or defense beyond what the league starts, and up to 12 each for running back and receiver depending on how far from startable your best benched one is &mdash; see below.</td></tr>
       <tr><td class="k">Bye week safety</td><td class="n">10%</td><td>Minus 20 for every starter beyond the second sharing the same bye week. Judged on the starting lineup only, because bench byes cost nothing.</td></tr>
     </table>
 
@@ -461,6 +461,24 @@
       fourteen-step scale running A+ down to F, long enough to give every seat
       in a fourteen-team room its own letter.
     </p>
+
+    <h3>What "cover" means in roster construction</h3>
+    <p>
+      If one of your starters goes down, how far from startable is the next
+      man up? That is the best player on your bench at that position,
+      measured in places past replacement level. Nothing is docked if he
+      could start today; the full 12 if he is fifteen or more places past it,
+      or if there is nobody there at all.
+    </p>
+    <div class="note">
+      This used to be a threshold &mdash; fewer than starters plus FLEX plus
+      one at a position and you lost 6 &mdash; and it never once fired,
+      because it sat exactly where every computer team lands. Measured across
+      a full room, all ten teams held four running backs and one quarterback
+      and every one of them scored a flat 100, which made fifteen per cent of
+      the grade a constant. Graded instead of a cliff, the same room came out
+      as seven different scores.
+    </div>
 
     <h3>Why kickers and defenses sit out of draft value</h3>
     <p>
@@ -682,7 +700,7 @@
   <!-- This page is long enough that getting back to the contents is a real
        scroll. Same control and same stylesheet as the app, so it looks and
        behaves like one thing rather than a page that grew its own button. -->
-  <script src="../back-to-top.js?v=202608151300" data-auto></script>
+  <script src="../back-to-top.js?v=202608151313" data-auto></script>
 
 </body>
 </html>
