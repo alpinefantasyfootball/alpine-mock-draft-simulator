@@ -2826,6 +2826,213 @@ function logColumns(player, sample, isSeason) {
   return { head: head, keys: keys };
 }
 
+/* Sleeper stores height as a plain count of inches — 67 through 78 across
+   our whole pool, no quote forms at all — so it is ours to render. A team
+   defense has neither, which is why every part of this line is optional
+   rather than dashed out. */
+function heightText(inches) {
+  const n = Number(inches);
+  if (!n || n < 40 || n > 90) return null;
+  return Math.floor(n / 12) + "'" + (n % 12) + '"';
+}
+
+/* Injury codes as words. The badge on the row has room for two letters and
+   the profile has room for the meaning, and "Carrying an Q designation" is
+   not a sentence. */
+const INJURY_WORDS = { Q: "questionable", D: "doubtful", O: "out",
+                       IR: "injured reserve", PUP: "physically unable to perform",
+                       SUS: "suspended", NA: "not active" };
+
+function injuryWords(code) {
+  return INJURY_WORDS[code] || String(code);
+}
+
+function bioLine(player, s) {
+  /* A team defense has no age, height or college, and there is no honest
+     dash to print for them — it is eleven people. It gets the one line that
+     is true of it instead, rather than an empty strip under the name. */
+  if (player.pos === "DST") {
+    return `${player.team} team defense &middot; bye ${player.bye}`;
+  }
+  if (!s) return `ADP ${player.adp.toFixed(1)}`;
+
+  const bits = [];
+  if (s.age) bits.push("Age " + s.age);
+  const ht = heightText(s.ht);
+  if (ht) bits.push(ht);
+  if (s.wt) bits.push(s.wt + " lb");
+  if (s.exp !== undefined) bits.push(s.exp === 0 ? "Rookie" : s.exp + " yrs exp");
+  if (s.col) bits.push(escHtml(s.col));
+  if (s.depth) bits.push(s.depth + (s.order ? " #" + s.order : ""));
+
+  return bits.join(" &middot; ");
+}
+
+/* The line Sleeper puts under a player's name: where he ranks, and where the
+   market has him. Ours differs in one way worth keeping — their "% rostered"
+   is telemetry from their own userbase, which we have no equivalent of and
+   would be guessing at. What we can say instead is what our model thinks,
+   which is the thing they cannot. */
+function rankRow(player) {
+  const score = overallScore(player);
+  const cells = [
+    ["#" + player.overall, "Overall"],
+    [player.pos + player.posRank, "Position"],
+    [player.adp.toFixed(1), "ADP"],
+    ["T" + player.tier, "Tier"],
+    [score === null ? "&mdash;" : Math.round(score), "Juke score"]
+  ];
+  return `<div class="rankrow">` + cells.map(function (c) {
+    return `<div class="rankcell"><b>${c[0]}</b><span>${c[1]}</span></div>`;
+  }).join("") + `</div>`;
+}
+
+/* ---- week by week ----------------------------------------
+
+   Logs are stored keyed by season now, so a player gets a selector of the
+   years he actually has: three for a rookie's worth of history, both for a
+   veteran, none at all for someone outside the weekly cut. Sleeper shows a
+   fixed row of five and greys out the ones a player never played; showing
+   only what exists says the same thing without the dead tabs. */
+let sheetLogPick = null;
+
+function logYears(s) {
+  return (s && s.w) ? Object.keys(s.w).sort().reverse() : [];
+}
+
+// The year on screen: whatever was last chosen if this player has it, else
+// his most recent. Reset per player so opening a rookie after a veteran does
+// not land on a year the rookie has never seen.
+function sheetLogYear(s) {
+  const years = logYears(s);
+  if (!years.length) return null;
+  return years.indexOf(sheetLogPick) >= 0 ? sheetLogPick : years[0];
+}
+
+function logsHtml(player, s, year) {
+  const years = logYears(s);
+  if (!years.length || !year) {
+    return `<div class="nodata">No week-by-week logs stored for this player.</div>`;
+  }
+
+  const weeks = s.w[year] || [];
+  const picker = years.length < 2 ? "" :
+    `<div class="yearpick">` + years.map(function (y) {
+      return `<button type="button" class="${y === year ? "on" : ""}" data-logyear="${y}">${y}</button>`;
+    }).join("") + `</div>`;
+
+  // Whether a week happened is a question about the raw data, never about
+  // what it scored, so both checks go through didPlay(). Listing a handful of
+  // stats by hand would call a week blank for anyone whose only contribution
+  // was outside that list.
+  const played = weeks.filter(didPlay);
+  const scored = played.reduce((a, g) => a + fantasyPoints(g), 0);
+  // The heading goes through perGame() so an all-bye log reads as a dash
+  // rather than a confident 0.0; avg stays a number for the cell tones.
+  const avg = played.length ? scored / played.length : 0;
+  const cols = logColumns(player, weeks);
+
+  const rows = weeks.map(function (g) {
+    const blank = !didPlay(g);
+    const points = fantasyPoints(g);
+    const cells = cols.keys.map(function (k) {
+      const v = k === "w" ? g.w : k === "pts" ? points : cellValue(g, k);
+      const tone = k === "pts" && !blank
+        ? (points >= avg * 1.4 ? "hi" : points <= avg * 0.5 ? "lo" : "") : "";
+      return `<td class="${tone}">${v === undefined ? "&mdash;" : v}</td>`;
+    }).join("");
+    return `<tr class="${blank ? "bye" : ""}">${cells}</tr>`;
+  }).join("");
+
+  return `${picker}
+    <p class="section-label">${year} week by week &middot; ${perGame(scored, played.length)} per game played</p>
+    <div class="tblscroll"><table class="logtbl">
+      <thead><tr>${cols.head.map((h) => `<th>${h}</th>`).join("")}</tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>`;
+}
+
+/* ---- our read --------------------------------------------
+
+   Sleeper fills a whole column of a player profile with wire copy from
+   Rotowire. We cannot republish that and would not want to — see the note in
+   CLAUDE.md — but the space is the most valuable on the page, and leaving it
+   empty concedes the comparison.
+
+   So this is the thing we have that a feed does not: the model, saying in
+   sentences what the meters below say in bars. Every clause is derived from
+   figures already computed for this player. Nothing here is fetched, nothing
+   is an opinion typed by a person, and nothing claims to be news. */
+function ourRead(player, s, sig) {
+  const lines = [];
+
+  /* A team defense is not a "him". Every other position in this pool is a
+     person and the NFL's are all men, so "him" is accurate there and reads
+     better than the alternatives; a defense gets its own phrasing rather
+     than a pronoun. */
+  const them = player.pos === "DST" ? "this defense" : "him";
+  const They = player.pos === "DST" ? "This defense is" : "He is";
+
+  // Where the market and the model disagree, which is the whole game.
+  const gap = marketGap(player);
+  if (player.projPosRank) {
+    if (gap >= MARKET_GAP) {
+      lines.push(`The board has ${them} at <b>${player.pos}${player.posRank}</b> and the projection
+        says <b>${player.pos}${player.projPosRank}</b> — ${gap} places of daylight in your favour.
+        That is the kind of gap that pays for a pick.`);
+    } else if (gap <= -MARKET_GAP) {
+      lines.push(`The room is drafting ${them} at <b>${player.pos}${player.posRank}</b> and the
+        projection only supports <b>${player.pos}${player.projPosRank}</b>. Taking ${them} here
+        means paying ${Math.abs(gap)} places above what the numbers carry.`);
+    } else {
+      lines.push(`Priced about right: <b>${player.pos}${player.posRank}</b> on the board,
+        <b>${player.pos}${player.projPosRank}</b> on the projection.`);
+    }
+  }
+
+  // Tier scarcity — the reason to reach a round early, or wait one out.
+  const left = board.filter(function (o) {
+    return !o.drafted && o.pos === player.pos && o.tier === player.tier;
+  }).length;
+  if (left > 0) {
+    lines.push(left === 1
+      ? `${They} the <b>last ${player.pos} in tier ${player.tier}</b>. After ${them} the drop is a
+         tier, not a pick.`
+      : `<b>${left} ${player.pos}s left in tier ${player.tier}</b>, so the position does not force
+         your hand yet.`);
+  }
+
+  // Where he sits on his own depth chart, which is the cheapest available
+  // read on whether the projection has a route to happening.
+  if (s && s.depth && s.order) {
+    lines.push(s.order === 1
+      ? `Listed <b>first on the ${player.team} depth chart</b> at ${s.depth}.`
+      : `Listed <b>${s.order}${s.order === 2 ? "nd" : s.order === 3 ? "rd" : "th"}</b>
+         at ${s.depth} for ${player.team}, which is the risk the projection is carrying.`);
+  }
+
+  if (player.inj) {
+    lines.push(`Listed <b>${escHtml(injuryWords(player.inj))}</b>. The model docks for it; how much
+      it should worry you is a question about your bench, not about ${them}.`);
+  }
+
+  // Availability, from games actually played rather than from a narrative.
+  const last = lastSeason(s);
+  if (last && last.gp !== undefined && last.gp < 14) {
+    lines.push(`Played <b>${last.gp} games</b> last season. A projection is a per-season number
+      and it assumes ${player.pos === "DST" ? "a full one" : "he is on the field for it"}.`);
+  }
+
+  if (!lines.length) return "";
+
+  return `<div class="ourread">
+      <p class="section-label">Our read</p>
+      ${lines.map((l) => `<p>${l}</p>`).join("")}
+      <p class="readnote">Worked out from this board and these projections, under your scoring.
+        It is one model's opinion, not a wire report and not a consensus.</p>
+    </div>`;
+}
+
 function openSheet(player) {
   sheetPlayer = player;
   const s = statOf(player);
@@ -2840,11 +3047,9 @@ function openSheet(player) {
         ${player.team} &middot; Bye ${player.bye} ${injBadge(player)}
       </div>
       <div class="facts">
-        ADP ${player.adp.toFixed(1)} &middot; ${player.pos}${player.posRank}
-        ${s && s.age ? " &middot; age " + s.age : ""}
-        ${s && s.exp !== undefined ? " &middot; " + (s.exp === 0 ? "rookie" : s.exp + " yrs") : ""}
-        ${s && s.depth ? " &middot; " + s.depth + (s.order ? " #" + s.order : "") : ""}
+        ${bioLine(player, s)}
       </div>
+      ${rankRow(player)}
     </div>
     <button class="sheet-close" id="sheetClose">&times;</button>`;
 
@@ -2856,6 +3061,7 @@ function openSheet(player) {
   } else {
     const p = sig.stats.p || {};
     overview = `
+      ${ourRead(player, s, sig)}
       ${meter("Overall", sig.overall, sig.overall >= 55 ? "good" : "", sig.reasons.overall)}
       ${meter("Upside",  sig.upside,  sig.upside  >= 55 ? "good" : "", sig.reasons.upside)}
       ${meter("Bust risk", sig.bust,  sig.bust >= 55 ? "bad" : sig.bust >= 35 ? "warn" : "", sig.reasons.bust)}
@@ -2878,39 +3084,7 @@ function openSheet(player) {
   // Column set is chosen from player.pos, never from whether a stat happens
   // to be present. A running back who threw one trick-play pass is still a
   // running back, and needs his receiving line.
-  let logs;
-  if (!s || !s.w || !s.w.length) {
-    logs = `<div class="nodata">No week-by-week logs stored for this player.</div>`;
-  } else {
-    // Whether a week happened is a question about the raw data, never about
-    // what it scored, so both checks go through didPlay(). The old version
-    // listed a handful of stats by hand and would have called a week blank
-    // for anyone whose only contribution was outside that list.
-    const played = s.w.filter(didPlay);
-    const scored = played.reduce((a, g) => a + fantasyPoints(g), 0);
-    // The heading goes through perGame() so an all-bye log reads as a dash
-    // rather than a confident 0.0; avg stays a number for the cell tones.
-    const avg = played.length ? scored / played.length : 0;
-    const cols = logColumns(player, s.w);
-
-    const rows = s.w.map(function (g) {
-      const blank = !didPlay(g);
-      const points = fantasyPoints(g);
-      const cells = cols.keys.map(function (k, i) {
-        const v = k === "w" ? g.w : k === "pts" ? points : cellValue(g, k);
-        const tone = k === "pts" && !blank
-          ? (points >= avg * 1.4 ? "hi" : points <= avg * 0.5 ? "lo" : "") : "";
-        return `<td class="${tone}">${v === undefined ? "&mdash;" : v}</td>`;
-      }).join("");
-      return `<tr class="${blank ? "bye" : ""}">${cells}</tr>`;
-    }).join("");
-
-    logs = `<p class="section-label">2025 week by week &middot; ${perGame(scored, played.length)} per game played</p>
-      <div class="tblscroll"><table class="logtbl">
-        <thead><tr>${cols.head.map((h) => `<th>${h}</th>`).join("")}</tr></thead>
-        <tbody>${rows}</tbody>
-      </table></div>`;
-  }
+  const logs = logsHtml(player, s, sheetLogYear(s));
 
   // ---------- seasons ----------
   let seasons;
@@ -2920,8 +3094,12 @@ function openSheet(player) {
     const years = seasonKeys(s).map((y) => [y, s.s[y]]);
     if (s.p) years.push(["2026 proj", s.p]);
 
+    /* Which columns to show is decided from a sample of every line we have,
+       so a column is not dropped because the one season on screen happened
+       to be empty. s.w is keyed by season now, so this walks the years
+       rather than concatenating an array. */
     const sample = years.map((y) => y[1]);
-    if (s.w) sample.push.apply(sample, s.w);
+    logYears(s).forEach(function (y) { sample.push.apply(sample, s.w[y]); });
     const cols = logColumns(player, sample, true);
 
     const rows = years.map(function (entry) {
@@ -3895,6 +4073,18 @@ $("startBtn").addEventListener("click", function () {
 document.addEventListener("click", function (e) {
   if (e.target.id === "resumeBtn") { const d = readSave(); if (d) resumeDraft(d); }
   if (e.target.id === "discardBtn") { clearSave(); showResumeBar(); }
+});
+
+/* The year buttons on the game logs. Delegated from the sheet body, which
+   openSheet() rewrites wholesale, and it repaints only the logs view rather
+   than reopening the sheet — reopening would throw away which tab you were
+   on to change something inside that tab. */
+$("sheetBody").addEventListener("click", function (e) {
+  const btn = e.target.closest ? e.target.closest("[data-logyear]") : null;
+  if (!btn || !sheetPlayer) return;
+  sheetLogPick = btn.dataset.logyear;
+  const s = statOf(sheetPlayer);
+  $("v-logs").innerHTML = logsHtml(sheetPlayer, s, sheetLogYear(s));
 });
 
 $("sheetBackdrop").addEventListener("click", closeSheet);

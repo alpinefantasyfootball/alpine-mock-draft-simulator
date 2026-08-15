@@ -57,7 +57,7 @@
 
        A query string rather than a renamed file, because renaming means a
        manifest and a manifest means a build step. This costs one number. -->
-  <link rel="stylesheet" href="style.css?v=202608143">
+  <link rel="stylesheet" href="style.css?v=202608145">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -596,17 +596,17 @@
 
   <!-- Every one of these carries the same ?v= as the stylesheet. See the note
        beside it in <head>: bump them together or don't bump them at all. -->
-  <script src="players.js?v=202608143"></script>
-  <script src="stats.js?v=202608143"></script>
+  <script src="players.js?v=202608145"></script>
+  <script src="stats.js?v=202608145"></script>
   <!-- The rules of a snake draft, with no reference to this page. It loads
        before app.js because app.js is a caller, and it is a separate file
        because a server will eventually have to run the same one. -->
-  <script src="draft-engine.js?v=202608143"></script>
+  <script src="draft-engine.js?v=202608145"></script>
   <!-- The socket to a shared room. Loaded always, connected never unless a
        manager asks for it: a solo draft touches nothing. -->
-  <script src="live.js?v=202608143"></script>
+  <script src="live.js?v=202608145"></script>
   <!-- Before app.js, which calls backToTop() on the last line of its setup. -->
-  <script src="back-to-top.js?v=202608143"></script>
-  <script src="app.js?v=202608143"></script>
+  <script src="back-to-top.js?v=202608145"></script>
+  <script src="app.js?v=202608145"></script>
 </body>
 </html>

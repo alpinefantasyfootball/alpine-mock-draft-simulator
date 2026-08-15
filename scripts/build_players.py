@@ -58,7 +58,17 @@ WEEKLY_KEEP = 180      # players who also get week-by-week game logs
 # with 2026 draft relevance. Seasons that return nothing are skipped, so this
 # is self-limiting if Sleeper's history does not reach that far.
 STAT_SEASONS = list(range(2018, 2026))
-WEEKLY_SEASON = 2025
+
+# Week-by-week logs, newest first. Two seasons, not more.
+#
+# Season totals above already go back to 2018, which is what a career table
+# wants. Weekly rows answer a different and narrower question during a draft
+# -- is he trending up, and what did the injury year look like -- and that is
+# last season and the one before it. Each season costs about 184KB in
+# stats.js, which is a plain script tag on a page with no build step, so a
+# five-year selector would put a megabyte of render-blocking JSON in front of
+# a phone to answer a question nobody asks mid-draft.
+WEEKLY_SEASONS = [2025, 2024]
 WEEKLY_WEEKS = 18
 PROJECTION_SEASON = 2026
 
@@ -366,14 +376,21 @@ def main():
         f"{SLEEPER}/projections/nfl/regular/{PROJECTION_SEASON}", optional=True)
     print(f"  {len(projections)} lines")
 
-    print(f"Fetching {WEEKLY_SEASON} weekly game logs...")
+    # Keyed by season, then week. A season that returns nothing simply does
+    # not appear, so the app draws a selector of the years it actually has
+    # rather than a tab that opens onto an empty table.
     weekly = {}
-    for week in range(1, WEEKLY_WEEKS + 1):
-        data = fetch_json(
-            f"{SLEEPER}/stats/nfl/regular/{WEEKLY_SEASON}/{week}", optional=True)
-        if data:
-            weekly[week] = data
-    print(f"  {len(weekly)} weeks")
+    for season in WEEKLY_SEASONS:
+        print(f"Fetching {season} weekly game logs...")
+        got = {}
+        for week in range(1, WEEKLY_WEEKS + 1):
+            data = fetch_json(
+                f"{SLEEPER}/stats/nfl/regular/{season}/{week}", optional=True)
+            if data:
+                got[week] = data
+        if got:
+            weekly[season] = got
+        print(f"  {len(got)} weeks")
 
     # ---- join every ADP set to Sleeper records ----
     indexes = index_sleeper(sleeper)
@@ -424,6 +441,18 @@ def main():
             record["age"] = int(entry["age"])
         if entry.get("years_exp") is not None:
             record["exp"] = int(entry["years_exp"])
+
+        # Bio. Already in the player feed we fetch, previously thrown away.
+        # It is the top line of a player profile everywhere else in fantasy,
+        # and it costs a few bytes a head.
+        if entry.get("height"):
+            record["ht"] = str(entry["height"])
+        if entry.get("weight"):
+            record["wt"] = str(entry["weight"])
+        if entry.get("college") and entry["college"] != "-":
+            record["col"] = entry["college"]
+        if entry.get("number") is not None:
+            record["no"] = int(entry["number"])
         if entry.get("depth_chart_position"):
             record["depth"] = entry["depth_chart_position"]
         if entry.get("depth_chart_order") is not None:
@@ -457,16 +486,20 @@ def main():
             record["p"] = block
 
         if rank < WEEKLY_KEEP:
-            logs = []
-            for week in sorted(weekly):
-                line = weekly[week].get(player_id)
-                if not line:
-                    continue
-                block = compact(line)
-                block["w"] = week
-                logs.append(block)
-            if logs:
-                record["w"] = logs
+            by_season = {}
+            for season, weeks in weekly.items():
+                logs = []
+                for week in sorted(weeks):
+                    line = weeks[week].get(player_id)
+                    if not line:
+                        continue
+                    block = compact(line)
+                    block["w"] = week
+                    logs.append(block)
+                if logs:
+                    by_season[str(season)] = logs
+            if by_season:
+                record["w"] = by_season
 
         if record:
             stats[player_id] = record
@@ -547,10 +580,11 @@ def main():
             "   Alpine Draft Room - stats, projections and depth charts\n"
             "   GENERATED FILE. Keyed by Sleeper player id.\n\n"
             "     age / exp    age, years of experience\n"
+            "     ht/wt/col/no height, weight, college, jersey number\n"
             "     depth/order  depth chart slot and place on it\n"
             "     s            season totals by year\n"
             "     p            projection for the coming season\n"
-            "     w            week by week logs for last season\n\n"
+            "     w            week by week logs, keyed by season\n\n"
             "   Raw components only. There is no points total in here: app.js\n"
             "   applies the scoring rules, so a league can change them without\n"
             "   this file being rebuilt.\n\n"

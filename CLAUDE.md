@@ -299,6 +299,22 @@ Hardcoding white made it invisible on every light surface, with only the
 orange swoosh showing. The token is brand navy in light, white in dark, and
 forced white on the navy draft bar.
 
+**Weekly logs are keyed by season; season totals are not.** `stat.w` is
+`{ "2025": [...], "2024": [...] }`, two years, and `stat.s` is every season
+back to 2018. They answer different questions: the career table wants depth
+and costs nothing extra, week-by-week wants recency and costs about 184KB a
+season in a file that is a plain script tag on a page with no build step.
+Five years of weekly rows would put a megabyte of render-blocking JSON in
+front of a phone. `WEEKLY_SEASONS` in `build_players.py` is the one place to
+change it, and `logYears()` draws a selector of the years a player actually
+has rather than five tabs with three of them dead.
+
+**Sleeper stores height as inches**, a bare number from 67 to 78 across the
+whole pool, with no quote form anywhere in it. `heightText()` renders it. A
+team defense has no height, weight, age or college — it is eleven people —
+so `bioLine()` gives it its own line rather than a strip of dashes, and
+`ourRead()` calls it "this defense" rather than "him".
+
 **Never sort `board` in place.** `DraftEngine.jitter()` reads a player's
 position in it, so the order of that array is an input to what every CPU
 does — and in a room, every client has to agree on it. Sorting it to draw a
