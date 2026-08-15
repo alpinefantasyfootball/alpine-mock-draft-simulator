@@ -62,6 +62,13 @@
     }
     .formula b { color: var(--link); font-weight: 700; }
 
+    /* One div per line, each with a hanging indent. These lines are sentences
+       now rather than code, so they are long enough to wrap on a phone, and a
+       wrapped line that starts hard against the left edge reads as the next
+       step of the sum instead of the rest of the current one. */
+    .formula > div { padding-left: 15px; text-indent: -15px; }
+    .formula > div.gap { margin-top: 11px; }
+
     /* A worked example at the league's own default settings. Labelled, so it
        is never mistaken for a number the code actually hardcodes. */
     .worked {
@@ -287,11 +294,10 @@
     </p>
 
     <div class="formula">
-starting slots = <b>teams</b> &times; starters at that position<br>
-FLEX slots = <b>teams</b> &times; <b>FLEX</b> &times; that position's share of the FLEX<br>
-replacement rank = the two added up, rounded, plus one<br>
-<br>
-share of the FLEX &mdash; RB 40%, WR 55%, TE 5%
+      <div>starting slots = <b>teams</b> &times; starters at that position</div>
+      <div>FLEX slots = <b>teams</b> &times; <b>FLEX</b> &times; that position's share of the FLEX</div>
+      <div>replacement rank = the two added up, rounded, plus one</div>
+      <div class="gap">share of the FLEX &mdash; RB 40%, WR 55%, TE 5%</div>
     </div>
 
     <p>
@@ -333,7 +339,7 @@ share of the FLEX &mdash; RB 40%, WR 55%, TE 5%
     </p>
 
     <div class="formula">
-score = (ADP + <b>wobble</b>) &times; <b>need</b> &times; <b>risk</b>
+      <div>score = (ADP + <b>wobble</b>) &times; <b>need</b> &times; <b>risk</b></div>
     </div>
 
     <p>
@@ -404,8 +410,7 @@ score = (ADP + <b>wobble</b>) &times; <b>need</b> &times; <b>risk</b>
     </p>
 
     <div class="formula">
-gap needed = 13% of the previous player's ADP<br>
-&mdash; or 2 draft places, whichever is bigger
+      <div>gap needed = 13% of the previous player's ADP, or 2 draft places, whichever is bigger</div>
     </div>
 
     <p>
