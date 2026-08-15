@@ -10,7 +10,7 @@
        made next door rather than reverting to light halfway through a
        visit. The only other script here is the back-to-top control, at the
        foot of the page. -->
-  <script src="../theme.js?v=202608151240"></script>
+  <script src="../theme.js?v=202608151300"></script>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -20,7 +20,7 @@
        styling. Everything below is layout for a page of prose, which the app
        has no use for, so it lives here rather than bloating style.css. -->
   <!-- Same ?v= as index.html, and bumped with it. See the note there. -->
-  <link rel="stylesheet" href="../style.css?v=202608151240">
+  <link rel="stylesheet" href="../style.css?v=202608151300">
 
   <link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="../favicon-16.png">
@@ -451,7 +451,7 @@
 
     <table>
       <tr><td class="k">Starter strength</td><td class="n">50%</td><td>Every player in your best legal starting lineup, scored by how many places above replacement level they rank at their position. Uses the replacement ranks derived in section 03.</td></tr>
-      <tr><td class="k">Draft value</td><td class="n">25%</td><td>How far each player fell past the board's own order when you took them. Taking a player later than his rank says is a bargain; taking him earlier is a reach.</td></tr>
+      <tr><td class="k">Draft value</td><td class="n">25%</td><td>How far each player fell past the board's own order when you took them. Taking a player later than his rank says is a bargain; taking him earlier is a reach. Kickers and defenses are left out &mdash; see below.</td></tr>
       <tr><td class="k">Roster construction</td><td class="n">15%</td><td>Starts at 100. Minus 14 for each unfilled starting slot, minus 9 for every quarterback, kicker or defense beyond what the league starts, minus 6 for being thin at running back or receiver.</td></tr>
       <tr><td class="k">Bye week safety</td><td class="n">10%</td><td>Minus 20 for every starter beyond the second sharing the same bye week. Judged on the starting lineup only, because bench byes cost nothing.</td></tr>
     </table>
@@ -460,6 +460,30 @@
       The weighted total is ranked, and the ranks are handed letters from a
       fourteen-step scale running A+ down to F, long enough to give every seat
       in a fourteen-team room its own letter.
+    </p>
+
+    <h3>Why kickers and defenses sit out of draft value</h3>
+    <p>
+      Because you do not choose when to take them. The room refuses a kicker
+      before the last two rounds and a defense before the last three, and the
+      suggestions never offer one earlier, so their draft slot is the room's
+      decision rather than yours.
+    </p>
+    <p>
+      Their ADP makes it worse. It comes from drafts that run more rounds than
+      most leagues set up here, so a kicker's place on the board is often past
+      the last pick that exists in your draft &mdash; which means taking one at
+      all reads as taking him early. Measured across a full ten-team, fourteen
+      round draft: <b>all ten kickers scored as reaches, by an average of 35
+      picks, and not one came out neutral.</b> "Biggest reach" had become a
+      lottery among kickers.
+    </p>
+    <p>
+      So both positions are left out of draft value and out of the two
+      callouts. It is not a thumb on the scale &mdash; every team drafts the
+      same forced pair, and recomputing a full room without them moved no team
+      more than two places. It takes out a constant that was drowning the
+      thing the number is supposed to measure.
     </p>
 
     <div class="note">
@@ -658,7 +682,7 @@
   <!-- This page is long enough that getting back to the contents is a real
        scroll. Same control and same stylesheet as the app, so it looks and
        behaves like one thing rather than a page that grew its own button. -->
-  <script src="../back-to-top.js?v=202608151240" data-auto></script>
+  <script src="../back-to-top.js?v=202608151300" data-auto></script>
 
 </body>
 </html>

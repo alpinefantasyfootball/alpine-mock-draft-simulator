@@ -1943,13 +1943,73 @@ a.room:hover { border-color: var(--blue-line); }
 
 /* ---------- narrow ---------- */
 
-/* Below this the rail cannot hold a name and a position without wrapping, so
-   it stops being a column and becomes two cards under the list. The board
-   stays: it is the thing worth keeping, and it is already scrollable. */
+/* The launcher and the sheet's way out are for the phone layout only. On a
+   desktop the rail is a column and neither has anything to do, so they are
+   off here and turned on inside the media query. */
+.railfab { display: none; }
+.raildismiss { display: none; }
+
+/* Between a tablet and a desktop there is room for the cards side by side
+   under the list, which is where they used to live at every width. */
 @media (max-width: 900px) {
   .worksplit { grid-template-columns: minmax(0, 1fr); }
   .rail { position: static; flex-direction: row; flex-wrap: wrap; }
   .rail .railcard { flex: 1 1 260px; }
+}
+
+/* ---------- the rail on a phone ----------
+
+   Two cards under the panel is fine while the panel is short. It is not fine
+   under the player table: measured at 375px the rail began 11,841px down the
+   Players tab, and the queue lives nowhere else, so the screen carrying 177
+   ways to add to the queue was the screen you could not read it from. The
+   rail was "never more than a glance away" everywhere except where it was
+   needed.
+
+   So it becomes a sheet with a launcher, exactly as the chat does one
+   breakpoint further in — the same problem deserves the same answer rather
+   than a second idea to learn. */
+@media (max-width: 700px) {
+  .railfab:not([hidden]) {
+    display: flex; align-items: center; gap: 7px;
+    position: fixed; left: 14px; z-index: 60;
+    /* Level with the chat launcher, which sits at the right on this rail. */
+    bottom: calc(74px + env(safe-area-inset-bottom, 0px));
+    font-family: Inter, sans-serif; font-size: 13px; font-weight: 600;
+    color: #fff; background: var(--navy);
+    border: 1px solid var(--navy-soft); border-radius: 22px;
+    padding: 10px 16px; cursor: pointer;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, .35);
+  }
+
+  /* Out of the layout until asked for, so it leaves no gap under the panel. */
+  .rail { display: none; }
+
+  body.rail-open .rail {
+    display: flex; flex-direction: column; flex-wrap: nowrap;
+    /* top: auto for the reason the chat sheet gives: the docked rule sets
+       top: 8px, and top plus a height is a complete answer the browser will
+       take in preference to bottom. */
+    position: fixed; top: auto; left: 0; right: 0; bottom: 0; z-index: 70;
+    height: 78vh; max-height: 78vh; width: auto;
+    gap: 10px; padding: 14px 12px calc(14px + env(safe-area-inset-bottom, 0px));
+    overflow-y: auto;
+    background: var(--sunken);
+    border-top: 1px solid var(--line);
+    border-radius: 14px 14px 0 0;
+    box-shadow: 0 -8px 28px rgba(0, 0, 0, .4);
+  }
+
+  body.rail-open .rail .railcard { flex: none; }
+
+  /* The sheet covers the board, so it needs its own way out. */
+  body.rail-open .raildismiss {
+    display: block; align-self: flex-end;
+    font-size: 24px; line-height: 1; padding: 0 6px; margin-bottom: -4px;
+    color: var(--ink-light); background: none; border: 0; cursor: pointer;
+  }
+
+  body.rail-open .railfab { display: none; }
 }
 
 @media (max-width: 560px) {

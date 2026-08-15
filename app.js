@@ -1455,6 +1455,7 @@ function autoDraftRest() {
 function goHome() {
   stopSim();
   stopClock();
+  openRailSheet(false);   // a sheet left open over the landing page
   state.lastPick = null;
   board.forEach((p) => { p.drafted = false; p.jitter = 0; });
   state.picks = [];
@@ -1984,9 +1985,30 @@ function bestLineup(roster) {
   });
 }
 
+/* Kickers and defenses are drafted when the app says they may be, not when
+   the manager decides. cpuScore() refuses a kicker before the last two rounds
+   and a defense before the last three, and the suggestions never offer them
+   earlier — so their draft slot is the rule's, not yours.
+
+   Judging them on ADP then punishes obeying that rule. Their ADP comes from
+   drafts that run more rounds than most leagues set up here, so a kicker's
+   board rank routinely lands past the last pick that exists: in a measured
+   ten-team, fourteen-round draft every one of the ten kickers scored as a
+   reach, averaging 35 picks early, and not a single one came out neutral.
+   The "biggest reach" callout was therefore a lottery among kickers rather
+   than anything about drafting.
+
+   So the two of them sit out of draft value and out of both callouts. It is
+   not a thumb on the scale: recomputed across a full room, dropping them
+   moved no team more than two places, because every team drafts the same
+   forced pair. It removes a constant that was drowning the signal. */
+const FORCED_LATE = { K: true, DST: true };
+function freelyChosen(p) { return !FORCED_LATE[p.player.pos]; }
+
 function analyseTeam(slot) {
   const roster = rosterOf(slot);
   const picks  = state.picks.filter((p) => p.slot === slot);
+  const judged = picks.filter(freelyChosen);
   const lineup = bestLineup(roster);
 
   // 1. starter strength
@@ -2003,7 +2025,7 @@ function analyseTeam(slot) {
      and every reach scored positive — a quarter of the grade rewarding
      exactly what it was written to punish. */
   let value = 0;
-  picks.forEach(function (p) { value += (p.overall - p.player.overall); });
+  judged.forEach(function (p) { value += (p.overall - p.player.overall); });
 
   // 3. roster construction
   let build = 100;
@@ -2033,11 +2055,17 @@ function analyseTeam(slot) {
      early" for a negative one, so they have been describing this convention
      correctly the whole time the arithmetic was inverted underneath them. */
   let bargain = null, reach = null;
-  picks.forEach(function (p) {
+  judged.forEach(function (p) {
     const gap = p.overall - p.player.overall;
     if (!bargain || gap > bargain.gap) bargain = { pick: p, gap: gap };
     if (!reach   || gap < reach.gap)   reach   = { pick: p, gap: gap };
   });
+  /* A reach is a pick you went and got early. If the worst gap on the board
+     is zero or better then nothing was reached for, and naming the least
+     positive pick "biggest reach" reads as an accusation about a pick that
+     landed exactly where the board wanted it. Mid-draft, with three or four
+     picks all near their rank, that was the usual outcome. */
+  if (reach && reach.gap >= 0) reach = null;
 
   return { slot: slot, roster: roster, lineup: lineup, byes: byes,
            starters: starters, value: value, build: build,
@@ -2669,6 +2697,12 @@ function renderRail() {
 
   $("railRosterHead").textContent = `Your roster · ${held} of ${rosterSize()}`;
 
+  /* The launcher answers the commonest question without being opened. It is
+     shown on the same terms as the chat's: only in a started draft, because
+     there is no roster to glance at before one. */
+  $("railFab").hidden = !(state.started && route() === "draft");
+  $("railFabText").textContent = `Roster ${held}/${rosterSize()}`;
+
   const benched = lineup.bench.length;
   const benchRow = benched
     ? `<li class="benchsum"><span class="rslot BN">BN</span>
@@ -2832,7 +2866,7 @@ function renderGrades() {
     <div class="bars">
       ${bar("Starter strength", Math.round(me.starters) + " pts above replacement",
             me.startersScaled, tone(me.startersScaled))}
-      ${bar("Draft value", (me.value >= 0 ? "+" : "") + me.value + " picks of ADP value",
+      ${bar("Draft value", (me.value >= 0 ? "+" : "") + me.value + " picks, K and D/ST aside",
             me.valueScaled, tone(me.valueScaled))}
       ${bar("Roster construction", me.build + " / 100",
             me.buildScaled, tone(me.buildScaled))}
@@ -2841,19 +2875,25 @@ function renderGrades() {
             me.byePenaltyScaled, tone(me.byePenaltyScaled))}
     </div>`;
 
-  if (me.bargain && me.reach) {
-    html += `<div class="callouts">
-      <div class="callout good">
+  /* Each callout stands on its own. They used to render as a pair or not at
+     all, so a draft with nothing reached for lost its best value too. */
+  if (me.bargain || me.reach) {
+    html += `<div class="callouts">`;
+    if (me.bargain) {
+      html += `<div class="callout good">
         <div class="lbl">Best value</div>
         <div class="val">${me.bargain.pick.player.name}</div>
         <div class="sub">Taken at ${pickCode(me.bargain.pick.overall)}, board had him ${me.bargain.pick.player.overall}${me.bargain.gap > 0 ? " &mdash; " + me.bargain.gap + " picks late" : ""}</div>
-      </div>
-      <div class="callout ${me.reach.gap < -8 ? "bad" : ""}">
+      </div>`;
+    }
+    if (me.reach) {
+      html += `<div class="callout ${me.reach.gap < -8 ? "bad" : ""}">
         <div class="lbl">Biggest reach</div>
         <div class="val">${me.reach.pick.player.name}</div>
-        <div class="sub">Taken at ${pickCode(me.reach.pick.overall)}, board had him ${me.reach.pick.player.overall}${me.reach.gap < 0 ? " &mdash; " + Math.abs(me.reach.gap) + " picks early" : ""}</div>
-      </div>
-    </div>`;
+        <div class="sub">Taken at ${pickCode(me.reach.pick.overall)}, board had him ${me.reach.pick.player.overall} &mdash; ${Math.abs(me.reach.gap)} picks early</div>
+      </div>`;
+    }
+    html += `</div>`;
   }
 
   // bye week strip, weeks 5 to 14
@@ -2881,7 +2921,10 @@ function renderGrades() {
     places above replacement level they rank at their position, where replacement is
     ${replacementText()} for this ${league.teams}-team league${flexCount() ? " with a FLEX" : ""}${league.superflex ? " and a superflex" : ""}.
     Draft value is 25%: how far each
-    player fell past their ADP when you took them. Roster construction is 15%, docking unfilled
+    player fell past their ADP when you took them, counting only the picks you were free to
+    time &mdash; kickers and defenses are left out, because the room will not let anyone take
+    one before the closing rounds and their ADP is set by longer drafts than this one.
+    Roster construction is 15%, docking unfilled
     starting slots, duplicate quarterbacks, kickers or defenses, and thin running back or receiver
     depth. Bye week safety is the last 10%, penalising any week with more than two starters off.
     Each component is scaled against the other ${league.teams - 1} teams before weighting.</p>`;
@@ -4183,6 +4226,18 @@ function openChatSheet(on) {
 }
 
 $("chatFab").addEventListener("click", function () { openChatSheet(!chatUI.open); });
+
+/* The rail sheet. Only a body class, because unlike the chat there is no
+   scroll position or unread count to look after — the rail is rebuilt by
+   render() every time anything changes, and it reads correctly whether the
+   sheet was open or shut. Closing on a draft is deliberate: drafting from
+   the queue is the reason the sheet exists, and leaving it over the board
+   afterwards hides the thing you just changed. */
+function openRailSheet(on) {
+  document.body.classList.toggle("rail-open", on);
+}
+$("railFab").addEventListener("click", function () { openRailSheet(true); });
+$("railDismiss").addEventListener("click", function () { openRailSheet(false); });
 $("chatDismiss").addEventListener("click", function () { openChatSheet(false); });
 
 /* ---- your name ------------------------------------------
@@ -4428,7 +4483,13 @@ document.addEventListener("click", function (event) {
   const name = event.target.dataset ? event.target.dataset.draft : null;
   if (!name || !isMyTurn()) return;
   const player = board.find((p) => p.name === name && !p.drafted);
-  if (player) draftAndAdvance(player);
+  if (player) {
+    // Drafting from the queue is why the sheet opens, so it gets out of the
+    // way once you have. Harmless on a wide screen, where the class does
+    // nothing at all.
+    openRailSheet(false);
+    draftAndAdvance(player);
+  }
 });
 
 document.querySelectorAll(".tabs button").forEach(function (button) {
