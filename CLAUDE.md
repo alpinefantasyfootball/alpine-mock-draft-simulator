@@ -188,6 +188,21 @@ manifest and a manifest is a build step. The daily workflow bumps it too,
 when it commits new player data — a nightly rebuild behind a cache is a
 rebuild nobody sees.
 
+**Do not request the new `?v=` URL until the deploy has actually landed.**
+This is the one way the scheme bites you, and it is easy to do while trying
+to be careful. GitHub Pages publishes `index.html` and the assets a moment
+apart, so a verification poll fired too early asks for `app.js?v=<new>` while
+Pages is still serving the old body at that path — and Cloudflare caches that
+answer against the fresh address for the full ten minutes. New HTML, old
+JavaScript, at a URL specifically designed to prevent exactly that. It has
+happened once, on the profile deploy.
+
+Wait for `curl https://jukeff.com/` to come back asking for the new version
+*and* give the assets a moment after that, or verify with an extra throwaway
+query (`?v=<new>&bust=1`), which reaches the origin without poisoning the
+real address. If it does happen, Caching → Configuration → Custom Purge, one
+URL per line, fixes it in seconds.
+
 That window used to be four hours. It was Cloudflare's Browser Cache TTL
 overriding GitHub Pages, which sends ten minutes; the zone is now set to
 **Respect Existing Headers**, so `Cache-Control: max-age=600` reaches the
