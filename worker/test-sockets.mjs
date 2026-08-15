@@ -74,6 +74,12 @@ function lastState(ws) {
   }
   return null;
 }
+// How many of a kind have arrived. Needed wherever "has one arrived?" is the
+// wrong question because an earlier one is already sitting in the inbox.
+function countOfType(ws, type) {
+  return ws.inbox.filter((m) => m.type === type).length;
+}
+
 function lastOfType(ws, type) {
   for (let i = ws.inbox.length - 1; i >= 0; i--) {
     if (ws.inbox[i].type === type) return ws.inbox[i];
@@ -123,19 +129,36 @@ bob.send(JSON.stringify({ type: "pick", key: "Gibbs" }));
 await sleep(300);
 check("bob cannot pick on alice's turn", lastOfType(bob, "rejected")?.code, "not-your-seat");
 
-// alice picks
+/* alice picks.
+
+   Waited for rather than slept through. A fixed 400ms is comfortable against
+   localhost and a coin toss against a worker at the other end of a real
+   network — this crashed on production reading picks[0] of an empty list,
+   which is the failure the until() helper was written for and which the note
+   above it already warns about. Any fixed sleep before an assertion about a
+   broadcast is the same bug waiting to happen. */
 alice.send(JSON.stringify({ type: "pick", key: "Gibbs" }));
-await sleep(400);
-s = lastState(bob);
-check("pick landed for everyone", s?.picks.length, 1);
-check("pick recorded to the right seat", s?.picks[0].slot, 0);
-check("pick key kept", s?.picks[0].key, "Gibbs");
+s = await until("alice's pick reaches bob", () => {
+  const st = lastState(bob);
+  return st && st.picks.length === 1 ? st : false;
+}) || { picks: [] };
+check("pick landed for everyone", s.picks.length, 1);
+check("pick recorded to the right seat", s.picks[0]?.slot, 0);
+check("pick key kept", s.picks[0]?.key, "Gibbs");
 
 // THE race: both sockets send the same player on bob's turn, same tick
 const before = lastState(bob).picks.length;
+/* A *new* rejection, counted rather than looked up. bob already carries one
+   from the wrong-seat check above, so waiting for "a rejection to exist"
+   returned instantly and the assertion read the picks before either send had
+   been decided. */
+const rejectsBefore = countOfType(bob, "rejected");
 bob.send(JSON.stringify({ type: "pick", key: "Bijan" }));
 bob.send(JSON.stringify({ type: "pick", key: "Bijan" }));
-await sleep(500);
+// One of the two must be refused, so a second rejection means both have been
+// decided — a pick count alone could catch the first one mid-flight.
+await until("the duplicate is decided",
+            () => countOfType(bob, "rejected") > rejectsBefore);
 s = lastState(bob);
 check("a duplicate submit adds exactly one pick", s.picks.length - before, 1);
 check("second submit was rejected", lastOfType(bob, "rejected")?.code !== undefined, true);
@@ -295,6 +318,33 @@ const res = await fetch(`${HTTP}/room/${ROOM}/state`);
 const view = await res.json();
 check("state route responds", res.status, 200);
 check("state route agrees on the pick count", view.picks.length, s.picks.length);
+
+/* ---- the GIPHY proxy is not open ----
+
+   CORS headers tell a browser whether to let a page read a response. They do
+   nothing about the request being made, so withholding them stopped nobody:
+   curl with a made-up Origin came back with a full result set and a little
+   more of the key's quota spent. These check the refusal, not the header. */
+const evil = await fetch(`${HTTP}/giphy?q=touchdown`,
+                         { headers: { Origin: "https://evil.example" } });
+check("a foreign origin is refused outright", evil.status, 403);
+check("and is told nothing else", (await evil.json()).results, undefined);
+
+const bare = await fetch(`${HTTP}/giphy?q=touchdown`);
+check("so is a request with no origin at all", bare.status, 403);
+
+/* A lookalike host has to fail too — the check is an exact match against the
+   list, not a substring, for the same reason cleanGif() parses a URL rather
+   than searching it for "giphy.com". */
+const lookalike = await fetch(`${HTTP}/giphy?q=x`,
+                              { headers: { Origin: "https://jukeff.com.evil.example" } });
+check("a lookalike origin is refused", lookalike.status, 403);
+
+const ours = await fetch(`${HTTP}/giphy?q=touchdown`,
+                         { headers: { Origin: "https://jukeff.com" } });
+check("our own origin is served", ours.status, 200);
+check("and gets the CORS header back",
+      ours.headers.get("access-control-allow-origin"), "https://jukeff.com");
 
 bob.close(); alice2.close(); try { stale.close(); } catch {}
 await sleep(200);

@@ -304,9 +304,24 @@ const ALLOWED = [
   "https://www.jukeff.com"
 ];
 
+/* Whether this request is from somewhere we serve.
+
+   Split out from corsFor() because the two do different jobs and only one of
+   them is security. CORS headers tell a *browser* whether to let the page
+   read a response; they do nothing about the request being made, or about a
+   client that is not a browser. Withholding the header therefore stopped
+   nobody: `curl -H "Origin: https://evil.example"` came back with a full set
+   of results and a little more of the GIPHY quota spent. The check below is
+   the one that refuses. */
+function originAllowed(request) {
+  const origin = request.headers.get("Origin") || "";
+  return ALLOWED.indexOf(origin) >= 0 ||
+         /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin);
+}
+
 function corsFor(request) {
   const origin = request.headers.get("Origin") || "";
-  const ok = ALLOWED.indexOf(origin) >= 0 || /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin);
+  const ok = originAllowed(request);
   return ok ? { "access-control-allow-origin": origin, "vary": "Origin" } : {};
 }
 
@@ -321,6 +336,15 @@ function corsFor(request) {
 async function giphySearch(request, env) {
   const cors = corsFor(request);
   const headers = Object.assign({ "content-type": "application/json" }, cors);
+
+  /* Refused outright, before the key is touched. This is the difference
+     between a proxy that a browser will not read from and a proxy that will
+     not answer — only the second one protects the quota, because anything
+     that is not a browser ignores the first. */
+  if (!originAllowed(request)) {
+    return new Response(JSON.stringify({ error: "forbidden" }),
+                        { status: 403, headers: { "content-type": "application/json" } });
+  }
 
   if (!env.GIPHY_KEY) {
     return new Response(JSON.stringify({ configured: false, results: [] }), { headers });
