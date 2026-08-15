@@ -27,17 +27,13 @@
        foot of the body, because by then the page has already been drawn: a
        reader who chose light would watch it flash dark first. No stored
        choice means no attribute, and no attribute means the dark default
-       that lives in :root. -->
-  <script>
-    (function () {
-      try {
-        var saved = localStorage.getItem("draftroom.theme");
-        if (saved === "light" || saved === "dark") {
-          document.documentElement.setAttribute("data-theme", saved);
-        }
-      } catch (err) {}   // private browsing can make localStorage throw
-    })();
-  </script>
+       that lives in :root.
+
+       A file rather than an inline script, so a Content-Security-Policy can
+       say script-src 'self' without either giving away 'unsafe-inline' or
+       pinning a hash that breaks the site the first time somebody edits it.
+       No defer, no async: it must run before the body is drawn. -->
+  <script src="theme.js?v=20260815j"></script>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -57,7 +53,7 @@
 
        A query string rather than a renamed file, because renaming means a
        manifest and a manifest means a build step. This costs one number. -->
-  <link rel="stylesheet" href="style.css?v=20260815i">
+  <link rel="stylesheet" href="style.css?v=20260815j">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -638,17 +634,17 @@
 
   <!-- Every one of these carries the same ?v= as the stylesheet. See the note
        beside it in <head>: bump them together or don't bump them at all. -->
-  <script src="players.js?v=20260815i"></script>
-  <script src="stats.js?v=20260815i"></script>
+  <script src="players.js?v=20260815j"></script>
+  <script src="stats.js?v=20260815j"></script>
   <!-- The rules of a snake draft, with no reference to this page. It loads
        before app.js because app.js is a caller, and it is a separate file
        because a server will eventually have to run the same one. -->
-  <script src="draft-engine.js?v=20260815i"></script>
+  <script src="draft-engine.js?v=20260815j"></script>
   <!-- The socket to a shared room. Loaded always, connected never unless a
        manager asks for it: a solo draft touches nothing. -->
-  <script src="live.js?v=20260815i"></script>
+  <script src="live.js?v=20260815j"></script>
   <!-- Before app.js, which calls backToTop() on the last line of its setup. -->
-  <script src="back-to-top.js?v=20260815i"></script>
-  <script src="app.js?v=20260815i"></script>
+  <script src="back-to-top.js?v=20260815j"></script>
+  <script src="app.js?v=20260815j"></script>
 </body>
 </html>

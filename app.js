@@ -2091,7 +2091,8 @@ function photoUrl(player) {
 function avatar(player, small) {
   const url = photoUrl(player);
   const photo = url
-    ? `<img src="${url}" alt="" loading="lazy" class="${player.pos === "DST" ? "logo" : ""}" onerror="this.remove()">`
+    ? `<img src="${url}" alt="" loading="lazy" data-drop-on-error
+         class="${player.pos === "DST" ? "logo" : ""}">`
     : "";
   return `<div class="avatar ${player.pos}${small ? " sm" : ""}">${initials(player.name)}${photo}</div>`;
 }
@@ -4221,6 +4222,23 @@ $("sheetBody").addEventListener("click", function (e) {
   const s = statOf(sheetPlayer);
   $("v-logs").innerHTML = logsHtml(sheetPlayer, s, sheetLogYear(s));
 });
+
+/* A player photo that 404s removes itself, leaving the initials underneath.
+
+   This was an inline onerror="this.remove()" on every avatar, which is a
+   script a Content-Security-Policy has to be told to allow — and allowing
+   inline handlers means allowing the ones an attacker writes too.
+
+   Registered with capture: true because `error` does not bubble. It fires on
+   the <img> and stops, so a listener on document only ever sees it on the
+   way down. Delegated rather than bound per image because render() creates
+   these by the hundred and throws them away again. */
+document.addEventListener("error", function (e) {
+  const el = e.target;
+  if (el && el.tagName === "IMG" && el.hasAttribute("data-drop-on-error")) {
+    el.remove();
+  }
+}, true);
 
 $("sheetBackdrop").addEventListener("click", closeSheet);
 

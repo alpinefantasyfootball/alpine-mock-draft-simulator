@@ -112,4 +112,28 @@
   }
 
   global.backToTop = backToTop;
+
+  /* A page with nothing to configure can ask for the default button on the
+     script tag itself:
+
+         <script src="back-to-top.js" data-auto></script>
+
+     The how-it-works page used to do this with an inline <script>backToTop()
+     </script>, which is one line of JavaScript that a Content-Security-Policy
+     has to be told to allow — and allowing inline scripts means allowing the
+     ones somebody else writes too. app.js still calls backToTop() directly,
+     twice and with options, which is why this is opt-in rather than
+     automatic.
+
+     document.currentScript is the tag being executed, and is only valid
+     while that is happening, so it is read now rather than inside the
+     listener. */
+  var here = document.currentScript;
+  if (here && here.hasAttribute("data-auto")) {
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", function () { backToTop(); });
+    } else {
+      backToTop();
+    }
+  }
 })(window);
