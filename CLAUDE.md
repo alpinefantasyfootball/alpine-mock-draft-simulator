@@ -134,6 +134,33 @@ indexing that array by finishing position needs the same clamp. Stretching
 the scale to fit the room was the alternative and was rejected: it would
 quietly regrade every ten-team draft, which is a bigger change than the bug.
 
+**The number in the room standings is the weighted total, and it has to be.**
+The table is ordered by that total and the letter is handed out for finishing
+position, so a column sitting between the two that shows anything else makes
+the table look broken. It used to print starter strength — one component of
+four — which produced this:
+
+```
+1  The Gibbs Ultimatum   90  A+
+4  Your Team             90  B+
+5  Nacua Matata          90  B
+7  Purdy Vacant          90  C+
+```
+
+Four teams sharing a 90 across ranks one to seven with four different grades,
+in a column that climbed and fell down a strictly ranked table. Every one of
+those numbers was correct and correctly rounded. Nothing underneath was
+wrong: those four really did have equal starter strength and really did
+separate on the other three components. A reader has no way to know that.
+
+**Which is the lesson worth keeping from it.** Every other bug in this
+section was in the arithmetic, and reconciling a total against its parts
+catches those. This one had no arithmetic to catch — a right value in the
+wrong column — and it only surfaced by reading what the analysis *renders*
+and comparing it to what the analysis *computes*. Do both. A grade can be
+correct and still be unbelievable, and an unbelievable grade is a broken
+feature: this is the same failure as a kicker being named the biggest reach.
+
 ## Conventions
 
 - `app.js` is organised in numbered sections. Keep new code in the right one.
@@ -678,6 +705,22 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   And run one draft at more than fourteen teams. The grade scale is fourteen
   long, the team count goes to twenty-four, and that is a shape nothing else
   in the routine covers.
+
+  Then read the panel and check it against those numbers, because the snippet
+  above cannot see the whole class of bug where the arithmetic is right and
+  the screen is wrong. The standings printed starter strength for months in a
+  table sorted by the weighted total, and every check that only looks at
+  computed values passes that happily. Scrape the table and compare:
+
+  ```js
+  const all = analyseDraft();
+  const shown = [...document.querySelectorAll("table.standings tr")]
+    .map(tr => [...tr.children].map(td => td.textContent.trim()));
+  console.log("standings match totals", shown.every(r =>
+    +r[2] === Math.round(all.find(t => t.rank === +r[0]).total)));
+  console.log("column descends", shown.map(r => +r[2])
+    .every((v, i, a) => i === 0 || v <= a[i - 1]));
+  ```
 
 ## Don't
 
