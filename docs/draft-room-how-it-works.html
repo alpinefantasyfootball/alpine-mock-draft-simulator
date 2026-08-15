@@ -121,7 +121,7 @@
 
     <p class="doc-intro">
       There is no panel of experts behind this app. Every rating, grade and
-      suggestion is computed from public data by rules that fit on this page.
+      suggestion is worked out from public data by rules that fit on this page.
       This is all of them.
     </p>
 
@@ -129,13 +129,14 @@
       <ol>
         <li><a href="#s01">What this is</a></li>
         <li><a href="#s02">Where the numbers come from</a></li>
-        <li><a href="#s03">The league, and everything derived from it</a></li>
+        <li><a href="#s03">The league, and everything that follows from it</a></li>
         <li><a href="#s04">How the CPU teams draft</a></li>
         <li><a href="#s05">Tiers</a></li>
         <li><a href="#s06">The draft grade</a></li>
         <li><a href="#s07">The three signals on a player</a></li>
         <li><a href="#s08">Saving and resuming</a></li>
-        <li><a href="#s09">What it deliberately does not do</a></li>
+        <li><a href="#s09">Drafting with your league</a></li>
+        <li><a href="#s10">What it deliberately does not do</a></li>
       </ol>
     </div>
 
@@ -145,7 +146,9 @@
     <p>
       A mock draft simulator. You take one seat, seven to thirteen computer
       opponents take the rest, and everyone drafts until the rounds run out.
-      Nothing is saved to a server and nobody else is in the room.
+      Drafting on your own, nothing leaves your browser and no server is
+      involved. You can also send a link and draft with your league instead,
+      which does use one &mdash; section 09 is how that works.
     </p>
     <p>
       It was built for one ten-team league and still opens on those settings,
@@ -156,7 +159,7 @@
 
     <h2 id="s02"><span class="no">02</span>Where the numbers come from</h2>
 
-    <p>Two free public feeds, no keys and no accounts:</p>
+    <p>Two free public sources, no accounts and nothing to sign up for:</p>
     <ul>
       <li><b>Sleeper</b> &mdash; the player list, injury designations, depth
         charts, season statistics back to 2018, week-by-week game logs and
@@ -184,10 +187,10 @@
     </table>
 
     <div class="note">
-      A projection of <code>0</code> from the feed means Sleeper has no forecast
-      for that player, not that he will score nothing. Those are treated as
-      missing. Counting them as real zeroes dragged replacement level toward
-      zero and made everybody else look elite.
+      A projection of zero means Sleeper has no forecast for that player, not
+      that he will score nothing. Those are treated as missing. Counting them
+      as real zeroes dragged replacement level down and made everybody else
+      look elite.
     </div>
 
     <h3>Scoring format changes the board</h3>
@@ -195,23 +198,23 @@
       Full PPR moves receivers up and running backs down, so each format has
       its own ADP list. When a draft starts, the board is built from the list
       matching your scoring, and every positional rank, tier and value figure
-      is computed from that list rather than from a fixed order.
+      is worked out from that list rather than from a fixed order.
     </p>
     <div class="note">
-      Team count is not a second axis. Fantasy Football Calculator accepts a
-      team-count parameter and repeats it back to you, but it returns the same
+      Team count does not change the ADP. Fantasy Football Calculator lets you
+      ask for a team count and repeats it back to you, but it returns the same
       drafts and the same ADP whether you ask for 8 teams or 14. Rather than
-      store four identical copies and imply a precision that is not there, the
-      app keeps one list per format and says so.
+      keep four identical copies and imply a precision that is not there, the
+      app keeps one list per scoring format and says so.
     </div>
 
-    <h3>Scoring happens in the browser</h3>
+    <h3>Scoring happens as you watch</h3>
     <p>
-      There is no points total in the data file. <code>stats.js</code> holds
-      raw components &mdash; yards, touchdowns, receptions, field goals by
-      distance, points allowed &mdash; and every scoring rule is applied here,
-      as the page runs. All thirty-eight of them are editable on the setup
-      screen.
+      There is no points total stored anywhere. What is kept is the raw
+      counting stats &mdash; yards, touchdowns, receptions, field goals by
+      distance, points allowed &mdash; and every scoring rule is applied on
+      the spot, as the page runs. All thirty-eight of them can be changed on
+      the setup screen.
     </p>
     <p>
       Change one and everything rescores at once: projections, every
@@ -220,48 +223,43 @@
       because the numbers were never baked in to begin with.
     </p>
     <p>
-      This is why the pipeline records facts rather than opinions about how to
-      value them. A stat that was never stored could never be rescored, so
-      everything scoreable is kept even when the default rules value it at
-      zero.
+      This is why the daily rebuild records what happened rather than opinions
+      about what it was worth. A stat that was never stored could never be
+      rescored, so everything worth points to somebody is kept, even when the
+      default rules score it at zero.
     </p>
 
     <div class="note">
-      <b>One honest limit.</b> Sleeper's projections are a coarser dataset
-      than its record of what actually happened. They do not forecast
-      defensive touchdowns, safeties or points allowed, and they report long
-      field goals as a single 50+ figure rather than splitting 50&ndash;59
-      from 60+. So those rules change a player's history far more than they
-      change his 2026 projection. Where a projection uses the coarse figure,
-      it is folded into the nearest band rather than dropped.
+      <b>One honest limit.</b> Sleeper's projections are less detailed than
+      its record of what actually happened. They do not forecast defensive
+      touchdowns, safeties or points allowed, and they report long field goals
+      as a single 50+ figure rather than splitting 50&ndash;59 from 60+. So
+      those rules change a player's history far more than they change his 2026
+      projection. Where a projection only gives the rough figure, it is folded
+      into the nearest band rather than thrown away.
     </div>
 
 
-    <h2 id="s03"><span class="no">03</span>The league, and everything derived from it</h2>
+    <h2 id="s03"><span class="no">03</span>The league, and everything that follows from it</h2>
 
     <p>
-      One object in <code>app.js</code> describes the league. Nothing else in
-      the app writes a league number down. Team count, round count, the
-      starting lineup, the FLEX and the bench all live here, and the setup
-      screen edits them:
+      Your league is described in one place, and every number on this page is
+      worked out from it. These are the settings the app opens on, and the
+      setup screen changes all of them:
     </p>
 
-    <div class="formula">
-const <b>league</b> = {<br>
-&nbsp;&nbsp;teams: 10,<br>
-&nbsp;&nbsp;rounds: 14,<br>
-&nbsp;&nbsp;starters: { QB: 1, RB: 2, WR: 2, TE: 1, K: 1, DST: 1 },<br>
-&nbsp;&nbsp;flex: 1,<br>
-&nbsp;&nbsp;bench: 5,<br>
-&nbsp;&nbsp;scoring: "half"<br>
-};
-    </div>
+    <table>
+      <tr><td class="k">League</td><td>10 teams, 14 rounds</td></tr>
+      <tr><td class="k">Starting lineup</td><td>QB 1, RB 2, WR 2, TE 1, K 1, D/ST 1, plus 1 FLEX</td></tr>
+      <tr><td class="k">Bench</td><td>5</td></tr>
+      <tr><td class="k">Scoring</td><td>Half PPR</td></tr>
+    </table>
 
     <p>
-      That matters more than it looks. An earlier version had "ten teams"
-      typed into a dozen different places and a replacement level worked out
-      by hand for one particular league. Both were correct exactly once, and
-      quietly wrong the moment anything changed.
+      That matters more than it looks. Nothing on this page is written down
+      separately from those settings, so switching to twelve teams moves
+      replacement level, the roster limits and the round a kicker becomes
+      legal along with it. Nothing is left behind describing your old league.
     </p>
 
     <h3>The setup screen refuses impossible leagues</h3>
@@ -278,7 +276,7 @@ const <b>league</b> = {<br>
 
     <h3>Replacement level</h3>
     <p>
-      This is the most important derived number in the app. It is the last
+      This is the most important number the app works out for you. It is the last
       player at a position who would realistically start <em>somewhere</em> in
       the league, and it feeds the draft grade, the Overall signal and every
       value-over-replacement figure.
@@ -289,11 +287,11 @@ const <b>league</b> = {<br>
     </p>
 
     <div class="formula">
-base = <b>teams</b> &times; starters[pos]<br>
-flex = <b>teams</b> &times; <b>flex</b> &times; flexShare[pos]<br>
-rank = round(base + flex) + 1<br>
+starting slots = <b>teams</b> &times; starters at that position<br>
+FLEX slots = <b>teams</b> &times; <b>FLEX</b> &times; that position's share of the FLEX<br>
+replacement rank = the two added up, rounded, plus one<br>
 <br>
-flexShare = { RB: 0.40, WR: 0.55, TE: 0.05 }
+share of the FLEX &mdash; RB 40%, WR 55%, TE 5%
     </div>
 
     <p>
@@ -335,14 +333,19 @@ flexShare = { RB: 0.40, WR: 0.55, TE: 0.05 }
     </p>
 
     <div class="formula">
-score = (adp + jitter) &times; <b>need</b> &times; <b>risk</b>
+score = (ADP + <b>wobble</b>) &times; <b>need</b> &times; <b>risk</b>
     </div>
 
+    <p>
+      A lower score wins, so anything below 1 pulls a player up the list and
+      anything above 1 pushes him down:
+    </p>
+
     <table>
-      <tr><td class="k">need</td><td class="n">0.80</td><td>still filling a starting slot</td></tr>
+      <tr><td class="k">need</td><td class="n">0.80</td><td>still filling a starting slot &mdash; wants him</td></tr>
       <tr><td class="k"></td><td class="n">1.00</td><td>sensible depth, up to two past the starters</td></tr>
-      <tr><td class="k"></td><td class="n">1.45</td><td>hoarding</td></tr>
-      <tr><td class="k"></td><td class="n">999</td><td>refuses to take the player at all</td></tr>
+      <tr><td class="k"></td><td class="n">1.45</td><td>hoarding &mdash; reluctant</td></tr>
+      <tr><td class="k"></td><td class="n">never</td><td>will not take the player at all</td></tr>
       <tr><td class="k">risk</td><td class="n">1.35</td><td>doubtful, or physically unable to perform</td></tr>
     </table>
 
@@ -376,11 +379,11 @@ score = (adp + jitter) &times; <b>need</b> &times; <b>risk</b>
     <h3>The wobble</h3>
     <p>
       A draft where every computer team took the best available player would
-      be identical every time. Each player gets a fixed offset of roughly
-      &plusmn;3 draft places, generated from a seed chosen when the draft
-      starts. It is deterministic, not random: it stays put for the whole
-      draft, so undoing a pick does not reshuffle how the room thinks, and a
-      resumed draft behaves exactly like the one you left.
+      play out identically every time. So each player is nudged about three
+      draft places one way or the other, decided once when the draft starts.
+      It is settled rather than rolled fresh each pick: the same nudge holds
+      all draft, so undoing a pick does not reshuffle how the room thinks,
+      and a resumed draft behaves exactly like the one you left.
     </p>
     <p>
       Picks are made one at a time on a three-quarter-second timer so you can
@@ -401,7 +404,8 @@ score = (adp + jitter) &times; <b>need</b> &times; <b>risk</b>
     </p>
 
     <div class="formula">
-threshold = max(2, previousPlayerAdp &times; 0.13)
+gap needed = 13% of the previous player's ADP<br>
+&mdash; or 2 draft places, whichever is bigger
     </div>
 
     <p>
@@ -416,7 +420,7 @@ threshold = max(2, previousPlayerAdp &times; 0.13)
     <h2 id="s06"><span class="no">06</span>The draft grade</h2>
 
     <p>
-      Four components. Each is computed the same way for every team in the
+      Four parts. Each is worked out the same way for every team in the
       room, then scaled from 0 to 100 against the other teams, then weighted.
       Your grade is a ranking against the people you actually drafted with, not
       against the league at large &mdash; which is why somebody always gets the
@@ -438,15 +442,16 @@ threshold = max(2, previousPlayerAdp &times; 0.13)
 
     <div class="note">
       Every input to this is printed on the Analysis tab while you draft. If a
-      grade looks wrong, the four bars will show you which component caused it.
+      grade looks wrong, the four bars will show you which part caused it.
     </div>
 
 
     <h2 id="s07"><span class="no">07</span>The three signals on a player</h2>
 
     <p>
-      Open any player and there are three meters. They are model output, not a
-      consensus of analysts, and they disagree with the market on purpose
+      Open any player and there are three meters. They are the app's own
+      reading, not a consensus of analysts, and they disagree with the market
+      on purpose
       &mdash; that disagreement is most of what they measure.
     </p>
 
@@ -488,9 +493,16 @@ threshold = max(2, previousPlayerAdp &times; 0.13)
     <h2 id="s08"><span class="no">08</span>Saving and resuming</h2>
 
     <p>
-      A draft in progress is stored in your own browser and nowhere else: your
-      seat, the clock length, the seed, the league settings and an ordered list
-      of player names. Refreshing the page no longer destroys a draft.
+      A draft on your own is stored in your own browser and nowhere else: your
+      seat, the clock length, the wobble, the league settings and an ordered
+      list of player names. Refreshing the page no longer destroys a draft.
+    </p>
+    <p>
+      A draft with your league works differently, because everyone in it has
+      to agree on what has happened. That one is held on a server while the
+      room is open &mdash; the seats, the picks, the names people typed and
+      the chat. There are no accounts anywhere in this app, so none of it is
+      attached to an identity. Section 09 is all of it.
     </p>
     <p>It refuses to restore rather than restore something broken, in two cases:</p>
     <ul>
@@ -505,17 +517,109 @@ threshold = max(2, previousPlayerAdp &times; 0.13)
     </ul>
 
 
-    <h2 id="s09"><span class="no">09</span>What it deliberately does not do</h2>
+    <h2 id="s09"><span class="no">09</span>Drafting with your league</h2>
+
+    <p>
+      Everything above describes a draft against the computer. You can also
+      create a room, send the link, and draft with real people instead.
+      Whoever opens it takes a seat, and any chair still empty when you start
+      is drafted by the computer &mdash; so six of you can still run a
+      ten-team draft.
+    </p>
+
+    <h3>The link</h3>
+    <p>
+      A room code is eight characters, and they are picked carefully: no
+      vowels, so a code can never accidentally spell a word at somebody, and
+      none of the characters that argue with each other on a screen &mdash; no
+      O against 0, no I against l against 1. Short enough to read down the
+      phone, long enough that guessing one is nobody's idea of an afternoon.
+    </p>
+
+    <h3>Seats</h3>
+    <p>
+      Seats are taken in the lobby, first come, and you can move chairs right
+      up until the draft starts. After that the room is set.
+    </p>
+    <p>
+      If you drop out mid-draft &mdash; a tunnel, a locked phone, a laptop
+      shut too fast &mdash; your seat is held and picked for until you are
+      back, never handed to somebody else. Losing your roster because your
+      train went underground would be far worse than having a pick made for
+      you.
+    </p>
+
+    <h3>The clock belongs to the room</h3>
+    <p>
+      The room does not count down. It records when the current pick started
+      and works out how much is left whenever anyone asks. That is what lets
+      someone who just joined, or whose phone was asleep in a pocket, see the
+      same number as everybody else instead of counting from whenever they
+      woke up.
+    </p>
+    <p>
+      When it runs out, the pick is made for that seat the same way it is for
+      an empty chair.
+    </p>
+
+    <h3>One board, agreed by everyone</h3>
+    <p>
+      Drafting alone, your own browser decides what is allowed, and there is
+      nobody to disagree with. With ten people the room decides instead, so
+      two managers hitting Draft on the same player half a second apart cannot
+      both come away with him. Your browser sends what you want, and the board
+      moves when the room says it moved.
+    </p>
+    <p>
+      The player list is rebuilt every morning, so a room also pins the version
+      it opened on. Two people on different mornings' lists would watch the
+      computer teams pick differently and drift apart inside a round.
+    </p>
+
+    <div class="note">
+      <b>One honest limit.</b> Working out what a computer team wants needs the
+      whole board, which is far too much to park on a server. So it is worked
+      out in the browser of whoever created the room, and sent in like any
+      other pick. If that person closes their tab, the empty chairs stop
+      picking until they come back. The board simply stops &mdash; which is at
+      least obvious, rather than quietly wrong.
+    </div>
+
+    <h3>Chat</h3>
+    <p>
+      Every room has a chat, with reactions and GIFs, and the picks appear in
+      it as they happen. Three things about it are worth saying plainly,
+      because chat is the only place in the app where the words come from
+      another person rather than from the data:
+    </p>
+    <ul>
+      <li>Anything typed is treated as words and never as instructions to the
+        page, so nobody can slip something live into everybody else's
+        draft.</li>
+      <li>GIFs are only ever fetched from GIPHY, checked properly rather than
+        by looking for "giphy" somewhere in the address &mdash; those are not
+        the same test, and the difference is somebody else's website.</li>
+      <li>Names are tidied up and capped at twenty characters, and the
+        "typing&hellip;" line is never stored anywhere. It is true for about
+        two seconds and a lie the moment a connection drops.</li>
+    </ul>
+    <p>
+      There is a ceiling of forty actions every ten seconds per person, which
+      is far above anything a real draft reaches and far below what a script
+      would want. Going over it costs you the message, never the draft.
+    </p>
+
+
+    <h2 id="s10"><span class="no">10</span>What it deliberately does not do</h2>
 
     <ul>
-      <li><b>No live multi-user drafting.</b> It roughly triples the project,
-        and even the large sites mostly do not do it.</li>
       <li><b>No expert rankings, news or analyst commentary.</b> That content
-        belongs to the sites that produce it. Everything here is computed from
-        public statistics.</li>
+        belongs to the sites that produce it. Everything here is worked out
+        from public statistics.</li>
       <li><b>No trade or keeper handling.</b> This simulates one snake draft.</li>
-      <li><b>No build step.</b> Plain HTML, CSS and JavaScript. Open
-        <code>index.html</code> and it runs.</li>
+      <li><b>No accounts, and nothing to install.</b> Opening the page is the
+        whole of it. Nobody is asked to sign up, and a draft on your own asks
+        nothing of anybody's server.</li>
     </ul>
 
     <p class="method">
