@@ -128,6 +128,23 @@ function replacementText() {
     .replace(/, ([^,]*)$/, " and $1");
 }
 
+/* The starting lineup in prose, derived the same way and for the same note.
+   The ranks above are worked out from this shape and nothing else, so a note
+   naming the room but not the lineup explains the least interesting half: on
+   a custom lineup it printed "QB21 ... for this 10-team league with a FLEX",
+   and there is no way to get from that to two starting quarterbacks. TE2 is
+   stranger still until you know the league starts no tight end.
+
+   Built from SLOT_ORDER so the FLEX and the superflex appear in the order
+   they are filled, and so a slot added there is never missing here. */
+function lineupText() {
+  return SLOT_ORDER
+    .filter((slot) => slotCount(slot) > 0)
+    .map((slot) => slotCount(slot) + " " + posLabel(slot))
+    .join(", ")
+    .replace(/, ([^,]*)$/, " and $1");
+}
+
 const REPLACEMENT_PTS = {};
 
 // The best value over replacement anywhere on the board. Every Overall score
@@ -3019,7 +3036,7 @@ function renderGrades() {
 
     <p class="method">Starter strength is 50% of the grade: every starter scored by how many
     places above replacement level they rank at their position, where replacement is
-    ${replacementText()} for this ${league.teams}-team league${flexCount() ? " with a FLEX" : ""}${league.superflex ? " and a superflex" : ""}.
+    ${replacementText()} for this ${league.teams}-team league, which starts ${lineupText()}.
     Draft value is 25%: how far each
     player fell past their ADP when you took them, counting only the picks you were free to
     time &mdash; kickers and defenses are left out, because the room will not let anyone take
