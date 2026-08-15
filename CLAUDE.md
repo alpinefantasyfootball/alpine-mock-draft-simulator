@@ -786,6 +786,30 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   "Add python.exe to PATH" box was ticked, which it usually isn't.
 - App: open `index.html` directly in a browser. `file://` works because the
   data files load via `<script src>` rather than fetch.
+- **A room draft has to be run to the end, with two clients, before anything
+  touching a room is believed.** Solo drafts have been driven to completion
+  since the beginning and a shared one never had been — which is how a room
+  that deadlocks at pick 86 shipped, and why it took an unattended full draft
+  rather than a bug report to find it. The two members need **two origins**:
+  `localhost:8765` and `127.0.0.1:8765` have separate `localStorage` and so
+  separate member ids, where two tabs on one origin are correctly treated as
+  one manager with two sockets. Assert at the end:
+
+  - 140 picks, 140 distinct players, 14 a team, snake order intact;
+  - **no rejections on either socket.** This is the one that matters. Wrap
+    `Live.pick`/`Live.autoPick` and listen for `type: "rejected"` — a room
+    can be rejecting half of what a client sends and look perfectly healthy
+    right up until it stops;
+  - **the sum of what each client sent equals the picks on the board**, with
+    every client's own-seat count matching its own picks. That single line is
+    what proves nobody drafted for anybody else;
+  - the gaps between picks. A median under 100ms is not a fast draft, it is
+    a client in a loop, and it will find the rate limiter.
+
+  Drive the second client from its **socket messages, not a timer**: a hidden
+  tab has its timers throttled to about once a minute, and that is the
+  harness stalling, not the app.
+
 - Before claiming a change works, run a full simulated draft and confirm
   140 picks, no duplicate players, 14 per team, no kicker before round 13.
   Then run one at a different shape — 12 teams, 15 rounds, full PPR, **bench
@@ -931,6 +955,71 @@ locally disagrees with the room within seconds.
 a player's board position, so a room has to pin the data version it started
 with. The files are rebuilt nightly and a mid-draft change would drift the
 boards apart.
+
+### "The browser stops deciding" has to be applied everywhere, not once
+
+The rule above was written for `draftAndAdvance()` and applied to
+`draftAndAdvance()`. Three other places went on deciding, and each one was a
+bug somebody hit in a real draft with a real friend on the other phone.
+
+**`autoDraftRest()` drafted the whole board.** Solo that is exactly right —
+"the rest" is nine CPUs and nobody minds. In a room "the rest" is other
+people's teams, and it filled all ten of them, locally, so the host was
+looking at a completed draft the room had never heard of. In a room it is now
+an autopilot on your own chair: one pick per turn, submitted through the same
+door as any other pick, everybody else untouched. The label was half the bug
+— "Auto-draft the rest" is a promise the app cannot keep in a room — so it
+reads "Auto-draft my picks" there, and toggles off.
+
+**`goHome()` cleared the local draft and stayed in the room.** The next
+broadcast put the draft straight back and `enterDraftUI()` returned you to
+it, at the room's real position. Pressing "New mock draft" and landing back in
+the old one is not a stale screen; it is the app refusing to leave. Leaving
+the draft screen now leaves the room — a real departure, chair to the CPU,
+exactly as closing the tab has always been — and it is recoverable because
+rejoining reclaims the seat.
+
+**An invite code arriving without a page load did nothing.** Joining happened
+once, at startup, which covers a link opened into a fresh tab and nothing
+else. A tab already on the site only changes its hash. That became reachable
+the moment leaving a room started clearing the code out of the address: the
+way back in is the link, and the link was the case that did not work.
+`hashchange` now joins when the code differs from the one we are in.
+
+### A safety limit the app trips on itself
+
+The worst of the four was not reported by anyone, because it does not look
+like a bug until it is fatal. A full ten-team room draft, run end to end,
+**stopped dead at pick 86** with an empty chair on the clock and every client
+waiting on a browser that was waiting on them.
+
+The chain, which is worth reading in full because no single link is wrong:
+
+1. `adoptRoom()` cleared `autoInFlight` on every broadcast carrying a pick, so
+   the host's CPU driver sent the next one the moment the last came back.
+   Measured on localhost: **a pick every 25ms**, a whole round inside a
+   second.
+2. The worker allows **forty actions per socket per ten seconds**. That
+   comment says "which no person reaches", and it is right — but the host's
+   browser is not a person, and it reaches it in the second round.
+3. The room answered `too-fast`. **A rejection goes to one socket and causes
+   no broadcast.**
+4. The driver only ever ran *on* a broadcast. With none coming, it never ran
+   again. The two-second timer cleared the flag but nothing retried — and
+   permission to try again is not a try.
+5. The clock was off, so no alarm woke the room either.
+
+Four correct-looking pieces, one dead draft. The fixes: the driver is still
+woken by the broadcast, because **a timer cannot be the engine** — a
+background tab has its timers clamped to a second and eventually to one a
+minute, and the host's phone is in a pocket for most of a draft — but it
+refuses to send twice inside `AUTO_PICK_MS`, and it keeps one retry timer as a
+backstop so a rejection, a lost broadcast or a momentary nothing-to-do cannot
+be the end of the chain.
+
+**Anything the app does on your behalf has to fit inside the limits the app
+imposes on you.** The rate limiter was written thinking about an attacker and
+a person, and the host's own browser is neither.
 
 ### A dropped socket is the normal path, not an edge case
 

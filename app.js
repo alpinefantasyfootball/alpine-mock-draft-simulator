@@ -644,6 +644,14 @@ const state = {
   simTimer: null,     // handle for the CPU pick animation
   simulating: false,
   lastPick: null,     // the pick currently shown in the ticker
+  /* Auto-drafting your own seat in a shared room. Solo has no use for it —
+     there the button drafts the remaining board in one go and finishes — but
+     in a room "the rest" cannot mean everybody's picks, so it becomes a
+     standing instruction about one chair and has to be remembered between
+     turns. Deliberately not saved: it is a decision about the next few
+     minutes, and coming back to a draft still on autopilot is a nasty
+     surprise. */
+  autoMe: false,
   // Players you want, in the order you want them. Names rather than objects
   // for the same reason picks are: the board is rebuilt from the generated
   // data on every restart, so a held reference would go stale while a name
@@ -859,10 +867,44 @@ function inRoom() { return typeof Live !== "undefined" && Live.active(); }
    like any other pick — the room checks it really is the host and really an
    empty seat before accepting it.
 
-   Guarded so only one pick is in flight at a time: the room broadcasts after
-   each one, and reacting to that broadcast by sending another before the
-   first was confirmed would put a queue of stale picks on the wire. */
+   Only one pick is in flight at a time, and the wait afterwards is a real
+   one. It used to be released by the next broadcast, which sounds right and
+   deadlocked a live draft:
+
+     - a pick arrives back, the flag clears, the next goes out immediately.
+       Measured on localhost that is a pick every 25ms, and a whole round of
+       CPU picks lands inside a second;
+     - the worker allows forty actions per socket per ten seconds — a limit
+       written for a person, and the host's browser is not one — so the room
+       started answering `too-fast`;
+     - a rejection goes to one socket and causes no broadcast. The driver
+       only ever ran *on* a broadcast, so with none coming it had nothing to
+       run on;
+     - the clock was off, so no alarm woke the room either.
+
+   The draft stopped dead at pick 86 with an empty chair on the clock and
+   every client sitting there waiting for a browser that was waiting for them.
+
+   So the driver is still woken by the broadcast — a *timer* cannot be the
+   engine here, because a background tab has its timers clamped to a second
+   and eventually to one a minute, and the host's phone is in someone's pocket
+   for most of a draft — but it now refuses to send twice inside
+   AUTO_PICK_MS. Broadcast-driven for liveness, time-gated for pace, with one
+   retry timer as a backstop so a rejected pick, a lost broadcast or a
+   momentary nothing-to-do can no longer be the end of the chain.
+
+   The backstop is the part that makes this self-healing. Permission to try
+   again is not a try, and that distinction is the whole bug above. */
+const AUTO_PICK_MS = 500;   // 2/sec against the room's 4/sec ceiling
+
 let autoInFlight = false;
+let lastAutoAt = 0;
+let autoRetry = null;
+
+function scheduleAutoRetry(ms) {
+  if (autoRetry) clearTimeout(autoRetry);
+  autoRetry = setTimeout(function () { autoRetry = null; driveRoomCPUs(); }, ms);
+}
 
 function driveRoomCPUs() {
   const room = Live.room();
@@ -878,14 +920,46 @@ function driveRoomCPUs() {
   // An empty chair, or anyone whose clock has run out — including me.
   if (chair && chair.taken && !chair.auto && !expired) return;
 
+  // Too soon after the last one: come back rather than dropping it, or this
+  // turn waits for a broadcast that has no reason to arrive.
+  const since = Date.now() - lastAutoAt;
+  if (since < AUTO_PICK_MS) { scheduleAutoRetry(AUTO_PICK_MS - since); return; }
+
   const choice = mine ? autoPickForMe() : cpuChoice(c.slot, c.round);
   if (!choice) return;
 
   autoInFlight = true;
+  lastAutoAt = Date.now();
   Live.autoPick(choice.name);
-  // Cleared on the next state rather than a timer, so a rejected pick does
-  // not wedge the room: the broadcast that follows any outcome releases it.
-  setTimeout(function () { autoInFlight = false; }, 2000);
+  scheduleAutoRetry(AUTO_PICK_MS + 2000);
+}
+
+/* Your own seat, drafting itself, when you have asked it to.
+
+   Deliberately separate from driveRoomCPUs() above even though the shape is
+   the same. That one is the *host* standing in for chairs nobody is sitting
+   in, and it runs on one machine for the whole room; this is any manager
+   asking for their own chair to be played, and it runs on theirs. Merging
+   them would put "am I the host" and "is this my seat" in one condition, and
+   they answer to different people. */
+let myAutoInFlight = false;
+
+function driveMyAutopilot() {
+  const room = Live.room();
+  if (!state.autoMe || !room || room.status !== "drafting" || myAutoInFlight) return;
+
+  const c = DraftEngine.onTheClock(room.league, room.picks.length);
+  if (!c || c.slot !== room.yourSeat) return;      // not your turn: nothing to do
+
+  const choice = autoPickForMe();
+  if (!choice) return;
+
+  myAutoInFlight = true;
+  Live.pick(choice.name);
+  // Released on a timer rather than on the next state, because a rejected
+  // pick — somebody took him a tenth of a second earlier — still has to be
+  // followed by another attempt or the seat stalls until the clock expires.
+  setTimeout(function () { myAutoInFlight = false; driveMyAutopilot(); }, 1200);
 }
 
 /* Take the room's word for it. The room sends a pick list of names; this
@@ -921,6 +995,10 @@ function adoptRoom(room) {
 
     pruneQueue();
     state.lastPick = state.picks.length ? state.picks[state.picks.length - 1] : null;
+    /* A pick landed, so nothing of ours is in flight any more. This releases
+       the *one at a time* guard and nothing else: the pace is a clock now,
+       kept in driveRoomCPUs(), because this line on its own is what let the
+       host fire a pick every 25ms and trip the room's rate limit. */
     autoInFlight = false;
   }
 
@@ -1349,6 +1427,7 @@ function onRoomChange() {
   renderChat();
   render();
   driveRoomCPUs();
+  driveMyAutopilot();
 }
 
 /* Somebody is typing. Recorded with an expiry rather than a flag, so a
@@ -1464,6 +1543,28 @@ function autoDraftRest() {
   stopSim();
   stopClock();
   state.lastPick = null;
+
+  /* In a room this is a request about one chair, not a decision about ten.
+
+     The loop below drafts every remaining pick on the board, which is exactly
+     right on your own machine and completely wrong in a room: it filled in
+     nine other managers' teams — two of them people sitting there with the
+     app open — and did it locally, so the host was looking at a finished
+     draft the room had never heard of. The next broadcast then rolled all of
+     it back, which is the same bug wearing a different coat.
+
+     So in a room it becomes an autopilot on your seat: submitted as ordinary
+     picks, one per turn, through the same door as any other pick, and the
+     board still only moves when the room says so. Everyone else drafts for
+     themselves. It toggles, because "I am going to be away for ten minutes"
+     stops being true and there has to be a way back. */
+  if (inRoom()) {
+    state.autoMe = !state.autoMe;
+    render();
+    driveMyAutopilot();
+    return;
+  }
+
   let guard = 0;
   while (!draftOver() && guard++ < totalPicks()) {
     const c = onTheClock();
@@ -1488,6 +1589,28 @@ function autoDraftRest() {
 function goHome() {
   stopSim();
   stopClock();
+  state.autoMe = false;
+
+  /* Leaving the draft screen has to mean leaving the room, and it did not.
+
+     Everything below clears the local draft — and in a room the local draft
+     is a copy, so the very next broadcast put it all back and `enterDraftUI()`
+     dropped you into the draft again at the room's real position. Pressing a
+     button that says "New mock draft" and landing back in the old one is not
+     a stale screen; it is the app refusing to leave.
+
+     So the room is left first. That is a real departure — the chair goes to
+     the CPU exactly as it does when a tab is closed — and it is recoverable
+     the same way: reopening the invite link reclaims the seat and takes it
+     off auto. The room code comes out of the address too, so a reload lands
+     on the setup screen rather than walking straight back in. */
+  if (typeof Live !== "undefined" && Live.room()) {
+    Live.disconnect();
+    if (location.hash.indexOf("room=") >= 0) location.hash = "#/draft";
+    renderInvite();
+    renderChat();
+  }
+
   openRailSheet(false);   // a sheet left open over the landing page
   state.lastPick = null;
   board.forEach((p) => { p.drafted = false; p.jitter = 0; });
@@ -1586,7 +1709,17 @@ function renderActionBar() {
   $("pauseBtn").hidden    = done;
   $("undoBtn").hidden     = done;
   $("autoBtn").hidden     = done;
-  if (!done) renderPauseButton();
+  if (!done) { renderPauseButton(); renderAutoButton(); }
+}
+
+/* "Auto-draft the rest" is the truth on your own machine and a promise the
+   app cannot keep in a room, where the rest is nine other people's business.
+   The label was part of the bug, not decoration on top of it: it is what said
+   the button would fill in the whole board, and in a room it did. */
+function renderAutoButton() {
+  const btn = $("autoBtn");
+  if (!inRoom()) { btn.textContent = "Auto-draft the rest"; return; }
+  btn.textContent = state.autoMe ? "Stop auto-drafting" : "Auto-draft my picks";
 }
 
 function renderPauseButton() {
@@ -4618,7 +4751,25 @@ $("signupBtn").addEventListener("click", function () {
          "sign-up, and your drafts already save to this device.");
 });
 
-window.addEventListener("hashchange", applyRoute);
+/* An invite code arriving in the address bar without a page load.
+
+   Joining a room used to happen once, at startup, which is right for a link
+   opened from a message into a fresh tab and wrong for every other way the
+   same link arrives. A tab already on the site only changes its hash — no
+   load, no startup, no join — so tapping the invite a second time did
+   nothing at all. That became reachable the moment leaving a room started
+   clearing the code out of the address: the way back in is the link, and the
+   link is exactly the case that did not work.
+
+   Guarded on the code differing from the one we are already in, because
+   applyRoute() runs on every hash change and rejoining the room you are
+   sitting in would drop the socket mid-draft. */
+window.addEventListener("hashchange", function () {
+  const code = typeof Live === "undefined" ? null : Live.codeInUrl();
+  const now = typeof Live === "undefined" ? null : Live.state().code;
+  if (code && code !== now) joinRoom(code, false);
+  applyRoute();
+});
 
 $("pauseBtn").addEventListener("click", togglePause);
 $("undoBtn").addEventListener("click", undo);

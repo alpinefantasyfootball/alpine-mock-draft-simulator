@@ -281,6 +281,10 @@
     retryStep = 0;
     live.socket = null;
     live.room = null;
+    // The code goes too. It is "the room we are in", not "the last room we
+    // saw", and anything asking whether we are already in a given room gets
+    // the wrong answer from a code that outlived its socket.
+    live.code = null;
     live.status = "off";
     live.reason = null;
     if (socket) { try { socket.close(); } catch (err) {} }
