@@ -1055,11 +1055,30 @@ function chatPickHtml(entry, room) {
      string here that does not strictly need escaping. It gets it anyway —
      the alternative is a reader having to know which of two adjacent
      interpolations is the safe one. */
+  /* The engine's own code, not round-plus-overall. Written by hand this read
+     "4.40" for the fortieth pick of a ten-team draft, which is round four,
+     pick ten — and the header two inches above it was saying "4.10 (40
+     Overall)" at the same time. One draft, two numbering schemes. */
+  const teams = (room.league && room.league.teams) || league.teams;
+
   return `<div class="pickline${mine ? " mine" : ""}">
-      <span class="pickno">${entry.round}.${String(entry.overall).padStart(2, "0")}</span>
+      <span class="pickno">${DraftEngine.pickCode(entry.overall, teams)}</span>
       <span class="picktext"><b>${escHtml(who)}</b> drafted ${escHtml(entry.player)}</span>
       <span class="msgwhen">${escHtml(chatTime(entry.at))}</span>
     </div>`;
+}
+
+/* Off the setup screen and into the draft. Its own function because two
+   things reach it: pressing Start in a solo draft, and — in a room — the
+   broadcast saying the host has begun, which is the only signal a guest
+   ever gets. */
+function enterDraftUI() {
+  tabsNav.hidden   = false;
+  actionbar.hidden = false;
+  showPanel("tab-suggest");
+  document.querySelectorAll(".tabs button").forEach(function (b) { b.classList.remove("on"); });
+  document.querySelector('.tabs button[data-tab="tab-suggest"]').classList.add("on");
+  window.scrollTo(0, 0);
 }
 
 function renderChat() {
@@ -1077,8 +1096,19 @@ function renderChat() {
   const log = $("chatLog");
   const stream = chatStream(room);
 
+  /* Is the chat actually on screen? On a phone it is a sheet, and a closed
+     sheet is the one moment unread messages matter most — but a hidden log
+     has no height, so "am I scrolled to the bottom" answers yes and clears
+     the count that the launcher's badge exists to show.
+
+     Asked of the computed style rather than of a matchMedia copy of the
+     breakpoint, so the answer comes from the stylesheet that actually
+     decides it and there is only one of it. */
+  const onScreen = getComputedStyle(dock).display !== "none";
+
   // Measured before the rebuild, because the rebuild is what destroys it.
-  const wasPinned = log.scrollHeight - log.scrollTop - log.clientHeight < 48;
+  const wasPinned = onScreen &&
+    log.scrollHeight - log.scrollTop - log.clientHeight < 48;
 
   if (!stream.length) {
     log.innerHTML = `<p class="chatempty">Nobody has said anything yet.</p>`;
@@ -1112,7 +1142,7 @@ function renderChat() {
      somebody to the bottom while they are reading back is how a chat becomes
      a thing people stop opening. What arrives while they are up there is
      counted instead, and offered. */
-  if (wasPinned || chatUI.pinned) {
+  if (onScreen && (wasPinned || chatUI.pinned)) {
     log.scrollTop = log.scrollHeight;
     chatUI.pinned = true;
     chatUI.seenId = newest;
@@ -1181,7 +1211,19 @@ function placeChat() {
 
 function onRoomChange() {
   const room = Live.room();
+
+  /* Whether the draft has begun, asked before and after, because the answer
+     changing is the thing that has to move everybody off the setup screen.
+
+     The button cannot do it. In a room it sends the intent and returns, and
+     the nine other managers never press it at all — so the transition has to
+     hang off the broadcast, which is the only thing all ten of us see. It
+     did not, and the draft ran behind a setup form for everyone. */
+  const wasStarted = state.started;
+
   adoptRoom(room);
+  if (!wasStarted && state.started) enterDraftUI();
+
   renderInvite();
   renderChat();
   render();
@@ -2256,16 +2298,45 @@ function scrollBoardToLive() {
   const scroller = $("boardScroll");
   if (!scroller) return;
 
-  const cell = scroller.querySelector(".cell.now") ||
-               scroller.querySelector(".cell.mine:last-of-type");
+  /* The cell on the clock, or failing that the last one of mine.
+
+     querySelectorAll rather than `.cell.mine:last-of-type`, which does not
+     mean what it looks like: every child of the grid is a div, so
+     :last-of-type matches only the very last cell on the board, and the
+     fallback fired only in the one case where the bottom-right chair
+     happened to be yours. */
+  const mine = scroller.querySelectorAll(".cell.mine");
+  const cell = scroller.querySelector(".cell.now") || mine[mine.length - 1];
   if (!cell) return;
+
+  /* Measured with rects, not offsetTop.
+
+     offsetTop is the distance to the nearest *positioned* ancestor, and
+     nothing between a cell and this scroller is positioned — so it was being
+     reported against <body> and came back 207px too large. One mistake, two
+     symptoms. The board sat four rounds past the live pick, because 207px is
+     about four rows. And it twitched on every CPU pick, because anything
+     above the board changing height — the pick ticker arriving, the header
+     switching to your turn — moves the board down the page, which moved a
+     number that was never supposed to be about the page. */
+  const cellBox = cell.getBoundingClientRect();
+  const viewBox = scroller.getBoundingClientRect();
+  const centred = scroller.scrollTop + (cellBox.top - viewBox.top) -
+                  (scroller.clientHeight - cellBox.height) / 2;
+
+  // Clamped here rather than left to the browser, so the comparison below is
+  // against the position we would actually end up at.
+  const target = Math.max(0, Math.min(centred,
+                                      scroller.scrollHeight - scroller.clientHeight));
+
+  /* Already there. Worth checking, because render() rebuilds the board on
+     every change and asking for a scroll we are already at still starts an
+     animation — and an animation every time a CPU picks is the jitter. */
+  if (Math.abs(target - scroller.scrollTop) < 4) return;
 
   const smooth = !(window.matchMedia &&
                    window.matchMedia("(prefers-reduced-motion: reduce)").matches);
-  scroller.scrollTo({
-    top: Math.max(0, cell.offsetTop - (scroller.clientHeight - cell.offsetHeight) / 2),
-    behavior: smooth ? "smooth" : "auto"
-  });
+  scroller.scrollTo({ top: target, behavior: smooth ? "smooth" : "auto" });
 }
 
 /* The starting lineup, with the best eligible player seated in each slot,
@@ -3596,7 +3667,16 @@ function openChatSheet(on) {
   log.scrollTop = log.scrollHeight;
   chatUI.pinned = true;
   chatUI.unread = 0;
-  renderChatMeta(Live.room());
+
+  // Opening the sheet is reading it. Marked here as well as on the next
+  // render, so nothing counts as missed in the gap between the two.
+  const room = Live.room();
+  if (room) {
+    chatUI.seenId = (room.chat || []).reduce(function (top, m) {
+      return m.id > top ? m.id : top;
+    }, 0);
+  }
+  renderChatMeta(room);
 }
 
 $("chatFab").addEventListener("click", function () { openChatSheet(!chatUI.open); });
@@ -3647,15 +3727,9 @@ $("startBtn").addEventListener("click", function () {
   state.seed = Math.floor(Math.random() * 1000000);
   applyJitter();
 
-  tabsNav.hidden   = false;
-  actionbar.hidden = false;
-  showPanel("tab-suggest");
-  document.querySelectorAll(".tabs button").forEach((b) => b.classList.remove("on"));
-  document.querySelector('.tabs button[data-tab="tab-suggest"]').classList.add("on");
-
+  enterDraftUI();
   render();
   runCPUs();
-  window.scrollTo(0, 0);
 });
 
 // resume / discard live inside a re-rendered banner, so they are delegated

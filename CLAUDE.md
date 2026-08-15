@@ -299,6 +299,32 @@ Hardcoding white made it invisible on every light surface, with only the
 orange swoosh showing. The token is brand navy in light, white in dark, and
 forced white on the navy draft bar.
 
+**`offsetTop` is not a distance to the scroller.** It is the distance to the
+nearest *positioned* ancestor, and nothing between a board cell and
+`#boardScroll` is positioned — so `scrollBoardToLive()` was reading a figure
+measured from `<body>`, 207px too large. One mistake, two symptoms that
+looked unrelated: the board sat about four rounds past the live pick, because
+207px is roughly four rows; and it twitched on every CPU pick, because
+anything above the board changing height — the ticker arriving, the header
+turning blue for your turn — moves the board down the page, which moved a
+number that was never supposed to be about the page. Both went away by
+measuring `getBoundingClientRect()` against the scroller's own rect. Do not
+"fix" this by adding `position: relative` to the scroller; that makes
+`offsetTop` correct today and silently wrong again the next time someone
+changes positioning.
+
+**Do not re-ask for a scroll you are already at.** `render()` rebuilds the
+board on every change, and `scrollTo({behavior:"smooth"})` starts an
+animation whether or not the target moved. During a run of CPU picks that is
+a new animation every few hundred milliseconds. `scrollBoardToLive()` returns
+early when the target is within 4px of where it already is, which is what
+takes the board from "moves constantly" to "moves once per round".
+
+**`:last-of-type` counts element types, not classes.** Every child of the
+board grid is a `div`, so `.cell.mine:last-of-type` matches the last cell on
+the board and only helps when the bottom-right chair happens to be yours. For
+"the last one matching this class", use `querySelectorAll` and take the end.
+
 **`scrollBy({behavior})` beats the stylesheet.** A `prefers-reduced-motion`
 rule on the container does not apply to a programmatic scroll that asks for
 `smooth`, so the score arrows check the media query themselves.
