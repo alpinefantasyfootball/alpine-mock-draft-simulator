@@ -1013,6 +1013,35 @@ the moment leaving a room started clearing the code out of the address: the
 way back in is the link, and the link was the case that did not work.
 `hashchange` now joins when the code differs from the one we are in.
 
+### A filter is a lens, never a decision
+
+`suggestions()` is filtered by the position chip on the panel, and
+`autoPickForMe()` read that list. So a manager looking at tight ends who
+already held their three got an empty list — and "Auto-draft the rest" read
+empty as *there is nothing left to draft* and abandoned the remaining rounds
+without a word. Reported from a real draft: eleventh of twelve, stopped in the
+ninth round of fourteen.
+
+**`autoPickForMe()` now takes `suggestions("ALL")`, never the filtered list.**
+Consulting the chip first and falling back looked like the respectful version
+and is worse: leave the panel on K, walk away, and the clock hands you a
+kicker in the fifth round. That was caught by the test written for the bug
+above — the fix had a bug of its own, and one run of the suite found it. The
+queue is where "what I actually want" lives; a chip is where you happen to be
+looking.
+
+**And the button now either finishes the draft or the board is empty.** Both
+branches of the loop fall back to `bestLeft()`, and a rejected pick breaks out
+instead of being retried identically until the guard runs down — which looked
+exactly like stopping halfway, because it was. `cpuChoice()` itself is left
+alone: every client in a room has to agree with it, so the fallback lives in
+the solo loop, where nobody else is watching.
+
+**Any preference that can empty a list can end a draft.** The roster caps in
+`maxAt()` are the same shape of thing — they exist to stop the CPU hoarding
+tight ends, not to decide your draft is over — which is why the last resort
+ignores those too.
+
 ### A safety limit the app trips on itself
 
 The worst of the four was not reported by anyone, because it does not look

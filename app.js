@@ -1508,8 +1508,49 @@ function queueTop() {
 
 // What to take on my behalf when I am not the one choosing. Order matters:
 // my own list first, the model's opinion second.
+/* What to take on my behalf when I am not the one choosing.
+
+   Four answers, in falling order of how much they know about what you want,
+   because this must always have one. It used to be
+   `queueTop() || suggestions()[0] || null`, and that `null` stopped a draft
+   dead: `suggestions()` is filtered by the position chip on the panel, so a
+   manager who tapped "TE" and already held their three tight ends had an
+   empty list — and "Auto-draft the rest" read that as "there is nothing left
+   to draft" and abandoned the remaining rounds without a word. Reported from
+   a real draft, stopping in the ninth round of fourteen.
+
+   The chip is a way of *looking* at the board, not a rule about what may be
+   drafted, so it is not consulted here at all — `suggestions("ALL")`, always.
+
+   Consulting it first and falling back looked like the respectful version and
+   was worse: leave the panel on K, walk away, and the clock hands you a
+   kicker in the fifth round. Caught by the test written for the bug above,
+   which is the argument for writing it. A filter that can lose you a draft is
+   not deference, and the queue is already where "what I actually want" lives.
+
+   The roster caps go the same way at the last step: they exist to stop the
+   CPU hoarding tight ends, not to decide that your draft is over. */
 function autoPickForMe() {
-  return queueTop() || suggestions()[0] || null;
+  return queueTop()               // the plan you actually made
+      || suggestions("ALL")[0]    // the model's opinion, whatever you were looking at
+      || bestLeft();              // and failing that, simply the best man left
+}
+
+/* The best player still on the board, ignoring every preference there is.
+
+   A last resort, and it only has to beat one thing: a draft that stops
+   halfway. K and DST come last even here, because the whole app already
+   refuses them until the closing rounds and a kicker in the sixth would read
+   as a bug in its own right — but they are still better than nothing if the
+   board somehow holds nothing else.
+
+   `board` is in ADP order and must never be sorted in place, so this filters,
+   which already returns a copy. */
+function bestLeft() {
+  const left = board.filter(function (p) { return !p.drafted && !isRuledOut(p); });
+  if (!left.length) return null;
+  const skill = left.filter(function (p) { return p.pos !== "K" && p.pos !== "DST"; });
+  return skill.length ? skill[0] : left[0];
 }
 
 function draftAndAdvance(player) {
@@ -1568,14 +1609,24 @@ function autoDraftRest() {
   let guard = 0;
   while (!draftOver() && guard++ < totalPicks()) {
     const c = onTheClock();
-    // My seats follow my queue before the model's opinion, exactly as the
-    // clock does. Auto-drafting the rest should not quietly throw away the
-    // plan I made. Every other seat is still the CPU's own choice.
-    const choice = c.slot === state.mySlot
+    /* My seats follow my queue before the model's opinion, exactly as the
+       clock does. Auto-drafting the rest should not quietly throw away the
+       plan I made. Every other seat is still the CPU's own choice.
+
+       Both fall back to the best player left rather than to nothing.
+       `cpuChoice()` is left alone to answer however it answers — every client
+       in a room has to agree with it, so it is not a thing to loosen — and
+       the fallback lives here, where it only affects a draft nobody else is
+       in. The rule this enforces is that the button either finishes the
+       draft or the board is empty. There is no third outcome, and there used
+       to be: it stopped in round nine and said nothing. */
+    const choice = (c.slot === state.mySlot
       ? autoPickForMe()
-      : cpuChoice(c.slot, c.round);
+      : cpuChoice(c.slot, c.round)) || bestLeft();
     if (!choice) break;
-    makePick(choice);
+    // A rejected pick would otherwise be retried identically until the guard
+    // ran out, which looks exactly like stopping halfway.
+    if (makePick(choice)) break;
     pruneQueue();
   }
   render();
@@ -1791,14 +1842,19 @@ function modelMultipliers(pool) {
   };
 }
 
-function suggestions() {
+/* `filter` overrides the chip that happens to be showing. The panel passes
+   nothing and gets what the reader asked for; anything picking on your behalf
+   passes "ALL", because which position you were last *looking at* is not a
+   rule about what you may draft. */
+function suggestions(filter) {
   const c = onTheClock();
   const round = c ? c.round : league.rounds;
+  const only = filter === undefined ? state.filterSuggest : filter;
 
   const pool = board.filter(function (p) {
     if (p.drafted) return false;
     if (isRuledOut(p)) return false;
-    if (state.filterSuggest !== "ALL" && p.pos !== state.filterSuggest) return false;
+    if (only !== "ALL" && p.pos !== only) return false;
     if (countAt(state.mySlot, p.pos) >= maxAt(p.pos)) return false;
     return true;
   });

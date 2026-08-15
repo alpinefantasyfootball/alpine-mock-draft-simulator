@@ -84,6 +84,65 @@ test("twelve teams, fifteen rounds, full PPR, bench six", async ({ browser }) =>
   await context.close();
 });
 
+/* Reported from a real draft: eleventh of twelve, auto-draft pressed part way
+   through, and it stopped in the ninth round without a word.
+
+   The cause was a position chip on the Suggestions panel. `suggestions()` is
+   filtered by it, so a manager looking at tight ends who already held their
+   three had an empty list — and the loop read an empty list as "there is
+   nothing left to draft" and abandoned the rest of the draft.
+
+   Driven through the real chips, because the chip is the input that caused
+   it, and every one of them is tried: the bug is not about tight ends, it is
+   about the panel's filter reaching a decision it was never part of. */
+for (const pos of ["ALL", "QB", "RB", "WR", "TE", "K", "DST"]) {
+  test(`auto-draft finishes with the ${pos} filter showing`, async ({ browser }) => {
+    const context = await browser.newContext();
+    const page = await openApp(context);
+
+    await page.selectOption("#teamCount", "12");
+    await page.selectOption("#draftSlot", "10");        // the 11th spot
+    await page.click("#startBtn");
+    expect(await page.evaluate(() => state.started)).toBe(true);
+
+    await page.click(`#suggestFilter button[data-pos="${pos}"]`);
+    expect(await page.evaluate(() => state.filterSuggest)).toBe(pos);
+
+    // Part way in by hand, which is when a person reaches for the button.
+    await page.evaluate(() => {
+      let guard = 0;
+      while (state.picks.length < 100 && guard++ < 300) {
+        const c = onTheClock();
+        const choice = c.slot === state.mySlot ? autoPickForMe() : cpuChoice(c.slot, c.round);
+        if (!choice || makePick(choice)) break;
+        pruneQueue();
+      }
+      render();
+    });
+
+    const out = await page.evaluate(async () => {
+      autoDraftRest();
+      await new Promise((r) => setTimeout(r, 1500));
+      const sizes = {};
+      state.picks.forEach((p) => { sizes[p.slot] = (sizes[p.slot] || 0) + 1; });
+      return {
+        picks: state.picks.length,
+        distinct: new Set(state.picks.map((p) => p.player.name)).size,
+        sizes: Object.values(sizes),
+        kickerRounds: state.picks.filter((p) => p.player.pos === "K").map((p) => p.round)
+      };
+    });
+
+    expect(out.picks, "the button finishes the draft or the board is empty").toBe(168);
+    expect(out.distinct).toBe(168);
+    expect(out.sizes.every((n) => n === 14)).toBe(true);
+    // The fallback must not reach for a kicker to keep the loop moving.
+    expect(Math.min(...out.kickerRounds)).toBeGreaterThanOrEqual(13);
+
+    await context.close();
+  });
+}
+
 test("solo still says 'Auto-draft the rest', because solo it is the truth", async ({ browser }) => {
   const context = await browser.newContext();
   const page = await openApp(context);
