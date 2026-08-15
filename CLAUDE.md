@@ -267,6 +267,41 @@ has to reach the same answer for an empty chair. Your suggestions and the CPU
 no longer share one formula, which is why the how-it-works page had to be
 changed too — it previously implied they did.
 
+### Tried and rejected: pricing depth by `aboveReplacement`
+
+`needMultiplier()` bands purely on how many of a position you hold, so it
+cannot tell McBride from Juwan Johnson — and the grade says those two are the
+difference between second in the room and eleventh. The obvious repair is to
+ask *would he actually start for me* instead of *how many do I have*:
+
+```js
+if (have >= need + 2) return 1.45;                 // hoarding, whoever he is
+return aboveReplacement(player) > 0 ? 1.00 : 1.45; // depth only if startable
+```
+
+It was built, and it was one-sided by construction — the count bands were left
+alone, so nothing could be promoted and the CPU could not be made to reach.
+Then it was measured across eleven pinned seeds, at the first and eleventh
+seats of a twelve-team draft, my seat drafting each way:
+
+**Starter strength never improved once.** It fell in nine of eleven and tied
+in two. Finishing rank got worse more often than better — five places worse on
+one seed. It did do exactly what it was built to do, cutting unstartable
+bench bodies from five to four, and that bought nothing at all.
+
+**Because replacement level is a yardstick for starters, and a bench pick is
+not a starting decision.** Below replacement *today* is not worthless: a bench
+spot is a lottery ticket on somebody being startable in November, and pricing
+it by who could start in September throws that away. It also goes flat exactly
+where it was meant to help — by the closing rounds almost everyone left is
+below replacement, so the multiplier stops discriminating and only distorts
+the middle rounds, where a third running back just under the line is a
+perfectly good pick.
+
+The same number being right in the grade and wrong here is not a
+contradiction. The grade is scoring who *starts*. This is choosing who to
+*hold*. **Do not reach for `aboveReplacement` again without re-reading this.**
+
 **Whether it helps is a measurable question, so measure it.** Same seed, same
 computer teams, your seat drafting each way, across pinned seeds: starter
 strength rose every time by four to five points and the finishing rank
