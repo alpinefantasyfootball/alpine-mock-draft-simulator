@@ -220,6 +220,19 @@ browser unchanged. If a stale asset ever reappears, check that setting first
 — but the `?v=` is what actually closes the hole, and it works whoever is
 serving the file.
 
+**The pages themselves carry no `?v=`, so checking a deploy needs the same
+throwaway query.** `?v=` protects everything `index.html` *loads* and can do
+nothing for `index.html` itself, or for
+`docs/draft-room-how-it-works.html` — those are cached under their own plain
+addresses for the same ten minutes. `curl` will show you the new page while
+the browser sitting next to it still shows the old one, because they hold
+separate caches, and a forced reload does not always clear the browser's:
+after the how-it-works rewrite the tab kept serving the previous copy until
+it was loaded as `…draft-room-how-it-works.html?cb=1`. So when the change is
+to a page rather than to an asset, verify it with a throwaway query too, and
+do not conclude a deploy failed because a tab you already had open disagrees
+with `curl`. Only the assets get a version; the pages get patience.
+
 **`og:image` must be an absolute URL, and it is baked to `jukeff.com`.**
 Link previews are fetched by Slack, iMessage and Twitter from their own
 servers, so a relative path resolves to nothing. If the domain ever changes,
