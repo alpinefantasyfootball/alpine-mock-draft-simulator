@@ -10,7 +10,7 @@
        made next door rather than reverting to light halfway through a
        visit. The only other script here is the back-to-top control, at the
        foot of the page. -->
-  <script src="../theme.js?v=202608151408"></script>
+  <script src="../theme.js?v=202608151425"></script>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -20,7 +20,7 @@
        styling. Everything below is layout for a page of prose, which the app
        has no use for, so it lives here rather than bloating style.css. -->
   <!-- Same ?v= as index.html, and bumped with it. See the note there. -->
-  <link rel="stylesheet" href="../style.css?v=202608151408">
+  <link rel="stylesheet" href="../style.css?v=202608151425">
 
   <link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="../favicon-16.png">
@@ -413,6 +413,30 @@
       watch the board fill in. Skip jumps straight to your turn.
     </p>
 
+    <h3>Your suggestions do one thing the computer teams do not</h3>
+    <p>
+      They are scored the same way, on your roster's needs rather than
+      somebody else's, with one addition: a player the projection rates highly
+      gets a discount on his draft position. Up to a quarter off, in
+      proportion to his Overall against the best player still on the board.
+    </p>
+    <p>
+      The reason is that ADP knows nothing about your scoring rules. Set
+      receptions to five points and every number on a player's card moves,
+      because Overall is worked out under your rules &mdash; but average draft
+      position is a record of other people's drafts and does not budge. Advice
+      built on ADP alone would hand you the same six names in a league where
+      catches are worth ten times what they usually are. So the model's
+      opinion, which does answer to your rules, gets a say.
+    </p>
+    <div class="note">
+      It is a discount rather than a replacement because ADP is the only thing
+      here that knows <em>when a player will actually be gone</em>, which is
+      most of what drafting is. The computer teams do not get this: they are
+      meant to behave like a room of people drafting off a market, and the
+      market is what they use.
+    </div>
+
 
     <h2 id="s05"><span class="no">05</span>Tiers</h2>
 
@@ -715,7 +739,7 @@
   <!-- This page is long enough that getting back to the contents is a real
        scroll. Same control and same stylesheet as the app, so it looks and
        behaves like one thing rather than a page that grew its own button. -->
-  <script src="../back-to-top.js?v=202608151408" data-auto></script>
+  <script src="../back-to-top.js?v=202608151425" data-auto></script>
 
 </body>
 </html>

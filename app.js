@@ -1591,21 +1591,78 @@ function clockText() {
    The same scoring the CPUs use, but applied to your roster
    — so it recommends what your team actually needs.        */
 
+/* The model's opinion, as a multiplier beside need and risk.
+
+   Everything else on the page answers to the scoring rules — Overall,
+   replacement level, the whole grade — and this did not. Suggestions were ADP
+   times need times risk, so setting receptions to five points changed every
+   number printed on a card and none of the order: with the editor open the
+   app was computing a better answer than the one it was giving.
+
+   It has to be the Overall, not marketGap(). marketGap compares a player with
+   his own position's market, so it says "this receiver is underrated among
+   receivers" and cannot say "receivers are worth more than backs now" — which
+   is the only thing five points a catch changes. Tried it that way first and
+   the list did not move, because the elite are WR1 and RB1 on both measures
+   whatever the rules. overallScore() is points above replacement at his own
+   position against the best such figure anywhere on the board, so it compares
+   across positions and answers to every rule in the table.
+
+   A multiplier, so it sits with need and risk rather than beside them in
+   different units, and it only ever pulls up: a player the model rates gets a
+   discount on his price, one it does not rate stays exactly where the market
+   put him. No centre point to argue about, and no player is pushed down for
+   want of a projection — those score null and are left alone.
+
+   Capped, because ADP is the one thing here that knows when a player will
+   actually be gone, and advice that forgets that is not advice. */
+const MODEL_CAP = 0.25;   // the market still decides the shape of the list
+
+/* Measured against the best player still available, not the best the board
+   ever held. overallScore() is a share of BEST_VOR, which is fixed for the
+   whole draft, so by the fifth round everyone left scores single figures and
+   a multiplier taken straight off it collapses to nothing — a 6% spread
+   across the entire candidate list, which reorders exactly nothing. Measured
+   that before believing it.
+
+   Against the best still on the board it keeps its range at every stage: the
+   best-rated player available always earns the full discount and the ones
+   with nothing to say for them pay full price. */
+function modelMultipliers(pool) {
+  const best = pool.reduce(function (top, p) {
+    const ovr = overallScore(p);
+    return ovr !== null && ovr > top ? ovr : top;
+  }, 0);
+
+  return function (player) {
+    if (!best) return 1;                       // nobody has a projection
+    const ovr = overallScore(player);
+    if (ovr === null) return 1;                // no opinion, leave him at market
+    return 1 - Math.min(1, ovr / best) * MODEL_CAP;
+  };
+}
+
 function suggestions() {
   const c = onTheClock();
   const round = c ? c.round : league.rounds;
 
-  return board
-    .filter(function (p) {
-      if (p.drafted) return false;
-      if (isRuledOut(p)) return false;
-      if (state.filterSuggest !== "ALL" && p.pos !== state.filterSuggest) return false;
-      if (countAt(state.mySlot, p.pos) >= maxAt(p.pos)) return false;
-      return true;
-    })
+  const pool = board.filter(function (p) {
+    if (p.drafted) return false;
+    if (isRuledOut(p)) return false;
+    if (state.filterSuggest !== "ALL" && p.pos !== state.filterSuggest) return false;
+    if (countAt(state.mySlot, p.pos) >= maxAt(p.pos)) return false;
+    return true;
+  });
+
+  const modelMultiplier = modelMultipliers(pool);
+
+  return pool
     .map(function (p) {
       const risk = isRisky(p) ? 1.35 : 1;
-      return { player: p, score: (p.adp + p.jitter) * needMultiplier(state.mySlot, p.pos, round) * risk };
+      return { player: p, score: (p.adp + p.jitter)
+                 * needMultiplier(state.mySlot, p.pos, round)
+                 * risk
+                 * modelMultiplier(p) };
     })
     .sort((a, b) => a.score - b.score)
     .slice(0, 6)
