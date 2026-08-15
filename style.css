@@ -473,6 +473,20 @@ select {
   border-radius: 8px; padding: 10px 12px; cursor: pointer;
 }
 
+/* Three dropdowns across a row is comfortable when the options are "QB 1" and
+   "RB 2". The league row's options are words, and on a phone that row gives
+   each select 96px: "14 rounds" alone wants 67px of it, and the dropdown
+   arrow the browser draws wants about 16 more, so the text ends up hard
+   against the arrow with nothing between them. Widening the padding does not
+   help — the arrow sits inside it and simply moves too. The row needs more
+   width, so below 480px it takes two lines: the league's size on the first,
+   scoring on its own. */
+@media (max-width: 480px) {
+  .field-row.wordy { flex-wrap: wrap; }
+  .field-row.wordy > select { flex: 1 1 calc(50% - 4px); }
+  .field-row.wordy > select:last-child { flex-basis: 100%; }
+}
+
 .hint { margin: 7px 0 0; font-size: 12px; color: var(--ink-light); }
 
 /* A roster that does not add up to the round count, or a league too big for

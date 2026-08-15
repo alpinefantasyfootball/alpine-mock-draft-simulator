@@ -33,7 +33,7 @@
        say script-src 'self' without either giving away 'unsafe-inline' or
        pinning a hash that breaks the site the first time somebody edits it.
        No defer, no async: it must run before the body is drawn. -->
-  <script src="theme.js?v=20260815j"></script>
+  <script src="theme.js?v=20260815k"></script>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -53,7 +53,7 @@
 
        A query string rather than a renamed file, because renaming means a
        manifest and a manifest means a build step. This costs one number. -->
-  <link rel="stylesheet" href="style.css?v=20260815j">
+  <link rel="stylesheet" href="style.css?v=20260815k">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -319,7 +319,10 @@
 
         <div class="field">
           <label for="teamCount">League</label>
-          <div class="field-row">
+          <!-- "wordy" because these three options are words rather than a
+               position and a digit, which is what makes them too wide to sit
+               three across on a phone. See the rule in style.css. -->
+          <div class="field-row wordy">
             <!-- Filled by fillSetupControls(), like every other setup
                  control, so the range lives in app.js beside the league it
                  describes rather than being written down twice. -->
@@ -634,17 +637,17 @@
 
   <!-- Every one of these carries the same ?v= as the stylesheet. See the note
        beside it in <head>: bump them together or don't bump them at all. -->
-  <script src="players.js?v=20260815j"></script>
-  <script src="stats.js?v=20260815j"></script>
+  <script src="players.js?v=20260815k"></script>
+  <script src="stats.js?v=20260815k"></script>
   <!-- The rules of a snake draft, with no reference to this page. It loads
        before app.js because app.js is a caller, and it is a separate file
        because a server will eventually have to run the same one. -->
-  <script src="draft-engine.js?v=20260815j"></script>
+  <script src="draft-engine.js?v=20260815k"></script>
   <!-- The socket to a shared room. Loaded always, connected never unless a
        manager asks for it: a solo draft touches nothing. -->
-  <script src="live.js?v=20260815j"></script>
+  <script src="live.js?v=20260815k"></script>
   <!-- Before app.js, which calls backToTop() on the last line of its setup. -->
-  <script src="back-to-top.js?v=20260815j"></script>
-  <script src="app.js?v=20260815j"></script>
+  <script src="back-to-top.js?v=20260815k"></script>
+  <script src="app.js?v=20260815k"></script>
 </body>
 </html>
