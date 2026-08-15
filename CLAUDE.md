@@ -202,6 +202,58 @@ written down twice" exists to prevent. When something here needs to know what
 a league permits, check whether the engine or the CPU already answers it
 before writing a second answer.
 
+## The suggestions
+
+`suggestions()` ranks by `(adp + jitter)` times need times risk times the
+model's opinion, lowest first. The last of those four is new and is the only
+one that answers to the scoring table.
+
+**Everything else on the page rescores when the rules change; this did not.**
+Setting receptions to five points moved every number printed on a suggestion
+card and none of the order, because the order was ADP, need and risk and none
+of the three has heard of a scoring rule. With the editor open the app was
+computing a better answer than the one it was giving.
+
+**It has to be `overallScore()`, not `marketGap()`.** `marketGap` compares a
+player with his own position's market, so it can say "this receiver is
+underrated among receivers" and can never say "receivers are worth more than
+backs now" — which is the only thing five points a catch changes. It was
+tried that way first and the list did not move, because the elite are WR1 and
+RB1 on both measures under any rules. `overallScore()` is points above
+replacement at his own position measured against the best such figure on the
+board, so it compares *across* positions.
+
+**It has to be measured against the best player still available, not
+`BEST_VOR`.** `overallScore()` is a share of `BEST_VOR`, which is fixed for
+the whole draft, so by the fifth round everyone left scores single figures and
+a multiplier taken straight off it collapses to a 6% spread across the
+candidate list — which reorders nothing. Against the best still on the board
+the range holds at every stage. Both of these were measured before being
+believed, and both first attempts looked reasonable and did nothing.
+
+**The multiplier only ever pulls a player up, and it is capped at
+`MODEL_CAP`.** A rated player buys a discount on his draft position, up to a
+quarter of it; an unrated one stays exactly where the market put him. No
+centre point to argue about, and a player with no projection scores `null` and
+is left alone rather than pushed down for the want of one. The cap is there
+because ADP is the one input that knows when a player will actually be gone,
+and advice that forgets that is not advice. Under default scoring it barely
+moves — at pick one it swaps the sixth name and reaches no further than ADP 7
+— and grows more assertive late, which is where ADP is noisiest.
+
+**`cpuChoice()` deliberately never sees any of this.** The CPU teams are meant
+to behave like a room drafting off a market, and in a shared room every client
+has to reach the same answer for an empty chair. Your suggestions and the CPU
+no longer share one formula, which is why the how-it-works page had to be
+changed too — it previously implied they did.
+
+**Whether it helps is a measurable question, so measure it.** Same seed, same
+computer teams, your seat drafting each way, across pinned seeds: starter
+strength rose every time by four to five points and the finishing rank
+improved every time. Draft value moved both ways, which is the tell that it is
+finding value rather than reaching. A suggestion change that cannot show this
+is a change to the numbers, not to the advice.
+
 ## Conventions
 
 - `app.js` is organised in numbered sections. Keep new code in the right one.
