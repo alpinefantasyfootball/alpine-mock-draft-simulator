@@ -1111,6 +1111,45 @@ function chatPickHtml(entry, room) {
     </div>`;
 }
 
+/* ---- the end of a draft ---------------------------------
+
+   The analysis is what the whole thing was for — the hero promises a grade
+   afterwards that shows its working — and until now it sat behind a tab you
+   had to know to press. The last pick lands, three buttons quietly change in
+   the action bar, and nothing else says it is over.
+
+   So it opens itself. A tab rather than a dialog, deliberately: the analysis
+   is a grade, four bars, two callouts, a bye strip, a standings table and a
+   method note, which is a page rather than something to read inside a box.
+   And a dialog would need dismissing, which puts the most valuable screen in
+   the app one stray click from gone. Switching tabs leaves everything where
+   it was — the board is one press away and nothing has to be closed. */
+function revealAnalysis() {
+  showPanel("tab-grades");
+  document.querySelectorAll(".tabs button").forEach(function (b) {
+    b.classList.toggle("on", b.dataset.tab === "tab-grades");
+  });
+  window.scrollTo(0, 0);
+}
+
+/* Whether the draft was already over last time we looked.
+
+   This has to be an edge, not a state. render() runs on every change, so
+   acting on "the draft is over" would drag you back to the analysis every
+   time you clicked away from it — including the click you just made to look
+   at the board. Acting on "the draft just became over" fires once. */
+let draftWasOver = false;
+
+// Seeded by whatever establishes a draft, so that adopting a finished board
+// is not mistaken for one finishing under you.
+function noteDraftPhase() { draftWasOver = state.started && draftOver(); }
+
+function checkDraftFinished() {
+  const over = state.started && draftOver();
+  if (over && !draftWasOver) revealAnalysis();
+  draftWasOver = over;
+}
+
 /* Off the setup screen and into the draft. Its own function because two
    things reach it: pressing Start in a solo draft, and — in a room — the
    broadcast saying the host has begun, which is the only signal a guest
@@ -3241,6 +3280,12 @@ function render() {
   renderTeam();
   renderPicks();
   saveDraft();
+
+  /* Last, and after saveDraft(), because it can change which panel is on
+     screen and everything above it should have drawn first. One call here
+     covers every route to the final pick — your own, the CPU loop,
+     auto-drafting the rest, and a room broadcasting that it is done. */
+  checkDraftFinished();
 }
 
 
@@ -3358,8 +3403,21 @@ function resumeDraft(data) {
   tabsNav.hidden = false;
   actionbar.hidden = false;
   $("resumeBar").hidden = true;
-  showPanel("tab-suggest");
-  document.querySelectorAll(".tabs button").forEach((b, i) => b.classList.toggle("on", i === 0));
+
+  /* A finished draft reopens on its analysis, not on suggestions — the
+     landing page called it "your finished draft", so the reason to reopen
+     one is to look at the result, and the suggestion list is exhausted by
+     then anyway. An unfinished one picks up where it left off. */
+  if (draftOver()) {
+    revealAnalysis();
+  } else {
+    showPanel("tab-suggest");
+    document.querySelectorAll(".tabs button").forEach((b, i) => b.classList.toggle("on", i === 0));
+  }
+
+  // Seeded before the render below, so reopening a finished board is not
+  // read as one that has only just finished.
+  noteDraftPhase();
 
   resetClock();
   render();

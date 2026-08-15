@@ -422,8 +422,24 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   data files load via `<script src>` rather than fetch.
 - Before claiming a change works, run a full simulated draft and confirm
   140 picks, no duplicate players, 14 per team, no kicker before round 13.
-  Then run one at a different shape — 12 teams, 15 rounds, full PPR — and
-  confirm 180 picks, 15 per team, one QB each and no kicker before round 14.
+  Then run one at a different shape — 12 teams, 15 rounds, full PPR, **bench
+  6** — and confirm 180 picks, 15 per team, one QB each and no kicker before
+  round 14.
+
+  The bench matters and this file used to leave it out. The default lineup is
+  eight starters plus a FLEX plus five bench, which is fourteen roster spots,
+  so fifteen rounds would draft a fifteenth player with nowhere to put him.
+  `setupProblem()` catches it and the Start button refuses — correctly, and
+  for several sessions this instruction quietly described a league the app
+  will not run.
+
+  **Drive it through the Start button, and assert `state.started` afterwards.**
+  Calling `autoDraftRest()` straight from the console drafts a full board
+  whether or not a draft was ever started, so a harness that skips the button
+  will happily "pass" a configuration the app rejects — which is exactly how
+  the missing bench went unnoticed. The picks it produces are real; the run
+  is not.
+
   If the console reports an error naming something the source no longer
   contains, you are looking at a cached `app.js`, not a real failure. Hard
   reload, or serve the folder over `python -m http.server` and use that.
