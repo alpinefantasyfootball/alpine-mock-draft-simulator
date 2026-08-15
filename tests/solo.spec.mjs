@@ -143,6 +143,62 @@ for (const pos of ["ALL", "QB", "RB", "WR", "TE", "K", "DST"]) {
   });
 }
 
+/* Nobody sits on a bench outranking the player in a slot they could fill.
+
+   `bestLineup()` used to sort candidates by `posRank`, which is a rank inside
+   a position, so filling a FLEX from TE19, RB25 and WR28 took the tight end —
+   19 being a smaller number than 25 — even though that tight end was below
+   replacement at his own position and the running back was five places above
+   his. Half the grade is starter strength, and it was being computed off a
+   lineup nobody would field.
+
+   Asserted across every team in the room rather than the one being watched,
+   because the component is scaled against the rest of the room: one team's
+   lineup being wrong moves everybody's grade. */
+test("every lineup fields the best eligible player", async ({ browser }) => {
+  const context = await browser.newContext();
+  const page = await openApp(context);
+
+  await page.selectOption("#teamCount", "12");
+  await page.click("#startBtn");
+  await page.evaluate(async () => { autoDraftRest(); await new Promise((r) => setTimeout(r, 2000)); });
+
+  const out = await page.evaluate(() => {
+    const all = analyseDraft();
+    const violations = [];
+    all.forEach((t) => {
+      const bench = t.roster.filter((p) => !t.lineup.some((s) => s.player === p));
+      t.lineup.forEach((s) => {
+        if (!s.player) return;
+        bench.forEach((b) => {
+          if (fillsSlot(b, s.slot) && aboveReplacement(b) > aboveReplacement(s.player)) {
+            violations.push(`team ${t.slot} ${s.slot}: ${s.player.name} ` +
+              `(${aboveReplacement(s.player)}) benched behind ${b.name} (${aboveReplacement(b)})`);
+          }
+        });
+      });
+    });
+    const w = WEIGHTS;
+    return {
+      violations,
+      // The two checks CLAUDE.md asks for beside it: a component that is the
+      // same for everybody is not in the grade, and a total has to equal its
+      // own parts.
+      distinct: ["startersScaled", "valueScaled", "buildScaled", "byePenaltyScaled"]
+        .map((k) => new Set(all.map((t) => Math.round(t[k]))).size),
+      reconciles: all.every((t) => Math.abs(
+        t.startersScaled * w.starters + t.valueScaled * w.value +
+        t.buildScaled * w.build + t.byePenaltyScaled * w.byes - t.total) < 1e-9)
+    };
+  });
+
+  expect(out.violations).toEqual([]);
+  expect(out.reconciles, "each total equals its own weighted parts").toBe(true);
+  expect(Math.min(...out.distinct), "no component is a constant across the room").toBeGreaterThan(1);
+
+  await context.close();
+});
+
 test("solo still says 'Auto-draft the rest', because solo it is the truth", async ({ browser }) => {
   const context = await browser.newContext();
   const page = await openApp(context);

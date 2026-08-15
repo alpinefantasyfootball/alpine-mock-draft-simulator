@@ -80,6 +80,24 @@ and they were wrong in the same direction: they all flattered picks nobody
 chose to make. Starter strength was correct throughout. What follows is why
 each was wrong, because none of them announced themselves.
 
+**`bestLineup()` sorts by `aboveReplacement`, never by `posRank`.** A rank
+inside a position cannot choose between positions, and the FLEX is a slot that
+has to. Sorting by `posRank` filled it from TE19, RB25 and WR28 by taking the
+tight end — 19 is a smaller number than 25 — when TE replacement is 14, so
+that tight end was *below* startable and worth 0, while the running back was
+five places above his own replacement and sat on the bench.
+
+Half the grade is starter strength, and it was being read off a lineup nobody
+would ever field. Measured on one real roster it cost five raw points against
+a room spanning 78 to 109, which is about eight points of final grade — several
+places in a twelve-team room. Six of the twelve teams in that draft had it, all
+six in the FLEX, all six a tight end.
+
+This is the suggestions bug in a different function, and the lesson is the same
+one: **a within-position measure cannot answer a between-position question.**
+Inside a single-position slot the two orderings are identical, which is exactly
+why it hid — every slot but the FLEX looked right.
+
 **A component that is the same for every team is not in the grade.** This is
 the check to run first on anything in here. `scaleAcross()` hands every team
 50 when the span is zero, so a constant contributes a constant and the weight

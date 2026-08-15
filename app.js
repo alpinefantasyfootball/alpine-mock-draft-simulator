@@ -2248,6 +2248,28 @@ function aboveReplacement(player) {
 }
 
 // The best legal starting lineup a roster can field.
+/* Who actually starts.
+
+   Sorted by `aboveReplacement`, not by `posRank`, and the difference only
+   shows in a slot more than one position can fill — which is to say in the
+   slot where it matters. `posRank` is a rank *inside* a position, so using it
+   to choose between positions compares numbers drawn on different scales:
+   asked to fill a FLEX from TE19, RB25 and WR28 it takes the tight end,
+   because 19 is a smaller number than 25.
+
+   Measured on a real roster, that put Juwan Johnson (TE19, and TE
+   replacement is 14, so he is *below* a startable tight end and worth 0) in
+   the FLEX ahead of David Montgomery (RB25 against an RB replacement of 30,
+   so worth 5). Five points of starter strength left on the bench, in the
+   component that is half the grade, on a team that came last in its room.
+
+   `aboveReplacement` is the currency the rest of the grade already counts in
+   and it knows how deep each position runs, which is the whole reason it
+   exists. Inside a single-position slot the two orderings are identical, so
+   nothing else moves.
+
+   This is the same mistake the suggestions had, in a different function: a
+   within-position measure cannot answer a between-position question. */
 function bestLineup(roster) {
   const used = [];
   const slots = lineupSlots();
@@ -2256,7 +2278,12 @@ function bestLineup(roster) {
     const eligible = roster.filter(function (p) {
       if (used.indexOf(p) >= 0) return false;
       return fillsSlot(p, slot);
-    }).sort((a, b) => a.posRank - b.posRank);
+    }).sort(function (a, b) {
+      const gap = aboveReplacement(b) - aboveReplacement(a);
+      // Ties on the same worth fall back to the board's own order, so the
+      // lineup is stable rather than depending on roster order.
+      return gap !== 0 ? gap : a.overall - b.overall;
+    });
 
     const pick = eligible[0] || null;
     if (pick) used.push(pick);
