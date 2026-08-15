@@ -347,15 +347,74 @@ good enough:
   comes from the No-Sniff toggle in the HSTS dialog instead. GitHub Pages
   cannot set headers at all, so Cloudflare is the only place these can live.
 
-**The CSP is report-only, and the thing stopping it being enforced is
-Cloudflare, not us.** Driving the whole app against it — player photos from
-sleepercdn, the ESPN scoreboard, the worker over https and wss, a GIPHY image
-— produces zero violations. Two Cloudflare injections do violate it:
-`static.cloudflareinsights.com/beacon.min.js` and the inline challenge-platform
-script from bot detection. Enforcing means either allowing those in
-`script-src` or turning the features off. Until that is decided, report-only
-is the honest state: the policy is correct and it is not lying about being
-enforced.
+**The CSP is enforced. Of Cloudflare's own two injections, one is allowed by
+name and the other is blocked on purpose.** Driving the whole app against the
+policy — player photos from sleepercdn, the ESPN scoreboard, the worker over
+https and wss, a GIPHY image — produces zero violations, and always did. What
+kept the policy report-only was Cloudflare injecting script into our pages,
+and the two it injects end differently because they are different kinds of
+script:
+
+- **The Web Analytics beacon is an ordinary external script,** so the host
+  goes in `script-src`. Allow `https://static.cloudflareinsights.com`, the
+  bare host — **not the path Cloudflare's own docs give you.** The real `src`
+  is `beacon.min.js/v4513226c…`, a version segment *after* the filename, and
+  a CSP source whose path does not end in `/` has to match exactly, so
+  `…/beacon.min.js` matches nothing at all. The beacon reports to
+  `/cdn-cgi/rum` on our own domain, which `connect-src 'self'` already
+  covers; the `cloudflareinsights.com` connect host in the docs is for sites
+  that embed the beacon by hand.
+- **The bot-detection script is inline,** so no host can allow it, and it
+  cannot be hashed either: the body carries `r:'<cf-ray>'`, unique per
+  request, so the hash the console helpfully offers is stale before you can
+  paste it. It has no nonce for the reason below. So it is **blocked, on
+  purpose**, and the only cost is console noise wherever a browser reports it.
+  Nothing else: the script never runs, `window.__CF$cv$params` is undefined
+  after load, and no part of the app has ever depended on it. The alternative
+  was `'unsafe-inline'` in `script-src`, which would hand any injected chat
+  message the run of the page — the single thing this file is most arranged to
+  prevent. A line in a console nobody but us opens is a much smaller price.
+
+**The blocked script is doing nothing anyway, and that took two toggles to
+establish.** Bot Fight Mode is **off** and JavaScript Detections is **off**,
+both under Security → Bots — and the injection continues regardless. Turning
+off JavaScript Detections alone changes nothing, because Cloudflare's own docs
+say "for Bot Fight Mode customers, JavaScript Detections is automatically
+enabled and cannot be disabled". Turning Bot Fight Mode off as well should
+have ended it, and did not: the free plan is currently injecting the script
+with both switches off and the card still reporting "JS Detections: On". That
+is a Cloudflare bug with open community reports, not a setting anybody missed.
+So the script we block is a leftover of a feature that is switched off. When
+Cloudflare fixes it the two console errors disappear on their own, and nothing
+here needs changing.
+
+**A nonce cannot rescue that, and the reason is circular.** It looks like it
+should work, and the usual objection does not apply here: a nonce normally has
+to reach the script tags too and a Transform Rule cannot touch the body, but
+every script on our pages is an external `src` from `'self'` and wants no
+nonce, so the header would be the whole job. Cloudflare does parse the CSP it
+is about to send and stamp the value onto its own injections. It was tried, as
+a dynamic header value, and `uuidv4(cf.random_seed)` did produce a fresh nonce
+per request:
+
+```
+concat("… script-src 'self' 'nonce-", uuidv4(cf.random_seed), "' https://static.cloudflareinsights.com; …")
+```
+
+The injected `<script>` came back with no `nonce` attribute on it at all. Bot
+detection injects **before** response-header Transform Rules run, so there was
+no header yet to read a nonce out of. Cloudflare's propagation works on a CSP
+the *origin* sent — and our origin is GitHub Pages, which cannot send headers,
+which is the whole reason the CSP is a Transform Rule. A `<meta>` CSP is not a
+way out either: Cloudflare documents JavaScript Detections as unsupported with
+nonces set that way.
+
+**Change the value before you change the header name.** Put a new value on
+`Content-Security-Policy-Report-Only` first and reload: an empty console is
+the only evidence worth having. Only then rename the header. Enforcing first
+and reading the console afterwards learns the same fact far too late — and
+this is exactly how the nonce turned out to be worthless, cheaply, instead of
+expensively.
 
 **Keep it enforceable.** No inline `<script>`, no `onerror=` or other inline
 handlers — that is why the theme switch is `theme.js`, why avatars use
