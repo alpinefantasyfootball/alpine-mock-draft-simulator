@@ -102,12 +102,57 @@
     code: null,
     socket: null,
     room: null,        // the last view the room sent
-    status: "off",     // off | connecting | open | closed | rejected
+    status: "off",     // off | connecting | reconnecting | open | closed | rejected
     reason: null,
+    wanted: false,     // are we meant to be in a room right now
+    opts: null,        // what connect() was called with, so a retry can repeat it
     onchange: null,    // app.js sets this
     onchat: null,
     ontyping: null
   };
+
+  /* A socket is not a connection you open once.
+
+     A phone closes one the moment the browser stops being the front app, and
+     the first thing anybody does after creating a room is leave the browser
+     to send the link. So the drop is not an edge case — it is the normal path
+     through the feature, and it used to be permanent: nothing here reopened a
+     socket, and `live.room` was kept, so the page went on showing an invite
+     box, a seat list and a chat window for a room it could no longer reach.
+
+     Backoff because a worker that is actually down should not be asked ten
+     times a second, and capped because a draft is a thing people are sitting
+     and waiting on. */
+  const RETRY_MS = [1000, 2000, 4000, 8000, 15000];
+  let retryStep = 0;
+  let retryTimer = null;
+
+  function stopRetry() {
+    if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; }
+  }
+
+  function scheduleRetry() {
+    if (!live.wanted || retryTimer) return;
+    const wait = RETRY_MS[Math.min(retryStep, RETRY_MS.length - 1)];
+    retryStep++;
+    retryTimer = setTimeout(function () { retryTimer = null; open(); }, wait);
+  }
+
+  /* Coming back to the tab is the strongest signal there is that a dropped
+     socket should be retried now rather than in eight seconds, and it is
+     exactly the moment it happens — the manager has just come back from
+     their messages app having sent the link.
+
+     readyState is checked as well as our own status, because a socket that
+     was suspended with the page can report open while being dead: the close
+     event arrives late, or never. */
+  function awake() {
+    if (!live.wanted) return;
+    if (live.socket && live.socket.readyState === 1 && live.status === "open") return;
+    stopRetry();
+    retryStep = 0;
+    open();
+  }
 
   function announce() {
     if (typeof live.onchange === "function") live.onchange(live);
@@ -136,25 +181,48 @@
     disconnect();
 
     live.code = code;
-    live.status = "connecting";
+    live.opts = opts || {};
+    live.wanted = true;
     live.reason = null;
+    open();
+  }
+
+  /* Opening the socket, which connect() does once and a retry does again.
+     Split from connect() because a reconnection must not clear `live.room`:
+     that is the last thing the room said, everything on the page is drawn
+     from it, and throwing it away to reopen a socket would blank the seat
+     list and the whole chat log for the second the socket takes to come
+     back. */
+  function open() {
+    const opts = live.opts || {};
+
+    const existing = live.socket;
+    live.socket = null;
+    if (existing) { try { existing.close(); } catch (err) {} }
+
+    // "reconnecting" only when there is something to reconnect to, so the
+    // first attempt still reads as connecting rather than as a fault.
+    live.status = live.room ? "reconnecting" : "connecting";
     announce();
 
     const params = new URLSearchParams({
       member: memberId(),
       // The stored name unless the caller has a better one, so following an
       // invite link lands you in the room already called something.
-      name: (opts && opts.name) || myName(),
-      league: JSON.stringify((opts && opts.league) || {}),
-      clock: String((opts && opts.clock) || 0),
-      data: (opts && opts.dataVersion) || ""
+      name: opts.name || myName(),
+      league: JSON.stringify(opts.league || {}),
+      clock: String(opts.clock || 0),
+      data: opts.dataVersion || ""
     });
 
-    const socket = new WebSocket(WORKER + "/room/" + code + "?" + params);
+    const socket = new WebSocket(WORKER + "/room/" + live.code + "?" + params);
     live.socket = socket;
 
     socket.addEventListener("open", function () {
       live.status = "open";
+      // The ladder starts again from the bottom, so a draft that drops once
+      // an hour never works its way up to a fifteen-second wait.
+      retryStep = 0;
       announce();
     });
 
@@ -177,26 +245,40 @@
            draft is usually a click that lost a race, and the state that
            follows already says so. */
         live.reason = msg.code;
-        if (live.status !== "open") live.status = "rejected";
+        if (live.status !== "open") {
+          live.status = "rejected";
+          // Being turned away is an answer, not a failure to reach anyone.
+          // Retrying it would ask the same question every second forever.
+          live.wanted = false;
+          stopRetry();
+        }
         announce();
       }
     });
 
-    socket.addEventListener("close", function () {
+    // One handler for both, because a socket that errors closes immediately
+    // after and the second event would otherwise schedule a second retry.
+    const gone = function () {
       if (live.socket !== socket) return;      // an old socket finishing
-      if (live.status !== "rejected") live.status = "closed";
+      live.socket = null;
+      if (live.status === "rejected") return;
+      live.status = live.room ? "reconnecting" : "closed";
       announce();
-    });
+      scheduleRetry();
+    };
 
-    socket.addEventListener("error", function () {
-      if (live.socket !== socket) return;
-      if (live.status !== "rejected") live.status = "closed";
-      announce();
-    });
+    socket.addEventListener("close", gone);
+    socket.addEventListener("error", gone);
   }
 
+  /* Leaving on purpose. `wanted` goes false first, so the close event this
+     causes is not mistaken for a drop and retried. */
   function disconnect() {
     const socket = live.socket;
+    live.wanted = false;
+    live.opts = null;
+    stopRetry();
+    retryStep = 0;
     live.socket = null;
     live.room = null;
     live.status = "off";
@@ -209,6 +291,18 @@
     try { live.socket.send(JSON.stringify(payload)); return true; }
     catch (err) { return false; }
   }
+
+  /* The two moments a dropped socket is worth retrying immediately rather
+     than on the ladder: the tab coming back to the front, and the network
+     coming back at all. Registered once, for the life of the page, and both
+     do nothing unless we are supposed to be in a room. */
+  if (root.document) {
+    root.document.addEventListener("visibilitychange", function () {
+      if (!root.document.hidden) awake();
+    });
+  }
+  root.addEventListener("online", awake);
+  root.addEventListener("pageshow", awake);
 
   return root.Live = {
     WORKER: WORKER,

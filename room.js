@@ -147,31 +147,39 @@
      cannot tell whether they are early or too late. */
   function join(state, opts, now) {
     const next = clone(state);
-    const existing = next.members[opts.member];
+    const known = next.members[opts.member];
     const name = cleanName(opts.name);
 
-    if (existing) {                       // a refresh, not a new person
-      existing.seen = now;
-      existing.name = name || existing.name;
-      // A reconnect carries the name the browser has, which may be newer than
-      // the one the chair is wearing — someone renamed themselves and then
-      // went through a tunnel. The chair follows the member, always.
-      const seat = seatOf(next, opts.member);
-      if (seat >= 0) next.seats[seat].name = existing.name;
-      return ok(next);
-    }
+    /* The chair they already hold, if any. Mid-draft leave() keeps the chair
+       and only marks it auto, so this finds it; in the lobby the chair was
+       freed and they take the first one going.
 
-    const seat = next.status === "lobby" ? freeSeat(next) : -1;
+       Which makes this the path everybody comes *back* along, not just the
+       one they arrive on — a socket on a phone drops every time the browser
+       stops being the front app. The two have to be told apart, because
+       leave() hands the seat to the CPU so the draft keeps moving without
+       them and returning has to undo precisely that. It did not: a manager
+       who went through a tunnel came back to a chair the host's browser went
+       on drafting for, and the only sign of it was picks they never made. */
+    let seat = seatOf(next, opts.member);
+    if (seat < 0 && next.status === "lobby") seat = freeSeat(next);
 
     next.members[opts.member] = {
-      name: name,
+      /* A reconnect carries whatever name that browser has, which may be
+         newer than the one the chair is wearing — somebody renamed
+         themselves and then went through a tunnel. One carrying no name at
+         all keeps the name they had rather than anonymising them. */
+      name: name || (known && known.name) || null,
       seat: seat >= 0 ? seat : null,
-      seen: now
+      seen: now,
+      // Survives a drop, so a return can be told from an arrival.
+      first: known ? known.first : now
     };
 
     if (seat >= 0) {
       next.seats[seat].member = opts.member;
-      next.seats[seat].name = name;
+      next.seats[seat].name = next.members[opts.member].name;
+      // They are back, so the room stops picking for them.
       next.seats[seat].auto = false;
     }
     return ok(next);
@@ -237,7 +245,16 @@
       }
       next.seats[seat].auto = true;
     }
-    delete next.members[opts.member];
+
+    /* The record stays, with its chair forgotten, where it used to be
+       deleted outright. It is the only thing that can tell a reconnection
+       from a new arrival, and without it a phone backgrounding in the lobby
+       — which is what everyone does, to send the invite link — announced
+       "took seat 1" again every time it came back. A room never holds more
+       of these than have actually been in it. */
+    if (next.members[opts.member]) {
+      next.members[opts.member].seat = null;
+    }
     return ok(next);
   }
 

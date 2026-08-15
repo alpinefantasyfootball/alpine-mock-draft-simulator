@@ -1284,6 +1284,22 @@ function renderChatMeta(room) {
     names.length === 2 ? names[0] + " and " + names[1] + " are typing…" :
     "Several managers are typing…";
 
+  /* Whether the chat can actually reach anyone.
+
+     Everything in the dock is a socket message, so all of it stops working
+     when one drops — and it used to stop working silently: the box still
+     invited a message, Send did nothing at all, and the line was neither sent
+     nor kept. A control that cannot act should say so rather than swallow the
+     click, so the whole footer goes dead together and one line explains it. */
+  const connected = inRoom();
+  $("chatOffline").hidden = connected;
+  $("chatInput").disabled = !connected;
+  $("chatSend").disabled = !connected;
+  $("gifBtn").disabled = !connected;
+  Array.prototype.forEach.call(
+    $("chatReactions").querySelectorAll("button"),
+    function (b) { b.disabled = !connected; });
+
   const jump = $("chatJump");
   jump.hidden = chatUI.unread === 0;
   jump.textContent = chatUI.unread + " new " +
@@ -4059,9 +4075,10 @@ $("resetScoring").addEventListener("click", function () {
 const LOCKABLE = ["teamCount", "roundCount", "scoring", "pickClock", "draftSlot"];
 
 const STATUS_TEXT = {
-  connecting: "Connecting…",
-  closed:     "Lost the connection. Reopen the link to rejoin — your seat is held.",
-  rejected:   "Could not join."
+  connecting:   "Connecting…",
+  reconnecting: "Reconnecting to the room — your seat is held.",
+  closed:       "Lost the connection. Reopen the link to rejoin — your seat is held.",
+  rejected:     "Could not join."
 };
 
 const REJECT_TEXT = {
@@ -4130,14 +4147,34 @@ function renderInvite() {
         <b>${s.index + 1}</b>${who}</span>`;
   }).join("");
 
-  // The room owns the shape once you are in one, so the controls that would
-  // change it out from under everybody are locked rather than lying.
-  const locked = status === "open" && !!room;
+  /* The room owns the shape once you are in one, so the controls that would
+     change it out from under everybody are locked rather than lying.
+
+     Being in a room is `room`, not `status === "open"`. A socket that has
+     dropped is being reconnected and the room is still there — and the
+     difference matters far more than it looks, because this is also what the
+     start button reads. Keyed on the socket, a phone that had been backgrounded
+     for ten seconds came back with every control unlocked and a button
+     offering to start a draft, and the button meant the solo one. */
+  const locked = !!room;
   LOCKABLE.forEach(function (id) { $(id).disabled = locked; });
-  $("startBtn").textContent = locked
-    ? (room && room.isHost ? "Start the draft for everyone" : "Waiting for the host…")
-    : "Start your draft";
-  $("startBtn").disabled = locked && !(room && room.isHost);
+
+  const startBtn = $("startBtn");
+  if (!locked) {
+    startBtn.textContent = "Start your draft";
+    startBtn.disabled = false;
+  } else if (status !== "open") {
+    // Nothing can be started while the room cannot hear us, and a button that
+    // says otherwise is the one that started a private draft nine people were
+    // waiting on.
+    startBtn.textContent = "Reconnecting…";
+    startBtn.disabled = true;
+  } else {
+    startBtn.textContent = room.isHost
+      ? "Start the draft for everyone"
+      : "Waiting for the host…";
+    startBtn.disabled = !room.isHost;
+  }
 }
 
 function joinRoom(code, asHost) {
@@ -4444,9 +4481,21 @@ $("startBtn").addEventListener("click", function () {
   readSetup();
   if (setupProblem()) { refreshSetup(); return; }   // belt and braces; the button is disabled too
 
-  // In a room the host asks and everyone starts together; the state that
-  // comes back is what actually begins the draft.
-  if (inRoom()) { Live.start(); return; }
+  /* In a room the host asks and everyone starts together; the state that
+     comes back is what actually begins the draft.
+
+     Asked of the room rather than of the socket. `inRoom()` is "the socket is
+     open right now", and a dropped socket is a normal second of a draft on a
+     phone — so falling through on it meant falling through to the branch
+     below, which starts a *solo* draft. That is not a degraded shared draft;
+     it is a different draft, on the host's phone, while everybody else sits
+     on "Waiting for the host…" until they give up. The button is disabled
+     while reconnecting, so this is the belt to that pair of braces. */
+  if (typeof Live !== "undefined" && Live.room()) {
+    if (inRoom()) Live.start();
+    else renderInvite();
+    return;
+  }
 
   state.mySlot      = Number(slotSelect.value);
   state.clockLength = Number($("pickClock").value);

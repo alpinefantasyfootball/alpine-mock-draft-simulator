@@ -900,3 +900,66 @@ locally disagrees with the room within seconds.
 a player's board position, so a room has to pin the data version it started
 with. The files are rebuilt nightly and a mid-draft change would drift the
 boards apart.
+
+### A dropped socket is the normal path, not an edge case
+
+A phone closes a WebSocket the moment the browser stops being the front app.
+So the drop is not a failure to design around — it is step three of the
+feature: create the room, copy the link, **leave the browser to send it**.
+Everything below was one report from one real draft on one phone, and all of
+it is that single second.
+
+**The page reconnects itself.** It did not, at all: nothing in `live.js`
+reopened a socket, so a drop was permanent until somebody reopened the link.
+Backoff for a worker that is genuinely down, and an immediate retry on
+`visibilitychange`, `online` and `pageshow` — coming back to the tab is the
+strongest evidence there is that now is the moment, and it is exactly when it
+happens. `open()` is split from `connect()` so a retry does not clear
+`live.room`: that is the last thing the room said and the whole page is drawn
+from it, so wiping it to reopen a socket blanks the seat list and the chat
+log for as long as the socket takes.
+
+**"In a room" is `Live.room()`. "The socket is up right now" is
+`Live.active()`.** They are not the same question and the start button asked
+the wrong one. With a dropped socket `inRoom()` is false, so the handler fell
+past the room branch into the one below it — and the branch below it starts a
+**solo** draft. Not a degraded shared draft: a different draft, on the host's
+phone, against CPUs, while everybody else sat on "Waiting for the host…"
+until they gave up. `renderInvite()` had the same bug and dressed it: keyed on
+the socket, it unlocked every setup control and relabelled the button "Start
+your draft", so the app cheerfully offered the wrong draft. Both now key on
+the room, and the button says "Reconnecting…" and is disabled while the
+socket is down.
+
+**A control that cannot act has to say so.** Chat is all socket messages, so
+all of it stops working on a drop — and it stopped silently: the box still
+invited a message, Send did nothing whatsoever, and the line was neither sent
+nor kept. "Nothing happens" is how it was reported, and that is the correct
+description. The whole footer now goes dead together with one line saying
+why. The one honest signal that already existed — `#inviteStatus` reading
+"Lost the connection" — was a grey hint contradicted by every control around
+it, which is not far off no signal at all.
+
+**Coming back has to undo exactly what leaving did.** `leave()` marks the
+chair `auto` so the room keeps moving without you, which is right. `join()`
+did not clear it, and could not even find the chair: `leave()` deletes the
+member record, so a returning manager took the "new person" branch, which
+mid-draft assigns no seat at all. The seat stayed theirs and stayed `auto`,
+so the host's browser went on drafting for someone sitting there watching it
+happen — no error, no message, visible only as picks they never made. This
+one had never bitten because nothing reconnected on its own; making
+reconnection work is what turned a dormant bug into the common path.
+
+**The member record outlives the connection.** It is the only thing that can
+tell a reconnection from an arrival — the lobby frees a dropped chair, so
+"had no seat a moment ago" is true of both — and without it every trip to the
+messages app and back added another "took seat 1" to the log. `leave()` keeps
+the record and forgets its chair; the worker announces on the record, not on
+the seat.
+
+**Two members in one browser: use two origins.** `localhost:8765` and
+`127.0.0.1:8765` are different origins with different `localStorage`, so they
+hold different `juke.member` ids and the room treats them as two people. Two
+tabs on the same origin share the id and the worker correctly treats them as
+one manager with two sockets, which tests nothing about a second person — and
+overwriting the id in one tab breaks the other the next time it reconnects.

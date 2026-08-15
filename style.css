@@ -2274,6 +2274,23 @@ a.room:hover { border-color: var(--blue-line); }
   min-height: 15px;
 }
 
+/* Why the composer below it has gone dead. Sits between the log and the box
+   so it is read on the way to the thing that is not working.
+
+   `[hidden]` is spelled out because the display below would otherwise beat
+   it — the same rule the chat dock itself needs, for the same reason. */
+.chatoffline {
+  flex: none; display: block; margin: 0 13px 6px; padding: 5px 9px;
+  font-size: 11px; border-radius: 7px;
+  /* --ink-mid, not the --ink-light the typing line uses. This is the note
+     that explains why nothing below it works, so it has to be read rather
+     than noticed: light comes out at 2.5:1 on this background, mid at 5.4:1
+     in light and 7.8:1 in dark. */
+  color: var(--ink-mid);
+  background: var(--sunken); border: 1px solid var(--line);
+}
+.chatoffline[hidden] { display: none; }
+
 /* ---- the composer ---- */
 
 .chatfoot {

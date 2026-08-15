@@ -128,14 +128,20 @@ export class DraftRoom {
 
     this.sockets.set(socket, member);
 
-    const before = Room.seatOf(this.room, member);
+    /* Asked of the member list rather than of the seats. A drop frees the
+       chair in the lobby, so "had no seat a moment ago" is true of somebody
+       coming straight back as well as of somebody arriving — and since the
+       page now reconnects by itself, that is every time a phone is put down.
+       The record outlives the connection precisely so this can tell them
+       apart. */
+    const knew = !!(this.room.members && this.room.members[member]);
     const joined = Room.join(this.room, { member, name }, Date.now());
     this.room = joined.state;
 
     // Only for somebody actually new. A refresh reconnects and would
     // otherwise announce the same person every time their train moved.
     const seat = Room.seatOf(this.room, member);
-    if (before < 0 && seat >= 0) {
+    if (!knew && seat >= 0) {
       // The cleaned name, not the one off the query string: this goes into a
       // stored line that everybody's browser will draw.
       this.room = Room.announce(this.room,

@@ -299,6 +299,30 @@ check("room survived a reconnect", s?.picks.length >= 2, true);
 check("alice keeps her seat mid-draft", s?.yourSeat, 0);
 check("still drafting", s?.status, "drafting");
 
+/* And she is drafting for herself again.
+
+   A drop hands the chair to the CPU so the room keeps moving without her,
+   which is right; coming back has to hand it straight back, which it did not.
+   The seat was still hers and still marked auto, so the host's browser went
+   on picking for a manager who was sitting there watching it happen — a
+   failure with no error anywhere, visible only as picks she never made.
+
+   It went unnoticed because nothing used to reconnect on its own: you got
+   here by reopening the link, which is rare enough that nobody did it twice.
+   The page retries by itself now, so this is the common path, not the odd
+   one. */
+check("a returning manager stops being auto", s?.seats[0].auto, false);
+check("and the chair is still hers", s?.seats[0].taken, true);
+
+/* Coming back is not arriving. The lobby frees a dropped chair, so "had no
+   seat a moment ago" is true of a reconnection too — and announcing on that
+   put "took seat 1" in the log every time a phone went to the messages app
+   and back, which is exactly what the person creating the room does. */
+const arrivals = (lastState(alice2).chat || [])
+  .filter((m) => m.system && /took seat/.test(m.text || ""));
+check("a reconnect is not announced as an arrival",
+      arrivals.filter((m) => /Alice|Coach Al/.test(m.text)).length, 1);
+
 // somebody arriving late reads what the room already said
 const lateChat = lastState(alice2).chat || [];
 check("a late joiner gets the history", lateChat.length > 0, true);
