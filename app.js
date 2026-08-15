@@ -226,19 +226,42 @@ syncThemeButton();
    to index.html. It also keeps the back button working, which
    matters most to the person pressing it mid-draft.        */
 
+/* The three phases of a fantasy season, in the order they happen.
+
+   These are a sequence, not a set of buckets, and the landing page draws
+   them that way — left to right, rooms stacked under each. A season arc says
+   "this covers the whole year" without a line of marketing copy, which a row
+   of badges on a flat grid cannot. */
+const SEASONS = ["Pre-season", "In-season", "Post-season"];
+
+/* Every room, its phase, and what it is for.
+
+   The blurbs are the short version of the real thing, so they have to
+   describe all of it. An earlier set was written from the room names alone
+   and each one covered about half its room: the Waiver Room without the
+   roster, the Strategy Room as draft-only, the Trade Room evaluating but not
+   simulating, and the Prospect Room described as dynasty value, which is not
+   what college-to-NFL scouting is at all.
+
+   The League Room genuinely spans in-season and post-season. It is filed
+   under the later one because the wrap-up is the part that is distinctly
+   its own — power rankings mid-season overlap with what the other rooms
+   already tell you — and because that leaves no phase standing empty. */
 const ROOMS = [
-  { name: "The Draft Room", href: "#/draft", live: true,
+  { name: "The Draft Room", href: "#/draft", live: true, season: "Pre-season",
     blurb: "Mock drafts against a board that knows ADP, tiers and replacement level." },
-  { name: "The Waiver Room", live: false,
-    blurb: "Claim priority, FAAB budgets, and who is actually worth a bid." },
-  { name: "The Prospect Room", live: false,
-    blurb: "Rookies and dynasty value, worked out the same way." },
-  { name: "The Trade Room", live: false,
-    blurb: "Value both sides of a deal before you send it." },
-  { name: "The League Room", live: false,
-    blurb: "Your league, tracked from week one to the playoffs." },
-  { name: "The Strategy Room", live: false,
-    blurb: "Targets and a plan before you are on the clock." }
+  { name: "The Prospect Room", live: false, season: "Pre-season",
+    blurb: "College production turned into an NFL projection, before the rookie drafts." },
+
+  { name: "The Waiver Room", live: false, season: "In-season",
+    blurb: "Set your roster and price a claim — FAAB, priority, and who is worth the bid." },
+  { name: "The Trade Room", live: false, season: "In-season",
+    blurb: "Value both sides of a deal, then play out what it does to your season." },
+  { name: "The Strategy Room", live: false, season: "In-season",
+    blurb: "A plan for the draft, the roster and the weekly lineup." },
+
+  { name: "The League Room", live: false, season: "Post-season",
+    blurb: "Analytics across the whole league, from playoff odds to the final wrap-up." }
 ];
 
 function roomCard(room) {
@@ -249,6 +272,23 @@ function roomCard(room) {
   return room.live
     ? '<a class="room" href="' + room.href + '">' + body + "</a>"
     : '<div class="room soon">' + body + "</div>";
+}
+
+/* The landing page draws the arc: one column per phase, rooms stacked under
+   it. Columns of different lengths are normal and read as intentional, where
+   a phase heading over a single card reads as an unfinished section.
+
+   The header panel stays a flat list. It is navigation — somewhere to go,
+   not a story about the season — and three headings inside a dropdown would
+   be structure for its own sake. Both still read the same ROOMS, so they
+   cannot disagree about what exists. */
+function seasonColumn(season) {
+  const rooms = ROOMS.filter(function (r) { return r.season === season; });
+  if (!rooms.length) return "";
+  return `<div class="phase">
+      <p class="phase-name">${season}</p>
+      ${rooms.map(roomCard).join("")}
+    </div>`;
 }
 
 // Written down once and rendered into both the header panel and the landing
@@ -278,7 +318,7 @@ function renderRooms() {
       "</button>" +
     "</div>";
 
-  $("homeRooms").innerHTML = html;
+  $("homeRooms").innerHTML = SEASONS.map(seasonColumn).join("");
   syncThemeButton();                 // the panel just gained a toggle
 }
 

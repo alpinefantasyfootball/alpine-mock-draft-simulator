@@ -38,6 +38,12 @@
      default theme is dark; the light theme puts the real brand navy back. */
   --mark-ink:    #FFFFFF;
   --orange-cta:  #C2410C;
+  /* Orange *as text on a surface*, which is a different problem again — the
+     same split as --blue and --link. The brand orange reads 5.49:1 on this
+     dark page and only 3.11:1 on the light one, so the light block swaps it
+     for the darker value, which is 4.83:1 there and 3.54:1 here. Neither
+     works in both, so neither may be named directly by a rule. */
+  --orange-ink:  #ED6011;
 
   /* The header changes colour with the state of the draft, not with the
      theme, so it keeps its own blues and reds. The ones below named
@@ -127,6 +133,9 @@
   --blue-line:   #C9DCF9;
   --cyan:        #12A3DC;
   --link:        #0E6BB0;
+  /* The darker orange as text here: 4.83:1 on this page, where the brand
+     value would be 3.11:1 and fail at any size the slogan is set in. */
+  --orange-ink:  #C2410C;
 
   --ink:         #16202C;
   --ink-mid:     #5A6875;
@@ -1332,10 +1341,49 @@ tr.drafted .ovr { color: var(--ink-light); }
   display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
 }
 
-.roomgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 46px; }
+.rooms-head {
+  margin: 0 0 4px;
+  font-family: Poppins, sans-serif; font-size: 21px; font-weight: 700;
+  letter-spacing: -.02em; color: var(--ink);
+}
 
-@media (max-width: 860px) { .rooms-inner, .roomgrid { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 560px) { .rooms-inner, .roomgrid { grid-template-columns: 1fr; } }
+.rooms-sub { margin: 0 0 18px; font-size: 13.5px; color: var(--ink-mid); }
+
+/* ---------- the season arc ----------
+
+   One column per phase, in the order a season happens. The columns hold
+   different numbers of rooms and that is the point: they read as a timeline
+   rather than as a grid with gaps in it. align-items: start keeps each
+   column its own height instead of stretching the short ones. */
+.roomgrid {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 12px; align-items: start; margin-bottom: 46px;
+}
+
+.phase { display: flex; flex-direction: column; gap: 10px; }
+
+/* The rule above each phase is what makes the three read as one timeline
+   rather than three unrelated lists. */
+.phase-name {
+  margin: 0 0 2px; padding-bottom: 7px;
+  border-bottom: 2px solid var(--blue-line);
+  font-family: Inter, sans-serif;
+  font-size: 9.5px; letter-spacing: .12em; text-transform: uppercase;
+  font-weight: 700; color: var(--link);
+}
+
+/* The header panel is a flat list and can reflow to any column count. The
+   landing arc cannot: at two columns the third phase drops to a second row
+   and stops reading left to right, which is the only thing the layout was
+   for. So it holds three columns as long as they are usable and then goes
+   to one, where the phases stack in season order and the arc still reads —
+   just vertically. */
+@media (max-width: 860px) { .rooms-inner { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 560px) { .rooms-inner { grid-template-columns: 1fr; } }
+
+@media (max-width: 700px) {
+  .roomgrid { grid-template-columns: 1fr; gap: 22px; }
+}
 
 .room {
   display: block; text-decoration: none;
@@ -1364,6 +1412,19 @@ a.room:hover { border-color: var(--blue-line); }
 .landing { max-width: 1120px; margin: 0 auto; padding: 0 18px 64px; }
 
 .hero { max-width: 720px; margin: 0 auto; text-align: center; padding: 66px 0 42px; }
+
+/* The slogan. Orange because it is the brand's one warm colour and this is
+   the brand's one line. Through --orange-ink rather than --orange: at 11px
+   bold this is small text, needs 4.5:1, and the brand value only manages
+   3.11:1 on the light page. Small and widely spaced, so it introduces the
+   headline rather than competing with it. */
+.hero-slogan {
+  margin: 0 0 10px;
+  font-family: Inter, sans-serif;
+  font-size: 11px; font-weight: 700;
+  letter-spacing: .18em; text-transform: uppercase;
+  color: var(--orange-ink);
+}
 
 .hero h1 {
   margin: 0 0 16px; font-family: Poppins, sans-serif;
