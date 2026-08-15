@@ -2065,9 +2065,20 @@ function analyseTeam(slot) {
   let build = 100;
   lineup.forEach(function (s) { if (!s.player) build -= 14; });          // hole in the lineup
   ["QB", "K", "DST"].forEach(function (pos) {
-    // A second kicker is wasted; a second quarterback is only wasted in a
-    // league that starts one, which is why this counts past the starters.
-    build -= Math.max(0, countAt(slot, pos) - league.starters[pos]) * 9;
+    /* A second kicker is wasted; a second quarterback is only wasted in a
+       league that starts one. That was always the intent and the sum did not
+       carry it: `league.starters.QB` is 1 in a superflex league too, since
+       the extra seat is a SFLEX rather than a second QB slot. So every team
+       in a superflex room was docked nine for the quarterback the format
+       obliges them to hold — and worse than a flat charge, dropping him
+       *improved* the score. Tested on a built roster: taking the second
+       quarterback out and putting a spare receiver there cost five points of
+       starter strength and gained seven of construction.
+
+       `cpuScore()` has had the right expression all along, which is why the
+       CPU drafts two and then got marked down for it. */
+    const allowed = league.starters[pos] + (pos === "QB" ? league.superflex : 0);
+    build -= Math.max(0, countAt(slot, pos) - allowed) * 9;
   });
 
   const benched = roster.filter(function (p) {
