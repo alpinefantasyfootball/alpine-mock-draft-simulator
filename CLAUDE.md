@@ -365,6 +365,19 @@ is a change to the numbers, not to the advice.
   "Discard draft" clears the save.
 - **The rooms are written down once,** in `ROOMS` in `app.js`, and rendered
   into both the header panel and the landing grid. Adding a room is one entry.
+- **A room is a name and takes a capital; the rooms are a category and do
+  not.** "The Draft Room", "The Waiver Room" — but "all six rooms", "shared
+  rooms", and the landing heading "The rooms". The same distinction as the
+  Ford Mustang against the cars, and it is the brand rule one level down:
+  capitalising the set would make *The Rooms* a product in its own right, and
+  the product is Juke, with the rooms underneath it.
+
+  The header button reading "Rooms" is not an exception. It is the first word
+  of a nav label, which is capitalised whatever the word is doing — "How it
+  works" sits beside it in sentence case for the same reason.
+
+  Five instances across the landing copy follow this and none break it; it was
+  simply never written down, which is why this bullet exists.
 - **Check a new class name against the existing sheet before using it.**
   The landing section was first called `.home`, which is already the header's
   home button; it inherited `display:flex` and collapsed to zero width. The
