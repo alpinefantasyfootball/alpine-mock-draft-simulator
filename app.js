@@ -588,7 +588,10 @@ const state = {
   queue: [],
   filterSuggest: "ALL",
   filterPlayers: "ALL",
-  search: ""
+  search: "",
+  // Which column the player table is ordered by, and which way. ADP ascending
+  // is the board's own order, so this starts where the list has always been.
+  sort: { key: "adp", dir: 1 }
 };
 
 
@@ -2184,24 +2187,165 @@ function renderQueue() {
   }).join("");
 }
 
+/* ---- the player table ------------------------------------
+
+   The columns, written down once. The header, the group bands above it, the
+   cells and the sort all read this list, so adding a column is one entry
+   rather than four edits that can disagree.
+
+   `get` returns a number or null, and null always means "we do not have
+   this", never zero. That distinction is the whole reason the sort below
+   pushes blanks to the bottom in both directions: a quarterback with no
+   rushing projection is not the worst rusher on the board, he is absent from
+   the question.
+
+   Targets are deliberately not here. Sleeper shows a TAR column and their
+   own projections do not fill it — it reads 0 for every player, Bijan and
+   Ja'Marr included. Receptions are projected, are the thing PPR actually
+   scores, and are a number rather than a zero. */
+function projOf(p) {
+  const s = statOf(p);
+  return (s && s.p && s.p.gp > 0) ? s.p : null;
+}
+
+function projStat(p, key) {
+  const pr = projOf(p);
+  const v = pr ? pr[key] : undefined;
+  return (v === undefined || v === null) ? null : v;
+}
+
+const PLAYER_COLS = [
+  /* The two that stay put while the stats scroll under them. Pinning the
+     name without the rank would leave the rank sliding out from behind it,
+     so both are sticky and the rank has a fixed width to sit the name
+     against. */
+  { key: "rk",   label: "RK",  title: "Rank by ADP", stick: "rk",
+    get: (p) => p.overall },
+  { key: "name", label: "Player", text: true, stick: "name",
+    get: (p) => p.name },
+  { key: "adp",  label: "ADP", title: "Average draft position",
+    get: (p) => p.adp,   fmt: (v) => v.toFixed(1) },
+  { key: "bye",  label: "BYE", get: (p) => p.bye },
+  { key: "ovr",  label: "OVR", title: "Projected points above the last startable player at this position, scored out of 100",
+    get: (p) => overallScore(p), fmt: (v) => Math.round(v), ours: true },
+
+  { group: "Proj", key: "pts", label: "PTS", title: "Projected points under your scoring",
+    get: (p) => p.projPts, fmt: (v) => Math.round(v) },
+  { group: "Proj", key: "avg", label: "AVG", title: "Projected points per game",
+    /* Through the same denominator the sheet uses. A team defense is
+       forecast as one aggregate row stamped gp:1, so dividing by the raw
+       figure would print a per-game number equal to the season total. */
+    get: function (p) {
+      const g = projGames(p.pos, projOf(p));
+      return (p.projPts === null || !g) ? null : p.projPts / g;
+    },
+    fmt: (v) => v.toFixed(1) },
+
+  { group: "Rushing",   key: "ra", label: "ATT", get: (p) => projStat(p, "ra") },
+  { group: "Rushing",   key: "ry", label: "YDS", get: (p) => projStat(p, "ry") },
+  { group: "Rushing",   key: "rt", label: "TD",  get: (p) => projStat(p, "rt") },
+
+  { group: "Receiving", key: "rc", label: "REC", get: (p) => projStat(p, "rc") },
+  { group: "Receiving", key: "cy", label: "YDS", get: (p) => projStat(p, "cy") },
+  { group: "Receiving", key: "ct", label: "TD",  get: (p) => projStat(p, "ct") },
+
+  { group: "Passing",   key: "pa", label: "ATT", get: (p) => projStat(p, "pa") },
+  { group: "Passing",   key: "py", label: "YDS", get: (p) => projStat(p, "py") },
+  { group: "Passing",   key: "pt", label: "TD",  get: (p) => projStat(p, "pt") }
+];
+
+function colByKey(key) {
+  return PLAYER_COLS.filter(function (c) { return c.key === key; })[0];
+}
+
+/* Two rows: the bands, then the columns. Both generated from PLAYER_COLS, so
+   a colspan can never fall out of step with the columns underneath it. */
+function renderPlayerHead() {
+  const head = $("playerHead");
+  if (!head) return;
+
+  // One cell per column and one for the actions, and not a single one more:
+  // a band row a column too wide shifts every heading off its numbers.
+  let bands = "";
+  let i = 0;
+  while (i < PLAYER_COLS.length) {
+    const c = PLAYER_COLS[i];
+    if (!c.group) {
+      bands += `<th class="${c.stick ? "stick " + c.stick : ""}"></th>`;
+      i++;
+      continue;
+    }
+    let span = 0;
+    while (i + span < PLAYER_COLS.length && PLAYER_COLS[i + span].group === c.group) span++;
+    bands += `<th class="band" colspan="${span}">${c.group}</th>`;
+    i += span;
+  }
+  bands += `<th></th>`;
+
+  const cols = PLAYER_COLS.map(function (c) {
+    const on = state.sort.key === c.key;
+    const arrow = on ? (state.sort.dir === 1 ? " ▲" : " ▼") : "";
+    const cls = (c.stick ? "stick " + c.stick : "num") +
+                " sortable" + (on ? " sorted" : "") + (c.ours ? " ours" : "");
+    return `<th class="${cls}"
+        data-sort="${c.key}" tabindex="0" role="button"
+        aria-sort="${on ? (state.sort.dir === 1 ? "ascending" : "descending") : "none"}"
+        ${c.title ? `title="${escHtml(c.title)}"` : ""}>${c.label}${arrow}</th>`;
+  }).join("");
+
+  head.innerHTML = `<tr class="bandrow">${bands}</tr><tr>${cols}<th></th></tr>`;
+}
+
+/* Sorted on a copy, always.
+
+   board is not just a list to draw — DraftEngine.jitter() reads a player's
+   position in it to work out the CPU wobble, and every client in a room has
+   to reach the same answer. Sorting it in place to draw a table would change
+   what the CPUs do, and change it differently for whoever happened to click
+   a column header. */
+function sortedPlayers(list) {
+  const col = colByKey(state.sort.key) || colByKey("adp");
+  const dir = state.sort.dir;
+
+  return list.slice().sort(function (a, b) {
+    const av = col.get(a), bv = col.get(b);
+
+    // Missing is missing in both directions. A player with no projection
+    // does not belong at the top of "fewest rushing yards".
+    const an = av === null || av === undefined;
+    const bn = bv === null || bv === undefined;
+    if (an && bn) return a.adp - b.adp;
+    if (an) return 1;
+    if (bn) return -1;
+
+    if (col.text) return String(av).localeCompare(String(bv)) * dir;
+    if (av !== bv) return (av - bv) * dir;
+
+    // A stable tiebreak, so equal numbers do not reshuffle between renders.
+    return a.adp - b.adp;
+  });
+}
+
 function renderPlayers() {
   const tbody = document.querySelector("#playerTable tbody");
   const hide  = $("hideDrafted").checked;
 
   renderPlayerFilter();
+  renderPlayerHead();
 
   const term = state.search.trim().toLowerCase();
 
-  const visible = board.filter(function (p) {
+  const visible = sortedPlayers(board.filter(function (p) {
     if (state.filterPlayers !== "ALL" && p.pos !== state.filterPlayers) return false;
     if (hide && p.drafted) return false;
     if (term && p.name.toLowerCase().indexOf(term) < 0
              && p.team.toLowerCase().indexOf(term) < 0) return false;
     return true;
-  });
+  }));
 
   if (!visible.length) {
-    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--ink-light);padding:26px">
+    tbody.innerHTML = `<tr><td colspan="${PLAYER_COLS.length + 1}"
+      style="text-align:center;color:var(--ink-light);padding:26px">
       No players match that search.</td></tr>`;
     return;
   }
@@ -2224,18 +2368,33 @@ function renderPlayers() {
         ? `<span class="chip reach">Reach &middot; projects ${p.pos}${p.projPosRank}</span>`
         : "";
 
+    const cells = PLAYER_COLS.map(function (c) {
+      if (c.text) {
+        return `<td class="stick name">
+            <span class="nm name-link" data-player="${p.name}">${p.name}</span>
+            <span class="meta"><span class="badge ${p.pos}">${p.pos}</span> ${p.team} &middot; ${p.pos}${p.posRank}
+              ${injBadge(p)} <span class="chip tier">T${p.tier}</span>${gapChip}</span>
+          </td>`;
+      }
+
+      const v = c.get(p);
+      // A dash, never a zero. The two mean opposite things and this table is
+      // now sortable, which makes conflating them a wrong answer rather than
+      // an ugly one.
+      if (v === null || v === undefined) return `<td class="num">&mdash;</td>`;
+
+      const shown = c.fmt ? c.fmt(v) : v;
+      if (c.stick) return `<td class="stick ${c.stick} num">${shown}</td>`;
+      if (c.key === "ovr") {
+        return `<td class="num ovr ${v >= 55 ? "good" : ""}"
+            title="${overallReason(p)}">${shown}</td>`;
+      }
+      return `<td class="num${c.group ? " stat" : ""}">${shown}</td>`;
+    }).join("");
+
     return `
       <tr class="${p.drafted ? "drafted" : ""} ${adpConflict(p) ? "conflict" : ""}">
-        <td>
-          <span class="nm name-link" data-player="${p.name}">${p.name}</span>
-          <span class="meta"><span class="badge ${p.pos}">${p.pos}</span> ${p.team} &middot; Bye ${p.bye}
-            ${injBadge(p)} <span class="chip tier">T${p.tier}</span>${gapChip}</span>
-        </td>
-        <td class="num">${p.pos}${p.posRank}</td>
-        <td class="num">${p.adp.toFixed(1)}</td>
-        <td class="num">${p.projPts === null ? "&mdash;" : Math.round(p.projPts)}</td>
-        <td class="num ovr ${score !== null && score >= 55 ? "good" : ""}"
-            title="${overallReason(p)}">${scoreCell}</td>
+        ${cells}
         <td class="rowacts">
           ${p.drafted ? "" : `<button class="star${queued(p) ? " on" : ""}" data-queue="${p.name}"
             aria-pressed="${queued(p)}"
@@ -3822,6 +3981,42 @@ $("roomyRows").addEventListener("change", function () {
 $("playerSearch").addEventListener("input", function () {
   state.search = this.value;
   renderPlayers();
+});
+
+/* Clicking a column sorts by it; clicking the same one again turns it round.
+
+   Delegated from the head rather than bound per header, because
+   renderPlayerHead() rewrites both rows on every render — including the one
+   that happens as a result of this very click.
+
+   A new column starts in the direction that puts the interesting end first:
+   most yards, most touchdowns, best score. ADP, rank and bye are the
+   exceptions, where low is the interesting end and always has been. */
+const SORT_ASCENDING_FIRST = ["rk", "adp", "bye", "name"];
+
+function sortPlayersBy(key) {
+  if (!colByKey(key)) return;
+  if (state.sort.key === key) {
+    state.sort.dir = -state.sort.dir;
+  } else {
+    state.sort.key = key;
+    state.sort.dir = SORT_ASCENDING_FIRST.indexOf(key) >= 0 ? 1 : -1;
+  }
+  renderPlayers();
+}
+
+$("playerHead").addEventListener("click", function (e) {
+  const th = e.target.closest ? e.target.closest("[data-sort]") : null;
+  if (th) sortPlayersBy(th.dataset.sort);
+});
+
+// The headers are reachable by keyboard, so they have to answer to it.
+$("playerHead").addEventListener("keydown", function (e) {
+  if (e.key !== "Enter" && e.key !== " ") return;
+  const th = e.target.closest ? e.target.closest("[data-sort]") : null;
+  if (!th) return;
+  e.preventDefault();
+  sortPlayersBy(th.dataset.sort);
 });
 
 // One listener on the whole page catches every Draft button,

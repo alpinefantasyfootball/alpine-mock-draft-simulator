@@ -1053,6 +1053,102 @@ tr.drafted .ovr { color: var(--ink-light); }
 .tblscroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .tblscroll table { min-width: 100%; width: max-content; }
 
+/* ---------- the sortable player grid ----------
+
+   Fifteen columns beside a draft board. The numbers are the point, so they
+   get tabular figures and as little padding as stays readable, and the one
+   column that is words stays pinned while the rest scrolls under it. */
+
+/* Two inherited properties have to go for the pinned columns to work at all.
+
+   `border-collapse: collapse` hands the borders to the table, and Chrome
+   then ignores `position: sticky` on a cell — the rule applies, the computed
+   style says sticky, and the cell scrolls away regardless. Collapse also
+   overrode the rank's width, so the offset the name sat at was wrong even
+   before that.
+
+   `overflow: hidden` — on the table, to clip the corner radius — makes the
+   table a scroll container of its own, and a sticky cell sticks to the
+   nearest one of those rather than to .tblscroll. The radius goes; the rows
+   are already fenced by the panel around them.
+
+   Every cell keeps its own border-bottom, so the horizontal rules survive
+   the switch to separate borders. */
+#playerTable.stats {
+  border-collapse: separate; border-spacing: 0; overflow: visible;
+  --rk-w: 44px;
+}
+
+#playerTable.stats th, #playerTable.stats td { white-space: nowrap; }
+
+#playerTable.stats .num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Projection components sit quieter than ADP and our own score. They are
+   supporting evidence, and fifteen columns at equal weight is a wall. */
+#playerTable.stats td.stat { color: var(--ink-mid); }
+
+/* The band above a group of columns: Proj, Rushing, Receiving, Passing. */
+#playerTable.stats .bandrow th {
+  padding: 5px 8px 3px;
+  font-size: 8.5px; letter-spacing: .11em; text-transform: uppercase;
+  color: var(--ink-light); font-weight: 700; text-align: center;
+  border-bottom: 0;
+}
+#playerTable.stats .bandrow th.band {
+  color: var(--link);
+  border-left: 1px solid var(--hairline);
+  border-right: 1px solid var(--hairline);
+}
+
+#playerTable.stats thead th.sortable { cursor: pointer; user-select: none; }
+#playerTable.stats thead th.sortable:hover { color: var(--ink); background: var(--fill); }
+#playerTable.stats thead th.sortable:focus-visible {
+  outline: 2px solid var(--blue); outline-offset: -2px;
+}
+#playerTable.stats thead th.sorted { color: var(--link); }
+
+/* Our own column, which is the one thing here that is not a feed. */
+#playerTable.stats thead th.ours { color: var(--t-good-fg); }
+#playerTable.stats thead th.ours.sorted { color: var(--good); }
+
+/* Rank and name stay put while the stats scroll under them.
+
+   Two cells rather than one, because the rank sits to the left of the name
+   and pinning only the name would leave the rank sliding out from behind it.
+   The rank gets a fixed width so the name has a known offset to sit at —
+   there is no CSS way to say "start where the previous sticky cell ended".
+
+   Each needs a background of its own: a transparent sticky cell shows the
+   numbers travelling through it. */
+#playerTable.stats .stick {
+  position: sticky; z-index: 2;
+  background: var(--card);
+}
+/* The rank's width is written once and the name's offset reads it, so the
+   two cannot drift apart into a one-pixel seam that shows the numbers. */
+#playerTable.stats .stick.rk {
+  left: 0;
+  width: var(--rk-w); min-width: var(--rk-w); max-width: var(--rk-w);
+  padding-left: 10px; padding-right: 6px;
+}
+#playerTable.stats .stick.name {
+  left: var(--rk-w);
+  border-right: 1px solid var(--hairline);
+}
+#playerTable.stats thead .stick { z-index: 3; background: var(--sunken); }
+#playerTable.stats tbody tr:hover .stick { background: var(--fill); }
+#playerTable.stats tbody tr.drafted .stick { background: var(--card); }
+
+/* The rank is a quiet number: it is the row's address, not a stat. */
+#playerTable.stats td.stick.rk { color: var(--ink-light); font-size: 11px; }
+
+@media (max-width: 560px) {
+  /* On a phone the pinned pair would eat most of the width, so only the
+     name stays and the rank scrolls away with everything else. */
+  #playerTable.stats .stick.rk { position: static; }
+  #playerTable.stats .stick.name { left: 0; --rk-w: 0px; }
+}
+
 .logtbl { font-size: 12px; }
 .logtbl th { padding: 7px 6px; font-size: 9px; }
 .logtbl td { padding: 6px; text-align: right; font-variant-numeric: tabular-nums; }
@@ -1459,7 +1555,18 @@ a.room:hover { border-color: var(--blue-line); }
 /* The star that puts a player in the queue. Off is an outline in muted ink,
    on is the brand orange filled — both legible on either theme, since
    --orange is a brand colour rather than a themed one. */
-.rowacts { display: flex; align-items: center; gap: 6px; justify-content: flex-end; }
+/* This is a <td>, so it does not get to be a flex container.
+
+   `display: flex` takes a cell out of table layout: it stops stretching to
+   the height of its row and sizes to its own content instead. Every other
+   cell in the row was 43px tall and this one was 35px, so its bottom border
+   was drawn seven pixels higher than the rest — a visible step in the
+   divider, starting exactly where the last column does. Laid out with
+   inline-block and white-space instead, which a table cell can do without
+   giving up being one. */
+.rowacts { text-align: right; white-space: nowrap; }
+.rowacts > * { vertical-align: middle; }
+.rowacts .draft-btn { margin-left: 6px; }
 
 .star {
   flex: none; width: 26px; height: 26px; padding: 0; cursor: pointer;

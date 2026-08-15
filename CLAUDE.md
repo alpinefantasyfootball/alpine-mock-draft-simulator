@@ -299,6 +299,38 @@ Hardcoding white made it invisible on every light surface, with only the
 orange swoosh showing. The token is brand navy in light, white in dark, and
 forced white on the navy draft bar.
 
+**Never sort `board` in place.** `DraftEngine.jitter()` reads a player's
+position in it, so the order of that array is an input to what every CPU
+does — and in a room, every client has to agree on it. Sorting it to draw a
+table would change the draft, and change it differently depending on which
+column somebody clicked. `sortedPlayers()` sorts a copy, and the filter
+before it already returns one.
+
+**A missing number is not a small number, and sorting is where that bites.**
+Ascending "rushing yards" must not open with two hundred players who have no
+rushing projection at all. Blanks go last in both directions.
+
+**Sleeper shows a TAR column their own projections do not fill** — it reads
+0 for every player, Bijan and Ja'Marr included. We show REC instead, which
+is projected, is what PPR actually scores, and is a number rather than a
+zero. Copy the layout, not the gap in it.
+
+**`display: flex` on a `<td>` stops it being a table cell.** It no longer
+stretches to the height of its row and sizes to its own content, so its
+bottom border lands above everybody else's — a step in the divider starting
+exactly where that column does. This was `.rowacts` for months. Lay a cell's
+contents out with inline-block, or wrap them in a div and flex that.
+
+**A sticky table cell needs `border-collapse: separate`, and no
+`overflow: hidden` on the table.** With collapsed borders Chrome accepts the
+rule — the computed style says `sticky` — and scrolls the cell away anyway,
+because the table owns the borders. `overflow: hidden` (there to clip a
+corner radius) makes the table its own scroll container, so the cell sticks
+to the table rather than to `.tblscroll`. The player grid overrides both.
+Collapse also overrides an explicit cell width, which is how the pinned name
+column ended up offset against a rank column that was not the width it had
+been told to be.
+
 **`offsetTop` is not a distance to the scroller.** It is the distance to the
 nearest *positioned* ancestor, and nothing between a board cell and
 `#boardScroll` is positioned — so `scrollBoardToLive()` was reading a figure
