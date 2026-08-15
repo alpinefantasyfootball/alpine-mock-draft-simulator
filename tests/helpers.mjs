@@ -1,0 +1,158 @@
+/* What the tests need from a page, and nothing about what they assert.
+
+   Two ideas carry most of this file:
+
+   1. A *member* is a browser context, not a tab. Two tabs on one origin share
+      localStorage, so they share `juke.member`, and the room correctly treats
+      them as one manager with two sockets — which tests nothing about a
+      second person. Playwright contexts have their own storage, so one
+      context is one manager.
+
+   2. Everything a client sends is recorded, and so is everything it is
+      refused. A room can be rejecting half of what a client sends and look
+      perfectly healthy from the outside, right up until it stops: that is
+      exactly how a shared draft once deadlocked at pick 86. So `__sent` and
+      `__rejects` are installed before the app loads and survive a reconnect,
+      because the interesting failures happen around a socket being replaced.
+*/
+
+export const SITE = "http://localhost:8765";
+export const WORKER_HTTP = "http://127.0.0.1:8787";
+
+/* Installed before any page script runs.
+
+   WebSocket is wrapped rather than the socket being listened to after the
+   fact, because `live.js` replaces the socket on every reconnect and a
+   listener attached to the first one would stop seeing anything at the
+   moment things get interesting. */
+function instrumentation() {
+  window.__sent = [];
+  window.__rejects = [];
+
+  const RealWS = window.WebSocket;
+  function Wrapped(url, protocols) {
+    const ws = protocols === undefined ? new RealWS(url) : new RealWS(url, protocols);
+    ws.addEventListener("message", function (e) {
+      try {
+        const m = JSON.parse(e.data);
+        if (m.type === "rejected") window.__rejects.push(m.code);
+      } catch (err) {}
+    });
+    return ws;
+  }
+  Wrapped.prototype = RealWS.prototype;
+  ["CONNECTING", "OPEN", "CLOSING", "CLOSED"].forEach(function (k) { Wrapped[k] = RealWS[k]; });
+  window.WebSocket = Wrapped;
+
+  // Live is defined by live.js, which has not run yet, so the wrapping is a
+  // function the test calls once the page is up.
+  window.__watchSends = function () {
+    if (window.__watching || typeof Live === "undefined") return false;
+    const pick = Live.pick, auto = Live.autoPick;
+    Live.pick = function (key) {
+      window.__sent.push({ t: Date.now(), kind: "pick", key: key });
+      return pick.apply(Live, arguments);
+    };
+    Live.autoPick = function (key) {
+      window.__sent.push({ t: Date.now(), kind: "auto", key: key });
+      return auto.apply(Live, arguments);
+    };
+    window.__watching = true;
+    return true;
+  };
+
+  /* A stand-in manager: picks on their own turn and never on anybody else's.
+
+     Driven by the socket rather than by a timer, deliberately. A page that is
+     not the front tab has its timers throttled to about once a minute, and a
+     draft that stalls because of that is the harness failing, not the app. */
+  window.__playAsHuman = function () {
+    const act = function () {
+      const room = Live.room();
+      if (!room || room.status !== "drafting") return;
+      const c = DraftEngine.onTheClock(room.league, room.picks.length);
+      if (!c || c.slot !== room.yourSeat) return;
+      const best = suggestions()[0];
+      if (best) Live.pick(best.name);
+    };
+    Live.state().socket.addEventListener("message", act);
+    act();
+  };
+}
+
+export async function openApp(context, path = "#/draft") {
+  const page = await context.newPage();
+  await page.addInitScript(instrumentation);
+  await page.goto(`${SITE}/index.html${path}`);
+  /* `state` is a top-level `const` in app.js, and `const` does not become a
+     property of `window` — only `var` and an explicit assignment do. So it is
+     checked unqualified, which resolves through the global scope the same way
+     the app's own code does. Written as `window.state` this waits forever on
+     a page that is working perfectly. */
+  await page.waitForFunction(
+    () => typeof state === "object" && typeof Live === "object" && typeof suggestions === "function");
+  await page.evaluate(() => window.__watchSends());
+  return page;
+}
+
+export function createRoom(page) {
+  return page.evaluate(async () => {
+    document.getElementById("createRoomBtn").click();
+    await new Promise((r) => setTimeout(r, 1500));
+    return Live.state().code;
+  });
+}
+
+export function roomView(page) {
+  return page.evaluate(() => {
+    const room = Live.room();
+    return room && {
+      status: room.status,
+      picks: room.picks.length,
+      yourSeat: room.yourSeat,
+      isHost: room.isHost,
+      seats: room.seats
+    };
+  });
+}
+
+export function sent(page) {
+  return page.evaluate(() => ({
+    all: window.__sent,
+    rejects: window.__rejects,
+    picks: window.__sent.filter((s) => s.kind === "pick").length,
+    autos: window.__sent.filter((s) => s.kind === "auto").length
+  }));
+}
+
+// Polls the worker rather than a page, so it is not fooled by one client
+// having a stale view of a room that has moved on without it.
+export async function waitForRoom(request, code, predicate, timeoutMs = 5 * 60 * 1000) {
+  const until = Date.now() + timeoutMs;
+  let last = null;
+  while (Date.now() < until) {
+    const res = await request.get(`${WORKER_HTTP}/room/${code}/state`);
+    if (res.ok()) {
+      last = await res.json();
+      if (predicate(last)) return last;
+    }
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+  throw new Error(`room ${code} never satisfied the condition; last seen: ` +
+                  JSON.stringify(last && { status: last.status, picks: last.picks.length }));
+}
+
+export function pickGaps(picks) {
+  const ts = picks.map((p) => p.at);
+  return ts.slice(1).map((t, i) => t - ts[i]);
+}
+
+export function median(values) {
+  if (!values.length) return null;
+  const s = values.slice().sort((a, b) => a - b);
+  return s[Math.floor(s.length / 2)];
+}
+
+export function perSeat(picks) {
+  return picks.reduce(function (o, p) { o[p.slot] = (o[p.slot] || 0) + 1; return o; }, {});
+}

@@ -7,6 +7,15 @@ __pycache__/
 # ever cause conflicts if they were shared.
 .claude/
 
+# The end-to-end test runner and what it leaves behind. The app itself has no
+# dependencies and no build step — package.json exists only so `npm install`
+# can fetch Playwright, and none of this is served, imported or needed to run
+# the site. A checked-in node_modules would also be published, since Pages
+# serves the whole repository.
+node_modules/
+test-results/
+playwright-report/
+
 # wrangler's local state: the Durable Object storage it fakes for
 # `wrangler dev`, its bundle cache and its temp files. 18MB of machine-local
 # scratch that is rebuilt on demand, and a checked-in copy would be someone

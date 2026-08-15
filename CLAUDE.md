@@ -38,6 +38,8 @@ Python 3 standard library only in the pipeline. No pip dependencies.
 | `live.js` | The client end of a room: one socket, the invite code, and the messages. Knows nothing about the board or how anything is drawn. |
 | `worker/` | The Cloudflare Durable Object behind an invite link, plus its `wrangler.toml`. Deployed to `juke-draft-room.jukeff.workers.dev`; a change here needs `wrangler deploy` before the page can use it. See `worker/README.md`. |
 | `scripts/test_engine.py` | Runs `draft-engine.js` and `room.js` in node/deno/bun and asserts the rules from outside a browser. |
+| `tests/` | End-to-end tests: the real pages, in a real browser, two managers in a real room. `playwright.config.mjs` starts both servers itself. |
+| `package.json` | **Dev only.** Fetches the test runner and nothing else. The app still has no build step, no bundler and no runtime dependency. |
 | `players.js` | **GENERATED.** 260 players by ADP. Never edit by hand. |
 | `stats.js` | **GENERATED.** Stats, projections, depth charts by Sleeper ID. |
 | `scripts/build_players.py` | The pipeline that writes the two generated files. |
@@ -786,6 +788,31 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   "Add python.exe to PATH" box was ticked, which it usually isn't.
 - App: open `index.html` directly in a browser. `file://` works because the
   data files load via `<script src>` rather than fetch.
+- **End to end: `npm install` once, then `npx playwright test`.** Ten tests,
+  about three minutes, and it starts the static server and `wrangler dev`
+  itself. It drives the real pages in a real browser — a solo draft at both
+  shapes, a full two-manager room draft to completion, a dropped socket
+  reconnecting, leaving and rejoining, and the phone layout.
+
+  It is the only tool here that is not plain Python or plain JavaScript, and
+  it earns that: everything it covers lives in the browser, so neither
+  existing suite can reach any of it. `package.json` exists for this and
+  nothing else — **the app still has no build step and no dependency**, and
+  nothing under `node_modules/` is served, imported or needed to run the site.
+
+  Two things about it worth knowing before changing it:
+
+  - **A manager is a browser context, not a tab.** Contexts have their own
+    `localStorage`, so their own `juke.member`. Two tabs share one id and the
+    room is right to treat them as one person with two sockets.
+  - **`state` is a top-level `const`, so it is not on `window`.** Waiting for
+    `window.state` waits forever on a page that is working perfectly; refer to
+    it unqualified, as the app's own code does.
+
+  When adding a test, check it fails against the bug it is meant to catch —
+  put the bug back for one run. Every test in there was written against a real
+  failure and confirmed to go red without the fix.
+
 - **A room draft has to be run to the end, with two clients, before anything
   touching a room is believed.** Solo drafts have been driven to completion
   since the beginning and a shared one never had been — which is how a room
