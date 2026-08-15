@@ -489,6 +489,35 @@ select {
   .field-row.wordy > select:last-child { flex-basis: 100%; }
 }
 
+/* ---------- 16px, or iOS zooms the page ----------
+
+   Safari zooms in on any field whose text is under 16px the moment it takes
+   focus, and it does not zoom back out afterwards. So typing one line into
+   the chat left the whole draft magnified and the manager pinching their way
+   back to it — every time they said anything. Every field in the app was
+   under the line: the selects at 14.5, chat and the GIF search at 12.5.
+
+   16px is a threshold in someone else's browser, not a typographic opinion,
+   which is why it is a flat override rather than a change to each rule. It is
+   scoped to coarse pointers so the desktop sizes are untouched, and it covers
+   selects as well as inputs because they zoom too.
+
+   The other fix is `maximum-scale=1` on the viewport, and it is worse: it
+   stops the zoom by taking pinch-zoom away from everybody, including the
+   people who need it to read at all. Measured after the change at 375px and
+   at 481px — no row overflows, and the league row still fits three across
+   above its wrapping breakpoint.
+
+   `!important` because every field here is styled through a class —
+   `.chatform input` beats a bare `input` on specificity, and the first
+   version of this rule silently moved the selects and left the chat box, the
+   name and the player search exactly as they were. This is not a preference
+   competing with those rules; it is a floor underneath all of them, and any
+   field added later gets it without anybody remembering to come back here. */
+@media (pointer: coarse) {
+  input, select, textarea { font-size: 16px !important; }
+}
+
 .hint { margin: 7px 0 0; font-size: 12px; color: var(--ink-light); }
 
 /* A roster that does not add up to the round count, or a league too big for
@@ -2084,8 +2113,16 @@ a.room:hover { border-color: var(--blue-line); }
 /* Relative rather than static: the jump-to-latest pill is absolutely
    positioned inside the dock, and with no positioned ancestor it would go
    looking for the page and land somewhere else entirely. */
+/* `top: auto` is doing real work here, and this is the second place in this
+   file to learn it. The docked rule is `position: sticky; top: 8px`; this one
+   only changes `position`, and `top` applies to a relatively positioned box
+   just as happily — as an 8px shove downwards, with the layout box left
+   where it was. So the dock hung 8px below its own slot and sat on top of
+   the Start button underneath it, which is a button, so it was 8px of dead
+   pixels on the thing the whole screen is for. The mobile sheet has the same
+   line for the same reason. */
 #lobbyChatSlot .chatdock {
-  position: relative; height: 420px; min-height: 0; margin-top: 14px;
+  position: relative; top: auto; height: 420px; min-height: 0; margin-top: 14px;
 }
 
 .chathead {

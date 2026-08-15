@@ -486,10 +486,41 @@ grew a chat panel for a room it was not in. Anything that is both toggled by
 the `hidden` property and given a display in the stylesheet needs
 `[hidden] { display: none }` or `:not([hidden])` on the display rule.
 
-**`top` survives when a sticky column becomes a fixed sheet.** The docked
-chat sets `top: 8px`; the mobile rule sets `bottom: 0` and a height. Top plus
-height is a complete answer, so the browser took it and ignored `bottom`, and
-the sheet opened at the top of the screen. `top: auto` is the fix.
+**`top` survives every change of `position`, and it has now caused two
+different bugs.** The docked chat sets `position: sticky; top: 8px`, and both
+of the rules that re-position it inherited that 8px:
+
+- *As a fixed sheet:* the mobile rule sets `bottom: 0` and a height. Top plus
+  height is a complete answer, so the browser took it and ignored `bottom`,
+  and the sheet opened at the top of the screen.
+- *As a relative block:* the lobby rule changes only `position`, and `top`
+  applies just as happily to a relatively positioned box — as an 8px shove
+  downwards with the layout box left where it was. So the dock hung 8px below
+  its own slot and sat on top of the Start button beneath it. Eight dead
+  pixels on the button the whole screen exists to get you to press.
+
+`top: auto` is the fix in both. **Changing `position` on a shared rule means
+auditing `top`, `right`, `bottom` and `left` with it** — they do not stop
+applying, they change meaning, and nothing warns you.
+
+**Every field is 16px on a touch screen, because iOS zooms anything smaller.**
+Safari zooms the page in when a field under 16px takes focus and does not zoom
+back out, so typing one line of chat left the whole draft magnified and the
+manager pinching their way back — every time they said anything. Every field
+in the app was under it: the selects at 14.5, chat and the GIF search at 12.5.
+
+It is one rule under `@media (pointer: coarse)`, with `!important`, and both
+parts are deliberate. Coarse pointers only, so desktop typography is
+untouched. `!important` because every field here is styled through a class and
+`.chatform input` beats a bare `input` — the first version of the rule moved
+the selects, silently left the chat box, the name and the player search where
+they were, and looked like it had worked. This is a floor under the design
+rather than an opinion competing with it, and a field added later inherits it
+without anybody remembering this exists.
+
+The other fix is `maximum-scale=1` on the viewport. It works and it is worse:
+it buys this by taking pinch-zoom from everybody, including people who need it
+to read the page at all.
 
 **`scrollWidth > clientWidth` is what correct truncation looks like too.**
 Sweeping the page for elements wider than their box is a good way to find a
