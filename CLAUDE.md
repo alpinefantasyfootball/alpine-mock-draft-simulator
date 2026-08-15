@@ -183,6 +183,25 @@ slots are catastrophic at pick 140 and inevitable at pick 25, and the same
 penalty fires either way. Zero picks is worth a look too — the panel is
 supposed to say "Nothing to grade yet" rather than grade an empty room.
 
+**How many of a position you may hold is `starters[pos]` plus the superflex,
+for a quarterback.** `league.starters.QB` is 1 in a superflex league as well,
+because the extra seat is a SFLEX rather than a second QB slot. Reading the
+allowance straight out of `starters` therefore docked every team in a
+superflex room nine points for the quarterback the format obliges them to
+hold — and not as a flat charge that washes out when everyone pays it.
+Dropping the second quarterback *improved* the score: on a built roster,
+replacing him with a spare receiver cost five points of starter strength and
+gained seven of construction. The component was paying teams to misbuild.
+
+**And this is what the league-shape rule above is for.** `cpuScore()` has had
+`league.starters.QB + league.superflex` since superflex was added, so the CPU
+drafts two quarterbacks knowing the format allows two, and the grade then
+marked it down for doing exactly that. One rule, written down in two places,
+which drifted — precisely the failure "nothing about the league shape may be
+written down twice" exists to prevent. When something here needs to know what
+a league permits, check whether the engine or the CPU already answers it
+before writing a second answer.
+
 ## Conventions
 
 - `app.js` is organised in numbered sections. Keep new code in the right one.
@@ -763,6 +782,27 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   And if you sweep the rendered text for `NaN`, match it case-sensitively.
   `/nan/i` hits the running back **Monangai**, which cost a few minutes
   chasing a bug that was a regex.
+
+  **Run a superflex draft as well.** The two shapes above are the only ones
+  the routine covers, and the whole grade had been checked against nothing
+  else — which is how a component that pays teams to misbuild a superflex
+  roster survived. Superflex is `SFLEX 1` and one extra round, two clicks
+  from the default. The thing to assert is that holding what the format
+  requires costs nothing, and that giving it up does not help:
+
+  ```js
+  const s = 0, saved = state.picks.slice(), before = analyseTeam(s).build;
+  const qbs = state.picks.filter(p => p.slot === s && p.player.pos === "QB")
+    .sort((a, b) => a.player.posRank - b.player.posRank);
+  const spare = board.find(p => p.pos === "WR" && !p.drafted);
+  state.picks = state.picks.map(p => p === qbs[1] ? { ...p, player: spare } : p);
+  console.log("breaking it helps?", analyseTeam(s).build > before);  // must be false
+  state.picks = saved;
+  ```
+
+  Any league setting that changes what a roster is allowed to hold deserves
+  the same treatment. A grade that rewards a worse roster is worse than no
+  grade, and it will not show up in a spread or a reconciliation.
 
 ## Don't
 
