@@ -161,6 +161,28 @@ and comparing it to what the analysis *computes*. Do both. A grade can be
 correct and still be unbelievable, and an unbelievable grade is a broken
 feature: this is the same failure as a kicker being named the biggest reach.
 
+**`build` is floored at zero, because it is printed as "x / 100".** Three
+rounds in, with six starting slots still empty, the bar read
+`Roster construction: -8 / 100` — nine holes at fourteen each and no cover at
+either running back or receiver, because there is barely a roster yet. The
+sum was right; a score out of a hundred going negative reads as a broken
+number rather than a bad roster.
+
+Clamping costs nothing, which was measured rather than assumed. Sampled every
+twenty picks through a full draft, the only negatives are in the opening
+rounds, and there the score separates teams by whether their third pick has
+come round yet — snake position, not construction. From round four on it
+never approaches zero, and the number of distinct scores in the room is
+identical clamped or not at every stage.
+
+**Open the Analysis tab mid-draft, not just at the end.** Every check in this
+section had been run on a completed board, and the incomplete one is a state
+every user passes through on the way there. It is also where a component
+built for a finished roster behaves least like itself: unfilled starting
+slots are catastrophic at pick 140 and inevitable at pick 25, and the same
+penalty fires either way. Zero picks is worth a look too — the panel is
+supposed to say "Nothing to grade yet" rather than grade an empty room.
+
 ## Conventions
 
 - `app.js` is organised in numbered sections. Keep new code in the right one.
@@ -721,6 +743,26 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   console.log("column descends", shown.map(r => +r[2])
     .every((v, i, a) => i === 0 || v <= a[i - 1]));
   ```
+
+  Do all of that **twice**: once on the finished board and once about three
+  rounds in. Everything in the grade section had only ever been checked on a
+  completed draft, which is how a bar reading `-8 / 100` survived — mid-draft
+  is where a component written for a finished roster behaves least like
+  itself. `autoDraftRest()` gets you the end state; for the middle, step the
+  clock forward by hand:
+
+  ```js
+  let g = 0;
+  while (state.picks.length < 25 && g++ < 60) {
+    const c = onTheClock();
+    makePick(cpuChoice(c.slot, c.round));
+  }
+  render();
+  ```
+
+  And if you sweep the rendered text for `NaN`, match it case-sensitively.
+  `/nan/i` hits the running back **Monangai**, which cost a few minutes
+  chasing a bug that was a regex.
 
 ## Don't
 
