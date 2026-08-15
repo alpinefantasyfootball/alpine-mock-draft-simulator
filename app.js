@@ -28,6 +28,12 @@ const league = {
 
 const POSITIONS = ["QB", "RB", "WR", "TE", "K", "DST"];
 
+/* What a position is called on screen, as opposed to the key it is stored
+   under. Only one of them differs, and that one difference was written out
+   three times — so the roster, the board legend and the starting-lineup
+   controls all said "D/ST" while the two position filters said "DST". */
+function posLabel(pos) { return pos === "DST" ? "D/ST" : pos; }
+
 // The order starting slots are listed and filled, with FLEX after the
 // positions it draws from so the better player lands in the named slot.
 const SLOT_ORDER = ["QB", "RB", "WR", "TE", "FLEX", "SFLEX", "DST", "K"];
@@ -117,7 +123,7 @@ function replacementRank(pos) {
 // and the maths drifted apart.
 function replacementText() {
   return POSITIONS
-    .map((pos) => (pos === "DST" ? "D/ST" : pos) + replacementRank(pos))
+    .map((pos) => posLabel(pos) + replacementRank(pos))
     .join(", ")
     .replace(/, ([^,]*)$/, " and $1");
 }
@@ -1683,9 +1689,22 @@ league.rules = rulesForFormat(league.scoring);
 
 // Defaults to the league on screen, but takes a format so a saved draft can
 // be described in its own terms.
+/* The scoring formats, named once.
+
+   These were written down three times — Title Case in the setup dropdown,
+   lower case here, and a third copy inside scoringSummary() — so the same
+   league read as "Half PPR" in one place and "half PPR" two inches below it.
+   The dropdown is filled from this now and every label goes through it, so
+   the three cannot disagree again.
+
+   Title Case throughout, because "Half PPR" is the industry's name for the
+   thing rather than a description of it, and because a format name appears
+   far more often as a label or a chip than inside a sentence. */
+const SCORING_NAMES = { standard: "Standard", half: "Half PPR", ppr: "Full PPR" };
+
 function scoringLabel(scoring) {
   const s = scoring || league.scoring;
-  return s === "ppr" ? "full PPR" : s === "standard" ? "standard" : "half PPR";
+  return SCORING_NAMES[s] || String(s || "");
 }
 
 // True when a stat line represents a game or season that actually happened.
@@ -1845,8 +1864,8 @@ function overallReason(player) {
                  (vor >= 0 ? "+" : "") + vor + " against a replacement " + player.pos];
 
   if (player.projPosRank) {
-    parts.push("projects " + player.pos + player.projPosRank +
-               ", drafted as " + player.pos + player.posRank);
+    parts.push("projects " + posLabel(player.pos) + player.projPosRank +
+               ", drafted as " + posLabel(player.pos) + player.posRank);
   }
   return parts.join(". ") + ".";
 }
@@ -1878,8 +1897,8 @@ function draftSignals(player) {
   // ---- Upside ----
   let upside = 20;
   if (gap >= 4)  { upside += Math.min(35, gap * 2.5);
-                   reasons.upside.push("projects " + player.pos + player.projPosRank +
-                     " but drafted as " + player.pos + player.posRank); }
+                   reasons.upside.push("projects " + posLabel(player.pos) + player.projPosRank +
+                     " but drafted as " + posLabel(player.pos) + player.posRank); }
   if (s.exp !== undefined && s.exp <= 3) { upside += 18; reasons.upside.push(
       s.exp === 0 ? "rookie" : s.exp + " years in the league"); }
   if (s.order === 1) { upside += 14; reasons.upside.push("first on the depth chart"); }
@@ -1896,8 +1915,8 @@ function draftSignals(player) {
   // ---- Bust ----
   let bust = 12;
   if (gap <= -4) { bust += Math.min(35, Math.abs(gap) * 2.5);
-                   reasons.bust.push("drafted as " + player.pos + player.posRank +
-                     " but projects only " + player.pos + player.projPosRank); }
+                   reasons.bust.push("drafted as " + posLabel(player.pos) + player.posRank +
+                     " but projects only " + posLabel(player.pos) + player.projPosRank); }
   if (isRuledOut(player)) { bust += 40; reasons.bust.push("ruled out"); }
   // Through injuryWords() so the meters agree with the prose above them.
   // "Q designation" and "listed questionable" on the same screen read as two
@@ -2178,9 +2197,9 @@ function renderSuggestions() {
         <div class="sug-body">
           <div class="sug-name name-link" data-player="${p.name}">${p.name}</div>
           <div class="sug-meta">
-            <span class="badge ${p.pos}">${p.pos}</span> ${p.team} &middot; Bye ${p.bye} ${injBadge(p)}
+            <span class="badge ${p.pos}">${posLabel(p.pos)}</span> ${p.team} &middot; Bye ${p.bye} ${injBadge(p)}
           </div>
-          <div class="sug-stats">Overall ${p.overall} (${p.pos}${p.posRank}) &middot; ADP ${p.adp.toFixed(1)} &middot; ${valueText}</div>
+          <div class="sug-stats">Overall ${p.overall} (${posLabel(p.pos)}${p.posRank}) &middot; ADP ${p.adp.toFixed(1)} &middot; ${valueText}</div>
           <div class="sug-meta" style="margin-top:5px">
             ${tierChip(p)}
             ${byeChip(p)}
@@ -2207,7 +2226,7 @@ function renderPlayerFilter() {
 
   $("playerFilter").querySelectorAll("button").forEach(function (button) {
     const pos = button.dataset.pos;
-    const label = pos === "ALL" ? "All" : pos;
+    const label = pos === "ALL" ? "All" : posLabel(pos);
 
     if (!state.started) {
       button.innerHTML = label;
@@ -2254,7 +2273,7 @@ function renderQueue() {
         <div class="qbody">
           <div class="qname name-link" data-player="${p.name}">${p.name}</div>
           <div class="qmeta">
-            <span class="badge ${p.pos}">${p.pos}</span> ${p.team} &middot; ADP ${p.adp.toFixed(1)}
+            <span class="badge ${p.pos}">${posLabel(p.pos)}</span> ${p.team} &middot; ADP ${p.adp.toFixed(1)}
             &middot; Overall ${score === null ? "&mdash;" : Math.round(score)} ${injBadge(p)}
           </div>
         </div>
@@ -2445,16 +2464,16 @@ function renderPlayers() {
     // chip on no row.
     const gap = marketGap(p);
     const gapChip = gap >= MARKET_GAP
-      ? `<span class="chip val">Value &middot; projects ${p.pos}${p.projPosRank}</span>`
+      ? `<span class="chip val">Value &middot; projects ${posLabel(p.pos)}${p.projPosRank}</span>`
       : gap <= -MARKET_GAP
-        ? `<span class="chip reach">Reach &middot; projects ${p.pos}${p.projPosRank}</span>`
+        ? `<span class="chip reach">Reach &middot; projects ${posLabel(p.pos)}${p.projPosRank}</span>`
         : "";
 
     const cells = PLAYER_COLS.map(function (c) {
       if (c.text) {
         return `<td class="stick name">
             <span class="nm name-link" data-player="${p.name}">${p.name}</span>
-            <span class="meta"><span class="badge ${p.pos}">${p.pos}</span> ${p.team} &middot; ${p.pos}${p.posRank}
+            <span class="meta"><span class="badge ${p.pos}">${posLabel(p.pos)}</span> ${p.team} &middot; ${posLabel(p.pos)}${p.posRank}
               ${injBadge(p)} <span class="chip tier">T${p.tier}</span>${gapChip}</span>
           </td>`;
       }
@@ -2607,7 +2626,7 @@ function renderTeam() {
   const lineup = seatedLineup();
 
   $("startersList").innerHTML =
-    lineup.seats.map((s) => rosterRow(s.slot, s.player, false)).join("");
+    lineup.seats.map((s) => rosterRow(posLabel(s.slot), s.player, false)).join("");
 
   // The bench is however many seats are left once the starters are seated.
   const benchRows = [];
@@ -2627,7 +2646,7 @@ function renderRail() {
   $("railRosterHead").textContent = `Your roster · ${held} of ${rosterSize()}`;
 
   $("railRoster").innerHTML = lineup.seats.map(function (s) {
-    const label = s.slot === "DST" ? "D/ST" : s.slot;
+    const label = posLabel(s.slot);
     if (!s.player) {
       return `<li class="empty"><span class="rslot ${s.slot}">${label}</span>
                 <span class="rfill none">Empty</span></li>`;
@@ -2648,7 +2667,7 @@ function rosterRow(slotName, player, isBench) {
       ${avatar(player, true)}
       <div>
         <div class="rname name-link" data-player="${player.name}">${player.name}</div>
-        <div class="rmeta"><span class="badge ${player.pos}">${player.pos}</span> ${player.team} &middot; Bye ${player.bye} ${injBadge(player)}</div>
+        <div class="rmeta"><span class="badge ${player.pos}">${posLabel(player.pos)}</span> ${player.team} &middot; Bye ${player.bye} ${injBadge(player)}</div>
       </div>
       <span class="rpick">${pickCode(pick.overall)}</span>
     </li>`;
@@ -2679,7 +2698,7 @@ function renderPicks() {
         <div>
           <div class="pick-team">${teamLabel(pick.slot)}</div>
           <div class="pick-name name-link" data-player="${pick.player.name}">${pick.player.name}</div>
-          <div class="pick-meta"><span class="badge ${pick.player.pos}">${pick.player.pos}</span> ${pick.player.team} &middot; Bye ${pick.player.bye}</div>
+          <div class="pick-meta"><span class="badge ${pick.player.pos}">${posLabel(pick.player.pos)}</span> ${pick.player.team} &middot; Bye ${pick.player.bye}</div>
         </div>
       </div>`;
   });
@@ -2737,7 +2756,7 @@ function renderTicker() {
       <div class="tick-team">${teamLabel(pick.slot)} selected</div>
       <div class="tick-name">
         ${pick.player.name}
-        <span class="badge ${pick.player.pos}">${pick.player.pos}</span>
+        <span class="badge ${pick.player.pos}">${posLabel(pick.player.pos)}</span>
         <span class="tick-tm">${pick.player.team} &middot; Bye ${pick.player.bye}</span>
         ${injBadge(pick.player)}
       </div>
@@ -2964,7 +2983,7 @@ function rankRow(player) {
   const score = overallScore(player);
   const cells = [
     ["#" + player.overall, "Overall"],
-    [player.pos + player.posRank, "Position"],
+    [posLabel(player.pos) + player.posRank, "Position"],
     [player.adp.toFixed(1), "ADP"],
     ["T" + player.tier, "Tier"],
     [score === null ? "&mdash;" : Math.round(score), "Juke score"]
@@ -3064,16 +3083,16 @@ function ourRead(player, s, sig) {
   const gap = marketGap(player);
   if (player.projPosRank) {
     if (gap >= MARKET_GAP) {
-      lines.push(`The board has ${them} at <b>${player.pos}${player.posRank}</b> and the projection
-        says <b>${player.pos}${player.projPosRank}</b> — ${gap} places of daylight in your favour.
+      lines.push(`The board has ${them} at <b>${posLabel(player.pos)}${player.posRank}</b> and the projection
+        says <b>${posLabel(player.pos)}${player.projPosRank}</b> — ${gap} places of daylight in your favour.
         That is the kind of gap that pays for a pick.`);
     } else if (gap <= -MARKET_GAP) {
-      lines.push(`The room is drafting ${them} at <b>${player.pos}${player.posRank}</b> and the
-        projection only supports <b>${player.pos}${player.projPosRank}</b>. Taking ${them} here
+      lines.push(`The room is drafting ${them} at <b>${posLabel(player.pos)}${player.posRank}</b> and the
+        projection only supports <b>${posLabel(player.pos)}${player.projPosRank}</b>. Taking ${them} here
         means paying ${Math.abs(gap)} places above what the numbers carry.`);
     } else {
-      lines.push(`Priced about right: <b>${player.pos}${player.posRank}</b> on the board,
-        <b>${player.pos}${player.projPosRank}</b> on the projection.`);
+      lines.push(`Priced about right: <b>${posLabel(player.pos)}${player.posRank}</b> on the board,
+        <b>${posLabel(player.pos)}${player.projPosRank}</b> on the projection.`);
     }
   }
 
@@ -3130,7 +3149,7 @@ function openSheet(player) {
     <div>
       <h3>${player.name}</h3>
       <div class="sub">
-        <span class="badge ${player.pos}">${player.pos}</span>
+        <span class="badge ${player.pos}">${posLabel(player.pos)}</span>
         ${player.team} &middot; Bye ${player.bye} ${injBadge(player)}
       </div>
       <div class="facts">
@@ -3157,7 +3176,7 @@ function openSheet(player) {
       <div class="statgrid">
         <div class="statbox"><div class="k">Points</div><div class="v">${Math.round(fantasyPoints(p))}</div></div>
         <div class="statbox"><div class="k">Per game</div><div class="v">${perGame(fantasyPoints(p), projGames(player.pos, p))}</div></div>
-        <div class="statbox"><div class="k">Pos rank</div><div class="v">${player.projPosRank ? player.pos + player.projPosRank : "&mdash;"}</div></div>
+        <div class="statbox"><div class="k">Pos rank</div><div class="v">${player.projPosRank ? posLabel(player.pos) + player.projPosRank : "&mdash;"}</div></div>
         <div class="statbox"><div class="k">vs ADP</div><div class="v">${player.projPosRank ? (player.posRank - player.projPosRank >= 0 ? "+" : "") + (player.posRank - player.projPosRank) : "&mdash;"}</div></div>
       </div>
       <p class="method">Overall is projected points above the last startable player at this position
@@ -3228,7 +3247,7 @@ function openSheet(player) {
       return `<div class="depthcol"><h5>${g}</h5>` + list.map(function (m) {
         return `<div class="depthrow ${m === player ? "self" : ""}">
             <span class="ord">${statOf(m).order || "&ndash;"}</span>
-            <span class="badge ${m.pos}">${m.pos}</span>
+            <span class="badge ${m.pos}">${posLabel(m.pos)}</span>
             <span>${m.name}</span>
             <span class="rpick">ADP ${m.adp.toFixed(1)}</span>
           </div>`;
@@ -3636,18 +3655,28 @@ function renderScoringFields() {
    &mdash; which is what this board is ranked on.</p>`;
 }
 
+/* Read off the rules rather than off league.scoring, and deliberately: the
+   scoring editor can set points per catch to anything, and a league that has
+   been edited to 0.75 is not any of the three named formats. So the name is
+   used when the number matches one exactly, and the number speaks for itself
+   when it does not. */
 function scoringSummary() {
   const r = league.rules;
-  const rec = r.rec === 1 ? "full PPR" : r.rec === 0.5 ? "half PPR"
-            : r.rec === 0 ? "no PPR" : r.rec + " per catch";
+  const format = Object.keys(REC_BY_FORMAT)
+    .filter(function (k) { return REC_BY_FORMAT[k] === r.rec; })[0];
+  const rec = format ? SCORING_NAMES[format] : r.rec + " per catch";
   return `${rec} · ${r.pass_td} pt passing TD · ${r.rush_td} pt rushing TD`;
 }
 
 function fillSetupControls() {
   fillList($("teamCount"), TEAM_COUNTS, league.teams, (i) => i + " teams");
+  // Filled from SCORING_NAMES rather than written into the markup, so the
+  // dropdown cannot drift from the labels the rest of the app prints.
+  fillList($("scoring"), Object.keys(SCORING_NAMES), league.scoring,
+           (k) => SCORING_NAMES[k]);
   fillRange($("roundCount"), 8, 20, league.rounds, (i) => i + " rounds");
   POSITIONS.forEach(function (pos) {
-    const label = pos === "DST" ? "D/ST" : pos;
+    const label = posLabel(pos);
     fillRange($("start" + pos), 0, SLOT_LIMITS[pos], league.starters[pos],
               (i) => label + " " + i);
   });
@@ -3817,7 +3846,7 @@ function renderInvite() {
     startRow.hidden = false;
     LOCKABLE.forEach(function (id) { $(id).disabled = false; });
     $("startBtn").disabled = false;
-    $("startBtn").textContent = "Start Your Draft";
+    $("startBtn").textContent = "Start your draft";
     return;
   }
 
@@ -3856,7 +3885,7 @@ function renderInvite() {
   LOCKABLE.forEach(function (id) { $(id).disabled = locked; });
   $("startBtn").textContent = locked
     ? (room && room.isHost ? "Start the draft for everyone" : "Waiting for the host…")
-    : "Start Your Draft";
+    : "Start your draft";
   $("startBtn").disabled = locked && !(room && room.isHost);
 }
 

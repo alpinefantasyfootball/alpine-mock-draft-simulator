@@ -57,7 +57,7 @@
 
        A query string rather than a renamed file, because renaming means a
        manifest and a manifest means a build step. This costs one number. -->
-  <link rel="stylesheet" href="style.css?v=20260815e">
+  <link rel="stylesheet" href="style.css?v=20260815i">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -329,11 +329,11 @@
                  describes rather than being written down twice. -->
             <select id="teamCount"></select>
             <select id="roundCount"></select>
-            <select id="scoring">
-              <option value="standard">Standard</option>
-              <option value="half" selected>Half PPR</option>
-              <option value="ppr">Full PPR</option>
-            </select>
+            <!-- Filled from SCORING_NAMES in app.js, like the two above it.
+                 Written out here it drifted from the labels the rest of the
+                 app prints, and the same league read as "Half PPR" in the
+                 dropdown and "half PPR" in the scoring summary below. -->
+            <select id="scoring"></select>
           </div>
         </div>
 
@@ -412,7 +412,7 @@
              the first pick. -->
         <div class="chatslot" id="lobbyChatSlot"></div>
 
-        <button class="primary big" id="startBtn">Start Your Draft</button>
+        <button class="primary big" id="startBtn">Start your draft</button>
         <p class="freshness" id="freshness"></p>
         <p class="freshness"><a href="docs/draft-room-how-it-works.html">How the Draft Room works</a></p>
       </div>
@@ -537,7 +537,7 @@
         <button data-pos="WR">WR</button>
         <button data-pos="TE">TE</button>
         <button data-pos="K">K</button>
-        <button data-pos="DST">DST</button>
+        <button data-pos="DST">D/ST</button>
       </div>
       <div id="suggestList"></div>
     </section>
@@ -566,7 +566,7 @@
         <button data-pos="WR">WR</button>
         <button data-pos="TE">TE</button>
         <button data-pos="K">K</button>
-        <button data-pos="DST">DST</button>
+        <button data-pos="DST">D/ST</button>
       </div>
 
       <!-- Six columns do not fit a phone, and a table that pushes the page
@@ -638,17 +638,17 @@
 
   <!-- Every one of these carries the same ?v= as the stylesheet. See the note
        beside it in <head>: bump them together or don't bump them at all. -->
-  <script src="players.js?v=20260815e"></script>
-  <script src="stats.js?v=20260815e"></script>
+  <script src="players.js?v=20260815i"></script>
+  <script src="stats.js?v=20260815i"></script>
   <!-- The rules of a snake draft, with no reference to this page. It loads
        before app.js because app.js is a caller, and it is a separate file
        because a server will eventually have to run the same one. -->
-  <script src="draft-engine.js?v=20260815e"></script>
+  <script src="draft-engine.js?v=20260815i"></script>
   <!-- The socket to a shared room. Loaded always, connected never unless a
        manager asks for it: a solo draft touches nothing. -->
-  <script src="live.js?v=20260815e"></script>
+  <script src="live.js?v=20260815i"></script>
   <!-- Before app.js, which calls backToTop() on the last line of its setup. -->
-  <script src="back-to-top.js?v=20260815e"></script>
-  <script src="app.js?v=20260815e"></script>
+  <script src="back-to-top.js?v=20260815i"></script>
+  <script src="app.js?v=20260815i"></script>
 </body>
 </html>
