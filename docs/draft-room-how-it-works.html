@@ -10,7 +10,7 @@
        made next door rather than reverting to light halfway through a
        visit. The only other script here is the back-to-top control, at the
        foot of the page. -->
-  <script src="../theme.js?v=202608151321"></script>
+  <script src="../theme.js?v=202608151329"></script>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -20,7 +20,7 @@
        styling. Everything below is layout for a page of prose, which the app
        has no use for, so it lives here rather than bloating style.css. -->
   <!-- Same ?v= as index.html, and bumped with it. See the note there. -->
-  <link rel="stylesheet" href="../style.css?v=202608151321">
+  <link rel="stylesheet" href="../style.css?v=202608151329">
 
   <link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="../favicon-16.png">
@@ -453,13 +453,28 @@
       <tr><td class="k">Starter strength</td><td class="n">50%</td><td>Every player in your best legal starting lineup, scored by how many places above replacement level they rank at their position. Uses the replacement ranks derived in section 03.</td></tr>
       <tr><td class="k">Draft value</td><td class="n">25%</td><td>How far each player fell past the board's own order when you took them. Taking a player later than his rank says is a bargain; taking him earlier is a reach. Kickers and defenses are left out &mdash; see below.</td></tr>
       <tr><td class="k">Roster construction</td><td class="n">15%</td><td>Starts at 100. Minus 14 for each unfilled starting slot, minus 9 for every quarterback, kicker or defense beyond what the league starts, and up to 12 each for running back and receiver depending on how far from startable your best benched one is &mdash; see below.</td></tr>
-      <tr><td class="k">Bye week safety</td><td class="n">10%</td><td>Minus 20 for every starter beyond the second sharing the same bye week. Judged on the starting lineup only, because bench byes cost nothing.</td></tr>
+      <tr><td class="k">Bye week safety</td><td class="n">10%</td><td>Every week that leaves more than two starters out costs 20 times the square of how many are missing beyond the second, added up across the season. Judged on the starting lineup only, because bench byes cost nothing. See below.</td></tr>
     </table>
 
     <p>
       The weighted total is ranked, and the ranks are handed letters from a
       fourteen-step scale running A+ down to F, long enough to give every seat
       in a fourteen-team room its own letter.
+    </p>
+
+    <h3>Why bye weeks are squared, and why every one counts</h3>
+    <p>
+      This used to read your worst bye week and stop. So three starters out
+      in week 6 <em>and</em> three more out in week 8 scored exactly the same
+      as a single bad week &mdash; the second one was invisible. Every week
+      that leaves more than two starters out is charged now.
+    </p>
+    <p>
+      Squared, because the weeks are not interchangeable. Four starters out
+      at once is a week you probably lose outright; three out twice is two
+      weeks you can patch from the bench. So the fourth man out costs four
+      times what the third does rather than twice, and one week with four off
+      outweighs two weeks with three.
     </p>
 
     <h3>What "cover" means in roster construction</h3>
@@ -700,7 +715,7 @@
   <!-- This page is long enough that getting back to the contents is a real
        scroll. Same control and same stylesheet as the app, so it looks and
        behaves like one thing rather than a page that grew its own button. -->
-  <script src="../back-to-top.js?v=202608151321" data-auto></script>
+  <script src="../back-to-top.js?v=202608151329" data-auto></script>
 
 </body>
 </html>

@@ -2005,6 +2005,19 @@ function bestLineup(roster) {
 const FORCED_LATE = { K: true, DST: true };
 function freelyChosen(p) { return !FORCED_LATE[p.player.pos]; }
 
+/* The label under the bye bar. It used to name the worst week and stop,
+   which was the same blind spot the score had: a lineup with two bad weeks
+   read as though it had one. Two are named, and beyond that it says how many
+   more there are rather than running a list along the bar. */
+function byeSummary(badWeeks) {
+  if (!badWeeks || !badWeeks.length) return "no bad weeks";
+
+  const first = `${badWeeks[0].off} starters off in week ${badWeeks[0].week}`;
+  if (badWeeks.length === 1) return first;
+  if (badWeeks.length === 2) return `${first}, ${badWeeks[1].off} in week ${badWeeks[1].week}`;
+  return `${first}, and ${badWeeks.length - 1} more bad weeks`;
+}
+
 function analyseTeam(slot) {
   const roster = rosterOf(slot);
   const picks  = state.picks.filter((p) => p.slot === slot);
@@ -2071,13 +2084,34 @@ function analyseTeam(slot) {
   });
   build = Math.round(build);
 
-  // 4. bye week exposure, judged on the starting nine only
+  /* 4. bye week exposure, judged on the starting lineup only, because a
+     bench player on a bye costs nothing.
+
+     Every bad week counts, not just the worst one. It used to read the worst
+     week and stop, so a lineup with three starters out in week 6 *and* three
+     more out in week 8 scored exactly the same as one with a single bad week
+     — the second was invisible. Measured across a room that left the whole
+     component with three distinct values among ten teams.
+
+     Squared, because the weeks are not interchangeable. Four starters out at
+     once is a week you probably lose; three out twice is two weeks you can
+     patch from the bench. So a week costs the square of how many are missing
+     beyond the second, and a fourth man out costs four times what a third
+     does rather than twice. */
   const byes = {};
   lineup.forEach(function (s) { if (s.player) byes[s.player.bye] = (byes[s.player.bye] || 0) + 1; });
-  let worstBye = 0, worstWeek = null;
-  Object.keys(byes).forEach(function (week) {
-    if (byes[week] > worstBye) { worstBye = byes[week]; worstWeek = Number(week); }
-  });
+
+  const badWeeks = Object.keys(byes)
+    .map(function (week) { return { week: Number(week), off: byes[week] }; })
+    .filter(function (w) { return w.off > 2; })
+    .sort(function (a, b) { return b.off - a.off || a.week - b.week; });
+
+  let byeCost = 0;
+  badWeeks.forEach(function (w) { byeCost += Math.pow(w.off - 2, 2); });
+
+  // Kept for the label, which names the week somebody actually has to survive.
+  const worstBye  = badWeeks.length ? badWeeks[0].off  : 0;
+  const worstWeek = badWeeks.length ? badWeeks[0].week : null;
 
   /* Biggest bargain and biggest reach, on the same signed gap as above:
      positive means he was still there long after the board said he would be
@@ -2100,8 +2134,8 @@ function analyseTeam(slot) {
 
   return { slot: slot, roster: roster, lineup: lineup, byes: byes,
            starters: starters, value: value, build: build,
-           byePenalty: -Math.max(0, worstBye - 2) * 20,
-           worstBye: worstBye, worstWeek: worstWeek,
+           byePenalty: -byeCost * 20,
+           worstBye: worstBye, worstWeek: worstWeek, badWeeks: badWeeks,
            bargain: bargain, reach: reach };
 }
 
@@ -2907,8 +2941,7 @@ function renderGrades() {
             me.valueScaled, tone(me.valueScaled))}
       ${bar("Roster construction", me.build + " / 100",
             me.buildScaled, tone(me.buildScaled))}
-      ${bar("Bye week safety",
-            me.worstBye >= 3 ? me.worstBye + " starters off in week " + me.worstWeek : "no bad weeks",
+      ${bar("Bye week safety", byeSummary(me.badWeeks),
             me.byePenaltyScaled, tone(me.byePenaltyScaled))}
     </div>`;
 
@@ -2964,8 +2997,9 @@ function renderGrades() {
     Roster construction is 15%, docking unfilled
     starting slots, spots spent on a quarterback, kicker or defense you can never start, and how
     far from startable your best benched running back and receiver are &mdash; nothing if either
-    could start today. Bye week safety is the last 10%, penalising any week with more than two
-    starters off.
+    could start today. Bye week safety is the last 10%, charging every week that leaves more than
+    two starters out &mdash; by the square of how many are missing beyond the second, so one week
+    with four off costs more than two weeks with three.
     Each component is scaled against the other ${league.teams - 1} teams before weighting.</p>`;
 
   body.innerHTML = html;
