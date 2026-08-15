@@ -330,6 +330,50 @@ team defense has no height, weight, age or college — it is eleven people —
 so `bioLine()` gives it its own line rather than a strip of dashes, and
 `ourRead()` calls it "this defense" rather than "him".
 
+## Security
+
+The zone is set beyond Cloudflare's defaults, and the defaults were not
+good enough:
+
+- **SSL/TLS is Full (Strict)**, not Full. Full encrypts to the origin but
+  validates nothing, so anything that can answer as GitHub Pages is
+  accepted — Cloudflare's own warning says so.
+- **Minimum TLS is 1.2.** The default is 1.0. Measured before changing it:
+  1,680 requests on 1.3, 92 on 1.2, none below.
+- **HSTS**, six months, no `includeSubDomains`, no preload. Preload is
+  months to exit, so it is a decision for when there is something to lose.
+- **A "Security headers" Transform Rule** sets `X-Frame-Options`,
+  `Referrer-Policy`, `Permissions-Policy` and the CSP. `X-Content-Type-Options`
+  comes from the No-Sniff toggle in the HSTS dialog instead. GitHub Pages
+  cannot set headers at all, so Cloudflare is the only place these can live.
+
+**The CSP is report-only, and the thing stopping it being enforced is
+Cloudflare, not us.** Driving the whole app against it — player photos from
+sleepercdn, the ESPN scoreboard, the worker over https and wss, a GIPHY image
+— produces zero violations. Two Cloudflare injections do violate it:
+`static.cloudflareinsights.com/beacon.min.js` and the inline challenge-platform
+script from bot detection. Enforcing means either allowing those in
+`script-src` or turning the features off. Until that is decided, report-only
+is the honest state: the policy is correct and it is not lying about being
+enforced.
+
+**Keep it enforceable.** No inline `<script>`, no `onerror=` or other inline
+handlers — that is why the theme switch is `theme.js`, why avatars use
+`data-drop-on-error` and a captured listener, and why back-to-top takes
+`data-auto` instead of a one-line call. `style-src` does allow
+`'unsafe-inline'`, because inline `style` attributes are everywhere and style
+injection is a far smaller problem than script injection.
+
+**The worker refuses, it does not just withhold.** CORS headers tell a
+browser whether to let a page read a response and do nothing about the
+request being made — `curl` with a made-up Origin drank the GIPHY quota
+happily. `originAllowed()` returns 403 before the key is touched. Forty
+actions per socket per ten seconds are allowed, which is far above a real
+draft and far below a script; a flood is refused, never disconnected,
+because a client with a runaway loop should lose the message and not the
+draft. Limiting *room creation* is not done and belongs on the edge, not in
+the room.
+
 **Never sort `board` in place.** `DraftEngine.jitter()` reads a player's
 position in it, so the order of that array is an input to what every CPU
 does — and in a room, every client has to agree on it. Sorting it to draw a

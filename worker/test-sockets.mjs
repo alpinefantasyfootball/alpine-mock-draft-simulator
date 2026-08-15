@@ -346,6 +346,29 @@ check("our own origin is served", ours.status, 200);
 check("and gets the CORS header back",
       ours.headers.get("access-control-allow-origin"), "https://jukeff.com");
 
+/* ---- the rate limit ----
+
+   The number that matters is not that a flood is stopped — it is that a real
+   draft never reaches it. So this checks both ends: a burst well past the
+   limit is refused, and the socket still works immediately afterwards for
+   somebody who was only ever going at human speed. */
+const flooder = await connect("flood", "Flooder");
+await sleep(300);
+const floodRejects = () => flooder.inbox.filter(
+  (m) => m.type === "rejected" && m.code === "too-fast").length;
+
+check("a normal burst is not limited", floodRejects(), 0);
+
+for (let i = 0; i < 80; i++) {
+  flooder.send(JSON.stringify({ type: "chat", text: "flood " + i }));
+}
+await until("the flood is refused", () => floodRejects() > 0);
+check("a flood is refused", floodRejects() > 0, true);
+
+// and the connection survives it
+check("the socket is not closed for flooding", flooder.readyState, 1);
+flooder.close();
+
 bob.close(); alice2.close(); try { stale.close(); } catch {}
 await sleep(200);
 

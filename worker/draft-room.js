@@ -31,6 +31,27 @@ import Room from "../room.js";
    forever. */
 const IDLE_MS = 6 * 60 * 60 * 1000;   // six hours
 
+/* What one socket may send, and how often.
+
+   Nothing was limited: a script could open a socket and write chat until the
+   room hit its storage ceiling, and every message is a Durable Object write
+   plus a broadcast to everyone else in the draft.
+
+   Forty actions per ten seconds is four a second sustained, which no person
+   reaches. Typing is already throttled to one message every two seconds by
+   the client, a pick happens once a turn, and the fastest real thing anyone
+   does is press a reaction a few times. The limit is deliberately far above
+   a real ten-person draft, because a limit that fires during somebody's
+   draft is worse than the abuse it prevents.
+
+   Counted per connection and held in memory rather than in storage: writing
+   a counter to disk on every message would cost more than the messages do,
+   and a limit that resets when the object is evicted is still a limit.
+   Someone determined can reconnect — that is a job for a Cloudflare rate
+   limiting rule on the edge, not for the room. */
+const RATE_WINDOW_MS = 10000;
+const RATE_MAX = 40;
+
 export class DraftRoom {
   constructor(ctx, env) {
     this.ctx = ctx;
@@ -135,10 +156,32 @@ export class DraftRoom {
     socket.close(1008, code);
   }
 
+  /* True when this socket has had its allowance for the moment.
+
+     A sliding count rather than a token bucket, because the window is short
+     and the arithmetic should be obvious to whoever reads it next. */
+  overRate(socket) {
+    const now = Date.now();
+    const seen = socket.__rate || { from: now, count: 0 };
+    if (now - seen.from > RATE_WINDOW_MS) { seen.from = now; seen.count = 0; }
+    seen.count++;
+    socket.__rate = seen;
+    return seen.count > RATE_MAX;
+  }
+
   async onMessage(socket, event) {
     const member = this.sockets.get(socket);
     const msg = safeJson(event.data);
     if (!msg || !member) return;
+
+    /* Refused, not disconnected. A client with a runaway loop should lose the
+       message rather than the draft, and the rejection is the thing that
+       tells it to stop. Checked before the message is even parsed for meaning,
+       so a flood costs one comparison rather than a storage write. */
+    if (this.overRate(socket)) {
+      try { socket.send(JSON.stringify({ type: "rejected", code: "too-fast" })); } catch (err) {}
+      return;
+    }
 
     const now = Date.now();
     let result;
