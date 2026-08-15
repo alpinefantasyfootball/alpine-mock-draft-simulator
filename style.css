@@ -255,10 +255,12 @@ body {
   border: 0; background: none;
   color: inherit; cursor: pointer;
   transition: opacity .15s ease;
-  /* The mark stays 34px, but a 34px tap target is under the 44px a thumb
-     needs. The padding grows the hit area and the negative margin takes the
-     space back, so nothing moves. */
-  padding: 5px; margin: -5px;
+  /* The mark is 31 by 36, and a thumb wants 44 square. The padding grows the
+     hit area and the negative margin takes the space back, so nothing moves
+     on the page. 7px rather than 5: five only reached 41 wide, which missed
+     the number this rule exists to hit, and it missed it quietly because the
+     hit area is invisible. 31 + 14 = 45. Measured, not assumed. */
+  padding: 7px; margin: -7px;
 }
 
 .home:hover { opacity: .78; }
