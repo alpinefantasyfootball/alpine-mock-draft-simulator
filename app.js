@@ -2131,7 +2131,13 @@ function analyseDraft() {
 
   all.slice().sort((a, b) => b.total - a.total).forEach(function (t, i) {
     t.rank = i + 1;
-    t.grade = GRADE_SCALE[i];
+    /* Clamped, because the scale is fourteen long and TEAM_COUNTS goes to
+       twenty-four. A sixteen-team room put the word "undefined" in the
+       standings against fifteenth and sixteenth, on screen, for anyone who
+       set one up. Everything at fourteen teams or fewer is unchanged; past
+       that the bottom of the room shares an F, which is honest — they are
+       all last in a room bigger than the scale was drawn for. */
+    t.grade = GRADE_SCALE[Math.min(i, GRADE_SCALE.length - 1)];
   });
 
   return all;
