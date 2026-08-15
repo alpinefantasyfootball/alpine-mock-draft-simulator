@@ -365,19 +365,30 @@ is a change to the numbers, not to the advice.
   "Discard draft" clears the save.
 - **The rooms are written down once,** in `ROOMS` in `app.js`, and rendered
   into both the header panel and the landing grid. Adding a room is one entry.
-- **A room is a name and takes a capital; the rooms are a category and do
-  not.** "The Draft Room", "The Waiver Room" — but "all six rooms", "shared
-  rooms", and the landing heading "The rooms". The same distinction as the
-  Ford Mustang against the cars, and it is the brand rule one level down:
-  capitalising the set would make *The Rooms* a product in its own right, and
-  the product is Juke, with the rooms underneath it.
+- **A room is a name and takes a capital. So does the landing section: "The
+  Rooms". Everywhere else in a sentence, "rooms" is a common noun and stays
+  lowercase.**
 
-  The header button reading "Rooms" is not an exception. It is the first word
-  of a nav label, which is capitalised whatever the word is doing — "How it
-  works" sits beside it in sentence case for the same reason.
+  So: "The Draft Room", "The Waiver Room", and the heading "The Rooms" — but
+  "all six rooms", "shared rooms", "as rooms arrive".
 
-  Five instances across the landing copy follow this and none break it; it was
-  simply never written down, which is why this bullet exists.
+  The grammar on its own would keep the heading lowercase, the way "the cars"
+  sits under "the Ford Mustang", and it did until the owner decided otherwise.
+  That is a brand call rather than a correction: it makes the set of rooms a
+  named surface of the product instead of a description of what is below the
+  fold. Juke is still the brand above it, which is why the individual rooms
+  keep their own names underneath and nothing else in the prose changes.
+
+  The header button reading "Rooms" is not evidence either way. It is the
+  first word of a nav label, which is capitalised whatever the word is doing —
+  "How it works" sits beside it in sentence case for the same reason.
+
+  There is exactly one heading, in `index.html`, and after this change every
+  *visible* use of the word on the landing page is capitalised: the nav
+  button, the heading, and the six room names. The lowercase uses are all in
+  comments and in this file — real prose about the project rather than copy
+  anybody reads on the page. So a sentence that needs the common noun still
+  gets a small r; there simply is not one on screen today.
 - **Check a new class name against the existing sheet before using it.**
   The landing section was first called `.home`, which is already the header's
   home button; it inherited `display:flex` and collapsed to zero width. The
