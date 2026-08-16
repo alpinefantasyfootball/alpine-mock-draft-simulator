@@ -29,7 +29,11 @@ function check(name, got, want) {
   else note.push("ok  " + name);
 }
 
-function connect(member, name, extra) {
+/* `room` last and defaulted, so every existing call site still reads as
+   connect(member, name) and only the sections that need a room of their own
+   have to say so. The host-only messages do: they are lobby-only, and this
+   file's main room starts drafting a few lines below. */
+function connect(member, name, extra, room = ROOM) {
   const q = new URLSearchParams({
     member, name,
     league: JSON.stringify(LEAGUE),
@@ -37,7 +41,7 @@ function connect(member, name, extra) {
     data: "v1",
     ...(extra || {})
   });
-  const ws = new WebSocket(`${BASE}/room/${ROOM}?${q}`);
+  const ws = new WebSocket(`${BASE}/room/${room}?${q}`);
   ws.inbox = [];
   ws.addEventListener("message", (e) => ws.inbox.push(JSON.parse(e.data)));
   return new Promise((res, rej) => {
@@ -392,6 +396,73 @@ check("a flood is refused", floodRejects() > 0, true);
 // and the connection survives it
 check("the socket is not closed for flooding", flooder.readyState, 1);
 flooder.close();
+
+/* ---- what only the host may do, over a real socket ----
+
+   room.js is checked directly by scripts/test_engine.py, which is where the
+   rules belong. What that cannot see is whether the *adapter* passes the
+   sender through — and it did not have to until now, because `pause` reached
+   Room with no member argument at all and no client had ever sent it. A host
+   check that the worker never gives a member to is not a check.
+
+   Its own room, because both messages are lobby-only and the room above has
+   been drafting since line 100. */
+const ORDER_ROOM = ROOM + "order";
+const host = await connect("alice", "Alice", null, ORDER_ROOM);
+const guest = await connect("bob", "Bob", null, ORDER_ROOM);
+await until("both seated", () => lastState(guest)?.seats.filter((s) => s.taken).length === 2);
+
+const rejectsOn = (ws) => ws.inbox.filter((m) => m.type === "rejected").length;
+const guestRejectsBefore = rejectsOn(guest);
+
+// ---- pausing ----
+guest.send(JSON.stringify({ type: "pause", on: true }));
+await until("the guest's pause is refused", () => rejectsOn(guest) > guestRejectsBefore);
+check("a guest cannot pause the room",
+      lastOfType(guest, "rejected").code, "not-your-seat");
+check("and the clock is untouched", lastState(guest).paused, false);
+
+host.send(JSON.stringify({ type: "pause", on: true }));
+await until("the room pauses", () => lastState(guest)?.paused === true);
+check("the host can pause, and everybody is told", lastState(guest).paused, true);
+host.send(JSON.stringify({ type: "pause", on: false }));
+await until("the room resumes", () => lastState(guest)?.paused === false);
+
+// ---- draft order ----
+check("the room is named after its host", lastState(guest).hostName, "Alice");
+check("naming it leaks no member id",
+      JSON.stringify(lastState(guest)).includes('"alice"'), false);
+
+const seatNames = (ws) => lastState(ws).seats.map((s) => s.name);
+check("seats start in arrival order", seatNames(guest), ["Alice", "Bob", null, null]);
+
+const beforeGuestSwap = rejectsOn(guest);
+guest.send(JSON.stringify({ type: "swap-seats", a: 0, b: 1 }));
+await until("the guest's swap is refused", () => rejectsOn(guest) > beforeGuestSwap);
+check("a guest cannot set the draft order",
+      lastOfType(guest, "rejected").code, "not-your-seat");
+check("and nothing moved", seatNames(guest), ["Alice", "Bob", null, null]);
+
+host.send(JSON.stringify({ type: "swap-seats", a: 0, b: 2 }));
+await until("the chairs move", () => seatNames(guest)?.[2] === "Alice");
+check("the host sets the draft order", seatNames(guest), [null, "Bob", "Alice", null]);
+
+/* The chair moved; the socket has to have moved with it. yourSeat is read off
+   the member record, so this is what catches a swap that changed the seat list
+   and left everybody pointing at where they used to sit. */
+check("the host's own socket knows where it sits now", lastState(host).yourSeat, 2);
+check("and the guest still sits where it did", lastState(guest).yourSeat, 1);
+
+// Once picks exist the snake order is what they mean, so it stops being movable.
+host.send(JSON.stringify({ type: "start" }));
+await until("the order room starts", () => lastState(host)?.status === "drafting");
+const beforeLateSwap = rejectsOn(host);
+host.send(JSON.stringify({ type: "swap-seats", a: 0, b: 1 }));
+await until("the late swap is refused", () => rejectsOn(host) > beforeLateSwap);
+check("the order cannot be changed once drafting",
+      lastOfType(host, "rejected").code, "not-in-lobby");
+
+host.close(); guest.close();
 
 bob.close(); alice2.close(); try { stale.close(); } catch {}
 await sleep(200);

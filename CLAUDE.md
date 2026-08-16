@@ -1010,13 +1010,24 @@ A cached stylesheet once let the logo expand to fill the entire screen.
 ## Testing
 
 - Room over sockets: `cd worker && wrangler dev --port 8787 --local`, then
-  `node worker/test-sockets.mjs` in another terminal. Fifty-two assertions
+  `node worker/test-sockets.mjs` in another terminal. Seventy-six assertions
   against the real Durable Object runtime, no Cloudflare account needed.
   This is the only thing that covers sockets, storage, the alarm and the
   messages that never reach storage at all — typing is relayed, so a suite
   that only inspects state cannot see it. The room logic itself is pure and
   covered below. `npx --yes wrangler@4 dev …` works if wrangler is not
   installed globally and leaves nothing in the repo.
+
+  **It is also the only thing that checks the adapter passes the sender
+  through.** `test_engine.py` proves `Room.pause()` refuses a guest, and that
+  proof is worthless if the worker calls it without a member — which is
+  exactly what it did, undetected, for as long as `pause` existed. A host
+  check the adapter never gives a member to is not a check, so the host-only
+  messages are asserted here, over a socket, and not only against the pure
+  room. Anything gated on *who sent it* belongs in both suites.
+
+  Run it against production after a deploy, too:
+  `JUKE_WORKER=wss://juke-draft-room.jukeff.workers.dev node worker/test-sockets.mjs`.
 - Engine: `py scripts/test_engine.py` — runs `draft-engine.js` and `room.js`
   outside a browser and asserts the snake maths, the turn order, the legality
   checks, the determinism of the CPU wobble, and the parts of a room that a
