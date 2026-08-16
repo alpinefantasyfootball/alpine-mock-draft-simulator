@@ -33,7 +33,7 @@
        say script-src 'self' without either giving away 'unsafe-inline' or
        pinning a hash that breaks the site the first time somebody edits it.
        No defer, no async: it must run before the body is drawn. -->
-  <script src="theme.js?v=202608167000"></script>
+  <script src="theme.js?v=202608168000"></script>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -53,7 +53,7 @@
 
        A query string rather than a renamed file, because renaming means a
        manifest and a manifest means a build step. This costs one number. -->
-  <link rel="stylesheet" href="style.css?v=202608167000">
+  <link rel="stylesheet" href="style.css?v=202608168000">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -269,8 +269,9 @@
           </div>
 
           <!-- The product shot, and it is the real board rather than a
-               picture of one — filled by renderHeroShot() from the same ADP
-               data and the same position colours the draft itself uses. A
+               picture of one — filled by renderHeroShot(), which drafts the
+               opening rounds out of the same player data, with the same
+               valuation and the same position colours the draft itself uses. A
                PNG would be a file to rebuild every time the design or the
                data moved, and it would be wrong the first time somebody
                forgot. Empty here, and it stays empty and harmless if
@@ -742,17 +743,17 @@
 
   <!-- Every one of these carries the same ?v= as the stylesheet. See the note
        beside it in <head>: bump them together or don't bump them at all. -->
-  <script src="players.js?v=202608167000"></script>
-  <script src="stats.js?v=202608167000"></script>
+  <script src="players.js?v=202608168000"></script>
+  <script src="stats.js?v=202608168000"></script>
   <!-- The rules of a snake draft, with no reference to this page. It loads
        before app.js because app.js is a caller, and it is a separate file
        because a server will eventually have to run the same one. -->
-  <script src="draft-engine.js?v=202608167000"></script>
+  <script src="draft-engine.js?v=202608168000"></script>
   <!-- The socket to a shared room. Loaded always, connected never unless a
        manager asks for it: a solo draft touches nothing. -->
-  <script src="live.js?v=202608167000"></script>
+  <script src="live.js?v=202608168000"></script>
   <!-- Before app.js, which calls backToTop() on the last line of its setup. -->
-  <script src="back-to-top.js?v=202608167000"></script>
-  <script src="app.js?v=202608167000"></script>
+  <script src="back-to-top.js?v=202608168000"></script>
+  <script src="app.js?v=202608168000"></script>
 </body>
 </html>

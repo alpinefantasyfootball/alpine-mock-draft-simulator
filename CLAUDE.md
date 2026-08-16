@@ -235,13 +235,21 @@ screen said so.** Both ends of the scale were being read as verdicts: a bare
 means, and no reader could get from one to the other unaided.
 
 **The pile of zeros is arithmetic, and that was measured before anything was
-changed.** 130 of the 221 players on the half-PPR board score exactly 0 — the
-majority state, not an edge case. Scored on the *fixed cohort* of 151 players
+changed.** Around three fifths of the half-PPR board scores exactly 0 — the
+majority state, not an edge case. Scored on a *fixed cohort* of the players
 with a line in 2023, 2024, 2025 and a 2026 projection, so survivorship cannot
-drift the answer, the share scoring zero is **39.7% in every one of those real
-completed seasons and 41.1% in the projection**. A fixed rank cut against a
-221-deep board in a league that starts ninety players puts most of the pool
-below the line whatever happens on the field. So there is nothing to correct in
+drift the answer, the share scoring zero is **the same in every one of those
+real completed seasons as it is in the projection** — measured 16 August 2026
+at 38.5% against 39.9% over 148 players, and 39.7% against 41.1% over 151 the
+day before. A fixed rank cut against a board a couple of hundred deep, in a
+league that starts about ninety players, puts most of the pool below the line
+whatever happens on the field.
+
+**Those counts move every night and the conclusion does not.** `players.js` is
+regenerated daily, so any literal total written down here is stale within a
+day — which is why the figures above carry a date and why the app derives
+`board.length` rather than quoting one. A drifted number is not a bug; a
+number without a date is. So there is nothing to correct in
 the maths and re-curving the scale would be correcting football. The floor
 needed a name, not a new formula.
 
@@ -617,10 +625,45 @@ way, not reasoned about.
   take the screen away mid-edit.
 - **The hero product shot is generated, not an image.** `renderHeroShot()`
   draws the opening rounds of a real board from the same `board` array, the
-  same ADP order and the same position solids the draft uses. A PNG would be
+  same valuation and the same position solids the draft uses. A PNG would be
   a file to rebuild every time the design or the nightly data moved, and it
   would be wrong the first time somebody forgot. This one has nothing in it
   to keep in sync.
+
+  **It drafts rather than slices, because ADP is an average and no single
+  draft looks like an average.** It used to be `board[i]` — the first forty
+  names in ADP order — and that is a real board that no room has ever
+  produced. A position that goes early in half the rooms and late in the
+  other half averages to the middle, where it loses to the backs and
+  receivers that go at the same spot in every room; so the top forty by ADP
+  is 18 RB, 21 WR, 1 QB and **no tight end at all**, and the graphic was two
+  colours. The elite quarterback goes in the third round of a real ten-team
+  draft and the two tight ends worth having go in the fourth, which is a
+  thing anybody who has drafted knows on sight — and the reason the picture
+  read as synthetic without anybody being able to say why.
+
+  `shotPicks()` runs fifty picks in snake order, each seat valuing the board
+  the way `suggestions()` does: ADP, need, injury risk and the model. Two of
+  those move the scarce positions, for different reasons. **The model prices
+  them** — `overallScore()` is points above replacement measured *across*
+  positions, so it can say an elite tight end beats the twenty-fifth
+  receiver, which is what an ADP average smooths away and what the product
+  claims to know. **Need is what makes a seat stop taking backs** — a fourth
+  running back is past the starting requirement and loses the 0.80, so the QB
+  and TE still on it finally win a pick, which is why a real fifth round has
+  quarterbacks in it and an ADP slice never does. `MODEL_CAP` keeps the first
+  of those to a quarter of a player's price, so it stays a nudge off the
+  market: the quarterback moves 30 → 23, the tight ends out of round five into
+  round four, and the first two rounds barely move.
+
+  **Five rounds, not four, and the fade is why.** The mask starts dissolving
+  at 46%, so at four rounds the fourth row is the one being eaten — and the
+  fourth row is where the tight ends land. The only two cells on the board
+  that are not a back or a receiver arrived as ghosts. A fifth round costs
+  37px, moves nothing above it, and gives the fade a row of its own.
+
+  Nothing in it is a name: whoever tonight's data says is QB1 and TE1 is who
+  turns up.
 
   It is the one place in the app where something overflows and can neither
   scroll nor ellipsise — the phone crop, where ten columns wide enough for a
