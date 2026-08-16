@@ -1063,6 +1063,33 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   The same pane cannot take screenshots, which is worth saying plainly:
   **everything above can be verified this way and none of it is a substitute
   for looking.** A grade can be correct and unbelievable; so can a colour.
+- **Point the same suite at what is deployed, after deploying it.**
+
+  ```bash
+  JUKE_SITE=https://jukeff.com \
+  JUKE_WORKER_HTTP=https://juke-draft-room.jukeff.workers.dev \
+  npx playwright test tests/room.spec.mjs
+  ```
+
+  The socket suite has had `JUKE_WORKER` since it was written and this one had
+  no equivalent, so the one thing nobody could run was the one thing worth
+  running after a deploy: a full room draft against the real worker, over the
+  real CSP, through Cloudflare. **Local is where a bug is found; live is where
+  it is confirmed gone**, and they are not the same claim — the room deadlock
+  at pick 86 was a rate limit that localhost is too fast to reach.
+
+  The two variables move together. `live.js` picks its worker off the address
+  bar — localhost means `127.0.0.1:8787`, anything else means the deployed one
+  — so pointing the page at production while the assertions watch a local
+  worker tests two rooms and reconciles neither. `webServer` is skipped
+  entirely when the site is not local, because waiting on a port nobody will
+  listen on times the run out before it starts.
+
+  `SITE` and `WORKER_HTTP` live in `tests/helpers.mjs` and are re-exported by
+  `playwright.config.mjs`. They used to be declared in both, which is the same
+  fact in two places and would have failed as a suite quietly testing a server
+  nobody was running.
+
 - **End to end: `npm install` once, then `npx playwright test`.** Ten tests,
   about three minutes, and it starts the static server and `wrangler dev`
   itself. It drives the real pages in a real browser — a solo draft at both

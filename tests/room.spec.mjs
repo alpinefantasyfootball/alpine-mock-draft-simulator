@@ -162,3 +162,127 @@ test("leaving the draft leaves the room, and the link brings you back", async ({
   await hostCtx.close();
   await guestCtx.close();
 });
+
+/* Everything the room gained after a real draft went wrong, checked with two
+   managers rather than one page and a stubbed room.
+
+   Each of these was reported from that draft: the setup screen still showed
+   the settings of a room you had made yourself, a guest could edit a league
+   they had joined, the clock was invisible to nine people out of ten, and
+   Pause, Undo and "Discard draft" were on screen for everybody. They were
+   fixed against a fake room object; this is the first time two clients have
+   disagreed about any of it. */
+test("a room belongs to its host, and says so to everybody in it", async ({ browser }) => {
+  const hostCtx = await browser.newContext();
+  const host = await openApp(hostCtx);
+  // A room is named after its host, so the host has to be called something.
+  await host.evaluate(() => Live.setName("Blake"));
+  const code = await createRoom(host);
+
+  const guestCtx = await browser.newContext();
+  const guest = await openApp(guestCtx, `#/draft?room=${code}`);
+  await guest.waitForFunction(() => Live.room() && Live.room().yourSeat >= 0);
+
+  /* ---- the room is named, on both screens ----
+     #friendsTitle, not a label inside #inviteBox: the heading became the
+     summary of a collapsed <details> and the id moved with the job. Asked for
+     by id here for the same reason renderInvite() asks for it by id — a
+     structural selector is a second place for that decision to live. */
+  await expect
+    .poll(() => guest.evaluate(() => document.getElementById("friendsTitle").textContent))
+    .toBe("Blake's Draft Room");
+  expect(await host.evaluate(() => document.getElementById("friendsTitle").textContent))
+    .toBe("Blake's Draft Room");
+
+  /* ---- the league is locked, and not only the five obvious controls ----
+     Every one of these runs refreshSetup() -> buildBoard(), so an unlocked one
+     is a guest quietly rebuilding their own board out from under the draft. */
+  const locks = (page) => page.evaluate(() => ({
+    teams: document.getElementById("teamCount").disabled,
+    rounds: document.getElementById("roundCount").disabled,
+    scoring: document.getElementById("scoring").disabled,
+    lineup: document.getElementById("startTE").disabled,
+    bench: document.getElementById("benchCount").disabled,
+    rule: document.querySelector("#scoringFields input").disabled,
+    reset: document.getElementById("resetScoring").disabled
+  }));
+  const allLocked = { teams: true, rounds: true, scoring: true, lineup: true,
+                      bench: true, rule: true, reset: true };
+  expect(await locks(guest), "a guest may not reshape the league").toEqual(allLocked);
+  // The host too: the wobble reads board position and every client has to agree.
+  expect(await locks(host), "nor may the host, once the room exists").toEqual(allLocked);
+
+  // ---- draft order is the host's ----
+  const seatNames = (page) =>
+    page.evaluate(() => Live.room().seats.map((s) => s.name));
+  expect(await seatNames(guest)).toEqual(["Blake", null, null, null, null,
+                                          null, null, null, null, null]);
+
+  await guest.evaluate(() => Live.swapSeats(0, 1));
+  await guest.waitForTimeout(1200);
+  expect(await guest.evaluate(() => Live.room().yourSeat),
+    "a guest cannot move itself up the order").toBe(1);
+
+  await host.evaluate(() => Live.swapSeats(0, 1));
+  await expect.poll(() => host.evaluate(() => Live.room().yourSeat)).toBe(1);
+  expect(await guest.evaluate(() => Live.room().yourSeat),
+    "and the other client agrees about where it now sits").toBe(0);
+
+  // ---- start, and check what a draft looks like from the guest's chair ----
+  await host.click("#startBtn");
+  await guest.waitForFunction(() => Live.room().status === "drafting");
+  await guest.waitForFunction(() => state.started === true);
+
+  // Seat 0 is the guest now, so make it somebody else's turn.
+  await guest.evaluate(() => draftAndAdvance(suggestions("ALL")[0]));
+  await guest.waitForFunction(() => !isMyTurn());
+
+  const watching = await guest.evaluate(() => ({
+    myTurn: isMyTurn(),
+    showing: clockShowing(),
+    // The display question and the authority question are different, and the
+    // page used the second to answer the first.
+    counting: clockRunnable(),
+    headerLabel: document.getElementById("rightLabel").textContent,
+    headerValue: document.getElementById("rightValue").textContent,
+    boardCell: (document.getElementById("boardClock") || {}).textContent || null
+  }));
+  expect(watching.myTurn).toBe(false);
+  expect(watching.showing, "a clock the whole room is waiting on is drawn").toBe(true);
+  expect(watching.counting, "but this browser never counts it").toBe(false);
+  expect(watching.headerLabel).toBe("Time left");
+  expect(watching.headerValue, "as a real countdown, not a dash").toMatch(/^\d+:\d\d$/);
+  expect(watching.boardCell, "and on the live cell too").toMatch(/^\d+:\d\d$/);
+
+  // ---- what a guest is not offered ----
+  const bar = await guest.evaluate(() => ({
+    pause: document.getElementById("pauseBtn").hidden,
+    undo: document.getElementById("undoBtn").hidden,
+    quit: document.getElementById("restartBtn").textContent
+  }));
+  expect(bar.pause, "pausing a shared clock is the host's").toBe(true);
+  expect(bar.undo, "there is no shared undo").toBe(true);
+  expect(bar.quit, "and the label says what the button does").toBe("Leave the room");
+
+  expect(await host.evaluate(() => document.getElementById("pauseBtn").hidden),
+    "the host keeps it").toBe(false);
+
+  // ---- pausing is a message, not a local flag ----
+  await host.evaluate(() => togglePause());
+  await expect.poll(() => guest.evaluate(() => Live.room().paused),
+    { message: "the room pauses for everyone" }).toBe(true);
+  expect(await guest.evaluate(() => state.paused)).toBe(true);
+  await host.evaluate(() => togglePause());
+  await expect.poll(() => guest.evaluate(() => Live.room().paused)).toBe(false);
+
+  // ---- the board is not scouting for the room ----
+  const chips = await guest.evaluate(() => {
+    state.filterPlayers = "ALL";
+    render();
+    return document.querySelectorAll("#playerTable .chip.val, #playerTable .chip.reach").length;
+  });
+  expect(chips, "Value and Reach are not read out to nine other managers").toBe(0);
+
+  await hostCtx.close();
+  await guestCtx.close();
+});

@@ -16,8 +16,24 @@
       because the interesting failures happen around a socket being replaced.
 */
 
-export const SITE = "http://localhost:8765";
-export const WORKER_HTTP = "http://127.0.0.1:8787";
+/* Local by default, and overridable so the same specs can be pointed at what
+   is actually deployed.
+
+   The socket suite has had JUKE_WORKER since it was written, and this file not
+   having the equivalent meant the one thing nobody could run was the one thing
+   worth running after a deploy: a full room draft against the real worker,
+   over the real CSP, through Cloudflare. Local is where a bug is found; live
+   is where it is confirmed gone.
+
+     JUKE_SITE=https://jukeff.com \
+     JUKE_WORKER_HTTP=https://juke-draft-room.jukeff.workers.dev \
+     npx playwright test tests/room.spec.mjs
+
+   Note that live.js picks its worker from the address bar — localhost means
+   127.0.0.1:8787 and anything else means the deployed one — so these two move
+   together or the page talks to a room the assertions are not watching. */
+export const SITE = process.env.JUKE_SITE || "http://localhost:8765";
+export const WORKER_HTTP = process.env.JUKE_WORKER_HTTP || "http://127.0.0.1:8787";
 
 /* Installed before any page script runs.
 

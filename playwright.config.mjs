@@ -16,8 +16,18 @@
 
 import { defineConfig } from "@playwright/test";
 
-export const SITE = "http://localhost:8765";
-export const WORKER_HTTP = "http://127.0.0.1:8787";
+/* Re-exported from the helpers rather than declared again. These two used to
+   be written out in both files — the same fact in two places, which is the
+   drift this project has a rule about — and nothing would have complained if
+   they had ever disagreed except a suite quietly testing a server nobody was
+   running. The helpers own them because that is where the env override lives. */
+export { SITE, WORKER_HTTP } from "./tests/helpers.mjs";
+import { SITE, WORKER_HTTP } from "./tests/helpers.mjs";
+
+/* Only start servers when the suite is actually pointed at localhost. Aimed at
+   the deployed site there is nothing to start, and a webServer block waiting on
+   a port nobody will ever listen on just times the run out before it begins. */
+const LOCAL = SITE.includes("localhost") || SITE.includes("127.0.0.1");
 
 export default defineConfig({
   testDir: "./tests",
@@ -44,7 +54,7 @@ export default defineConfig({
      until somebody creates a room. Waiting for a URL therefore waits for a
      2xx that is never coming, and the suite times out with both servers up
      and perfectly healthy. A listening port is the honest question here. */
-  webServer: [
+  webServer: !LOCAL ? undefined : [
     {
       command: "py -m http.server 8765",
       port: 8765,
