@@ -45,6 +45,19 @@ async function stubNews(page, items) {
   }, items);
 }
 
+/* News is asked for by the player's id at the *provider*, which the pipeline
+   writes into stats.js as `x`. Nothing in the repo carries one until a build
+   runs with a key, so a test that wants headlines has to put one there — and
+   that is worth doing rather than working around, because the absence of an
+   id is itself a behaviour with its own test below. */
+async function crosswalk(page, name, theirId = "T-TEST-1") {
+  await page.evaluate(([n, id]) => {
+    const p = board.find((x) => x.name === n);
+    const rec = PLAYER_STATS[p.id];
+    rec.x = { tank: id };
+  }, [name, theirId]);
+}
+
 test.describe("latest news", () => {
   test("with no provider key the sheet is complete and the panel is absent",
     async ({ context }) => {
@@ -97,6 +110,7 @@ test.describe("latest news", () => {
     const page = await openApp(context);
     await start(page);
     await stubNews(page, HOSTILE);
+    await crosswalk(page, "Jahmyr Gibbs");
 
     await page.evaluate(() => openSheet(board.find((p) => p.name === "Jahmyr Gibbs")));
     await page.waitForSelector(".newsbox:not([hidden])", { timeout: 5000 });
@@ -146,6 +160,9 @@ test.describe("latest news", () => {
       /* The sheet is one element reused for everybody, so an answer that
          arrives after the reader has moved on would render into whoever is
          open now. Nothing else in the app would catch it. */
+      await crosswalk(page, "Bijan Robinson", "T-BIJAN");
+      await crosswalk(page, "Ja'Marr Chase", "T-CHASE");
+
       const r = await page.evaluate(async () => {
         newsCache.clear();
 
@@ -177,9 +194,42 @@ test.describe("latest news", () => {
       expect(r.leaked, "the first player's news rendered into the second's sheet").toBe(false);
     });
 
+  test("a player we could not link is never asked about", async ({ context }) => {
+    const page = await openApp(context);
+    await start(page);
+
+    /* The pipeline reports these in unmatched.txt and the sheet shows nothing.
+       What it must never do is fall back to a name, or to league-wide
+       headlines dressed as his: somebody else's news under this player's name
+       is the one outcome worse than an empty panel, and every number around it
+       would still be right. */
+    const r = await page.evaluate(async () => {
+      newsCache.clear();
+      let asked = 0;
+      Live.news = (id) => { asked++; return Promise.resolve({ configured: true, items: [{
+        title: "SOMEBODY ELSE'S NEWS", summary: "", source: "Wire", at: "",
+        url: "https://example.com/x" }] }); };
+
+      const p = board.find((x) => x.pos !== "DST");
+      delete PLAYER_STATS[p.id].x;              // not in the crosswalk
+      openSheet(p);
+      await new Promise((r2) => setTimeout(r2, 400));
+
+      const panel = document.querySelector("#newsPanel");
+      return { asked, hidden: panel.hidden, html: panel.innerHTML,
+               sourceId: sourceId(p, "tank") };
+    });
+
+    expect(r.sourceId, "no id for this player").toBe("");
+    expect(r.asked, "the provider is never called without an id").toBe(0);
+    expect(r.hidden, "and the panel stays hidden").toBe(true);
+    expect(r.html, "with nothing in it").toBe("");
+  });
+
   test("a failed fetch leaves no mark on the sheet", async ({ context }) => {
     const page = await openApp(context);
     await start(page);
+    await crosswalk(page, "Puka Nacua");
 
     const r = await page.evaluate(async () => {
       newsCache.clear();

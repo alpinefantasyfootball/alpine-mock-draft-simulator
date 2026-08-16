@@ -4163,6 +4163,17 @@ function safeNewsUrl(url) {
   }
 }
 
+/* This player's id at another source, from the crosswalk the pipeline builds.
+
+   The whole point of holding it is that nothing has to match on a name while
+   somebody is reading a profile. A name search at request time is how one Josh
+   Allen ends up wearing the other one's news — and every number on the sheet
+   around it would still be correct, so nobody would catch it. */
+function sourceId(player, source) {
+  const s = statOf(player);
+  return (s && s.x && s.x[source]) || "";
+}
+
 function renderNews(player) {
   const panel = $("newsPanel");
   if (!panel || !player) return;
@@ -4170,6 +4181,13 @@ function renderNews(player) {
   panel.innerHTML = "";
 
   if (typeof Live === "undefined" || !Live.news) return;
+
+  /* No id, no news. Deliberately not a fallback to a name or to league-wide
+     headlines: an empty panel is a player we could not link, and the pipeline
+     has already written him into unmatched.txt. Showing somebody else's news
+     under his name is the one outcome worse than showing none. */
+  const theirId = sourceId(player, "tank");
+  if (!theirId) return;
 
   const key = player.id || player.name;
 
@@ -4189,7 +4207,7 @@ function renderNews(player) {
 
   if (newsCache.has(key)) { draw(newsCache.get(key)); return; }
 
-  Live.news(player.id).then(function (data) {
+  Live.news(theirId).then(function (data) {
     // Cached per player for the session, because a draft opens the same sheet
     // repeatedly and a headline does not change inside one.
     newsCache.set(key, data);

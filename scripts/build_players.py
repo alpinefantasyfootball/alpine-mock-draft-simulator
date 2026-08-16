@@ -2,12 +2,18 @@
 """
 Rebuild players.js and stats.js from live data.
 
-Sources (all free, no key, no account)
+Sources (all free, no key, no account -- except the last, which is optional)
   https://api.sleeper.app/v1/players/nfl                    player master, injury, depth chart
   https://api.sleeper.app/v1/stats/nfl/regular/{season}     season totals
   https://api.sleeper.app/v1/stats/nfl/regular/{yr}/{wk}    weekly game logs
   https://api.sleeper.app/v1/projections/nfl/regular/{yr}   projections
   https://fantasyfootballcalculator.com/api/v1/adp/{format} ADP, one set per scoring format
+  .../getNFLPlayerList (Tank01, via RapidAPI)               source-id crosswalk, needs TANK01_KEY
+
+TANK01_KEY is read from the environment and is optional. Without it the
+crosswalk step is skipped, the build is otherwise identical, and player news
+stays switched off in the app. Nothing here may depend on a third party being
+up in order to produce a board.
 
 Sleeper asks that these be called no more than once a day.
 FFC asks for attribution.
@@ -21,6 +27,7 @@ Run by hand:  python scripts/build_players.py
 """
 
 import json
+import os
 import re
 import unicodedata
 import urllib.error
@@ -225,6 +232,26 @@ def fetch_json(url, optional=False):
         raise
 
 
+def fetch_json_headers(url, headers, optional=False):
+    """fetch_json with request headers, for a source that needs a key.
+
+    Split out rather than adding a parameter to fetch_json, because every
+    caller of that one is a free public feed and should stay obviously so.
+    A key is a different kind of dependency and it reads better named.
+    """
+    merged = {"User-Agent": "alpine-draft-room/1.0"}
+    merged.update(headers or {})
+    request = urllib.request.Request(url, headers=merged)
+    try:
+        with urllib.request.urlopen(request, timeout=90) as response:
+            return json.load(response)
+    except (urllib.error.URLError, urllib.error.HTTPError, ValueError) as error:
+        if optional:
+            print(f"  ! skipped {url} ({error})")
+            return {}
+        raise
+
+
 def normalise(name):
     text = unicodedata.normalize("NFKD", name or "")
     text = "".join(c for c in text if not unicodedata.combining(c)).lower()
@@ -282,6 +309,138 @@ def compact(row):
         if value:
             out[short] = round(float(value), 1) if isinstance(value, float) else int(value)
     return out
+
+
+# ---------------------------------------------------------------- source ids
+#
+# One player, several providers, each with its own id. `x` on a stats record
+# holds the foreign keys, so anything we add later joins to the same player
+# without a second lookup at request time -- which is the part that matters.
+# A name search performed while somebody is reading a profile is how one Josh
+# Allen ends up wearing the other one's news, and every number around it would
+# still be right.
+#
+# The key is read from the environment and never written down here. With no
+# key the whole step is skipped, the build succeeds, and the app carries on
+# exactly as it does today: no `x`, so no news. A pipeline that needs a
+# third party to be up in order to produce a board is not a pipeline this
+# project wants.
+TANK01_KEY = os.environ.get("TANK01_KEY", "")
+TANK01_HOST = "tank01-nfl-live-in-game-real-time-statistics-nfl.p.rapidapi.com"
+
+# One call, not thirty-two. The free tier allows a thousand a month and the
+# workflow runs daily, so per-team rosters (32 x 30 = 960) would spend the
+# entire allowance on the crosswalk alone and leave nothing for the news the
+# crosswalk exists to serve. getNFLPlayerList is the whole league in one.
+TANK01_LIST = f"https://{TANK01_HOST}/getNFLPlayerList"
+
+
+def fetch_tank01_players():
+    """Every Tank01 player, or nothing at all. Never fatal."""
+    if not TANK01_KEY:
+        print("Tank01: no TANK01_KEY set, skipping the source-id crosswalk")
+        return []
+
+    print("Fetching Tank01 player list...")
+    body = fetch_json_headers(TANK01_LIST, {
+        "x-rapidapi-key": TANK01_KEY,
+        "x-rapidapi-host": TANK01_HOST,
+    }, optional=True)
+
+    rows = body.get("body") if isinstance(body, dict) else body
+    rows = rows if isinstance(rows, list) else []
+    print(f"  {len(rows)} players")
+    return rows
+
+
+def link_source_ids(stats, sleeper, indexes, tank_rows):
+    """Attach Tank01 ids to our records, and report anything that did not.
+
+    Two joins, in order of how much they can be trusted:
+
+    1. Their `sleeperBotID`, if they carry it. That is an identifier both
+       sides already agree on, so there is nothing to get wrong.
+    2. Failing that, the same name/position/team match the ADP join uses.
+       Reused rather than reimplemented -- a second normalise() that drifted
+       from the first would be the same class of bug as a league shape
+       written down twice.
+
+    Returns (linked, report_lines). Everything that fails is in the report:
+    a crosswalk that misses quietly is worse than no crosswalk, because a
+    wrong match does not look wrong on the page.
+    """
+    by_name_pos_team, by_name_pos, _by_name = indexes
+    linked, report = {}, []
+    claimed = {}                        # our id -> their id, to catch collisions
+    method = {}                         # our id -> how it was matched
+
+    for row in tank_rows:
+        their_id = str(row.get("playerID") or "").strip()
+        if not their_id:
+            continue
+
+        name = (row.get("longName") or row.get("espnName") or "").strip()
+        position = POSITION_MAP.get((row.get("pos") or "").upper())
+        team = clean_team(row.get("team"))
+
+        # 1. The identifier they already share with us.
+        our_id = str(row.get("sleeperBotID") or "").strip()
+        how = "sleeperBotID"
+
+        # 2. Name, position and team, strictest first -- and only for players
+        #    we actually carry, so the report is about our pool rather than
+        #    about every practice-squad player in the league.
+        if not our_id or our_id not in stats:
+            our_id = ""
+            key = normalise(name)
+            if key and position:
+                match = (by_name_pos_team.get((key, position, team))
+                         or by_name_pos.get((key, position)))
+                if match:
+                    our_id = match[0]
+                    how = "name+pos+team"
+
+        if not our_id or our_id not in stats:
+            continue
+
+        # Two of theirs pointing at one of ours means the join is wrong, not
+        # that the player has two ids. Report it and keep neither, because
+        # picking one at random is how the wrong news gets served.
+        if our_id in claimed and claimed[our_id] != their_id:
+            report.append(f"COLLISION | {name} | {position} | {team} | "
+                          f"{claimed[our_id]} and {their_id} both map to {our_id}")
+            linked.pop(our_id, None)
+            continue
+
+        claimed[our_id] = their_id
+        linked[our_id] = their_id
+        method[our_id] = how
+
+    # What we hold and could not link. This is the list that matters: every
+    # one of these is a player whose sheet will have no news, and silence
+    # about it is exactly what unmatched.txt exists to prevent.
+    for our_id, record in stats.items():
+        if our_id in linked:
+            continue
+        entry = sleeper.get(our_id) or {}
+        name = entry.get("full_name") or entry.get("last_name") or our_id
+        pos = entry.get("position") or "?"
+        report.append(f"{name} | {pos} | {clean_team(entry.get('team'))} | "
+                      f"no Tank01 id")
+
+    # Counted from what survived, not from what was attempted. Tallying as we
+    # went made a collision read "1 on sleeperBotID" beside "linked 0", and a
+    # duplicated row count twice -- a number that disagrees with the thing it
+    # is describing is how you stop trusting the numbers.
+    direct = sum(1 for k in linked if method.get(k) == "sleeperBotID")
+    fallback = len(linked) - direct
+    print(f"  linked {len(linked)} of {len(stats)} "
+          f"({direct} on sleeperBotID, {fallback} on name)")
+    if tank_rows and not direct:
+        # Worth saying plainly: it means the good join is not available and
+        # every row came from name matching, which is the fragile one.
+        print("  ! no sleeperBotID on any row -- every link came from a name")
+    return linked, report
 
 
 def index_sleeper(sleeper):
@@ -408,6 +567,10 @@ def main():
         if data:
             past_projections[season] = data
         print(f"  {len(data)} lines")
+
+    # Optional, keyed, and never fatal: no key means no crosswalk and a build
+    # that is otherwise identical to today's.
+    tank_rows = fetch_tank01_players()
 
     # Keyed by season, then week. A season that returns nothing simply does
     # not appear, so the app draws a selector of the years it actually has
@@ -555,6 +718,17 @@ def main():
         if record:
             stats[player_id] = record
 
+    # ---- source ids ----
+    #
+    # After the records exist, because the join is against the pool we
+    # actually carry rather than against every player either source knows
+    # about. Attached to stats.js and not players.js: the same player appears
+    # once per scoring format there, so an id would be stored three times and
+    # could disagree with itself.
+    source_ids, source_report = link_source_ids(stats, sleeper, indexes, tank_rows)
+    for our_id, their_id in source_ids.items():
+        stats[our_id]["x"] = {"tank": their_id}
+
     # ---- which scoreable stats the forecast actually carries ----
     #
     # Sleeper's projections are far coarser than its actuals: it forecasts
@@ -592,6 +766,7 @@ def main():
     flagged = sum(1 for p in players if p["inj"])
     projected = sum(1 for v in stats.values() if "p" in v)
     archived = sum(1 for v in stats.values() if "pp" in v)
+    crosswalked = sum(1 for v in stats.values() if "x" in v)
     archive_years = sorted({y for v in stats.values() for y in v.get("pp", {})})
 
     set_blocks = ",\n\n".join(
@@ -639,6 +814,8 @@ def main():
             "     p            projection for the coming season\n"
             "     pp           what we projected for seasons already played,\n"
             "                  keyed by year to line up with s\n"
+            "     x            this player's id at other sources, so nothing\n"
+            "                  has to match on a name at request time\n"
             "     w            week by week logs, keyed by season\n\n"
             "   Raw components only. There is no points total in here: app.js\n"
             "   applies the scoring rules, so a league can change them without\n"
@@ -649,6 +826,7 @@ def main():
             "   over anything outside it scores history correctly and adds\n"
             "   nothing to the 2026 projection, which is what the draft board\n"
             "   is ranked on. The scoring editor says so on each rule.\n\n"
+            f"   Source ids : {crosswalked} of {len(stats)} players carry a Tank01 id\n"
             f"   Archived   : {archived} players carry past projections"
             f"{' for ' + ', '.join(archive_years) if archive_years else ' (none returned)'}\n"
             f"   Generated : {stamp}\n"
@@ -667,6 +845,20 @@ def main():
             key for key in SEEN_KEYS
             if key not in STAT_FIELDS
             and key not in IGNORED_KEYS and not key.startswith("bonus_"))
+        # A player we hold but could not link is a player whose sheet will
+        # have no news. That is a small thing on its own and a bad thing to
+        # discover from a user, so it is written down here with everything
+        # else the pipeline could not use.
+        handle.write("\n\n\nPlayers with no id at another source\n")
+        handle.write("Each of these has no Latest news on their sheet, because the\n"
+                     "only safe way to ask for it is by id. A COLLISION line means two\n"
+                     "of their players claim one of ours -- neither is stored, since\n"
+                     "picking one would serve somebody else's news under this name.\n\n")
+        if not TANK01_KEY:
+            handle.write("(no TANK01_KEY set, so no crosswalk was attempted)\n")
+        else:
+            handle.write("\n".join(source_report) if source_report else "(none)\n")
+
         handle.write("\n\n\nSleeper stats we are not storing\n")
         handle.write("The browser can only score what this pipeline records, so anything\n"
                      "here is a scoring rule the app could never support. If a league\n"
@@ -680,6 +872,12 @@ def main():
     # Said out loud either way. Sleeper may or may not serve a past season's
     # forecast, and "no archive" is a fact about the feed worth seeing in the
     # run rather than inferring from a file that looks the same as before.
+    if not TANK01_KEY:
+        print("  no TANK01_KEY, so no source ids; player news stays off")
+    else:
+        print(f"  source ids on {crosswalked} of {len(stats)} players "
+              f"({len(stats) - crosswalked} without, see unmatched.txt)")
+
     if archive_years:
         print(f"  archived projections for {', '.join(archive_years)} "
               f"on {archived} players")

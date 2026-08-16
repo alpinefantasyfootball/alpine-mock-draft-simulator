@@ -38,6 +38,7 @@ Python 3 standard library only in the pipeline. No pip dependencies.
 | `live.js` | The client end of a room: one socket, the invite code, and the messages. Knows nothing about the board or how anything is drawn. |
 | `worker/` | The Cloudflare Durable Object behind an invite link, plus the two proxied routes whose keys may not be in the page (`/giphy`, `/news`) and its `wrangler.toml`. Deployed to `juke-draft-room.jukeff.workers.dev`; a change here needs `wrangler deploy` before the page can use it. See `worker/README.md`. |
 | `scripts/test_engine.py` | Runs `draft-engine.js` and `room.js` in node/deno/bun and asserts the rules from outside a browser. |
+| `scripts/test_crosswalk.py` | The source-id join, without the network. A bad join does not look like a failure, which is why it is not left to a pipeline run. |
 | `tests/` | End-to-end tests: the real pages, in a real browser, two managers in a real room. `playwright.config.mjs` starts both servers itself. |
 | `package.json` | **Dev only.** Fetches the test runner and nothing else. The app still has no build step, no bundler and no runtime dependency. |
 | `players.js` | **GENERATED.** 260 players by ADP. Never edit by hand. |
@@ -502,6 +503,41 @@ a single `release` variable is the obvious shape and is wrong: the second
 request, which is not a race and passes against an app with no guard at all.
 Collect the pending resolvers and settle only the first. This was written the
 wrong way first and the run that caught it looked like an app bug.
+
+**News is asked for by the provider's id, never by a name.** `x` on a stats
+record holds this player's id at other sources, built nightly by
+`link_source_ids()`. A name search at request time is how one Josh Allen ends
+up wearing the other one's news — and every number on the sheet around it
+would still be right, so nobody would catch it.
+
+**No id means no news, and no fallback.** Not a name lookup, not league-wide
+headlines dressed as his. Somebody else's news under a player's name is the
+one outcome worse than an empty panel. The pipeline has already written him
+into `unmatched.txt`, which is where that fact belongs.
+
+**The crosswalk prefers an identifier both sides already agree on.** Tank01
+carries `sleeperBotID` on its MLB rosters and very likely on its NFL ones; when
+it is there the join is a dictionary lookup with nothing to get wrong. The
+name/position/team fallback exists for when it is not, and it **reuses
+`index_sleeper()` and `normalise()`** rather than reimplementing them — a
+second normaliser that drifted from the first is the same class of bug as a
+league shape written down twice. The run prints which route each link came
+from, and says so loudly if every one came from a name.
+
+**Two of theirs claiming one of ours stores neither.** Picking one is a coin
+flip that serves the wrong player's news, so a collision is reported and both
+are dropped.
+
+**One call, not thirty-two.** `getNFLPlayerList` is the whole league; per-team
+rosters would be 32 × 30 = 960 calls a month against a 1,000 free tier and
+would spend the entire allowance on the crosswalk that exists to serve the
+news.
+
+**Count what survived, not what was attempted.** The first version tallied as
+it went, so a collision printed "linked 0 … (1 on sleeperBotID)" and a
+duplicated row counted twice. A count that disagrees with the data it
+describes is how you stop believing the run output — which is the only thing
+standing between a quiet bad join and a user finding it.
 
 **`TANK01_BASE` points the worker at a stub.** The provider cannot be reached
 from a test and a key cannot live in the repo, so the whole path — worker,
@@ -1236,8 +1272,13 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   and says so plainly if none is there rather than looking like a failure.
   Node is installed user-scope via winget, so a new terminal sees it and an
   already-open one does not.
+- Crosswalk: `python scripts/test_crosswalk.py` — the source-id join against a
+  handful of players, including two Josh Allens, a collision and a player
+  neither side shares. Needs nothing but the standard library.
 - Pipeline: `python scripts/build_players.py` — prints counts and writes the
-  generated files. Check `unmatched.txt` afterwards. On Windows run it as
+  generated files. Check `unmatched.txt` afterwards. **`TANK01_KEY` in the
+  environment is optional**: without it the crosswalk is skipped, the build is
+  otherwise identical, and news stays off. On Windows run it as
   `py scripts/build_players.py`. A bare `python` reaches the Microsoft Store
   stub and fails with "Python was not found" unless the installer's
   "Add python.exe to PATH" box was ticked, which it usually isn't.
@@ -1290,7 +1331,7 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   fact in two places and would have failed as a suite quietly testing a server
   nobody was running.
 
-- **End to end: `npm install` once, then `npx playwright test`.** Thirty-five
+- **End to end: `npm install` once, then `npx playwright test`.** Thirty-six
   tests, about twelve minutes, and it starts the static server and `wrangler dev`
   itself. It drives the real pages in a real browser — a solo draft at both
   shapes, a full two-manager room draft to completion, a dropped socket
