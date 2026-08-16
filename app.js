@@ -2508,8 +2508,40 @@ function label(score) {
 // Value over replacement, as a score out of 100. Split out of draftSignals()
 // because the player list wants this on every row, where the reasons, the
 // upside model and the bust model would all be work thrown away.
+/* Positions the projection cannot rank, so we decline to score them.
+
+   Backtested against three seasons of archived forecasts — what Sleeper said
+   before the season, against what happened — the projected order for these two
+   has no relationship to the finishing order:
+
+       K    r = 0.37, -0.09, 0.57      (2023, 2024, 2025)
+       DST  r = 0.32,  0.06, 0.25
+
+   2024's kickers were *negatively* correlated. Every other position lands
+   between 0.58 and 0.73.
+
+   There is a mechanical reason underneath and it cannot be repaired from the
+   feed. Sleeper forecasts only `fgm_40_49` and `fgm_50_59` — no field goal
+   under forty yards at all, which was 253 of the 406 made in 2025. Every
+   kicker is therefore projected far too low, and there is no total to subtract
+   from to recover the rest, so inventing them would be this pipeline recording
+   an opinion instead of a fact. About half the shortfall cancels in value over
+   replacement, because a kicker and his replacement move together; none of the
+   ranking noise does, and no amount of arithmetic fixes r = -0.09.
+
+   Returning null rather than a number is the same answer this already gives a
+   player with no projection, and it flows the same way: the sheet and the
+   table print a dash, and modelMultipliers() leaves him exactly where the
+   market put him rather than pushing him down for the want of a score.
+
+   The grade is deliberately untouched. It runs on aboveReplacement(), and a
+   kicker really did score those points — how a finished roster performed and
+   how well a forecast ranks are different questions. */
+const UNRANKED_POSITIONS = ["K", "DST"];
+
 function overallScore(player) {
   if (!player || player.projPts === null || player.projPts === undefined) return null;
+  if (UNRANKED_POSITIONS.indexOf(player.pos) >= 0) return null;
   const vor = player.projPts - (REPLACEMENT_PTS[player.pos] || 0);
   return Math.max(0, Math.min(100, (vor / (BEST_VOR || 1)) * 100));
 }
@@ -2528,6 +2560,9 @@ function overallScore(player) {
    score available and a negative there would invert the discount. */
 function replacementGap(player) {
   if (!player || player.projPts === null || player.projPts === undefined) return null;
+  // Same refusal as overallScore(). This is that figure before the clamp, so
+  // a position we will not rank has no gap to report either.
+  if (UNRANKED_POSITIONS.indexOf(player.pos) >= 0) return null;
   return player.projPts - (REPLACEMENT_PTS[player.pos] || 0);
 }
 
@@ -2573,8 +2608,12 @@ function draftSignals(player) {
   // ---- Juke score: value over a replacement starter, in your scoring ----
   const vor = player.projPts - (REPLACEMENT_PTS[player.pos] || 0);
   const overall = overallScore(player);
-  reasons.overall.push(Math.round(player.projPts) + " projected points, " +
-    (vor >= 0 ? "+" : "") + Math.round(vor) + " vs a replacement " + player.pos);
+  if (overall === null) {
+    reasons.overall.push("the projection cannot rank this position, so we do not score it");
+  } else {
+    reasons.overall.push(Math.round(player.projPts) + " projected points, " +
+      (vor >= 0 ? "+" : "") + Math.round(vor) + " vs a replacement " + player.pos);
+  }
 
   // How far the projections disagree with the market, at his position.
   const gap = player.projPosRank ? (player.posRank - player.projPosRank) : 0;
@@ -4076,6 +4115,16 @@ function rankRow(player) {
 function jukeNote(player) {
   const bits = [];
 
+  /* A position we decline to rank says so first, and then stops. The lines
+     below are all about a score that does not exist here, and "projects K3,
+     drafted as K1" invites exactly the comparison the backtest says is
+     worthless. */
+  if (player.projPts !== null && overallScore(player) === null) {
+    return `<p class="jukenote"><b>Not rated</b> &mdash; the projection ranks this
+      position no better than chance, measured against three seasons of our own
+      forecasts, so the Juke score is left blank rather than guessed at.</p>`;
+  }
+
   const gap = replacementGap(player);
   if (gap !== null && gap < 0) {
     /* What a clamped zero is actually saying. Below replacement is not the
@@ -4210,6 +4259,26 @@ function logsHtml(player, s, year) {
 const newsCache = new Map();
 const NEWS_SUMMARY_MAX = 200;
 
+/* What stands in for the meter at a position we will not score.
+
+   An empty bar reading "Very Low" is what a null produces if you let it
+   through, and that is a verdict rather than an abstention — the one reading
+   further from the truth than the number it replaced. Saying nothing at all
+   is not right either: the meter is missing and the reader deserves to know
+   it was removed on purpose. */
+function unratedNote(player) {
+  const what = player.pos === "DST" ? "defenses" : "kickers";
+  return `<div class="sig unrated">
+      <div class="sig-head"><b>Juke score</b><span>Not rated</span></div>
+      <p class="sig-why">Graded against three seasons of our own past forecasts,
+        the projection ranks ${what} no better than chance &mdash; one of those
+        seasons came out backwards. Rather than print a number we know carries
+        no signal, we leave it blank. The projected points below are still real,
+        and ${player.pos === "DST" ? "a defense" : "a kicker"} is worth taking
+        late whoever it is.</p>
+    </div>`;
+}
+
 function newsSlot() {
   // Hidden until there is something to say. The stylesheet gives .newsbox a
   // display, so it carries its own [hidden] rule — an author display beats
@@ -4330,7 +4399,15 @@ function ourRead(player, s, sig) {
 
   // Where the market and the model disagree, which is the whole game.
   const gap = marketGap(player);
-  if (player.projPosRank) {
+  /* At a position we decline to score, the projected rank is the very thing
+     the backtest found worthless — so "K1 on the projection" is an argument
+     from a number we have just told the reader not to trust. The timing is
+     what actually matters here, and the app already enforces it. */
+  if (overallScore(player) === null && player.projPts !== null) {
+    lines.push(`The projection cannot separate ${player.pos === "DST" ? "defenses" : "kickers"}
+      well enough to be worth acting on, so take one late and take whoever is
+      there. This one is drafted around <b>${posLabel(player.pos)}${player.posRank}</b>.`);
+  } else if (player.projPosRank) {
     if (gap >= MARKET_GAP) {
       lines.push(`The board has ${them} at <b>${posLabel(player.pos)}${player.posRank}</b> and the projection
         says <b>${posLabel(player.pos)}${player.projPosRank}</b> — ${gap} places of daylight in your favour.
@@ -4425,7 +4502,9 @@ function openSheet(player) {
     const p = sig.stats.p || {};
     overview = `
       ${ourRead(player, s, sig)}
-      ${meter("Juke score", sig.overall, sig.overall >= 55 ? "good" : "", sig.reasons.overall)}
+      ${sig.overall === null
+          ? unratedNote(player)
+          : meter("Juke score", sig.overall, sig.overall >= 55 ? "good" : "", sig.reasons.overall)}
       ${meter("Upside",  sig.upside,  sig.upside  >= 55 ? "good" : "", sig.reasons.upside)}
       ${meter("Bust risk", sig.bust,  sig.bust >= 55 ? "bad" : sig.bust >= 35 ? "warn" : "", sig.reasons.bust)}
 
@@ -4436,12 +4515,16 @@ function openSheet(player) {
         <div class="statbox"><div class="k">Pos rank</div><div class="v">${player.projPosRank ? posLabel(player.pos) + player.projPosRank : "&mdash;"}</div></div>
         <div class="statbox"><div class="k">vs ADP</div><div class="v">${player.projPosRank ? (player.posRank - player.projPosRank >= 0 ? "+" : "") + (player.posRank - player.projPosRank) : "&mdash;"}</div></div>
       </div>
-      <p class="method">The Juke score is projected points above the last startable player at
+      <p class="method">${overallScore(player) === null ? `Kickers and defenses carry no Juke
+      score: measured against three seasons of archived forecasts the projection ranks them no
+      better than chance, so the number is withheld rather than guessed at. Everything else on
+      this sheet &mdash; the projection, the history, the depth chart &mdash; is unaffected.` : ``}
+      ${overallScore(player) !== null ? `The Juke score is projected points above the last startable player at
       this position in a ${league.teams}-team league &mdash; ${player.pos}${replacementRank(player.pos)} on
       this board &mdash; as a share of the best such figure anywhere on it. It is a ranking against
       the rest of the pool, so somebody always scores 100, and most of the ${board.length} players
       here score nothing at all &mdash; this league only ever starts
-      ${league.teams * (starterCount() + flexCount())} of them at once.
+      ${league.teams * (starterCount() + flexCount())} of them at once.` : ``}
       Upside and bust risk weigh how far the projection disagrees with ADP,
       plus experience, age, depth chart position, injury designation and last season's availability.
       This is one model, not a consensus of analysts.</p>`;
