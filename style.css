@@ -1,4 +1,46 @@
 /* ==========================================================
+   Scale — type and radius
+   ==========================================================
+
+   Two scales, and nothing below may use a raw px value for
+   either. They are not colours: these are identical under both
+   themes, which is why they sit in their own block above the
+   colour one rather than inside it.
+
+   The type scale replaced 26 distinct font sizes — every half
+   step from 8.5px to 16px, chosen per element by eye. Each one
+   was defensible and the set was not: nothing shared a size, so
+   nothing read as belonging to the same family. Eight steps at
+   roughly a 1.2 ratio, widening at display sizes.
+
+   --fs-base lands on 16px, which is also the size iOS needs a
+   field to be before it stops zooming the page on focus. That
+   rule under @media (pointer: coarse) is now a floor the design
+   already meets rather than an exception fighting it.
+
+   The radius scale replaced 15 values — every integer from 2 to
+   12. Four steps and a pill, by the job each does: an inline
+   mark, a control, a card, an overlay.
+   ========================================================== */
+
+:root {
+  --fs-2xs:  10px;   /* board cells, badges, uppercase micro-labels */
+  --fs-xs:   12px;   /* hints, meta, field labels, small buttons    */
+  --fs-sm:   14px;   /* card body, blurbs, nav, tabs                */
+  --fs-base: 16px;   /* body, form fields, primary buttons          */
+  --fs-lg:   19px;   /* lead paragraphs, panel headings, wordmark   */
+  --fs-xl:   23px;   /* section headings                            */
+  --fs-2xl:  32px;   /* grade letter, hero headline on a phone      */
+  --fs-3xl:  42px;   /* hero headline                               */
+
+  --r-xs:    4px;    /* badges, board cells, bars, swatches         */
+  --r-sm:    8px;    /* buttons, inputs, selects, seats             */
+  --r-md:   12px;    /* cards and panels                            */
+  --r-lg:   16px;    /* overlays: player sheet, dialog, rail, chat  */
+  --r-pill: 999px;   /* chips, pills, tabs, the two FABs            */
+}
+
+/* ==========================================================
    Juke — stylesheet
    Colours are defined once here, at the top, and reused
    everywhere below by name. Change one line, change the
@@ -37,7 +79,21 @@
   /* The navy half of the logo, on a normal surface. White here because the
      default theme is dark; the light theme puts the real brand navy back. */
   --mark-ink:    #FFFFFF;
+  /* The primary action colour, everywhere and only. White on it is 5.18:1,
+     and it does not move between themes, which is why a rule may name it.
+
+     It used to share the job with --blue: .cta was orange and .primary was
+     blue, so the same control — "Resume" on a saved draft — was orange on
+     the landing page and blue three lines into the draft view, from the
+     same two words in the same codebase. A first-time visitor pressed a
+     big orange button and then had to find a blue one to actually start.
+
+     Blue keeps everything it was already better at: focus rings, the
+     selected tab, the header when the clock is yours. Orange means act,
+     blue means state. See the note on .draft-btn for the one place a
+     button does something and is deliberately still blue. */
   --orange-cta:  #C2410C;
+  --orange-cta-hover: #A8380A;   /* was typed as a literal in .cta:hover */
   /* Orange *as text on a surface*, which is a different problem again — the
      same split as --blue and --link. The brand orange reads 5.49:1 on this
      dark page and only 3.11:1 on the light one, so the light block swaps it
@@ -47,13 +103,26 @@
 
   /* The header changes colour with the state of the draft, not with the
      theme, so it keeps its own blues and reds. The ones below named
-     --blue and --danger do move, which is why these are separate. */
-  --hdr-blue-deep: #0A548A;
-  --hdr-blue:      #0E6BB0;
-  --hdr-cyan:      #12A3DC;
-  --hdr-red-deep:  #7A1F1A;
-  --hdr-red:       #B43026;
-  --hdr-red-lift:  #D0453A;
+     --blue and --danger do move, which is why these are separate.
+
+     Every stop here carries white text, so every stop has to clear 4.5:1
+     against white on its own. That is a stricter rule than it sounds:
+     --hdr-cyan sits at 130% and so is never fully painted, and it would
+     have been tempting to check only the colour the box actually reaches.
+     Tying the requirement to a stop percentage means moving that stop
+     silently breaks the contrast, so each stop passes by itself and any
+     interpolation between two passing stops passes with them.
+
+     --hdr-cyan was #12A3DC, which is 2.88 — the worst contrast anywhere
+     in the app. The lightest colour actually painted was 3.65, and the
+     header carries a 16px headline, a 12px pick line and a 10px label on
+     top of it. */
+  --hdr-blue-deep: #0A548A;   /* white 7.93 */
+  --hdr-blue:      #0E6BB0;   /* white 5.60 */
+  --hdr-cyan:      #0E7DA9;   /* white 4.63, was #12A3DC at 2.88 */
+  --hdr-red-deep:  #7A1F1A;   /* white 10.3 */
+  --hdr-red:       #B43026;   /* white 6.19 */
+  --hdr-red-lift:  #D04439;   /* white 4.60, was #D0453A at 4.57 */
 
   /* Blue as a filled button always carries white text, so it can only go so
      light before that text stops being readable. It brightens a little from
@@ -66,9 +135,23 @@
   --cyan:        #35BDEE;
   --link:        #62B8F2;   /* blue on a surface, rather than under white text */
 
+  /* Three tones, and the lightest of them is pinned by contrast rather than
+     by taste. --ink-light is the tertiary tone — captions, meta, uppercase
+     labels — and it is used 58 times, almost always at --fs-2xs or --fs-xs,
+     which is small text and therefore needs 4.5:1.
+
+     It was #76838F and it missed on every surface it lands on: 4.43 on
+     --sunken, 4.18 on --card, 3.83 on --well and 3.54 on --fill. That is
+     122 elements, and it was not a rounding error — the light theme's
+     #94A1AC was worse still, bottoming out at 2.31.
+
+     The binding surface is --fill, the lightest thing it sits on in dark
+     and the darkest in light. --fill-hi is lighter again but never carries
+     this tone: every rule that hovers to --fill-hi either sets --ink or
+     starts from --ink-mid, which clears it at 5.30. */
   --ink:         #E6ECF3;
-  --ink-mid:     #A2B0BE;
-  --ink-light:   #76838F;
+  --ink-mid:     #A2B0BE;   /* 6.21 on --fill */
+  --ink-light:   #8E9BA9;   /* 4.85 on --fill, the worst surface it meets */
 
   --page:        #0E151E;
   --card:        #18212D;
@@ -101,22 +184,46 @@
 
   /* Position colours. The -bg / -fg pair is a chip or an avatar; the bare
      name is a solid block on the draft board, which always carries white
-     text and so is the same in both themes. */
+     text and so is the same in both themes.
+
+     "Always carries white text" is a contrast requirement, and for four of
+     the six it was not being met. The board sets names at --fs-2xs, so the
+     bar is 4.5:1, and they measured: TE 2.68, WR 3.12, QB 3.96, RB 3.97 —
+     80 elements. Only K (4.52) and DST (4.86) passed.
+
+     The fix darkens lightness alone and leaves hue and saturation where
+     they were, so the board still colour-codes the way it always has. Each
+     lands at 4.61-4.62, a margin over the bar rather than exactly on it.
+     The cost is concentrated in TE and WR: measured as CIE76 dE, TE moves
+     19 and WR 14.4, which is a change you will see, while RB moves 4.9 and
+     K 1.4, which you will not. DST did not move at all.
+
+     What matters more than any single shift is that the six are still
+     telling apart from each other: the closest pair is RB/DST, and it goes
+     from 28.1 to 25.0 against a just-noticeable threshold near 2.3.
+
+     If a seventh position is ever added, check white on it before adding
+     it here. That check is the reason four of these values are not the
+     ones sampled off the original artwork. */
   /* Seat colours, for the avatar beside a chat message. Solids under white
      text, exactly like the position blocks below and defined here for the
      same reason: they are the same value under both themes, so a rule may
      name one without needing a light override. Eight, cycled, because a
      fourteen-team room has more chairs than there are hues worth telling
-     apart at eighteen pixels across. */
-  --seat-0:#2E86C1; --seat-1:#28A667; --seat-2:#D9534F; --seat-3:#8064CF;
-  --seat-4:#E08A2C; --seat-5:#12879B; --seat-6:#B5427F; --seat-7:#607483;
+     apart at eighteen pixels across.
 
-  --qb-bg:#3A1D22;  --qb-fg:#F0929B;  --qb:#D9534F;
-  --rb-bg:#12293A;  --rb-fg:#74B9E6;  --rb:#2E86C1;
-  --wr-bg:#12301F;  --wr-fg:#6ED79C;  --wr:#28A667;
-  --te-bg:#33240F;  --te-fg:#E9AE63;  --te:#E08A2C;
-  --k-bg:#251E3C;   --k-fg:#B4A0EC;   --k:#8064CF;
-  --dst-bg:#232B33; --dst-fg:#A8B7C2; --dst:#607483;
+     Five of these were the same hex as a position colour and so carried
+     the same failure; they take the same darkened value. seat-5 was 4.23
+     on its own account. seat-6 and seat-7 already passed. */
+  --seat-0:#2A7BB1; --seat-1:#208553; --seat-2:#D43E39; --seat-3:#7F62CF;
+  --seat-4:#AA6419; --seat-5:#118093; --seat-6:#B5427F; --seat-7:#607483;
+
+  --qb-bg:#3A1D22;  --qb-fg:#F0929B;  --qb:#D43E39;   /* white 4.62 */
+  --rb-bg:#12293A;  --rb-fg:#74B9E6;  --rb:#2A7BB1;   /* white 4.62 */
+  --wr-bg:#12301F;  --wr-fg:#6ED79C;  --wr:#208553;   /* white 4.62 */
+  --te-bg:#33240F;  --te-fg:#E9AE63;  --te:#AA6419;   /* white 4.61 */
+  --k-bg:#251E3C;   --k-fg:#B4A0EC;   --k:#7F62CF;    /* white 4.61 */
+  --dst-bg:#232B33; --dst-fg:#A8B7C2; --dst:#607483;  /* white 4.86 */
 
   /* Tells the browser to draw the parts we don't control — select popups,
      checkboxes, scrollbars — to match. Without it a dark page gets white
@@ -137,9 +244,22 @@
      value would be 3.11:1 and fail at any size the slogan is set in. */
   --orange-ink:  #C2410C;
 
+  /* The same three tones, and the one place the two themes could not simply
+     mirror each other.
+
+     --ink-light has to reach #5E6A76 to clear 4.5:1 on --fill (#EDF0F3),
+     and #5A6875 — where --ink-mid sat — is 4.83 against 5.00. Two tones
+     0.17 apart is one tone with two names, so making the tertiary legible
+     had to push the secondary along with it. --ink-mid moves to #4C5763,
+     which restores a 1.61 gap on --fill and lines up with dark's 1.36.
+
+     So the ramp is set from the bottom in both themes: --ink-light is
+     whatever the worst surface allows, and --ink-mid is placed above it.
+     Body text getting darker in light is the side effect, and it is the
+     right side effect. */
   --ink:         #16202C;
-  --ink-mid:     #5A6875;
-  --ink-light:   #94A1AC;
+  --ink-mid:     #4C5763;   /* 6.44 on --fill */
+  --ink-light:   #5E6A76;   /* 4.83 on --fill, the worst surface it meets */
 
   --page:        #F5F7FA;
   --card:        #FFFFFF;
@@ -187,7 +307,7 @@ body {
   background: var(--page);
   color: var(--ink);
   font-family: Inter, system-ui, sans-serif;
-  font-size: 15px;
+  font-size: var(--fs-base);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -254,6 +374,7 @@ body {
   display: flex; align-items: center;
   border: 0; background: none;
   color: inherit; cursor: pointer;
+  font-size: var(--fs-sm);        /* icon only — see the note on .theme-toggle */
   transition: opacity .15s ease;
   /* The mark is 31 by 36, and a thumb wants 44 square. The padding grows the
      hit area and the negative margin takes the space back, so nothing moves
@@ -264,7 +385,7 @@ body {
 }
 
 .home:hover { opacity: .78; }
-.home:focus-visible { outline: 2px solid var(--blue); outline-offset: 4px; border-radius: 6px; }
+.home:focus-visible { outline: 2px solid var(--blue); outline-offset: 4px; border-radius: var(--r-sm); }
 
 /* The shield is taller than it is wide — 662 by 774 in the artwork — so it
    cannot be sized as a square without squashing it. The drop shadow it used to
@@ -293,17 +414,31 @@ body {
 .appbar-text h1 {
   margin: 0;
   font-family: Poppins, sans-serif;
-  font-size: 16px; font-weight: 700; letter-spacing: -0.01em;
+  font-size: var(--fs-base); font-weight: 700; letter-spacing: -0.01em;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
 .appbar-text p {
-  margin: 0; font-size: 12px; color: var(--ink-mid);
+  margin: 0; font-size: var(--fs-xs); color: var(--ink-mid);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
+/* Solid, not rgba(255,255,255,.82).
+
+   Washing white out to signal "secondary" is close to free on a dark
+   surface and expensive on a saturated one, and this is the most saturated
+   surface in the app. At 12px it needs 4.5:1, and the lightest end of the
+   blue gradient gives pure white 4.64 — so the minimum workable alpha is
+   0.98, and even a solid #F2F6F9 only reaches 4.27. There is no opacity
+   that reads as secondary and stays legible; the choice is a false one.
+
+   So hierarchy here comes from size and weight instead, which is what it
+   should have come from on a colour this strong: 12px regular under a 16px
+   bold headline. Same for .count-label below, which was .68 and measured
+   2.48 — the worst contrast on the page a manager stares at while their
+   own clock runs down. */
 .appbar.my-turn .appbar-text p,
-.appbar.urgent .appbar-text p { color: rgba(255,255,255,.82); }
+.appbar.urgent .appbar-text p { color: #fff; }
 
 .appbar-right {
   margin-left: auto;
@@ -314,16 +449,16 @@ body {
 .count { text-align: right; }
 
 .count-label {
-  display: block; font-size: 9.5px; letter-spacing: .1em;
+  display: block; font-size: var(--fs-2xs); letter-spacing: .1em;
   text-transform: uppercase; color: var(--ink-light); font-weight: 600;
 }
 
 .appbar.my-turn .count-label,
-.appbar.urgent .count-label { color: rgba(255,255,255,.68); }
+.appbar.urgent .count-label { color: #fff; }
 
 .count-value {
   display: block; font-family: Poppins, sans-serif;
-  font-size: 22px; font-weight: 700; line-height: 1.1;
+  font-size: var(--fs-xl); font-weight: 700; line-height: 1.1;
   font-variant-numeric: tabular-nums;
 }
 
@@ -336,6 +471,11 @@ body {
 .theme-toggle {
   flex: none;
   display: flex; align-items: center; justify-content: center;
+  /* Icon only, so this changes nothing on screen — but a button with no
+     font-size of its own takes the browser's 13.333px, which is the one
+     value on the page that is not on the scale. Set so an audit of "is
+     everything on the scale" can be believed. */
+  font-size: var(--fs-sm);
   width: 34px; height: 34px;
   border: 1px solid var(--line); border-radius: 50%;
   background: var(--fill); color: var(--ink-mid);
@@ -363,8 +503,8 @@ body {
 
 .tabs button {
   flex: none; font-family: Inter, sans-serif;
-  font-size: 13.5px; font-weight: 600; color: var(--ink-mid);
-  background: none; border: 0; border-radius: 999px;
+  font-size: var(--fs-sm); font-weight: 600; color: var(--ink-mid);
+  background: none; border: 0; border-radius: var(--r-pill);
   padding: 8px 16px; cursor: pointer; white-space: nowrap;
 }
 
@@ -380,8 +520,8 @@ body {
 
 .mini {
   flex: none; font-family: Inter, sans-serif;
-  font-size: 12px; font-weight: 600; color: var(--ink-mid);
-  background: var(--fill); border: 0; border-radius: 6px;
+  font-size: var(--fs-xs); font-weight: 600; color: var(--ink-mid);
+  background: var(--fill); border: 0; border-radius: var(--r-sm);
   padding: 6px 12px; cursor: pointer; white-space: nowrap;
 }
 
@@ -390,8 +530,8 @@ body {
 
 /* The way on to the next mock. Reads as an invitation, next to a Discard
    that reads as a warning, so the two are not mistaken for each other. */
-.mini.go { background: var(--blue); color: #fff; }
-.mini.go:hover { background: var(--blue-dark); }
+.mini.go { background: var(--orange-cta); color: #fff; }
+.mini.go:hover { background: var(--orange-cta-hover); }
 .mini:disabled { opacity: .45; cursor: default; }
 .mini.active { background: var(--navy); color: #fff; }
 .mini.active:hover { background: var(--navy-soft); }
@@ -413,24 +553,24 @@ body {
 
 .tick-pick {
   flex: none; font-family: Poppins, sans-serif; font-weight: 700;
-  font-size: 12px; color: var(--cyan); width: 34px;
+  font-size: var(--fs-xs); color: var(--cyan); width: 34px;
   font-variant-numeric: tabular-nums;
 }
 
 .tick-body { min-width: 0; flex: 1; }
 
 .tick-team {
-  font-size: 9.5px; letter-spacing: .1em; text-transform: uppercase;
+  font-size: var(--fs-2xs); letter-spacing: .1em; text-transform: uppercase;
   color: rgba(255,255,255,.62); font-weight: 700;
 }
 
 .tick-name {
   display: flex; align-items: center; gap: 6px;
-  font-size: 14px; font-weight: 600; margin-top: 2px;
+  font-size: var(--fs-sm); font-weight: 600; margin-top: 2px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
-.tick-tm { font-size: 11.5px; color: rgba(255,255,255,.72); font-weight: 400; }
+.tick-tm { font-size: var(--fs-xs); color: rgba(255,255,255,.72); font-weight: 400; }
 
 .ticker .mini {
   background: rgba(255,255,255,.16); color: #fff;
@@ -448,21 +588,21 @@ body {
 .setup {
   max-width: 460px; margin: 18px auto;
   background: var(--card); border: 1px solid var(--line);
-  border-radius: 12px; padding: 24px 22px 22px;
+  border-radius: var(--r-md); padding: 24px 22px 22px;
 }
 
 .setup { border-top: 3px solid var(--orange); }
 
 .setup h2 {
   margin: 0 0 20px; font-family: Poppins, sans-serif;
-  font-size: 22px; font-weight: 700; letter-spacing: -0.02em;
+  font-size: var(--fs-xl); font-weight: 700; letter-spacing: -0.02em;
 }
 
 .field { margin-bottom: 20px; }
 
 .field label {
   display: block; margin-bottom: 7px;
-  font-size: 12px; font-weight: 700; letter-spacing: .05em;
+  font-size: var(--fs-xs); font-weight: 700; letter-spacing: .05em;
   text-transform: uppercase; color: var(--ink-mid);
 }
 
@@ -470,9 +610,9 @@ body {
 
 select {
   flex: 1; width: 100%;
-  font-family: Inter, sans-serif; font-size: 14.5px; color: var(--ink);
+  font-family: Inter, sans-serif; font-size: var(--fs-sm); color: var(--ink);
   background: var(--card); border: 1px solid var(--line);
-  border-radius: 8px; padding: 10px 12px; cursor: pointer;
+  border-radius: var(--r-sm); padding: 10px 12px; cursor: pointer;
 }
 
 /* Three dropdowns across a row is comfortable when the options are "QB 1" and
@@ -515,10 +655,10 @@ select {
    competing with those rules; it is a floor underneath all of them, and any
    field added later gets it without anybody remembering to come back here. */
 @media (pointer: coarse) {
-  input, select, textarea { font-size: 16px !important; }
+  input, select, textarea { font-size: var(--fs-base) !important; }
 }
 
-.hint { margin: 7px 0 0; font-size: 12px; color: var(--ink-light); }
+.hint { margin: 7px 0 0; font-size: var(--fs-xs); color: var(--ink-light); }
 
 /* A roster that does not add up to the round count, or a league too big for
    the player pool. The draft cannot start until it is fixed. */
@@ -526,9 +666,9 @@ select {
 
 .ghost {
   flex: none; font-family: Inter, sans-serif;
-  font-size: 13.5px; font-weight: 600; color: var(--link);
+  font-size: var(--fs-sm); font-weight: 600; color: var(--link);
   background: var(--card); border: 1px solid var(--line);
-  border-radius: 8px; padding: 10px 16px; cursor: pointer;
+  border-radius: var(--r-sm); padding: 10px 16px; cursor: pointer;
 }
 
 .ghost:hover { background: var(--blue-pale); border-color: var(--blue-line); }
@@ -537,35 +677,44 @@ select {
    A native <details>, so open and closed cost no JavaScript and keyboard
    and screen reader behaviour come for free. */
 
-.scoring {
+/* A collapsed box on the setup screen. Scoring was the only one for a long
+   while; League and Draft with friends joined it when the screen stopped
+   putting sixty controls in front of somebody who wanted to press one
+   button. Each carries a summary of what is inside, so closed is still
+   informative — the point is to answer "what league is this" without
+   opening anything. */
+.setupbox {
   background: var(--sunken); border: 1px solid var(--line);
-  border-radius: 8px; margin-bottom: 20px;
+  border-radius: var(--r-sm); margin-bottom: 20px;
 }
 
-.scoring > summary {
+.setupbox > summary {
   display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
   padding: 12px 15px; cursor: pointer;
-  font-size: 12px; font-weight: 700;
+  font-size: var(--fs-xs); font-weight: 700;
   letter-spacing: .05em; text-transform: uppercase; color: var(--ink-mid);
 }
 
-.scoring > summary:hover { color: var(--ink); }
+.setupbox > summary:hover { color: var(--ink); }
 
-.scoring-sum {
-  font-size: 11.5px; font-weight: 500; letter-spacing: 0;
+.box-sum {
+  font-size: var(--fs-xs); font-weight: 500; letter-spacing: 0;
   text-transform: none; color: var(--ink-light);
 }
 
-.scoring > div, .scoring > .hint, .scoring > button { margin-left: 15px; margin-right: 15px; }
-.scoring .section-label { margin: 14px 15px 6px; }
-.scoring > button { margin-bottom: 15px; }
-.scoring .hint { margin-bottom: 14px; }
+.setupbox > div, .setupbox > .hint, .setupbox > button { margin-left: 15px; margin-right: 15px; }
+.setupbox .section-label { margin: 14px 15px 6px; }
+.setupbox > button { margin-bottom: 15px; }
+.setupbox .hint { margin-bottom: 14px; }
+/* The boxes hold .field blocks, whose own bottom margin would double up
+   against the box padding. */
+.setupbox .field:last-child { margin-bottom: 15px; }
 
 .rulegrid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; }
 @media (max-width: 420px) { .rulegrid { grid-template-columns: 1fr; } }
 
 .rule { display: flex; align-items: center; gap: 8px; justify-content: space-between; }
-.rule span { font-size: 12.5px; color: var(--ink-mid); }
+.rule span { font-size: var(--fs-sm); color: var(--ink-mid); }
 
 /* A yardage rule takes the divisor a league says out loud and shows the
    multiplier the engine uses underneath it, so neither number is a mystery.
@@ -573,11 +722,11 @@ select {
 .rule.per-yard { grid-column: 1 / -1; align-items: flex-start; }
 
 .divisor { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
-.divisor i { font-style: normal; font-size: 11.5px; color: var(--ink-light); }
+.divisor i { font-style: normal; font-size: var(--fs-xs); color: var(--ink-light); }
 .divisor input { width: 62px; }
 .divisor b {
   flex-basis: 100%; font-weight: 500;
-  font-size: 10.5px; color: var(--ink-light);
+  font-size: var(--fs-2xs); color: var(--ink-light);
   font-variant-numeric: tabular-nums;
 }
 
@@ -586,23 +735,23 @@ select {
    So it takes the muted ink rather than a colour that reads as an error. */
 .rule .past {
   display: inline-block; margin-left: 6px;
-  font-style: normal; font-size: 9.5px; font-weight: 700;
+  font-style: normal; font-size: var(--fs-2xs); font-weight: 700;
   letter-spacing: .05em; text-transform: uppercase;
   color: var(--ink-light);
-  background: var(--fill); border-radius: 3px; padding: 1px 5px;
+  background: var(--fill); border-radius: var(--r-xs); padding: 1px 5px;
 }
 
 .hint .past {
-  font-style: normal; font-weight: 700; font-size: 9.5px;
+  font-style: normal; font-weight: 700; font-size: var(--fs-2xs);
   letter-spacing: .05em; text-transform: uppercase;
-  background: var(--fill); border-radius: 3px; padding: 1px 5px;
+  background: var(--fill); border-radius: var(--r-xs); padding: 1px 5px;
 }
 
 .rule input {
   flex: none; width: 66px; text-align: right;
-  font-family: Inter, sans-serif; font-size: 13px; color: var(--ink);
+  font-family: Inter, sans-serif; font-size: var(--fs-sm); color: var(--ink);
   background: var(--card); border: 1px solid var(--line);
-  border-radius: 6px; padding: 5px 7px;
+  border-radius: var(--r-sm); padding: 5px 7px;
 }
 
 .rule input:focus { outline: 2px solid var(--blue); outline-offset: 1px; border-color: var(--blue); }
@@ -611,18 +760,26 @@ select {
    With thirty-eight of them that would make the editor unusable on a phone,
    so they grow rather than the page jumping. */
 @media (max-width: 640px) {
-  .rule input { font-size: 16px; width: 74px; }
+  .rule input { font-size: var(--fs-base); width: 74px; }
 }
 
 .primary {
   font-family: Inter, sans-serif; font-weight: 600; color: #fff;
-  background: var(--blue); border: 0; border-radius: 8px;
-  padding: 9px 18px; font-size: 14px; cursor: pointer;
+  background: var(--orange-cta); border: 0; border-radius: var(--r-sm);
+  padding: 9px 18px; font-size: var(--fs-sm); cursor: pointer;
 }
 
-.primary:hover { background: var(--blue-dark); }
-.primary:disabled { background: var(--ink-light); cursor: not-allowed; }
-.primary.big { width: 100%; padding: 14px; font-size: 15.5px; }
+.primary:hover { background: var(--orange-cta-hover); }
+
+/* Not white on --ink-light. That pairing was 3.88:1 and became 2.83:1 when
+   --ink-light was lightened to clear its own contrast bar — a disabled
+   control is exempt from the rule, so nothing failed, and the label quietly
+   got harder to read anyway. Muted text on a muted fill is the more honest
+   way to say "off" in any case, and it measures 4.85. */
+.primary:disabled {
+  background: var(--fill); color: var(--ink-light); cursor: not-allowed;
+}
+.primary.big { width: 100%; padding: 14px; font-size: var(--fs-base); }
 
 /* ---------- position filter ---------- */
 
@@ -630,7 +787,7 @@ select {
 
 .pos-filter button {
   flex: none; font-family: Inter, sans-serif;
-  font-size: 13px; font-weight: 600; color: var(--ink-mid);
+  font-size: var(--fs-sm); font-weight: 600; color: var(--ink-mid);
   background: none; border: 0; padding: 7px 12px;
   cursor: pointer; border-bottom: 2px solid transparent;
 }
@@ -641,7 +798,7 @@ select {
    Written by renderPlayerFilter(), and absent before a draft starts. */
 .pos-filter .need {
   display: inline-block; margin-left: 5px;
-  font-size: 11px; font-weight: 700;
+  font-size: var(--fs-xs); font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--ink-light);
 }
@@ -655,8 +812,8 @@ select {
 
 .inj {
   display: inline-block;
-  font-size: 9px; font-weight: 700; letter-spacing: .04em;
-  padding: 2px 5px; border-radius: 3px;
+  font-size: var(--fs-2xs); font-weight: 700; letter-spacing: .04em;
+  padding: 2px 5px; border-radius: var(--r-xs);
   background: var(--fill); color: var(--ink-mid);
 }
 
@@ -680,7 +837,7 @@ tr.conflict .nm { color: var(--t-bad-fg); }
   width: 46px; height: 46px; flex: none;
   border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  font-family: Poppins, sans-serif; font-weight: 700; font-size: 15px;
+  font-family: Poppins, sans-serif; font-weight: 700; font-size: var(--fs-base);
   letter-spacing: -0.02em;
 }
 
@@ -691,7 +848,7 @@ tr.conflict .nm { color: var(--t-bad-fg); }
 .avatar.K   { background: var(--k-bg);   color: var(--k-fg); }
 .avatar.DST { background: var(--dst-bg); color: var(--dst-fg); }
 
-.avatar.sm { width: 34px; height: 34px; font-size: 12px; }
+.avatar.sm { width: 34px; height: 34px; font-size: var(--fs-xs); }
 
 /* The headshot sits on top of the initials. If it fails to load it
    removes itself and the initials show through, so a missing photo
@@ -706,7 +863,7 @@ tr.conflict .nm { color: var(--t-bad-fg); }
 
 .freshness {
   margin: 14px 0 0; text-align: center;
-  font-size: 11.5px; color: var(--ink-light);
+  font-size: var(--fs-xs); color: var(--ink-light);
 }
 
 .freshness a { color: var(--link); text-decoration: none; }
@@ -716,8 +873,8 @@ tr.conflict .nm { color: var(--t-bad-fg); }
 
 .chip {
   display: inline-block;
-  font-size: 10px; font-weight: 700; letter-spacing: .02em;
-  padding: 2px 7px; border-radius: 999px;
+  font-size: var(--fs-2xs); font-weight: 700; letter-spacing: .02em;
+  padding: 2px 7px; border-radius: var(--r-pill);
   background: var(--track); color: var(--ink-mid);
 }
 
@@ -737,7 +894,7 @@ tr.conflict .nm { color: var(--t-bad-fg); }
 .sug {
   display: flex; align-items: center; gap: 13px;
   background: var(--card); border: 1px solid var(--line);
-  border-radius: 10px; padding: 12px 14px; margin-bottom: 9px;
+  border-radius: var(--r-md); padding: 12px 14px; margin-bottom: 9px;
 }
 
 .sug.top { border-color: var(--blue-line); box-shadow: 0 2px 10px rgba(44,107,237,.09); }
@@ -746,16 +903,16 @@ tr.conflict .nm { color: var(--t-bad-fg); }
 
 .sug-name {
   font-family: Poppins, sans-serif;
-  font-size: 16px; font-weight: 600; letter-spacing: -0.01em;
+  font-size: var(--fs-base); font-weight: 600; letter-spacing: -0.01em;
   line-height: 1.2;
 }
 
 .sug-meta {
   display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
-  margin-top: 4px; font-size: 12px; color: var(--ink-mid);
+  margin-top: 4px; font-size: var(--fs-xs); color: var(--ink-mid);
 }
 
-.sug-stats { margin-top: 3px; font-size: 11.5px; color: var(--ink-light); }
+.sug-stats { margin-top: 3px; font-size: var(--fs-xs); color: var(--ink-light); }
 
 .value-up   { color: var(--good); font-weight: 600; }
 .value-down { color: var(--ink-light); }
@@ -781,9 +938,9 @@ tr.conflict .nm { color: var(--t-bad-fg); }
    thing and were the same kind of thing before this rule existed. */
 .toolbar input[type="search"] {
   flex: 1 1 190px; min-width: 0;
-  font-family: Inter, sans-serif; font-size: 14px; color: var(--ink);
+  font-family: Inter, sans-serif; font-size: var(--fs-sm); color: var(--ink);
   background: var(--card); border: 1px solid var(--line);
-  border-radius: 8px; padding: 9px 12px;
+  border-radius: var(--r-sm); padding: 9px 12px;
   -webkit-appearance: none; appearance: none;
 }
 .toolbar input[type="search"]::placeholder { color: var(--ink-light); }
@@ -794,7 +951,7 @@ tr.conflict .nm { color: var(--t-bad-fg); }
 .check {
   display: inline-flex; align-items: center; gap: 6px;
   white-space: nowrap; cursor: pointer;
-  font-size: 13px; color: var(--ink-mid); flex: none;
+  font-size: var(--fs-sm); color: var(--ink-mid); flex: none;
 }
 .check input { cursor: pointer; flex: none; margin: 0; }
 
@@ -812,11 +969,11 @@ tr.conflict .nm { color: var(--t-bad-fg); }
 table {
   width: 100%; border-collapse: collapse;
   background: var(--card); border: 1px solid var(--line);
-  border-radius: 10px; overflow: hidden;
+  border-radius: var(--r-md); overflow: hidden;
 }
 
 th {
-  text-align: left; font-size: 9.5px; letter-spacing: .09em;
+  text-align: left; font-size: var(--fs-2xs); letter-spacing: .09em;
   text-transform: uppercase; color: var(--ink-light); font-weight: 700;
   padding: 10px 12px; background: var(--sunken); border-bottom: 1px solid var(--line);
 }
@@ -827,17 +984,17 @@ tr:last-child td { border-bottom: 0; }
 .num { text-align: right; font-variant-numeric: tabular-nums; }
 th.num { text-align: right; }
 
-.nm { display: block; font-weight: 600; font-size: 14.5px; line-height: 1.25; }
+.nm { display: block; font-weight: 600; font-size: var(--fs-sm); line-height: 1.25; }
 
 .meta {
   display: flex; align-items: center; gap: 6px;
-  margin-top: 3px; font-size: 12px; color: var(--ink-mid);
+  margin-top: 3px; font-size: var(--fs-xs); color: var(--ink-mid);
 }
 
 .badge {
   display: inline-block; min-width: 30px; text-align: center;
-  font-size: 10px; font-weight: 700; letter-spacing: .02em;
-  padding: 2px 6px; border-radius: 4px;
+  font-size: var(--fs-2xs); font-weight: 700; letter-spacing: .02em;
+  padding: 2px 6px; border-radius: var(--r-xs);
 }
 
 .badge.QB  { background: var(--qb-bg);  color: var(--qb-fg); }
@@ -847,10 +1004,20 @@ th.num { text-align: right; }
 .badge.K   { background: var(--k-bg);   color: var(--k-fg); }
 .badge.DST { background: var(--dst-bg); color: var(--dst-fg); }
 
+/* Blue, and staying blue, while every other action in the app went orange.
+
+   "One primary action colour" is a rule about the primary action — the one
+   thing a screen is asking you to do. This is a row control, repeated on
+   every player in a table that is 200 rows long, and 200 orange buttons is
+   not emphasis, it is wallpaper. It would also outshout the actual primary
+   on the same screen, which is the point of having one.
+
+   So the division is by rank, not by whether the control does something:
+   orange for the page-level action, blue for a repeated inline one. */
 .draft-btn {
-  font-family: Inter, sans-serif; font-size: 12.5px; font-weight: 600;
+  font-family: Inter, sans-serif; font-size: var(--fs-sm); font-weight: 600;
   color: #fff; background: var(--blue); border: 0;
-  border-radius: 6px; padding: 7px 14px; cursor: pointer; white-space: nowrap;
+  border-radius: var(--r-sm); padding: 7px 14px; cursor: pointer; white-space: nowrap;
 }
 
 .draft-btn:hover { background: var(--blue-dark); }
@@ -873,12 +1040,12 @@ tr.drafted .ovr { color: var(--ink-light); }
    nothing here has to be undone twice. */
 
 #playerTable.compact td { padding: 5px 12px; }
-#playerTable.compact .nm { font-size: 13.5px; }
-#playerTable.compact .meta { margin-top: 1px; font-size: 11px; gap: 5px; }
-#playerTable.compact .badge { min-width: 26px; font-size: 9px; padding: 1px 5px; }
-#playerTable.compact .chip { font-size: 9px; padding: 1px 5px; }
-#playerTable.compact .inj { font-size: 8.5px; padding: 1px 4px; }
-#playerTable.compact .draft-btn { font-size: 11.5px; padding: 5px 11px; }
+#playerTable.compact .nm { font-size: var(--fs-sm); }
+#playerTable.compact .meta { margin-top: 1px; font-size: var(--fs-xs); gap: 5px; }
+#playerTable.compact .badge { min-width: 26px; font-size: var(--fs-2xs); padding: 1px 5px; }
+#playerTable.compact .chip { font-size: var(--fs-2xs); padding: 1px 5px; }
+#playerTable.compact .inj { font-size: var(--fs-2xs); padding: 1px 4px; }
+#playerTable.compact .draft-btn { font-size: var(--fs-xs); padding: 5px 11px; }
 
 /* ---------- draft board ---------- */
 
@@ -894,8 +1061,8 @@ tr.drafted .ovr { color: var(--ink-light); }
 
 .board .hd {
   background: var(--board-hd); color: var(--ink-mid);
-  font-size: 8.5px; font-weight: 700; text-align: center;
-  padding: 5px 2px; border-radius: 4px;
+  font-size: var(--fs-2xs); font-weight: 700; text-align: center;
+  padding: 5px 2px; border-radius: var(--r-xs);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
@@ -903,14 +1070,14 @@ tr.drafted .ovr { color: var(--ink-light); }
 
 .board .rd {
   background: var(--well); color: var(--ink-light);
-  font-size: 10px; font-weight: 700;
-  display: flex; align-items: center; justify-content: center; border-radius: 4px;
+  font-size: var(--fs-2xs); font-weight: 700;
+  display: flex; align-items: center; justify-content: center; border-radius: var(--r-xs);
 }
 
 .board .cell {
-  background: var(--fill); border-radius: 4px;
+  background: var(--fill); border-radius: var(--r-xs);
   padding: 5px 6px; min-height: 42px;
-  font-size: 10px; line-height: 1.25; color: #fff;
+  font-size: var(--fs-2xs); line-height: 1.25; color: #fff;
 }
 
 .board .cell.empty { color: var(--ink-light); font-variant-numeric: tabular-nums; }
@@ -926,14 +1093,14 @@ tr.drafted .ovr { color: var(--ink-light); }
 .board .cell.DST { background: var(--dst); }
 
 .board .cell b { display: block; font-weight: 700; }
-.board .cell s { display: block; text-decoration: none; opacity: .85; font-size: 9px; }
+.board .cell s { display: block; text-decoration: none; opacity: .85; font-size: var(--fs-2xs); }
 
 .legend {
   display: flex; gap: 14px; flex-wrap: wrap;
-  margin-top: 12px; font-size: 11.5px; color: var(--ink-mid);
+  margin-top: 12px; font-size: var(--fs-xs); color: var(--ink-mid);
 }
 
-.sw { width: 11px; height: 11px; display: inline-block; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+.sw { width: 11px; height: 11px; display: inline-block; border-radius: var(--r-xs); margin-right: 5px; vertical-align: -1px; }
 .sw.QB { background: var(--qb); } .sw.RB { background: var(--rb); }
 .sw.WR { background: var(--wr); } .sw.TE { background: var(--te); }
 .sw.K  { background: var(--k); }  .sw.DST { background: var(--dst); }
@@ -941,14 +1108,14 @@ tr.drafted .ovr { color: var(--ink-light); }
 /* ---------- roster ---------- */
 
 .section-label {
-  margin: 4px 0 8px; font-size: 9.5px; letter-spacing: .1em;
+  margin: 4px 0 8px; font-size: var(--fs-2xs); letter-spacing: .1em;
   text-transform: uppercase; color: var(--ink-light); font-weight: 700;
 }
 
 .roster {
   list-style: none; margin: 0 0 22px; padding: 0;
   background: var(--card); border: 1px solid var(--line);
-  border-radius: 10px; overflow: hidden;
+  border-radius: var(--r-md); overflow: hidden;
 }
 
 .roster li {
@@ -960,23 +1127,23 @@ tr.drafted .ovr { color: var(--ink-light); }
 
 .slot {
   flex: none; width: 46px; text-align: center;
-  font-size: 10.5px; font-weight: 700; color: var(--ink-mid);
-  background: var(--well); border-radius: 5px; padding: 5px 0;
+  font-size: var(--fs-2xs); font-weight: 700; color: var(--ink-mid);
+  background: var(--well); border-radius: var(--r-xs); padding: 5px 0;
 }
 
 .slot.bn { color: var(--ink-light); }
 
-.skeleton { flex: 1; height: 9px; max-width: 190px; border-radius: 5px; background: var(--track); }
+.skeleton { flex: 1; height: 9px; max-width: 190px; border-radius: var(--r-xs); background: var(--track); }
 
-.rname { font-weight: 600; font-size: 14px; line-height: 1.25; }
-.rmeta { font-size: 11.5px; color: var(--ink-mid); margin-top: 2px; }
-.rpick { margin-left: auto; font-size: 11.5px; color: var(--ink-light); font-variant-numeric: tabular-nums; }
+.rname { font-weight: 600; font-size: var(--fs-sm); line-height: 1.25; }
+.rmeta { font-size: var(--fs-xs); color: var(--ink-mid); margin-top: 2px; }
+.rpick { margin-left: auto; font-size: var(--fs-xs); color: var(--ink-light); font-variant-numeric: tabular-nums; }
 
 /* ---------- picks feed ---------- */
 
 .round-divider {
   display: flex; align-items: center; gap: 10px;
-  margin: 16px 0 10px; font-size: 10.5px; font-weight: 700;
+  margin: 16px 0 10px; font-size: var(--fs-2xs); font-weight: 700;
   letter-spacing: .1em; text-transform: uppercase; color: var(--ink-light);
 }
 
@@ -987,46 +1154,46 @@ tr.drafted .ovr { color: var(--ink-light); }
 .pick-card {
   display: flex; align-items: center; gap: 12px;
   background: var(--card); border: 1px solid var(--line);
-  border-radius: 10px; padding: 10px 12px; margin-bottom: 8px;
+  border-radius: var(--r-md); padding: 10px 12px; margin-bottom: 8px;
 }
 
 .pick-card.mine { border-color: var(--blue); background: var(--row-blue); }
-.pick-no { flex: none; width: 38px; font-family: Poppins, sans-serif; font-weight: 700; font-size: 13px; color: var(--ink-mid); }
-.pick-team { font-size: 11px; color: var(--ink-light); margin-bottom: 2px; }
-.pick-name { font-weight: 600; font-size: 14px; line-height: 1.2; }
-.pick-meta { display: flex; align-items: center; gap: 6px; margin-top: 3px; font-size: 11.5px; color: var(--ink-mid); }
+.pick-no { flex: none; width: 38px; font-family: Poppins, sans-serif; font-weight: 700; font-size: var(--fs-sm); color: var(--ink-mid); }
+.pick-team { font-size: var(--fs-xs); color: var(--ink-light); margin-bottom: 2px; }
+.pick-name { font-weight: 600; font-size: var(--fs-sm); line-height: 1.2; }
+.pick-meta { display: flex; align-items: center; gap: 6px; margin-top: 3px; font-size: var(--fs-xs); color: var(--ink-mid); }
 
 /* ---------- draft analysis ---------- */
 
 .grade-hero {
   display: flex; align-items: center; gap: 16px;
   background: linear-gradient(120deg, var(--navy-deep), var(--navy) 60%, var(--navy-lift));
-  color: #fff; border-radius: 12px; padding: 18px 20px; margin-bottom: 16px;
+  color: #fff; border-radius: var(--r-md); padding: 18px 20px; margin-bottom: 16px;
 }
 
 .grade-letter {
-  flex: none; width: 78px; height: 78px; border-radius: 14px;
+  flex: none; width: 78px; height: 78px; border-radius: var(--r-lg);
   background: rgba(255,255,255,.13);
   display: flex; align-items: center; justify-content: center;
-  font-family: Poppins, sans-serif; font-weight: 700; font-size: 32px;
+  font-family: Poppins, sans-serif; font-weight: 700; font-size: var(--fs-2xl);
   letter-spacing: -0.03em;
 }
 
-.grade-hero h3 { margin: 0 0 3px; font-family: Poppins, sans-serif; font-size: 19px; font-weight: 700; }
-.grade-hero p  { margin: 0; font-size: 12.5px; color: rgba(255,255,255,.78); line-height: 1.5; }
+.grade-hero h3 { margin: 0 0 3px; font-family: Poppins, sans-serif; font-size: var(--fs-lg); font-weight: 700; }
+.grade-hero p  { margin: 0; font-size: var(--fs-sm); color: rgba(255,255,255,.78); line-height: 1.5; }
 
-.bars { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin-bottom: 16px; }
+.bars { background: var(--card); border: 1px solid var(--line); border-radius: var(--r-md); padding: 14px 16px; margin-bottom: 16px; }
 .bar-row { margin-bottom: 12px; }
 .bar-row:last-child { margin-bottom: 0; }
 
 .bar-head {
   display: flex; justify-content: space-between; align-items: baseline;
-  font-size: 12.5px; margin-bottom: 5px;
+  font-size: var(--fs-sm); margin-bottom: 5px;
 }
 .bar-head b { font-weight: 600; }
-.bar-head span { color: var(--ink-light); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.bar-head span { color: var(--ink-light); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
 
-.bar-track { height: 8px; background: var(--track); border-radius: 5px; overflow: hidden; }
+.bar-track { height: 8px; background: var(--track); border-radius: var(--r-xs); overflow: hidden; }
 
 /* No radius on the fill. The track already rounds it by clipping, and giving
    the fill its own curve as well means it gets anti-aliased against the grey
@@ -1042,13 +1209,13 @@ tr.drafted .ovr { color: var(--ink-light); }
 
 .callout {
   background: var(--card); border: 1px solid var(--line);
-  border-left: 3px solid var(--blue); border-radius: 8px; padding: 11px 13px;
+  border-left: 3px solid var(--blue); border-radius: var(--r-sm); padding: 11px 13px;
 }
 .callout.good { border-left-color: var(--good); }
 .callout.bad  { border-left-color: var(--danger); }
-.callout .lbl { font-size: 9.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-light); font-weight: 700; }
-.callout .val { font-weight: 600; font-size: 14px; margin-top: 3px; }
-.callout .sub { font-size: 11.5px; color: var(--ink-mid); margin-top: 2px; }
+.callout .lbl { font-size: var(--fs-2xs); letter-spacing: .1em; text-transform: uppercase; color: var(--ink-light); font-weight: 700; }
+.callout .val { font-weight: 600; font-size: var(--fs-sm); margin-top: 3px; }
+.callout .sub { font-size: var(--fs-xs); color: var(--ink-mid); margin-top: 2px; }
 
 .standings { width: 100%; }
 .standings td.rk { width: 26px; color: var(--ink-light); font-variant-numeric: tabular-nums; }
@@ -1058,15 +1225,15 @@ tr.drafted .ovr { color: var(--ink-light); }
 
 .byebar { display: flex; gap: 3px; margin-top: 4px; }
 .byebar i {
-  flex: 1; height: 22px; border-radius: 3px; background: var(--track);
-  font-style: normal; font-size: 9px; color: var(--ink-light);
+  flex: 1; height: 22px; border-radius: var(--r-xs); background: var(--track);
+  font-style: normal; font-size: var(--fs-2xs); color: var(--ink-light);
   display: flex; align-items: center; justify-content: center;
 }
 .byebar i.w2 { background: var(--t-info-bg); color: var(--t-info-fg); }
 .byebar i.w3 { background: var(--t-bye-bg);  color: var(--t-bye-fg); font-weight: 700; }
 .byebar i.w4 { background: var(--t-bad-bg);  color: var(--t-bad-fg); font-weight: 700; }
 
-.method { font-size: 11.5px; color: var(--ink-light); line-height: 1.6; margin-top: 14px; }
+.method { font-size: var(--fs-xs); color: var(--ink-light); line-height: 1.6; margin-top: 14px; }
 
 /* ---------- player detail sheet ---------- */
 
@@ -1081,7 +1248,7 @@ tr.drafted .ovr { color: var(--ink-light); }
   width: min(680px, calc(100vw - 24px));
   max-height: calc(100vh - 60px);
   display: flex; flex-direction: column;
-  background: var(--card); border-radius: 14px; overflow: hidden;
+  background: var(--card); border-radius: var(--r-lg); overflow: hidden;
   box-shadow: 0 24px 60px rgba(6,12,22,.45);
 }
 
@@ -1097,10 +1264,10 @@ tr.drafted .ovr { color: var(--ink-light); }
   color: #fff;
 }
 
-.sheet-head .avatar { width: 62px; height: 62px; font-size: 19px; }
-.sheet-head h3 { margin: 0; font-family: Poppins, sans-serif; font-size: 20px; font-weight: 700; letter-spacing: -.02em; }
-.sheet-head .sub { display: flex; align-items: center; gap: 7px; margin-top: 4px; font-size: 12.5px; color: rgba(255,255,255,.80); }
-.sheet-head .facts { margin-top: 5px; font-size: 11.5px; color: rgba(255,255,255,.62); font-variant-numeric: tabular-nums; }
+.sheet-head .avatar { width: 62px; height: 62px; font-size: var(--fs-lg); }
+.sheet-head h3 { margin: 0; font-family: Poppins, sans-serif; font-size: var(--fs-lg); font-weight: 700; letter-spacing: -.02em; }
+.sheet-head .sub { display: flex; align-items: center; gap: 7px; margin-top: 4px; font-size: var(--fs-sm); color: rgba(255,255,255,.80); }
+.sheet-head .facts { margin-top: 5px; font-size: var(--fs-xs); color: rgba(255,255,255,.62); font-variant-numeric: tabular-nums; }
 
 /* Where he ranks, in the header rather than buried in the overview. The
    header is navy under both themes, so white at varying opacity is a colour
@@ -1112,11 +1279,11 @@ tr.drafted .ovr { color: var(--ink-light); }
 }
 .rankcell { display: flex; flex-direction: column; gap: 1px; }
 .rankcell b {
-  font-size: 15px; font-weight: 700; line-height: 1;
+  font-size: var(--fs-base); font-weight: 700; line-height: 1;
   font-variant-numeric: tabular-nums; color: #fff;
 }
 .rankcell span {
-  font-size: 8.5px; letter-spacing: .1em; text-transform: uppercase;
+  font-size: var(--fs-2xs); letter-spacing: .1em; text-transform: uppercase;
   color: rgba(255, 255, 255, .55); font-weight: 700;
 }
 
@@ -1128,17 +1295,17 @@ tr.drafted .ovr { color: var(--ink-light); }
 .ourread {
   background: var(--sunken); border: 1px solid var(--line);
   border-left: 3px solid var(--link);
-  border-radius: 0 9px 9px 0;
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
   padding: 13px 15px; margin-bottom: 16px;
 }
 .ourread .section-label { margin: 0 0 8px; }
-.ourread p { margin: 0 0 8px; font-size: 13px; line-height: 1.6; color: var(--ink-mid); }
+.ourread p { margin: 0 0 8px; font-size: var(--fs-sm); line-height: 1.6; color: var(--ink-mid); }
 .ourread p:last-child { margin-bottom: 0; }
 .ourread b { color: var(--ink); font-weight: 650; }
 
 .readnote {
   margin-top: 10px !important;
-  font-size: 11px !important; font-style: italic;
+  font-size: var(--fs-xs) !important; font-style: italic;
   color: var(--ink-light) !important;
 }
 
@@ -1147,9 +1314,9 @@ tr.drafted .ovr { color: var(--ink-light); }
 .yearpick { display: flex; gap: 4px; margin-bottom: 10px; }
 
 .yearpick button {
-  font-family: Inter, sans-serif; font-size: 11.5px; font-weight: 600;
+  font-family: Inter, sans-serif; font-size: var(--fs-xs); font-weight: 600;
   color: var(--ink-mid); background: var(--fill);
-  border: 1px solid var(--line); border-radius: 7px;
+  border: 1px solid var(--line); border-radius: var(--r-sm);
   padding: 5px 11px; cursor: pointer; font-variant-numeric: tabular-nums;
 }
 .yearpick button:hover { background: var(--fill-hi); color: var(--ink); }
@@ -1160,7 +1327,7 @@ tr.drafted .ovr { color: var(--ink-light); }
   width: 30px; height: 30px; flex: none;
   border: 0; border-radius: 50%;
   background: rgba(255,255,255,.16); color: #fff;
-  font-size: 17px; line-height: 1; cursor: pointer;
+  font-size: var(--fs-lg); line-height: 1; cursor: pointer;
 }
 
 .sheet-tabs {
@@ -1169,8 +1336,8 @@ tr.drafted .ovr { color: var(--ink-light); }
 }
 
 .sheet-tabs button {
-  flex: none; font-family: Inter, sans-serif; font-size: 12.5px; font-weight: 600;
-  color: var(--ink-mid); background: none; border: 0; border-radius: 999px;
+  flex: none; font-family: Inter, sans-serif; font-size: var(--fs-sm); font-weight: 600;
+  color: var(--ink-mid); background: none; border: 0; border-radius: var(--r-pill);
   padding: 7px 14px; cursor: pointer; white-space: nowrap;
 }
 
@@ -1183,10 +1350,10 @@ tr.drafted .ovr { color: var(--ink-light); }
 /* signal meters */
 .sig { margin-bottom: 16px; }
 .sig-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
-.sig-head b { font-size: 13px; font-weight: 600; }
-.sig-head span { font-size: 12px; font-weight: 700; }
+.sig-head b { font-size: var(--fs-sm); font-weight: 600; }
+.sig-head span { font-size: var(--fs-xs); font-weight: 700; }
 .sig-seg { display: flex; gap: 3px; }
-.sig-seg i { flex: 1; height: 7px; border-radius: 4px; background: var(--track); }
+.sig-seg i { flex: 1; height: 7px; border-radius: var(--r-xs); background: var(--track); }
 .sig-seg i.on { background: var(--blue); }
 .sig.good .sig-seg i.on { background: var(--good); }
 .sig.good .sig-head span { color: var(--good); }
@@ -1194,13 +1361,13 @@ tr.drafted .ovr { color: var(--ink-light); }
 .sig.warn .sig-head span { color: var(--t-warn-fg); }
 .sig.bad  .sig-seg i.on { background: var(--danger); }
 .sig.bad  .sig-head span { color: var(--danger); }
-.sig-why { margin: 6px 0 0; font-size: 11.5px; color: var(--ink-light); line-height: 1.55; }
+.sig-why { margin: 6px 0 0; font-size: var(--fs-xs); color: var(--ink-light); line-height: 1.55; }
 
 .statgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 4px 0 18px; }
 @media (max-width: 520px) { .statgrid { grid-template-columns: repeat(2, 1fr); } }
-.statbox { background: var(--sunken); border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; text-align: center; }
-.statbox .k { font-size: 9px; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-light); font-weight: 700; }
-.statbox .v { font-family: Poppins, sans-serif; font-weight: 700; font-size: 17px; margin-top: 2px; }
+.statbox { background: var(--sunken); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 9px 10px; text-align: center; }
+.statbox .k { font-size: var(--fs-2xs); letter-spacing: .09em; text-transform: uppercase; color: var(--ink-light); font-weight: 700; }
+.statbox .v { font-family: Poppins, sans-serif; font-weight: 700; font-size: var(--fs-lg); margin-top: 2px; }
 
 /* Stat tables can outgrow a phone once receiving, rushing and returns
    are all present, so they scroll sideways inside the sheet. */
@@ -1244,7 +1411,7 @@ tr.drafted .ovr { color: var(--ink-light); }
 /* The band above a group of columns: Proj, Rushing, Receiving, Passing. */
 #playerTable.stats .bandrow th {
   padding: 5px 8px 3px;
-  font-size: 8.5px; letter-spacing: .11em; text-transform: uppercase;
+  font-size: var(--fs-2xs); letter-spacing: .11em; text-transform: uppercase;
   color: var(--ink-light); font-weight: 700; text-align: center;
   border-bottom: 0;
 }
@@ -1294,7 +1461,7 @@ tr.drafted .ovr { color: var(--ink-light); }
 #playerTable.stats tbody tr.drafted .stick { background: var(--card); }
 
 /* The rank is a quiet number: it is the row's address, not a stat. */
-#playerTable.stats td.stick.rk { color: var(--ink-light); font-size: 11px; }
+#playerTable.stats td.stick.rk { color: var(--ink-light); font-size: var(--fs-xs); }
 
 @media (max-width: 700px) {
   /* On a phone the pinned pair would eat the screen. Measured at 375px:
@@ -1347,8 +1514,8 @@ tr.drafted .ovr { color: var(--ink-light); }
   }
 }
 
-.logtbl { font-size: 12px; }
-.logtbl th { padding: 7px 6px; font-size: 9px; }
+.logtbl { font-size: var(--fs-xs); }
+.logtbl th { padding: 7px 6px; font-size: var(--fs-2xs); }
 .logtbl td { padding: 6px; text-align: right; font-variant-numeric: tabular-nums; }
 .logtbl td:first-child, .logtbl th:first-child { text-align: left; }
 .logtbl tr.bye td { color: var(--ink-light); font-style: italic; }
@@ -1356,26 +1523,26 @@ tr.drafted .ovr { color: var(--ink-light); }
 .logtbl td.lo { background: var(--row-bad); }
 
 .depthcol { margin-bottom: 16px; }
-.depthcol h5 { margin: 0 0 6px; font-size: 10.5px; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-light); font-weight: 700; }
-.depthrow { display: flex; align-items: center; gap: 9px; padding: 7px 0; border-bottom: 1px solid var(--hairline); font-size: 13px; }
+.depthcol h5 { margin: 0 0 6px; font-size: var(--fs-2xs); letter-spacing: .09em; text-transform: uppercase; color: var(--ink-light); font-weight: 700; }
+.depthrow { display: flex; align-items: center; gap: 9px; padding: 7px 0; border-bottom: 1px solid var(--hairline); font-size: var(--fs-sm); }
 .depthrow:last-child { border-bottom: 0; }
-.depthrow .ord { width: 20px; font-family: Poppins, sans-serif; font-weight: 700; color: var(--ink-light); font-size: 11px; }
+.depthrow .ord { width: 20px; font-family: Poppins, sans-serif; font-weight: 700; color: var(--ink-light); font-size: var(--fs-xs); }
 .depthrow.self { font-weight: 600; color: var(--link); }
 
 .name-link { cursor: pointer; }
 .name-link:hover { color: var(--link); text-decoration: underline; }
 
-.nodata { padding: 30px 10px; text-align: center; font-size: 13px; color: var(--ink-light); }
+.nodata { padding: 30px 10px; text-align: center; font-size: var(--fs-sm); color: var(--ink-light); }
 
 /* ---------- empty states ---------- */
 
 .empty {
   background: var(--card); border: 1px solid var(--line);
-  border-radius: 10px; padding: 48px 24px; text-align: center;
+  border-radius: var(--r-md); padding: 48px 24px; text-align: center;
 }
 
-.empty-title { margin: 0 0 4px; font-weight: 600; font-size: 15px; }
-.empty-sub { margin: 0 auto; max-width: 34ch; font-size: 13px; color: var(--ink-mid); line-height: 1.5; }
+.empty-title { margin: 0 0 4px; font-weight: 600; font-size: var(--fs-base); }
+.empty-sub { margin: 0 auto; max-width: 34ch; font-size: var(--fs-sm); color: var(--ink-mid); line-height: 1.5; }
 .empty .primary { margin-top: 18px; }
 
 /* ==========================================================
@@ -1405,13 +1572,13 @@ tr.drafted .ovr { color: var(--ink-light); }
    different near-black, which made the shield read navy next to a black
    wordmark. One colour, one lockup. */
 .wordmark {
-  font-family: Poppins, sans-serif; font-weight: 700; font-size: 20px;
+  font-family: Poppins, sans-serif; font-weight: 700; font-size: var(--fs-lg);
   letter-spacing: -0.01em; color: var(--mark-ink); line-height: 1;
 }
 
 .navbtn, .navlink {
-  font-family: Inter, sans-serif; font-size: 13.5px; font-weight: 600;
-  border: 0; border-radius: 8px; padding: 8px 12px;
+  font-family: Inter, sans-serif; font-size: var(--fs-sm); font-weight: 600;
+  border: 0; border-radius: var(--r-sm); padding: 8px 12px;
   cursor: pointer; text-decoration: none; white-space: nowrap;
 }
 
@@ -1423,13 +1590,13 @@ tr.drafted .ovr { color: var(--ink-light); }
 /* Brand orange is only 3.34:1 against white, so a filled button that carries
    white text uses the darker --orange-cta. */
 .cta {
-  font-family: Inter, sans-serif; font-size: 13.5px; font-weight: 700;
-  color: #fff; background: var(--orange-cta); border: 0; border-radius: 8px;
+  font-family: Inter, sans-serif; font-size: var(--fs-sm); font-weight: 700;
+  color: #fff; background: var(--orange-cta); border: 0; border-radius: var(--r-sm);
   padding: 9px 16px; cursor: pointer; text-decoration: none; white-space: nowrap;
 }
-.cta:hover { background: #A8380A; }
-.cta.lg { font-size: 15px; padding: 13px 26px; }
-.navlink.lg { font-size: 14.5px; padding: 13px 10px; }
+.cta:hover { background: var(--orange-cta-hover); }
+.cta.lg { font-size: var(--fs-base); padding: 13px 26px; }
+.navlink.lg { font-size: var(--fs-sm); padding: 13px 10px; }
 
 .chev {
   display: inline-block; width: 6px; height: 6px; opacity: .65;
@@ -1449,11 +1616,11 @@ tr.drafted .ovr { color: var(--ink-light); }
 
 .rooms-head {
   margin: 0 0 4px;
-  font-family: Poppins, sans-serif; font-size: 21px; font-weight: 700;
+  font-family: Poppins, sans-serif; font-size: var(--fs-xl); font-weight: 700;
   letter-spacing: -.02em; color: var(--ink);
 }
 
-.rooms-sub { margin: 0 0 18px; font-size: 13.5px; color: var(--ink-mid); }
+.rooms-sub { margin: 0 0 18px; font-size: var(--fs-sm); color: var(--ink-mid); }
 
 /* ---------- the season arc ----------
 
@@ -1474,7 +1641,7 @@ tr.drafted .ovr { color: var(--ink-light); }
   margin: 0 0 2px; padding-bottom: 7px;
   border-bottom: 2px solid var(--blue-line);
   font-family: Inter, sans-serif;
-  font-size: 9.5px; letter-spacing: .12em; text-transform: uppercase;
+  font-size: var(--fs-2xs); letter-spacing: .12em; text-transform: uppercase;
   font-weight: 700; color: var(--link);
 }
 
@@ -1494,28 +1661,83 @@ tr.drafted .ovr { color: var(--ink-light); }
 .room {
   display: block; text-decoration: none;
   background: var(--card); border: 1px solid var(--line);
-  border-radius: 10px; padding: 13px 15px;
+  border-radius: var(--r-md); padding: 13px 15px;
   transition: border-color .15s ease;
 }
 
 a.room:hover { border-color: var(--blue-line); }
 .room.soon { opacity: .66; }
-.room b { display: block; font-size: 14px; font-weight: 700; color: var(--ink); }
-.room .blurb { display: block; font-size: 12.5px; color: var(--ink-mid); margin-top: 4px; line-height: 1.5; }
+.room b { display: block; font-size: var(--fs-sm); font-weight: 700; color: var(--ink); }
+.room .blurb { display: block; font-size: var(--fs-sm); color: var(--ink-mid); margin-top: 4px; line-height: 1.5; }
 
 .pill {
   display: inline-block; margin-top: 9px;
-  font-size: 9.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
-  padding: 3px 7px; border-radius: 999px;
+  font-size: var(--fs-2xs); font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  padding: 3px 7px; border-radius: var(--r-pill);
   background: var(--t-orange-bg); color: var(--t-orange-fg);
 }
 .pill.grey { background: var(--t-neutral-bg); color: var(--t-neutral-fg); }
+
+/* ==========================================================
+   OPTION 2 — the open room takes the colour
+   Self-contained. Deleting this block returns all six cards
+   to identical grey; the "live" class in roomCard() is
+   harmless on its own.
+   ==========================================================
+
+   The room grid is the largest region on the landing page — 427px tall,
+   full width — and it was six identical grey rectangles.
+
+   Colouring all six was the obvious version and is worse. Grey on the
+   five that do not open yet is not decoration withheld: it is the
+   difference between a door and a plan, and it is the fastest way to
+   read this grid. So the colour marks the one room you can walk into,
+   which makes it information rather than paint, and the grid needs no
+   second pass the day the Waiver Room ships — it just moves.
+
+   Brand orange, not the blue the phase rules use, because the one thing
+   on this page already wearing it is the button that does the same job.
+   --orange is the same value under both themes, so it can be named here
+   directly. */
+
+.room.live {
+  /* 3px border plus 13px padding is the 16px the other cards get from
+     15px plus their 1px border, so every card's text starts on the same
+     line down the column. */
+  border-left: 3px solid var(--orange);
+  padding-left: 13px;
+  background: var(--card);
+}
+
+/* Longhands, and border-left-color restated rather than left to cascade.
+   a.room:hover sets all four to --blue-line at (0,2,1), which outranks the
+   (0,2,0) of .room.live — so without this line the orange bar turns blue
+   under the pointer, on the one card the colour is there to mark. */
+a.room.live:hover {
+  border-top-color: var(--line);
+  border-right-color: var(--line);
+  border-bottom-color: var(--line);
+  border-left-color: var(--orange);
+  background: var(--fill);
+}
+
+/* Solid rather than the tint the other pills carry, because this is the
+   only badge on the page that means "you can press this". White on
+   --orange-cta is 5.18:1; on the brand --orange it would be 3.34:1,
+   which is the whole reason the darker token exists. */
+.room.live .pill {
+  background: var(--orange-cta); color: #fff;
+}
 
 /* ---------- landing ---------- */
 
 /* Not ".home" — that is already the header's home button, and the collision
    collapsed this section to zero width. */
-.landing { max-width: 1120px; margin: 0 auto; padding: 0 18px 64px; }
+/* The 1120px column used to live here. It moved down to .landing-inner and
+   .band-inner so the navy band can run edge to edge between them. */
+.landing { padding: 0 0 64px; }
+
+.landing-inner { max-width: 1120px; margin: 0 auto; padding: 0 18px; }
 
 .hero { max-width: 720px; margin: 0 auto; text-align: center; padding: 66px 0 42px; }
 
@@ -1527,32 +1749,32 @@ a.room:hover { border-color: var(--blue-line); }
 .hero-slogan {
   margin: 0 0 10px;
   font-family: Inter, sans-serif;
-  font-size: 11px; font-weight: 700;
+  font-size: var(--fs-xs); font-weight: 700;
   letter-spacing: .18em; text-transform: uppercase;
   color: var(--orange-ink);
 }
 
 .hero h1 {
   margin: 0 0 16px; font-family: Poppins, sans-serif;
-  font-size: 42px; font-weight: 700; letter-spacing: -0.03em; line-height: 1.12;
+  font-size: var(--fs-3xl); font-weight: 700; letter-spacing: -0.03em; line-height: 1.12;
 }
 
-.hero-sub { margin: 0 0 26px; font-size: 17px; line-height: 1.65; color: var(--ink-mid); }
+.hero-sub { margin: 0 0 26px; font-size: var(--fs-lg); line-height: 1.65; color: var(--ink-mid); }
 .hero-cta { display: flex; gap: 12px; justify-content: center; align-items: center; flex-wrap: wrap; }
 
 @media (max-width: 620px) {
   .hero { padding: 42px 0 32px; }
-  .hero h1 { font-size: 31px; }
-  .hero-sub { font-size: 15.5px; }
+  .hero h1 { font-size: var(--fs-2xl); }
+  .hero-sub { font-size: var(--fs-base); }
 }
 
 .landing-resume {
   display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
   background: var(--card); border: 1px solid var(--blue-line);
-  border-radius: 10px; padding: 14px 16px; margin: 0 0 36px;
+  border-radius: var(--r-md); padding: 14px 16px; margin: 0 0 36px;
 }
-.landing-resume p { margin: 0; font-size: 13.5px; }
-.landing-resume .sub { font-size: 12px; color: var(--ink-mid); margin-top: 3px; }
+.landing-resume p { margin: 0; font-size: var(--fs-sm); }
+.landing-resume .sub { font-size: var(--fs-xs); color: var(--ink-mid); margin-top: 3px; }
 .landing-resume .btnrow { margin-left: auto; display: flex; gap: 8px; }
 
 .pillars {
@@ -1561,26 +1783,227 @@ a.room:hover { border-color: var(--blue-line); }
 }
 @media (max-width: 760px) { .pillars { grid-template-columns: 1fr; } }
 
-.pillar b { display: block; font-size: 14px; font-weight: 700; margin-bottom: 5px; }
-.pillar span { font-size: 13px; color: var(--ink-mid); line-height: 1.6; }
+.pillar b { display: block; font-size: var(--fs-sm); font-weight: 700; margin-bottom: 5px; }
+.pillar span { font-size: var(--fs-sm); color: var(--ink-mid); line-height: 1.6; }
 
-.landing-foot { margin: 38px 0 0; text-align: center; font-size: 12px; color: var(--ink-light); }
+.landing-foot { margin: 38px 0 0; text-align: center; font-size: var(--fs-xs); color: var(--ink-light); }
 .landing-foot p { margin: 0 0 4px; }
 .landing-foot p:last-child { margin-bottom: 0; }
+
+/* ==========================================================
+   OPTION 1 — the navy hero band
+   Self-contained. Deleting this block and the two wrapper
+   divs in index.html returns the landing page to flat.
+   ==========================================================
+
+   The homepage was two tones ten points apart — --page #0E151E under
+   --card #18212D — across a thousand square pixels, with the one
+   saturated thing on it being the CTA at 0.8% of the area. This is the
+   second surface.
+
+   It is brand navy specifically because --navy-deep, --navy and
+   --navy-glow are byte-identical in both themes. That is what lets
+   everything inside name white and the --band-* values below directly
+   without a light override: the rule at the top of this file forbids a
+   colour that moves between themes, and this band never moves. It is
+   the same licence .appbar.my-turn already uses.
+
+   It stops at the header rather than continuing up through it. Turning
+   .shellbar navy would have to turn .appbar navy with it — CLAUDE.md
+   requires the two to share a surface so a CPU on the clock looks like
+   the homepage — and that is a change to the draft room, not to the
+   landing page. */
+
+.hero-band {
+  /* Light-on-navy, blue-tinted rather than neutral grey, which is the one
+     trick DESIGN-DIRECTION.md singles out as making a dark surface read as
+     designed. Contrast on --navy: 8.7:1 mid, 5.5:1 dim, both over 4.5. */
+  --band-ink:     #FFFFFF;
+  --band-ink-mid: #B9CBE0;
+  --band-ink-dim: #8AA2BE;
+
+  /* The linear part holds --navy-deep flat for 112px before it moves. The
+     score strip is 102px tall and sits in that flat region, so the fades at
+     its two ends can match the background exactly with a single colour —
+     over a moving gradient they could not.
+
+     The radial is --navy-glow at 45%, centred below the band so it lifts the
+     area behind the button and never reaches the strip. Written as rgba
+     rather than through the token because a colour cannot be interpolated
+     inside rgba(); color-mix() could, and would take the whole declaration
+     down with it on any browser that did not know the function. */
+  background:
+    /* The fade out, painted over everything below it. The band used to end at
+       --navy against a --page of --navy's own 1.27:1 — and the radial below
+       put the band at its brightest exactly where it was cut off, which is
+       what made that edge read as a mistake rather than as a boundary.
+
+       --page is the one value in this block that does move between themes,
+       and it has to: the band's job at this edge is to arrive at whatever
+       page it is sitting on. In light that is navy melting into #F5F7FA,
+       which is a far bigger step than dark's and needs the ramp more.
+
+       64px, and .hero carries at least 78px of bottom padding under both
+       breakpoints, so no text ever sits inside the fade. That clearance is
+       the whole constraint here — --band-ink-mid over a light-theme fade
+       would lose its contrast on the way down. */
+    linear-gradient(to top, var(--page), transparent 64px),
+    radial-gradient(900px 380px at 50% 118%, rgba(14,90,147,.45), transparent 72%),
+    linear-gradient(180deg, var(--navy-deep) 0, var(--navy-deep) 112px, var(--navy) 100%);
+
+  /* The header is --card, which is lighter than this band's --navy-deep top
+     by 1.08:1 and a different hue besides, so the join read as two unrelated
+     strips. It cannot be closed from this side: matching the band to the
+     header would grey out the navy exactly where the score strip sits, and
+     turning .shellbar navy means turning .appbar navy with it, because
+     CLAUDE.md requires a CPU on the clock to look like the homepage.
+
+     So the seam becomes depth instead. The header casts onto the band, which
+     is a thing a reader already knows how to interpret. */
+  box-shadow: inset 0 9px 18px -10px rgba(0,0,0,.75);
+
+  margin-bottom: 46px;
+}
+
+.band-inner { max-width: 1120px; margin: 0 auto; padding: 0 18px; }
+
+/* The bottom padding was the fade's clearance back when the hero was the
+   last thing in the band. The shot sits under it now and reaches the band's
+   bottom edge, so it is the shot that meets the fade — and it fades itself,
+   on purpose, with its own mask. What is left here is just the gap between
+   the button and the picture. */
+.hero-band .hero { padding: 66px 0 34px; }
+
+.hero-band .hero h1     { color: var(--band-ink); }
+.hero-band .hero-sub    { color: var(--band-ink-mid); }
+/* --orange rather than --orange-ink: the light theme swaps --orange-ink for a
+   darker value that only works on a light page, and this page is navy under
+   both themes. The brand value is 5.17:1 here, so small text still passes. */
+.hero-band .hero-slogan { color: var(--orange); }
+
+.hero-band .navlink     { color: var(--band-ink-mid); }
+.hero-band .navlink:hover { color: var(--band-ink); }
+
+/* The score strip on navy. Every surface in here is translucent white rather
+   than --card, because --card is #FFFFFF in the light theme and a white card
+   on navy carrying near-black --ink text is the one combination this band
+   would otherwise produce. */
+.hero-band .scores-wrap { border-bottom: 0; margin-bottom: 0; }
+.hero-band .scores-wrap::before { background: linear-gradient(to right, var(--navy-deep), transparent); }
+.hero-band .scores-wrap::after  { background: linear-gradient(to left,  var(--navy-deep), transparent); }
+
+.hero-band .game {
+  background: rgba(255,255,255,.06);
+  border-color: rgba(255,255,255,.14);
+}
+.hero-band .game-row      { color: var(--band-ink-mid); }
+.hero-band .game-row.lead { color: var(--band-ink); }
+.hero-band .game-st       { color: var(--band-ink-dim); }
+.hero-band .game-st.live  { color: var(--orange); }
+
+.hero-band .scores-arrow {
+  background: rgba(255,255,255,.10);
+  border-color: rgba(255,255,255,.20);
+  color: var(--band-ink-mid);
+}
+.hero-band .scores-arrow:hover { background: rgba(255,255,255,.20); color: var(--band-ink); }
+
+/* --blue is the focus ring everywhere else and it disappears into navy. */
+.hero-band :focus-visible { outline-color: #fff; }
+
+/* ---------- the product shot ----------
+
+   Filled by renderHeroShot(). Decoration: no pointer events, no selection,
+   no tab stop, aria-hidden in the markup.
+
+   It is cropped rather than scaled on a narrow screen. Ten columns wide
+   enough to hold a surname cannot fit a phone — at 375px each would get
+   31px — and a board shrunk until it is unreadable stops being a picture
+   of the product. So the columns keep a floor of 88px and the container
+   clips, which is how a screenshot is normally cropped on a phone anyway.
+
+   That crop is the one place in the app where something overflows and can
+   neither scroll nor ellipsise, which is the shape CLAUDE.md calls a leak.
+   It is deliberate here and it is the exception: the clipped part is
+   decoration with a duplicate elsewhere, not content with no way to reach
+   it. Anything else that trips that check is still a bug. */
+.hero-shot {
+  display: grid;
+  grid-template-columns: 26px repeat(10, minmax(88px, 1fr));
+  gap: 3px;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none; -webkit-user-select: none;
+  /* Dissolves into the band rather than stopping at an edge, so it reads as
+     a glimpse of something larger — which it is. The band's own fade is a
+     background layer and cannot touch foreground content, so the shot has
+     to carry its own. No mask support means no fade and a hard bottom edge,
+     which is a worse picture and not a broken one. */
+  -webkit-mask-image: linear-gradient(to bottom, #000 46%, transparent 100%);
+          mask-image: linear-gradient(to bottom, #000 46%, transparent 100%);
+}
+
+.shot-hd, .shot-rd {
+  font-size: var(--fs-2xs); font-weight: 700; color: var(--band-ink-dim);
+  text-align: center; padding-bottom: 3px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.shot-hd.me { color: var(--band-ink); }
+.shot-rd { display: flex; align-items: center; justify-content: center; padding-bottom: 0; }
+
+.shot-cell {
+  border-radius: var(--r-xs); padding: 5px 6px; min-height: 34px;
+  color: #fff; overflow: hidden;
+}
+.shot-cell b {
+  display: block; font-size: var(--fs-2xs); font-weight: 700;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.shot-cell s {
+  display: block; text-decoration: none; font-size: var(--fs-2xs);
+  opacity: .78; white-space: nowrap;
+}
+/* The same six solids the board uses, so the shot cannot drift from it. */
+.shot-cell.QB  { background: var(--qb); }
+.shot-cell.RB  { background: var(--rb); }
+.shot-cell.WR  { background: var(--wr); }
+.shot-cell.TE  { background: var(--te); }
+.shot-cell.K   { background: var(--k); }
+.shot-cell.DST { background: var(--dst); }
+.shot-cell.empty { background: rgba(255,255,255,.06); }
+.shot-cell.mine { outline: 2px solid rgba(255,255,255,.55); outline-offset: -2px; }
+
+@media (max-width: 620px) {
+  /* The flat region of the gradient tracks the strip, and the strip is the
+     same height at every width — one row that scrolls rather than wraps —
+     so only the spacing moves here, never the 112px.
+
+     78px still clears the 64px fade. It is lopsided against the 42px above
+     it and that is the fade's price, not a judgement about the hero. */
+  .hero-band { margin-bottom: 34px; }
+  .hero-band .hero { padding: 42px 0 26px; }
+
+  /* At the desktop floor of 88px a phone shows 3.4 of the ten columns, and
+     three and a bit columns reads as a picture that failed to load rather
+     than one that is cropped. 58px shows just over five — half the room,
+     which reads as a board — and the surnames that no longer fit ellipsise,
+     which is honest truncation rather than a broken layout. */
+  .hero-shot { grid-template-columns: 20px repeat(10, minmax(58px, 1fr)); }
+}
 
 /* ---------- the "not yet" dialog ----------
    A native <dialog>, so Escape, focus trapping and the backdrop are free. */
 
 .dlg {
-  border: 0; border-radius: 14px; padding: 24px 26px;
+  border: 0; border-radius: var(--r-lg); padding: 24px 26px;
   width: min(420px, calc(100vw - 32px));
   background: var(--card); color: var(--ink);
   box-shadow: 0 24px 60px rgba(6,12,22,.45);
 }
 
 .dlg::backdrop { background: rgba(6,12,22,.55); }
-.dlg h3 { margin: 0 0 8px; font-family: Poppins, sans-serif; font-size: 18px; font-weight: 700; }
-.dlg p { margin: 0 0 18px; font-size: 14px; line-height: 1.6; color: var(--ink-mid); }
+.dlg h3 { margin: 0 0 8px; font-family: Poppins, sans-serif; font-size: var(--fs-lg); font-weight: 700; }
+.dlg p { margin: 0 0 18px; font-size: var(--fs-sm); line-height: 1.6; color: var(--ink-mid); }
 
 /* ---------- the score strip ----------
    One row, horizontally scrolling, never taller than it needs to be. It is
@@ -1620,7 +2043,7 @@ a.room:hover { border-color: var(--blue-line); }
   display: flex; align-items: center; justify-content: center;
   width: 28px; height: 28px; border-radius: 50%;
   border: 1px solid var(--line); background: var(--card); color: var(--ink-mid);
-  font-size: 16px; line-height: 1; cursor: pointer;
+  font-size: var(--fs-base); line-height: 1; cursor: pointer;
   opacity: 0; pointer-events: none; transition: opacity .18s ease;
 }
 
@@ -1637,12 +2060,12 @@ a.room:hover { border-color: var(--blue-line); }
 .game {
   flex: none; min-width: 132px;
   background: var(--card); border: 1px solid var(--line);
-  border-radius: 9px; padding: 8px 11px;
+  border-radius: var(--r-sm); padding: 8px 11px;
 }
 
 .game-row {
   display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
-  font-size: 12.5px; line-height: 1.55; color: var(--ink-mid);
+  font-size: var(--fs-sm); line-height: 1.55; color: var(--ink-mid);
 }
 
 .game-row .tm { font-weight: 600; }
@@ -1650,7 +2073,7 @@ a.room:hover { border-color: var(--blue-line); }
 .game-row.lead { color: var(--ink); }
 .game-row.lead .tm, .game-row.lead .sc { font-weight: 700; }
 
-.game-st { margin-top: 5px; font-size: 10.5px; color: var(--ink-light); white-space: nowrap; }
+.game-st { margin-top: 5px; font-size: var(--fs-2xs); color: var(--ink-light); white-space: nowrap; }
 .game-st.live { color: var(--orange); font-weight: 700; }
 
 /* ---------- the header on a narrow screen ----------
@@ -1664,7 +2087,7 @@ a.room:hover { border-color: var(--blue-line); }
    panel that the burger opens. */
 
 .burger { display: none; flex-direction: column; gap: 4px; width: 18px; }
-.burger i { display: block; height: 2px; background: currentColor; border-radius: 2px; }
+.burger i { display: block; height: 2px; background: currentColor; border-radius: var(--r-xs); }
 
 .rooms-extra { display: none; }
 
@@ -1707,6 +2130,7 @@ a.room:hover { border-color: var(--blue-line); }
      holding it clear. */
   bottom: calc(18px + env(safe-area-inset-bottom));
   width: 44px; height: 44px;      /* a full touch target, not a decoration */
+  font-size: var(--fs-sm);        /* icon only — see the note on .theme-toggle */
   display: flex; align-items: center; justify-content: center;
   border: 0; border-radius: 50%;
   background: var(--navy); color: #fff;
@@ -1773,7 +2197,7 @@ a.room:hover { border-color: var(--blue-line); }
 .qrow {
   display: flex; align-items: center; gap: 10px;
   background: var(--card); border: 1px solid var(--line);
-  border-radius: 10px; padding: 9px 12px; margin-bottom: 7px;
+  border-radius: var(--r-md); padding: 9px 12px; margin-bottom: 7px;
 }
 
 /* The one at the front is what the clock takes if it runs out while you are
@@ -1782,22 +2206,22 @@ a.room:hover { border-color: var(--blue-line); }
 .qrow.next .qn { color: var(--orange-cta); }
 
 .qn {
-  font-family: Inter, sans-serif; font-size: 12px; font-weight: 700;
+  font-family: Inter, sans-serif; font-size: var(--fs-xs); font-weight: 700;
   color: var(--ink-light); width: 16px; flex: none;
   font-variant-numeric: tabular-nums;
 }
 
 .qbody { flex: 1; min-width: 0; }
-.qname { font-size: 14px; font-weight: 600; }
-.qmeta { display: flex; align-items: center; gap: 6px; margin-top: 2px; font-size: 11.5px; color: var(--ink-mid); }
+.qname { font-size: var(--fs-sm); font-weight: 600; }
+.qmeta { display: flex; align-items: center; gap: 6px; margin-top: 2px; font-size: var(--fs-xs); color: var(--ink-mid); }
 
 .qmoves { display: flex; flex-direction: column; gap: 2px; flex: none; }
 
 .qmove {
   width: 22px; height: 17px; padding: 0; cursor: pointer;
-  font-size: 10px; line-height: 1;
+  font-size: var(--fs-2xs); line-height: 1;
   color: var(--ink-mid); background: var(--fill);
-  border: 1px solid var(--line); border-radius: 4px;
+  border: 1px solid var(--line); border-radius: var(--r-xs);
 }
 .qmove:hover:not(:disabled) { background: var(--fill-hi); color: var(--ink); }
 .qmove:disabled { opacity: .35; cursor: default; }
@@ -1820,20 +2244,20 @@ a.room:hover { border-color: var(--blue-line); }
 
 .star {
   flex: none; width: 26px; height: 26px; padding: 0; cursor: pointer;
-  font-size: 14px; line-height: 1;
+  font-size: var(--fs-sm); line-height: 1;
   color: var(--ink-light); background: none;
-  border: 1px solid var(--line); border-radius: 6px;
+  border: 1px solid var(--line); border-radius: var(--r-sm);
 }
 .star:hover { color: var(--orange); border-color: var(--orange); }
 .star.on { color: #fff; background: var(--orange-cta); border-color: var(--orange-cta); }
 
-#playerTable.compact .star { width: 22px; height: 22px; font-size: 12px; }
+#playerTable.compact .star { width: 22px; height: 22px; font-size: var(--fs-xs); }
 
 /* A positional run, in the strip that already says what just happened. */
 .run {
   margin-left: auto; flex: none;
-  font-size: 12px; color: var(--t-warn-fg);
-  background: var(--t-warn-bg); border-radius: 999px; padding: 4px 11px;
+  font-size: var(--fs-xs); color: var(--t-warn-fg);
+  background: var(--t-warn-bg); border-radius: var(--r-pill); padding: 4px 11px;
 }
 .run b { color: inherit; font-weight: 700; }
 
@@ -1878,7 +2302,7 @@ a.room:hover { border-color: var(--blue-line); }
    height of the screen, not against a number. */
 .boardpane {
   background: var(--card); border: 1px solid var(--line);
-  border-radius: 12px; padding: 10px 12px; margin-bottom: 10px;
+  border-radius: var(--r-md); padding: 10px 12px; margin-bottom: 10px;
 }
 
 .boardpane .board-scroll {
@@ -1909,12 +2333,12 @@ a.room:hover { border-color: var(--blue-line); }
 
 .railcard {
   background: var(--card); border: 1px solid var(--line);
-  border-radius: 12px; padding: 11px 13px;
+  border-radius: var(--r-md); padding: 11px 13px;
 }
 
 .railhead {
   margin: 0 0 8px; font-family: Inter, sans-serif;
-  font-size: 9.5px; letter-spacing: .1em; text-transform: uppercase;
+  font-size: var(--fs-2xs); letter-spacing: .1em; text-transform: uppercase;
   color: var(--ink-light); font-weight: 700;
 }
 
@@ -1922,13 +2346,13 @@ a.room:hover { border-color: var(--blue-line); }
 
 .railslots li {
   display: flex; align-items: center; gap: 8px;
-  background: var(--sunken); border-radius: 6px; padding: 5px 8px;
-  font-size: 12px; min-width: 0;
+  background: var(--sunken); border-radius: var(--r-sm); padding: 5px 8px;
+  font-size: var(--fs-xs); min-width: 0;
 }
 
 .rslot {
   flex: none; width: 34px;
-  font-size: 9px; font-weight: 700; letter-spacing: .04em;
+  font-size: var(--fs-2xs); font-weight: 700; letter-spacing: .04em;
   color: var(--ink-light);
 }
 
@@ -1943,7 +2367,7 @@ a.room:hover { border-color: var(--blue-line); }
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .rfill.none { font-weight: 400; font-style: italic; color: var(--ink-light); }
-.rtm { flex: none; font-size: 10px; color: var(--ink-light); letter-spacing: .02em; }
+.rtm { flex: none; font-size: var(--fs-2xs); color: var(--ink-light); letter-spacing: .02em; }
 
 /* An unfilled starting slot is the actionable state, so it is the one that
    takes a tint rather than every filled row taking one. */
@@ -1963,12 +2387,12 @@ a.room:hover { border-color: var(--blue-line); }
 .rail .qrow { padding: 6px 8px; gap: 6px; margin-bottom: 5px; flex-wrap: wrap; }
 .rail .qrow .avatar { display: none; }
 .rail .qbody { flex: 1 1 130px; }
-.rail .qname { font-size: 12.5px; }
-.rail .qmeta { font-size: 10.5px; gap: 5px; }
-.rail .qrow .draft-btn { flex: none; font-size: 11px; padding: 4px 9px; }
+.rail .qname { font-size: var(--fs-sm); }
+.rail .qmeta { font-size: var(--fs-2xs); gap: 5px; }
+.rail .qrow .draft-btn { flex: none; font-size: var(--fs-xs); padding: 4px 9px; }
 .rail .empty { padding: 6px 2px; }
-.rail .empty-title { font-size: 13px; }
-.rail .empty-sub { font-size: 11px; }
+.rail .empty-title { font-size: var(--fs-sm); }
+.rail .empty-sub { font-size: var(--fs-xs); }
 
 /* ---------- narrow ---------- */
 
@@ -2004,9 +2428,9 @@ a.room:hover { border-color: var(--blue-line); }
     position: fixed; left: 14px; z-index: 60;
     /* Level with the chat launcher, which sits at the right on this rail. */
     bottom: calc(74px + env(safe-area-inset-bottom, 0px));
-    font-family: Inter, sans-serif; font-size: 13px; font-weight: 600;
+    font-family: Inter, sans-serif; font-size: var(--fs-sm); font-weight: 600;
     color: #fff; background: var(--navy);
-    border: 1px solid var(--navy-soft); border-radius: 22px;
+    border: 1px solid var(--navy-soft); border-radius: var(--r-pill);
     padding: 10px 16px; cursor: pointer;
     box-shadow: 0 4px 16px rgba(0, 0, 0, .35);
   }
@@ -2025,7 +2449,7 @@ a.room:hover { border-color: var(--blue-line); }
     overflow-y: auto;
     background: var(--sunken);
     border-top: 1px solid var(--line);
-    border-radius: 14px 14px 0 0;
+    border-radius: var(--r-lg) var(--r-lg) 0 0;
     box-shadow: 0 -8px 28px rgba(0, 0, 0, .4);
   }
 
@@ -2034,7 +2458,7 @@ a.room:hover { border-color: var(--blue-line); }
   /* The sheet covers the board, so it needs its own way out. */
   body.rail-open .raildismiss {
     display: block; align-self: flex-end;
-    font-size: 24px; line-height: 1; padding: 0 6px; margin-bottom: -4px;
+    font-size: var(--fs-2xl); line-height: 1; padding: 0 6px; margin-bottom: -4px;
     color: var(--ink-light); background: none; border: 0; cursor: pointer;
   }
 
@@ -2056,9 +2480,9 @@ a.room:hover { border-color: var(--blue-line); }
 
 .linkrow input {
   flex: 1; min-width: 0;
-  font-family: Inter, sans-serif; font-size: 12.5px;
+  font-family: Inter, sans-serif; font-size: var(--fs-sm);
   color: var(--ink-mid); background: var(--sunken);
-  border: 1px solid var(--line); border-radius: 7px; padding: 8px 10px;
+  border: 1px solid var(--line); border-radius: var(--r-sm); padding: 8px 10px;
 }
 
 /* Every seat in the room at a glance, so it is obvious how many friends have
@@ -2067,8 +2491,8 @@ a.room:hover { border-color: var(--blue-line); }
 
 .seat {
   display: inline-flex; align-items: center; gap: 5px;
-  font-size: 11px; color: var(--ink-light);
-  background: var(--fill); border-radius: 6px; padding: 3px 8px;
+  font-size: var(--fs-xs); color: var(--ink-light);
+  background: var(--fill); border-radius: var(--r-sm); padding: 3px 8px;
 }
 .seat b { font-weight: 700; color: var(--ink-light); font-variant-numeric: tabular-nums; }
 
@@ -2085,7 +2509,7 @@ a.room:hover { border-color: var(--blue-line); }
    what a browser does to a button by default — the chair should look exactly
    like the span it replaces until it is picked up. */
 .seat.movable {
-  font: inherit; font-size: 11px; border: 0; cursor: grab;
+  font: inherit; font-size: var(--fs-xs); border: 0; cursor: grab;
   -webkit-appearance: none; appearance: none;
 }
 .seat.movable:hover { outline: 1px solid var(--line); }
@@ -2109,7 +2533,7 @@ a.room:hover { border-color: var(--blue-line); }
 .chatdock {
   display: flex; flex-direction: column;
   background: var(--card); border: 1px solid var(--line);
-  border-radius: 12px; overflow: hidden;
+  border-radius: var(--r-md); overflow: hidden;
   /* Sticky and tall, so reading the chat is not a thing you scroll away from
      the board to do. The viewport minus the header and a margin. */
   position: sticky; top: 8px;
@@ -2149,11 +2573,11 @@ a.room:hover { border-color: var(--blue-line); }
 
 .chathead h3 {
   margin: 0; font-family: Inter, sans-serif;
-  font-size: 9.5px; letter-spacing: .1em; text-transform: uppercase;
+  font-size: var(--fs-2xs); letter-spacing: .1em; text-transform: uppercase;
   color: var(--ink-light); font-weight: 700;
 }
 
-.chatpresence { font-size: 11px; color: var(--ink-light); margin-left: auto; }
+.chatpresence { font-size: var(--fs-xs); color: var(--ink-light); margin-left: auto; }
 
 /* Only ever in the mobile sheet. Hidden here rather than not rendered, so
    the same dock is the same dock in both places. */
@@ -2181,7 +2605,7 @@ a.room:hover { border-color: var(--blue-line); }
    above it rather than stepping in and out as people take turns. */
 .msg.grouped { padding-top: 0; }
 .msg.grouped .msgwhen {
-  grid-column: 1; text-align: right; font-size: 9.5px;
+  grid-column: 1; text-align: right; font-size: var(--fs-2xs);
   /* Only on hover, because a timestamp against every line of a fast
      conversation is nine columns of noise to find one useful number. */
   opacity: 0; transition: opacity .12s;
@@ -2191,7 +2615,7 @@ a.room:hover { border-color: var(--blue-line); }
 .chatav {
   grid-column: 1; width: 26px; height: 26px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  font-size: 10px; font-weight: 700; letter-spacing: .02em;
+  font-size: var(--fs-2xs); font-weight: 700; letter-spacing: .02em;
   color: #fff;                     /* white on a solid, the same in both themes */
   flex: none; user-select: none;
 }
@@ -2204,14 +2628,14 @@ a.room:hover { border-color: var(--blue-line); }
 .msgbody { grid-column: 2; min-width: 0; }
 
 .msgwho {
-  margin: 0 0 1px; font-size: 12px; font-weight: 650; color: var(--ink);
+  margin: 0 0 1px; font-size: var(--fs-xs); font-weight: 650; color: var(--ink);
   display: flex; align-items: baseline; gap: 6px;
 }
 
-.msgwhen { font-size: 10px; font-weight: 400; color: var(--ink-light); }
+.msgwhen { font-size: var(--fs-2xs); font-weight: 400; color: var(--ink-light); }
 
 .msgtext {
-  font-size: 12.5px; line-height: 1.45; color: var(--ink-mid);
+  font-size: var(--fs-sm); line-height: 1.45; color: var(--ink-mid);
   /* A long unbroken string typed by someone else must not widen the dock. */
   overflow-wrap: anywhere; white-space: pre-wrap;
 }
@@ -2226,7 +2650,7 @@ a.room:hover { border-color: var(--blue-line); }
 .chatline { margin: 0; overflow-wrap: anywhere; }
 
 .chatline.system {
-  font-size: 11px; color: var(--ink-light); font-style: italic;
+  font-size: var(--fs-xs); color: var(--ink-light); font-style: italic;
   padding: 3px 0 3px 34px;
 }
 
@@ -2239,22 +2663,22 @@ a.room:hover { border-color: var(--blue-line); }
 .pickline {
   display: flex; align-items: baseline; gap: 8px;
   margin: 3px 0; padding: 5px 9px;
-  background: var(--sunken); border-radius: 7px;
+  background: var(--sunken); border-radius: var(--r-sm);
   border-left: 2px solid var(--line);
-  font-size: 11.5px; color: var(--ink-mid);
+  font-size: var(--fs-xs); color: var(--ink-mid);
 }
 
 .pickline.mine { border-left-color: var(--blue); background: var(--row-blue); }
 
 .pickno {
-  flex: none; font-size: 10px; font-weight: 700;
+  flex: none; font-size: var(--fs-2xs); font-weight: 700;
   color: var(--ink-light); font-variant-numeric: tabular-nums;
 }
 
 .picktext { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .picktext b { color: var(--ink); font-weight: 650; }
 
-.chatempty { margin: 0; font-size: 11.5px; color: var(--ink-light); font-style: italic; }
+.chatempty { margin: 0; font-size: var(--fs-xs); color: var(--ink-light); font-style: italic; }
 
 /* ---- reactions ---- */
 
@@ -2262,12 +2686,12 @@ a.room:hover { border-color: var(--blue-line); }
 
 .reactchip {
   display: inline-flex; align-items: center; gap: 3px;
-  font-family: Inter, sans-serif; font-size: 11px; line-height: 1;
+  font-family: Inter, sans-serif; font-size: var(--fs-xs); line-height: 1;
   color: var(--ink-mid); background: var(--fill);
-  border: 1px solid var(--line); border-radius: 10px;
+  border: 1px solid var(--line); border-radius: var(--r-md);
   padding: 2px 6px; cursor: pointer;
 }
-.reactchip b { font-size: 10px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.reactchip b { font-size: var(--fs-2xs); font-weight: 700; font-variant-numeric: tabular-nums; }
 .reactchip:hover { background: var(--fill-hi); }
 
 /* Yours, so a count of four is readable as "including me" without counting. */
@@ -2281,7 +2705,7 @@ a.room:hover { border-color: var(--blue-line); }
 .reactadd {
   grid-column: 3; align-self: start;
   width: 20px; height: 20px; padding: 0;
-  font-size: 13px; line-height: 1;
+  font-size: var(--fs-sm); line-height: 1;
   color: var(--ink-light); background: var(--fill);
   border: 1px solid var(--line); border-radius: 50%;
   cursor: pointer; opacity: 0; transition: opacity .12s;
@@ -2297,12 +2721,12 @@ a.room:hover { border-color: var(--blue-line); }
   position: absolute; right: 0; top: 22px; z-index: 5;
   display: flex; gap: 2px; padding: 4px;
   background: var(--card); border: 1px solid var(--line);
-  border-radius: 9px; box-shadow: 0 6px 18px rgba(0, 0, 0, .28);
+  border-radius: var(--r-sm); box-shadow: 0 6px 18px rgba(0, 0, 0, .28);
 }
 
 .reactpicker button {
-  font-size: 15px; line-height: 1; padding: 3px 4px;
-  background: none; border: 0; border-radius: 6px; cursor: pointer;
+  font-size: var(--fs-base); line-height: 1; padding: 3px 4px;
+  background: none; border: 0; border-radius: var(--r-sm); cursor: pointer;
 }
 .reactpicker button:hover { background: var(--fill-hi); }
 
@@ -2313,15 +2737,15 @@ a.room:hover { border-color: var(--blue-line); }
 .chatjump {
   position: absolute; left: 50%; transform: translateX(-50%);
   bottom: 96px; z-index: 4;
-  font-family: Inter, sans-serif; font-size: 11px; font-weight: 600;
+  font-family: Inter, sans-serif; font-size: var(--fs-xs); font-weight: 600;
   color: #fff; background: var(--blue);
-  border: 0; border-radius: 20px; padding: 5px 12px;
+  border: 0; border-radius: var(--r-pill); padding: 5px 12px;
   cursor: pointer; box-shadow: 0 4px 12px rgba(0, 0, 0, .3);
 }
 
 .chattyping {
   flex: none; margin: 0; padding: 0 13px 4px;
-  font-size: 10.5px; font-style: italic; color: var(--ink-light);
+  font-size: var(--fs-2xs); font-style: italic; color: var(--ink-light);
   /* Reserved whether or not anybody is typing, so the composer does not
      jump up and down every time somebody starts a sentence. */
   min-height: 15px;
@@ -2334,7 +2758,7 @@ a.room:hover { border-color: var(--blue-line); }
    it — the same rule the chat dock itself needs, for the same reason. */
 .chatoffline {
   flex: none; display: block; margin: 0 13px 6px; padding: 5px 9px;
-  font-size: 11px; border-radius: 7px;
+  font-size: var(--fs-xs); border-radius: var(--r-sm);
   /* --ink-mid, not the --ink-light the typing line uses. This is the note
      that explains why nothing below it works, so it has to be read rather
      than noticed: light comes out at 2.5:1 on this background, mid at 5.4:1
@@ -2354,9 +2778,9 @@ a.room:hover { border-color: var(--blue-line); }
 .quicksay { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
 
 .quicksay button {
-  font-family: Inter, sans-serif; font-size: 11px; line-height: 1;
+  font-family: Inter, sans-serif; font-size: var(--fs-xs); line-height: 1;
   color: var(--ink-mid); background: var(--fill);
-  border: 1px solid var(--line); border-radius: 11px;
+  border: 1px solid var(--line); border-radius: var(--r-md);
   padding: 5px 9px; cursor: pointer;
 }
 .quicksay button:hover { background: var(--fill-hi); color: var(--ink); }
@@ -2365,13 +2789,13 @@ a.room:hover { border-color: var(--blue-line); }
 
 .chatform input {
   flex: 1; min-width: 0;
-  font-family: Inter, sans-serif; font-size: 12.5px;
+  font-family: Inter, sans-serif; font-size: var(--fs-sm);
   color: var(--ink); background: var(--card);
-  border: 1px solid var(--line); border-radius: 7px; padding: 8px 10px;
+  border: 1px solid var(--line); border-radius: var(--r-sm); padding: 8px 10px;
 }
 .chatform input:focus { outline: 2px solid var(--blue); outline-offset: 1px; border-color: var(--blue); }
-.chatform button { flex: none; font-size: 11.5px; padding: 8px 11px; }
-.chatform .sendbtn { font-size: 12px; }
+.chatform button { flex: none; font-size: var(--fs-xs); padding: 8px 11px; }
+.chatform .sendbtn { font-size: var(--fs-xs); }
 
 /* ---- your name ---- */
 
@@ -2379,9 +2803,9 @@ a.room:hover { border-color: var(--blue-line); }
 
 .namerow input {
   width: 100%; box-sizing: border-box;
-  font-family: Inter, sans-serif; font-size: 13px;
+  font-family: Inter, sans-serif; font-size: var(--fs-sm);
   color: var(--ink); background: var(--sunken);
-  border: 1px solid var(--line); border-radius: 7px; padding: 9px 11px;
+  border: 1px solid var(--line); border-radius: var(--r-sm); padding: 9px 11px;
 }
 .namerow input:focus { outline: 2px solid var(--blue); outline-offset: 1px; border-color: var(--blue); }
 
@@ -2394,8 +2818,8 @@ a.room:hover { border-color: var(--blue-line); }
 .chatbadge {
   display: inline-flex; align-items: center; justify-content: center;
   min-width: 17px; height: 17px; padding: 0 4px;
-  font-size: 10px; font-weight: 700; color: #fff;
-  background: var(--orange-cta); border-radius: 9px;
+  font-size: var(--fs-2xs); font-weight: 700; color: #fff;
+  background: var(--orange-cta); border-radius: var(--r-sm);
 }
 
 /* ---------- chat on a narrow screen ----------
@@ -2418,9 +2842,9 @@ a.room:hover { border-color: var(--blue-line); }
     /* Above the action bar, which is itself pinned to the bottom, and clear
        of the home indicator on a phone with no bezel. */
     bottom: calc(74px + env(safe-area-inset-bottom, 0px));
-    font-family: Inter, sans-serif; font-size: 13px; font-weight: 600;
+    font-family: Inter, sans-serif; font-size: var(--fs-sm); font-weight: 600;
     color: #fff; background: var(--navy);
-    border: 1px solid var(--navy-soft); border-radius: 22px;
+    border: 1px solid var(--navy-soft); border-radius: var(--r-pill);
     padding: 10px 16px; cursor: pointer;
     box-shadow: 0 4px 16px rgba(0, 0, 0, .35);
   }
@@ -2437,7 +2861,7 @@ a.room:hover { border-color: var(--blue-line); }
        the screen with a gap under it. */
     position: fixed; top: auto; left: 0; right: 0; bottom: 0; z-index: 70;
     height: 78vh; max-height: 78vh; width: auto;
-    border-radius: 14px 14px 0 0;
+    border-radius: var(--r-lg) var(--r-lg) 0 0;
     border-left: 0; border-right: 0; border-bottom: 0;
     box-shadow: 0 -8px 28px rgba(0, 0, 0, .4);
     padding-bottom: env(safe-area-inset-bottom, 0px);
@@ -2446,7 +2870,7 @@ a.room:hover { border-color: var(--blue-line); }
   /* The sheet covers the board, so it needs its own way out. */
   body.chat-open .chatdismiss {
     display: block; margin-left: 6px;
-    font-size: 20px; line-height: 1; padding: 0 4px;
+    font-size: var(--fs-lg); line-height: 1; padding: 0 4px;
     color: var(--ink-light); background: none; border: 0; cursor: pointer;
   }
 
@@ -2466,7 +2890,7 @@ a.room:hover { border-color: var(--blue-line); }
 .chatgif {
   display: block; margin-top: 5px;
   max-width: 100%; max-height: 130px;
-  border-radius: 7px;
+  border-radius: var(--r-sm);
 }
 
 .gifbox { margin-bottom: 8px; }
@@ -2478,7 +2902,7 @@ a.room:hover { border-color: var(--blue-line); }
 }
 
 .gifpick {
-  padding: 0; border: 1px solid var(--line); border-radius: 6px;
+  padding: 0; border: 1px solid var(--line); border-radius: var(--r-sm);
   background: var(--sunken); cursor: pointer; overflow: hidden;
   aspect-ratio: 1 / 1;
 }

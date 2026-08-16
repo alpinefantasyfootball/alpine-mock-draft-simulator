@@ -33,7 +33,7 @@
        say script-src 'self' without either giving away 'unsafe-inline' or
        pinning a hash that breaks the site the first time somebody edits it.
        No defer, no async: it must run before the body is drawn. -->
-  <script src="theme.js?v=202608160015"></script>
+  <script src="theme.js?v=202608162700"></script>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -53,7 +53,7 @@
 
        A query string rather than a renamed file, because renaming means a
        manifest and a manifest means a build step. This costs one number. -->
-  <link rel="stylesheet" href="style.css?v=202608160015">
+  <link rel="stylesheet" href="style.css?v=202608162700">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -200,91 +200,123 @@
     <!-- ---------- LANDING ---------- -->
     <section class="landing" id="view-home">
 
-      <!-- Scores are fetched after the page renders and stay hidden unless
-           there are games, so the offseason shows nothing at all rather than
-           an empty frame. -->
-      <div class="scores-wrap" id="scoreWrap" hidden>
-        <button class="scores-arrow left" id="scoreLeft" type="button"
-                aria-label="Scroll scores left">&#8249;</button>
-        <div class="scores" id="scoreStrip"></div>
-        <button class="scores-arrow right" id="scoreRight" type="button"
-                aria-label="Scroll scores right">&#8250;</button>
-      </div>
+      <!-- The band is brand navy and runs edge to edge, so the 1120px column
+           that .landing used to own moves inside it and into .landing-inner
+           below. Full bleed by nesting rather than by 100vw: a viewport unit
+           counts the scrollbar the page has, which is how a layout starts
+           overflowing sideways on the one machine that shows one.
 
-      <!-- The slogan sits above the headline, not in it.
+           Everything in here sits on navy under both themes, which is what
+           lets it use white and the --band-* tokens directly — see the note
+           on the band in style.css. -->
+      <div class="hero-band">
+        <div class="band-inner">
 
-           It is a claim about Juke — all six rooms — and it is what explains
-           the name: a juke is an evasive move, and this is where the agility
-           comes from. The h1 under it is a Draft Room promise, which is the
-           right headline while the Draft Room is the only room open and the
-           wrong one to have welded the brand into. Kept apart, the h1 can
-           change as rooms arrive and the brand line stays put.
+          <!-- Scores are fetched after the page renders and stay hidden unless
+               there are games, so the offseason shows nothing at all rather than
+               an empty frame. -->
+          <div class="scores-wrap" id="scoreWrap" hidden>
+            <button class="scores-arrow left" id="scoreLeft" type="button"
+                    aria-label="Scroll scores left">&#8249;</button>
+            <div class="scores" id="scoreStrip"></div>
+            <button class="scores-arrow right" id="scoreRight" type="button"
+                    aria-label="Scroll scores right">&#8250;</button>
+          </div>
 
-           Not in the header lockup: .shell-inner is 1fr auto 1fr with
-           nowrap sides, and a tagline there makes the wordmark collision
-           documented in CLAUDE.md worse rather than better. -->
-      <div class="hero">
-        <p class="hero-slogan">Agility Through Analytics</p>
-        <h1>Draft with the numbers already done.</h1>
-        <!-- This said "no waiting on nine other people", and it had gone
-             wrong twice over.
+          <!-- The slogan sits above the headline, not in it.
 
-             It wrote the league shape into prose, which is the thing
-             CLAUDE.md's strongest rule exists to prevent — the setup screen
-             does eight to fourteen teams, so at twelve it is eleven other
-             people and at eight it is seven.
+               It is a claim about Juke — all six rooms — and it is what explains
+               the name: a juke is an evasive move, and this is where the agility
+               comes from. The h1 under it is a Draft Room promise, which is the
+               right headline while the Draft Room is the only room open and the
+               wrong one to have welded the brand into. Kept apart, the h1 can
+               change as rooms arrive and the brand line stays put.
 
-             Worse, it argued against a feature we now have. Framing other
-             managers as the thing you are spared made sense when solo was
-             the only mode. With shared rooms it undercuts them, on a page
-             whose next section is about drafting with your league. So the
-             speed stays as the promise and the people become the option. -->
-        <p class="hero-sub">Mock drafts against opponents that understand ADP, tiers
-           and replacement level, and a grade afterwards that shows its working.
-           Free, no account, and nobody to wait on &mdash; or send a link and draft
-           with your league.</p>
-        <div class="hero-cta">
-          <a class="cta lg" href="#/draft">Start a mock draft</a>
-          <!-- The only "How it works" on this page. It used to be here and in
-               the header nav, 150px apart, both pointing at the same Draft
-               Room document. This is the one that survives: it sits under a
-               Draft Room headline beside the Draft Room button, where the
-               link is about the thing you are looking at. In the header it
-               read as "how Juke works" and would have been wrong the day a
-               second room shipped. -->
-          <a class="navlink lg" href="docs/draft-room-how-it-works.html">How it works</a>
+               Not in the header lockup: .shell-inner is 1fr auto 1fr with
+               nowrap sides, and a tagline there makes the wordmark collision
+               documented in CLAUDE.md worse rather than better. -->
+          <div class="hero">
+            <p class="hero-slogan">Agility Through Analytics</p>
+            <h1>Draft with the numbers already done.</h1>
+            <!-- This said "no waiting on nine other people", and it had gone
+                 wrong twice over.
+
+                 It wrote the league shape into prose, which is the thing
+                 CLAUDE.md's strongest rule exists to prevent — the setup screen
+                 does eight to fourteen teams, so at twelve it is eleven other
+                 people and at eight it is seven.
+
+                 Worse, it argued against a feature we now have. Framing other
+                 managers as the thing you are spared made sense when solo was
+                 the only mode. With shared rooms it undercuts them, on a page
+                 whose next section is about drafting with your league. So the
+                 speed stays as the promise and the people become the option. -->
+            <p class="hero-sub">Mock drafts against opponents that understand ADP, tiers
+               and replacement level, and a grade afterwards that shows its working.
+               Free, no account, and nobody to wait on &mdash; or send a link and draft
+               with your league.</p>
+            <div class="hero-cta">
+              <a class="cta lg" href="#/draft">Start a mock draft</a>
+              <!-- The only "How it works" on this page. It used to be here and in
+                   the header nav, 150px apart, both pointing at the same Draft
+                   Room document. This is the one that survives: it sits under a
+                   Draft Room headline beside the Draft Room button, where the
+                   link is about the thing you are looking at. In the header it
+                   read as "how Juke works" and would have been wrong the day a
+                   second room shipped. -->
+              <a class="navlink lg" href="docs/draft-room-how-it-works.html">How it works</a>
+            </div>
+          </div>
+
+          <!-- The product shot, and it is the real board rather than a
+               picture of one — filled by renderHeroShot() from the same ADP
+               data and the same position colours the draft itself uses. A
+               PNG would be a file to rebuild every time the design or the
+               data moved, and it would be wrong the first time somebody
+               forgot. Empty here, and it stays empty and harmless if
+               anything upstream fails.
+
+               aria-hidden because it is decoration: it says nothing the
+               headline above it does not, and the real thing is one button
+               away. -->
+          <div class="hero-shot" id="heroShot" aria-hidden="true"></div>
+
         </div>
       </div>
 
-      <div class="landing-resume" id="homeResume" hidden></div>
+      <div class="landing-inner">
 
-      <!-- A real heading rather than the small-caps .section-label used
-           elsewhere. The phase labels underneath are already small caps, and
-           two of those stacked twelve pixels apart read as one doubled
-           label rather than a heading over a section. -->
-      <h2 class="rooms-head">The Rooms</h2>
-      <p class="rooms-sub">One for every part of the season. The Draft Room is open now.</p>
-      <div class="roomgrid" id="homeRooms"></div>
+        <div class="landing-resume" id="homeResume" hidden></div>
 
-      <div class="pillars">
-        <div class="pillar">
-          <b>Real ADP, refreshed daily</b>
-          <span>Fantasy Football Calculator, one set per scoring format, rebuilt every morning.</span>
+        <!-- A real heading rather than the small-caps .section-label used
+             elsewhere. The phase labels underneath are already small caps, and
+             two of those stacked twelve pixels apart read as one doubled
+             label rather than a heading over a section. -->
+        <h2 class="rooms-head">The Rooms</h2>
+        <p class="rooms-sub">One for every part of the season. The Draft Room is open now.</p>
+        <div class="roomgrid" id="homeRooms"></div>
+
+        <div class="pillars">
+          <div class="pillar">
+            <b>Real ADP, refreshed daily</b>
+            <span>Fantasy Football Calculator, one set per scoring format, rebuilt every morning.</span>
+          </div>
+          <div class="pillar">
+            <b>Projections you can re-score</b>
+            <span>Sleeper stats back to 2018, and all 38 scoring rules are yours to edit. Change one and everything recalculates.</span>
+          </div>
+          <div class="pillar">
+            <b>A grade that explains itself</b>
+            <span>Every number the app computes is written down on one page. No black box, no panel of experts.</span>
+          </div>
         </div>
-        <div class="pillar">
-          <b>Projections you can re-score</b>
-          <span>Sleeper stats back to 2018, and all 38 scoring rules are yours to edit. Change one and everything recalculates.</span>
-        </div>
-        <div class="pillar">
-          <b>A grade that explains itself</b>
-          <span>Every number the app computes is written down on one page. No black box, no panel of experts.</span>
-        </div>
+
+        <footer class="landing-foot">
+          <p id="homeMeta"></p>
+          <p>Juke runs entirely in your browser. Nothing you draft is sent anywhere.</p>
+        </footer>
+
       </div>
-
-      <footer class="landing-foot">
-        <p id="homeMeta"></p>
-        <p>Juke runs entirely in your browser. Nothing you draft is sent anywhere.</p>
-      </footer>
     </section>
 
     <!-- ---------- THE DRAFT ROOM ---------- -->
@@ -317,8 +349,32 @@
           <p class="hint">When the clock runs out, the top suggestion is drafted for you. You can pause it at any time once the draft starts.</p>
         </div>
 
+        <!-- League shape and starting lineup, closed.
+
+             This screen used to ask sixty questions before it would let you
+             draft: fourteen selects and forty-four scoring inputs across five
+             labelled groups, with the Start button under all of it. Every one
+             of those controls earns its place for somebody replicating a real
+             league, and none of them is the reason a first-time visitor came.
+
+             The defaults are the whole premise of the project — this was
+             built for one ten-team league and every control still defaults to
+             it — so the screen now leads with the two settings people
+             actually change and puts the rest one click away, summarised so
+             that closed still tells you what league you are about to draft.
+
+             refreshSetup() forces this open when setupProblem() has something
+             to say, because a disabled Start button with the explanation
+             hidden inside a closed box is worse than the wall of controls
+             this replaced. -->
+        <details class="setupbox" id="leagueBox">
+          <summary>
+            <span>League</span>
+            <span class="box-sum" id="leagueSummary"></span>
+          </summary>
+
         <div class="field">
-          <label for="teamCount">League</label>
+          <label for="teamCount">Teams, rounds and scoring</label>
           <!-- "wordy" because these three options are words rather than a
                position and a digit, which is what makes them too wide to sit
                three across on a phone. See the rule in style.css. -->
@@ -359,13 +415,15 @@
           <p class="hint" id="rosterSum"></p>
         </div>
 
+        </details>
+
         <!-- Collapsed by default. Thirty-eight numbers would swamp a setup
              screen that most people never need to touch, but every one of
              them is here for the leagues that do. -->
-        <details class="scoring" id="scoringBox">
+        <details class="setupbox scoring" id="scoringBox">
           <summary>
             <span>Scoring</span>
-            <span class="scoring-sum" id="scoringSummary"></span>
+            <span class="box-sum" id="scoringSummary"></span>
           </summary>
           <div id="scoringFields"></div>
           <button class="ghost" type="button" id="resetScoring">Reset to defaults</button>
@@ -375,8 +433,23 @@
              Off by default and completely optional. A solo mock draft never
              touches the network, which is the first term the multi-user work
              happens on — see CLAUDE.md. -->
-        <div class="field invite" id="inviteBox">
-          <label>Draft with friends</label>
+        <!-- Closed like the others, and reopened by renderInvite() the moment
+             a room exists — a host who has just created one must not have to
+             go looking for the link they came here to send. -->
+        <!-- Not .invite any more: that rule draws a top border and 18px of
+             padding to separate this section from the plain fields above it,
+             and on a box that already has its own border it just doubles up. -->
+        <details class="setupbox" id="friendsBox">
+          <!-- renderInvite() writes the room title into #friendsTitle. It used
+               to write into a <label> inside #inviteBox; the label became this
+               summary when the section was collapsed, so the id moved with the
+               job rather than the lookup being left to find nothing. -->
+          <summary>
+            <span id="friendsTitle">Draft with friends</span>
+            <span class="box-sum" id="friendsSum">Send a link and draft together</span>
+          </summary>
+
+        <div class="field" id="inviteBox">
           <p class="hint" id="inviteHint">Create a room and send the link. Anyone who opens
             it takes a seat; the rest are drafted by the CPU.</p>
 
@@ -404,12 +477,21 @@
           </div>
         </div>
 
+        </details>
+
         <!-- Where the chat sits while the room is still filling up. This is
              the moment people most want to talk — waiting to find out who
              actually turned up — and until now there was nowhere to do it,
              because the chat lived inside a shell that stays hidden until
              the first pick. -->
         <div class="chatslot" id="lobbyChatSlot"></div>
+
+        <!-- The reason the button below is refusing, said next to the button
+             rather than inside the box that caused it. #rosterSum still
+             carries the same message in its old place, which is where you
+             look once the League box is open; this is what you see when it
+             is shut. -->
+        <p class="hint bad" id="setupProblemMsg" hidden></p>
 
         <button class="primary big" id="startBtn">Start your draft</button>
         <p class="freshness" id="freshness"></p>
@@ -660,17 +742,17 @@
 
   <!-- Every one of these carries the same ?v= as the stylesheet. See the note
        beside it in <head>: bump them together or don't bump them at all. -->
-  <script src="players.js?v=202608160015"></script>
-  <script src="stats.js?v=202608160015"></script>
+  <script src="players.js?v=202608162700"></script>
+  <script src="stats.js?v=202608162700"></script>
   <!-- The rules of a snake draft, with no reference to this page. It loads
        before app.js because app.js is a caller, and it is a separate file
        because a server will eventually have to run the same one. -->
-  <script src="draft-engine.js?v=202608160015"></script>
+  <script src="draft-engine.js?v=202608162700"></script>
   <!-- The socket to a shared room. Loaded always, connected never unless a
        manager asks for it: a solo draft touches nothing. -->
-  <script src="live.js?v=202608160015"></script>
+  <script src="live.js?v=202608162700"></script>
   <!-- Before app.js, which calls backToTop() on the last line of its setup. -->
-  <script src="back-to-top.js?v=202608160015"></script>
-  <script src="app.js?v=202608160015"></script>
+  <script src="back-to-top.js?v=202608162700"></script>
+  <script src="app.js?v=202608162700"></script>
 </body>
 </html>

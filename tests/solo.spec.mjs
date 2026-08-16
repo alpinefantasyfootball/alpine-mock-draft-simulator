@@ -10,6 +10,15 @@
 import { test, expect } from "@playwright/test";
 import { openApp } from "./helpers.mjs";
 
+/* The League controls live inside a collapsed <details> now, because the
+   setup screen was asking sixty questions before it would let anybody draft.
+   Playwright's selectOption waits for the control to be visible, so a test
+   that changes the league has to open the box first — which is what a person
+   does too, and is the point of the test driving the real screen. */
+async function openLeagueBox(page) {
+  await page.evaluate(() => { document.getElementById("leagueBox").open = true; });
+}
+
 async function runSoloDraft(page, setup) {
   await page.evaluate(async (fields) => {
     for (const [id, value] of Object.entries(fields)) {
@@ -100,6 +109,7 @@ for (const pos of ["ALL", "QB", "RB", "WR", "TE", "K", "DST"]) {
     const context = await browser.newContext();
     const page = await openApp(context);
 
+    await openLeagueBox(page);
     await page.selectOption("#teamCount", "12");
     await page.selectOption("#draftSlot", "10");        // the 11th spot
     await page.click("#startBtn");
@@ -159,6 +169,7 @@ test("every lineup fields the best eligible player", async ({ browser }) => {
   const context = await browser.newContext();
   const page = await openApp(context);
 
+  await openLeagueBox(page);
   await page.selectOption("#teamCount", "12");
   await page.click("#startBtn");
   await page.evaluate(async () => { autoDraftRest(); await new Promise((r) => setTimeout(r, 2000)); });

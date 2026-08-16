@@ -10,7 +10,7 @@
        made next door rather than reverting to light halfway through a
        visit. The only other script here is the back-to-top control, at the
        foot of the page. -->
-  <script src="../theme.js?v=202608160015"></script>
+  <script src="../theme.js?v=202608162700"></script>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -20,7 +20,7 @@
        styling. Everything below is layout for a page of prose, which the app
        has no use for, so it lives here rather than bloating style.css. -->
   <!-- Same ?v= as index.html, and bumped with it. See the note there. -->
-  <link rel="stylesheet" href="../style.css?v=202608160015">
+  <link rel="stylesheet" href="../style.css?v=202608162700">
 
   <link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="../favicon-16.png">
@@ -35,22 +35,22 @@
        200px to its left. */
     .appbar-inner { max-width: 720px; }
 
-    .doc-intro { font-size: 16.5px; line-height: 1.7; color: var(--ink-mid); margin: 0 0 10px; }
+    .doc-intro { font-size: var(--fs-base); line-height: 1.7; color: var(--ink-mid); margin: 0 0 10px; }
 
     .doc h2 {
       margin: 40px 0 12px; padding-top: 18px;
       border-top: 1px solid var(--line);
-      font-family: Poppins, sans-serif; font-size: 19px;
+      font-family: Poppins, sans-serif; font-size: var(--fs-lg);
       font-weight: 700; letter-spacing: -0.01em;
     }
     .doc h2 .no {
       display: block; margin-bottom: 5px;
-      font-family: Inter, sans-serif; font-size: 10px; font-weight: 700;
+      font-family: Inter, sans-serif; font-size: var(--fs-2xs); font-weight: 700;
       letter-spacing: .12em; color: var(--cyan);
     }
     .doc h3 {
       margin: 22px 0 8px;
-      font-size: 13.5px; font-weight: 700; color: var(--ink);
+      font-size: var(--fs-sm); font-weight: 700; color: var(--ink);
     }
     .doc p  { line-height: 1.72; margin: 0 0 13px; }
     .doc ul { line-height: 1.72; margin: 0 0 13px; padding-left: 20px; }
@@ -60,10 +60,10 @@
        these are formulas and not fixed numbers, so they get to look like it. */
     .formula {
       background: var(--card); border: 1px solid var(--line);
-      border-left: 3px solid var(--cyan); border-radius: 8px;
+      border-left: 3px solid var(--cyan); border-radius: var(--r-sm);
       padding: 13px 15px; margin: 0 0 14px;
       font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      font-size: 12.5px; line-height: 1.75; color: var(--ink);
+      font-size: var(--fs-sm); line-height: 1.75; color: var(--ink);
       overflow-x: auto;
     }
     .formula b { color: var(--link); font-weight: 700; }
@@ -79,37 +79,37 @@
        is never mistaken for a number the code actually hardcodes. */
     .worked {
       background: var(--sunken); border: 1px solid var(--line);
-      border-radius: 8px; padding: 13px 15px; margin: 0 0 14px;
+      border-radius: var(--r-sm); padding: 13px 15px; margin: 0 0 14px;
     }
     .worked-title {
-      margin: 0 0 7px; font-size: 10px; font-weight: 700;
+      margin: 0 0 7px; font-size: var(--fs-2xs); font-weight: 700;
       letter-spacing: .07em; text-transform: uppercase; color: var(--ink-light);
     }
-    .worked p, .worked ul { margin-bottom: 0; font-size: 13.5px; color: var(--ink-mid); }
+    .worked p, .worked ul { margin-bottom: 0; font-size: var(--fs-sm); color: var(--ink-mid); }
 
     .doc table { margin: 0 0 16px; }
-    .doc td { padding: 9px 12px; border-bottom: 1px solid var(--line); font-size: 13.5px; vertical-align: top; }
+    .doc td { padding: 9px 12px; border-bottom: 1px solid var(--line); font-size: var(--fs-sm); vertical-align: top; }
     .doc tr:last-child td { border-bottom: 0; }
     .doc td.k { font-weight: 600; white-space: nowrap; }
     .doc td.n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
     .doc code {
       font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      font-size: .89em; background: var(--fill); border-radius: 4px; padding: 1px 5px;
+      font-size: .89em; background: var(--fill); border-radius: var(--r-xs); padding: 1px 5px;
     }
 
     .note {
       border-left: 3px solid var(--te); background: var(--t-bye-bg);
-      border-radius: 0 8px 8px 0; padding: 12px 15px; margin: 0 0 14px;
-      font-size: 13.5px; line-height: 1.65; color: var(--ink-mid);
+      border-radius: 0 var(--r-sm) var(--r-sm) 0; padding: 12px 15px; margin: 0 0 14px;
+      font-size: var(--fs-sm); line-height: 1.65; color: var(--ink-mid);
     }
 
-    .toc { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px; margin: 22px 0 6px; }
-    .toc ol { margin: 0; padding-left: 20px; line-height: 1.95; font-size: 14px; }
+    .toc { background: var(--card); border: 1px solid var(--line); border-radius: var(--r-md); padding: 14px 18px; margin: 22px 0 6px; }
+    .toc ol { margin: 0; padding-left: 20px; line-height: 1.95; font-size: var(--fs-sm); }
     .toc a { color: var(--link); text-decoration: none; }
     .toc a:hover { text-decoration: underline; }
 
-    .backlink { display: inline-block; margin-top: 30px; font-size: 13.5px; color: var(--link); text-decoration: none; }
+    .backlink { display: inline-block; margin-top: 30px; font-size: var(--fs-sm); color: var(--link); text-decoration: none; }
     .backlink:hover { text-decoration: underline; }
   </style>
 </head>
@@ -739,7 +739,7 @@
   <!-- This page is long enough that getting back to the contents is a real
        scroll. Same control and same stylesheet as the app, so it looks and
        behaves like one thing rather than a page that grew its own button. -->
-  <script src="../back-to-top.js?v=202608160015" data-auto></script>
+  <script src="../back-to-top.js?v=202608162700" data-auto></script>
 
 </body>
 </html>

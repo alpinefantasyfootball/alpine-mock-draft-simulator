@@ -292,8 +292,11 @@ function roomCard(room) {
                '<span class="blurb">' + room.blurb + "</span>" +
                '<span class="pill' + (room.live ? "" : " grey") + '">' +
                (room.live ? "Open" : "Planned") + "</span>";
+  // "live" rather than styling off a.room: the tag already says it is a link,
+  // and the stylesheet is asking a different question — which room is open —
+  // that will still need answering the day a second one is.
   return room.live
-    ? '<a class="room" href="' + room.href + '">' + body + "</a>"
+    ? '<a class="room live" href="' + room.href + '">' + body + "</a>"
     : '<div class="room soon">' + body + "</div>";
 }
 
@@ -343,6 +346,54 @@ function renderRooms() {
 
   $("homeRooms").innerHTML = SEASONS.map(seasonColumn).join("");
   syncThemeButton();                 // the panel just gained a toggle
+}
+
+/* ---------- the product shot ----------
+
+   A first-time visitor never saw what this app looks like. The landing page
+   had no image of any kind — not one <img> and not one illustrative <svg> —
+   so the most persuasive thing the project has built was invisible until
+   somebody committed to a draft to see it.
+
+   This draws the opening rounds of a real board: the same `board` array the
+   draft reads, sorted by the same ADP, in real snake order, in the position
+   colours the app uses everywhere else. It is a screenshot that cannot go
+   stale, because there is nothing in it to keep in sync.
+
+   Ten teams because that is the league this was built for and the shape the
+   setup screen still defaults to. Four rounds because that is what fits
+   above the fade without pushing the button off a laptop screen. */
+const SHOT_TEAMS = 10;
+const SHOT_ROUNDS = 4;
+const SHOT_MINE = 3;      // one column reads as yours, the way a real board does
+
+function renderHeroShot() {
+  const el = $("heroShot");
+  // board is empty until the setup screen has been read. Decoration is not
+  // worth a broken landing page, so this simply does nothing until it is not.
+  if (!el || !board.length) return;
+
+  let html = '<div class="shot-rd"></div>';
+  for (let s = 0; s < SHOT_TEAMS; s++) {
+    html += '<div class="shot-hd' + (s === SHOT_MINE ? " me" : "") + '">' +
+            (s === SHOT_MINE ? "YOU" : escHtml(cpuName(s).split(" ")[0])) + "</div>";
+  }
+
+  for (let r = 1; r <= SHOT_ROUNDS; r++) {
+    html += '<div class="shot-rd">' + r + "</div>";
+    for (let s = 0; s < SHOT_TEAMS; s++) {
+      // Snake: odd rounds run left to right, even rounds back the other way.
+      // Straight off the board, so this is what the room looks like when
+      // every seat takes the best player left — which is the honest picture.
+      const i = (r - 1) * SHOT_TEAMS + (r % 2 ? s : SHOT_TEAMS - 1 - s);
+      const p = board[i];
+      if (!p) { html += '<div class="shot-cell empty"></div>'; continue; }
+      html += '<div class="shot-cell ' + p.pos + (s === SHOT_MINE ? " mine" : "") + '">' +
+              "<b>" + escHtml(lastName(p.name)) + "</b>" +
+              "<s>" + p.pos + " &middot; " + escHtml(p.team) + "</s></div>";
+    }
+  }
+  el.innerHTML = html;
 }
 
 function closeRooms() {
@@ -4387,6 +4438,16 @@ function scoringSummary() {
   return `${rec} · ${r.pass_td} pt passing TD · ${r.rush_td} pt rushing TD`;
 }
 
+/* What the League box says while it is shut. Built from `league` like
+   everything else, so it cannot describe a different league from the one the
+   controls inside it hold — the same reason scoringSummary() exists. */
+function leagueSummary() {
+  // scoringLabel(), not SCORING_NAMES directly — the same lookup with the
+  // same fallback already exists and drifting from it is how the dropdown
+  // and the scoring summary once disagreed about the same league.
+  return `${league.teams} teams · ${league.rounds} rounds · ${scoringLabel()}`;
+}
+
 function fillSetupControls() {
   fillList($("teamCount"), TEAM_COUNTS, league.teams, (i) => i + " teams");
   // Filled from SCORING_NAMES rather than written into the markup, so the
@@ -4462,6 +4523,21 @@ function refreshSetup() {
   note.classList.toggle("bad", !!problem);
   $("startBtn").disabled = !!problem;
   $("scoringSummary").textContent = scoringSummary();
+  $("leagueSummary").textContent = leagueSummary();
+
+  /* The League box is shut by default, and everything that can refuse the
+     Start button lives inside it. So the reason is repeated next to the
+     button, and the box is opened so the control that needs changing is
+     actually on screen — a disabled button whose explanation is folded away
+     is worse than the wall of controls the box replaced.
+
+     Opened, never closed: once somebody has it open they are working in it,
+     and having it shut itself the moment the arithmetic came right would
+     take the screen away mid-edit. */
+  const msg = $("setupProblemMsg");
+  msg.textContent = problem;
+  msg.hidden = !problem;
+  if (problem) $("leagueBox").open = true;
 
   // Scoring decides which ADP set the board comes from, so it has to be
   // rebuilt here rather than only when the draft starts.
@@ -4611,7 +4687,15 @@ function renderInvite() {
   // Locking is undone here as well as set below, because leaving a room
   // comes through this branch and an early return left every control
   // disabled with nothing on screen explaining why.
-  const label = $("inviteBox").querySelector("label");
+  // The summary of the Draft with friends box, which is where the old
+  // <label> went when that section was collapsed.
+  const label = $("friendsTitle");
+
+  // A host who has just made a room came here to send a link, so the box
+  // opens itself rather than making them go and find it. Only ever opened:
+  // somebody who closes it mid-room has said something, and reopening it on
+  // the next broadcast would be an argument rather than a feature.
+  if (status !== "off") $("friendsBox").open = true;
 
   if (status === "off") {
     box.hidden = true;
@@ -5391,6 +5475,7 @@ refreshSetup();
 // The route has the last word on what is visible, so it runs after the
 // setup screen has been built rather than before.
 renderRooms();
+renderHeroShot();      // after refreshSetup(), which is what fills `board`
 applyRoute();
 
 /* An invite code in the address bar means someone followed a link, so the
