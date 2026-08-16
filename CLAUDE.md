@@ -41,7 +41,7 @@ Python 3 standard library only in the pipeline. No pip dependencies.
 | `tests/` | End-to-end tests: the real pages, in a real browser, two managers in a real room. `playwright.config.mjs` starts both servers itself. |
 | `package.json` | **Dev only.** Fetches the test runner and nothing else. The app still has no build step, no bundler and no runtime dependency. |
 | `players.js` | **GENERATED.** 260 players by ADP. Never edit by hand. |
-| `stats.js` | **GENERATED.** Stats, projections, depth charts by Sleeper ID. |
+| `stats.js` | **GENERATED.** Stats, projections, depth charts by Sleeper ID. `pp` holds what we projected for seasons already played, so a forecast can be graded against what happened. |
 | `scripts/build_players.py` | The pipeline that writes the two generated files. |
 | `.github/workflows/update-players.yml` | Runs the pipeline daily at 11:00 UTC. |
 | `og-image.png` | **GENERATED.** 1200x630 link-preview card. Rebuild by opening `scripts/build_og.html` in a browser and clicking download. |
@@ -221,6 +221,95 @@ which drifted — precisely the failure "nothing about the league shape may be
 written down twice" exists to prevent. When something here needs to know what
 a league permits, check whether the engine or the CPU already answers it
 before writing a second answer.
+
+## The Juke score
+
+Projected points above a replacement starter at that position, as a share of
+the best such figure on the board. `overallScore()`, and it is the one number
+the app has that a projection feed does not.
+
+**It is a ranking against the pool, not a rating of the player, and nothing on
+screen said so.** Both ends of the scale were being read as verdicts: a bare
+`0` as "worthless" and a bare `100` as "perfect". Neither is what the number
+means, and no reader could get from one to the other unaided.
+
+**The pile of zeros is arithmetic, and that was measured before anything was
+changed.** 130 of the 221 players on the half-PPR board score exactly 0 — the
+majority state, not an edge case. Scored on the *fixed cohort* of 151 players
+with a line in 2023, 2024, 2025 and a 2026 projection, so survivorship cannot
+drift the answer, the share scoring zero is **39.7% in every one of those real
+completed seasons and 41.1% in the projection**. A fixed rank cut against a
+221-deep board in a league that starts ninety players puts most of the pool
+below the line whatever happens on the field. So there is nothing to correct in
+the maths and re-curving the scale would be correcting football. The floor
+needed a name, not a new formula.
+
+**Two zeros are not equal, which is what `replacementGap()` exists to say.**
+Michael Wilson scored 14 on last season's actuals — 181.6 points across all
+seventeen games, +29.4 over replacement — and reads 0 for 2026 because his
+projection falls 45 points *while projected WR replacement rises 22*. Most of
+that 67-point swing is the projection compressing the field, not a judgement
+about him. It stays out of `overallScore()` deliberately: `modelMultipliers()`
+divides by the best score available and a negative there would invert the
+discount.
+
+**A score can rise while the points fall, and Gibbs is the case to keep.** He
+actually scored 328 points last season for a Juke score of **82** — McCaffrey
+was the 100 that year. His 2026 projection is 300 points, twenty-eight
+*fewer*, and he scores **100**. Nothing is wrong: a projection is an average
+over everything that might happen, so it shaves the extremes off everybody, and
+he rises because the field beneath him was compressed further than he was. One
+player explains the entire metric, which is why the sheet and the how-it-works
+page both carry him.
+
+**The number is sharper than the sport supports, so do not dress it as
+precision.** Year to year across real seasons the score persists at r 0.35–0.55
+(0.52–0.55 pace-adjusted at 10+ games) with a mean absolute move of 12 to 20
+points, and between a quarter and two fifths of the players above zero one year
+were back at zero the next. The 2026 projection sits at **r 0.79 against last
+season's actuals, MAE 6.8** — roughly twice as tightly coupled to last year as
+consecutive real years are to each other. It is last year, smoothed. That is
+expected of a projection built knowing last year and is not a bug; it is a
+reason to present a ranking rather than a measurement.
+
+**One number may not have three names.** The strip said "Juke score", the meter
+two hundred pixels below it said "Overall", the queue row said "Overall" and
+the table column said "OVR" — all the same figure, with nothing connecting any
+of them, so the sheet appeared to show two unrelated ratings. It is the Juke
+score everywhere now. **"Overall" still appears on the sheet and correctly so:
+it is the board rank in the first cell of the strip**, which is a different
+fact and always was.
+
+**The explanation already existed in the worst possible place.**
+`overallReason()` had been writing exactly the right sentence all along and was
+reachable only as a `title` tooltip on a table cell — which is to say not at
+all on a phone, and never on the sheet somebody opens *because* they are
+confused. `jukeNote()` puts it under the strip. When something is unclear on
+screen, check whether the app already computes the answer before writing a
+second one.
+
+**`buildPriorSeason()` runs inside `buildProjections()`, and it has to.** Last
+season is scored with the same `fantasyPoints()` under the same rules, so it
+rescores when the scoring table moves exactly as everything else does — a
+historical figure that ignored the editor would be the one number on the sheet
+quietly describing a different league. Its replacement level is re-derived from
+what actually happened rather than reused from the projection: measuring last
+season against this season's baseline would call the difference a change in the
+player, which is the precise error the comparison exists to expose.
+
+**A missing season is blank, never zero.** Eighteen players on the board have
+no line at all, and a 0 there would be a judgement about a season they were not
+in — the same rule as "treat `0` from an API as missing".
+
+**`pp` in `stats.js` is what we said about seasons that have since been
+played.** Only the coming season's projection was ever stored and it was
+overwritten nightly, so the one question worth asking of a projection — was it
+any good — had no data behind it at all, and the numbers above had to be
+assembled from actuals alone. `PROJECTION_HISTORY` in `build_players.py` fetches
+past seasons from the same endpoint; each is optional and the counts are
+printed, so a season Sleeper declines to serve is visible in the run rather
+than silently absent. Even if every one comes back empty the list still earns
+its place, because next year's run finds this year in it.
 
 ## The suggestions
 
@@ -1090,11 +1179,18 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   fact in two places and would have failed as a suite quietly testing a server
   nobody was running.
 
-- **End to end: `npm install` once, then `npx playwright test`.** Ten tests,
-  about three minutes, and it starts the static server and `wrangler dev`
+- **End to end: `npm install` once, then `npx playwright test`.** Sixteen
+  tests, about five minutes, and it starts the static server and `wrangler dev`
   itself. It drives the real pages in a real browser — a solo draft at both
   shapes, a full two-manager room draft to completion, a dropped socket
-  reconnecting, leaving and rejoining, and the phone layout.
+  reconnecting, leaving and rejoining, the phone layout, and what the player
+  sheet actually says about the Juke score.
+
+  **The static server is `py` on Windows and `python3` everywhere else**, picked
+  in `playwright.config.mjs` from `process.platform`. It was `py` outright,
+  which is the Windows launcher and exists nowhere else, so on Linux or macOS
+  the whole suite died with "py: not found" before a single test ran — a
+  failure that looks like a broken harness rather than a missing interpreter.
 
   It is the only tool here that is not plain Python or plain JavaScript, and
   it earns that: everything it covers lives in the browser, so neither
@@ -1124,6 +1220,21 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   When adding a test, check it fails against the bug it is meant to catch —
   put the bug back for one run. Every test in there was written against a real
   failure and confirmed to go red without the fix.
+
+  **And disable the HTTP cache while you do it, or the answer is noise.**
+  `app.js?v=` is a fixed address between deploys, which is the whole point of
+  it — but a bug-back run edits `app.js` without touching the version, so the
+  browser is entitled to serve the body it already has. Five mutations in a row
+  came back failing all six tests, including tests the mutation could not
+  possibly reach, and every one of those runs was measuring some mixture of the
+  patched file and the cached one. It does not look like a caching problem; it
+  looks like a suite with no discrimination at all.
+
+  Launch with `--disable-application-cache --disk-cache-size=1` and set
+  `Cache-Control: no-cache` on the context. Done that way each mutation flips
+  exactly the property its own test asserts and nothing else, which is the
+  result that means something. Same trap as the deploy note in the caching
+  section, reached from the other direction.
 
 - **A room draft has to be run to the end, with two clients, before anything
   touching a room is believed.** Solo drafts have been driven to completion

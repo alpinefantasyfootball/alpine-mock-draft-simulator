@@ -72,6 +72,27 @@ WEEKLY_SEASONS = [2025, 2024]
 WEEKLY_WEEKS = 18
 PROJECTION_SEASON = 2026
 
+# Past seasons' projections, kept beside the actuals so the app can be held to
+# what it said. Until now only the coming season was stored and it was
+# overwritten nightly, which meant the one question worth asking of a
+# projection -- was it any good -- had no data behind it at all. Season totals
+# reach back to 2018 and every one of them is a graded answer to a forecast
+# nobody kept.
+#
+# Three back rather than all of them. A projection block is about the size of a
+# season block, so each year costs roughly what a year of actuals costs in a
+# file that is a plain script tag on a page with no build step, and three is
+# enough to separate a model that is calibrated from one that had a good year.
+#
+# Whether Sleeper serves these at all is a question this cannot answer from
+# here: the endpoint takes a year, and asking for a past one may return the
+# preseason forecast, the in-season revision, or nothing. Each fetch is
+# optional and the counts are printed, so a season that comes back empty is
+# visible in the run rather than silently absent from the file. If they all
+# come back empty this list still earns its place going forward -- next year's
+# run finds 2026 in it.
+PROJECTION_HISTORY = [2025, 2024, 2023]
+
 POSITION_MAP = {"QB": "QB", "RB": "RB", "WR": "WR", "TE": "TE",
                 "PK": "K", "K": "K", "DEF": "DST", "DST": "DST"}
 
@@ -376,6 +397,18 @@ def main():
         f"{SLEEPER}/projections/nfl/regular/{PROJECTION_SEASON}", optional=True)
     print(f"  {len(projections)} lines")
 
+    # The same endpoint, pointed at seasons that have already been played. A
+    # year that returns nothing simply does not appear, exactly as a missing
+    # season of actuals does.
+    past_projections = {}
+    for season in PROJECTION_HISTORY:
+        print(f"Fetching {season} projections (archive)...")
+        data = fetch_json(
+            f"{SLEEPER}/projections/nfl/regular/{season}", optional=True)
+        if data:
+            past_projections[season] = data
+        print(f"  {len(data)} lines")
+
     # Keyed by season, then week. A season that returns nothing simply does
     # not appear, so the app draws a selector of the years it actually has
     # rather than a tab that opens onto an empty table.
@@ -485,6 +518,24 @@ def main():
             block["gp"] = int(projection.get("gp") or 0)
             record["p"] = block
 
+        # What we said about seasons that have since been played, keyed the
+        # same way the actuals in "s" are, so the two line up by year without
+        # the app having to know anything about how either was fetched. Same
+        # gp test as above: a zero-filled row is not a forecast.
+        past = {}
+        for season in sorted(past_projections):
+            line = past_projections[season].get(player_id)
+            if not line:
+                continue
+            block = compact(line)
+            games = int(line.get("gp") or 0)
+            if games == 0 and not block:
+                continue
+            block["gp"] = games
+            past[str(season)] = block
+        if past:
+            record["pp"] = past
+
         if rank < WEEKLY_KEEP:
             by_season = {}
             for season, weeks in weekly.items():
@@ -540,6 +591,8 @@ def main():
     matched = sum(1 for p in players if p["id"])
     flagged = sum(1 for p in players if p["inj"])
     projected = sum(1 for v in stats.values() if "p" in v)
+    archived = sum(1 for v in stats.values() if "pp" in v)
+    archive_years = sorted({y for v in stats.values() for y in v.get("pp", {})})
 
     set_blocks = ",\n\n".join(
         f'  "{key}": [\n' + ",\n".join(player_line(p) for p in sets[key]) + "\n  ]"
@@ -584,6 +637,8 @@ def main():
             "     depth/order  depth chart slot and place on it\n"
             "     s            season totals by year\n"
             "     p            projection for the coming season\n"
+            "     pp           what we projected for seasons already played,\n"
+            "                  keyed by year to line up with s\n"
             "     w            week by week logs, keyed by season\n\n"
             "   Raw components only. There is no points total in here: app.js\n"
             "   applies the scoring rules, so a league can change them without\n"
@@ -593,7 +648,9 @@ def main():
             "   PROJECTED_KEYS is the subset Sleeper actually forecasts. A rule\n"
             "   over anything outside it scores history correctly and adds\n"
             "   nothing to the 2026 projection, which is what the draft board\n"
-            "   is ranked on. The scoring editor says so on each rule.\n"
+            "   is ranked on. The scoring editor says so on each rule.\n\n"
+            f"   Archived   : {archived} players carry past projections"
+            f"{' for ' + ', '.join(archive_years) if archive_years else ' (none returned)'}\n"
             f"   Generated : {stamp}\n"
             "   ========================================================== */\n\n"
             "const STAT_KEYS = " + json.dumps(key_map, separators=(",", ":")) + ";\n\n"
@@ -620,6 +677,14 @@ def main():
     print(f"\n{PLAYERS_FILE}: {counts}, {matched} matched, "
           f"{flagged} flagged, {len(unmatched)} unmatched")
     print(f"{STATS_FILE}: {len(stats)} players with stats, {projected} with projections")
+    # Said out loud either way. Sleeper may or may not serve a past season's
+    # forecast, and "no archive" is a fact about the feed worth seeing in the
+    # run rather than inferring from a file that looks the same as before.
+    if archive_years:
+        print(f"  archived projections for {', '.join(archive_years)} "
+              f"on {archived} players")
+    else:
+        print("  no past projections returned; nothing archived this run")
 
     # The smallest set is the ceiling on teams x rounds, so print it: it is the
     # number the setup screen validates against.

@@ -10,7 +10,7 @@
        made next door rather than reverting to light halfway through a
        visit. The only other script here is the back-to-top control, at the
        foot of the page. -->
-  <script src="../theme.js?v=202608163000"></script>
+  <script src="../theme.js?v=202608164000"></script>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -20,7 +20,7 @@
        styling. Everything below is layout for a page of prose, which the app
        has no use for, so it lives here rather than bloating style.css. -->
   <!-- Same ?v= as index.html, and bumped with it. See the note there. -->
-  <link rel="stylesheet" href="../style.css?v=202608163000">
+  <link rel="stylesheet" href="../style.css?v=202608164000">
 
   <link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="../favicon-16.png">
@@ -86,6 +86,9 @@
       letter-spacing: .07em; text-transform: uppercase; color: var(--ink-light);
     }
     .worked p, .worked ul { margin-bottom: 0; font-size: var(--fs-sm); color: var(--ink-mid); }
+    /* Worked examples were one paragraph each until the Juke score needed two.
+       Without this they butt together into a single block of text. */
+    .worked p + p { margin-top: 10px; }
 
     .doc table { margin: 0 0 16px; }
     .doc td { padding: 9px 12px; border-bottom: 1px solid var(--line); font-size: var(--fs-sm); vertical-align: top; }
@@ -242,8 +245,8 @@
     </p>
     <p>
       Change one and everything rescores at once: projections, every
-      historical season, the week-by-week logs, replacement level, the Overall
-      signal and the draft grade. Nothing is rebuilt and nothing is refetched,
+      historical season, the week-by-week logs, replacement level, the Juke
+      score and the draft grade. Nothing is rebuilt and nothing is refetched,
       because the numbers were never baked in to begin with.
     </p>
     <p>
@@ -302,7 +305,7 @@
     <p>
       This is the most important number the app works out for you. It is the last
       player at a position who would realistically start <em>somewhere</em> in
-      the league, and it feeds the draft grade, the Overall signal and every
+      the league, and it feeds the draft grade, the Juke score and every
       value-over-replacement figure.
     </p>
     <p>
@@ -418,12 +421,12 @@
       They are scored the same way, on your roster's needs rather than
       somebody else's, with one addition: a player the projection rates highly
       gets a discount on his draft position. Up to a quarter off, in
-      proportion to his Overall against the best player still on the board.
+      proportion to his Juke score against the best player still on the board.
     </p>
     <p>
       The reason is that ADP knows nothing about your scoring rules. Set
       receptions to five points and every number on a player's card moves,
-      because Overall is worked out under your rules &mdash; but average draft
+      because the Juke score is worked out under your rules &mdash; but average draft
       position is a record of other people's drafts and does not budge. Advice
       built on ADP alone would hand you the same six names in a league where
       catches are worth ten times what they usually are. So the model's
@@ -558,11 +561,45 @@
       &mdash; that disagreement is most of what they measure.
     </p>
 
-    <h3>Overall</h3>
+    <h3>The Juke score</h3>
     <p>
       Projected points above a replacement starter at that position, expressed
       against the best such figure on the board. A player projected for exactly
       replacement production scores zero regardless of name.
+    </p>
+    <p>
+      It is a <em>ranking against the rest of the pool</em>, not a rating of the
+      player, and two things follow from that which surprise people. Somebody
+      always scores 100. And most of the board scores 0, because the board is
+      about 220 deep and a ten-team league only ever starts ninety players at
+      once &mdash; so a receiver one point below replacement prints what a
+      receiver sixty points below prints. The player sheet says how far below,
+      because those are not the same player.
+    </p>
+    <div class="worked">
+      <p class="worked-title">Why a score can go up while the points go down</p>
+      <p>
+        Jahmyr Gibbs actually scored 328 points in 2025, which was a Juke score
+        of <b>82</b> &mdash; Christian McCaffrey was the 100 that year. The 2026
+        projection has Gibbs at 300 points, twenty-eight <em>fewer</em>, and his
+        score is <b>100</b>. Nothing is broken. A projection is an average over
+        everything that might happen, so it shaves the extremes off everybody,
+        and Gibbs rises because the field beneath him was compressed further
+        than he was.
+      </p>
+      <p>
+        That is the whole idea in one player: the number is where you stand, not
+        what you will score.
+      </p>
+    </div>
+    <p>
+      The sheet prints last season's Juke score beside this season's for the same
+      reason. Where the two disagree is where the projection is actually taking a
+      position &mdash; and it is worth knowing how big those moves get. Across
+      real consecutive seasons the score moves by 12 to 20 points on average, and
+      of the players who scored above zero one year, between a quarter and two
+      fifths were back at zero the next. Treat it as a strong opinion about
+      ranking, not a measurement.
     </p>
 
     <h3>Upside</h3>
@@ -739,7 +776,7 @@
   <!-- This page is long enough that getting back to the contents is a real
        scroll. Same control and same stylesheet as the app, so it looks and
        behaves like one thing rather than a page that grew its own button. -->
-  <script src="../back-to-top.js?v=202608163000" data-auto></script>
+  <script src="../back-to-top.js?v=202608164000" data-auto></script>
 
 </body>
 </html>

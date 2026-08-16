@@ -1294,6 +1294,25 @@ tr.drafted .ovr { color: var(--ink-light); }
   color: rgba(255, 255, 255, .55); font-weight: 700;
 }
 
+/* What the Juke score in that strip means, said next to the number instead of
+   in a method note under three meters past the fold.
+
+   White at .90 rather than the .55 the labels above use, and that is the
+   contrast rule rather than a preference: this is a sentence to read, not a
+   micro-label to glance at. The gradient's lightest stop is --navy-lift, and
+   every stop has to clear on its own — .90 measures 7.87 there and better on
+   the other two, where .62 would be 4.64 and .55 only 4.00. Hierarchy against
+   the strip comes from size and weight, which is the only thing that works on
+   a saturated surface. */
+.jukenote {
+  margin: 9px 0 0; padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, .14);
+  font-size: var(--fs-xs); line-height: 1.5;
+  color: rgba(255, 255, 255, .90);
+  font-variant-numeric: tabular-nums;
+}
+.jukenote b { color: #fff; font-weight: 700; }
+
 /* ---------- our read ----------
 
    The column Sleeper gives to a wire service. Ours is the model talking, so

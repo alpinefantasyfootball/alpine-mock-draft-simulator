@@ -56,7 +56,14 @@ export default defineConfig({
      and perfectly healthy. A listening port is the honest question here. */
   webServer: !LOCAL ? undefined : [
     {
-      command: "py -m http.server 8765",
+      /* `py` is the Windows launcher and is the only thing that works there;
+         it does not exist anywhere else, so the suite could not start its own
+         static server on Linux or macOS at all — it failed with "py: not
+         found" before a single test ran. Same reason CLAUDE.md tells you to
+         run the pipeline as `py scripts/build_players.py`: this project is
+         developed on Windows. Picked per platform rather than changed, so the
+         Windows path is untouched. */
+      command: (process.platform === "win32" ? "py" : "python3") + " -m http.server 8765",
       port: 8765,
       reuseExistingServer: true,
       timeout: 30 * 1000
