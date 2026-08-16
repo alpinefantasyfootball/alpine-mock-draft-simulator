@@ -2851,6 +2851,58 @@ function photoUrl(player) {
     : "https://sleepercdn.com/content/nfl/players/thumb/" + player.id + ".jpg";
 }
 
+/* ---- team colour ------------------------------------------
+
+   One mark per club, used only where nothing is written on top of it: the
+   ring around the headshot and the band under the sheet header. That
+   restriction is the whole design, and it came out of measuring the
+   alternative rather than from taste.
+
+   **A team-coloured header does not survive thirty-two real teams.** Darkened
+   far enough to carry white text — lightness only, hue and saturation held,
+   the same repair the position solids had — ten pairs land below the
+   just-noticeable difference and twenty-seven of the 496 pairs sit within 6
+   CIE76. Carolina, Detroit, the Chargers and Houston all become the same dark
+   teal; Dallas and Indianapolis become one navy. You pay the entire contrast
+   bill and lose the identity you were buying, which is the opposite of what
+   this is for. Pittsburgh's gold is 1.76:1 against white and New Orleans' is
+   1.85:1, so there is no version of that header that simply works.
+
+   Kept at full brand value against the navy header instead, seven vanish into
+   it — CHI, DAL, HOU, JAX, NE, SEA and TEN, every one of them a club whose
+   primary is a navy or a near-black. Those seven take the mark the club is
+   actually known by, which is a substitution their own kit makes: Chicago's
+   orange, Seattle's green, Jacksonville's gold. Raiders silver for the same
+   reason — black is legal on navy and reads as nothing.
+
+   Measured at those values, every accent clears 12 CIE76 against all three
+   navy stops and against the card in both themes, worst case 13.6. Three
+   pairs are still effectively one colour and always will be: CIN and DEN
+   share a hex, ATL and HOU both use #A71930, CAR and LAC are 2.3 apart at
+   brand. The club is named in text beside the mark, so a shared colour costs
+   nothing a reader can be misled by.
+
+   Not a token in `:root`, because these are somebody else's colours rather
+   than ours and there are thirty-two of them. It reaches the stylesheet as
+   `--team` on the header, the same way `--mark-ink` reaches a `<use>`. */
+const TEAM_ACCENT = {
+  ARI: "#97233F", ATL: "#A71930", BAL: "#241773", BUF: "#00338D",
+  CAR: "#0085CA", CHI: "#C83803", CIN: "#FB4F14", CLE: "#311D00",
+  DAL: "#869397", DEN: "#FB4F14", DET: "#0076B6", GB:  "#203731",
+  HOU: "#A71930", IND: "#002C5F", JAX: "#D7A22A", KC:  "#E31837",
+  LAC: "#0080C6", LAR: "#003594", LV:  "#A5ACAF", MIA: "#008E97",
+  MIN: "#4F2683", NE:  "#C60C30", NO:  "#D3BC8D", NYG: "#0B2265",
+  NYJ: "#125740", PHI: "#004C54", PIT: "#FFB612", SEA: "#69BE28",
+  SF:  "#AA0000", TB:  "#D50A0A", TEN: "#4B92DB", WAS: "#5A1414"
+};
+
+// A free agent has no club and no colour. The stylesheet falls back to
+// --navy-lift rather than to nothing, so the ring and the band are always
+// drawn and only their colour changes.
+function teamAccent(player) {
+  return (player && TEAM_ACCENT[player.team]) || "";
+}
+
 function avatar(player, small) {
   const url = photoUrl(player);
   const photo = url
@@ -4138,6 +4190,14 @@ function openSheet(player) {
   sheetPlayer = player;
   const s = statOf(player);
   const sig = draftSignals(player);
+
+  /* The club's colour, handed to the stylesheet as a property rather than as
+     a fill. Set on the header so both the ring and the band below it inherit
+     one value, and removed rather than blanked for a player with no club, so
+     the rule falls back to its own default instead of to an empty string. */
+  const accent = teamAccent(player);
+  if (accent) $("sheetHead").style.setProperty("--team", accent);
+  else $("sheetHead").style.removeProperty("--team");
 
   $("sheetHead").innerHTML = `
     ${avatar(player)}

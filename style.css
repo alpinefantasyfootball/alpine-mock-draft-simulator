@@ -1264,14 +1264,45 @@ tr.drafted .ovr { color: var(--ink-light); }
            left: 0; top: 0; transform: none; }
 }
 
+/* The club's colour arrives as --team, set per player in openSheet(). The
+   default is here rather than there so a free agent, or a club we have no
+   mark for, still gets a ring and a band — only the colour changes.
+
+   position: relative is for the band below, and nothing inside this header is
+   absolutely positioned, so it re-anchors nothing. .sheet-close sits on
+   margin-left: auto and .avatar img is anchored to .avatar, which has its own
+   position. Both checked, because changing position on a shared rule is how
+   `top` quietly changes meaning. */
 .sheet-head {
+  --team: var(--navy-lift);
+  position: relative;
   display: flex; align-items: center; gap: 14px;
   padding: 16px 18px;
   background: linear-gradient(120deg, var(--navy-deep), var(--navy) 65%, var(--navy-lift));
   color: #fff;
 }
 
-.sheet-head .avatar { width: 62px; height: 62px; font-size: var(--fs-lg); }
+/* A band of the club's colour along the foot of the header, and a ring of it
+   around the headshot. Neither carries text, which is the entire reason the
+   accent is allowed to be the real brand colour: seven of the thirty-two
+   cannot hold white type at all — Pittsburgh's gold measures 1.76:1 — so a
+   team-coloured surface with anything written on it is not available. See the
+   note above TEAM_ACCENT in app.js for what was measured.
+
+   The band sits inside the header rather than on .sheet-tabs so it travels
+   with the navy and cannot separate from it at a rounded corner. */
+.sheet-head::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: 0;
+  height: 3px; background: var(--team);
+}
+
+
+/* A ring of the club's colour outside the circle. box-shadow rather than a
+   border, so the avatar keeps its 62px and the flex row does not shift. */
+.sheet-head .avatar {
+  width: 62px; height: 62px; font-size: var(--fs-lg);
+  box-shadow: 0 0 0 3px var(--team);
+}
 .sheet-head h3 { margin: 0; font-family: Poppins, sans-serif; font-size: var(--fs-lg); font-weight: 700; letter-spacing: -.02em; }
 .sheet-head .sub { display: flex; align-items: center; gap: 7px; margin-top: 4px; font-size: var(--fs-sm); color: rgba(255,255,255,.80); }
 .sheet-head .facts { margin-top: 5px; font-size: var(--fs-xs); color: rgba(255,255,255,.62); font-variant-numeric: tabular-nums; }

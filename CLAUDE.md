@@ -311,6 +311,57 @@ printed, so a season Sleeper declines to serve is visible in the run rather
 than silently absent. Even if every one comes back empty the list still earns
 its place, because next year's run finds this year in it.
 
+## Team colour
+
+One mark per club, in `TEAM_ACCENT`, used in exactly two places on the player
+sheet: a ring around the headshot and a band under the header. **Nothing is
+ever written on top of it, and that restriction is the whole design.**
+
+**A team-coloured header does not survive thirty-two real teams.** Darkened
+far enough to carry white text — lightness only, hue and saturation held, the
+same repair the position solids had — ten pairs land below the just-noticeable
+difference and 27 of the 496 pairs sit within 6 CIE76. Carolina, Detroit, the
+Chargers and Houston all become the same dark teal; Dallas and Indianapolis
+become one navy. You pay the whole contrast bill and lose the identity you
+were buying. At brand values only 9 pairs are that close, so it is the
+darkening that destroys it, and the darkening is not optional if type sits on
+top: **Pittsburgh's gold is 1.76:1 against white and New Orleans' is 1.85:1.**
+
+**So the colour goes where there is no text, and then it can be the real
+brand colour.** Which is the same trade the position solids could not make —
+those carry white type by definition, so they had to move.
+
+**Seven clubs vanish into a navy header at brand value** — CHI, DAL, HOU, JAX,
+NE, SEA, TEN, every one of them a navy or a near-black, because the header is
+itself brand navy. Those seven take the mark the club is actually known by,
+which is a substitution their own kit makes: Chicago's orange, Seattle's
+green, Jacksonville's gold, Dallas silver. Raiders silver too — black is
+legal against navy and reads as nothing.
+
+**The test is perceptual distance, not contrast ratio.** A decorative mark is
+not a UI control and the club is named in text beside it, so 1.4.11's 3:1 is
+the wrong bar — measured that way 30 of 32 "fail", and lightening them to pass
+moves 30 clubs more than 8 CIE76 off their brand, turning Cleveland brown into
+orange. Measured as CIE76 against every surface the mark can touch — all three
+navy stops and the card in both themes — every accent clears 12, worst case
+13.6. Three pairs are effectively one colour and always will be: CIN and DEN
+share a hex, ATL and HOU both use #A71930, CAR and LAC are 2.3 apart at brand.
+
+**It reaches the stylesheet as `--team` on the header, never as a fill.** Same
+pattern as `--mark-ink` on a `<use>`. `:root` would be the wrong home: these
+are somebody else's colours and there are thirty-two of them. The default
+lives on `.sheet-head` so a club with no mark still draws a ring and a band.
+
+**Clear it, do not merely set it.** The sheet is one element reused for every
+player, so a sheet opened after Pittsburgh's inherits gold unless the property
+is removed. `openSheet()` removes rather than blanks.
+
+**A ring is a `box-shadow`, not a `border`.** Everything is
+`box-sizing: border-box`, so a border leaves the outer circle at 62px and eats
+three pixels out of the *inside* — `clientWidth` drops to 56 and the headshot
+is inset and shrunk. A test asserting the outer rect passes either way and
+proves nothing, which is what the first version of it did.
+
 ## The suggestions
 
 `suggestions()` ranks by `(adp + jitter)` times need times risk times the
@@ -1179,12 +1230,13 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   fact in two places and would have failed as a suite quietly testing a server
   nobody was running.
 
-- **End to end: `npm install` once, then `npx playwright test`.** Sixteen
-  tests, about five minutes, and it starts the static server and `wrangler dev`
+- **End to end: `npm install` once, then `npx playwright test`.** Thirty
+  tests, about ten minutes, and it starts the static server and `wrangler dev`
   itself. It drives the real pages in a real browser — a solo draft at both
   shapes, a full two-manager room draft to completion, a dropped socket
-  reconnecting, leaving and rejoining, the phone layout, and what the player
-  sheet actually says about the Juke score.
+  reconnecting, leaving and rejoining, the phone layout, what the player sheet
+  says about the Juke score, and that every club's colour is drawn where no
+  text can land on it.
 
   **The static server is `py` on Windows and `python3` everywhere else**, picked
   in `playwright.config.mjs` from `process.platform`. It was `py` outright,
