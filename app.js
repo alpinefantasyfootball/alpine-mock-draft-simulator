@@ -3423,11 +3423,15 @@ function renderRail() {
   $("railFab").hidden = !(state.started && route() === "draft");
   $("railFabText").textContent = `Roster ${held}/${rosterSize()}`;
 
+  /* A real button, because it always looked like one. This row exists to say
+     the rail is not showing you everything, so the way to the rest of it
+     belongs on the row — it just has to actually go there. */
   const benched = lineup.bench.length;
   const benchRow = benched
     ? `<li class="benchsum"><span class="rslot BN">BN</span>
          <span class="rfill">${benched} on the bench</span>
-         <span class="rtm">My Team</span></li>`
+         <button type="button" class="rtm" data-goto-tab="tab-team"
+           aria-label="See all ${held} players on My Team">My Team</button></li>`
     : "";
 
   $("railRoster").innerHTML = lineup.seats.map(function (s) {
@@ -5494,12 +5498,40 @@ document.addEventListener("click", function (event) {
   }
 });
 
-document.querySelectorAll(".tabs button").forEach(function (button) {
-  button.addEventListener("click", function () {
-    document.querySelectorAll(".tabs button").forEach((b) => b.classList.remove("on"));
-    button.classList.add("on");
-    showPanel(button.dataset.tab);
+/* Going to a tab, which used to be three lines living inside one static
+   button's click handler — so the only thing in the app that could change tabs
+   was the tab strip itself. Anything else wanting to send you somewhere had to
+   either write "which tab is on" down a second time or, as the rail did, look
+   like a link and do nothing at all. */
+function goToTab(id) {
+  document.querySelectorAll(".tabs button").forEach(function (b) {
+    b.classList.toggle("on", b.dataset.tab === id);
   });
+  showPanel(id);
+}
+
+document.querySelectorAll(".tabs button").forEach(function (button) {
+  button.addEventListener("click", function () { goToTab(button.dataset.tab); });
+});
+
+/* The rail's way through to the full roster.
+
+   It was a `<span class="rtm">My Team</span>`: blue, sitting at the end of the
+   one row that says there are players it is not showing you, and wired to
+   nothing. It read as a link on every screen the app has — it was only
+   reported from the installed desktop app because that is where somebody sat
+   and tried to click it.
+
+   Delegated, because renderRail() rebuilds that row on every render — one per
+   pick — so a listener attached to the element would be thrown away seconds
+   after it was set. */
+document.addEventListener("click", function (e) {
+  const go = e.target.closest && e.target.closest("[data-goto-tab]");
+  if (!go) return;
+  goToTab(go.dataset.gotoTab);
+  // On a phone the rail is a sheet lying over the board, so it has to get out
+  // of the way of the panel it just opened.
+  openRailSheet(false);
 });
 
 $("suggestFilter").addEventListener("click", function (e) {

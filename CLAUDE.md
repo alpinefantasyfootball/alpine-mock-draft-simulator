@@ -1455,6 +1455,35 @@ shared one. In a room they come off the Players tab and are said in the ticker
 after the pick instead — to the one manager who has already made the decision.
 `marketChip()` is the single renderer for both, so the two can't drift.
 
+### Blue text is a promise too
+
+The rail's bench row ended in `<span class="rtm">My Team</span>`, coloured
+`--link`, sitting at the end of the one row whose entire job is to say *there
+are players here I am not showing you*. Nothing listened to it. It had never
+been clickable on any screen the app has, and it was reported from the
+installed desktop app only because that is where somebody sat down and tried.
+
+**Nothing about it looked wrong, because looking right was the whole defect.**
+A dead control is invisible to every check this project runs: it renders, it
+contrasts, it does not overflow, no console error, no failing assertion. The
+only thing that finds it is pressing it.
+
+It is a `<button>` now, delegated — `renderRail()` rebuilds that row on every
+pick, so a listener attached to the element would be discarded seconds after it
+was set.
+
+**And it could not have worked without `goToTab()` existing first.** Switching
+tabs was three lines inside the tab strip's own click handler, so the only
+thing in the app able to change tabs was the tab strip; anything else had to
+write "which tab is on" down a second time. That is why the row got a colour
+and no behaviour — the behaviour had nowhere to come from. A control that
+cannot reach the thing it names is a design problem before it is a bug, and
+the fix is to give the destination a name, not to copy the three lines.
+
+Setting the panel without the strip is its own small lie: the app is then on a
+tab its own nav says it is not. `goToTab()` does both, and the test asserts
+both.
+
 ### A fraction is a promise about its denominator
 
 The position filter doubles as the roster-need display, and it printed

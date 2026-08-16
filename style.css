@@ -2374,7 +2374,20 @@ a.room.live:hover {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .rfill.none { font-weight: 400; font-style: italic; color: var(--ink-light); }
-.rtm { flex: none; font-size: var(--fs-2xs); color: var(--ink-light); letter-spacing: .02em; }
+/* A <button>, because it was always drawn as a link and is now wired like
+   one. Everything here except the padding is undoing a browser default so it
+   still looks exactly like the span it replaces — the padding is there because
+   `--fs-2xs` is a very small thing to ask a thumb to hit, and it is negative
+   on the right so the text stays flush with the rows above rather than the
+   tap target pushing it in. */
+.rtm {
+  flex: none; font-family: inherit; font-size: var(--fs-2xs); font-weight: inherit;
+  color: var(--ink-light); letter-spacing: .02em;
+  background: none; border: 0; padding: 6px 0 6px 10px; margin: -6px 0;
+  cursor: pointer; -webkit-appearance: none; appearance: none;
+}
+.rtm:hover { text-decoration: underline; }
+.rtm:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; border-radius: 4px; }
 
 /* An unfilled starting slot is the actionable state, so it is the one that
    takes a tint rather than every filled row taking one. */

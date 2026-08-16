@@ -307,3 +307,61 @@ test("a filled starting slot is not a cap, and does not claim to be", async ({ b
 
   await context.close();
 });
+
+/* The rail's way through to the rest of the roster.
+
+   The bench row exists to say the rail is not showing you everything — nine
+   starting slots above a heading that counts fourteen — and it ended in a blue
+   "My Team" that was a <span> wired to nothing. It read as a link on every
+   screen the app has; it was reported from the installed desktop app only
+   because that is where somebody sat and tried to click it.
+
+   Asserted as a journey rather than as markup: press it, and end up looking at
+   the players it was telling you about. */
+test("the rail's My Team goes to My Team", async ({ browser }) => {
+  const context = await browser.newContext();
+  const page = await openApp(context);
+  await page.click("#startBtn");
+
+  await page.evaluate(() => {
+    let g = 0;
+    while (rosterOf(state.mySlot).length < 12 && g++ < 200) {
+      const c = onTheClock();
+      makePick(c.slot === state.mySlot ? autoPickForMe() : cpuChoice(c.slot, c.round));
+    }
+    render();
+  });
+
+  const before = await page.evaluate(() => ({
+    benched: document.querySelector(".benchsum .rfill").textContent.trim(),
+    panel: document.querySelector(".panel.on").id,
+    tab: document.querySelector(".tabs button.on").dataset.tab
+  }));
+  expect(before.benched, "there are players the rail is not showing").toMatch(/on the bench$/);
+  expect(before.panel).not.toBe("tab-team");
+
+  // A control, not a coloured word. Playwright's click fails a <span> that
+  // nothing listens to only by way of the assertions below, so this is checked
+  // outright: the thing that looks pressable has to be pressable.
+  const rtm = page.locator(".benchsum .rtm");
+  await expect(rtm).toHaveText("My Team");
+  expect(await rtm.evaluate((el) => el.tagName), "it is a real control").toBe("BUTTON");
+
+  await rtm.click();
+
+  const after = await page.evaluate(() => ({
+    panel: document.querySelector(".panel.on").id,
+    tab: document.querySelector(".tabs button.on").dataset.tab,
+    railOpen: document.body.classList.contains("rail-open"),
+    // The whole roster, which is the thing the rail could not show.
+    rows: document.querySelectorAll("#benchList li").length
+  }));
+
+  expect(after.panel, "it opens My Team").toBe("tab-team");
+  // The strip has to follow, or the app is on a tab its own nav says it is not.
+  expect(after.tab, "and the tab strip agrees").toBe("tab-team");
+  expect(after.railOpen, "the sheet gets out of the way of what it opened").toBe(false);
+  expect(after.rows, "and the bench is actually listed").toBeGreaterThan(0);
+
+  await context.close();
+});
