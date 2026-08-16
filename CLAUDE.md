@@ -36,12 +36,13 @@ Python 3 standard library only in the pipeline. No pip dependencies.
 | `draft-engine.js` | The rules of a snake draft — turn order, legality, the CPU wobble. No DOM, no globals, no dependencies, so a server can run the identical file. |
 | `room.js` | One shared draft: seats, picks, the clock. Pure, and time is always passed in rather than read. Loaded by the worker only; the page consumes the view it sends. |
 | `live.js` | The client end of a room: one socket, the invite code, and the messages. Knows nothing about the board or how anything is drawn. |
-| `worker/` | The Cloudflare Durable Object behind an invite link, plus its `wrangler.toml`. Deployed to `juke-draft-room.jukeff.workers.dev`; a change here needs `wrangler deploy` before the page can use it. See `worker/README.md`. |
+| `worker/` | The Cloudflare Durable Object behind an invite link, plus the two proxied routes whose keys may not be in the page (`/giphy`, `/news`) and its `wrangler.toml`. Deployed to `juke-draft-room.jukeff.workers.dev`; a change here needs `wrangler deploy` before the page can use it. See `worker/README.md`. |
 | `scripts/test_engine.py` | Runs `draft-engine.js` and `room.js` in node/deno/bun and asserts the rules from outside a browser. |
+| `scripts/test_crosswalk.py` | The source-id join, without the network. A bad join does not look like a failure, which is why it is not left to a pipeline run. |
 | `tests/` | End-to-end tests: the real pages, in a real browser, two managers in a real room. `playwright.config.mjs` starts both servers itself. |
 | `package.json` | **Dev only.** Fetches the test runner and nothing else. The app still has no build step, no bundler and no runtime dependency. |
 | `players.js` | **GENERATED.** 260 players by ADP. Never edit by hand. |
-| `stats.js` | **GENERATED.** Stats, projections, depth charts by Sleeper ID. |
+| `stats.js` | **GENERATED.** Stats, projections, depth charts by Sleeper ID. `pp` holds what we projected for seasons already played, so a forecast can be graded against what happened. |
 | `scripts/build_players.py` | The pipeline that writes the two generated files. |
 | `.github/workflows/update-players.yml` | Runs the pipeline daily at 11:00 UTC. |
 | `og-image.png` | **GENERATED.** 1200x630 link-preview card. Rebuild by opening `scripts/build_og.html` in a browser and clicking download. |
@@ -222,6 +223,154 @@ written down twice" exists to prevent. When something here needs to know what
 a league permits, check whether the engine or the CPU already answers it
 before writing a second answer.
 
+## The Juke score
+
+Projected points above a replacement starter at that position, as a share of
+the best such figure on the board. `overallScore()`, and it is the one number
+the app has that a projection feed does not.
+
+**It is a ranking against the pool, not a rating of the player, and nothing on
+screen said so.** Both ends of the scale were being read as verdicts: a bare
+`0` as "worthless" and a bare `100` as "perfect". Neither is what the number
+means, and no reader could get from one to the other unaided.
+
+**The pile of zeros is arithmetic, and that was measured before anything was
+changed.** Around three fifths of the half-PPR board scores exactly 0 — the
+majority state, not an edge case. Scored on a *fixed cohort* of the players
+with a line in 2023, 2024, 2025 and a 2026 projection, so survivorship cannot
+drift the answer, the share scoring zero is **the same in every one of those
+real completed seasons as it is in the projection** — measured 16 August 2026
+at 38.5% against 39.9% over 148 players, and 39.7% against 41.1% over 151 the
+day before. A fixed rank cut against a board a couple of hundred deep, in a
+league that starts about ninety players, puts most of the pool below the line
+whatever happens on the field.
+
+**Those counts move every night and the conclusion does not.** `players.js` is
+regenerated daily, so any literal total written down here is stale within a
+day — which is why the figures above carry a date and why the app derives
+`board.length` rather than quoting one. A drifted number is not a bug; a
+number without a date is. So there is nothing to correct in
+the maths and re-curving the scale would be correcting football. The floor
+needed a name, not a new formula.
+
+**Two zeros are not equal, which is what `replacementGap()` exists to say.**
+Michael Wilson scored 14 on last season's actuals — 181.6 points across all
+seventeen games, +29.4 over replacement — and reads 0 for 2026 because his
+projection falls 45 points *while projected WR replacement rises 22*. Most of
+that 67-point swing is the projection compressing the field, not a judgement
+about him. It stays out of `overallScore()` deliberately: `modelMultipliers()`
+divides by the best score available and a negative there would invert the
+discount.
+
+**A score can rise while the points fall, and Gibbs is the case to keep.** He
+actually scored 328 points last season for a Juke score of **82** — McCaffrey
+was the 100 that year. His 2026 projection is 300 points, twenty-eight
+*fewer*, and he scores **100**. Nothing is wrong: a projection is an average
+over everything that might happen, so it shaves the extremes off everybody, and
+he rises because the field beneath him was compressed further than he was. One
+player explains the entire metric, which is why the sheet and the how-it-works
+page both carry him.
+
+**The number is sharper than the sport supports, so do not dress it as
+precision.** Year to year across real seasons the score persists at r 0.35–0.55
+(0.52–0.55 pace-adjusted at 10+ games) with a mean absolute move of 12 to 20
+points, and between a quarter and two fifths of the players above zero one year
+were back at zero the next. The 2026 projection sits at **r 0.79 against last
+season's actuals, MAE 6.8** — roughly twice as tightly coupled to last year as
+consecutive real years are to each other. It is last year, smoothed. That is
+expected of a projection built knowing last year and is not a bug; it is a
+reason to present a ranking rather than a measurement.
+
+**One number may not have three names.** The strip said "Juke score", the meter
+two hundred pixels below it said "Overall", the queue row said "Overall" and
+the table column said "OVR" — all the same figure, with nothing connecting any
+of them, so the sheet appeared to show two unrelated ratings. It is the Juke
+score everywhere now. **"Overall" still appears on the sheet and correctly so:
+it is the board rank in the first cell of the strip**, which is a different
+fact and always was.
+
+**The explanation already existed in the worst possible place.**
+`overallReason()` had been writing exactly the right sentence all along and was
+reachable only as a `title` tooltip on a table cell — which is to say not at
+all on a phone, and never on the sheet somebody opens *because* they are
+confused. `jukeNote()` puts it under the strip. When something is unclear on
+screen, check whether the app already computes the answer before writing a
+second one.
+
+**`buildPriorSeason()` runs inside `buildProjections()`, and it has to.** Last
+season is scored with the same `fantasyPoints()` under the same rules, so it
+rescores when the scoring table moves exactly as everything else does — a
+historical figure that ignored the editor would be the one number on the sheet
+quietly describing a different league. Its replacement level is re-derived from
+what actually happened rather than reused from the projection: measuring last
+season against this season's baseline would call the difference a change in the
+player, which is the precise error the comparison exists to expose.
+
+**A missing season is blank, never zero.** Eighteen players on the board have
+no line at all, and a 0 there would be a judgement about a season they were not
+in — the same rule as "treat `0` from an API as missing".
+
+**`pp` in `stats.js` is what we said about seasons that have since been
+played.** Only the coming season's projection was ever stored and it was
+overwritten nightly, so the one question worth asking of a projection — was it
+any good — had no data behind it at all, and the numbers above had to be
+assembled from actuals alone. `PROJECTION_HISTORY` in `build_players.py` fetches
+past seasons from the same endpoint; each is optional and the counts are
+printed, so a season Sleeper declines to serve is visible in the run rather
+than silently absent. Even if every one comes back empty the list still earns
+its place, because next year's run finds this year in it.
+
+## Team colour
+
+One mark per club, in `TEAM_ACCENT`, used in exactly two places on the player
+sheet: a ring around the headshot and a band under the header. **Nothing is
+ever written on top of it, and that restriction is the whole design.**
+
+**A team-coloured header does not survive thirty-two real teams.** Darkened
+far enough to carry white text — lightness only, hue and saturation held, the
+same repair the position solids had — ten pairs land below the just-noticeable
+difference and 27 of the 496 pairs sit within 6 CIE76. Carolina, Detroit, the
+Chargers and Houston all become the same dark teal; Dallas and Indianapolis
+become one navy. You pay the whole contrast bill and lose the identity you
+were buying. At brand values only 9 pairs are that close, so it is the
+darkening that destroys it, and the darkening is not optional if type sits on
+top: **Pittsburgh's gold is 1.76:1 against white and New Orleans' is 1.85:1.**
+
+**So the colour goes where there is no text, and then it can be the real
+brand colour.** Which is the same trade the position solids could not make —
+those carry white type by definition, so they had to move.
+
+**Seven clubs vanish into a navy header at brand value** — CHI, DAL, HOU, JAX,
+NE, SEA, TEN, every one of them a navy or a near-black, because the header is
+itself brand navy. Those seven take the mark the club is actually known by,
+which is a substitution their own kit makes: Chicago's orange, Seattle's
+green, Jacksonville's gold, Dallas silver. Raiders silver too — black is
+legal against navy and reads as nothing.
+
+**The test is perceptual distance, not contrast ratio.** A decorative mark is
+not a UI control and the club is named in text beside it, so 1.4.11's 3:1 is
+the wrong bar — measured that way 30 of 32 "fail", and lightening them to pass
+moves 30 clubs more than 8 CIE76 off their brand, turning Cleveland brown into
+orange. Measured as CIE76 against every surface the mark can touch — all three
+navy stops and the card in both themes — every accent clears 12, worst case
+13.6. Three pairs are effectively one colour and always will be: CIN and DEN
+share a hex, ATL and HOU both use #A71930, CAR and LAC are 2.3 apart at brand.
+
+**It reaches the stylesheet as `--team` on the header, never as a fill.** Same
+pattern as `--mark-ink` on a `<use>`. `:root` would be the wrong home: these
+are somebody else's colours and there are thirty-two of them. The default
+lives on `.sheet-head` so a club with no mark still draws a ring and a band.
+
+**Clear it, do not merely set it.** The sheet is one element reused for every
+player, so a sheet opened after Pittsburgh's inherits gold unless the property
+is removed. `openSheet()` removes rather than blanks.
+
+**A ring is a `box-shadow`, not a `border`.** Everything is
+`box-sizing: border-box`, so a border leaves the outer circle at 62px and eats
+three pixels out of the *inside* — `clientWidth` drops to 56 and the headshot
+is inset and shrunk. A test asserting the outer rect passes either way and
+proves nothing, which is what the first version of it did.
+
 ## The suggestions
 
 `suggestions()` ranks by `(adp + jitter)` times need times risk times the
@@ -308,6 +457,101 @@ strength rose every time by four to five points and the finishing rank
 improved every time. Draft value moved both ways, which is the tell that it is
 finding value rather than reaching. A suggestion change that cannot show this
 is a change to the numbers, not to the advice.
+
+## Latest news
+
+Headlines on a player sheet, under "Our read", through the worker. The order
+on screen is the order of the argument: ours first, because it is the thing no
+feed has, then the wire.
+
+**We link, we do not republish.** A headline, one clipped line, the source's
+name and an outbound link. Reproducing the body is what a licence buys;
+aggregating a headline and linking back is not that. **`source` is never
+dropped** — an unattributed headline is the version of this we may not show,
+so it falls back to the provider's own name rather than to an empty string.
+This is the narrow exception to "don't republish news"; the Don't rule still
+stands for article bodies, expert rankings and analyst commentary.
+
+**The key lives in the worker.** Same rule as `GIPHY_KEY`, same route shape,
+same `originAllowed()` refusal *before the key is read* — CORS tells a browser
+whether it may read a response and does nothing about the request being made.
+The two proxy functions are separate, so the origin check is a call each has
+to remember; `test-sockets.mjs` asserts both rather than assuming one covers
+the other.
+
+**No key answers `configured: false`, not an empty list.** "Not wired up" and
+"nothing today" are different facts and only one is worth investigating. The
+panel draws nothing either way — no message, no spinner. A section nobody
+asked to wait for is worse as a permanently empty box than as no box, which
+is why this differs from the GIF picker, where a button was pressed and
+silence would be a bug.
+
+**It fails by disappearing** — the score strip's contract, and now the second
+runtime dependency on somebody else's server. Never throws, never blocks a
+render, never leaves a gap. The catch on the fetch is the contract rather than
+politeness: a rejected promise here surfaces as an unhandled rejection on a
+page that is otherwise fine.
+
+**Escape every field, and check the link.** This is the third thing on the
+page written by someone outside the project, after chat and the ESPN strip,
+and it lands in `innerHTML`. `safeNewsUrl()` parses with `URL` and keeps only
+http(s) — the same rule as the GIF host and for a worse reason: a
+`javascript:` href is an outside party running script in the page. Verified by
+putting `<img src=x onerror=…>` and a `javascript:` link through the real path
+and checking no element is built and nothing runs.
+
+**Which player an answer belongs to is checked when it lands, not when it was
+asked for.** The sheet is one element reused for everybody, so a slow response
+for a player the reader has closed renders into whoever is open now. Nothing
+else in the app would catch it.
+
+**And a test for that race is easy to write so that it cannot fail.** Holding
+a single `release` variable is the obvious shape and is wrong: the second
+`openSheet()` overwrites it, so resolving settles the *second* player's own
+request, which is not a race and passes against an app with no guard at all.
+Collect the pending resolvers and settle only the first. This was written the
+wrong way first and the run that caught it looked like an app bug.
+
+**News is asked for by the provider's id, never by a name.** `x` on a stats
+record holds this player's id at other sources, built nightly by
+`link_source_ids()`. A name search at request time is how one Josh Allen ends
+up wearing the other one's news — and every number on the sheet around it
+would still be right, so nobody would catch it.
+
+**No id means no news, and no fallback.** Not a name lookup, not league-wide
+headlines dressed as his. Somebody else's news under a player's name is the
+one outcome worse than an empty panel. The pipeline has already written him
+into `unmatched.txt`, which is where that fact belongs.
+
+**The crosswalk prefers an identifier both sides already agree on.** Tank01
+carries `sleeperBotID` on its MLB rosters and very likely on its NFL ones; when
+it is there the join is a dictionary lookup with nothing to get wrong. The
+name/position/team fallback exists for when it is not, and it **reuses
+`index_sleeper()` and `normalise()`** rather than reimplementing them — a
+second normaliser that drifted from the first is the same class of bug as a
+league shape written down twice. The run prints which route each link came
+from, and says so loudly if every one came from a name.
+
+**Two of theirs claiming one of ours stores neither.** Picking one is a coin
+flip that serves the wrong player's news, so a collision is reported and both
+are dropped.
+
+**One call, not thirty-two.** `getNFLPlayerList` is the whole league; per-team
+rosters would be 32 × 30 = 960 calls a month against a 1,000 free tier and
+would spend the entire allowance on the crosswalk that exists to serve the
+news.
+
+**Count what survived, not what was attempted.** The first version tallied as
+it went, so a collision printed "linked 0 … (1 on sleeperBotID)" and a
+duplicated row counted twice. A count that disagrees with the data it
+describes is how you stop believing the run output — which is the only thing
+standing between a quiet bad join and a user finding it.
+
+**`TANK01_BASE` points the worker at a stub.** The provider cannot be reached
+from a test and a key cannot live in the repo, so the whole path — worker,
+normalisation, escaping, rendering — is driven against a local server serving
+a canned, deliberately hostile payload. Everything above was measured that
+way, not reasoned about.
 
 ## Conventions
 
@@ -1071,8 +1315,13 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   and says so plainly if none is there rather than looking like a failure.
   Node is installed user-scope via winget, so a new terminal sees it and an
   already-open one does not.
+- Crosswalk: `python scripts/test_crosswalk.py` — the source-id join against a
+  handful of players, including two Josh Allens, a collision and a player
+  neither side shares. Needs nothing but the standard library.
 - Pipeline: `python scripts/build_players.py` — prints counts and writes the
-  generated files. Check `unmatched.txt` afterwards. On Windows run it as
+  generated files. Check `unmatched.txt` afterwards. **`TANK01_KEY` in the
+  environment is optional**: without it the crosswalk is skipped, the build is
+  otherwise identical, and news stays off. On Windows run it as
   `py scripts/build_players.py`. A bare `python` reaches the Microsoft Store
   stub and fails with "Python was not found" unless the installer's
   "Add python.exe to PATH" box was ticked, which it usually isn't.
@@ -1125,11 +1374,19 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   fact in two places and would have failed as a suite quietly testing a server
   nobody was running.
 
-- **End to end: `npm install` once, then `npx playwright test`.** Ten tests,
-  about three minutes, and it starts the static server and `wrangler dev`
+- **End to end: `npm install` once, then `npx playwright test`.** Thirty-six
+  tests, about twelve minutes, and it starts the static server and `wrangler dev`
   itself. It drives the real pages in a real browser — a solo draft at both
   shapes, a full two-manager room draft to completion, a dropped socket
-  reconnecting, leaving and rejoining, and the phone layout.
+  reconnecting, leaving and rejoining, the phone layout, what the player sheet
+  says about the Juke score, that every club's colour is drawn where no text
+  can land on it, and that a news payload cannot put script in the page.
+
+  **The static server is `py` on Windows and `python3` everywhere else**, picked
+  in `playwright.config.mjs` from `process.platform`. It was `py` outright,
+  which is the Windows launcher and exists nowhere else, so on Linux or macOS
+  the whole suite died with "py: not found" before a single test ran — a
+  failure that looks like a broken harness rather than a missing interpreter.
 
   It is the only tool here that is not plain Python or plain JavaScript, and
   it earns that: everything it covers lives in the browser, so neither
@@ -1159,6 +1416,21 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   When adding a test, check it fails against the bug it is meant to catch —
   put the bug back for one run. Every test in there was written against a real
   failure and confirmed to go red without the fix.
+
+  **And disable the HTTP cache while you do it, or the answer is noise.**
+  `app.js?v=` is a fixed address between deploys, which is the whole point of
+  it — but a bug-back run edits `app.js` without touching the version, so the
+  browser is entitled to serve the body it already has. Five mutations in a row
+  came back failing all six tests, including tests the mutation could not
+  possibly reach, and every one of those runs was measuring some mixture of the
+  patched file and the cached one. It does not look like a caching problem; it
+  looks like a suite with no discrimination at all.
+
+  Launch with `--disable-application-cache --disk-cache-size=1` and set
+  `Cache-Control: no-cache` on the context. Done that way each mutation flips
+  exactly the property its own test asserts and nothing else, which is the
+  result that means something. Same trap as the deploy note in the caching
+  section, reached from the other direction.
 
 - **A room draft has to be run to the end, with two clients, before anything
   touching a room is believed.** Solo drafts have been driven to completion

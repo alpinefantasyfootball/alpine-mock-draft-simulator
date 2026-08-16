@@ -104,6 +104,38 @@ answers how long is left when asked. That is what lets a phone that was
 asleep, or someone who just joined, arrive at the same number as everyone
 else rather than counting from whenever they woke up.
 
+## The two proxied routes
+
+Neither is about the draft. Both exist because a key in client-side
+JavaScript is public, so the page calls us and we call them.
+
+- **`/giphy?q=`** — the chat GIF picker. `wrangler secret put GIPHY_KEY`.
+- **`/news?player=`** — headlines on a player sheet.
+  `wrangler secret put TANK01_KEY`.
+
+Both refuse an origin they do not serve **before the key is read**, with a
+403. That is the check that matters: CORS headers tell a browser whether to
+let a page read a response and do nothing about the request being made, so
+`curl` with a made-up Origin drank the GIPHY quota happily until
+`originAllowed()` went in front of it.
+
+With no key set, each answers `configured: false` rather than an empty list.
+The two are different facts — "not wired up" and "nothing today" — and only
+one is worth investigating. The news panel draws nothing either way, which is
+deliberate: it is a section nobody asked to wait for, and a permanently empty
+box is worse than no box.
+
+`TANK01_BASE` overrides the upstream host and exists for the tests, which
+point it at a local stub so the whole path can be driven without a key or a
+network. Leave it unset in production.
+
+Only the shape `{ title, summary, source, at, url }` reaches the page.
+Normalising here rather than passing the provider's payload through means
+swapping provider is a change to `fetchUpstreamNews()` and nothing else, and
+it keeps the number of fields the page has to escape down to what it draws.
+**`source` is never dropped** — we link and attribute rather than republish,
+and an unattributed headline is the version of this that is not allowed.
+
 ## Not done yet
 
 - `chooseFor()` returns `null`. The CPU's real opinion needs the board, which

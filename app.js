@@ -101,7 +101,7 @@ function maxAt(pos) {
 
 // Replacement level: the last player at a position who would realistically
 // start somewhere in the league. It has to be derived, because it moves with
-// team count and FLEX slots, and it feeds the draft grade, the Overall signal
+// team count and FLEX slots, and it feeds the draft grade, the Juke score
 // and value over replacement. The FLEX shares are how often each position
 // actually wins that slot, which is why RB and WR run so much deeper.
 const FLEX_SHARE = { RB: 0.40, WR: 0.55, TE: 0.05 };
@@ -147,7 +147,7 @@ function lineupText() {
 
 const REPLACEMENT_PTS = {};
 
-// The best value over replacement anywhere on the board. Every Overall score
+// The best value over replacement anywhere on the board. Every Juke score
 // is a percentage of it, so it is worked out once per build in
 // buildProjections() rather than per player.
 let BEST_VOR = 0;
@@ -2092,13 +2092,13 @@ function clockText() {
 
 /* The model's opinion, as a multiplier beside need and risk.
 
-   Everything else on the page answers to the scoring rules — Overall,
+   Everything else on the page answers to the scoring rules — the Juke score,
    replacement level, the whole grade — and this did not. Suggestions were ADP
    times need times risk, so setting receptions to five points changed every
    number printed on a card and none of the order: with the editor open the
    app was computing a better answer than the one it was giving.
 
-   It has to be the Overall, not marketGap(). marketGap compares a player with
+   It has to be the Juke score, not marketGap(). marketGap compares a player with
    his own position's market, so it says "this receiver is underrated among
    receivers" and cannot say "receivers are worth more than backs now" — which
    is the only thing five points a catch changes. Tried it that way first and
@@ -2403,12 +2403,101 @@ function buildProjections() {
   });
 
   // The best value-over-replacement on the board, which is the denominator
-  // every Overall score is measured against. It is computed once here rather
+  // every Juke score is measured against. It is computed once here rather
   // than inside draftSignals(), because the player list now asks for a score
   // on every row: recomputing it per call made that O(n^2) over the pool.
   // It has to come after the loop above, since it reads REPLACEMENT_PTS.
   BEST_VOR = Math.max.apply(null, board.map((p) =>
     p.projPts === null ? 0 : p.projPts - (REPLACEMENT_PTS[p.pos] || 0)));
+
+  buildPriorSeason();
+}
+
+/* ---- last season, scored the same way ---------------------
+
+   The score is a share of the best value over replacement on the board, and
+   nothing on screen said so — so a bare 100 read as a rating of the player
+   rather than a ranking against the room. Gibbs is the whole argument for
+   this: he is projected for 300 points having actually scored 328, and his
+   score goes *up* from 82 to 100, because the projection compresses everyone
+   below him. Two numbers side by side teach that in four words. One cannot.
+
+   Measured before it was built. Over the fixed cohort of players with a line
+   in 2023, 2024, 2025 and a 2026 projection, the share scoring zero is the
+   same in every real season as it is in the projection — 38.5% against 39.9%
+   on 16 August 2026 — so the pile of zeros is what this formula does to a
+   board a couple of hundred deep in a league that starts about ninety
+   players, not something the projection invented. Nothing to correct in the
+   maths; the number just needed saying out loud. (The totals move nightly
+   with the data; the conclusion has not.)
+
+   This runs at the end of buildProjections() rather than lazily, for the
+   reason the note above BEST_VOR gives: the sheet and the table both ask per
+   player, and a pass per call is O(n^2) over the pool. It also means a
+   scoring change rescores history too, which is the property the rest of the
+   app already has and this would look broken without. */
+let PRIOR_SEASON = null;
+let PRIOR_BEST_VOR = 0;
+const PRIOR_REPLACEMENT_PTS = {};
+
+// The most recent completed season anywhere in the data, derived rather than
+// written down: the pipeline's STAT_SEASONS moves every year and a literal
+// here would silently go stale the first January nobody remembered it.
+function latestStatSeason() {
+  let latest = null;
+  board.forEach(function (p) {
+    const s = statOf(p);
+    if (!s || !s.s) return;
+    Object.keys(s.s).forEach(function (yr) {
+      if (latest === null || yr > latest) latest = yr;
+    });
+  });
+  return latest;
+}
+
+function buildPriorSeason() {
+  PRIOR_SEASON = latestStatSeason();
+  POSITIONS.forEach(function (pos) { PRIOR_REPLACEMENT_PTS[pos] = 0; });
+  PRIOR_BEST_VOR = 0;
+
+  board.forEach(function (p) {
+    const s = statOf(p);
+    const line = PRIOR_SEASON && s && s.s ? s.s[PRIOR_SEASON] : null;
+    // Same test the projection gets, and for the same reason: a season the
+    // player was not in the league is absent, never a zero.
+    const played = line && line.gp > 0;
+    p.priorPts = played ? fantasyPoints(line) : null;
+    p.priorGames = played ? line.gp : null;
+  });
+
+  // Replacement level is re-derived from what actually happened, at the same
+  // ranks. Reusing the projection's replacement points would measure last
+  // season against this season's baseline and call the difference a change in
+  // the player — which is exactly the error the whole feature exists to expose.
+  POSITIONS.forEach(function (pos) {
+    const ranked = board
+      .filter((p) => p.pos === pos && p.priorPts !== null)
+      .sort((a, b) => b.priorPts - a.priorPts);
+
+    const rank = replacementRank(pos);
+    const cut = Math.min(rank, ranked.length) - 1;
+    PRIOR_REPLACEMENT_PTS[pos] = cut >= 0 && ranked[cut] ? ranked[cut].priorPts : 0;
+    if (ranked.length < rank && ranked.length) {
+      PRIOR_REPLACEMENT_PTS[pos] = ranked[ranked.length - 1].priorPts;
+    }
+  });
+
+  PRIOR_BEST_VOR = Math.max.apply(null, board.map((p) =>
+    p.priorPts === null ? 0 : p.priorPts - (PRIOR_REPLACEMENT_PTS[p.pos] || 0)));
+}
+
+// Last season's Juke score, on the same scale. Null for anyone who did not
+// play it — the eighteen rookies on the board have no line at all, and a zero
+// there would be a judgement about a season they were not in.
+function priorScore(player) {
+  if (!player || player.priorPts === null || player.priorPts === undefined) return null;
+  const vor = player.priorPts - (PRIOR_REPLACEMENT_PTS[player.pos] || 0);
+  return Math.max(0, Math.min(100, (vor / (PRIOR_BEST_VOR || 1)) * 100));
 }
 
 function label(score) {
@@ -2423,6 +2512,23 @@ function overallScore(player) {
   if (!player || player.projPts === null || player.projPts === undefined) return null;
   const vor = player.projPts - (REPLACEMENT_PTS[player.pos] || 0);
   return Math.max(0, Math.min(100, (vor / (BEST_VOR || 1)) * 100));
+}
+
+/* The same figure before the clamp, which is the only one that can tell two
+   zeros apart. Roughly three fifths of the board scores exactly 0, so the
+   floor is the majority state rather than an edge case, and a receiver one
+   point below replacement prints what a receiver sixty points below prints.
+
+   Michael Wilson is the case that made this worth having. He scored 14 on
+   last season's actuals — 181.6 points across all seventeen games, +29.4 over
+   replacement — and reads 0 for 2026 because his projection falls 45 points
+   while projected WR replacement *rises* 22. Most of that swing is the
+   projection compressing the field, not a verdict on him, and "0" cannot say
+   so. It stays out of overallScore(): modelMultipliers() divides by the best
+   score available and a negative there would invert the discount. */
+function replacementGap(player) {
+  if (!player || player.projPts === null || player.projPts === undefined) return null;
+  return player.projPts - (REPLACEMENT_PTS[player.pos] || 0);
 }
 
 /* The reasoning behind a score, said in one line. Built from figures already
@@ -2464,7 +2570,7 @@ function draftSignals(player) {
 
   const reasons = { overall: [], upside: [], bust: [] };
 
-  // ---- Overall: value over a replacement starter, in your scoring ----
+  // ---- Juke score: value over a replacement starter, in your scoring ----
   const vor = player.projPts - (REPLACEMENT_PTS[player.pos] || 0);
   const overall = overallScore(player);
   reasons.overall.push(Math.round(player.projPts) + " projected points, " +
@@ -2827,6 +2933,58 @@ function photoUrl(player) {
     : "https://sleepercdn.com/content/nfl/players/thumb/" + player.id + ".jpg";
 }
 
+/* ---- team colour ------------------------------------------
+
+   One mark per club, used only where nothing is written on top of it: the
+   ring around the headshot and the band under the sheet header. That
+   restriction is the whole design, and it came out of measuring the
+   alternative rather than from taste.
+
+   **A team-coloured header does not survive thirty-two real teams.** Darkened
+   far enough to carry white text — lightness only, hue and saturation held,
+   the same repair the position solids had — ten pairs land below the
+   just-noticeable difference and twenty-seven of the 496 pairs sit within 6
+   CIE76. Carolina, Detroit, the Chargers and Houston all become the same dark
+   teal; Dallas and Indianapolis become one navy. You pay the entire contrast
+   bill and lose the identity you were buying, which is the opposite of what
+   this is for. Pittsburgh's gold is 1.76:1 against white and New Orleans' is
+   1.85:1, so there is no version of that header that simply works.
+
+   Kept at full brand value against the navy header instead, seven vanish into
+   it — CHI, DAL, HOU, JAX, NE, SEA and TEN, every one of them a club whose
+   primary is a navy or a near-black. Those seven take the mark the club is
+   actually known by, which is a substitution their own kit makes: Chicago's
+   orange, Seattle's green, Jacksonville's gold. Raiders silver for the same
+   reason — black is legal on navy and reads as nothing.
+
+   Measured at those values, every accent clears 12 CIE76 against all three
+   navy stops and against the card in both themes, worst case 13.6. Three
+   pairs are still effectively one colour and always will be: CIN and DEN
+   share a hex, ATL and HOU both use #A71930, CAR and LAC are 2.3 apart at
+   brand. The club is named in text beside the mark, so a shared colour costs
+   nothing a reader can be misled by.
+
+   Not a token in `:root`, because these are somebody else's colours rather
+   than ours and there are thirty-two of them. It reaches the stylesheet as
+   `--team` on the header, the same way `--mark-ink` reaches a `<use>`. */
+const TEAM_ACCENT = {
+  ARI: "#97233F", ATL: "#A71930", BAL: "#241773", BUF: "#00338D",
+  CAR: "#0085CA", CHI: "#C83803", CIN: "#FB4F14", CLE: "#311D00",
+  DAL: "#869397", DEN: "#FB4F14", DET: "#0076B6", GB:  "#203731",
+  HOU: "#A71930", IND: "#002C5F", JAX: "#D7A22A", KC:  "#E31837",
+  LAC: "#0080C6", LAR: "#003594", LV:  "#A5ACAF", MIA: "#008E97",
+  MIN: "#4F2683", NE:  "#C60C30", NO:  "#D3BC8D", NYG: "#0B2265",
+  NYJ: "#125740", PHI: "#004C54", PIT: "#FFB612", SEA: "#69BE28",
+  SF:  "#AA0000", TB:  "#D50A0A", TEN: "#4B92DB", WAS: "#5A1414"
+};
+
+// A free agent has no club and no colour. The stylesheet falls back to
+// --navy-lift rather than to nothing, so the ring and the band are always
+// drawn and only their colour changes.
+function teamAccent(player) {
+  return (player && TEAM_ACCENT[player.team]) || "";
+}
+
 function avatar(player, small) {
   const url = photoUrl(player);
   const photo = url
@@ -3093,7 +3251,7 @@ function renderQueue() {
           <div class="qname name-link" data-player="${p.name}">${p.name}</div>
           <div class="qmeta">
             <span class="badge ${p.pos}">${posLabel(p.pos)}</span> ${p.team} &middot; ADP ${p.adp.toFixed(1)}
-            &middot; Overall ${score === null ? "&mdash;" : Math.round(score)} ${injBadge(p)}
+            &middot; Juke ${score === null ? "&mdash;" : Math.round(score)} ${injBadge(p)}
           </div>
         </div>
         <div class="qmoves">
@@ -3146,7 +3304,7 @@ const PLAYER_COLS = [
   { key: "adp",  label: "ADP", title: "Average draft position",
     get: (p) => p.adp,   fmt: (v) => v.toFixed(1) },
   { key: "bye",  label: "BYE", get: (p) => p.bye },
-  { key: "ovr",  label: "OVR", title: "Projected points above the last startable player at this position, scored out of 100",
+  { key: "ovr",  label: "JUKE", title: "The Juke score: projected points above the last startable player at this position, as a share of the best such figure on the board",
     get: (p) => overallScore(p), fmt: (v) => Math.round(v), ours: true },
 
   { group: "Proj", key: "pts", label: "PTS", title: "Projected points under your scoring",
@@ -3271,7 +3429,7 @@ function renderPlayers() {
   }
 
   tbody.innerHTML = visible.map(function (p) {
-    // Overall was only ever visible inside the player sheet, which meant
+    // The Juke score was only ever visible inside the player sheet, which meant
     // opening a player to find out whether he was worth opening. It is the
     // one number this app has that the ADP feed does not, so it belongs on
     // the row. A dash where there is no projection, never a zero.
@@ -3890,6 +4048,11 @@ function bioLine(player, s) {
    which is the thing they cannot. */
 function rankRow(player) {
   const score = overallScore(player);
+  /* "Overall" is the board rank here and has always meant that. The score
+     beside it used to carry the same word in the queue, the meter and the
+     table header, so the strip and the meter below it were the same number
+     under two names with nothing saying so. One name now — the score is the
+     Juke score everywhere, and this cell keeps Overall for the rank. */
   const cells = [
     ["#" + player.overall, "Overall"],
     [posLabel(player.pos) + player.posRank, "Position"],
@@ -3899,7 +4062,64 @@ function rankRow(player) {
   ];
   return `<div class="rankrow">` + cells.map(function (c) {
     return `<div class="rankcell"><b>${c[0]}</b><span>${c[1]}</span></div>`;
-  }).join("") + `</div>`;
+  }).join("") + `</div>` + jukeNote(player);
+}
+
+/* What the number in that strip actually means, next to the number itself.
+   The sheet did explain it — in the method paragraph under three meters, past
+   the fold, using the other name — which is a long way from the figure that
+   raised the question.
+
+   Both halves are derived from work already done: overallReason() has existed
+   all along and was reachable only as a `title` tooltip on a table cell, which
+   is to say not at all on a phone. */
+function jukeNote(player) {
+  const bits = [];
+
+  const gap = replacementGap(player);
+  if (gap !== null && gap < 0) {
+    /* What a clamped zero is actually saying. Below replacement is not the
+       same as worthless: of the players who scored zero on 2024 actuals, 35%
+       were above it a year later and nine of them reached 25.
+
+       The size of the gap is deliberately not repeated here — the sentence
+       after this one already carries it, and printing "below replacement by
+       37 points · 137 projected points, -37 against a replacement WR" says
+       the same number twice in a row. This clause exists to give the floor a
+       name and a landmark; the arithmetic belongs to the line that follows. */
+    bits.push(`<b>Below replacement</b> &mdash; startable ${posLabel(player.pos)}
+      territory begins at ${posLabel(player.pos)}${replacementRank(player.pos)}
+      on this board`);
+  }
+
+  // Trailing full stop off, because these are joined by a middot: a sentence
+  // ending "drafted as WR37. · Scored 14" reads as a typo rather than a list.
+  bits.push(escHtml(overallReason(player)).replace(/\.\s*$/, ""));
+
+  const was = priorScore(player);
+  if (was !== null && PRIOR_SEASON) {
+    const move = projectionMove(player);
+    bits.push(`Scored <b>${Math.round(was)}</b> on ${PRIOR_SEASON} actuals
+      (${player.priorGames} game${player.priorGames === 1 ? "" : "s"})${move}`);
+  } else if (PRIOR_SEASON) {
+    bits.push(`No ${PRIOR_SEASON} season to compare against, so this is the
+      projection alone`);
+  }
+
+  return `<p class="jukenote">${bits.join(" &middot; ")}</p>`;
+}
+
+// Which way the model is betting, and only when the move is big enough to be
+// worth a reader's attention. Year-to-year movement in this score is large by
+// nature — across real consecutive seasons the mean absolute change is 12 to
+// 20 points — so a threshold under that would call noise a bet.
+function projectionMove(player) {
+  const now = overallScore(player), was = priorScore(player);
+  if (now === null || was === null) return "";
+  const d = Math.round(now - was);
+  if (Math.abs(d) < 15) return "";
+  return d > 0 ? `, so the projection is <b>up ${d}</b> on him`
+               : `, so the projection is <b>down ${Math.abs(d)}</b> on him`;
 }
 
 /* ---- week by week ----------------------------------------
@@ -3965,6 +4185,116 @@ function logsHtml(player, s, year) {
       <thead><tr>${cols.head.map((h) => `<th>${h}</th>`).join("")}</tr></thead>
       <tbody>${rows}</tbody>
     </table></div>`;
+}
+
+/* ---- latest news -----------------------------------------
+
+   Headlines about this player, fetched through the worker so the provider's
+   key is never in the page. It sits directly under "Our read" on purpose:
+   ours first, because it is the thing no feed has, then the wire.
+
+   **It is a link, not a reprint.** Headline, one clipped line, the source's
+   name and an outbound link. Reproducing the body is what a licence buys; an
+   aggregator's headline and a link back is not that, and the attribution is
+   not decoration — an unsourced headline is the version we may not show.
+
+   **Every field is escaped.** This is the third thing on the page written by
+   somebody outside this project, after chat and the ESPN strip, and it lands
+   in innerHTML. The same rule applies for the same reason.
+
+   **It never blocks, never throws and fails by disappearing** — the score
+   strip's contract. A sheet opens with the panel hidden and it only appears
+   if headlines arrive. No spinner: a permanently-empty box on a page that is
+   otherwise complete is worse than no box, and this is a section a reader
+   never asked to wait for. */
+const newsCache = new Map();
+const NEWS_SUMMARY_MAX = 200;
+
+function newsSlot() {
+  // Hidden until there is something to say. The stylesheet gives .newsbox a
+  // display, so it carries its own [hidden] rule — an author display beats
+  // the property, which is how a solo draft once grew a chat panel.
+  return `<div class="newsbox" id="newsPanel" hidden></div>`;
+}
+
+function newsHtml(items) {
+  return `<p class="section-label">Latest news</p>` + items.map(function (n) {
+    const when = escHtml(String(n.at || "").slice(0, 24));
+    return `<a class="newsitem" href="${escHtml(safeNewsUrl(n.url))}"
+               target="_blank" rel="noopener noreferrer">
+        <span class="newshead">${escHtml(n.title)}</span>
+        ${n.summary ? `<span class="newssum">${escHtml(String(n.summary).slice(0, NEWS_SUMMARY_MAX))}</span>` : ""}
+        <span class="newsfoot">${escHtml(n.source)}${when ? " &middot; " + when : ""}</span>
+      </a>`;
+  }).join("") +
+  `<p class="readnote">Headlines from our news provider, linked rather than
+     reproduced. Juke does not write these and does not endorse them.</p>`;
+}
+
+/* A link from a feed is a claim, not a fact — the same rule the GIF host gets,
+   and checked the same way with URL rather than a substring. Anything that is
+   not plain http(s) is dropped: a javascript: or data: href here would be an
+   outside party running script in the page, which is the one thing this
+   codebase is most arranged to prevent. */
+function safeNewsUrl(url) {
+  try {
+    const u = new URL(String(url), location.href);
+    return (u.protocol === "https:" || u.protocol === "http:") ? u.href : "";
+  } catch (err) {
+    return "";
+  }
+}
+
+/* This player's id at another source, from the crosswalk the pipeline builds.
+
+   The whole point of holding it is that nothing has to match on a name while
+   somebody is reading a profile. A name search at request time is how one Josh
+   Allen ends up wearing the other one's news — and every number on the sheet
+   around it would still be correct, so nobody would catch it. */
+function sourceId(player, source) {
+  const s = statOf(player);
+  return (s && s.x && s.x[source]) || "";
+}
+
+function renderNews(player) {
+  const panel = $("newsPanel");
+  if (!panel || !player) return;
+  panel.hidden = true;
+  panel.innerHTML = "";
+
+  if (typeof Live === "undefined" || !Live.news) return;
+
+  /* No id, no news. Deliberately not a fallback to a name or to league-wide
+     headlines: an empty panel is a player we could not link, and the pipeline
+     has already written him into unmatched.txt. Showing somebody else's news
+     under his name is the one outcome worse than showing none. */
+  const theirId = sourceId(player, "tank");
+  if (!theirId) return;
+
+  const key = player.id || player.name;
+
+  /* Which player this answer belongs to, checked when it lands rather than
+     when it was asked for. A slow response for the player you just closed
+     would otherwise render into the sheet you have open now — the sheet is
+     one element reused for everybody, so nothing else would have caught it. */
+  const draw = function (data) {
+    if (!sheetPlayer || (sheetPlayer.id || sheetPlayer.name) !== key) return;
+    const items = (data && data.items || []).filter((n) => n && n.title && safeNewsUrl(n.url));
+    if (!items.length) return;
+    const live = $("newsPanel");
+    if (!live) return;
+    live.innerHTML = newsHtml(items);
+    live.hidden = false;
+  };
+
+  if (newsCache.has(key)) { draw(newsCache.get(key)); return; }
+
+  Live.news(theirId).then(function (data) {
+    // Cached per player for the session, because a draft opens the same sheet
+    // repeatedly and a headline does not change inside one.
+    newsCache.set(key, data);
+    draw(data);
+  }).catch(function () { /* the panel simply stays hidden */ });
 }
 
 /* ---- our read --------------------------------------------
@@ -4053,6 +4383,14 @@ function openSheet(player) {
   const s = statOf(player);
   const sig = draftSignals(player);
 
+  /* The club's colour, handed to the stylesheet as a property rather than as
+     a fill. Set on the header so both the ring and the band below it inherit
+     one value, and removed rather than blanked for a player with no club, so
+     the rule falls back to its own default instead of to an empty string. */
+  const accent = teamAccent(player);
+  if (accent) $("sheetHead").style.setProperty("--team", accent);
+  else $("sheetHead").style.removeProperty("--team");
+
   $("sheetHead").innerHTML = `
     ${avatar(player)}
     <div>
@@ -4072,12 +4410,14 @@ function openSheet(player) {
   let overview;
   if (!sig) {
     overview = `<div class="nodata">No projection or stat history for this player yet.
-      The data refresh fills this in for anyone Sleeper carries.</div>`;
+      The data refresh fills this in for anyone Sleeper carries.</div>
+      ${newsSlot()}`;
   } else {
     const p = sig.stats.p || {};
     overview = `
       ${ourRead(player, s, sig)}
-      ${meter("Overall", sig.overall, sig.overall >= 55 ? "good" : "", sig.reasons.overall)}
+      ${newsSlot()}
+      ${meter("Juke score", sig.overall, sig.overall >= 55 ? "good" : "", sig.reasons.overall)}
       ${meter("Upside",  sig.upside,  sig.upside  >= 55 ? "good" : "", sig.reasons.upside)}
       ${meter("Bust risk", sig.bust,  sig.bust >= 55 ? "bad" : sig.bust >= 35 ? "warn" : "", sig.reasons.bust)}
 
@@ -4088,8 +4428,12 @@ function openSheet(player) {
         <div class="statbox"><div class="k">Pos rank</div><div class="v">${player.projPosRank ? posLabel(player.pos) + player.projPosRank : "&mdash;"}</div></div>
         <div class="statbox"><div class="k">vs ADP</div><div class="v">${player.projPosRank ? (player.posRank - player.projPosRank >= 0 ? "+" : "") + (player.posRank - player.projPosRank) : "&mdash;"}</div></div>
       </div>
-      <p class="method">Overall is projected points above the last startable player at this position
-      in a ${league.teams}-team league, ${player.pos}${replacementRank(player.pos)} on this board.
+      <p class="method">The Juke score is projected points above the last startable player at
+      this position in a ${league.teams}-team league &mdash; ${player.pos}${replacementRank(player.pos)} on
+      this board &mdash; as a share of the best such figure anywhere on it. It is a ranking against
+      the rest of the pool, so somebody always scores 100, and most of the ${board.length} players
+      here score nothing at all &mdash; this league only ever starts
+      ${league.teams * (starterCount() + flexCount())} of them at once.
       Upside and bust risk weigh how far the projection disagrees with ADP,
       plus experience, age, depth chart position, injury designation and last season's availability.
       This is one model, not a consensus of analysts.</p>`;
@@ -4179,6 +4523,11 @@ function openSheet(player) {
   $("sheet").hidden = false;
   $("sheetBackdrop").hidden = false;
   $("sheetBody").scrollTop = 0;
+
+  // After the panel exists in the DOM and after the sheet is on screen: this
+  // fills in later, over the network, and must never be something the sheet
+  // waits for.
+  renderNews(player);
 }
 
 function closeSheet() {

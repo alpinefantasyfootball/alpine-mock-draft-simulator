@@ -435,9 +435,105 @@ async function giphySearch(request, env) {
   }
 }
 
+/* Player news, proxied.
+
+   Same shape as the GIPHY route above and for the same reason: the key lives
+   here, the origin is refused before the key is touched, and no key answers
+   `configured: false` rather than an empty list, so the page can say "not set
+   up" instead of showing a panel that is silently always empty.
+
+   Two things are different, and both are about what this content *is*.
+
+   **We normalise rather than pass through.** The client sees `{ title, source,
+   at, url, summary }` and nothing else. That is partly the GIPHY argument —
+   fewer fields to keep escaping — and partly that the upstream shape is not
+   ours to depend on: swapping provider should be a change to one function
+   here, not to the sheet.
+
+   **We link, we do not republish.** A headline, a short summary, the source's
+   name and a link back to it is what an aggregator may do; reproducing the
+   body is what a licence is for. `summary` is cut hard for that reason as
+   well as for layout, and `source` is never dropped — an unattributed
+   headline is the version of this that is not allowed.
+
+   TANK01_BASE exists so the tests can point this at a local stub. The real
+   host is the default and nothing has to be set in production. */
+const NEWS_BASE = "https://tank01-nfl-live-in-game-real-time-statistics-nfl.p.rapidapi.com";
+const NEWS_MAX = 6;
+const SUMMARY_MAX = 220;
+
+// One upstream call, deliberately isolated. Everything above and below this
+// function is ours; this is the only part that knows whose API it is.
+async function fetchUpstreamNews(env, playerId, base) {
+  const api = base + "/getNFLNews?fantasyNews=true&maxItems=" + NEWS_MAX +
+              (playerId ? "&playerID=" + encodeURIComponent(playerId) : "&topNews=true");
+
+  const res = await fetch(api, {
+    headers: {
+      "x-rapidapi-key": env.TANK01_KEY,
+      "x-rapidapi-host": new URL(base).host
+    }
+  });
+  if (!res.ok) throw new Error("news " + res.status);
+  const body = await res.json();
+
+  const rows = Array.isArray(body) ? body : (body.body || body.data || []);
+  return (Array.isArray(rows) ? rows : []).map(function (n) {
+    return {
+      title: String(n.title || n.headline || "").slice(0, 200),
+      summary: String(n.summary || n.description || "").slice(0, SUMMARY_MAX),
+      // Attribution is not optional, so it falls back to the provider's own
+      // name rather than to an empty string.
+      source: String(n.source || n.provider || "Tank01").slice(0, 60),
+      at: String(n.published || n.date || n.playerID || "").slice(0, 40),
+      url: String(n.link || n.url || "").slice(0, 400)
+    };
+  }).filter((n) => n.title && n.url).slice(0, NEWS_MAX);
+}
+
+async function playerNews(request, env) {
+  const cors = corsFor(request);
+  const headers = Object.assign({ "content-type": "application/json" }, cors);
+
+  if (!originAllowed(request)) {
+    return new Response(JSON.stringify({ error: "forbidden" }),
+                        { status: 403, headers: { "content-type": "application/json" } });
+  }
+
+  if (!env.TANK01_KEY) {
+    return new Response(JSON.stringify({ configured: false, items: [] }), { headers });
+  }
+
+  // Whatever id the page holds, bounded. It is echoed into a URL, so it is
+  // constrained here rather than trusted to be the id we think it is.
+  const playerId = (new URL(request.url).searchParams.get("player") || "")
+    .replace(/[^A-Za-z0-9_-]/g, "").slice(0, 24);
+
+  try {
+    const items = await fetchUpstreamNews(env, playerId, env.TANK01_BASE || NEWS_BASE);
+    return new Response(JSON.stringify({ configured: true, items }), { headers });
+  } catch (err) {
+    /* News failing is not worth breaking a sheet over — the same rule the
+       score strip follows. `error: true` is for us; the page draws nothing
+       either way. */
+    return new Response(JSON.stringify({ configured: true, items: [], error: true }),
+                        { headers });
+  }
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+
+    if (url.pathname === "/news") {
+      if (request.method === "OPTIONS") {
+        return new Response(null, { headers: Object.assign({
+          "access-control-allow-methods": "GET",
+          "access-control-max-age": "86400"
+        }, corsFor(request)) });
+      }
+      return playerNews(request, env);
+    }
 
     if (url.pathname === "/giphy") {
       if (request.method === "OPTIONS") {

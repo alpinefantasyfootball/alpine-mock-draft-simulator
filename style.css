@@ -1264,14 +1264,45 @@ tr.drafted .ovr { color: var(--ink-light); }
            left: 0; top: 0; transform: none; }
 }
 
+/* The club's colour arrives as --team, set per player in openSheet(). The
+   default is here rather than there so a free agent, or a club we have no
+   mark for, still gets a ring and a band — only the colour changes.
+
+   position: relative is for the band below, and nothing inside this header is
+   absolutely positioned, so it re-anchors nothing. .sheet-close sits on
+   margin-left: auto and .avatar img is anchored to .avatar, which has its own
+   position. Both checked, because changing position on a shared rule is how
+   `top` quietly changes meaning. */
 .sheet-head {
+  --team: var(--navy-lift);
+  position: relative;
   display: flex; align-items: center; gap: 14px;
   padding: 16px 18px;
   background: linear-gradient(120deg, var(--navy-deep), var(--navy) 65%, var(--navy-lift));
   color: #fff;
 }
 
-.sheet-head .avatar { width: 62px; height: 62px; font-size: var(--fs-lg); }
+/* A band of the club's colour along the foot of the header, and a ring of it
+   around the headshot. Neither carries text, which is the entire reason the
+   accent is allowed to be the real brand colour: seven of the thirty-two
+   cannot hold white type at all — Pittsburgh's gold measures 1.76:1 — so a
+   team-coloured surface with anything written on it is not available. See the
+   note above TEAM_ACCENT in app.js for what was measured.
+
+   The band sits inside the header rather than on .sheet-tabs so it travels
+   with the navy and cannot separate from it at a rounded corner. */
+.sheet-head::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: 0;
+  height: 3px; background: var(--team);
+}
+
+
+/* A ring of the club's colour outside the circle. box-shadow rather than a
+   border, so the avatar keeps its 62px and the flex row does not shift. */
+.sheet-head .avatar {
+  width: 62px; height: 62px; font-size: var(--fs-lg);
+  box-shadow: 0 0 0 3px var(--team);
+}
 .sheet-head h3 { margin: 0; font-family: Poppins, sans-serif; font-size: var(--fs-lg); font-weight: 700; letter-spacing: -.02em; }
 .sheet-head .sub { display: flex; align-items: center; gap: 7px; margin-top: 4px; font-size: var(--fs-sm); color: rgba(255,255,255,.80); }
 .sheet-head .facts { margin-top: 5px; font-size: var(--fs-xs); color: rgba(255,255,255,.62); font-variant-numeric: tabular-nums; }
@@ -1294,6 +1325,25 @@ tr.drafted .ovr { color: var(--ink-light); }
   color: rgba(255, 255, 255, .55); font-weight: 700;
 }
 
+/* What the Juke score in that strip means, said next to the number instead of
+   in a method note under three meters past the fold.
+
+   White at .90 rather than the .55 the labels above use, and that is the
+   contrast rule rather than a preference: this is a sentence to read, not a
+   micro-label to glance at. The gradient's lightest stop is --navy-lift, and
+   every stop has to clear on its own — .90 measures 7.87 there and better on
+   the other two, where .62 would be 4.64 and .55 only 4.00. Hierarchy against
+   the strip comes from size and weight, which is the only thing that works on
+   a saturated surface. */
+.jukenote {
+  margin: 9px 0 0; padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, .14);
+  font-size: var(--fs-xs); line-height: 1.5;
+  color: rgba(255, 255, 255, .90);
+  font-variant-numeric: tabular-nums;
+}
+.jukenote b { color: #fff; font-weight: 700; }
+
 /* ---------- our read ----------
 
    The column Sleeper gives to a wire service. Ours is the model talking, so
@@ -1314,6 +1364,45 @@ tr.drafted .ovr { color: var(--ink-light); }
   margin-top: 10px !important;
   font-size: var(--fs-xs) !important; font-style: italic;
   color: var(--ink-light) !important;
+}
+
+/* ---------- latest news ----------
+
+   Sits under Our read and is deliberately quieter than it: ours is the model
+   talking and has the accent border, this is somebody else's headline and is
+   a plain list of links. The order on screen is the order of the argument —
+   what we think, then what is being said.
+
+   `:not([hidden])` rather than a bare display, because renderNews() toggles
+   the property and an author display beats it. A solo draft once grew a chat
+   panel exactly this way. */
+.newsbox:not([hidden]) { display: block; margin-bottom: 16px; }
+.newsbox .section-label { margin: 0 0 8px; }
+
+.newsitem {
+  display: block; text-decoration: none;
+  padding: 10px 12px; margin-bottom: 6px;
+  background: var(--sunken); border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+}
+.newsitem:hover { border-color: var(--link); }
+.newsitem:last-of-type { margin-bottom: 0; }
+
+.newshead {
+  display: block; font-size: var(--fs-sm); font-weight: 650;
+  line-height: 1.45; color: var(--link);
+}
+.newssum {
+  display: block; margin-top: 3px;
+  font-size: var(--fs-xs); line-height: 1.55; color: var(--ink-mid);
+}
+/* The source's name, which is the part that may not be dropped. --ink-light
+   is the tertiary tone and clears 4.5:1 on --sunken in both themes; see the
+   contrast note in CLAUDE.md before reaching for anything lighter. */
+.newsfoot {
+  display: block; margin-top: 5px;
+  font-size: var(--fs-2xs); font-weight: 700;
+  letter-spacing: .04em; text-transform: uppercase; color: var(--ink-light);
 }
 
 /* ---------- the game-log year selector ---------- */

@@ -374,6 +374,39 @@ check("our own origin is served", ours.status, 200);
 check("and gets the CORS header back",
       ours.headers.get("access-control-allow-origin"), "https://jukeff.com");
 
+/* ---- the news proxy is not open either ----
+
+   Same route shape, same key-in-the-worker reason, so it gets the same
+   refusals. Worth asserting separately rather than assuming the GIPHY checks
+   above cover it: they are two functions, and the origin check is a call each
+   of them has to remember to make. A route that forgot would look perfectly
+   healthy from a browser on our own domain, which is the only place anybody
+   would ever try it. */
+const newsEvil = await fetch(`${HTTP}/news?player=9221`,
+                             { headers: { Origin: "https://evil.example" } });
+check("news refuses a foreign origin", newsEvil.status, 403);
+
+const newsBare = await fetch(`${HTTP}/news?player=9221`);
+check("news refuses a request with no origin", newsBare.status, 403);
+
+const newsLookalike = await fetch(`${HTTP}/news?player=9221`,
+                                  { headers: { Origin: "https://jukeff.com.evil.example" } });
+check("news refuses a lookalike origin", newsLookalike.status, 403);
+
+const newsOurs = await fetch(`${HTTP}/news?player=9221`,
+                             { headers: { Origin: "https://jukeff.com" } });
+check("news serves our own origin", newsOurs.status, 200);
+const newsBody = await newsOurs.json();
+/* With no key set this says so rather than answering with an empty list that
+   looks like "no headlines today". The page draws nothing either way, but the
+   two are different facts and only one of them is worth investigating. */
+check("news answers with an items array", Array.isArray(newsBody.items), true);
+check("news reports whether it is configured",
+      typeof newsBody.configured, "boolean");
+if (!newsBody.configured) {
+  check("an unconfigured provider returns no items", newsBody.items.length, 0);
+}
+
 /* ---- the rate limit ----
 
    The number that matters is not that a flood is stopped — it is that a real
