@@ -2,11 +2,11 @@
    Alpine Draft Room - player data
    GENERATED FILE. Edit scripts/build_players.py instead.
 
-   Generated : 2026-08-16 11:40 UTC
+   Generated : 2026-08-16 20:22 UTC
    Players   : standard 210 · half 218 · ppr 261
    Seasons   : 2018-2025
    Matched   : 218 of the half set carry a Sleeper id
-   Flagged   : 31 carry an injury designation
+   Flagged   : 30 carry an injury designation
    Projected : 262 have 2026 projections
 
    ADP: Fantasy Football Calculator, one set per scoring format.
@@ -15,7 +15,7 @@
    Player, injury and stat data: Sleeper.
    ========================================================== */
 
-const PLAYERS_META = { generated: "2026-08-16 11:40 UTC", count: 218, matched: 218, flagged: 31, projected: 262, unmatched: 0 };
+const PLAYERS_META = { generated: "2026-08-16 20:22 UTC", count: 218, matched: 218, flagged: 30, projected: 262, unmatched: 0 };
 
 /* One ordered list per scoring format. app.js picks the set that
    matches league.scoring when a draft starts, and works out every
@@ -122,7 +122,7 @@ const ADP_SETS = {
   { id: "4046", name: "Patrick Mahomes", pos: "QB", team: "KC", bye: 5, adp: 97.6, inj: "Q" },
   { id: "11560", name: "Caleb Williams", pos: "QB", team: "CHI", bye: 10, adp: 98.1, inj: "" },
   { id: "13294", name: "Makai Lemon", pos: "WR", team: "PHI", bye: 10, adp: 98.9, inj: "Q" },
-  { id: "9500", name: "Josh Downs", pos: "WR", team: "IND", bye: 13, adp: 99.6, inj: "Q" },
+  { id: "9500", name: "Josh Downs", pos: "WR", team: "IND", bye: 13, adp: 99.6, inj: "" },
   { id: "8121", name: "Romeo Doubs", pos: "WR", team: "NE", bye: 11, adp: 99.7, inj: "" },
   { id: "2449", name: "Stefon Diggs", pos: "WR", team: "WAS", bye: 7, adp: 100.1, inj: "" },
   { id: "4199", name: "Aaron Jones Sr.", pos: "RB", team: "MIN", bye: 6, adp: 100.6, inj: "" },
@@ -322,7 +322,7 @@ const ADP_SETS = {
   { id: "9754", name: "Quentin Johnston", pos: "WR", team: "LAC", bye: 7, adp: 84.2, inj: "" },
   { id: "8183", name: "Brock Purdy", pos: "QB", team: "SF", bye: 8, adp: 85.7, inj: "" },
   { id: "12489", name: "RJ Harvey", pos: "RB", team: "DEN", bye: 10, adp: 87.0, inj: "" },
-  { id: "9500", name: "Josh Downs", pos: "WR", team: "IND", bye: 13, adp: 87.1, inj: "Q" },
+  { id: "9500", name: "Josh Downs", pos: "WR", team: "IND", bye: 13, adp: 87.1, inj: "" },
   { id: "5947", name: "Jakobi Meyers", pos: "WR", team: "JAX", bye: 7, adp: 87.4, inj: "" },
   { id: "DEN", name: "Denver Defense", pos: "DST", team: "DEN", bye: 10, adp: 87.6, inj: "" },
   { id: "10859", name: "Sam LaPorta", pos: "TE", team: "DET", bye: 6, adp: 89.0, inj: "" },
@@ -544,7 +544,7 @@ const ADP_SETS = {
   { id: "12489", name: "RJ Harvey", pos: "RB", team: "DEN", bye: 10, adp: 83.6, inj: "" },
   { id: "8183", name: "Brock Purdy", pos: "QB", team: "SF", bye: 8, adp: 85.5, inj: "" },
   { id: "4037", name: "Chris Godwin Jr.", pos: "WR", team: "TB", bye: 10, adp: 85.8, inj: "" },
-  { id: "9500", name: "Josh Downs", pos: "WR", team: "IND", bye: 13, adp: 85.8, inj: "Q" },
+  { id: "9500", name: "Josh Downs", pos: "WR", team: "IND", bye: 13, adp: 85.8, inj: "" },
   { id: "10859", name: "Sam LaPorta", pos: "TE", team: "DET", bye: 6, adp: 87.4, inj: "" },
   { id: "7567", name: "Kenny Gainwell", pos: "RB", team: "TB", bye: 10, adp: 88.6, inj: "" },
   { id: "DEN", name: "Denver Defense", pos: "DST", team: "DEN", bye: 10, adp: 90.6, inj: "" },
