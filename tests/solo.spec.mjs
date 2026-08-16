@@ -357,6 +357,30 @@ test("the rail's My Team goes to My Team", async ({ browser }) => {
     rows: document.querySelectorAll("#benchList li").length
   }));
 
+  /* `.rtm` is worn by two things — this button, and the trailing "RB · SF" on
+     every ordinary roster row — and styling the bare class put a pointer, a
+     hover underline and 10px of padding onto all of them. It shipped that way
+     for one deploy. The control half is scoped to `button.rtm` now, and this
+     is what says so. */
+  const bleed = await page.evaluate(() => {
+    const spans = [...document.querySelectorAll(".railslots li:not(.benchsum) .rtm")];
+    const btn = document.querySelector(".benchsum button.rtm");
+    return {
+      rows: spans.length,
+      inert: spans.every((el) => {
+        const s = getComputedStyle(el);
+        return s.cursor === "auto" && s.paddingLeft === "0px" && s.marginTop === "0px";
+      }),
+      buttonCursor: getComputedStyle(btn).cursor,
+      // Still the same typography, or the fix would have changed how it looks.
+      sameType: getComputedStyle(btn).fontSize === getComputedStyle(spans[0]).fontSize
+    };
+  });
+  expect(bleed.rows, "there are ordinary roster rows to bleed onto").toBeGreaterThan(1);
+  expect(bleed.inert, "plain roster labels are not dressed as controls").toBe(true);
+  expect(bleed.buttonCursor, "and the one that is, is").toBe("pointer");
+  expect(bleed.sameType).toBe(true);
+
   expect(after.panel, "it opens My Team").toBe("tab-team");
   // The strip has to follow, or the app is on a tab its own nav says it is not.
   expect(after.tab, "and the tab strip agrees").toBe("tab-team");

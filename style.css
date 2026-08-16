@@ -2374,20 +2374,32 @@ a.room.live:hover {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .rfill.none { font-weight: 400; font-style: italic; color: var(--ink-light); }
-/* A <button>, because it was always drawn as a link and is now wired like
-   one. Everything here except the padding is undoing a browser default so it
-   still looks exactly like the span it replaces — the padding is there because
-   `--fs-2xs` is a very small thing to ask a thumb to hit, and it is negative
-   on the right so the text stays flush with the rows above rather than the
-   tap target pushing it in. */
-.rtm {
-  flex: none; font-family: inherit; font-size: var(--fs-2xs); font-weight: inherit;
-  color: var(--ink-light); letter-spacing: .02em;
+/* Two things wear this class and only one of them is a control: the trailing
+   "RB · SF" on every roster row, and the bench row's button through to My
+   Team. So the shared half is the typography, and everything that makes a
+   control a control is scoped to the element that is one.
+
+   Getting that wrong is not theoretical — it shipped. A cursor, a hover
+   underline and 10px of padding went onto the bare `.rtm` and landed on every
+   roster row in the rail, which is the sheet's own rule about checking a class
+   name against the existing stylesheet, ignored by the person who wrote it
+   down. `grep` for the class, not just for the element you are looking at. */
+.rtm { flex: none; font-size: var(--fs-2xs); color: var(--ink-light); letter-spacing: .02em; }
+
+/* A <button>, because it was always drawn as a link and is now wired like one.
+   Everything here except the padding is undoing a browser default so it still
+   looks exactly like the span it replaced; the padding is there because
+   `--fs-2xs` is a very small thing to ask a thumb to hit, and the negative
+   vertical margin keeps the taller tap target from growing the row. */
+button.rtm {
+  font-family: inherit; font-weight: inherit;
   background: none; border: 0; padding: 6px 0 6px 10px; margin: -6px 0;
   cursor: pointer; -webkit-appearance: none; appearance: none;
 }
-.rtm:hover { text-decoration: underline; }
-.rtm:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; border-radius: 4px; }
+button.rtm:hover { text-decoration: underline; }
+button.rtm:focus-visible {
+  outline: 2px solid var(--link); outline-offset: 2px; border-radius: 4px;
+}
 
 /* An unfilled starting slot is the actionable state, so it is the one that
    takes a tint rather than every filled row taking one. */
