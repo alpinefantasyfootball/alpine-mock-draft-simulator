@@ -327,6 +327,71 @@ is a change to the numbers, not to the advice.
   same reason: `--orange` (#ED6011) is the brand, and it is only 3.34:1
   against white, so anything putting white text on it uses `--orange-cta`
   (#C2410C, 5.18:1) instead.
+- **Two scales, and no rule below them may write a raw px.** Eight type
+  steps — 10, 12, 14, 16, 19, 23, 32, 42 — and five radii — 4, 8, 12, 16,
+  pill. They live in their own `:root` block above the colours, because
+  they do not move between themes and should not be read as if they might.
+
+  They replaced 26 font sizes and 15 radii: every half step from 8.5px to
+  16px and every integer from 2 to 12, each chosen per element by eye. The
+  draft room rendered eleven sizes at once, nine of them between 8.5 and 13.
+  **Every individual choice was defensible and the set was not** — nothing
+  shared a size, so nothing read as belonging to the same family, and that
+  is a thing a visitor feels without being able to name.
+
+  Radii divide by the job, not by taste: an inline mark, a control, a card,
+  an overlay. `50%` stays where a circle is genuinely wanted.
+
+  The check is one line in the console, and it should come back 8 and 5:
+  the count of distinct `fontSize` and `borderRadius` across everything
+  rendered. Anything off the scale is a rule that forgot, and an icon-only
+  button with no `font-size` at all counts — Chrome gives it 13.333px, so
+  `.theme-toggle`, `.to-top` and `.home` each carry one that changes
+  nothing on screen and keeps that audit honest.
+- **One primary action colour, and it is `--orange-cta`.** Orange means
+  act; blue means state — focus rings, the selected tab, the header when
+  the clock is yours. They were split for a long time, `.cta` orange and
+  `.primary` blue, which meant the same control was two colours depending
+  on the screen: "Resume" on a saved draft was orange on the landing page
+  and blue three lines into the draft view, from the same two words in the
+  same codebase.
+
+  **`.draft-btn` is blue on purpose and is not an oversight.** The rule is
+  about *the primary action* — the one thing a screen is asking for — and
+  that is a row control repeated on every player in a 200-row table. Two
+  hundred orange buttons is wallpaper, and it would outshout the actual
+  primary on the same screen, which is the point of having one. The split
+  is by rank, not by whether a control does something.
+- **The setup screen leads with the two settings people change and folds
+  the rest away.** It asked 68 questions before it would let anybody draft
+  — fourteen selects and forty-four scoring inputs — with the Start button
+  under all of it. Six controls are visible now; nothing was removed.
+
+  Three `.setupbox` disclosures — League, Scoring, Draft with friends —
+  each carrying a summary of what is inside, so shut is still informative.
+  That summary comes from `league` through `leagueSummary()` and
+  `scoringLabel()`, never from a second copy of the same lookup.
+
+  **Anything that can refuse the Start button has to say so outside the box
+  that caused it.** Every check in `setupProblem()` lives inside League, so
+  `refreshSetup()` writes the reason to `#setupProblemMsg` beside the button
+  *and* forces the box open. A disabled button whose explanation is folded
+  away is worse than the wall of controls this replaced. It opens and never
+  closes itself: shutting the box the moment the arithmetic came right would
+  take the screen away mid-edit.
+- **The hero product shot is generated, not an image.** `renderHeroShot()`
+  draws the opening rounds of a real board from the same `board` array, the
+  same ADP order and the same position solids the draft uses. A PNG would be
+  a file to rebuild every time the design or the nightly data moved, and it
+  would be wrong the first time somebody forgot. This one has nothing in it
+  to keep in sync.
+
+  It is the one place in the app where something overflows and can neither
+  scroll nor ellipsise — the phone crop, where ten columns wide enough for a
+  surname cannot fit and 31px columns would not be a picture of anything.
+  That is deliberate and it is the *only* exception: the clipped part is
+  decoration with a duplicate one click away, not content with no way to
+  reach it. Anything else that trips that check is still a bug.
 - **The centred wordmark needs a breakpoint.** `.shell-inner` is
   `1fr auto 1fr`, so each side gets the same width. Below about 540px the
   sides need ~191px of links and get ~110px, and because the links are
@@ -353,6 +418,31 @@ is a change to the numbers, not to the advice.
   landing page read as the same site. Only `.my-turn` and `.urgent` take
   colour, and they carry their own reversed mark and white text. A CPU being
   on the clock is the resting state and must look like the homepage.
+
+- **The navy band starts below the header, and that is the rule above
+  holding.** The landing page was two tones ten points apart — `--page`
+  under `--card` — across a thousand square pixels, with the one saturated
+  thing on it being the CTA at 0.8% of the area. `.hero-band` is the second
+  surface, and it is brand navy specifically because `--navy-deep`, `--navy`
+  and `--navy-glow` are byte-identical in both blocks. **That is what lets
+  everything inside it name white and the `--band-*` values directly**, the
+  same licence `.appbar.my-turn` already uses.
+
+  Making the header navy too would read better and would mean making
+  `.appbar` navy with it, which is a change to the draft room rather than to
+  the landing page. The seam is handled with an inset shadow instead, so the
+  header casts onto the band rather than mismatching against it.
+
+  Full bleed by nesting — `.hero-band` > `.band-inner`, with the 1120px
+  column moved out of `.landing` — **never by `100vw`**, which counts the
+  scrollbar and starts overflowing sideways on whichever machine shows one.
+
+  Its bottom fade is the one value in that block that moves between themes,
+  and it has to: the band's job at that edge is to arrive at whatever page
+  it is sitting on. **Anything laid over that fade needs clearance**, which
+  is what `.hero-band .hero`'s bottom padding is for — `--band-ink-mid` over
+  a light-theme fade loses its contrast on the way down. The product shot is
+  the exception and fades itself, on purpose, with its own mask.
 
 - **Two views, one hash route.** `#/` is the landing page, `#/draft` is the
   Draft Room. Hash routing because GitHub Pages has no rewrite to send a real
@@ -588,6 +678,12 @@ back out, so typing one line of chat left the whole draft magnified and the
 manager pinching their way back — every time they said anything. Every field
 in the app was under it: the selects at 14.5, chat and the GIF search at 12.5.
 
+Those three sizes no longer exist. The type scale below puts `--fs-base` at
+16px and every field on it, so the rule is now a floor the design already
+meets rather than an exception fighting it. **Leave the rule in.** It costs
+nothing while the scale holds and it is the only thing standing between a
+field added in a hurry and a magnified draft.
+
 It is one rule under `@media (pointer: coarse)`, with `!important`, and both
 parts are deliberate. Coarse pointers only, so desktop typography is
 untouched. `!important` because every field here is styled through a class and
@@ -671,6 +767,77 @@ whole pool, with no quote form anywhere in it. `heightText()` renders it. A
 team defense has no height, weight, age or college — it is eleven people —
 so `bioLine()` gives it its own line rather than a strip of dashes, and
 `ourRead()` calls it "this defense" rather than "him".
+
+## Contrast
+
+Every one of these was found in a single sweep, and none of them announced
+itself. The app looked fine throughout. **The bar is 4.5:1 for anything
+under 24px — or under 18.66px bold — which is very nearly all of it**, and
+a sweep that uses 18px, or 14px bold, is measuring a rule that does not
+exist and will pass things that fail.
+
+**`--ink-light` is pinned by `--fill`, not by taste.** It is the tertiary
+tone, used 58 times, almost always at `--fs-2xs` or `--fs-xs`. It missed on
+every surface it lands on: 4.43 on `--sunken`, 4.18 on `--card`, 3.83 on
+`--well`, 3.54 on `--fill` — and the light theme, which nobody had checked,
+bottomed out at **2.31**. 122 elements across the two.
+
+**Fixing the tertiary tone forced the secondary along with it.** In light,
+`--ink-light` has to reach `#5E6A76` to clear `--fill`, and `--ink-mid` was
+sitting at `#5A6875` — 4.83 against 5.00. Two tones 0.17 apart is one tone
+with two names, so `--ink-mid` moved to `#4C5763`. **The ramp is set from
+the bottom in both themes**: the tertiary is whatever the worst surface
+allows, and the secondary is placed above it. Body text getting darker in
+light is the side effect and it is the right one.
+
+`--fill-hi` looks like a fifth failing surface at 3.02 and is not: every
+rule that hovers to it either sets `--ink` or starts from `--ink-mid`,
+which clears it at 5.30. Check what a token is actually paired with before
+solving for it.
+
+**Four of the six position solids failed under the white text they are
+documented as always carrying.** TE 2.68, WR 3.12, QB 3.96, RB 3.97 — 80
+elements — with only K (4.52) and DST (4.86) passing. They are darkened by
+lightness alone, hue and saturation held, so the board colour-codes exactly
+as it did: the closest pair is RB/DST and it separates by 25 in CIE76
+against a just-noticeable threshold near 2.3. TE moved most, by 19.
+
+**So four of these are no longer the values sampled off the logo artwork,
+and that is not a drift to correct.** Five seat colours were the same hex
+and carried the same fault; they took the same values. **A seventh position
+or a ninth seat needs white checked against it before it is added.**
+
+**Every stop in a gradient must clear white on its own.** `--hdr-cyan` was
+`#12A3DC` — 2.88, the worst in the app — under a header carrying a 16px
+headline, a 12px pick line and a 10px label. It sits at 130%, so it is
+never fully painted, and it is tempting to check only the colour the box
+actually reaches. **Do not tie the requirement to a stop percentage**: move
+the stop later and the contrast silently breaks. With every stop passing,
+any interpolation between them passes too.
+
+**Translucent white on a saturated surface is a false economy.** The header
+labels were `rgba(255,255,255,.82)` and `.68`, measuring 2.95 and **2.48** —
+the worst contrast on the screen somebody stares at while their own clock
+runs down. At a 4.6 backdrop the minimum workable alpha is **0.98**, and
+even a solid `#F2F6F9` only reaches 4.27. There is no opacity that reads as
+secondary and stays legible; the choice is not a real one. Hierarchy on a
+strong colour comes from size and weight.
+
+**A disabled control is exempt, which is how a regression hid in one.**
+`.primary:disabled` was white on `--ink-light` at 3.88. Lightening
+`--ink-light` to clear its own bar dropped that to **2.83**, and no sweep
+would ever have caught it, because WCAG excuses inactive controls. It is
+muted text on a muted fill now. **Fixing a token can degrade something the
+rules do not check** — when a token moves, look at what else names it.
+
+**Sweep with the real backdrop, or the answer is noise in both
+directions.** A walker that reads `backgroundColor` cannot see a gradient:
+on `.appbar.my-turn` it falls through to `--card` and reports white-on-white
+at 1.07, which is not a failure, and on the navy band it reported the hero
+slogan at 4.30 when the slogan actually sits over the flat `--navy-deep`
+region and measures 5.15. **Both a false alarm and a real miss came out of
+the same shortcut.** Composite the alpha, and interpolate the gradient at
+the element's own position.
 
 ## Security
 
@@ -865,6 +1032,26 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   "Add python.exe to PATH" box was ticked, which it usually isn't.
 - App: open `index.html` directly in a browser. `file://` works because the
   data files load via `<script src>` rather than fetch.
+- **In a headless or hidden browser, disable transitions before you measure
+  a colour.** A pane that is not compositing produces no frames, so a CSS
+  transition never advances — it sits frozen at its starting value, and
+  `getComputedStyle` reports that old value indefinitely. It does not look
+  like an artifact. It looks like a bug, with a plausible cause.
+
+  It manufactured two in one session. `.room` has `transition: border-color`,
+  so removing the `live` class left the border reading orange forever and
+  looked like a specificity problem. `.appbar` has `transition: color`, so
+  the my-turn header reported `--ink` rather than `#fff` and a rule was
+  nearly added to "fix" a headline that was already white.
+
+  `document.head.appendChild` a `* { transition: none !important }` style,
+  measure, then remove it. And note that `requestAnimationFrame` never fires
+  in such a pane either, so anything awaiting one hangs until the tool times
+  out — `setTimeout` still works.
+
+  The same pane cannot take screenshots, which is worth saying plainly:
+  **everything above can be verified this way and none of it is a substitute
+  for looking.** A grade can be correct and unbelievable; so can a colour.
 - **End to end: `npm install` once, then `npx playwright test`.** Ten tests,
   about three minutes, and it starts the static server and `wrangler dev`
   itself. It drives the real pages in a real browser — a solo draft at both
@@ -877,7 +1064,7 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   nothing else — **the app still has no build step and no dependency**, and
   nothing under `node_modules/` is served, imported or needed to run the site.
 
-  Two things about it worth knowing before changing it:
+  Three things about it worth knowing before changing it:
 
   - **A manager is a browser context, not a tab.** Contexts have their own
     `localStorage`, so their own `juke.member`. Two tabs share one id and the
@@ -885,6 +1072,16 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   - **`state` is a top-level `const`, so it is not on `window`.** Waiting for
     `window.state` waits forever on a page that is working perfectly; refer to
     it unqualified, as the app's own code does.
+  - **A test that changes the league has to open the League box first.**
+    `page.selectOption` waits for the control to be visible and the setup
+    controls sit inside a collapsed `<details>` now, so eight tests went red
+    on `#teamCount` until `openLeagueBox()` went in front of them. That is
+    the real journey, not a workaround — a person opens it too.
+
+    `page.evaluate` does not care: `runSoloDraft` sets values through the
+    DOM and `createRoom` calls `.click()` directly, so both still work on a
+    control nobody can see. Which is worth knowing in both directions —
+    it is also why a harness can pass a screen a person cannot use.
 
   When adding a test, check it fails against the bug it is meant to catch —
   put the bug back for one run. Every test in there was written against a real
