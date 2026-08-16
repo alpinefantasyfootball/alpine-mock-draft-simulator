@@ -21,3 +21,12 @@ playwright-report/
 # scratch that is rebuilt on demand, and a checked-in copy would be someone
 # else's half-finished draft.
 worker/.wrangler/
+
+# Folder metadata the operating system writes on its own. This repository
+# lives inside OneDrive, which drops a desktop.ini in any folder it has
+# been given an icon or a localised name for — so it reappears on its own
+# after every delete. Nothing to do with the site, and Pages serves the
+# whole repository, so a stray one would be published at jukeff.com.
+desktop.ini
+Thumbs.db
+.DS_Store
