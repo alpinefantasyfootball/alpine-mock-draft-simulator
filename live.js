@@ -359,6 +359,25 @@
       return fetch(http + "/giphy?q=" + encodeURIComponent(q))
         .then((r) => r.json())
         .catch(() => ({ configured: false, results: [] }));
+    },
+
+    /* Player news, through the worker, for the same reason as the GIFs: the
+       key is server-side.
+
+       It lives in live.js because this is the file that knows where the
+       worker is, and nowhere else does — but note it has nothing to do with
+       being in a room. A solo draft opening a player sheet calls this, and
+       should: news is not a shared-draft feature, it is a player-profile one.
+
+       A rejected promise here would surface as an unhandled rejection on a
+       page that is otherwise fine, so the catch is the contract rather than
+       politeness. Offline, blocked, or no worker at all all arrive at the
+       same answer: nothing to show. */
+    news: function (playerId) {
+      const http = WORKER.replace(/^ws/, "http");
+      return fetch(http + "/news?player=" + encodeURIComponent(playerId || ""))
+        .then((r) => r.json())
+        .catch(() => ({ configured: false, items: [] }));
     }
   };
 })(window);

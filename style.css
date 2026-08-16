@@ -1366,6 +1366,45 @@ tr.drafted .ovr { color: var(--ink-light); }
   color: var(--ink-light) !important;
 }
 
+/* ---------- latest news ----------
+
+   Sits under Our read and is deliberately quieter than it: ours is the model
+   talking and has the accent border, this is somebody else's headline and is
+   a plain list of links. The order on screen is the order of the argument —
+   what we think, then what is being said.
+
+   `:not([hidden])` rather than a bare display, because renderNews() toggles
+   the property and an author display beats it. A solo draft once grew a chat
+   panel exactly this way. */
+.newsbox:not([hidden]) { display: block; margin-bottom: 16px; }
+.newsbox .section-label { margin: 0 0 8px; }
+
+.newsitem {
+  display: block; text-decoration: none;
+  padding: 10px 12px; margin-bottom: 6px;
+  background: var(--sunken); border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+}
+.newsitem:hover { border-color: var(--link); }
+.newsitem:last-of-type { margin-bottom: 0; }
+
+.newshead {
+  display: block; font-size: var(--fs-sm); font-weight: 650;
+  line-height: 1.45; color: var(--link);
+}
+.newssum {
+  display: block; margin-top: 3px;
+  font-size: var(--fs-xs); line-height: 1.55; color: var(--ink-mid);
+}
+/* The source's name, which is the part that may not be dropped. --ink-light
+   is the tertiary tone and clears 4.5:1 on --sunken in both themes; see the
+   contrast note in CLAUDE.md before reaching for anything lighter. */
+.newsfoot {
+  display: block; margin-top: 5px;
+  font-size: var(--fs-2xs); font-weight: 700;
+  letter-spacing: .04em; text-transform: uppercase; color: var(--ink-light);
+}
+
 /* ---------- the game-log year selector ---------- */
 
 .yearpick { display: flex; gap: 4px; margin-bottom: 10px; }

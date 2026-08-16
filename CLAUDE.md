@@ -36,7 +36,7 @@ Python 3 standard library only in the pipeline. No pip dependencies.
 | `draft-engine.js` | The rules of a snake draft — turn order, legality, the CPU wobble. No DOM, no globals, no dependencies, so a server can run the identical file. |
 | `room.js` | One shared draft: seats, picks, the clock. Pure, and time is always passed in rather than read. Loaded by the worker only; the page consumes the view it sends. |
 | `live.js` | The client end of a room: one socket, the invite code, and the messages. Knows nothing about the board or how anything is drawn. |
-| `worker/` | The Cloudflare Durable Object behind an invite link, plus its `wrangler.toml`. Deployed to `juke-draft-room.jukeff.workers.dev`; a change here needs `wrangler deploy` before the page can use it. See `worker/README.md`. |
+| `worker/` | The Cloudflare Durable Object behind an invite link, plus the two proxied routes whose keys may not be in the page (`/giphy`, `/news`) and its `wrangler.toml`. Deployed to `juke-draft-room.jukeff.workers.dev`; a change here needs `wrangler deploy` before the page can use it. See `worker/README.md`. |
 | `scripts/test_engine.py` | Runs `draft-engine.js` and `room.js` in node/deno/bun and asserts the rules from outside a browser. |
 | `tests/` | End-to-end tests: the real pages, in a real browser, two managers in a real room. `playwright.config.mjs` starts both servers itself. |
 | `package.json` | **Dev only.** Fetches the test runner and nothing else. The app still has no build step, no bundler and no runtime dependency. |
@@ -448,6 +448,66 @@ strength rose every time by four to five points and the finishing rank
 improved every time. Draft value moved both ways, which is the tell that it is
 finding value rather than reaching. A suggestion change that cannot show this
 is a change to the numbers, not to the advice.
+
+## Latest news
+
+Headlines on a player sheet, under "Our read", through the worker. The order
+on screen is the order of the argument: ours first, because it is the thing no
+feed has, then the wire.
+
+**We link, we do not republish.** A headline, one clipped line, the source's
+name and an outbound link. Reproducing the body is what a licence buys;
+aggregating a headline and linking back is not that. **`source` is never
+dropped** — an unattributed headline is the version of this we may not show,
+so it falls back to the provider's own name rather than to an empty string.
+This is the narrow exception to "don't republish news"; the Don't rule still
+stands for article bodies, expert rankings and analyst commentary.
+
+**The key lives in the worker.** Same rule as `GIPHY_KEY`, same route shape,
+same `originAllowed()` refusal *before the key is read* — CORS tells a browser
+whether it may read a response and does nothing about the request being made.
+The two proxy functions are separate, so the origin check is a call each has
+to remember; `test-sockets.mjs` asserts both rather than assuming one covers
+the other.
+
+**No key answers `configured: false`, not an empty list.** "Not wired up" and
+"nothing today" are different facts and only one is worth investigating. The
+panel draws nothing either way — no message, no spinner. A section nobody
+asked to wait for is worse as a permanently empty box than as no box, which
+is why this differs from the GIF picker, where a button was pressed and
+silence would be a bug.
+
+**It fails by disappearing** — the score strip's contract, and now the second
+runtime dependency on somebody else's server. Never throws, never blocks a
+render, never leaves a gap. The catch on the fetch is the contract rather than
+politeness: a rejected promise here surfaces as an unhandled rejection on a
+page that is otherwise fine.
+
+**Escape every field, and check the link.** This is the third thing on the
+page written by someone outside the project, after chat and the ESPN strip,
+and it lands in `innerHTML`. `safeNewsUrl()` parses with `URL` and keeps only
+http(s) — the same rule as the GIF host and for a worse reason: a
+`javascript:` href is an outside party running script in the page. Verified by
+putting `<img src=x onerror=…>` and a `javascript:` link through the real path
+and checking no element is built and nothing runs.
+
+**Which player an answer belongs to is checked when it lands, not when it was
+asked for.** The sheet is one element reused for everybody, so a slow response
+for a player the reader has closed renders into whoever is open now. Nothing
+else in the app would catch it.
+
+**And a test for that race is easy to write so that it cannot fail.** Holding
+a single `release` variable is the obvious shape and is wrong: the second
+`openSheet()` overwrites it, so resolving settles the *second* player's own
+request, which is not a race and passes against an app with no guard at all.
+Collect the pending resolvers and settle only the first. This was written the
+wrong way first and the run that caught it looked like an app bug.
+
+**`TANK01_BASE` points the worker at a stub.** The provider cannot be reached
+from a test and a key cannot live in the repo, so the whole path — worker,
+normalisation, escaping, rendering — is driven against a local server serving
+a canned, deliberately hostile payload. Everything above was measured that
+way, not reasoned about.
 
 ## Conventions
 
@@ -1230,13 +1290,13 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   fact in two places and would have failed as a suite quietly testing a server
   nobody was running.
 
-- **End to end: `npm install` once, then `npx playwright test`.** Thirty
-  tests, about ten minutes, and it starts the static server and `wrangler dev`
+- **End to end: `npm install` once, then `npx playwright test`.** Thirty-five
+  tests, about twelve minutes, and it starts the static server and `wrangler dev`
   itself. It drives the real pages in a real browser — a solo draft at both
   shapes, a full two-manager room draft to completion, a dropped socket
   reconnecting, leaving and rejoining, the phone layout, what the player sheet
-  says about the Juke score, and that every club's colour is drawn where no
-  text can land on it.
+  says about the Juke score, that every club's colour is drawn where no text
+  can land on it, and that a news payload cannot put script in the page.
 
   **The static server is `py` on Windows and `python3` everywhere else**, picked
   in `playwright.config.mjs` from `process.platform`. It was `py` outright,

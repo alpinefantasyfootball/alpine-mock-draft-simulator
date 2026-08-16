@@ -4105,6 +4105,98 @@ function logsHtml(player, s, year) {
     </table></div>`;
 }
 
+/* ---- latest news -----------------------------------------
+
+   Headlines about this player, fetched through the worker so the provider's
+   key is never in the page. It sits directly under "Our read" on purpose:
+   ours first, because it is the thing no feed has, then the wire.
+
+   **It is a link, not a reprint.** Headline, one clipped line, the source's
+   name and an outbound link. Reproducing the body is what a licence buys; an
+   aggregator's headline and a link back is not that, and the attribution is
+   not decoration — an unsourced headline is the version we may not show.
+
+   **Every field is escaped.** This is the third thing on the page written by
+   somebody outside this project, after chat and the ESPN strip, and it lands
+   in innerHTML. The same rule applies for the same reason.
+
+   **It never blocks, never throws and fails by disappearing** — the score
+   strip's contract. A sheet opens with the panel hidden and it only appears
+   if headlines arrive. No spinner: a permanently-empty box on a page that is
+   otherwise complete is worse than no box, and this is a section a reader
+   never asked to wait for. */
+const newsCache = new Map();
+const NEWS_SUMMARY_MAX = 200;
+
+function newsSlot() {
+  // Hidden until there is something to say. The stylesheet gives .newsbox a
+  // display, so it carries its own [hidden] rule — an author display beats
+  // the property, which is how a solo draft once grew a chat panel.
+  return `<div class="newsbox" id="newsPanel" hidden></div>`;
+}
+
+function newsHtml(items) {
+  return `<p class="section-label">Latest news</p>` + items.map(function (n) {
+    const when = escHtml(String(n.at || "").slice(0, 24));
+    return `<a class="newsitem" href="${escHtml(safeNewsUrl(n.url))}"
+               target="_blank" rel="noopener noreferrer">
+        <span class="newshead">${escHtml(n.title)}</span>
+        ${n.summary ? `<span class="newssum">${escHtml(String(n.summary).slice(0, NEWS_SUMMARY_MAX))}</span>` : ""}
+        <span class="newsfoot">${escHtml(n.source)}${when ? " &middot; " + when : ""}</span>
+      </a>`;
+  }).join("") +
+  `<p class="readnote">Headlines from our news provider, linked rather than
+     reproduced. Juke does not write these and does not endorse them.</p>`;
+}
+
+/* A link from a feed is a claim, not a fact — the same rule the GIF host gets,
+   and checked the same way with URL rather than a substring. Anything that is
+   not plain http(s) is dropped: a javascript: or data: href here would be an
+   outside party running script in the page, which is the one thing this
+   codebase is most arranged to prevent. */
+function safeNewsUrl(url) {
+  try {
+    const u = new URL(String(url), location.href);
+    return (u.protocol === "https:" || u.protocol === "http:") ? u.href : "";
+  } catch (err) {
+    return "";
+  }
+}
+
+function renderNews(player) {
+  const panel = $("newsPanel");
+  if (!panel || !player) return;
+  panel.hidden = true;
+  panel.innerHTML = "";
+
+  if (typeof Live === "undefined" || !Live.news) return;
+
+  const key = player.id || player.name;
+
+  /* Which player this answer belongs to, checked when it lands rather than
+     when it was asked for. A slow response for the player you just closed
+     would otherwise render into the sheet you have open now — the sheet is
+     one element reused for everybody, so nothing else would have caught it. */
+  const draw = function (data) {
+    if (!sheetPlayer || (sheetPlayer.id || sheetPlayer.name) !== key) return;
+    const items = (data && data.items || []).filter((n) => n && n.title && safeNewsUrl(n.url));
+    if (!items.length) return;
+    const live = $("newsPanel");
+    if (!live) return;
+    live.innerHTML = newsHtml(items);
+    live.hidden = false;
+  };
+
+  if (newsCache.has(key)) { draw(newsCache.get(key)); return; }
+
+  Live.news(player.id).then(function (data) {
+    // Cached per player for the session, because a draft opens the same sheet
+    // repeatedly and a headline does not change inside one.
+    newsCache.set(key, data);
+    draw(data);
+  }).catch(function () { /* the panel simply stays hidden */ });
+}
+
 /* ---- our read --------------------------------------------
 
    Sleeper fills a whole column of a player profile with wire copy from
@@ -4218,11 +4310,13 @@ function openSheet(player) {
   let overview;
   if (!sig) {
     overview = `<div class="nodata">No projection or stat history for this player yet.
-      The data refresh fills this in for anyone Sleeper carries.</div>`;
+      The data refresh fills this in for anyone Sleeper carries.</div>
+      ${newsSlot()}`;
   } else {
     const p = sig.stats.p || {};
     overview = `
       ${ourRead(player, s, sig)}
+      ${newsSlot()}
       ${meter("Juke score", sig.overall, sig.overall >= 55 ? "good" : "", sig.reasons.overall)}
       ${meter("Upside",  sig.upside,  sig.upside  >= 55 ? "good" : "", sig.reasons.upside)}
       ${meter("Bust risk", sig.bust,  sig.bust >= 55 ? "bad" : sig.bust >= 35 ? "warn" : "", sig.reasons.bust)}
@@ -4329,6 +4423,11 @@ function openSheet(player) {
   $("sheet").hidden = false;
   $("sheetBackdrop").hidden = false;
   $("sheetBody").scrollTop = 0;
+
+  // After the panel exists in the DOM and after the sheet is on screen: this
+  // fills in later, over the network, and must never be something the sheet
+  // waits for.
+  renderNews(player);
 }
 
 function closeSheet() {
