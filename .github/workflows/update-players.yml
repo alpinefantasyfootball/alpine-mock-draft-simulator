@@ -29,6 +29,20 @@ jobs:
 
       - name: Rebuild players.js
         run: python scripts/build_players.py
+        env:
+          # The source-id crosswalk, and nothing else here, needs a key. Without
+          # it build_players.py skips that step and says so, and the rebuild is
+          # otherwise identical -- which is exactly what makes this dangerous to
+          # leave out. This job regenerates stats.js from scratch every morning,
+          # so a missing key does not fail the run: it quietly drops every `x`
+          # id that a keyed run had put there, and player news stops working
+          # overnight with nothing in the log that looks like a fault.
+          #
+          # Set it once: Settings -> Secrets and variables -> Actions -> New
+          # repository secret, named TANK01_KEY. An unset secret arrives as an
+          # empty string, which is the same as no key, so this line is safe to
+          # merge before the secret exists.
+          TANK01_KEY: ${{ secrets.TANK01_KEY }}
 
       - name: Commit if anything changed
         run: |

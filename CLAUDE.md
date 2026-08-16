@@ -547,6 +547,17 @@ duplicated row counted twice. A count that disagrees with the data it
 describes is how you stop believing the run output — which is the only thing
 standing between a quiet bad join and a user finding it.
 
+**The nightly workflow needs the key too, and forgetting it fails silently.**
+`update-players.yml` regenerates `stats.js` from scratch every morning, so a
+run without `TANK01_KEY` does not fail — it quietly drops every `x` id a keyed
+run had written, and player news stops working overnight with nothing in the
+log that looks like a fault. The secret is set once under Settings → Secrets
+and variables → Actions; the workflow passes it in `env:` on the rebuild step.
+**A manual local run does not bump `?v=`.** Only the workflow does that, so a
+rebuild you run by hand and commit yourself is new data behind a cached
+address — which is the same "a rebuild nobody sees" failure, reached from the
+other direction.
+
 **`TANK01_BASE` points the worker at a stub.** The provider cannot be reached
 from a test and a key cannot live in the repo, so the whole path — worker,
 normalisation, escaping, rendering — is driven against a local server serving
