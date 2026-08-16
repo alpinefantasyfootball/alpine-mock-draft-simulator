@@ -1426,8 +1426,12 @@ tr.drafted .ovr { color: var(--ink-light); }
   font-size: var(--fs-lg); line-height: 1; cursor: pointer;
 }
 
+/* 8px below rather than 9, because the border-bottom is inside the box: with
+   an even 9 the selected pill measured 9px of space above it and 10 below,
+   which is small enough to be invisible as a number and quite visible as a
+   lopsided chip. 8 + the 1px border is the 9 the top already had. */
 .sheet-tabs {
-  display: flex; gap: 4px; padding: 9px 12px;
+  display: flex; gap: 4px; padding: 9px 12px 8px;
   border-bottom: 1px solid var(--line); overflow-x: auto;
 }
 

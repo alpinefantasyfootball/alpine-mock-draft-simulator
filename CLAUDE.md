@@ -512,6 +512,28 @@ request, which is not a race and passes against an app with no guard at all.
 Collect the pending resolvers and settle only the first. This was written the
 wrong way first and the run that caught it looked like an app bug.
 
+**It has a tab of its own, and the tab is hidden until headlines arrive.**
+It began under "Our read" on the Overview tab, which put six cards between the
+model's read and the meters that follow it. `renderNews()` reveals the tab and
+hides it again on every open — the sheet is one element reused for everybody,
+so a tab left showing from the last player opens onto *his* headlines under
+this player's name, and the reader has to click before finding out. That is
+worse than the panel equivalent, not better.
+
+**The reset toggles by view name, not by index.** It was `i === 0`, which
+stopped meaning "Overview" the moment a hidden tab sat second in the strip.
+
+**The source is the link's hostname when the provider does not name one.**
+Measured against the real feed rather than guessed: Tank01 returns a title, a
+link and an image, and no source field at all — so the first version named
+*them* on every card, which is wrong twice. They are the aggregator, not the
+author, and "TANK01" tells a reader nothing about whether to trust the line.
+The link is the honest answer, parsed with `URL` rather than a regex.
+
+**A field with no value is empty; it does not borrow one.** `at` fell back to
+`playerID`, so every card on a real sheet read "TANK01 · 4429795". Anything
+that does not look like a date is dropped rather than printed.
+
 **News is asked for by the provider's id, never by a name.** `x` on a stats
 record holds this player's id at other sources, built nightly by
 `link_source_ids()`. A name search at request time is how one Josh Allen ends
@@ -582,6 +604,12 @@ way, not reasoned about.
   same reason: `--orange` (#ED6011) is the brand, and it is only 3.34:1
   against white, so anything putting white text on it uses `--orange-cta`
   (#C2410C, 5.18:1) instead.
+- **A border-bottom is inside the box, so symmetric padding is not symmetric
+  space.** `.sheet-tabs` had an even `9px 12px` and the selected pill measured
+  9px of clearance above it and 10 below, because the 1px border sits within
+  the element. Small enough to be invisible as a number and quite visible as a
+  lopsided chip — it was spotted by eye before it was measured. The padding is
+  `9px 12px 8px` now, so 8 + the border is the 9 the top already had.
 - **Two scales, and no rule below them may write a raw px.** Eight type
   steps — 10, 12, 14, 16, 19, 23, 32, 42 — and five radii — 4, 8, 12, 16,
   pill. They live in their own `:root` block above the colours, because
