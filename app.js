@@ -356,22 +356,96 @@ function renderRooms() {
    somebody committed to a draft to see it.
 
    This draws the opening rounds of a real board: the same `board` array the
-   draft reads, sorted by the same ADP, in real snake order, in the position
-   colours the app uses everywhere else. It is a screenshot that cannot go
-   stale, because there is nothing in it to keep in sync.
+   draft reads, valued the way the draft values it, in real snake order, in the
+   position colours the app uses everywhere else. It is a screenshot that
+   cannot go stale, because there is nothing in it to keep in sync.
 
    Ten teams because that is the league this was built for and the shape the
-   setup screen still defaults to. Four rounds because that is what fits
-   above the fade without pushing the button off a laptop screen. */
+   setup screen still defaults to.
+
+   Five rounds because four stops one row short of the tight ends. The elite
+   quarterback lands in the third and the two tight ends worth having in the
+   fourth, so at four rounds the fourth is the row the mask is busy dissolving
+   and the only two cells that are not a back or a receiver arrive as ghosts.
+   A fifth round costs 37px, moves nothing above it — the button and the
+   headline both sit above the shot — and gives the fade a row of its own to
+   eat, which is what it is for. */
 const SHOT_TEAMS = 10;
-const SHOT_ROUNDS = 4;
+const SHOT_ROUNDS = 5;
 const SHOT_MINE = 3;      // one column reads as yours, the way a real board does
+
+/* The shot used to be `board[i]` — the opening names in ADP order, laid out in
+   snake order. That is a real board and it is the wrong one, because **ADP is
+   an average and no single draft looks like an average.** A position that goes
+   early in half the rooms and late in the other half averages to the middle,
+   where it loses to the run of backs and receivers that go at the same spot in
+   every room. Measured on today's data, the top forty by ADP is eighteen RB,
+   twenty-one WR and one QB — no tight end at all — so the graphic was two
+   colours and a single red cell, and it read as synthetic to anybody who has
+   drafted. The tight ends are there at 41 and 43, one row past the crop.
+
+   So the shot drafts rather than slices: fifty picks, snake order, each seat
+   valuing the board the way `suggestions()` does — ADP, need, injury risk and
+   the app's own model.
+
+   Two of those four are what move the scarce positions up, and they move them
+   for different reasons. **The model prices them.** `overallScore()` is points
+   above replacement measured *across* positions, so it can say an elite tight
+   end beats the twenty-fifth receiver — which is exactly what an ADP average
+   smooths away and exactly what the product claims to know. **Need is what
+   makes a seat stop taking backs.** A fourth running back is past the starting
+   requirement and loses the 0.80, so once a seat has its starters the QB and
+   TE still on 0.80 finally win a pick — which is why a real room's fifth round
+   has quarterbacks in it and an ADP slice never does.
+
+   Neither is a thumb on the scale. `MODEL_CAP` holds the model to a quarter of
+   a player's price, so this is a nudge off the market rather than a different
+   board: measured on today's data the quarterback moves from 30 to 23 and the
+   tight ends from 41 and 43 into the fourth round, while the first two rounds
+   barely move at all.
+
+   Which makes this a better advert as well as a better picture. The headline
+   above it says the numbers are already done, and the board underneath is now
+   drawn by those numbers rather than by the market they improve on.
+
+   Nothing here is a name. Whoever the nightly data says is QB1 and TE1 is who
+   turns up, so there is still nothing in this graphic to keep in sync. */
+function shotPicks() {
+  const taken = {};                                    // name -> true
+  const have  = [];                                    // seat -> pos -> count
+  for (let s = 0; s < SHOT_TEAMS; s++) have.push({});
+
+  const picks = [];
+  for (let n = 1; n <= SHOT_TEAMS * SHOT_ROUNDS; n++) {
+    // One implementation of what a snake draft is, the same one the room runs.
+    const c = DraftEngine.pickInfo(n, SHOT_TEAMS);
+    const pool = board.filter((p) => !taken[p.name] && !isRuledOut(p));
+    if (!pool.length) break;
+
+    const modelMultiplier = modelMultipliers(pool);
+    let best = null, bestScore = Infinity;
+    pool.forEach(function (p) {
+      const score = (p.adp + p.jitter)
+        * needFromCount(have[c.slot][p.pos] || 0, p.pos, c.round)
+        * (isRisky(p) ? 1.35 : 1)
+        * modelMultiplier(p);
+      if (score < bestScore) { bestScore = score; best = p; }
+    });
+
+    taken[best.name] = true;
+    have[c.slot][best.pos] = (have[c.slot][best.pos] || 0) + 1;
+    picks[n - 1] = best;
+  }
+  return picks;
+}
 
 function renderHeroShot() {
   const el = $("heroShot");
   // board is empty until the setup screen has been read. Decoration is not
   // worth a broken landing page, so this simply does nothing until it is not.
   if (!el || !board.length) return;
+
+  const picks = shotPicks();
 
   let html = '<div class="shot-rd"></div>';
   for (let s = 0; s < SHOT_TEAMS; s++) {
@@ -382,11 +456,10 @@ function renderHeroShot() {
   for (let r = 1; r <= SHOT_ROUNDS; r++) {
     html += '<div class="shot-rd">' + r + "</div>";
     for (let s = 0; s < SHOT_TEAMS; s++) {
-      // Snake: odd rounds run left to right, even rounds back the other way.
-      // Straight off the board, so this is what the room looks like when
-      // every seat takes the best player left — which is the honest picture.
+      // Snake: odd rounds run left to right, even rounds back the other way,
+      // so seat `s` in round `r` took the pick at this overall number.
       const i = (r - 1) * SHOT_TEAMS + (r % 2 ? s : SHOT_TEAMS - 1 - s);
-      const p = board[i];
+      const p = picks[i];
       if (!p) { html += '<div class="shot-cell empty"></div>'; continue; }
       html += '<div class="shot-cell ' + p.pos + (s === SHOT_MINE ? " mine" : "") + '">' +
               "<b>" + escHtml(lastName(p.name)) + "</b>" +
@@ -762,9 +835,12 @@ function countAt(slot, pos) {
    starting RB will reach for one; a team with four already
    will not.                                                */
 
-function needMultiplier(slot, pos, round) {
-  const have = countAt(slot, pos);
-
+/* Split from needMultiplier() so a roster that is not in `state.picks` can ask
+   the same question. The hero shot drafts a whole room nobody is sitting in,
+   which has no slots to look up and must not touch the real draft. Every
+   league-shape decision stays here rather than being restated by the caller,
+   which is the point — the superflex bug was this rule written down twice. */
+function needFromCount(have, pos, round) {
   if (have >= maxAt(pos)) return 999;              // roster limit
 
   // Kickers and defenses go at the very end of any draft, so the cutoffs are
@@ -782,6 +858,10 @@ function needMultiplier(slot, pos, round) {
   if (have < need)       return 0.80;   // still filling a starting slot
   if (have < need + 2)   return 1.00;   // sensible depth
   return 1.45;                          // hoarding
+}
+
+function needMultiplier(slot, pos, round) {
+  return needFromCount(countAt(slot, pos), pos, round);
 }
 
 function cpuChoice(slot, round) {
