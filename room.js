@@ -230,6 +230,44 @@
     return ok(next);
   }
 
+  /* The host putting the room in draft order.
+
+     Seats are swapped in pairs and named by index, never by who is in them.
+     That is not a convenience: a client is never told another member's id, and
+     "move Blake to seat 3" would have to name Blake — so the one operation the
+     host is given is the one that needs no ids at all. Two indices, and the
+     room works out who moved.
+
+     Lobby only, for the same reason the shape is: the snake order is what a
+     draft *is*, and changing it once picks exist would rewrite whose picks
+     they were. Host only, like start() and pause(). */
+  function swapSeats(state, opts) {
+    if (state.status !== "lobby") return fail(state, ERR.NOT_IN_LOBBY);
+    if (state.host && opts.member !== state.host) return fail(state, ERR.NOT_YOUR_SEAT);
+
+    const a = Number(opts.a);
+    const b = Number(opts.b);
+    if (!state.seats[a] || !state.seats[b]) return fail(state, ERR.NO_SUCH_SEAT);
+
+    const next = clone(state);
+    if (a === b) return ok(next);          // a drag that went nowhere
+
+    const held = next.seats[a];
+    next.seats[a] = next.seats[b];
+    next.seats[b] = held;
+
+    /* The member records carry a chair too, and it is what a reconnection
+       looks itself up by — so leaving them behind would send somebody who
+       went through a tunnel back to the seat they used to have. The else-if
+       matters: a record already moved from a to b must not be moved back. */
+    Object.keys(next.members).forEach(function (id) {
+      if (next.members[id].seat === a) next.members[id].seat = b;
+      else if (next.members[id].seat === b) next.members[id].seat = a;
+    });
+
+    return ok(next);
+  }
+
   /* Leaving frees the seat in the lobby but keeps it mid-draft, switched to
      auto. A dropped connection is usually a tunnel or a locked phone, and
      handing someone's roster to a stranger because their train went
@@ -399,7 +437,12 @@
     return seatIsAuto(state, c.slot) || expired(state, now);
   }
 
-  function pause(state, on) {
+  /* The host's, like start(). The clock is the one thing in a room that is
+     true for everybody at once, so anybody being able to stop it means
+     anybody can stop everybody — and this had no check at all, which nothing
+     noticed only because no client had ever sent the message. */
+  function pause(state, opts, on) {
+    if (state.host && opts.member !== state.host) return fail(state, ERR.NOT_YOUR_SEAT);
     const next = clone(state);
     next.paused = !!on;
     return ok(next);
@@ -595,6 +638,12 @@
       }),
       reactions: REACTIONS,
       isHost: !!state.host && state.host === member,
+      /* Whose room this is, so the page can say so. Derived rather than
+         stored: the host has already typed a name and already cleaned it, and
+         a second copy would be one more thing to keep in step when they
+         rename themselves mid-draft. Null until they type one — the page
+         falls back to the invite code rather than inventing a name. */
+      hostName: (state.members[state.host] || {}).name || null,
       yourSeat: seatOf(state, member),
       seats: state.seats.map(function (chair, i) {
         return {
@@ -616,6 +665,7 @@
     create: create,
     join: join,
     claimSeat: claimSeat,
+    swapSeats: swapSeats,
     leave: leave,
     rename: rename,
     start: start,

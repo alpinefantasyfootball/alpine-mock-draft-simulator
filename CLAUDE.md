@@ -1090,6 +1090,136 @@ the moment leaving a room started clearing the code out of the address: the
 way back in is the link, and the link was the case that did not work.
 `hashchange` now joins when the code differs from the one we are in.
 
+### Joining a room means taking all of its league, not part of it
+
+`adoptRoom()` compared one field:
+
+```js
+if (room.league && room.league.teams !== league.teams) { ... }
+```
+
+Ten teams either side and it adopted nothing — so a joiner kept their own
+rounds, lineup, bench, clock and **scoring**, and scoring is not a preference.
+It picks the ADP set, and the sets are not the same people: **standard 207,
+half 221, full PPR 260**. A half-PPR joiner in a full-PPR room therefore had a
+board missing 39 of the players that room could legally draft, defenses and
+kickers among them.
+
+Every one of those picks arrived at `board.find(p => p.name === rp.key)`,
+missed, and hit `if (!player) return;` — dropped without a word. That is four
+separate symptoms from one line:
+
+- **a CPU seat that appears to skip its turn**, which is a blank cell where a
+  pick should be, reported from a real draft as exactly that;
+- **a draft that can never finish on that screen.** 139 of 140 means
+  `draftOver()` stays false forever, so the Analysis tab sits on "Grade so
+  far — 3 of 10" for a draft the room completed minutes ago;
+- **a full board rebuild on every broadcast**, chat messages included, because
+  `state.picks.length !== room.picks.length` can no longer ever be false;
+- **a setup screen still describing the last room you made**, which is what it
+  felt like from the outside and has nothing obviously to do with any of the
+  above.
+
+The league is adopted whole now, `sameLeague()` compares the keys the *room*
+sent rather than ours — comparing ours means an older room missing a key
+reports a difference adopting can never close, and rebuilds forever — and a
+key that still does not resolve says so in the console instead of leaving a
+hole for somebody to find in the last round.
+
+**A silent `return` on unresolvable data is how a wrong board looks right.**
+Nothing about that draft appeared broken until the very end.
+
+### Everything the room decides has to be locked, not just the five obvious ones
+
+`LOCKABLE` named five controls. A league is far more than five, and the
+starting lineup, the bench and all thirty-eight scoring rules were left open to
+anybody in the room — each of them wired to `refreshSetup()` → `readSetup()` →
+`buildBoard()`. So a guest could rebuild their own board out from under the
+draft they were in, and nothing on screen said so: their replacement levels,
+suggestions and grade simply stopped describing everybody else's draft, and
+`adoptRoom()` cannot put it back, because a room only ever broadcasts the
+league it was created with.
+
+Locked for the **host** too. The wobble reads board position and every client
+has to agree, so the shape is fixed the moment the room exists. Changing it
+means a new room.
+
+The scoring editor is locked by sweeping `#scoringFields` rather than by name,
+and `renderScoringFields()` re-applies it — those inputs are new elements every
+time it runs, so a lock set on the previous set has already been thrown away.
+
+**A control that cannot act must not merely fail; it must not be offered.**
+Pause, Undo and "Discard draft" were all on screen for everybody in a room and
+all three were the browser deciding:
+
+- **Pause was a local flag that sent nothing.** The room went on counting and
+  handed the seat to the CPU while the header read "Paused". It is a message
+  now, and `Room.pause()` has the host check it never had — nothing had caught
+  that, because no client had ever sent the message.
+- **Undo rolled picks off the local copy** and the next broadcast put them
+  back. There is no shared undo and there should not be one. It is hidden in a
+  room.
+- **"Discard draft" discarded nobody's draft.** What it did was walk you out
+  of the room, so it says "Leave the room" there. The label was the bug.
+
+### A clock everyone is waiting on has to be a clock everyone can see
+
+`clockRunnable()` answered two questions with one condition, and one of them
+was wrong. "Should this browser be counting" is only ever your own turn in a
+solo draft — running out of it drafts for you. "Is there a countdown worth
+drawing" is true for the whole room on anybody's turn, and the page was using
+the first to answer the second. Nine managers out of ten watched a clock they
+could not see, in both places it is drawn: the header and the live board cell.
+
+`clockShowing()` is now the display question and `clockRunnable()` stays the
+authority question. In a room the countdown is **painted, never counted**:
+`startRoomTicking()` walks the last `msLeft` down between broadcasts — which
+arrive on picks and messages, not once a second, so a clock drawn only from
+those sits still for a minute and then jumps — and it never drafts. Running out
+is the room's business.
+
+`resetClock()` asks `hasRoom()` rather than `inRoom()`, because a dropped
+socket is still a room and a browser answering "no" would start counting on its
+own and draft for a seat it no longer speaks for.
+
+### Following the live pick is a default, not a rule
+
+`render()` rebuilds the board on every change — one per CPU pick — and
+`scrollBoardToLive()` re-centred every time without asking where the reader had
+put it. So scrolling up to look at round one during a run of CPU picks was
+impossible: measured at round 12, somebody at the top of the board was pulled
+back to 316px two or three times a second, for as long as they kept trying.
+
+`boardFollow` holds it. **The `scroll` event cannot be what frees it** — a
+smooth programmatic scroll fires a stream of them and the board would free
+itself on its own animation — so it listens for `wheel`, `touchstart`,
+`pointerdown` and `keydown`, which only a person produces. It resumes on its
+own when the reader scrolls back to the live pick, which needs no separate
+gesture to mean "done looking", and your own turn takes the lead back **once**
+rather than continuously, or scrolling during your own pick would be undone as
+briskly as during anybody else's.
+
+### Hiding a thing is not the same as putting it away
+
+`.draftshell > .chatslot:not(:empty)` claims a 330px column, and `:empty` is
+about child *nodes* — a slot holding a dock with `hidden` on it is not empty.
+`renderChat()` hid the dock when there was no room and left it where it was, so
+leaving a room and starting a solo draft in the same tab kept the whole column:
+**330px of nothing beside the board, and the board down from 1391px to 1061px
+to pay for it.** `placeChat()` parks it back outside the grid now.
+
+Same family as "an author `display` beats `[hidden]`", and the same lesson:
+`hidden` is a rendering hint, and layout questions are answered by where a node
+actually is.
+
+### A shared board is a board nine other people are reading
+
+The Value and Reach chips are the app reading the board for you before you
+commit, which is right in a solo mock and is scouting for the entire room in a
+shared one. In a room they come off the Players tab and are said in the ticker
+after the pick instead — to the one manager who has already made the decision.
+`marketChip()` is the single renderer for both, so the two can't drift.
+
 ### A filter is a lens, never a decision
 
 `suggestions()` is filtered by the position chip on the panel, and

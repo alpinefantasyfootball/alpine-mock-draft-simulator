@@ -215,6 +215,11 @@ export class DraftRoom {
       case "claim-seat":
         result = Room.claimSeat(this.room, { member, seat: Number(msg.seat) });
         break;
+      // The host putting the room in draft order. Two seat indices and
+      // nothing else — see the note on Room.swapSeats.
+      case "swap-seats":
+        result = Room.swapSeats(this.room, { member, a: msg.a, b: msg.b });
+        break;
       case "start":
         result = Room.start(this.room, { member }, now);
         if (!result.error) result.state = Room.announce(result.state, "The draft has begun.", now);
@@ -228,7 +233,7 @@ export class DraftRoom {
         result = Room.hostPick(this.room, { member, key: msg.key, now });
         break;
       case "pause":
-        result = Room.pause(this.room, !!msg.on);
+        result = Room.pause(this.room, { member }, !!msg.on);
         break;
       case "chat":
         result = Room.say(this.room, { member, text: msg.text, gif: msg.gif, now });

@@ -2079,6 +2079,22 @@ a.room:hover { border-color: var(--blue-line); }
 .seat.you { background: var(--t-good-bg); color: var(--t-good-fg); }
 .seat.you b { color: var(--t-good-fg); }
 
+/* The host's copy of a chair is a <button>, so that setting the draft order
+   is reachable by keyboard and announces itself, and so a phone gets a tap
+   target rather than a drag it cannot perform. Everything here is undoing
+   what a browser does to a button by default — the chair should look exactly
+   like the span it replaces until it is picked up. */
+.seat.movable {
+  font: inherit; font-size: 11px; border: 0; cursor: grab;
+  -webkit-appearance: none; appearance: none;
+}
+.seat.movable:hover { outline: 1px solid var(--line); }
+.seat.movable:focus-visible { outline: 2px solid var(--link); outline-offset: 1px; }
+
+/* Picked up. Named rather than dimmed, because on a phone this state can
+   last as long as it takes to decide where it is going. */
+.seat.held { cursor: grabbing; outline: 2px dashed var(--link); outline-offset: 1px; }
+
 /* ---------- room chat ----------
 
    The only text on this page written by somebody other than us. It is

@@ -178,6 +178,68 @@ check("jitter differs by seed", E.jitter(42, 1) === E.jitter(42, 2), false);
   check("actions do not mutate", JSON.stringify(r), snapshot);
 })();
 
+/* ---- what only the host may do ----
+
+   Three things about a room belong to whoever made it, and two of them were
+   not checked at all. Pausing had no host test — nothing caught it, because
+   no client had ever sent the message — and the clock is the one fact a room
+   holds that is true for everybody at once, so anyone able to stop it was
+   anyone able to stop everybody. */
+(function () {
+  const league = { teams: 4, rounds: 2, starters: { QB: 1, RB: 1 },
+                   flex: 0, superflex: 0, bench: 0 };
+  const T0 = 1000000;
+  let r = R.create({ league: league, seed: 1, host: "alice", clockLength: 30 });
+  r = R.join(r, { member: "alice", name: "Alice" }, T0).state;
+  r = R.join(r, { member: "bob", name: "Bob" }, T0).state;
+  r = R.join(r, { member: "cass", name: "Cass" }, T0).state;
+
+  check("a guest cannot pause the room",
+        R.pause(r, { member: "bob" }, true).error, R.ERR.NOT_YOUR_SEAT);
+  check("the host can", R.pause(r, { member: "alice" }, true).state.paused, true);
+  check("a refused pause leaves the clock alone",
+        R.pause(r, { member: "bob" }, true).state.paused, false);
+
+  // ---- draft order, which is seats and never names ----
+  check("a guest cannot set the draft order",
+        R.swapSeats(r, { member: "bob", a: 0, b: 1 }).error, R.ERR.NOT_YOUR_SEAT);
+  check("a seat that does not exist is refused",
+        R.swapSeats(r, { member: "alice", a: 0, b: 99 }).error, R.ERR.NO_SUCH_SEAT);
+
+  const swapped = R.swapSeats(r, { member: "alice", a: 0, b: 2 }).state;
+  check("the chairs change places",
+        swapped.seats.map((s) => s.name), ["Cass", "Bob", "Alice", null]);
+
+  /* The member record carries a chair of its own and it is what a
+     reconnection looks itself up by, so leaving it behind would send somebody
+     who went through a tunnel back to the seat they used to have. */
+  check("the member records follow the chairs",
+        [swapped.members.alice.seat, swapped.members.cass.seat], [2, 0]);
+  check("a member who did not move is untouched", swapped.members.bob.seat, 1);
+  check("and the room agrees with itself",
+        [R.seatOf(swapped, "alice"), R.seatOf(swapped, "cass")], [2, 0]);
+
+  check("a swap with itself is allowed and changes nothing",
+        JSON.stringify(R.swapSeats(r, { member: "alice", a: 1, b: 1 }).state.seats),
+        JSON.stringify(r.seats));
+
+  /* Lobby only. Once a pick exists the snake order is what those picks mean,
+     so moving a chair afterwards would rewrite whose they were. */
+  const started = R.start(r, { member: "alice" }, T0).state;
+  check("the order cannot be changed once drafting",
+        R.swapSeats(started, { member: "alice", a: 0, b: 1 }).error, R.ERR.NOT_IN_LOBBY);
+
+  // ---- a room says whose it is, without saying who anybody is ----
+  const view = R.viewFor(r, "bob", T0);
+  check("the room is named after its host", view.hostName, "Alice");
+  check("naming it leaks no member id", JSON.stringify(view).indexOf('"alice"') < 0, true);
+
+  let nameless = R.create({ league: league, seed: 1, host: "alice" });
+  nameless = R.join(nameless, { member: "alice", name: null }, T0).state;
+  check("a host who typed no name gives the room none",
+        R.viewFor(nameless, "alice", T0).hostName, null);
+})();
+
 /* ---- names, and the things hanging off a message ----
 
    All of this is drawn on somebody else's screen from something somebody

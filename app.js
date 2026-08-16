@@ -860,7 +860,13 @@ function skipSim() {
    only moves when the room says it did. That is the whole
    reason two people cannot take the same player.            */
 
+/* "The socket is up right now" and "we are in a room" are different questions,
+   and answering the second with the first is what once started a private solo
+   draft on the host's phone while everybody else waited. inRoom() is the one
+   to ask before *sending* anything; hasRoom() is the one to ask before
+   deciding what this browser is allowed to decide for itself. */
 function inRoom() { return typeof Live !== "undefined" && Live.active(); }
+function hasRoom() { return typeof Live !== "undefined" && !!Live.room(); }
 
 /* The host's browser is the CPU for every empty chair. The worker has no
    board, so the opinion is worked out here, where it already lives, and sent
@@ -965,28 +971,86 @@ function driveMyAutopilot() {
 /* Take the room's word for it. The room sends a pick list of names; this
    turns them back into board players. Rebuilt only when the count differs,
    because a state arrives on every seat change and every chat message too. */
+/* Does the room's league match ours, key for key?
+
+   Only the keys the *room* sent are compared. A room made by an older build
+   may not carry all of them, and Object.assign leaves ours in place for those
+   — so comparing our keys instead would report a difference that adopting can
+   never close, and rebuild the board on every broadcast forever. */
+function sameLeague(theirs, ours) {
+  return Object.keys(theirs).every(function (key) {
+    return JSON.stringify(theirs[key]) === JSON.stringify(ours[key]);
+  });
+}
+
 function adoptRoom(room) {
   if (!room) return;
 
-  // Joining someone else's room means drafting their league, not yours.
-  if (room.league && room.league.teams !== league.teams) {
-    Object.assign(league, room.league);
+  /* Joining someone else's room means drafting their league, not yours — all
+     of it. This compared team counts alone, so a room that differed in
+     anything else left the joiner on their own settings, and one of those
+     settings decides which players exist.
+
+     `scoring` picks the ADP set, and the sets are not the same people: 221 in
+     half PPR against 260 in full. So a half-PPR joiner in a full-PPR room had
+     a board missing 39 of the players that room could draft — including
+     defenses and kickers, which is the last round. Every one of them arrived
+     below as a key nothing matched and was dropped without a word, which
+     reads on the board as a CPU seat that skipped its turn, and leaves the
+     draft permanently one pick short of finishing: draftOver() never goes
+     true, so the Analysis tab is stuck on "Grade so far" for a draft the room
+     finished minutes ago.
+
+     The board has to be rebuilt for any of it, not only for scoring —
+     replacement level, tiers and every projection are worked out from the
+     lineup and the scoring table — and rebuilding clears the drafted flags,
+     so the picks below have to be re-applied whether or not the count moved. */
+  let rebuilt = false;
+
+  if (room.league && !sameLeague(room.league, league)) {
+    Object.assign(league, JSON.parse(JSON.stringify(room.league)));
     buildBoard();
+    rebuilt = true;
+
+    /* The setup screen is drawn from `league` and does not read it again on
+       its own, so without this it goes on showing the shape of whatever room
+       you were in last — which is what a joiner saw instead of the room they
+       had just walked into.
+
+       lastFormat moves with it. readSetup() treats a changed format as "the
+       user just picked a new one" and resets the reception rule to that
+       format's default, which would throw away the host's edited scoring the
+       next time anything on the screen was touched. */
+    fillSetupControls();
+    renderScoringFields();
+    lastFormat = league.scoring;
   }
 
   if (room.yourSeat >= 0) state.mySlot = room.yourSeat;
   state.clockLength = room.clockLength;
   state.seed = room.seed;
   state.started = room.status !== "lobby";
+  // The room's, not ours. Pausing is the host's and arrives back like every
+  // other fact about a shared draft.
+  state.paused = !!room.paused;
 
-  if (state.picks.length !== room.picks.length) {
+  if (rebuilt || state.picks.length !== room.picks.length) {
     applyJitter();
     board.forEach(function (p) { p.drafted = false; });
     state.picks = [];
 
+    /* A key nothing matches used to return quietly, which is how the bug
+       above stayed invisible for a whole draft. It should not be reachable
+       now that the league is adopted whole, and if it ever is again the board
+       is wrong in a way nobody can see — so it says so once per pick rather
+       than leaving a hole for somebody to find in the last round. */
     room.picks.forEach(function (rp) {
       const player = board.find((p) => p.name === rp.key);
-      if (!player) return;      // a name the local build does not carry
+      if (!player) {
+        console.warn("Room pick " + rp.overall + " (" + rp.key +
+                     ") is not on this board — the leagues have drifted apart.");
+        return;
+      }
       player.drafted = true;
       state.picks.push({
         overall: rp.overall, round: rp.round, slot: rp.slot, player: player
@@ -1271,6 +1335,9 @@ function renderChat() {
   if (!room) {
     dock.hidden = true;
     $("chatFab").hidden = true;
+    // Moved out, not just hidden. See placeChat() — a hidden dock left in the
+    // draft slot keeps its column and takes 330px off the board.
+    placeChat();
     return;
   }
   dock.hidden = false;
@@ -1404,7 +1471,23 @@ function renderChatMeta(room) {
    every broadcast would make it unusable. */
 function placeChat() {
   const dock = $("chatDock");
-  const slot = $(state.started && route() === "draft" ? "draftChatSlot" : "lobbyChatSlot");
+
+  /* Parked outside the draft grid when there is no room to talk in, and this
+     is the whole of a bug that made a solo draft look wrong.
+
+     `.draftshell > .chatslot:not(:empty)` claims a 330px column, and `:empty`
+     is about child *nodes* — a slot holding a dock with `hidden` on it is not
+     empty. So leaving a room and starting a solo draft in the same tab left
+     the dock behind, hiding it and keeping its column: 330px of nothing beside
+     the board, and the board itself down from 1391px to 1061px to pay for it.
+
+     Hiding a thing is not the same as putting it away. Same family as the
+     rule about `[hidden]` losing to an author `display`, and the same fix —
+     make the DOM say what is actually true. */
+  const slot = !hasRoom()
+    ? $("view-app")
+    : $(state.started && route() === "draft" ? "draftChatSlot" : "lobbyChatSlot");
+
   if (slot && dock.parentNode !== slot) slot.appendChild(dock);
 }
 
@@ -1428,6 +1511,18 @@ function onRoomChange() {
   render();
   driveRoomCPUs();
   driveMyAutopilot();
+
+  /* The room's countdown, restarted against the figure that just arrived —
+     adoptRoom() has the number, this is only what makes it move between
+     broadcasts.
+
+     Last, and deliberately below the two drivers. Those are the liveness of
+     the entire room: the host's browser is what plays every empty chair, and
+     it runs on the broadcast. Anything new placed above them is a new way for
+     one thrown exception to stop a draft ten people are sitting in — which is
+     the shape of the deadlock at pick 86, and painting a clock is not worth
+     re-opening it. */
+  resetClock();
 }
 
 /* Somebody is typing. Recorded with an expiry rather than a flag, so a
@@ -1696,8 +1791,24 @@ function stopClock() {
   if (state.timerId) { clearInterval(state.timerId); state.timerId = null; }
 }
 
+/* Two different questions that used to be one.
+
+   `clockRunnable()` is "should this browser be counting" — and only your own
+   turn in a solo draft ever is, because that is the only countdown a solo
+   draft has and running out of it drafts for you.
+
+   `clockShowing()` is "is there a countdown worth drawing", which in a room is
+   true on everybody's turn. The room already sends msLeft to every client and
+   adoptRoom() already mirrors it into state.timeLeft; the page simply refused
+   to draw it unless the seat was yours, so nine people out of ten watched a
+   clock they could not see. */
 function clockRunnable() {
-  return state.clockLength > 0 && !draftOver() && isMyTurn();
+  return state.clockLength > 0 && !draftOver() && !hasRoom() && isMyTurn();
+}
+
+function clockShowing() {
+  if (!state.clockLength || draftOver() || !state.started) return false;
+  return hasRoom() || isMyTurn();
 }
 
 // Start counting down from whatever is on the clock right now.
@@ -1724,23 +1835,58 @@ function startTicking() {
    the panel on screen, because getElementById simply will not find it. */
 function tickBoardClock() {
   const cell = $("boardClock");
-  if (cell && clockRunnable()) cell.textContent = clockText();
+  if (cell && clockShowing()) cell.textContent = clockText();
+}
+
+/* A room's clock, painted rather than counted.
+
+   The room is the authority and sends msLeft with every broadcast — but a
+   broadcast happens on a pick or a message, not once a second, so a clock
+   drawn only from those sits still for a minute and then jumps. This walks
+   the last known figure down in between and is corrected by the next
+   broadcast. It never drafts: running out is the room's business, and the
+   host's browser is what answers for it. */
+function startRoomTicking() {
+  stopClock();
+  state.timerId = setInterval(function () {
+    if (state.timeLeft > 0) state.timeLeft--;
+    renderHeader();
+    tickBoardClock();
+  }, 1000);
 }
 
 // Put a fresh clock on the board. Called after every pick.
 function resetClock() {
   stopClock();
-  // The room counts for everyone in a shared draft, and a second timer
-  // ticking locally would disagree with it within a few seconds.
-  if (inRoom()) return;
+
+  /* The room counts for everyone in a shared draft, and a second timer
+     deciding things locally would disagree with it within a few seconds. So
+     nothing here starts a countdown that can act — only one that draws.
+
+     hasRoom() rather than inRoom(): a dropped socket is still a room, and a
+     browser that answered "no" to that would start counting on its own and
+     draft for a seat it no longer speaks for. */
+  if (hasRoom()) {
+    if (clockShowing() && !state.paused) startRoomTicking();
+    return;
+  }
+
   if (!clockRunnable()) return;
   state.timeLeft = state.clockLength;
   if (!state.paused) startTicking();
 }
 
-// Pausing only stops the countdown. You can still draft while
-// paused, and the pause survives until you turn it back off.
+/* Pausing only stops the countdown. You can still draft while paused, and the
+   pause survives until you turn it back off.
+
+   In a room it is a message, not a flag. It used to be neither: the local
+   value flipped, the header read "Paused", and the room went on counting
+   down and handed the seat to the CPU underneath it. The room refuses it from
+   anyone but the host, and the answer comes back as room.paused like every
+   other fact about a shared draft — so nothing is set here at all. */
 function togglePause() {
+  if (hasRoom()) { Live.pause(!state.paused); return; }
+
   state.paused = !state.paused;
   if (state.paused) {
     stopClock();
@@ -1754,12 +1900,34 @@ function togglePause() {
 // Pause, undo and auto-draft are all meaningless once the last pick is in.
 // Rather than leave four dead controls sitting there, the bar becomes the
 // one thing you actually want next.
+/* Three of these were the browser deciding things it does not get to decide
+   in a room, and all three were offered to everybody in it.
+
+   - Undo rolls picks off the local copy. In a room the local copy is a
+     drawing of somebody else's record, so it un-drafted players for you and
+     the next broadcast put them straight back. There is no shared undo and
+     there should not be one: a draft ten people are in is not a thing one of
+     them reverses. It goes away.
+   - Pause is the host's, and it is now a message rather than a local flag —
+     see togglePause(). Everyone else sees the state it produces.
+   - "Discard draft" did not discard anybody's draft but yours, and what it
+     actually did in a room was walk you out of it. The label is the bug: it
+     reads as destroying a shared draft and it reads as an act, so it says
+     what it does. */
 function renderActionBar() {
   const done = draftOver();
+  const room = hasRoom();
+  const host = room && !!Live.room().isHost;
+
   $("newDraftBtn").hidden = !done;
-  $("pauseBtn").hidden    = done;
-  $("undoBtn").hidden     = done;
+  $("pauseBtn").hidden    = done || (room && !host);
+  $("undoBtn").hidden     = done || room;
   $("autoBtn").hidden     = done;
+
+  const quit = $("restartBtn");
+  quit.textContent = room ? "Leave the room" : "Discard draft";
+  quit.classList.toggle("danger", !room);
+
   if (!done) { renderPauseButton(); renderAutoButton(); }
 }
 
@@ -2589,10 +2757,28 @@ function renderHeader() {
     }
   } else {
     appbar.classList.add("live");
-    statusLine.textContent = teamLabel(pickInfo(overall).slot);
-    pickLabel.textContent  = "Pick " + pickCode(overall) + " (" + overall + " Overall)";
-    rightLabel.textContent = "Your turn in";
-    rightValue.textContent = picksUntilMyTurn();
+    pickLabel.textContent = "Pick " + pickCode(overall) + " (" + overall + " Overall)";
+
+    /* Somebody else is up. Solo that is a CPU with no countdown of its own, so
+       the useful number is how long until you are back; in a room there is a
+       real clock running on a real person and it belongs on screen for
+       everybody, not only for whoever it is running against.
+
+       "Your turn in" moves onto the status line rather than being dropped —
+       it is the other thing worth knowing while you wait, and the right-hand
+       block only has room for one. */
+    const gap = picksUntilMyTurn();
+
+    if (hasRoom() && clockShowing()) {
+      statusLine.textContent = teamLabel(pickInfo(overall).slot) +
+        (gap ? " · you are in " + gap : "");
+      rightLabel.textContent = state.paused ? "Paused" : "Time left";
+      rightValue.textContent = clockText();
+    } else {
+      statusLine.textContent = teamLabel(pickInfo(overall).slot);
+      rightLabel.textContent = "Your turn in";
+      rightValue.textContent = gap;
+    }
   }
 }
 
@@ -2901,14 +3087,8 @@ function renderPlayers() {
     const scoreCell = score === null ? "&mdash;" : Math.round(score);
 
     // Where the model and the market disagree enough to be worth saying out
-    // loud. Only shown at the threshold, because a chip on every row is a
-    // chip on no row.
-    const gap = marketGap(p);
-    const gapChip = gap >= MARKET_GAP
-      ? `<span class="chip val">Value &middot; projects ${posLabel(p.pos)}${p.projPosRank}</span>`
-      : gap <= -MARKET_GAP
-        ? `<span class="chip reach">Reach &middot; projects ${posLabel(p.pos)}${p.projPosRank}</span>`
-        : "";
+    // loud. Off the board entirely in a room — see marketChip().
+    const gapChip = hasRoom() ? "" : marketChip(p);
 
     const cells = PLAYER_COLS.map(function (c) {
       if (c.text) {
@@ -2982,7 +3162,7 @@ function renderBoard() {
         // The cell on the clock is the clock. Looking away from where the
         // pick lands to find out how long is left is the thing this removes.
         html += `<div class="cell empty ${isNow ? "now" : ""}"${isNow ? ' id="boardClock"' : ""}>${
-          isNow && clockRunnable() ? clockText() : r + "." + String(s + 1).padStart(2, "0")
+          isNow && clockShowing() ? clockText() : r + "." + String(s + 1).padStart(2, "0")
         }</div>`;
       }
     }
@@ -2999,9 +3179,32 @@ function renderBoard() {
    The media query is asked here rather than left to the stylesheet, because
    a prefers-reduced-motion rule does not apply to a programmatic scroll that
    asks for "smooth" — the same reason the score arrows check it themselves. */
+/* Following the live pick is the default, and it stays the default until the
+   reader disagrees with it.
+
+   Until now that disagreement lasted about 350ms. render() rebuilds the board
+   on every change — one per CPU pick — and this re-centred every time with
+   nothing asked about where the reader had put it, so scrolling up to check
+   round one during a run of CPU picks was simply not possible: measured at
+   round 12, somebody sitting at the top of the board was pulled back to 316px
+   two or three times a second, for as long as they kept trying.
+
+   Only real input frees it. A scroll event cannot be used for this — a smooth
+   programmatic scroll fires a stream of them and would free the board on its
+   own animation — so it listens for the things only a person does. */
+const boardFollow = { on: true, atPick: -1 };
+
+function freeBoardScroll() { boardFollow.on = false; }
+
 function scrollBoardToLive() {
   const scroller = $("boardScroll");
   if (!scroller) return;
+
+  /* Your own turn takes the lead back, once. Once rather than continuously,
+     or scrolling up to check a bye week *during your own pick* would be undone
+     as briskly as during anybody else's — the same bug wearing your name. */
+  if (isMyTurn() && boardFollow.atPick !== state.picks.length) boardFollow.on = true;
+  boardFollow.atPick = state.picks.length;
 
   /* The cell on the clock, or failing that the last one of mine.
 
@@ -3036,8 +3239,14 @@ function scrollBoardToLive() {
 
   /* Already there. Worth checking, because render() rebuilds the board on
      every change and asking for a scroll we are already at still starts an
-     animation — and an animation every time a CPU picks is the jitter. */
-  if (Math.abs(target - scroller.scrollTop) < 4) return;
+     animation — and an animation every time a CPU picks is the jitter.
+
+     It is also how following resumes on its own: scrolling back to the live
+     pick is the reader saying they are done looking, and it needs no separate
+     gesture to mean that. */
+  if (Math.abs(target - scroller.scrollTop) < 4) { boardFollow.on = true; return; }
+
+  if (!boardFollow.on) return;
 
   const smooth = !(window.matchMedia &&
                    window.matchMedia("(prefers-reduced-motion: reduce)").matches);
@@ -3200,6 +3409,26 @@ function currentRun() {
   return { pos: top, count: counts[top] };
 }
 
+/* Where the model and the market disagree enough to be worth saying out loud.
+   Only at the threshold, because a chip on every row is a chip on no row.
+
+   Solo it sits on the player row, which is where you want it: it is the app
+   reading the board for you before you commit. In a room the same chip on the
+   same shared list is the app reading the board for *everybody*, including the
+   nine people who have not thought about that player yet — so it comes off the
+   board there and is said in the ticker instead, after the pick, to the one
+   manager who has already made the decision. */
+function marketChip(player) {
+  const gap = marketGap(player);
+  if (gap >= MARKET_GAP) {
+    return `<span class="chip val">Value &middot; projects ${posLabel(player.pos)}${player.projPosRank}</span>`;
+  }
+  if (gap <= -MARKET_GAP) {
+    return `<span class="chip reach">Reach &middot; projects ${posLabel(player.pos)}${player.projPosRank}</span>`;
+  }
+  return "";
+}
+
 function renderTicker() {
   const ticker = $("ticker");
   const pick = state.lastPick;
@@ -3223,6 +3452,7 @@ function renderTicker() {
         <span class="badge ${pick.player.pos}">${posLabel(pick.player.pos)}</span>
         <span class="tick-tm">${pick.player.team} &middot; Bye ${pick.player.bye}</span>
         ${injBadge(pick.player)}
+        ${pick.slot === state.mySlot ? marketChip(pick.player) : ""}
       </div>
     </div>
     ${runNote}
@@ -4136,6 +4366,12 @@ function renderScoringFields() {
    Sleeper's projections are coarser, so anything marked <i class="past">past only</i>
    scores a player's record correctly and adds nothing to his 2026 projection
    &mdash; which is what this board is ranked on.</p>`;
+
+  /* These inputs are new elements every time, so a lock set on the last set of
+     them has just been thrown away. Re-applied here rather than at the call
+     sites: this function is called from five places and one of them forgetting
+     is a scoring editor that quietly works again in somebody else's room. */
+  if (typeof Live !== "undefined" && Live.room()) lockScoring(true);
 }
 
 /* Read off the rules rather than off league.scoring, and deliberately: the
@@ -4287,8 +4523,58 @@ $("resetScoring").addEventListener("click", function () {
 
 /* The controls a room owns once you are in one. Named here so locking and
    unlocking cannot drift apart — the bug that shipped first was exactly
-   that: one path set them, the other returned before clearing them. */
-const LOCKABLE = ["teamCount", "roundCount", "scoring", "pickClock", "draftSlot"];
+   that: one path set them, the other returned before clearing them.
+
+   This was five controls, and the shape of a league is far more than five.
+   The starting lineup, the bench and all thirty-eight scoring rules were left
+   open, and every one of them runs refreshSetup() → readSetup() → buildBoard()
+   — so a manager who had joined somebody else's room could rebuild their own
+   board out from under it. Nothing about it looked wrong on screen: their
+   replacement levels, suggestions and grade simply stopped describing the
+   draft everybody else was in, and adoptRoom() could not put it back, because
+   a room only broadcasts the league it was created with.
+
+   Locked for the host too, not only for joiners. The CPU wobble reads a
+   player's position on the board and every client has to reach the same
+   answer, so the shape is fixed the moment the room exists — for whoever made
+   it as much as for whoever joined. Changing it means a new room. */
+const LOCKABLE = ["teamCount", "roundCount", "scoring", "pickClock", "draftSlot",
+                  "startFLEX", "startSFLEX", "benchCount"]
+  .concat(POSITIONS.map((pos) => "start" + pos));
+
+/* The scoring editor is thirty-eight fields drawn by renderScoringFields(),
+   so it is locked by sweeping it rather than by name. Re-queried each time,
+   because those inputs are rebuilt whenever a rule changes. */
+function lockScoring(locked) {
+  $("scoringFields").querySelectorAll("input, select").forEach(function (field) {
+    field.disabled = locked;
+  });
+  $("resetScoring").disabled = locked;
+}
+
+/* What a room is called: its host, or its invite code until they have typed a
+   name. Nothing is stored for it — the room derives it from the host's member
+   record, which is a name they have already given and the room has already
+   cleaned, so it follows them if they rename themselves.
+
+   The box's own label carries it, rather than a heading of its own. That label
+   is the first line of the panel and it is where a joiner was reading the
+   settings of whatever room they had last made, which is what made a room feel
+   like the wrong one. */
+function roomTitle(room) {
+  if (!room) return "Draft with friends";
+  if (room.hostName) return room.hostName + "'s Draft Room";
+  return Live.state().code ? "Draft Room " + Live.state().code : "The Draft Room";
+}
+
+/* Setting the draft order. Which seat the host has picked up, and nothing
+   else — the swap itself is the room's to perform, and the seat list only
+   moves when it says so, exactly as the board does for a pick.
+
+   Declared above renderInvite() rather than beside its handlers, because a
+   `const` is in its temporal dead zone until the line runs and renderInvite()
+   reads this one. */
+const seatOrder = { held: null };
 
 const STATUS_TEXT = {
   connecting:   "Connecting…",
@@ -4325,10 +4611,14 @@ function renderInvite() {
   // Locking is undone here as well as set below, because leaving a room
   // comes through this branch and an early return left every control
   // disabled with nothing on screen explaining why.
+  const label = $("inviteBox").querySelector("label");
+
   if (status === "off") {
     box.hidden = true;
     startRow.hidden = false;
+    label.textContent = roomTitle(null);
     LOCKABLE.forEach(function (id) { $(id).disabled = false; });
+    lockScoring(false);
     $("startBtn").disabled = false;
     $("startBtn").textContent = "Start your draft";
     return;
@@ -4336,11 +4626,17 @@ function renderInvite() {
 
   startRow.hidden = true;
   box.hidden = false;
+  label.textContent = roomTitle(room);
   $("inviteLink").value = Live.link() || "";
 
   const reason = Live.reason();
   let text = STATUS_TEXT[status] || "";
   if (reason && REJECT_TEXT[reason]) text = REJECT_TEXT[reason];
+
+  /* Draft order is the host's, and only while the room is still filling up.
+     Once a pick exists the snake order is what those picks *mean*, so moving a
+     chair would rewrite whose they were. */
+  const canOrder = !!room && room.isHost && room.status === "lobby";
 
   if (status === "open" && room) {
     const taken = room.seats.filter((s) => s.taken).length;
@@ -4349,6 +4645,11 @@ function renderInvite() {
         " seats will be drafted by the CPU unless somebody takes them."
       : taken + " of " + room.seats.length + " seats taken. The rest are CPU.";
     if (room.status !== "lobby") text = "Drafting. " + text;
+    if (canOrder) {
+      text += seatOrder.held === null
+        ? " Drag a seat, or tap two, to set the draft order."
+        : " Now tap the seat to swap it with.";
+    }
   }
   $("inviteStatus").textContent = text;
 
@@ -4356,11 +4657,26 @@ function renderInvite() {
      message is. This list used to be safe by accident — every chair said
      "Manager" or "CPU", both of which we wrote — and stopped being the moment
      names became real. Names are not a display detail; they are the second
-     piece of text on this page that somebody else wrote. */
+     piece of text on this page that somebody else wrote.
+
+     For the host it is a row of buttons rather than a row of spans. Draggable
+     for a mouse, and tap-one-then-tap-another for a phone — the host is very
+     often on one, and HTML5 drag and drop does not exist on touch at all, so
+     the drag alone would be a feature that works on the machine it was built
+     on and nowhere else. Both paths end at the same swap. */
   $("seatList").innerHTML = !room ? "" : room.seats.map(function (s) {
     const who = s.you ? "You" : s.taken ? escHtml(s.name || "Manager") : "CPU";
-    return `<span class="seat ${s.you ? "you" : s.taken ? "human" : ""}">
-        <b>${s.index + 1}</b>${who}</span>`;
+    const kind = s.you ? "you" : s.taken ? "human" : "";
+
+    if (!canOrder) {
+      return `<span class="seat ${kind}"><b>${s.index + 1}</b>${who}</span>`;
+    }
+
+    const held = seatOrder.held === s.index;
+    return `<button type="button" class="seat ${kind} movable${held ? " held" : ""}"
+        draggable="true" data-seat="${s.index}" aria-pressed="${held}"
+        aria-label="Seat ${s.index + 1}, ${who}. Tap to move.">
+        <b>${s.index + 1}</b>${who}</button>`;
   }).join("");
 
   /* The room owns the shape once you are in one, so the controls that would
@@ -4374,6 +4690,7 @@ function renderInvite() {
      offering to start a draft, and the button meant the solo one. */
   const locked = !!room;
   LOCKABLE.forEach(function (id) { $(id).disabled = locked; });
+  lockScoring(locked);
 
   const startBtn = $("startBtn");
   if (!locked) {
@@ -4415,6 +4732,72 @@ $("createRoomBtn").addEventListener("click", function () {
   // own share and bookmark both do the right thing.
   location.hash = "#/draft?room=" + code;
   joinRoom(code, true);
+});
+
+function seatAt(target) {
+  const button = target && target.closest && target.closest(".seat[data-seat]");
+  return button ? Number(button.dataset.seat) : null;
+}
+
+function swapSeatsTo(index) {
+  if (index === null || seatOrder.held === null) return;
+  if (index !== seatOrder.held) Live.swapSeats(seatOrder.held, index);
+  seatOrder.held = null;
+  // Drawn now rather than waiting for the broadcast, so the seat lets go under
+  // the finger. A rejected swap is corrected by the state that follows.
+  renderInvite();
+}
+
+/* Delegated from document, because renderInvite() rebuilds every one of these
+   buttons on every broadcast — a chat message included — and a listener
+   attached to one of them would be thrown away seconds after it was set. */
+document.addEventListener("click", function (e) {
+  const index = seatAt(e.target);
+  if (index === null) return;
+
+  if (seatOrder.held === null || seatOrder.held === index) {
+    // Tapping the held seat again puts it back down rather than swapping it
+    // with itself, which is the only way out of a tap you did not mean.
+    seatOrder.held = seatOrder.held === index ? null : index;
+    renderInvite();
+    return;
+  }
+  swapSeatsTo(index);
+});
+
+document.addEventListener("dragstart", function (e) {
+  const index = seatAt(e.target);
+  if (index === null) return;
+  seatOrder.held = index;
+  /* Firefox will not start a drag at all unless something is set, and the
+     seat index goes in as well as being held above so a drag that somehow
+     outlives this page's state still knows what it is carrying. */
+  if (e.dataTransfer) {
+    e.dataTransfer.effectAllowed = "move";
+    try { e.dataTransfer.setData("text/plain", String(index)); } catch (err) {}
+  }
+  renderInvite();
+});
+
+// A drop target has to say it is one, and the way to say so is to cancel the
+// dragover. Without this the drop event never fires and nothing happens.
+document.addEventListener("dragover", function (e) {
+  if (seatOrder.held === null || seatAt(e.target) === null) return;
+  e.preventDefault();
+  if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
+});
+
+document.addEventListener("drop", function (e) {
+  const index = seatAt(e.target);
+  if (index === null || seatOrder.held === null) return;
+  e.preventDefault();
+  swapSeatsTo(index);
+});
+
+// A drag abandoned over the page, or off it. The seat stays picked up for the
+// tap path, so this only tidies the drag's own visual state.
+document.addEventListener("dragend", function (e) {
+  if (seatAt(e.target) !== null) renderInvite();
 });
 
 $("copyLinkBtn").addEventListener("click", function () {
@@ -4855,6 +5238,20 @@ window.addEventListener("hashchange", function () {
 });
 
 $("pauseBtn").addEventListener("click", togglePause);
+
+/* Directly on the scroller rather than delegated from document, and that is
+   safe here for once: render() replaces #boardGrid's innerHTML, never
+   #boardScroll itself, so this element outlives every rebuild.
+
+   Three events because there are three ways to move a scroller by hand, and
+   `scroll` is not one that can be used — see the note on boardFollow. Passive,
+   because none of them is being cancelled and a non-passive wheel listener on
+   a scroll container costs a frame. */
+["wheel", "touchstart", "pointerdown"].forEach(function (event) {
+  $("boardScroll").addEventListener(event, freeBoardScroll, { passive: true });
+});
+// Arrow keys, Page Up and Home all scroll a focused container too.
+$("boardScroll").addEventListener("keydown", freeBoardScroll);
 $("undoBtn").addEventListener("click", undo);
 $("autoBtn").addEventListener("click", autoDraftRest);
 $("restartBtn").addEventListener("click", restart);

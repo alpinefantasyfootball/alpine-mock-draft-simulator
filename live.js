@@ -335,7 +335,15 @@
     pick:     function (key) { return send({ type: "pick", key: key }); },
     autoPick: function (key) { return send({ type: "auto", key: key }); },
     claimSeat:function (seat){ return send({ type: "claim-seat", seat: seat }); },
+    // Draft order, set by the host in the lobby. Indices only: this end has
+    // never been told anybody else's member id and does not need one.
+    swapSeats:function (a, b){ return send({ type: "swap-seats", a: a, b: b }); },
     start:    function ()    { return send({ type: "start" }); },
+    /* The room owns the countdown, so pausing it is a message like any other.
+       It used to be a purely local flag, which stopped nothing: the room went
+       on counting and handed the seat to the CPU while the header said
+       "Paused". The room refuses it from anyone but the host. */
+    pause:    function (on)  { return send({ type: "pause", on: !!on }); },
     chat: function (text, gif) { return send({ type: "chat", text: text, gif: gif || null }); },
     react: function (id, emoji) { return send({ type: "react", id: id, emoji: emoji }); },
 
