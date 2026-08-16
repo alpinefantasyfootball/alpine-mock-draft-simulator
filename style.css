@@ -1366,6 +1366,12 @@ tr.drafted .ovr { color: var(--ink-light); }
   color: var(--ink-light) !important;
 }
 
+/* A signal we decline to give, in place of the meter. No bar, because there is
+   no value to draw; the label and the reason carry it. --ink-light is the
+   tertiary tone and clears 4.5:1 on --card in both themes. */
+.sig.unrated .sig-head span { color: var(--ink-light); font-weight: 600; }
+.sig.unrated .sig-why { margin-top: 4px; }
+
 /* ---------- latest news ----------
 
    Sits under Our read and is deliberately quieter than it: ours is the model

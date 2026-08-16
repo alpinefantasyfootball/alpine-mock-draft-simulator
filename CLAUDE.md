@@ -320,6 +320,74 @@ printed, so a season Sleeper declines to serve is visible in the run rather
 than silently absent. Even if every one comes back empty the list still earns
 its place, because next year's run finds this year in it.
 
+## Grading the projection against itself
+
+`pp` in `stats.js` holds what we forecast for 2023, 2024 and 2025, beside what
+actually happened in `s`. That made the only question worth asking of a
+projection answerable for the first time.
+
+**Check the archive is preseason before believing any of it.** Sleeper's
+endpoint takes a year, and a forecast updated *during* a season would grade
+itself brilliantly. It is not: every player who ended up playing four games or
+fewer was still projected for a full eighteen, in all three seasons without
+exception. That test is the first thing to re-run if the archive ever moves.
+
+**The projection beats repeating last season, everywhere.** Against actual
+points: r 0.83 / 0.79 / 0.72 for 2023 / 2024 / 2025, against 0.58 / 0.57 /
+0.59 for last year's actuals used as this year's forecast. So the board is
+built on something better than the naive alternative, which was previously an
+assumption. Note the population is players on *today's* board, so anyone who
+washed out of the league is missing and both predictors are flattered.
+
+**Availability is most of the error, and it cuts both ways.** Players who
+managed 15+ games: r 0.873. Under 15: r 0.617. And for the healthy group the
+projection runs **20 points light** — a forecast is an expected value that
+prices in injury risk, so it must undershoot everyone who avoids it. A healthy
+season routinely beats its own projection and that is not a miss.
+
+**The top of the Juke score is trustworthy and the floor is not a sentence.**
+Projected 90+ finished at a median of 83, with 80% clearing 50. Of the
+projected zeros, 68% finished at zero — so a third climbed out, which matches
+the 35% measured from actuals alone by a different route.
+
+### Kickers and defenses are not ranked, and that is measured
+
+The projected order for these two has no relationship to the finishing order:
+**K at r 0.37, −0.09, 0.57 and DST at 0.32, 0.06, 0.25**, against 0.58 to 0.73
+for every other position. One kicker season came out backwards.
+
+**There is a mechanical reason and it cannot be repaired from the feed.**
+`PROJECTED_KEYS` already records that Sleeper forecasts only `fgm_40_49` and
+`fgm_50_59` — **no field goal under forty yards at all**, which was 253 of the
+406 made in 2025. Jason Myers was projected 81 points and scored 195. There is
+no total FG count in the feed to subtract from, so the short kicks cannot be
+recovered, and inventing them would be this pipeline recording an opinion.
+
+This is the same family as the `fgm_50p` bug `reconcile()` fixes, at the other
+end of the range, and the difference is that this one has no fix.
+
+**About half the bias cancels in value over replacement** — a kicker and his
+replacement move together — and none of the ranking noise does. No arithmetic
+repairs r = −0.09, which is why the answer is to withhold the number rather
+than adjust it.
+
+**`overallScore()` returns null for `UNRANKED_POSITIONS`,** which flows exactly
+as a missing projection already does: a dash on the sheet and in the table, and
+`modelMultipliers()` leaving the player where the market put him rather than
+pushing him down for the want of a score.
+
+**Withholding has to be complete or it is worse than not withholding.** A
+sheet that prints a dash in the strip and then says "K1 on the projection"
+three lines below has told the reader to distrust a number and then argued
+from it. `ourRead()` and the method note both change for these positions, and
+the meter is *replaced* rather than fed a null — left alone it renders an empty
+bar labelled "Very Low", which is a verdict, and further from the truth than
+the number it replaced.
+
+**The grade is deliberately untouched.** It runs on `aboveReplacement()` and a
+kicker really did score those points. How a finished roster performed and how
+well a forecast ranks are different questions, and only the second one failed.
+
 ## Team colour
 
 One mark per club, in `TEAM_ACCENT`, used in exactly two places on the player
@@ -1413,13 +1481,14 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   fact in two places and would have failed as a suite quietly testing a server
   nobody was running.
 
-- **End to end: `npm install` once, then `npx playwright test`.** Thirty-six
-  tests, about twelve minutes, and it starts the static server and `wrangler dev`
+- **End to end: `npm install` once, then `npx playwright test`.** Forty-two
+  tests, about fourteen minutes, and it starts the static server and `wrangler dev`
   itself. It drives the real pages in a real browser — a solo draft at both
   shapes, a full two-manager room draft to completion, a dropped socket
   reconnecting, leaving and rejoining, the phone layout, what the player sheet
   says about the Juke score, that every club's colour is drawn where no text
-  can land on it, and that a news payload cannot put script in the page.
+  can land on it, that a news payload cannot put script in the page, and that
+  the positions we refuse to rank are refused consistently.
 
   **The static server is `py` on Windows and `python3` everywhere else**, picked
   in `playwright.config.mjs` from `process.platform`. It was `py` outright,
