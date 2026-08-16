@@ -1428,6 +1428,45 @@ shared one. In a room they come off the Players tab and are said in the ticker
 after the pick instead — to the one manager who has already made the decision.
 `marketChip()` is the single renderer for both, so the two can't drift.
 
+### A fraction is a promise about its denominator
+
+The position filter doubles as the roster-need display, and it printed
+`have/starters` in every state with the count turning `--good` once the
+starting slot was filled. At tight end that is a green **"1/1"** the moment you
+take one — a success colour on a fraction that reads as a ceiling — when
+`maxAt("TE")` is 3 and a backup tight end is an ordinary pick.
+
+It was reported from a real draft as *the app would not let me take a second
+one*, and the app had let him take anything he liked: the Draft button on an
+available tight end is disabled only when the clock is not yours, there were
+nineteen on the board at the time, and `suggestions()` had simply not offered
+one in its top six. **Nothing was broken except the sentence the screen was
+saying.** That is the same failure as a kicker being named the biggest reach —
+a correct number that no reader can arrive at the right conclusion from.
+
+So the denominator is only drawn while it is still owed. A requirement you have
+met is discharged, and continuing to print it as a fraction invents a limit
+that does not exist; what replaces it is the count alone, in the muted tone,
+until the position is genuinely full. **The stylesheet had already written the
+rule, one line above the rule that broke it** — "a filled slot is the normal
+case and does not need to shout about itself" — which is worth noticing,
+because a comment contradicting the declaration underneath it is a bug someone
+has already half-found.
+
+**`atPositionCap()` asks `needMultiplier()` rather than answering again.** The
+cap is not one rule: `maxAt()` for the skill positions, the starting
+requirement for a kicker or a defense, `starters.QB + superflex` for a
+quarterback. Writing that down a second time is precisely how the superflex bug
+happened. The last round is passed in so the K and DST *timing* gates do not
+fire — this is a question about a roster, not about when a kicker becomes
+legal.
+
+And when a test asks "was it my turn", **read it before the test stuffs the
+roster, not after.** Pushing picks straight into `state.picks` to reach a cap
+moves whose turn it is, so an answer collected at the end of the block is about
+the board the harness built rather than the one it drove. That cost a red run
+on a test whose subject was fine.
+
 ### A filter is a lens, never a decision
 
 `suggestions()` is filtered by the position chip on the panel, and

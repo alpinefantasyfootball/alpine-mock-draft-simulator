@@ -804,9 +804,16 @@ select {
 }
 
 /* Short of a starting slot is the only state worth colouring. A filled slot
-   is the normal case and does not need to shout about itself. */
+   is the normal case and does not need to shout about itself.
+
+   `.met` used to take `--good`, which contradicted the line above it and
+   read as a stop sign: green "1/1" against TE the moment you took one, on a
+   roster that may hold three. It is the resting state now and inherits the
+   muted count colour. The only other mark is `.full`, which is drawn when
+   the app genuinely has no more of that position to offer — struck through,
+   because that is a thing that has run out rather than a thing gone well. */
 .pos-filter button.short .need { color: var(--t-warn-fg); }
-.pos-filter button.met   .need { color: var(--good); }
+.pos-filter button.full  .need { text-decoration: line-through; opacity: .75; }
 
 /* ---------- injury designations ---------- */
 

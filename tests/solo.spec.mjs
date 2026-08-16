@@ -217,3 +217,93 @@ test("solo still says 'Auto-draft the rest', because solo it is the truth", asyn
   await expect(page.locator("#autoBtn")).toHaveText("Auto-draft the rest");
   await context.close();
 });
+
+/* The roster-need chip, which said a thing the app never enforced.
+
+   It printed `have/starters` in every state and turned green once the
+   starting slot was filled, so one tight end painted a green "TE 1/1" — a
+   success colour on a fraction that reads as a ceiling. Reported from a real
+   draft as the app refusing a second tight end. It had refused nothing: the
+   Draft button was never disabled, and there were nineteen on the board.
+
+   So this asserts the two halves together — what the chip says, and what the
+   board actually allows — because the bug was entirely the gap between them. */
+test("a filled starting slot is not a cap, and does not claim to be", async ({ browser }) => {
+  const context = await browser.newContext();
+  const page = await openApp(context);
+  await page.click("#startBtn");
+
+  const out = await page.evaluate(async () => {
+    const chip = (pos) => {
+      const b = [...document.querySelectorAll("#playerFilter button")]
+        .find((x) => x.dataset.pos === pos);
+      return {
+        text: b.textContent.trim(),
+        cls: [...b.classList].filter((c) => c !== "on").join(" "),
+        colour: getComputedStyle(b.querySelector(".need")).color
+      };
+    };
+
+    // Reach my turn, take a tight end, then reach my turn again so the row
+    // buttons are live — a disabled button on somebody else's clock proves
+    // nothing about tight ends.
+    while (!isMyTurn()) { const c = onTheClock(); makePick(cpuChoice(c.slot, c.round)); }
+    makePick(board.find((p) => p.pos === "TE" && !p.drafted));
+    while (!isMyTurn() && !draftOver()) { const c = onTheClock(); makePick(cpuChoice(c.slot, c.round)); }
+
+    state.filterPlayers = "TE";
+    render();
+    const rows = [...document.querySelectorAll("#playerTable tbody tr")]
+      .filter((tr) => !tr.classList.contains("drafted"));
+
+    const withOne = chip("TE");
+    const shortRB = chip("RB");
+
+    /* Read before the roster is stuffed below, not after. Everything past
+       this point pushes picks straight into state.picks to reach the cap,
+       which moves whose turn it is — so a turn asked for at the end of this
+       block is an answer about a board the test built, not the one it drove. */
+    const onMyTurn = isMyTurn();
+    const teAvailable = rows.length;
+    const teDisabled = rows.filter((tr) => tr.querySelector(".draft-btn").disabled).length;
+
+    // And at the cap the chip is allowed to say so, because there it is true.
+    while (countAt(state.mySlot, "TE") < maxAt("TE")) {
+      const te = board.find((p) => p.pos === "TE" && !p.drafted);
+      te.drafted = true;
+      state.picks.push({ overall: state.picks.length + 1, round: 1,
+                         slot: state.mySlot, player: te });
+    }
+    render();
+
+    return {
+      onMyTurn, teAvailable, teDisabled,
+      withOne, shortRB,
+      atCap: chip("TE"),
+      capIsAboveStarters: maxAt("TE") > league.starters.TE
+    };
+  });
+
+  // The board never blocked a second tight end, which is the whole report.
+  expect(out.onMyTurn, "asked while the clock was mine").toBe(true);
+  expect(out.teAvailable, "there were tight ends to take").toBeGreaterThan(1);
+  expect(out.teDisabled, "no available tight end was unclickable").toBe(0);
+  expect(out.capIsAboveStarters).toBe(true);
+
+  // One tight end is a met requirement, not a full position: no denominator
+  // to imply a ceiling, and not the colour that says "done".
+  expect(out.withOne.text, "the fraction is dropped once it is paid").toBe("TE1");
+  expect(out.withOne.cls).toBe("met");
+  expect(out.withOne.colour, "and it is not coloured like a warning or a win")
+    .not.toBe(out.shortRB.colour);
+
+  // Still short is still worth saying, and still a fraction.
+  expect(out.shortRB.text).toBe("RB0/2");
+  expect(out.shortRB.cls).toBe("short");
+
+  // The one honest stop.
+  expect(out.atCap.text).toBe("TE3");
+  expect(out.atCap.cls).toBe("full");
+
+  await context.close();
+});

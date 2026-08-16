@@ -2888,6 +2888,21 @@ function renderSuggestions() {
   }).join("");
 }
 
+/* Is this app finished offering me this position?
+
+   Asked of the CPU's own valuation rather than answered a second time here.
+   needMultiplier() returns 999 at the roster cap, and the cap is not one rule:
+   it is maxAt() for the skill positions, but the starting requirement for a
+   kicker or a defense, and starters + superflex for a quarterback. Writing
+   that down again is exactly how the superflex bug happened — one rule in two
+   places, left to drift.
+
+   The last round is passed in so the K and DST *timing* gates do not fire.
+   This is a question about the roster, not about when a kicker becomes legal. */
+function atPositionCap(pos) {
+  return needMultiplier(state.mySlot, pos, league.rounds) === 999;
+}
+
 /* The position filter doubles as the roster-need display: the control you
    already reach for to narrow the list is also the one that tells you what
    you are still missing. It saves a trip to My Team on every pick.
@@ -2898,7 +2913,26 @@ function renderSuggestions() {
 
    It only carries counts once a draft is running. Before that there is no
    roster to be short of, and showing pool sizes here would give one control
-   two different meanings. */
+   two different meanings.
+
+   ---- and a fraction is a promise about the denominator ----
+
+   This printed `have/starters` in every state, in green once the starting slot
+   was filled. At tight end that is a green "1/1" the moment you take one — a
+   success colour on a fraction that reads as a ceiling, when the app will
+   happily let you hold three and a backup tight end is a perfectly ordinary
+   pick. It was reported from a real draft as the app refusing a second one,
+   and the app had refused nothing: the Draft button was never disabled once,
+   and there were nineteen tight ends on the board at the time.
+
+   So the denominator is only shown while it is still owed. A requirement you
+   have met is discharged, and continuing to print it as a fraction invents a
+   limit that does not exist. What replaces it is the honest limit — the count
+   alone until atPositionCap() says the app really has stopped offering them.
+
+   The stylesheet already said this, one line above the rule that did the
+   opposite: "a filled slot is the normal case and does not need to shout
+   about itself." */
 function renderPlayerFilter() {
   const filled = rosterOf(state.mySlot).length;
 
@@ -2908,18 +2942,45 @@ function renderPlayerFilter() {
 
     if (!state.started) {
       button.innerHTML = label;
-      button.classList.remove("short", "met");
+      button.classList.remove("short", "met", "full");
+      button.removeAttribute("title");
       return;
     }
 
-    const have = pos === "ALL" ? filled : countAt(state.mySlot, pos);
-    const need = pos === "ALL" ? rosterSize() : (league.starters[pos] || 0);
+    const all = pos === "ALL";
+    const have = all ? filled : countAt(state.mySlot, pos);
+    const need = all ? rosterSize() : (league.starters[pos] || 0);
+    const short = have < need;
 
-    button.innerHTML = `${label}<span class="need">${have}/${need}</span>`;
-    // Short of a starting slot is the actionable state, so it is the only
-    // one that takes a colour. "Met" is just the absence of a warning.
-    button.classList.toggle("short", have < need);
-    button.classList.toggle("met", have >= need);
+    /* "All" keeps its fraction throughout, because there the denominator is a
+       real ceiling: rosterSize() is how many players you may end up with, and
+       running out of spots is a thing that actually happens to you. */
+    const full = all ? have >= need : atPositionCap(pos);
+    const count = short || all ? `${have}/${need}` : String(have);
+
+    button.innerHTML = `${label}<span class="need">${count}</span>`;
+
+    /* "All" counts roster spots, not starting slots, so it needs its own
+       wording — the shared sentence read "13 more ALL to fill your starting
+       lineup", which is wrong about the number and about the noun. */
+    const left = need - have;
+    if (all) {
+      button.title = short
+        ? `${left} roster ${left === 1 ? "spot" : "spots"} still to fill`
+        : "Your roster is full";
+    } else if (short) {
+      button.title = `${left} more ${posLabel(pos)} to fill your starting lineup`;
+    } else if (full) {
+      button.title = `You are holding as many ${posLabel(pos)} as this draft will suggest`;
+    } else {
+      button.removeAttribute("title");
+    }
+
+    /* Short of a starting slot is the actionable state. "Full" is the only
+       other one worth marking, and it is the one that used to be a lie. */
+    button.classList.toggle("short", short);
+    button.classList.toggle("met", !short && !full);
+    button.classList.toggle("full", full && !short);
   });
 }
 
