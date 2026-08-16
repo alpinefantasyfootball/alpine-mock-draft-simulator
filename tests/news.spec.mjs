@@ -70,9 +70,12 @@ test.describe("latest news", () => {
 
       const r = await page.evaluate(() => {
         const panel = document.querySelector("#newsPanel");
+        const tab = document.querySelector("#newsTab");
         return { exists: !!panel, hidden: panel ? panel.hidden : null,
                  empty: panel ? panel.innerHTML === "" : null,
-                 box: panel ? panel.getBoundingClientRect().height : null,
+                 tabHidden: tab ? tab.hidden : null,
+                 tabsShown: [...document.querySelectorAll("#sheetTabs button")]
+                   .filter((b) => !b.hidden).map((b) => b.textContent),
                  ourRead: !!document.querySelector(".ourread"),
                  meters: document.querySelectorAll(".sig").length };
       });
@@ -80,8 +83,15 @@ test.describe("latest news", () => {
       expect(r.exists, "the slot is always in the markup").toBe(true);
       expect(r.hidden, "but hidden with nothing to show").toBe(true);
       expect(r.empty, "and holding nothing").toBe(true);
-      expect(r.box, "so it takes no vertical space").toBe(0);
-      // The rest of the sheet is the point: news is additive, never load-bearing.
+
+      /* The tab is what a reader can see, so it is what the assertion is
+         about. Measuring the panel's height would pass whatever happened —
+         it lives inside an inactive .sheet-view, which is display:none until
+         its tab is chosen, so it is zero high even when full of headlines. */
+      expect(r.tabHidden, "no tab is offered when there is nothing behind it").toBe(true);
+      expect(r.tabsShown, "and the other four are untouched")
+        .toEqual(["Overview", "Game Logs", "Seasons", "Depth Chart"]);
+      // News is additive, never load-bearing.
       expect(r.ourRead, "Our read is unaffected").toBe(true);
       expect(r.meters, "the three meters are unaffected").toBe(3);
     });
@@ -113,7 +123,8 @@ test.describe("latest news", () => {
     await crosswalk(page, "Jahmyr Gibbs");
 
     await page.evaluate(() => openSheet(board.find((p) => p.name === "Jahmyr Gibbs")));
-    await page.waitForSelector(".newsbox:not([hidden])", { timeout: 5000 });
+    await page.waitForSelector("#newsTab:not([hidden])", { timeout: 5000 });
+    await page.click("#newsTab");          // the journey a reader takes
 
     const r = await page.evaluate(() => {
       const panel = document.querySelector("#newsPanel");
@@ -125,12 +136,19 @@ test.describe("latest news", () => {
         targets: [...new Set(items.map((a) => a.getAttribute("target")))],
         heads: items.map((a) => a.querySelector(".newshead").textContent),
         sources: items.map((a) => a.querySelector(".newsfoot").textContent),
+        viewOn: document.querySelector("#v-news").classList.contains("on"),
+        tabOn: document.querySelector("#newsTab").classList.contains("on"),
         injected: { img: panel.querySelectorAll("img").length,
                     script: panel.querySelectorAll("script").length,
                     b: panel.querySelectorAll("b").length },
         pwned: [window.__pwned, window.__pwned2, window.__pwned3, window.__pwned4]
       };
     });
+
+    // Clicking the tab has to move the strip and the panel together — setting
+    // one without the other leaves the sheet on a tab its own nav denies.
+    expect(r.tabOn, "the tab is lit").toBe(true);
+    expect(r.viewOn, "and its view is the one showing").toBe(true);
 
     // Both unsafe schemes gone; only the two http(s) items survive.
     expect(r.count, "javascript: and data: links are dropped").toBe(2);
@@ -217,13 +235,48 @@ test.describe("latest news", () => {
 
       const panel = document.querySelector("#newsPanel");
       return { asked, hidden: panel.hidden, html: panel.innerHTML,
+               tabHidden: document.querySelector("#newsTab").hidden,
                sourceId: sourceId(p, "tank") };
     });
 
     expect(r.sourceId, "no id for this player").toBe("");
     expect(r.asked, "the provider is never called without an id").toBe(0);
     expect(r.hidden, "and the panel stays hidden").toBe(true);
+    expect(r.tabHidden, "and no tab is offered").toBe(true);
     expect(r.html, "with nothing in it").toBe("");
+  });
+
+  test("the tab does not survive into the next player's sheet", async ({ context }) => {
+    const page = await openApp(context);
+    await start(page);
+    await crosswalk(page, "Jahmyr Gibbs");
+    await stubNews(page, [{ title: "Gibbs headline", summary: "", source: "espn.com",
+      at: "", url: "https://example.com/gibbs" }]);
+
+    /* The sheet is one element reused for everybody and the tab strip is part
+       of it, so a tab left showing from the last player is a tab that opens
+       onto his headlines under this player's name. Worse than the panel
+       equivalent: the reader has to click before they find out. */
+    const r = await page.evaluate(async () => {
+      openSheet(board.find((p) => p.name === "Jahmyr Gibbs"));
+      await new Promise((r2) => setTimeout(r2, 400));
+      const afterGibbs = !document.querySelector("#newsTab").hidden;
+
+      const other = board.find((p) => p.name !== "Jahmyr Gibbs" && p.pos !== "DST");
+      delete PLAYER_STATS[other.id].x;        // nobody we can ask about
+      openSheet(other);
+      await new Promise((r2) => setTimeout(r2, 400));
+
+      return { afterGibbs,
+               afterOther: !document.querySelector("#newsTab").hidden,
+               panelHtml: document.querySelector("#newsPanel").innerHTML,
+               showing: document.querySelector("#v-overview").classList.contains("on") };
+    });
+
+    expect(r.afterGibbs, "the tab appears for a player who has news").toBe(true);
+    expect(r.afterOther, "and is gone again for one who has none").toBe(false);
+    expect(r.panelHtml, "with the previous headlines cleared out").toBe("");
+    expect(r.showing, "and the sheet is back on Overview").toBe(true);
   });
 
   test("a failed fetch leaves no mark on the sheet", async ({ context }) => {
@@ -237,13 +290,14 @@ test.describe("latest news", () => {
       openSheet(board.find((p) => p.name === "Puka Nacua"));
       await new Promise((r2) => setTimeout(r2, 400));
       const panel = document.querySelector("#newsPanel");
-      return { hidden: panel.hidden, height: panel.getBoundingClientRect().height,
+      return { hidden: panel.hidden,
+               tabHidden: document.querySelector("#newsTab").hidden,
                sheetOpen: !document.getElementById("sheet").hidden,
                ourRead: !!document.querySelector(".ourread") };
     });
 
     expect(r.hidden, "hidden").toBe(true);
-    expect(r.height, "and taking no space").toBe(0);
+    expect(r.tabHidden, "and no tab is offered").toBe(true);
     expect(r.sheetOpen, "the sheet is unharmed").toBe(true);
     expect(r.ourRead, "and still complete").toBe(true);
   });

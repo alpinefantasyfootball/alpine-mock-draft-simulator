@@ -4218,7 +4218,9 @@ function newsSlot() {
 }
 
 function newsHtml(items) {
-  return `<p class="section-label">Latest news</p>` + items.map(function (n) {
+  // No heading: the tab is the heading. It carried one while this lived under
+  // Our read on the Overview tab, where it needed to announce itself.
+  return items.map(function (n) {
     const when = escHtml(String(n.at || "").slice(0, 24));
     return `<a class="newsitem" href="${escHtml(safeNewsUrl(n.url))}"
                target="_blank" rel="noopener noreferrer">
@@ -4258,9 +4260,15 @@ function sourceId(player, source) {
 
 function renderNews(player) {
   const panel = $("newsPanel");
+  const tab = $("newsTab");
   if (!panel || !player) return;
+
+  /* Hidden first, every time. The sheet is one element reused for everybody,
+     so a tab left showing from the last player is a tab that opens onto his
+     headlines under this player's name. */
   panel.hidden = true;
   panel.innerHTML = "";
+  if (tab) tab.hidden = true;
 
   if (typeof Live === "undefined" || !Live.news) return;
 
@@ -4285,6 +4293,8 @@ function renderNews(player) {
     if (!live) return;
     live.innerHTML = newsHtml(items);
     live.hidden = false;
+    const liveTab = $("newsTab");
+    if (liveTab) liveTab.hidden = false;
   };
 
   if (newsCache.has(key)) { draw(newsCache.get(key)); return; }
@@ -4410,13 +4420,11 @@ function openSheet(player) {
   let overview;
   if (!sig) {
     overview = `<div class="nodata">No projection or stat history for this player yet.
-      The data refresh fills this in for anyone Sleeper carries.</div>
-      ${newsSlot()}`;
+      The data refresh fills this in for anyone Sleeper carries.</div>`;
   } else {
     const p = sig.stats.p || {};
     overview = `
       ${ourRead(player, s, sig)}
-      ${newsSlot()}
       ${meter("Juke score", sig.overall, sig.overall >= 55 ? "good" : "", sig.reasons.overall)}
       ${meter("Upside",  sig.upside,  sig.upside  >= 55 ? "good" : "", sig.reasons.upside)}
       ${meter("Bust risk", sig.bust,  sig.bust >= 55 ? "bad" : sig.bust >= 35 ? "warn" : "", sig.reasons.bust)}
@@ -4512,12 +4520,19 @@ function openSheet(player) {
 
   $("sheetBody").innerHTML = `
     <div class="sheet-view on" id="v-overview">${overview}</div>
+    <div class="sheet-view" id="v-news">${newsSlot()}</div>
     <div class="sheet-view" id="v-logs">${logs}</div>
     <div class="sheet-view" id="v-seasons">${seasons}</div>
     <div class="sheet-view" id="v-depth">${depth}</div>`;
 
-  document.querySelectorAll("#sheetTabs button").forEach(function (b, i) {
-    b.classList.toggle("on", i === 0);
+  /* Back to Overview on every open. By view name rather than by index: a
+     hidden Latest News tab sits second in the strip, so "the first button" and
+     "the tab we want" stopped being the same thing. */
+  document.querySelectorAll("#sheetTabs button").forEach(function (b) {
+    b.classList.toggle("on", b.dataset.view === "v-overview");
+  });
+  document.querySelectorAll(".sheet-view").forEach(function (v) {
+    v.classList.toggle("on", v.id === "v-overview");
   });
 
   $("sheet").hidden = false;

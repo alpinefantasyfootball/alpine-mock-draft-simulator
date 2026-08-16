@@ -479,16 +479,49 @@ async function fetchUpstreamNews(env, playerId, base) {
 
   const rows = Array.isArray(body) ? body : (body.body || body.data || []);
   return (Array.isArray(rows) ? rows : []).map(function (n) {
+    const url = String(n.link || n.url || "").slice(0, 400);
     return {
       title: String(n.title || n.headline || "").slice(0, 200),
       summary: String(n.summary || n.description || "").slice(0, SUMMARY_MAX),
-      // Attribution is not optional, so it falls back to the provider's own
-      // name rather than to an empty string.
-      source: String(n.source || n.provider || "Tank01").slice(0, 60),
-      at: String(n.published || n.date || n.playerID || "").slice(0, 40),
-      url: String(n.link || n.url || "").slice(0, 400)
+      source: sourceName(n, url),
+      at: publishedAt(n),
+      url: url
     };
   }).filter((n) => n.title && n.url).slice(0, NEWS_MAX);
+}
+
+/* Who actually wrote it.
+
+   Measured against the real feed rather than guessed: Tank01 returns a title,
+   a link and an image, and no source field of any kind — so the first version
+   of this fell back to naming *them* on every card, which is wrong twice over.
+   They are the aggregator, not the author, and "TANK01" tells a reader
+   nothing about whether to trust the line.
+
+   The link is the honest answer, because the link is where the article
+   actually lives. Parsed with URL rather than a regex, for the same reason
+   cleanGif() does: a hostname is a structured thing and picking it apart by
+   hand is how "espn.com.evil.example" becomes "espn.com". */
+function sourceName(row, url) {
+  const given = String(row.source || row.provider || "").trim();
+  if (given) return given.slice(0, 60);
+  try {
+    return new URL(url).hostname.replace(/^www\./, "").slice(0, 60);
+  } catch (err) {
+    return "";
+  }
+}
+
+/* When it was published, and nothing else.
+
+   This used to fall back to `playerID`, which is not a date and never was —
+   so every card on a real sheet read "TANK01 · 4429795". A field that has no
+   value is empty; it does not borrow one from whatever else is lying around.
+   Anything that does not look like a date is dropped rather than printed. */
+function publishedAt(row) {
+  const raw = String(row.published || row.date || row.publishedDate || "").trim();
+  if (!raw) return "";
+  return /\d{4}|\d{1,2}[/-]\d{1,2}/.test(raw) ? raw.slice(0, 40) : "";
 }
 
 async function playerNews(request, env) {
