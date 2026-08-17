@@ -461,9 +461,25 @@ function renderHeroShot() {
       const i = (r - 1) * SHOT_TEAMS + (r % 2 ? s : SHOT_TEAMS - 1 - s);
       const p = picks[i];
       if (!p) { html += '<div class="shot-cell empty"></div>'; continue; }
+
+      /* The same card the draft room draws, minus the face.
+
+         Fifty headshots is fifty requests to somebody else's server on the
+         first paint of the marketing page, for decoration the mask starts
+         dissolving at 46% — the landing page loads no third-party image at
+         all today and this is not the thing worth spending that on. Everything
+         else is free and is what makes it read as a real board.
+
+         Names and arrows go through the same two functions the board uses, so
+         the picture cannot start claiming a different product from the one a
+         click away. */
       html += '<div class="shot-cell ' + p.pos + (s === SHOT_MINE ? " mine" : "") + '">' +
-              "<b>" + escHtml(lastName(p.name)) + "</b>" +
-              "<s>" + p.pos + " &middot; " + escHtml(p.team) + "</s></div>";
+              "<b>" + escHtml(shortName(p)) + "</b>" +
+              "<s>" + p.pos + " &middot; " + escHtml(p.team) + "</s>" +
+              '<span class="cell-foot">' +
+                '<span class="cell-dir">' + boardArrow(r, s, SHOT_TEAMS) + "</span>" +
+                '<span class="cell-pick">' + DraftEngine.pickCode(i + 1, SHOT_TEAMS) + "</span>" +
+              "</span></div>";
     }
   }
   el.innerHTML = html;
@@ -3039,6 +3055,20 @@ function lastName(name) {
   return parts[parts.length - 1];
 }
 
+/* "J. Cook" — the form a draft board uses, because a surname alone stops
+   being an answer the moment two of them share it.
+
+   A defense keeps its club. `lastName()` already drops the word "Defense", so
+   initialising what is left produces "L. Chargers", which is nobody: the first
+   word of a team name is not a first name. This is the same rule as deciding a
+   player's type from `player.pos` rather than from the shape of their data. */
+function shortName(player) {
+  if (player.pos === "DST") return lastName(player.name);
+  const parts = player.name.trim().split(/\s+/);
+  if (parts.length < 2) return player.name;
+  return parts[0][0] + ". " + lastName(player.name);
+}
+
 function initials(name) {
   const parts = name.replace(/[^A-Za-z .'-]/g, "").split(" ");
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
@@ -3602,6 +3632,46 @@ function renderPlayers() {
   }).join("");
 }
 
+/* Which way the pick order leaves this cell.
+
+   A snake board is read for its turns, and the turn is the one thing the
+   numbers alone make you work out: the last pick of a round hands straight
+   over to the first pick of the next, which is why the two ends of the room
+   pick twice in a row and the middle never does. So the last pick of any
+   round points down and everything else points the way its round runs.
+
+   `pickInRound` rather than a second copy of the mirror — the whole point of
+   putting it in the engine was that this is the third place that wants it.
+
+   `teams` is a parameter rather than read from `league`, because the hero shot
+   draws a fixed ten-team room whatever league the visitor has set up. One
+   function for both boards: the landing page claiming a different snake from
+   the product is the drift this signature exists to prevent. */
+function boardArrow(round, slot, teams) {
+  if (DraftEngine.pickInRound(round, slot, teams) === teams) return "&darr;";
+  return round % 2 === 0 ? "&larr;" : "&rarr;";
+}
+
+/* The headshot, or nothing at all.
+
+   `avatar()` is deliberately not reused. It draws initials underneath as a
+   fallback and carries the `.avatar` class, which is hidden outright inside
+   the rail and is the player photo on the sheet — a 20px board face wants
+   neither. Nothing is drawn when there is no id, rather than a placeholder:
+   140 grey circles is a worse board than 140 cards, six of which have no
+   picture.
+
+   `data-drop-on-error` is how a 404 disappears. It has to be that rather than
+   an inline `onerror`, because an inline handler is a script the CSP would
+   have to allow, and allowing those means allowing the ones somebody else
+   writes into a chat message. */
+function boardFace(player) {
+  const url = photoUrl(player);
+  return url
+    ? `<img class="cell-face" src="${url}" alt="" loading="lazy" data-drop-on-error>`
+    : "";
+}
+
 function renderBoard() {
   const grid = $("boardGrid");
 
@@ -3622,9 +3692,14 @@ function renderBoard() {
     for (let s = 0; s < league.teams; s++) {
       const pick = state.picks.find((p) => p.round === r && p.slot === s);
       if (pick) {
-        const last = lastName(pick.player.name);
-        html += `<div class="cell ${pick.player.pos} ${s === state.mySlot ? "mine" : ""}">
-                   <b>${last}</b><s>${pick.player.pos} &middot; ${pick.player.team}</s></div>`;
+        const p = pick.player;
+        html += `<div class="cell ${p.pos} ${s === state.mySlot ? "mine" : ""}">
+                   <b>${shortName(p)}</b><s>${p.pos} &middot; ${p.team}</s>
+                   <span class="cell-foot">
+                     <span class="cell-dir" aria-hidden="true">${boardArrow(r, s, league.teams)}</span>
+                     <span class="cell-pick">${pickCode(pick.overall)}</span>
+                     ${boardFace(p)}
+                   </span></div>`;
       } else {
         const c = onTheClock();
         const isNow = c && c.round === r && c.slot === s;
