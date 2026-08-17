@@ -2039,6 +2039,26 @@ tr.drafted .ovr { color: var(--ink-light); }
      absolutely positioned — so its intrinsic width is zero and the whole
      doorway collapses while still reporting a healthy max-width. */
   .doorway-outer { width: 100%; max-width: 320px; justify-self: center; padding: 30px 0; }
+
+  /* The door opens further on a phone, and the text column moves left to use
+     what the swing gives back.
+
+     A swung door covers cos(θ) of the frame, so opening it *further* is what
+     frees up width — the intuition runs the other way and it is wrong. At 48°
+     and 54° the panel ran straight over the text it is supposed to be
+     revealing; that was measured rather than reasoned, after reasoning got it
+     backwards.
+
+     At the desktop 62° the text column is about 130px on a 320px frame, and
+     "The Draft Room" wraps to two lines on the one panel whose whole job is
+     the room's name. 68° gives 142px and one line, and drops the blurb from
+     six lines to four. Past about 73° the placard starts to squeeze and the
+     door stops reading as a door — 79px of visible face against 107 here.
+
+     Phone only. Desktop has width to spare and 62° reads better on a door
+     that size. */
+  .roomstage.open .door { transform: rotateY(-68deg); }
+  .door-room-inner { left: 42%; }
 }
 
 /* The header panel is a flat list and can reflow to any column count. The
