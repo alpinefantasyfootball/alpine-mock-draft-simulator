@@ -14,6 +14,36 @@ facts.
 
 ---
 
+## Status, August 2026
+
+This was written before the scoring editor, shared rooms and the worker
+existed. It has **not** been rewritten: the pricing, the stages and the
+conversion model are unchanged and are still the owner's call. What follows is
+a corrections pass — statements that are now factually false are fixed in
+place, and assumptions that need checking are flagged where they appear.
+
+**Shipped since it was written:**
+
+- **Scoring is fully configurable in the browser.** All 38 rules, live
+  rescoring of projections, historical seasons, week logs, replacement level
+  and the grade. This was item 1 of §09 and the first bullet of Stage 1.
+- **Shared rooms.** Invite links, seats, a live clock, chat with GIFs and
+  reactions, reconnection — on a Cloudflare Worker with Durable Objects.
+- **Player news**, proxied through the same worker on a 1,000-call/month tier.
+
+**Read beside this file**, both written after it: `MVP-ROADMAP.md` for
+sequencing, `DESIGN-DIRECTION.md` for design.
+
+**Those two disagree with this one about shape, and it is unresolved.** This
+plan is explicitly gated on users with no timeline attached; the roadmap runs
+four dated phases to an app-store release before the 2027 season. Both are
+defensible. They should not both be true.
+
+**The largest unverified assumption is in the first sentence of this file** —
+see the flag in §08.
+
+---
+
 ## 01. What is being sold, and to whom
 
 Three products, one subscription:
@@ -56,9 +86,10 @@ payments. This project computes everything from public data. That is a
 permanently lower cost base and it is why a solo operator can compete at all.
 
 **Points are recomputed from raw components.** Most tools inherit the host
-platform's scoring assumptions. This one already discards them. Once scoring
-is fully configurable, the numbers will be correct for leagues that other
-tools quietly approximate.
+platform's scoring assumptions. This one already discards them, and all 38
+scoring rules are now editable in the browser — so the numbers are already
+correct for leagues that other tools quietly approximate, rather than
+correct-once-Phase-2-lands as this originally said.
 
 **Positioning:** the transparent alternative. Smaller addressable segment
 than FantasyPros, materially higher trust and retention within it.
@@ -82,6 +113,12 @@ SEO surface, and the proof that the paid tier is honest.
 | League + team history | — | — | ✓ |
 | Dynasty / keeper support | — | — | ✓ |
 | **Price** | $0 | **$39/yr** | **$79/yr** |
+
+> **Flag.** "Custom scoring import" was a strong paid line when scoring was
+> baked into the pipeline. All 38 rules are now editable for free, so what
+> remains behind the paywall is *importing* settings from a connected league —
+> a convenience rather than a capability. Worth re-pricing that row, or moving
+> something else into it.
 
 $39 undercuts FantasyPros' $59.88 by a third while sitting far below a
 typical league buy-in. It is an easy yes for someone already spending $100
@@ -133,15 +170,26 @@ At maturity the mix should be roughly:
 
 ### Stage 1 — Free, earn trust (0 → 5,000 annual users)
 
-Revenue: **$0.** Cost: **~$0**, still a static site.
+Revenue: **$0.** Cost: **near $0** — the site is still static on GitHub Pages,
+but there is now a Cloudflare Worker with Durable Objects behind shared rooms,
+and player news runs on a 1,000-call/month free tier. Both are free at this
+size and neither is free at scale. "Still a static site" is no longer accurate.
 
-- Finish Phase 2 so scoring is genuinely configurable. Nothing paid works
-  without it.
+- ~~Finish Phase 2 so scoring is genuinely configurable.~~ **Done.** All 38
+  rules are editable in the browser and everything rescores live.
 - Connect Sleeper leagues, free, no account required. It needs no backend
   and it is the cheapest possible test of whether league sync is the hook.
 - Build the shareable draft recap page. This is the growth engine; see 06.
+  **Still the highest-leverage unbuilt thing in this file** — `MVP-ROADMAP.md`
+  independently reaches the same conclusion from the product side.
 - Instrument everything: drafts completed, return visits, which league
   shapes people pick.
+
+> **Partly done, and the plan does not know it.** Shared rooms ship an invite
+> link that puts a whole league in one draft together. That is a first version
+> of the league-connect loop §06 calls the highest-leverage growth mechanic —
+> without the league sync, but with the warm introduction. Worth measuring
+> before building the fuller version.
 
 Success looks like people coming back unprompted, not revenue.
 
@@ -218,7 +266,7 @@ not cheap and cannot be justified on hope.
 
 | Stage | Monthly | Notes |
 |---|---|---|
-| 1 | ~$0 | static hosting, a domain |
+| 1 | ~$0 | static hosting, a domain, and — new since this was written — a Cloudflare Worker and a 1,000-call/month news tier, both free at this size |
 | 2 | $50–150 | backend, database, Stripe fees ~2.9% + 30¢ |
 | 3 | $200–500 | scaling, transactional email, error monitoring |
 | 4 | $800–2,000 | plus the first contractor, almost certainly support |
@@ -255,6 +303,20 @@ storing something you cannot rotate, and training the exact behaviour
 phishing relies on. Common in this space; still a genuine liability. Treat
 ESPN as blocked until there is a route that does not require it.
 
+**Commercial-use rights are assumed, not established — and the first sentence
+of this file depends on them.** "Without a licence" is true of *expert
+rankings*: computing everything from public data genuinely avoids the
+relationships and contracts FantasyPros carries, and that argument in §02
+stands. It says nothing about whether the feeds themselves may be used in a
+paid product. Sleeper's API, Fantasy Football Calculator's ADP, Tank01 and the
+ESPN scoreboard are all free and undocumented, and **none has been checked for
+commercial terms.**
+
+This is the single largest unverified assumption in the plan, because it sits
+underneath the cost advantage the whole positioning rests on. `MVP-ROADMAP.md`
+makes it the first item of the first phase for the same reason. Until it is
+answered in writing, treat "no licensing cost" as a hypothesis.
+
 **Solo maintenance.** One person, in the busiest six weeks, is a single
 point of failure at the worst possible moment.
 
@@ -271,20 +333,28 @@ model with the real number.
 
 ## 09. What to do next
 
-1. **Phase 2.** Scoring rules into the browser. Every paid feature, on every
-   platform, depends on it.
-2. **Sleeper league connect**, free and unauthenticated.
+1. ~~**Phase 2.** Scoring rules into the browser.~~ **Done.**
+2. **Establish commercial-use rights** for every feed. Not in the original
+   list, and it belongs first now: it can invalidate the cost argument this
+   plan is built on. See §08.
 3. **The shareable draft recap.** The growth loop, and the cheapest thing on
-   this list.
-4. **Instrument the funnel** so Stage 2 pricing is set against real numbers.
+   this list. Unbuilt, and now the top item of both this file and
+   `MVP-ROADMAP.md`.
+4. **Sleeper league connect**, free and unauthenticated.
+5. **Instrument the funnel** so Stage 2 pricing is set against real numbers.
 
-Nothing before Stage 2 costs money. The first three items are the whole
-Stage 1 plan, and they can be built without a backend, an account system or
-a single dollar of spend.
+Nothing here costs money except item 2, which costs time and email. The rest
+can be built without a backend, an account system or a dollar of spend — with
+the caveat that a backend now partly exists, so "no backend" is a choice rather
+than a constraint.
 
 ---
 
 ## Sources
+
+> **Flag.** These were read once, when this was written, and none has been
+> re-checked since. FantasyPros' pricing in particular is a live number that
+> anchors the whole ladder in §03. Re-verify before quoting any of it.
 
 - FantasyPros pricing: <https://www.fantasypros.com/premium/plans/bp/>
 - FSGA participation research: <https://thefsga.org/new-fsga-research-highlights-industry-stability-and-next-generation-growth-in-fantasy-sports-and-sports-betting/>

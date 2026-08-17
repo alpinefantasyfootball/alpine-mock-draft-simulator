@@ -3,7 +3,9 @@
 Right now the league shape is hardcoded to one ten-team league. This makes it
 configurable from the setup screen. Read `CLAUDE.md` first.
 
-**Do Phase 1 only unless told otherwise. Phase 2 is a separate decision.**
+**Both phases are done.** This file is kept as the record of what was asked
+for and why, not as a task list. See the note above Phase 2 before acting on
+anything in it.
 
 ---
 
@@ -120,15 +122,26 @@ still one click.
 
 ---
 
-## Phase 2 — custom scoring — DO NOT BUILD WITHOUT ASKING
+## Phase 2 — custom scoring — BUILT
 
-Recorded here so the design isn't lost. All scoring currently happens in
-`build_players.py`, and fantasy points are baked into `stats.js` before the
-browser sees them. **21 of the 36 scoring inputs are not stored at all** —
-every field-goal distance bucket, every defensive component, all two-point
-conversions. So the browser cannot rescore a player today.
+> **This section describes a wall that is no longer there.** It was written
+> when scoring was baked into `stats.js` and said "the browser cannot rescore a
+> player today". It can: all four steps below shipped, the pipeline stores raw
+> components and no points total at all, and the setup screen carries 38
+> editable rules that live-rescore projections, historical seasons, week logs,
+> replacement level and the grade. `CLAUDE.md` has the current rules under
+> **Data** and **The Juke score**.
+>
+> Left in place because the reasoning is still the reasoning, and because the
+> last paragraph — a pipeline should record facts, not opinions about how to
+> value them — is the principle the architecture now follows.
 
-Making scoring configurable means:
+The problem as it stood: all scoring happened in `build_players.py`, and
+fantasy points were baked into `stats.js` before the browser saw them. **21 of
+the 36 scoring inputs were not stored at all** — every field-goal distance
+bucket, every defensive component, all two-point conversions.
+
+Making scoring configurable meant:
 
 1. Expand `STAT_FIELDS` in `build_players.py` to store every scoreable raw
    component, not just the display-worthy ones.
@@ -137,8 +150,8 @@ Making scoring configurable means:
 4. Add a scoring editor to the setup screen.
 
 That is the right architecture regardless — a data pipeline should record
-facts, not opinions about how to value them. It's roughly half a day and it
-invalidates the existing `stats.js`, so it needs its own pass.
+facts, not opinions about how to value them. It was estimated at roughly half a
+day; it invalidated the existing `stats.js`, and it took its own pass.
 
 ---
 
