@@ -1,195 +1,263 @@
 # Design direction
 
-A review of Sleeper, and what to take from it. Written to answer one
-question: what turns this from a good personal project into something that
-holds up next to the products people already use?
+Where Juke's design should go over the next year, and why. This is direction
+rather than schedule — `BUSINESS-PLAN.md` and the MVP roadmap hold sequencing,
+and `CLAUDE.md` holds the rules. Nothing here overrides either.
 
-Read `CLAUDE.md` first. Nothing here overrides the rules in it.
-
----
-
-## What I actually saw, and what I didn't
-
-Sleeper's real draft room is behind a login, and no account was created to
-get past it. So this review is based on:
-
-- the public mock draft landing page, including the feature grid where they
-  compare themselves to "other apps" — that grid is Sleeper stating what it
-  considers table stakes;
-- their live design tokens, read off the rendered page;
-- how the marketing site itself is built and behaves.
-
-The interior of the draft room is **not** reviewed here. Anything below about
-in-draft interaction is reasoning from the feature list and from general draft
-UX, not from having used it. Worth doing properly later from an account you
-own.
+Rewritten August 2026. The version this replaces was a Sleeper review written
+before anyone had an account there, and it opened by saying so: *"the interior
+of the draft room is not reviewed here."* That caveat is now closed — both
+products have been walked end to end, with a completed mock drafted on each,
+and Sleeper's marketing site reviewed frame by frame from a screen recording.
+It also still called the product Alpine.
 
 ---
 
-## 01. Their design tokens, measured
+## What has changed since the last version
 
-| | Sleeper | Alpine today |
+Almost everything it recommended has shipped, which is the main reason it
+needed replacing rather than amending.
+
+| Recommended then | Now |
+|---|---|
+| A 16px base, to stop iOS zooming a focused field | Shipped, and the rule is a floor the whole type scale meets |
+| Blue-tinted neutrals | Shipped, and the ramp is set from the worst surface upward rather than by eye |
+| Dark mode via `prefers-color-scheme` | Shipped as two full themes with an explicit toggle |
+| Pill radii on chips only | Shipped as five radii, divided by job |
+| Scoring rules moved into the browser | Shipped — 38 rules, live rescoring of projections, history and the grade |
+| Position-run detection on the board | Shipped — the ticker says "3 of the last 5 were running backs" |
+
+Two claims in it are now simply wrong. It said `CLAUDE.md` ruled out live
+multi-user drafting; that decision was reversed and shared rooms shipped. And
+its feature-parity arithmetic ("six of eleven") counted a product that no
+longer exists.
+
+---
+
+## Where Juke stands, measured
+
+| | Sleeper | Juke today |
 |---|---|---|
-| Page background | `#05091D` — near-black, blue cast | `#F5F7FA` light grey |
-| Surfaces | `#131E2C`, `#192533`, `#202635` | `#FFFFFF` cards |
-| Primary text | white | `#16202C` |
-| Secondary text | `#98B3D6`, `#5F7BA9` — **blue-tinted** | `#5A6875`, `#94A1AC` |
-| Display font | Poppins | Poppins |
-| Body font | Inter | Inter |
-| Base size | 16px | 15px |
-| Corner radius | pills everywhere, plus 20–32px cards | 8–12px |
-| Buttons | uppercase, 600, 1px letter-spacing, pill | sentence case, 600, 8px radius |
+| Page background | `#05091D` | `#0E151E` dark · `#F5F7FA` light |
+| Surfaces | `#131E2C`, `#192533` | `#18212D` dark · `#FFFFFF` light |
+| Secondary text | blue-tinted | `#A2B0BE` / `#4C5763`, blue-tinted, contrast-derived |
+| Display / body font | Poppins / Inter | Poppins / Inter |
+| Base size | 16px | 16px |
+| Type scale | not published | eight steps: 10 · 12 · 14 · 16 · 19 · 23 · 32 · 42 |
+| Radii | pills plus 20–32px cards | five: 4 · 8 · 12 · 16 · pill |
+| Themes | dark only | two, both designed |
 
-Two things jump out.
+**The typography was independently identical and still is** — Poppins over
+Inter, the same pairing. That remains a signal that the type foundation is
+sound and does not need touching.
 
-**The typography is already the same.** Inter and Poppins, the exact pairing
-this project picked independently. That is a real signal that the type
-foundation is sound and does not need touching.
-
-**Their neutrals are blue, not grey.** Every muted colour on the page carries
-a blue cast rather than being true grey. It is the single cheapest trick in
-their system and the main reason a very dark UI reads as designed rather than
-as "dark mode was switched on". Alpine's `--ink-light` is already slightly
-blue; `--ink-mid` is closer to neutral.
+The gap that closed is cohesion. The old note said Juke rendered 26 font sizes
+and 15 radii, each chosen per element; the scales replaced them, and the audit
+that proves it is one line in the console.
 
 ---
 
-## 02. What they treat as table stakes
+## What the comparison actually established
 
-Straight from their own comparison grid: free with no ads, mobile app,
-real-time, invite others, solo option, start anytime, unlimited pause,
-rookie-only option, customisable positions, copyable draftboards,
-pre-selected keepers.
+**Sleeper is a league platform that happens to have a good draft room.** It
+competes with ESPN and Yahoo, it customises everything, and its draft room is
+one surface of a much larger product. **Juke is a draft analyst** — a narrower
+room wrapped around a grading model and a published method that Sleeper does
+not have at all.
 
-Alpine has: free, no ads, solo, start anytime, unlimited pause, and — as of
-the settings work — customisable positions. That is six of eleven, and the
-six that matter for a single-player tool.
+That framing is the most useful thing to come out of the review, because it
+settles what parity is worth: almost nothing. The gaps that matter are the ones
+that stop somebody drafting, not the ones that make a feature grid even.
 
-The five it lacks all require either accounts or multiplayer. `CLAUDE.md`
-already rules out live multi-user drafting for good reasons, and that decision
-should hold. **The gap is not a to-do list.** Competing with Sleeper on
-Sleeper's axis is unwinnable and not the point.
+### The correction worth recording
 
-Two of their features are worth stealing because they are single-player and
-genuinely good:
+An earlier draft of this analysis led with **editable scoring** as Juke's
+biggest advantage, on the evidence that Sleeper's mock-draft setup offers nine
+ranking presets with no editable values.
 
-- **Copyable draftboards / templates.** Re-running the same league setup
-  repeatedly is the core loop of mocking. Saving named setups is cheap here —
-  the `league` object already serialises.
-- **Custom ADP.** Their acknowledgement that ADP is an input, not a truth.
+That is true of the *mock flow* and false of the platform. A real Sleeper
+league has full per-stat custom scoring, commissioner-editable across every
+category including rare plays, with a forced recalculation of played weeks.
+**Custom scoring is table stakes, not a moat.** What survives is narrow: Juke
+lets you mock-draft against your exact rules without creating a league first.
 
----
-
-## 03. What to adopt
-
-### Adopt: dark surface as an option, not a replacement
-
-Sleeper is dark because it is a social app people use at night on a phone in
-bed. Alpine's light theme is legible, printable and matches the Alpine
-Consulting Partners brand it carries in the header. Throwing that away to look
-like a competitor would be the wrong trade.
-
-The right move is `prefers-color-scheme` support, which means the colours in
-`:root` need a dark counterpart. This is already the project's structure —
-colours are defined once and reused by name — so it is a contained change to
-one block of `style.css` and nothing else.
-
-### Adopt: blue-tinted neutrals
-
-Push `--ink-mid` and `--ink-light` slightly further toward blue. Small change,
-disproportionate effect on cohesion, no structural risk.
-
-### Adopt: a 16px base
-
-15px is a hair small for a phone. 16px is also what stops iOS Safari zooming
-the page when a text input is focused — a real bug the search box on the
-Players tab will hit today.
-
-### Adopt: pill radii on chips only
-
-Their pills work on tags and buttons. Applying 24px+ radii to data-dense
-tables and the draft board would hurt scanning. Alpine's tier and bye chips
-are already pills; leave the cards alone.
-
-### Adopt: the draftboard as a first-class view
-
-They call out that the board "gives you extra context on opponent moves so you
-can adapt to position runs and team needs". That is the single most valuable
-screen in any draft tool and Alpine already has it — but it is the third tab
-and it renders small. It deserves to be more prominent, and it should show
-position runs, which the app has the data to detect and currently does not
-surface.
+It is recorded here because the failure is instructive rather than
+embarrassing: one screen was generalised into a claim about a company, and it
+flattered us. The differentiators that held up under first-hand review are all
+in the layer *above* the draft.
 
 ---
 
-## 04. What to reject
+## Four threads for the next year
 
-- **Their information density.** A marketing page is not a draft room, but
-  their app is busy. Alpine's calm, one-thing-per-panel layout is a genuine
-  advantage for a first-time drafter. Do not trade it for feature parity.
-- **`user-scalable=no`.** Sleeper ships it. It breaks pinch-zoom and is an
-  accessibility failure. Alpine's viewport tag is currently correct — keep it
-  that way.
-- **Uppercase button labels.** Fashionable, slightly dated, and worse for
-  legibility at small sizes.
+These are open questions, not tasks. Each is worth a year of small decisions
+pointing the same way.
+
+### 01. Flat, or with depth — pick one
+
+Juke is one plane. Cards on a background, everywhere. The Rooms door is the
+first element in the product with any dimensionality, and that currently makes
+it an outlier rather than a language.
+
+Over a year this resolves in one of two directions, and it should be chosen
+rather than arrived at: depth becomes a system, or the door is the exception
+that proves the page is flat.
+
+A depth system needs no photography. It needs the unglamorous parts — one
+light source, agreed rules for what is near and what is far, and shadows that
+share a direction. Juke's shadows were each picked locally: the door casts one
+way, the cards another, the player sheet a third. Nobody notices any single one
+of them, and the sum is what "designed" means.
+
+**The spatial metaphor is already in the product's own vocabulary.** It is
+called The Rooms. That is the argument for depth, and it is the kind of reason
+that outlasts a trend.
+
+### 02. There is no colour language for time
+
+The palette encodes two things. **Position** — six solids, darkened until white
+clears 4.5:1 on each. **Intent** — orange acts, blue states, one primary action
+per screen.
+
+Nothing encodes *when*. Juke is a seasonal product with six rooms strung across
+pre-season, in-season and post-season, and the interface has no idea what time
+of year it is. A season axis would be a genuine system-level addition: the door
+placards already carry the phase as text, the header could know it, the rooms
+list already groups by it.
+
+The constraint is that the palette is close to full. A third axis has to be
+carried by something other than hue — value, temperature, or a treatment rather
+than a colour. That is a real design problem and a year is the right amount of
+time for it.
+
+### 03. Atmosphere is the honest gap
+
+Juke's design is **clean and atmosphere-free**. That is an accurate description
+rather than a criticism of any one decision: every rule in `CLAUDE.md` about
+contrast, scales and tokens has made the product more legible, and none of them
+has made it feel like a place.
+
+Competitors solve this with stadium photography, chrome and neon. Those are
+wrong for Juke — a turf-and-crowd backdrop is the most generic visual in fantasy
+sports, it puts a busy photo behind text, and the landing page currently loads
+no third-party image at all with a test asserting it.
+
+**But "that's generic" is not an answer.** It is a test for filtering ideas, not
+a substitute for having one. The version of this worth building reaches for
+atmosphere through the one thing only Juke has: **the name is a football move.**
+A juke is a feint, a cut, a change of direction, and it is already in the mark
+as the swoosh. Motion that cuts rather than fades, direction changes, a beat of
+misdirection before a reveal — that is a language available to Juke and to
+nobody else in this market.
+
+### 04. What the homepage becomes when the product remembers you
+
+Today the landing page is a pitch, and it can afford to be, because there is
+nothing to come back to. One `localStorage` slot, no account, no history.
+
+The moment accounts and draft history exist, the homepage forks: a pitch for
+strangers, something closer to a dashboard for people returning. That is a
+design problem worth thinking about well before the accounts land, because it
+changes what the page is *for* — and the answer determines whether the door and
+the product shot stay above the fold or move below a "your leagues" surface.
+
+---
+
+## What to adopt from Sleeper's marketing site
+
+Reviewed frame by frame. Every content section is **a claim paired with a moving
+proof of that claim**, four times down the page. Juke's landing page is a hero,
+the rooms, and a footer.
+
+**Stage and list.** A persistent visual beside three or four labels, the
+highlighted one advancing on a timer, the stage re-rendering to illustrate
+whichever is current. The Rooms door is Juke's first instance of this shape.
+
+**The stage should teach, not decorate.** Their best section shows a `'25
+roster` beside a `'26 roster` and redraws per league type: redraft replaces
+everyone, keeper carries two across wearing a `KEPT` badge, dynasty keeps all
+five and adds a rookie pick. It explains what a keeper league *is* in two
+seconds, to somebody who did not know. **That is the thing worth stealing** —
+and Juke's equivalent question is "what is a Juke score and why is Gibbs 100",
+which is exactly the confusion that started this work.
+
+**Juke's stages can be the real component.** Theirs are illustrations. Every
+claim Juke wants to make is already rendered by working code — `renderHeroShot()`
+draws a real board, `analyseDraft()` a real grade, `suggestions()` a real tier
+callout, `projectionRecord()` a real forecast against a real season. Nothing to
+keep in sync, which is the same principle the product shot already follows.
+
+**And their board drafts itself**, clock counting down on the live cell, rebuilt
+per draft type. That is the current bar, not a differentiator.
+
+---
+
+## What to reject
+
+Carried forward from the previous version, all still true:
+
+- **Their information density.** A calm, one-thing-per-panel layout is a
+  genuine advantage for a first-time drafter.
+- **`user-scalable=no`.** Sleeper ships it; it breaks pinch-zoom. Juke's
+  viewport tag is correct and the 16px field floor solves the same problem
+  honestly.
+- **Uppercase button labels.**
 - **Chasing AI positioning.** Their "powerful A.I." is ADP plus tendencies.
-  Alpine's honesty about its own model — every number explained on the page —
-  is more durable than marketing language, and it is what "timeless" actually
+  Explaining every number is more durable, and it is what timeless actually
   looks like.
 
----
+Added:
 
-## 05. Where Alpine is genuinely ahead
-
-Worth naming, because it should be protected in any redesign.
-
-- **Every number is explained.** The method notes, the four grade bars, and
-  `docs/draft-room-how-it-works.html` mean nothing is a black box. No major
-  fantasy site does this.
-- **Points are recomputed from raw components.** Most tools take the
-  platform's number and inherit its assumptions.
-- **Replacement level is derived, not asserted.** It moves correctly with
-  league shape.
-- **It is fast.** No framework, no bundle, no login, no ads. Opens instantly.
+- **Stadium photography, chrome and neon.** Covered above. Generic in a market
+  where everyone already uses it, and structurally wrong for a page whose
+  argument is legibility.
+- **Ambient decoration with no job.** Their homepage has a scrolling
+  `FANTASY FOOTBALL` marquee, bobbing footballs and robot mascots. Those work
+  for a consumer social product with a mascot. The version of playfulness Juke
+  should buy is derived from its own subject, not borrowed from theirs.
+- **An invented social-proof number.** "Trusted by 13+ million players" sits in
+  their hero. When Juke has an honest number — drafts completed, boards graded
+  — it belongs there. Until then the hero's proof is the board itself.
 
 ---
 
-## 06. Suggested order
+## Where Juke is genuinely ahead
 
-Roughly cheapest-to-most-valuable first. None of this is committed to.
+Worth naming, because it should be protected in any redesign. All four are
+now better evidenced than when they were first written.
 
-1. 16px base size — fixes the iOS input-zoom bug as a side effect.
-2. Blue-tinted neutrals.
-3. Dark mode via `prefers-color-scheme` on the `:root` block.
-4. Saved league setups, named. Reuses the existing settings fingerprint.
-5. Position-run detection on the draft board.
-6. Custom ADP import.
-7. Scoring rules moved into the browser — Phase 2 in `SETTINGS-REFACTOR.md`.
-   This is the one that unlocks the most, because it makes the scoring
-   selector honest.
+- **Every number is explained.** The method notes, the four grade bars and
+  `docs/draft-room-how-it-works.html` mean nothing is a black box. Confirmed
+  first-hand: Sleeper's CPU logic and ranking methodology are opaque.
+- **A post-draft grade.** Sleeper's mock ends with a board, a roster and a
+  marketing CTA — **no evaluation at all.** A company of that scale leaving the
+  user there is not a gap Juke needs to defend; it is the product.
+- **Replacement level and tiers are derived from your league**, not asserted.
+  Sleeper gives an ADP list and a projected-pick tag, with no tier logic.
+- **The projection is graded against itself.** `pp` in `stats.js` holds what was
+  forecast for seasons since played, so "our record on him" is checkable. No
+  other mock tool does this.
+- **It is fast, and free of ceremony.** No framework, no bundle, no login, no
+  ads, works offline. Sleeper requires an account for everything.
 
 ---
 
-## 07. The app store question
+## The app store question
 
-This needs saying plainly, because it conflicts with a rule in `CLAUDE.md`.
+Unchanged in substance, and still the honest sequence.
 
-**Google Play is reachable** from where the project stands. A Trusted Web
-Activity wraps an existing PWA; `manifest.json` and the icons already exist.
-The remaining work is service-worker offline support, and Play requires a
-signed Android package, which means a build step for the wrapper only — not
-for the site.
+**Google Play is reachable.** A Trusted Web Activity wraps the existing PWA;
+`manifest.json` and the icons exist. The remaining work is service-worker
+offline support — **which the project still does not have** — plus a signed
+Android package, meaning a build step for the wrapper only.
 
 **The App Store is harder.** Apple rejects thin web wrappers under the
 minimum-functionality guideline. Passing review realistically means a native
-shell with native capabilities, which means Capacitor or similar, which means
-a real build pipeline and a Mac.
+shell, which means a real pipeline and a Mac.
 
-So the honest sequence is: strengthen the PWA → ship to Play via TWA → treat
-iOS as a separate project with its own decision about tooling.
+So: strengthen the PWA → ship to Play via TWA → treat iOS as a separate project
+with its own tooling decision.
 
-The "no build step" rule in `CLAUDE.md` is correct today and should not be
-relaxed for the website. It will have to be revisited for the wrapper, and
-that is fine — the wrapper is a different artefact from the site. The website
-staying buildless is what keeps it fast and approachable, and that should
-survive any app store.
+**The no-build-step rule stays.** It is correct for the website and it is what
+keeps the site fast and approachable. It will have to be revisited for the
+wrapper, and that is fine: the wrapper is a different artefact from the site.
