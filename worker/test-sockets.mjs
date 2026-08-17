@@ -407,6 +407,41 @@ if (!newsBody.configured) {
   check("an unconfigured provider returns no items", newsBody.items.length, 0);
 }
 
+/* ---- news is cached, and failures are not ----
+
+   The provider is a thousand calls a month and a draft is the same dozen
+   players opened repeatedly, so the cache is the difference between the
+   feature working and being rationed. Two things are asserted: that a repeat
+   is served without going upstream, and that CORS is still decided per
+   request -- a cache that answered with the first caller's origin header
+   would turn a per-request decision into a shared one. */
+const newsFirst = await fetch(`${HTTP}/news?player=CACHETEST1`,
+                              { headers: { Origin: "https://jukeff.com" } });
+check("news answers a first ask", newsFirst.status, 200);
+const firstBody = await newsFirst.json();
+
+const newsAgain = await fetch(`${HTTP}/news?player=CACHETEST1`,
+                              { headers: { Origin: "https://jukeff.com" } });
+check("and answers a repeat", newsAgain.status, 200);
+
+/* Only meaningful with a key configured: without one the route returns before
+   it ever reaches the cache, which is correct and is why this is conditional
+   rather than an unconditional assertion that would fail on a fresh checkout. */
+if (firstBody.configured) {
+  check("a repeated ask is served from cache",
+        newsAgain.headers.get("x-juke-cache"), "hit");
+}
+
+const newsOther = await fetch(`${HTTP}/news?player=CACHETEST1`,
+                              { headers: { Origin: "https://www.jukeff.com" } });
+check("a cached answer still gets the asking origin's CORS header",
+      newsOther.headers.get("access-control-allow-origin"), "https://www.jukeff.com");
+
+const newsEvilCached = await fetch(`${HTTP}/news?player=CACHETEST1`,
+                                   { headers: { Origin: "https://evil.example" } });
+check("and a forbidden origin is still refused, cached or not",
+      newsEvilCached.status, 403);
+
 /* ---- the rate limit ----
 
    The number that matters is not that a flood is stopped — it is that a real

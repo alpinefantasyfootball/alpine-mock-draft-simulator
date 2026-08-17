@@ -460,6 +460,14 @@ async function giphySearch(request, env) {
    host is the default and nothing has to be set in production. */
 const NEWS_BASE = "https://tank01-nfl-live-in-game-real-time-statistics-nfl.p.rapidapi.com";
 const NEWS_MAX = 6;
+
+/* Fifteen minutes. Long enough that a draft — an hour of the same dozen
+   players being opened repeatedly — costs one call each rather than dozens,
+   and short enough that a Sunday-morning inactive tag still reaches somebody
+   drafting that afternoon. The provider updates several times an hour, so
+   past this point we would be trading real freshness for savings that are
+   already most of the way banked. */
+const NEWS_TTL = 900;
 const SUMMARY_MAX = 220;
 
 // One upstream call, deliberately isolated. Everything above and below this
@@ -542,16 +550,69 @@ async function playerNews(request, env) {
   const playerId = (new URL(request.url).searchParams.get("player") || "")
     .replace(/[^A-Za-z0-9_-]/g, "").slice(0, 24);
 
+  /* Served from the edge cache when we have asked recently.
+
+     Without this the provider is called once per sheet opened, and a draft is
+     people opening the same dozen players over and over. The free tier is a
+     thousand calls a month, so sweeping the board once — 201 players with an
+     id — is a fifth of the allowance in one sitting, and two people doing it
+     is most of a month. Headlines change hourly at most, so this is close to
+     free in freshness and is the difference between the feature being usable
+     and being rationed. */
+  const cache = caches.default;
+  const key = newsCacheKey(playerId);
+
+  const hit = await cache.match(key);
+  if (hit) {
+    /* Rebuilt rather than returned. The cached entry deliberately carries no
+       CORS headers: those depend on who is asking, and handing one origin's
+       header to another is how a cache turns a per-request decision into a
+       shared one. The body is the only thing worth keeping. */
+    return new Response(await hit.text(),
+      { headers: Object.assign({}, headers, { "x-juke-cache": "hit" }) });
+  }
+
   try {
     const items = await fetchUpstreamNews(env, playerId, env.TANK01_BASE || NEWS_BASE);
-    return new Response(JSON.stringify({ configured: true, items }), { headers });
+    const body = JSON.stringify({ configured: true, items });
+
+    /* Only a real answer is kept, and an empty one counts: "he has no news
+       today" is a fact worth caching, and re-asking for it every time would
+       spend the allowance on exactly the players who have nothing. The catch
+       below is what must never be cached — pinning an upstream blip for the
+       whole TTL would turn a momentary failure into a quarter of an hour of
+       silence. That is the same line `configured` already draws between "not
+       wired up" and "nothing today". */
+    await cache.put(key, new Response(body, {
+      headers: {
+        "content-type": "application/json",
+        "cache-control": "public, max-age=" + NEWS_TTL
+      }
+    }));
+
+    return new Response(body,
+      { headers: Object.assign({}, headers, { "x-juke-cache": "miss" }) });
   } catch (err) {
     /* News failing is not worth breaking a sheet over — the same rule the
        score strip follows. `error: true` is for us; the page draws nothing
-       either way. */
+       either way. Not cached, deliberately: see above. */
     return new Response(JSON.stringify({ configured: true, items: [], error: true }),
                         { headers });
   }
+}
+
+/* The cache key, built rather than taken from the request.
+
+   `caches.default` keys on the whole URL, and the real one carries an Origin
+   header and could carry anything else a client appends. A canonical key means
+   one entry per player rather than one per (player, however-you-asked), which
+   is the difference between a cache that works and a cache that mostly misses.
+
+   The host is not a real one and is never fetched; it exists because the Cache
+   API wants a Request. */
+function newsCacheKey(playerId) {
+  return new Request("https://juke-news-cache.invalid/player/" +
+                     encodeURIComponent(playerId || "none"));
 }
 
 export default {

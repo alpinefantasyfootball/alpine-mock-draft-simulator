@@ -676,6 +676,32 @@ rebuild you run by hand and commit yourself is new data behind a cached
 address — which is the same "a rebuild nobody sees" failure, reached from the
 other direction.
 
+**The route caches, and that is what makes it affordable.** Without it the
+provider is called once per sheet opened, and a draft is the same dozen
+players opened over and over. The free tier is a thousand calls a month, so
+sweeping the board once — 201 players with an id — is a fifth of the allowance
+in a sitting. Measured: 50 requests across 5 players cost **5 upstream calls**
+rather than 50. Fifteen minutes, in `NEWS_TTL`.
+
+**The cache key is built, not taken from the request.** `caches.default` keys
+on the whole URL, so the real request — which carries an Origin and could
+carry anything a client appends — would produce one entry per way of asking
+rather than one per player. `newsCacheKey()` canonicalises it.
+
+**A cached entry carries no CORS headers, and the response is rebuilt.** Which
+origin may read a response is a per-request decision, and serving one caller's
+`access-control-allow-origin` to another turns it into a shared one. The body
+is the only thing worth keeping; the headers are put back per request, and the
+origin refusal still happens before the cache is ever consulted.
+
+**An error is never cached, and an empty answer is.** "He has no news today"
+is a fact worth keeping, and re-asking for it would spend the allowance on
+exactly the players who have nothing. Caching a failure would pin an upstream
+blip for the whole TTL and turn a moment's outage into a quarter hour of
+silence — the same line `configured` already draws between "not wired up" and
+"nothing today". Tested by taking the provider down, asking for a new player,
+bringing it back and checking the next ask is a miss that returns real items.
+
 **`TANK01_BASE` points the worker at a stub.** The provider cannot be reached
 from a test and a key cannot live in the repo, so the whole path — worker,
 normalisation, escaping, rendering — is driven against a local server serving
