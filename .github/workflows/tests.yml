@@ -1,0 +1,52 @@
+name: Tests
+
+# The two suites that are cheap enough to run on every change: standard-library
+# Python, no network, no pip install, a few seconds each.
+#
+# The Playwright suite is deliberately NOT here. It is forty-seven tests, about
+# fifteen minutes, and it needs a wrangler dev running a Durable Object beside
+# a static server -- worth running before a deploy, and too heavy to sit in
+# front of every push. So this is a floor rather than the whole gate: green
+# here means the snake maths and the source-id join still hold, and it does not
+# mean the app works. Anything touching the browser still gets `npx playwright
+# test` run by hand.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Read-only. This job checks; the only workflow that writes is the nightly
+# rebuild, and it says so in its own permissions block.
+permissions:
+  contents: read
+
+jobs:
+  suites:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # test_engine.py evaluates draft-engine.js and room.js in a real
+      # JavaScript host -- that is the entire point of it, since the claim
+      # being tested is that a server and every client reach the same verdict.
+      # It looks for node, deno or bun on PATH and says so plainly if none is
+      # there, which on a bare runner would read as the engine being broken.
+      # ubuntu-latest ships node, so this pin is about knowing which one ran
+      # rather than about making it available.
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Engine and room rules
+        run: python scripts/test_engine.py
+
+      - name: Source-id crosswalk
+        run: python scripts/test_crosswalk.py
