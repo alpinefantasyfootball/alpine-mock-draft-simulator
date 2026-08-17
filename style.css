@@ -225,6 +225,51 @@
   --k-bg:#251E3C;   --k-fg:#B4A0EC;   --k:#7F62CF;    /* white 4.61 */
   --dst-bg:#232B33; --dst-fg:#A8B7C2; --dst:#607483;  /* white 4.86 */
 
+  /* ---- elevation ----
+
+     Four steps, and no rule below may write a raw box-shadow for a lifted
+     surface. They replaced fourteen distinct shadow values across eighteen
+     declarations, every one picked locally by eye — the same failure as the
+     26 font sizes and 15 radii, and the one DESIGN-DIRECTION.md names as the
+     difference between "clean" and "designed": nobody notices any single
+     shadow, and the sum of them is what reads as a product.
+
+     Two things make this a system rather than a list.
+
+     **One light source, and it is directly above.** Every step offsets down
+     the Y axis only. A shadow that leans left beside one that leans right is
+     two light sources in one composition, which is the thing the eye catches
+     without being able to name it. The door is the single exception and says
+     so where it sits: it is a lit object with its own interior light, not a
+     card on a page.
+
+     **Two layers, always.** A tight, dark contact shadow for where the object
+     meets the surface, and a broad, soft ambient one for the room light it
+     blocks. One blurred layer is what flat design does; both is what makes a
+     surface look like it is actually above another one. That is most of the
+     difference between these and what they replaced.
+
+     They live here rather than beside the type and radius scales because a
+     shadow is a colour: on a dark page it has to be near-black and deep to
+     register at all, and the same value on a light page reads as grime.
+
+     Three things below still write a shadow by hand, and none of them is a
+     lifted surface: `.sug.top` is a blue state glow rather than a height,
+     `--team` is a ring drawn as a shadow because a border would eat the
+     headshot, and the doorway's handle, placard and sill are detail on a lit
+     object with an interior light of its own. The door says so where it sits.
+     Anything else with a literal here is a rule that forgot. */
+  --elev-1: 0 1px 2px rgba(3, 8, 16, .48);
+  --elev-2: 0 2px 4px rgba(3, 8, 16, .42), 0 6px 14px rgba(3, 8, 16, .36);
+  --elev-3: 0 4px 8px rgba(3, 8, 16, .42), 0 14px 30px rgba(3, 8, 16, .40);
+  --elev-4: 0 8px 16px rgba(3, 8, 16, .46), 0 28px 60px rgba(3, 8, 16, .48);
+  /* The one that casts upwards, and the single exception to the overhead
+     light. A sheet rising from the bottom edge of the screen has no floor
+     below it to cast onto, so the shadow's whole job there is to separate its
+     top edge from the page it is covering. Named rather than written inline
+     so "no raw box-shadow for a lifted surface" stays literally true. */
+  --elev-up: 0 -8px 28px rgba(3, 8, 16, .44);
+
   /* Tells the browser to draw the parts we don't control — select popups,
      checkboxes, scrollbars — to match. Without it a dark page gets white
      dropdowns. */
@@ -271,6 +316,15 @@
   --fill-hi:     #E6EBF1;
   --track:       #EDF1F5;
   --board-hd:    #E9EDF1;
+
+  /* Same geometry, a fraction of the weight, and tinted with the page's own
+     navy rather than black — a neutral grey shadow on a cool light page reads
+     as dirt. See the note on the dark set for why there are two layers. */
+  --elev-1: 0 1px 2px rgba(20, 35, 56, .10);
+  --elev-2: 0 2px 4px rgba(20, 35, 56, .07), 0 6px 14px rgba(20, 35, 56, .10);
+  --elev-3: 0 4px 8px rgba(20, 35, 56, .08), 0 14px 30px rgba(20, 35, 56, .12);
+  --elev-4: 0 8px 16px rgba(20, 35, 56, .10), 0 28px 60px rgba(20, 35, 56, .18);
+  --elev-up: 0 -8px 28px rgba(20, 35, 56, .16);
 
   --mark-ink:    #152A49;
 
@@ -1340,7 +1394,7 @@ tr.drafted .ovr { color: var(--ink-light); }
   max-height: calc(100vh - 60px);
   display: flex; flex-direction: column;
   background: var(--card); border-radius: var(--r-lg); overflow: hidden;
-  box-shadow: 0 24px 60px rgba(6,12,22,.45);
+  box-shadow: var(--elev-4);
 }
 
 @media (max-width: 620px) {
@@ -1826,160 +1880,270 @@ tr.drafted .ovr { color: var(--ink-light); }
    different numbers of rooms and that is the point: they read as a timeline
    rather than as a grid with gaps in it. align-items: start keeps each
    column its own height instead of stretching the short ones. */
-/* ---------- the door, and the rooms turning through it ----------
+/* ---------- the doorway, and the rooms turning through it ----------
 
-   The doorway carries its own ground — a navy wall and a lit room — so it is
-   the same object in both themes, the same licence .hero-band already takes.
-   The list beside it uses page tokens, because it is page furniture. */
-/* The list is capped rather than left to fill the column, and the cap is 560
-   so the block's right edge lands on the pillars' below it.
+   Rebuilt after somebody who had never seen the page called it "the books
+   with the room names". That is the correct read of what was there: a 4:5
+   panel, hinged on its left edge, swinging open, with two embossed rectangles
+   on its face. Every one of those is a hardback cover. None of them is a door.
 
-   At 1fr it ran to 624px for rows whose longest line is 124px, so the selected
-   row drew as a wide, mostly empty rectangle and the door and the list read as
-   two objects with a gap rather than one composition.
+   What makes a door read as a door is construction, not detail, and there are
+   five parts to it. Grain, brass and a knob are the last of the five and the
+   old version had only those.
 
-   It was 480 first, on the argument that tighter rows beat a flush edge. That
-   was measured afterwards and the argument does not survive it: the row is
-   124px of text either way, so 480 leaves 356px empty and 560 leaves 436 —
-   80px of slack, not tight against loose. The real gain was 624 → 480; going
-   to 560 gives a quarter of it back and buys an edge shared with every other
-   section on the page. Alignment is a property somebody can see; 80px inside
-   an already three-quarters-empty row is not.
+   **Proportion.** A door is 36 by 80 inches — 1:2.2. The old opening was
+   1:0.8, which is a book, a tablet or a picture frame. The opening is 1:2.15
+   now, and it is the single change that does most of the work.
 
-   The door stays 480: it carries the placard better than 420 and drops the
-   blurb from four lines to three. */
+   **A wall with thickness.** A door is a hole cut in something. The old jamb
+   was a 12px flat border, which is a mount rather than a wall. The reveal —
+   the sides of the hole, seen through the opening — is *painted* rather than
+   built from real 3D faces, and that is measured rather than lazy: the
+   perspective has to stay long or the swinging panel magnifies until it
+   spills over the section above it, and at that focal length a 40px reveal on
+   a 280px doorway resolves to about three pixels of visible offset. Real
+   geometry that renders as three pixels costs the same as a gradient and
+   reads as nothing.
+
+   **Thickness on the door itself.** This one *is* real 3D and has to be. The
+   panel turns 64 degrees, so its leading edge swings round to face the reader,
+   and a painted edge does not survive that. `.door-edge` is a face at 90
+   degrees to the panel. After the proportion it is the strongest cue in here,
+   because it is the one a book cover cannot fake.
+
+   **A floor.** Books float; doors stand on something. The sill, the contact
+   shadow under the leading edge and the light the open room throws onto the
+   floor are one object between them, and without them the whole assembly is
+   a rectangle on a background again.
+
+   **A handle at human height.** The old knob was 13px on a 456px panel —
+   2.9% of the width, dead centre vertically. A real handle sits at 1.05m on a
+   2.03m door, which is 48% down, and is about 7% of the width. Small and
+   centred reads as a clasp, which is one more thing books have and doors
+   do not.
+
+   Two constraints inherited from the version this replaces, both still live:
+
+   Nothing between .doorway-outer and .door may set an overflow. Any value but
+   visible establishes a flattening context that `transform-style: preserve-3d`
+   cannot cross, and the door stops swinging and starts squashing. The
+   interior clips; the frame does not.
+
+   `margin: auto` is never used to centre the doorway. An auto margin on a
+   grid item defeats the default stretch and makes the item shrink-wrap its
+   content — and every child of .doorway is absolutely positioned, so its
+   intrinsic width is zero. The two together collapse the whole thing while it
+   still reports a perfectly healthy max-width. `justify-self` instead.
+
+   The door swings *towards* the reader. Away is what it really does seen from
+   inside the room, and at that angle it is edge-on, unlit and invisible — the
+   physics is right and there is no picture.
+
+   The whole assembly is dark under both themes, the same licence .hero-band
+   takes, which is what lets everything in here name white and the navies
+   directly. It is a lit object rather than a page surface, and it is the one
+   place --elev-* does not apply: those model a single overhead light on a
+   flat page, and this has a light of its own coming out of it. */
+
+/* The list is capped at 560 so the block's right edge lands on the pillars'
+   below it. At 1fr it ran to 624px for rows whose longest line is 124px, so
+   the door and the list read as two objects with a gap rather than as one
+   composition. */
 .roomstage {
   display: grid;
   grid-template-columns: minmax(0, 480px) minmax(0, 1fr);
   gap: 40px; align-items: center; margin-bottom: 46px;
 }
 
-/* A door swung towards the reader brings its far edge closer, and closer means
-   bigger. At a short perspective the panel renders oversize and spills out of
-   the section over whatever sits above it; 2600px holds it to about 16%, and
-   the padding absorbs the rest instead of letting it overlap. */
-.doorway-outer { perspective: 2600px; padding: 58px 0; }
+/* The door and its card. Relative, because the card overlaps the doorway. */
+.doorstage { position: relative; min-height: 560px; display: flex; align-items: center; }
 
-/* No overflow on this, ever — it is the door's 3D ancestor. Any value but
-   visible establishes a flattening context that preserve-3d cannot cross, and
-   the door stops swinging and starts squashing. The interior clips instead,
-   which is why .door-room is a sibling of the door rather than its parent. */
+/* 2000px is a long lens and it is not a taste decision. A door swung towards
+   the reader brings its leading edge closer, and closer means bigger: the
+   magnification is P / (P - w·sin θ), which at 228px of door and 64 degrees is
+   1.11 here and would be 1.42 at 700px. The shorter lens gives a far better
+   reveal and renders the panel half again as tall as its own frame, over
+   whatever sits above it.
+
+   The angle is set by how much lit room is left to see, and that is a
+   three-way trade rather than a preference: the panel covers cos θ of the
+   opening, the card covers a fixed strip on the right, and what remains
+   between them is the whole point of opening it. At 58° and a 264px card the
+   room showed through a 59px slot — a door ajar rather than a door open.
+   64° and 250px give 104px of the 228, which is 46% of the opening. Past
+   about 73° the placard starts to squeeze and the panel stops reading as a
+   door at all. */
+.doorway-outer {
+  position: relative;
+  perspective: 2000px;
+  width: 280px; padding: 44px 0;
+}
+
 .doorway {
-  position: relative; aspect-ratio: 4 / 5;
+  position: relative; width: 100%; aspect-ratio: 280 / 560;
+  transform-style: preserve-3d;
+}
+
+/* ---- the wall ---- */
+
+/* Lit from above, like everything else on the page. The grain is two
+   near-invisible gradients rather than an image: at 4% alpha it does nothing
+   you could point at and it stops 300 by 560 pixels of flat navy reading as
+   a swatch. */
+.wall {
+  position: absolute; inset: 0;
+  border-radius: var(--r-sm);
+  background:
+    linear-gradient(180deg, #2B4A6C 0%, #1B3350 42%, #0E1E36 100%),
+    repeating-linear-gradient(90deg, rgba(255,255,255,.04) 0 1px, transparent 1px 7px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .13),
+    inset 0 -40px 60px -40px rgba(0, 0, 0, .55);
+}
+
+/* Light from the open room falling on the wall around the opening. It is the
+   cheapest thing in here and it is most of why the room reads as lit rather
+   than as a dark rectangle with a picture in it. */
+.wall-spill {
+  position: absolute; inset: 0; border-radius: var(--r-sm);
+  background: radial-gradient(58% 42% at 50% 62%, rgba(237, 96, 17, .20), transparent 70%);
+  opacity: 0; transition: opacity .7s ease .12s;
+}
+.roomstage.open .wall-spill { opacity: 1; }
+
+/* ---- the opening ----
+
+   1:2.15, against a real door's 1:2.2. The inner shadow is the reveal: a hard
+   dark line at the head, softer down the sides, and the two thin gradient
+   edges below are the lit and unlit faces of the wall's thickness. */
+.opening {
+  position: absolute; left: 26px; right: 26px; top: 26px; bottom: 0;
+  transform-style: preserve-3d;
+  box-shadow:
+    inset 0 8px 14px -6px rgba(0, 0, 0, .85),
+    inset 8px 0 14px -8px rgba(0, 0, 0, .70),
+    inset -8px 0 14px -8px rgba(0, 0, 0, .55),
+    0 0 0 1px rgba(0, 0, 0, .45);
+}
+/* The reveal's two faces. The left one takes the light and the right one is
+   in shade, which is the whole reason a hole looks like a hole. */
+.opening::before, .opening::after {
+  content: ""; position: absolute; top: 0; bottom: 0; width: 5px;
+  pointer-events: none; z-index: 3;
+}
+.opening::before { left: 0;  background: linear-gradient(90deg, rgba(255,255,255,.16), transparent); }
+.opening::after  { right: 0; background: linear-gradient(270deg, rgba(0,0,0,.55), transparent); }
+
+/* Seen only while the room turns. Without it the swap rotates to edge-on and
+   you look straight through the wall. */
+.shaft {
+  position: absolute; inset: 0;
+  background: linear-gradient(180deg, #060C16, #02060C);
+}
+
+/* Room and door together, so a change of room reads as a drum revolving
+   inside a fixed frame rather than as the wall itself spinning. */
+.swap {
+  position: absolute; inset: 0;
   transform-style: preserve-3d;
   transition: transform .46s cubic-bezier(.6, 0, .3, 1);
 }
-.roomstage.turning .doorway { transform: rotateY(90deg); }
+.roomstage.turning .swap { transform: rotateY(90deg); }
 
-.jamb {
-  position: absolute; inset: 0;
-  background: linear-gradient(180deg, var(--navy-soft), var(--navy-deep));
-  border-radius: 10px 10px var(--r-xs) var(--r-xs);
-  box-shadow: 0 24px 50px rgba(6, 12, 22, .45);
-}
+/* ---- the room beyond ---- */
 
 .door-room {
-  position: absolute; inset: 12px; overflow: hidden;
-  border-radius: 6px 6px 2px 2px;
+  position: absolute; inset: 0; overflow: hidden;
+  background: linear-gradient(180deg, #14263F 0%, #0A1526 62%, #060D18 100%);
+}
+/* The far wall, lit warm, and low enough that the light reads as coming from
+   inside the room rather than from a lamp pointed at the reader. */
+.room-far {
+  position: absolute; inset: 0;
   background:
-    radial-gradient(130% 90% at 78% 10%, rgba(237, 96, 17, .20), transparent 62%),
-    linear-gradient(180deg, #11223D, #070F1D);
+    radial-gradient(72% 44% at 50% 30%, rgba(237, 96, 17, .30), transparent 68%),
+    radial-gradient(120% 60% at 50% 100%, rgba(237, 96, 17, .18), transparent 70%);
 }
-.door-room::before {
-  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 40%;
-  background: linear-gradient(0deg, rgba(237, 96, 17, .14), transparent);
-}
-
-/* Clear of the swing. The open door covers about 47% of the frame, and text
-   under it is hidden by the thing that is supposed to be revealing it. */
-.door-room-inner {
-  position: absolute; left: 50%; right: 18px; bottom: 22px;
-  display: flex; flex-direction: column; align-items: flex-start;
-}
-/* Literal white, not a token.
-
-   This was `var(--band-ink)`, which is declared on `.hero-band` rather than on
-   `:root` — so out here it resolves to nothing, the property falls back to
-   inherit, and the room's name picked up the page's dark ink and vanished
-   against a dark interior in the light theme. The room carries its own ground
-   in both themes, which is exactly the case where naming white directly is
-   allowed. */
-.door-room-name {
-  font-size: var(--fs-base); font-weight: 700; color: #fff;
-  line-height: 1.2; margin-bottom: 7px;
-}
-.door-room-status {
-  font-size: var(--fs-2xs); font-weight: 700;
-  letter-spacing: .12em; text-transform: uppercase;
-  color: #FFB98A; margin-bottom: 9px;
-}
-.door-room-status.soon { color: #9FB3CA; }
-.door-room-blurb { font-size: var(--fs-sm); line-height: 1.45; color: #D9E3EF; }
-.door-room-season {
-  font-size: var(--fs-2xs); font-weight: 700;
-  letter-spacing: .12em; text-transform: uppercase;
-  color: #8194AC; margin-top: 12px;
+/* A floor inside the room, which is what gives the interior a bottom. The
+   opening runs to the ground, so without it the room is a lit fog. */
+.room-floor {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 26%;
+  background: linear-gradient(0deg, rgba(237, 96, 17, .26), rgba(6, 13, 24, .10));
+  box-shadow: inset 0 1px 0 rgba(255, 200, 150, .18);
 }
 
-/* The interior text arrives once the door is out of the way, rather than
-   sitting there waiting to be uncovered. */
-.door-room-inner > * {
-  opacity: 0; transform: translateY(6px);
-  transition: opacity .4s ease, transform .4s ease;
-}
-.roomstage.open .door-room-inner > * { opacity: 1; transform: none; }
-.roomstage.open .door-room-name   { transition-delay: .30s; }
-.roomstage.open .door-room-status { transition-delay: .38s; }
-.roomstage.open .door-room-blurb  { transition-delay: .44s; }
-.roomstage.open .door-room-season { transition-delay: .52s; }
+/* ---- the door ---- */
 
 .door {
-  position: absolute; inset: 12px;
-  transform-origin: left center; transform: rotateY(0deg);
+  position: absolute; inset: 0;
+  transform-origin: left center; transform: rotateY(0deg) translateZ(-3px);
   transition: transform .78s cubic-bezier(.22, .9, .24, 1.06);
   transform-style: preserve-3d;
-  border-radius: 6px 6px 2px 2px;
-  box-shadow: 18px 6px 34px rgba(6, 12, 22, .42);
   display: flex; align-items: center; justify-content: center;
 }
-.roomstage.open .door { transform: rotateY(-62deg); }
+.roomstage.open .door { transform: rotateY(-64deg) translateZ(-3px); }
 
+/* Stiles, rails and two panels, at the proportions a real six-panel door
+   uses: a tall upper panel, a lock rail at handle height, a shorter lower
+   one. The old face carried two equal 30% rectangles, which is a book cover's
+   embossing rather than joinery. */
 .door-face {
   position: absolute; inset: 0; overflow: hidden;
-  border-radius: 6px 6px 2px 2px;
-  background: linear-gradient(102deg, #24406B 0%, #1A3053 46%, #14263F 100%);
-  border: 1px solid rgba(255, 255, 255, .10);
+  background:
+    linear-gradient(102deg, #2A4972 0%, #1C3459 46%, #142743 100%);
+  border: 1px solid rgba(255, 255, 255, .12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .10);
 }
 .door-face::before, .door-face::after {
-  content: ""; position: absolute; left: 14%; right: 14%;
-  border: 1px solid rgba(255, 255, 255, .07);
-  border-radius: 3px;
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, .35);
+  content: ""; position: absolute; left: 11%; right: 11%;
+  border-radius: var(--r-xs);
+  background: linear-gradient(160deg, rgba(0,0,0,.22), rgba(255,255,255,.05));
+  box-shadow:
+    inset 0 2px 3px rgba(0, 0, 0, .55),
+    inset 0 -1px 0 rgba(255, 255, 255, .10);
 }
-.door-face::before { top: 7%; height: 30%; }
-.door-face::after { bottom: 7%; height: 30%; }
+.door-face::before { top: 8%;  height: 35%; }
+.door-face::after  { top: 57%; height: 32%; }
+
+/* The panel's thickness, and the only genuinely 3D piece besides the swing.
+   rotateY(-90deg) about the right edge lays this face straight back into the
+   opening; at 58 degrees open it turns towards the reader and catches the
+   light. Take this out and the door is a sheet of paper again. */
+.door-edge {
+  position: absolute; top: 0; bottom: 0; right: 0; width: 9px;
+  transform-origin: right center; transform: rotateY(-90deg);
+  background: linear-gradient(180deg, #4B6E99, #22395C);
+}
 
 /* A swung door turns away from the light. Without this the panel is as bright
    open as shut, which is the tell that it is a rectangle rather than a door. */
 .door-shade {
-  position: absolute; inset: 0; border-radius: 6px 6px 2px 2px;
-  background: linear-gradient(270deg, rgba(0, 0, 0, .50), rgba(0, 0, 0, .10));
+  position: absolute; inset: 0;
+  background: linear-gradient(270deg, rgba(0, 0, 0, .52), rgba(0, 0, 0, .08));
   opacity: 0; transition: opacity .78s ease;
 }
 .roomstage.open .door-shade { opacity: 1; }
 
-.knob {
-  position: absolute; right: 9%; top: 50%;
-  width: 13px; height: 13px; margin-top: -6px; border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #E6CE86, #C9A227 55%, #9A7B18);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, .55);
+/* 1.05m on a 2.03m door is 48% down, and a lever is about 7% of the width.
+   A backplate and a lever, rather than a 13px stud in the vertical centre. */
+.handle {
+  position: absolute; right: 6%; top: 48%;
+  width: 7px; height: 34px; margin-top: -17px; border-radius: var(--r-pill);
+  background: linear-gradient(140deg, #E8D294, #C9A227 55%, #8E7015);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .6), inset 0 1px 0 rgba(255, 255, 255, .5);
+}
+.handle::before {
+  content: ""; position: absolute; right: 4px; top: 9px;
+  width: 24px; height: 6px; border-radius: var(--r-pill);
+  background: linear-gradient(180deg, #EBD79F, #B8901D);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .55), inset 0 1px 0 rgba(255, 255, 255, .45);
 }
 
 /* The placard. Brass rather than a brand colour on purpose — it is furniture,
    and it must not read as a position solid or a club mark. */
 .placard {
-  position: relative; width: 74%; padding: 10px 12px; text-align: center;
-  border-radius: 3px;
+  position: relative; width: 74%; padding: 9px 10px; text-align: center;
+  border-radius: var(--r-xs);
   background: linear-gradient(158deg, #E6CE86, #C9A227 52%, #9A7B18);
   border: 1px solid rgba(0, 0, 0, .35);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .45), 0 3px 8px rgba(0, 0, 0, .5);
@@ -1997,6 +2161,108 @@ tr.drafted .ovr { color: var(--ink-light); }
 }
 .placard::before { left: 6px; }
 .placard::after { right: 6px; }
+
+/* ---- the ground ----
+
+   Three elements that are one object: the sill the door closes onto, the
+   light the open room throws forward, and the shadow the assembly casts.
+   Together they are what stops the whole thing floating. */
+.sill {
+  position: absolute; left: 18px; right: 18px; bottom: -6px; height: 8px;
+  border-radius: 0 0 var(--r-xs) var(--r-xs);
+  background: linear-gradient(180deg, #35547A, #16263D);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, .6);
+}
+.floor-spill {
+  position: absolute; left: -14%; right: -14%; bottom: 4px; height: 76px;
+  border-radius: 50%;
+  background: radial-gradient(50% 60% at 50% 0%, rgba(237, 96, 17, .34), transparent 72%);
+  filter: blur(9px);
+  opacity: 0; transition: opacity .7s ease .18s;
+  pointer-events: none;
+}
+.roomstage.open .floor-spill { opacity: 1; }
+.floor-shadow {
+  position: absolute; left: 4%; right: 4%; bottom: 12px; height: 46px;
+  border-radius: 50%;
+  background: radial-gradient(50% 58% at 50% 50%, rgba(3, 8, 16, .60), transparent 72%);
+  filter: blur(11px);
+  pointer-events: none;
+}
+
+/* ---- the room's own words ----
+
+   Outside the opening, overlapping it, which is the arrangement that lets the
+   door be door-shaped at all. It carries its own dark ground under both
+   themes, so white and the band tones are legal on it. */
+.room-card {
+  position: absolute; right: 0; top: 50%; transform: translateY(-50%);
+  width: 250px; z-index: 2;
+  padding: 18px 20px 20px;
+  border-radius: var(--r-md);
+  border: 1px solid rgba(255, 255, 255, .13);
+  background: linear-gradient(158deg, rgba(26, 48, 78, .96), rgba(9, 19, 34, .97));
+  box-shadow: var(--elev-4);
+  backdrop-filter: blur(6px);
+}
+/* The card arrives once the door is out of the way, rather than sitting there
+   waiting to be uncovered. */
+.room-card > * {
+  opacity: 0; transform: translateX(-8px);
+  transition: opacity .42s ease, transform .42s ease;
+}
+.roomstage.open .room-card > * { opacity: 1; transform: none; }
+.roomstage.open .door-room-status { transition-delay: .30s; }
+.roomstage.open .door-room-name   { transition-delay: .36s; }
+.roomstage.open .door-room-blurb  { transition-delay: .42s; }
+.roomstage.open .door-room-season { transition-delay: .48s; }
+.roomstage.open .room-enter       { transition-delay: .54s; }
+
+.door-room-status {
+  display: inline-block; margin-bottom: 9px;
+  padding: 3px 9px; border-radius: var(--r-pill);
+  font-size: var(--fs-2xs); font-weight: 700;
+  letter-spacing: .12em; text-transform: uppercase;
+  color: #FFC49B; background: rgba(237, 96, 17, .18);
+  border: 1px solid rgba(237, 96, 17, .38);
+}
+.door-room-status.soon {
+  color: #A9BED6; background: rgba(255, 255, 255, .07);
+  border-color: rgba(255, 255, 255, .16);
+}
+/* Literal white, not a token. --band-ink is declared on .hero-band rather
+   than on :root, so out here it resolves to nothing, the property falls back
+   to inherit, and the room's name picks up the page's dark ink and vanishes
+   against a dark card in the light theme. The card carries its own ground in
+   both themes, which is exactly the case where naming white is allowed. */
+.door-room-name {
+  margin: 0 0 8px; font-size: var(--fs-lg); font-weight: 700;
+  color: #fff; line-height: 1.2;
+}
+.door-room-blurb {
+  margin: 0; font-size: var(--fs-sm); line-height: 1.5; color: #D3DFEC;
+}
+.door-room-season {
+  display: block; margin-top: 12px;
+  font-size: var(--fs-2xs); font-weight: 700;
+  letter-spacing: .12em; text-transform: uppercase; color: #8DA2BB;
+}
+/* Deliberately not orange. One primary action per screen and the hero above
+   already has it; this is the same destination reached from further down the
+   page, so it states rather than shouts. */
+.room-enter {
+  display: inline-block; margin-top: 14px;
+  padding: 8px 14px; border-radius: var(--r-sm);
+  font-size: var(--fs-sm); font-weight: 700; text-decoration: none;
+  color: #fff; background: rgba(255, 255, 255, .10);
+  border: 1px solid rgba(255, 255, 255, .22);
+  transition: background .15s ease, border-color .15s ease;
+}
+.room-enter:hover { background: rgba(255, 255, 255, .17); border-color: rgba(255, 255, 255, .34); }
+.room-enter:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.room-enter::after { content: " \2192"; }
+.room-enter[hidden] { display: none; }
+
 
 /* ---------- the list beside the door ---------- */
 .roomlist { display: flex; flex-direction: column; gap: 18px; max-width: 560px; }
@@ -2034,31 +2300,36 @@ tr.drafted .ovr { color: var(--ink-light); }
 
 @media (max-width: 760px) {
   .roomstage { grid-template-columns: 1fr; gap: 22px; }
-  /* justify-self, never `margin: 0 auto`: an auto margin on a grid item
+
+  /* The card can no longer overlap the doorway — at this width there is
+     nothing to overlap into — so the stage stops being a canvas and becomes
+     a column, and the card goes under the door.
+
+     justify-self, never `margin: 0 auto`: an auto margin on a grid item
      defeats stretch and makes it shrink-wrap, and every child of .doorway is
      absolutely positioned — so its intrinsic width is zero and the whole
      doorway collapses while still reporting a healthy max-width. */
-  .doorway-outer { width: 100%; max-width: 320px; justify-self: center; padding: 30px 0; }
+  .doorstage {
+    flex-direction: column; align-items: center;
+    min-height: 0; justify-self: center; width: 100%;
+  }
+  .doorway-outer { width: min(74vw, 250px); padding: 24px 0 12px; }
+  .room-card {
+    position: static; transform: none;
+    width: 100%; max-width: 340px; margin-top: 6px;
+  }
+  .roomstage.open .room-card > * { transform: none; }
 
-  /* The door opens further on a phone, and the text column moves left to use
-     what the swing gives back.
+  /* The door opens further on a phone.
 
-     A swung door covers cos(θ) of the frame, so opening it *further* is what
-     frees up width — the intuition runs the other way and it is wrong. At 48°
-     and 54° the panel ran straight over the text it is supposed to be
-     revealing; that was measured rather than reasoned, after reasoning got it
-     backwards.
-
-     At the desktop 62° the text column is about 130px on a 320px frame, and
-     "The Draft Room" wraps to two lines on the one panel whose whole job is
-     the room's name. 68° gives 142px and one line, and drops the blurb from
-     six lines to four. Past about 73° the placard starts to squeeze and the
-     door stops reading as a door — 79px of visible face against 107 here.
-
-     Phone only. Desktop has width to spare and 62° reads better on a door
-     that size. */
-  .roomstage.open .door { transform: rotateY(-68deg); }
-  .door-room-inner { left: 42%; }
+     A swung door covers cos(θ) of the opening, so opening it *further* is
+     what shows more of the room behind it — the intuition runs the other way
+     and it is wrong. It mattered more when the copy sat inside the opening
+     and the panel ran over the words it was supposed to be revealing; now
+     that the card is outside, this is simply about how much lit room a
+     250px-wide doorway can show. Past about 73° the placard starts to squeeze
+     and the door stops reading as a door. */
+  .roomstage.open .door { transform: rotateY(-66deg) translateZ(-3px); }
 }
 
 /* The header panel is a flat list and can reflow to any column count. The
@@ -2446,7 +2717,7 @@ a.room.live:hover {
   border: 0; border-radius: var(--r-lg); padding: 24px 26px;
   width: min(420px, calc(100vw - 32px));
   background: var(--card); color: var(--ink);
-  box-shadow: 0 24px 60px rgba(6,12,22,.45);
+  box-shadow: var(--elev-4);
 }
 
 .dlg::backdrop { background: rgba(6,12,22,.55); }
@@ -2582,7 +2853,7 @@ a.room.live:hover {
   display: flex; align-items: center; justify-content: center;
   border: 0; border-radius: 50%;
   background: var(--navy); color: #fff;
-  box-shadow: 0 6px 20px rgba(6,12,22,.38);
+  box-shadow: var(--elev-3);
   cursor: pointer;
   /* Out of the way when it is not wanted: invisible, unclickable, and
      untabbable — the tabIndex is handled in JavaScript alongside this. */
@@ -2905,7 +3176,7 @@ button.rtm:focus-visible {
     color: #fff; background: var(--navy);
     border: 1px solid var(--navy-soft); border-radius: var(--r-pill);
     padding: 10px 16px; cursor: pointer;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, .35);
+    box-shadow: var(--elev-3);
   }
 
   /* Out of the layout until asked for, so it leaves no gap under the panel. */
@@ -2923,7 +3194,7 @@ button.rtm:focus-visible {
     background: var(--sunken);
     border-top: 1px solid var(--line);
     border-radius: var(--r-lg) var(--r-lg) 0 0;
-    box-shadow: 0 -8px 28px rgba(0, 0, 0, .4);
+    box-shadow: var(--elev-up);
   }
 
   body.rail-open .rail .railcard { flex: none; }
@@ -3194,7 +3465,7 @@ button.rtm:focus-visible {
   position: absolute; right: 0; top: 22px; z-index: 5;
   display: flex; gap: 2px; padding: 4px;
   background: var(--card); border: 1px solid var(--line);
-  border-radius: var(--r-sm); box-shadow: 0 6px 18px rgba(0, 0, 0, .28);
+  border-radius: var(--r-sm); box-shadow: var(--elev-2);
 }
 
 .reactpicker button {
@@ -3213,7 +3484,7 @@ button.rtm:focus-visible {
   font-family: Inter, sans-serif; font-size: var(--fs-xs); font-weight: 600;
   color: #fff; background: var(--blue);
   border: 0; border-radius: var(--r-pill); padding: 5px 12px;
-  cursor: pointer; box-shadow: 0 4px 12px rgba(0, 0, 0, .3);
+  cursor: pointer; box-shadow: var(--elev-2);
 }
 
 .chattyping {
@@ -3319,7 +3590,7 @@ button.rtm:focus-visible {
     color: #fff; background: var(--navy);
     border: 1px solid var(--navy-soft); border-radius: var(--r-pill);
     padding: 10px 16px; cursor: pointer;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, .35);
+    box-shadow: var(--elev-3);
   }
 
   /* Out of the layout entirely until it is asked for, so the dock does not
@@ -3336,7 +3607,7 @@ button.rtm:focus-visible {
     height: 78vh; max-height: 78vh; width: auto;
     border-radius: var(--r-lg) var(--r-lg) 0 0;
     border-left: 0; border-right: 0; border-bottom: 0;
-    box-shadow: 0 -8px 28px rgba(0, 0, 0, .4);
+    box-shadow: var(--elev-up);
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 

@@ -414,6 +414,18 @@ function paintRoom(n) {
   $("roomStatus").textContent  = r.live ? "Open now" : "Not open yet";
   $("roomStatus").className    = "door-room-status" + (r.live ? "" : " soon");
 
+  /* The way in, on the card, for a room that has one. The list beside the
+     door is still the index; this is the same destination offered where
+     somebody has just finished reading what the room is for, which is the
+     moment they are most likely to want it. Hidden rather than disabled for
+     the rooms that do not exist — a control that cannot act must not merely
+     fail, it must not be offered. */
+  const enter = $("roomEnter");
+  if (enter) {
+    enter.hidden = !r.live;
+    if (r.live) enter.setAttribute("href", r.href);
+  }
+
   const rows = document.querySelectorAll("#homeRooms .rl");
   rows.forEach(function (el) {
     const on = Number(el.dataset.room) === n;
