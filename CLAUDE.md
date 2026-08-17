@@ -953,7 +953,48 @@ way, not reasoned about.
   off-screen. Returning hands the clock back or restarts the room. Only
   "Discard draft" clears the save.
 - **The rooms are written down once,** in `ROOMS` in `app.js`, and rendered
-  into both the header panel and the landing grid. Adding a room is one entry.
+  into both the header panel and the landing page. Adding a room is one entry.
+
+  **On the landing page they turn through a door.** It was a grid of six cards
+  with five greyed out, which is the worst available framing of a roadmap: it
+  reads as five things that are missing. A door you have not opened yet is the
+  same fact told properly, and the placard promises nothing the data does not
+  say — `live` and `season` come straight from `ROOMS`, so it cannot overclaim.
+
+  Drawn in CSS, no image, for the reason written beside the product shot: a
+  picture is a file to rebuild every time the palette moves, and it is wrong the
+  first time somebody forgets.
+
+  **Three things about it that are invisible when they break.**
+
+  **`overflow` on any ancestor between `.doorway` and `.door` flattens the 3D.**
+  Any value but `visible` establishes a flattening context that
+  `transform-style: preserve-3d` cannot cross, so the transform still applies
+  and the door squashes instead of swinging. The interior clips; the frame must
+  not. A width check alone does not catch this — the panel narrows either way.
+  What separates them is **height**: under perspective a door swung towards the
+  reader draws *taller* than at rest, and flattened it does not move at all.
+
+  **`margin: 0 auto` on the doorway collapses it to nothing.** An auto margin on
+  a grid item defeats the default `stretch` and makes the item shrink-wrap its
+  content — and every child of `.doorway` is absolutely positioned, so its
+  intrinsic width is zero. At phone width the whole thing vanished while still
+  computing a perfectly healthy `max-width: 320px`. `justify-self` instead, and
+  test the measured box rather than the style.
+
+  **The door opens *towards* the reader, and that is deliberate.** Away is what
+  it really does seen from inside the room, and at that angle it is edge-on,
+  unlit and invisible — correct physics, no picture. Towards costs about 47% of
+  the frame, which is why the interior text starts at half and the frame is
+  wider than it looks like it needs to be. Anything written under the swing is
+  hidden by the thing that is supposed to be revealing it.
+
+  **A colour inside the room is a literal, not a token.** `--band-ink` is
+  declared on `.hero-band`, not on `:root`, so naming it out here resolved to
+  nothing — the property fell back to inherit and the room's name picked up the
+  page's dark ink and disappeared against a dark interior in the light theme.
+  The room carries its own ground in both themes, which is exactly the case
+  where white may be named directly.
 - **A room is a name and takes a capital. So does the landing section: "The
   Rooms". Everywhere else in a sentence, "rooms" is a common noun and stays
   lowercase.**
