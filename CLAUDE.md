@@ -350,6 +350,34 @@ Projected 90+ finished at a median of 83, with 80% clearing 50. Of the
 projected zeros, 68% finished at zero — so a third climbed out, which matches
 the 35% measured from actuals alone by a different route.
 
+### Our record on a player
+
+`projectionRecord()` puts what we forecast beside what happened, on the Seasons
+tab. It is the only number on the sheet that can be checked rather than
+believed, and it is the thing a projection feed will never show you about
+itself.
+
+**Both halves go through `fantasyPoints()` under the current rules**, so it
+rescores with the scoring editor like everything else. A historical figure that
+ignored the editor would be the one number here quietly describing a different
+league.
+
+**Games played is not decoration, it is the honesty.** McCaffrey 2024 reads
+"we said 250, he got 40, −210" and that is a true number a reader would draw
+entirely the wrong conclusion from. Beside it sits a dimmed **4**. Availability
+is most of the projection's error — r 0.873 at 15+ games against 0.617 below —
+so the count is what separates a wrong read from a hamstring.
+
+**A column of green needs explaining too.** The forecast runs about 20 points
+light on anyone who stays fit, because it is an expected value that prices in
+injury risk, so most healthy seasons beat it. Without the note under the table
+that reads as a model that is simply too low rather than as one doing its job.
+
+**A season with a forecast but no real games is not gradeable and is dropped**,
+and a defense shows a dash rather than a games count — `gp: 1` on an aggregate
+DST row is not one game, which is the bug `perGame()` already exists to prevent
+arriving from a new direction.
+
 ### Kickers and defenses are not ranked, and that is measured
 
 The projected order for these two has no relationship to the finishing order:
@@ -1481,8 +1509,8 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   fact in two places and would have failed as a suite quietly testing a server
   nobody was running.
 
-- **End to end: `npm install` once, then `npx playwright test`.** Forty-two
-  tests, about fourteen minutes, and it starts the static server and `wrangler dev`
+- **End to end: `npm install` once, then `npx playwright test`.** Forty-seven
+  tests, about fifteen minutes, and it starts the static server and `wrangler dev`
   itself. It drives the real pages in a real browser — a solo draft at both
   shapes, a full two-manager room draft to completion, a dropped socket
   reconnecting, leaving and rejoining, the phone layout, what the player sheet

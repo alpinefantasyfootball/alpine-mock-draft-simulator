@@ -1372,6 +1372,14 @@ tr.drafted .ovr { color: var(--ink-light); }
 .sig.unrated .sig-head span { color: var(--ink-light); font-weight: 600; }
 .sig.unrated .sig-why { margin-top: 4px; }
 
+/* What we forecast against what happened. --good and --bad are the tokens the
+   grade already uses for the same idea, so a beat and a miss read the same way
+   here as they do there. The games column dims below fifteen because that is
+   where the measurement says the error stops being about the player. */
+.logtbl.record td.beat   { color: var(--good); font-variant-numeric: tabular-nums; }
+.logtbl.record td.missed { color: var(--danger); font-variant-numeric: tabular-nums; }
+.logtbl.record td.short  { color: var(--ink-light); }
+
 /* ---------- latest news ----------
 
    Sits under Our read and is deliberately quieter than it: ours is the model

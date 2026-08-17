@@ -2321,6 +2321,86 @@ function seasonKeys(stat) {
   return stat && stat.s ? Object.keys(stat.s).sort() : [];
 }
 
+/* ---- what we said, against what happened ------------------
+
+   `pp` holds the preseason forecast for seasons that have since been played,
+   beside the actuals in `s`. Every other number on this sheet is a claim about
+   the future; this is the only one that can be checked, and it is the thing no
+   projection feed shows you about itself.
+
+   Both sides go through fantasyPoints() under the current rules, so this
+   rescores with the scoring editor exactly as the rest of the sheet does. A
+   historical figure that ignored the editor would be the one number here
+   quietly describing a different league.
+
+   **Games played is not decoration.** Measured across all three archived
+   seasons, availability is most of the error: players who managed 15+ games
+   came in at r 0.873, under 15 at r 0.617. A forecast missed by 210 points
+   because somebody tore a hamstring in week four is a different claim from one
+   that was wrong about the player, and a table that shows only the miss lets a
+   reader draw the wrong conclusion from a true number.
+
+   **And the projection runs light on anyone who stays fit** — 20 points on
+   average for the 15+ group. That is not a flaw to correct: a projection is an
+   expected value that prices in injury risk, so it must undershoot everyone
+   who avoids it. The note under the table says so, because otherwise a column
+   of green "+" figures reads as a model that is simply too low. */
+function projectionRecord(player) {
+  const s = statOf(player);
+  if (!s || !s.pp || !s.s) return [];
+
+  return Object.keys(s.pp).sort().reverse().map(function (year) {
+    const said = s.pp[year], did = s.s[year];
+    // A season he was not in has nothing to grade. Same rule as everywhere
+    // else: absent, never zero.
+    if (!did || !did.gp) return null;
+    const proj = fantasyPoints(said);
+    const act = fantasyPoints(did);
+    return {
+      year: year,
+      proj: proj,
+      act: act,
+      diff: act - proj,
+      // A team defense is one aggregate row stamped gp:1, so its game count is
+      // not a game count. projGames() exists for exactly this and the answer
+      // here is to show nothing rather than "1".
+      games: player.pos === "DST" ? null : did.gp
+    };
+  }).filter(Boolean);
+}
+
+function projectionRecordHtml(player) {
+  const rows = projectionRecord(player);
+  if (!rows.length) return "";
+
+  const body = rows.map(function (r) {
+    const up = r.diff >= 0;
+    /* Fifteen games is the line the measurement was taken at, and it is why
+       the count is here: below it, the miss is mostly about availability. */
+    const short = r.games !== null && r.games < 15;
+    return `<tr>
+      <td>${r.year}</td>
+      <td>${Math.round(r.proj)}</td>
+      <td>${Math.round(r.act)}</td>
+      <td class="${up ? "beat" : "missed"}">${up ? "+" : "&minus;"}${Math.abs(Math.round(r.diff))}</td>
+      <td class="${short ? "short" : ""}">${r.games === null ? "&mdash;" : r.games}</td>
+    </tr>`;
+  }).join("");
+
+  return `<p class="section-label">Our record on ${player.pos === "DST" ? "this defense" : "him"}
+      &middot; ${scoringLabel()}</p>
+    <div class="tblscroll"><table class="logtbl record">
+      <thead><tr><th>Year</th><th>We said</th><th>He got</th><th>Diff</th><th>GP</th></tr></thead>
+      <tbody>${body}</tbody>
+    </table></div>
+    <p class="method">What we projected before each season, against what actually happened,
+      both scored under your current rules. A projection is an average over everything that
+      might happen, so it prices in the chance of injury &mdash; which means a player who
+      stays fit routinely beats it. Across these seasons the forecast ran about 20 points
+      light on anyone who managed fifteen games or more, and most of the large misses below
+      that line are availability rather than a wrong read.</p>`;
+}
+
 // The most recent season in which the player actually appeared.
 function lastSeason(stat) {
   const keys = seasonKeys(stat).filter((y) => stat.s[y].gp > 0);
@@ -4563,7 +4643,8 @@ function openSheet(player) {
     }).join("");
 
     const span = seasonKeys(s);
-    seasons = `<p class="section-label">${span.length ? span[0] + " to " + span[span.length - 1] : "Career"}
+    seasons = projectionRecordHtml(player) +
+      `<p class="section-label">${span.length ? span[0] + " to " + span[span.length - 1] : "Career"}
       &middot; ${scoringLabel()}, 6 points per touchdown</p>
       <div class="tblscroll"><table class="logtbl">
         <thead><tr>${cols.head.map((h) => `<th>${h}</th>`).join("")}</tr></thead>
