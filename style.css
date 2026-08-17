@@ -1154,20 +1154,20 @@ tr.drafted .ovr { color: var(--ink-light); }
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
-/* Deliberately not scoped to .board: the hero shot draws the same card and
-   wears the same three classes, so there is one declaration of what a card's
-   foot looks like rather than two that agree until somebody edits one. The
-   face below is board-only, which is why that one keeps its scope.
+/* Scoped to .board, because the board is the only thing with a foot. It was
+   unscoped for one commit, while the hero shot wore the same three classes —
+   the hero shows the name and the club only now, so leaving these global would
+   be an invitation rather than a shared definition.
 
    margin-top: auto pins the foot to the bottom of the card, so a wrapped or
    ellipsised name never pushes the face out of line with its neighbours. */
-.cell-foot {
+.board .cell-foot {
   display: flex; align-items: center; gap: 4px;
   margin-top: auto; padding-top: 3px;
 }
 
-.cell-dir  { font-weight: 700; line-height: 1; }
-.cell-pick { font-variant-numeric: tabular-nums; }
+.board .cell-dir  { font-weight: 700; line-height: 1; }
+.board .cell-pick { font-variant-numeric: tabular-nums; }
 
 /* Pushed to the right edge by the margin rather than by a spacer, so a card
    whose photo failed to load closes up instead of leaving a hole — the
@@ -2130,9 +2130,13 @@ a.room.live:hover {
   grid-template-columns: 26px repeat(10, minmax(88px, 1fr));
   /* The header row sizes to itself; every round row after it is one card
      tall. Stated here rather than as a min-height on the cell, for the reason
-     written beside the board's own grid. */
+     written beside the board's own grid.
+
+     34px, which is what it was before the card grew a third line and what a
+     two-line card measures at (32) plus room. It went to 54 to fit an arrow
+     and a pick number; those are gone. */
   grid-template-rows: auto;
-  grid-auto-rows: 54px;
+  grid-auto-rows: 34px;
   gap: 3px;
   overflow: hidden;
   pointer-events: none;
@@ -2207,9 +2211,13 @@ a.room.live:hover {
      more, and at 58px that collapses to **11 of 50**: a board of "G. Pic…"
      and "A. Bro…", which is not truncation, it is a different graphic.
 
-     70px puts it back to 35 of 50 and still shows 4.8 of the ten columns —
-     near enough the half-room that made 58 the answer the first time. The
-     foot wants 41px at its widest, so it is never what decides this. */
+     70px puts it back to 40 of 50 and still shows 4.8 of the ten columns —
+     near enough the half-room that made 58 the answer the first time.
+
+     This stays at 70 now the arrow and pick number have gone, because the
+     foot was never what decided it: it wanted 41px at its widest and the
+     names want more. The initial is what costs the width, and the initial is
+     the part that was worth keeping. */
   .hero-shot { grid-template-columns: 20px repeat(10, minmax(70px, 1fr)); }
 }
 

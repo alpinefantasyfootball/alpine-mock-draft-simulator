@@ -833,27 +833,57 @@ way, not reasoned about.
   decoration with a duplicate one click away, not content with no way to
   reach it. Anything else that trips that check is still a bug.
 
-  **It draws the board card, minus the face.** Same `shortName()`, same
-  `boardArrow()`, same `pickCode()` as the draft room, because a graphic that
-  drifts from the product is a lie the app tells about itself. Fifty headshots
-  is fifty requests to somebody else's server on the first paint of the
-  marketing page, for decoration the mask starts dissolving at 46% — the
-  landing page loads no third-party image at all, and a test now asserts that.
+  **A card here is a name and a club, and that is an editorial decision
+  rather than a rule.** The shot is an *excerpt* of the board — five rounds of
+  fourteen, ten teams fixed, no faces — so what it leaves out gets decided per
+  item, not settled once by "match the product".
 
-  **`boardArrow()` takes `teams` rather than reading `league`, and the bug
-  that guards against is latent rather than live.** `renderHeroShot()` runs
-  once at startup, when `league.teams` is still the default ten, so a version
-  reading `league.teams` draws an identical shot and no page-level test can
-  tell the two apart. The test moves the league to twelve and calls the
-  function directly. **A mutation that passes is not a test** — this one did,
-  first time round, and the comment above it claimed otherwise.
+  The faces are out on cost: fifty headshots is fifty requests to somebody
+  else's server on the first paint of the marketing page, for decoration the
+  mask starts dissolving at 46%. The landing page loads no third-party image
+  at all, and a test asserts that.
 
-  **The phone floor moved 58px → 70px, and the reason is the initial.** At
-  58px, with a surname alone, 38 of the 50 names fitted. The card carries
-  "G. Pickens" now, which is about 14px more, and at 58px that collapses to
-  **11 of 50** — a board of "G. Pic…" and "A. Bro…", which is not truncation
-  but a different graphic. 70px puts it back to 35 and still shows 4.8 of the
-  ten columns. The foot wants 41px at its widest, so it never decides this.
+  **The arrow and the pick number were carried over from the board and did not
+  survive being looked at.** They shipped for one commit and the owner's first
+  reaction to the rendered page was that it looked jumbled, which was right.
+
+  **The pick numbers zigzag.** Row one runs `1.01 → 1.10` left to right and row
+  two runs `2.10 → 2.01` back the other way — correct, and on the working board
+  it is something a drafter actively tracks. On a graphic somebody glances at,
+  it is fifty four-character numbers alternating direction with no pattern for
+  the eye to hold.
+
+  **And there was no way to demote them.** The usual repair for two elements
+  competing is to make one smaller or dimmer. Both are shut here: `--fs-2xs` is
+  the bottom of the type scale, and dimming is precisely the opacity bug that
+  had to be removed from this file and the board's. So the pick number would
+  have competed with the player's name at equal weight for ever, in a 103×54px
+  box whose whole job is the name.
+
+  **`shortName()` stays**, which is the half of that change that worked:
+  "J. Gibbs" reads as a person where "Gibbs" read as a row in a table.
+
+  **The lesson is about the frame, not the elements.** "It draws the board
+  card" was written as though matching the product were the goal, and it is
+  not — the shot has about two seconds to say *this is a real draft board,
+  colour-coded, with real players*. Every true fact added to a cell with room
+  in it costs some of that. A test now asserts exactly two elements per card,
+  because the pull is always towards adding one more.
+
+  **The phone floor is 70px, and the initial is why.** At 58px, with a surname
+  alone, 38 of the 50 names fitted. The card carries "G. Pickens" now, about
+  14px more, and at 58px that collapses to **11 of 50** — a board of "G. Pic…"
+  and "A. Bro…", which is not truncation but a different graphic. 70px gives 40
+  of 50 and still shows 4.8 of the ten columns. It stayed at 70 when the foot
+  came off, because the foot never decided it: it wanted 41px at its widest and
+  the names want more.
+
+  **The shot is ten teams whatever the visitor has set, and the test for that
+  has to call the function.** `renderHeroShot()` runs once at startup, when
+  `league.teams` is still the default ten, so a version reading `league.teams`
+  draws an identical shot and no page-level check can separate them. It is a
+  latent bug rather than a live one. **A mutation that passes is not a test** —
+  the first version of this one did, and its comment claimed otherwise.
 
   **A flex column compresses rather than overflows, so clipping does not
   report as clipping.** The row height was set to 48px against a card wanting
