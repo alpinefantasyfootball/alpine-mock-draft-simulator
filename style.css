@@ -1826,21 +1826,202 @@ tr.drafted .ovr { color: var(--ink-light); }
    different numbers of rooms and that is the point: they read as a timeline
    rather than as a grid with gaps in it. align-items: start keeps each
    column its own height instead of stretching the short ones. */
-.roomgrid {
-  display: grid; grid-template-columns: repeat(3, 1fr);
-  gap: 12px; align-items: start; margin-bottom: 46px;
+/* ---------- the door, and the rooms turning through it ----------
+
+   The doorway carries its own ground — a navy wall and a lit room — so it is
+   the same object in both themes, the same licence .hero-band already takes.
+   The list beside it uses page tokens, because it is page furniture. */
+.roomstage {
+  display: grid;
+  grid-template-columns: minmax(0, 420px) minmax(0, 1fr);
+  gap: 40px; align-items: center; margin-bottom: 46px;
 }
 
-.phase { display: flex; flex-direction: column; gap: 10px; }
+/* A door swung towards the reader brings its far edge closer, and closer means
+   bigger. At a short perspective the panel renders oversize and spills out of
+   the section over whatever sits above it; 2600px holds it to about 16%, and
+   the padding absorbs the rest instead of letting it overlap. */
+.doorway-outer { perspective: 2600px; padding: 44px 0; }
 
+/* No overflow on this, ever — it is the door's 3D ancestor. Any value but
+   visible establishes a flattening context that preserve-3d cannot cross, and
+   the door stops swinging and starts squashing. The interior clips instead,
+   which is why .door-room is a sibling of the door rather than its parent. */
+.doorway {
+  position: relative; aspect-ratio: 4 / 5;
+  transform-style: preserve-3d;
+  transition: transform .46s cubic-bezier(.6, 0, .3, 1);
+}
+.roomstage.turning .doorway { transform: rotateY(90deg); }
+
+.jamb {
+  position: absolute; inset: 0;
+  background: linear-gradient(180deg, var(--navy-soft), var(--navy-deep));
+  border-radius: 10px 10px var(--r-xs) var(--r-xs);
+  box-shadow: 0 24px 50px rgba(6, 12, 22, .45);
+}
+
+.door-room {
+  position: absolute; inset: 12px; overflow: hidden;
+  border-radius: 6px 6px 2px 2px;
+  background:
+    radial-gradient(130% 90% at 78% 10%, rgba(237, 96, 17, .20), transparent 62%),
+    linear-gradient(180deg, #11223D, #070F1D);
+}
+.door-room::before {
+  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 40%;
+  background: linear-gradient(0deg, rgba(237, 96, 17, .14), transparent);
+}
+
+/* Clear of the swing. The open door covers about 47% of the frame, and text
+   under it is hidden by the thing that is supposed to be revealing it. */
+.door-room-inner {
+  position: absolute; left: 50%; right: 18px; bottom: 22px;
+  display: flex; flex-direction: column; align-items: flex-start;
+}
+/* Literal white, not a token.
+
+   This was `var(--band-ink)`, which is declared on `.hero-band` rather than on
+   `:root` — so out here it resolves to nothing, the property falls back to
+   inherit, and the room's name picked up the page's dark ink and vanished
+   against a dark interior in the light theme. The room carries its own ground
+   in both themes, which is exactly the case where naming white directly is
+   allowed. */
+.door-room-name {
+  font-size: var(--fs-base); font-weight: 700; color: #fff;
+  line-height: 1.2; margin-bottom: 7px;
+}
+.door-room-status {
+  font-size: var(--fs-2xs); font-weight: 700;
+  letter-spacing: .12em; text-transform: uppercase;
+  color: #FFB98A; margin-bottom: 9px;
+}
+.door-room-status.soon { color: #9FB3CA; }
+.door-room-blurb { font-size: var(--fs-sm); line-height: 1.45; color: #D9E3EF; }
+.door-room-season {
+  font-size: var(--fs-2xs); font-weight: 700;
+  letter-spacing: .12em; text-transform: uppercase;
+  color: #8194AC; margin-top: 12px;
+}
+
+/* The interior text arrives once the door is out of the way, rather than
+   sitting there waiting to be uncovered. */
+.door-room-inner > * {
+  opacity: 0; transform: translateY(6px);
+  transition: opacity .4s ease, transform .4s ease;
+}
+.roomstage.open .door-room-inner > * { opacity: 1; transform: none; }
+.roomstage.open .door-room-name   { transition-delay: .30s; }
+.roomstage.open .door-room-status { transition-delay: .38s; }
+.roomstage.open .door-room-blurb  { transition-delay: .44s; }
+.roomstage.open .door-room-season { transition-delay: .52s; }
+
+.door {
+  position: absolute; inset: 12px;
+  transform-origin: left center; transform: rotateY(0deg);
+  transition: transform .78s cubic-bezier(.22, .9, .24, 1.06);
+  transform-style: preserve-3d;
+  border-radius: 6px 6px 2px 2px;
+  box-shadow: 18px 6px 34px rgba(6, 12, 22, .42);
+  display: flex; align-items: center; justify-content: center;
+}
+.roomstage.open .door { transform: rotateY(-62deg); }
+
+.door-face {
+  position: absolute; inset: 0; overflow: hidden;
+  border-radius: 6px 6px 2px 2px;
+  background: linear-gradient(102deg, #24406B 0%, #1A3053 46%, #14263F 100%);
+  border: 1px solid rgba(255, 255, 255, .10);
+}
+.door-face::before, .door-face::after {
+  content: ""; position: absolute; left: 14%; right: 14%;
+  border: 1px solid rgba(255, 255, 255, .07);
+  border-radius: 3px;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, .35);
+}
+.door-face::before { top: 7%; height: 30%; }
+.door-face::after { bottom: 7%; height: 30%; }
+
+/* A swung door turns away from the light. Without this the panel is as bright
+   open as shut, which is the tell that it is a rectangle rather than a door. */
+.door-shade {
+  position: absolute; inset: 0; border-radius: 6px 6px 2px 2px;
+  background: linear-gradient(270deg, rgba(0, 0, 0, .50), rgba(0, 0, 0, .10));
+  opacity: 0; transition: opacity .78s ease;
+}
+.roomstage.open .door-shade { opacity: 1; }
+
+.knob {
+  position: absolute; right: 9%; top: 50%;
+  width: 13px; height: 13px; margin-top: -6px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #E6CE86, #C9A227 55%, #9A7B18);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .55);
+}
+
+/* The placard. Brass rather than a brand colour on purpose — it is furniture,
+   and it must not read as a position solid or a club mark. */
+.placard {
+  position: relative; width: 74%; padding: 10px 12px; text-align: center;
+  border-radius: 3px;
+  background: linear-gradient(158deg, #E6CE86, #C9A227 52%, #9A7B18);
+  border: 1px solid rgba(0, 0, 0, .35);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .45), 0 3px 8px rgba(0, 0, 0, .5);
+}
+.placard-name {
+  display: block; font-size: var(--fs-xs); font-weight: 700;
+  letter-spacing: .1em; text-transform: uppercase;
+  color: #23180A; text-shadow: 0 1px 0 rgba(255, 255, 255, .35);
+  line-height: 1.25;
+}
+.placard::before, .placard::after {
+  content: ""; position: absolute; top: 50%; margin-top: -2px;
+  width: 4px; height: 4px; border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, #6B5310, #3A2C06);
+}
+.placard::before { left: 6px; }
+.placard::after { right: 6px; }
+
+/* ---------- the list beside the door ---------- */
+.roomlist { display: flex; flex-direction: column; gap: 18px; }
+.rl-group { display: flex; flex-direction: column; gap: 4px; }
 /* The rule above each phase is what makes the three read as one timeline
-   rather than three unrelated lists. */
-.phase-name {
-  margin: 0 0 2px; padding-bottom: 7px;
+   rather than three unrelated lists — carried over from the season columns
+   this replaced, where it did the same job across rather than down. */
+.rl-phase {
+  margin: 0 0 4px; padding-bottom: 7px;
   border-bottom: 2px solid var(--blue-line);
-  font-family: Inter, sans-serif;
-  font-size: var(--fs-2xs); letter-spacing: .12em; text-transform: uppercase;
-  font-weight: 700; color: var(--link);
+  font-size: var(--fs-2xs); font-weight: 700;
+  letter-spacing: .12em; text-transform: uppercase; color: var(--link);
+}
+
+.rl {
+  display: block; width: 100%; text-align: left;
+  background: transparent; border: 1px solid transparent;
+  border-radius: var(--r-sm); padding: 9px 12px;
+  font: inherit; color: var(--ink-mid); cursor: pointer;
+  text-decoration: none;
+  transition: background .15s ease, border-color .15s ease, color .15s ease;
+}
+.rl:hover { background: var(--fill); color: var(--ink); }
+.rl:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.rl.on { background: var(--fill); border-color: var(--line); color: var(--ink); }
+.rl-name { display: block; font-size: var(--fs-sm); font-weight: 700; color: var(--ink); }
+.rl-meta {
+  display: block; margin-top: 2px;
+  font-size: var(--fs-2xs); font-weight: 700;
+  letter-spacing: .1em; text-transform: uppercase; color: var(--ink-light);
+}
+/* The open room keeps the orange edge it had as a card. */
+.rl.live { border-left: 3px solid var(--orange); padding-left: 10px; }
+.rl.live .rl-meta { color: var(--t-orange-fg); }
+
+@media (max-width: 760px) {
+  .roomstage { grid-template-columns: 1fr; gap: 22px; }
+  /* justify-self, never `margin: 0 auto`: an auto margin on a grid item
+     defeats stretch and makes it shrink-wrap, and every child of .doorway is
+     absolutely positioned — so its intrinsic width is zero and the whole
+     doorway collapses while still reporting a healthy max-width. */
+  .doorway-outer { width: 100%; max-width: 320px; justify-self: center; padding: 30px 0; }
 }
 
 /* The header panel is a flat list and can reflow to any column count. The

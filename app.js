@@ -308,12 +308,32 @@ function roomCard(room) {
    not a story about the season — and three headings inside a dropdown would
    be structure for its own sake. Both still read the same ROOMS, so they
    cannot disagree about what exists. */
-function seasonColumn(season) {
+/* The list beside the door.
+
+   Still grouped by phase, because the arc is the point — the columns it
+   replaces existed to say "this covers the whole year" without a line of
+   marketing copy, and a flat list of six would throw that away. Stacked
+   rather than in three columns now, since it sits in one column beside the
+   doorway.
+
+   Every row is a button. The open room is also a link, and both need to work:
+   pressing "The Draft Room" should take you into it, pressing any other should
+   turn the door to it. */
+function roomRow(room, index) {
+  const meta = room.live ? "Live now" : room.season;
+  const body = `<span class="rl-name">${escHtml(room.name)}</span>` +
+               `<span class="rl-meta">${escHtml(meta)}</span>`;
+  return room.live
+    ? `<a class="rl live" href="${room.href}" data-room="${index}">${body}</a>`
+    : `<button class="rl" type="button" data-room="${index}">${body}</button>`;
+}
+
+function seasonGroup(season) {
   const rooms = ROOMS.filter(function (r) { return r.season === season; });
   if (!rooms.length) return "";
-  return `<div class="phase">
-      <p class="phase-name">${season}</p>
-      ${rooms.map(roomCard).join("")}
+  return `<div class="rl-group">
+      <p class="rl-phase">${season}</p>
+      ${rooms.map(function (r) { return roomRow(r, ROOMS.indexOf(r)); }).join("")}
     </div>`;
 }
 
@@ -344,8 +364,128 @@ function renderRooms() {
       "</button>" +
     "</div>";
 
-  $("homeRooms").innerHTML = SEASONS.map(seasonColumn).join("");
+  $("homeRooms").innerHTML = SEASONS.map(seasonGroup).join("");
   syncThemeButton();                 // the panel just gained a toggle
+  startRoomDoor();
+}
+
+/* ---------- the door ----------
+
+   One doorway, and the rooms turning through it. The placard carries the name,
+   the room behind it carries what the room is for, and the list beside it is
+   both the index and the control.
+
+   Everything comes from ROOMS, so the placards cannot drift from the app — the
+   same rule the product shot follows, and for the same reason.
+
+   Three things this has to get right, none of them obvious:
+
+   `margin: auto` is never used to centre the doorway. An auto margin on a grid
+   item defeats the default stretch and makes the item shrink-wrap its content
+   — and every child of .doorway is absolutely positioned, so its intrinsic
+   width is zero. The two together collapse the whole thing to nothing while
+   still reporting a healthy max-width. `justify-self` instead.
+
+   Nothing between the doorway and the door may set an overflow. Any value but
+   visible establishes a flattening context that `transform-style: preserve-3d`
+   cannot cross, and the door renders as a flat strip rather than swinging. The
+   interior clips; the frame does not.
+
+   The door swings *towards* the reader. Away is what it really does seen from
+   inside the room, and at that angle it is edge-on, unlit and invisible — the
+   physics is right and there is no picture. Towards costs about 47% of the
+   frame, which is why the interior text starts at half. */
+const DOOR_HOLD  = 6000;   // how long a room stays open
+const DOOR_SHUT  = 820;    // the door closing
+const DOOR_TURN  = 460;    // edge-on, where the swap happens
+
+let doorAt = 0, doorTimers = [], doorRunning = false;
+
+function doorClear() { doorTimers.forEach(clearTimeout); doorTimers = []; }
+function doorLater(fn, ms) { doorTimers.push(setTimeout(fn, ms)); }
+
+function paintRoom(n) {
+  const r = ROOMS[n];
+  if (!r || !$("roomPlacard")) return;
+  $("roomPlacard").textContent = r.name;
+  $("roomName").textContent    = r.name;
+  $("roomBlurb").textContent   = r.blurb;
+  $("roomSeason").textContent  = r.season;
+  $("roomStatus").textContent  = r.live ? "Open now" : "Not open yet";
+  $("roomStatus").className    = "door-room-status" + (r.live ? "" : " soon");
+
+  const rows = document.querySelectorAll("#homeRooms .rl");
+  rows.forEach(function (el) {
+    const on = Number(el.dataset.room) === n;
+    el.classList.toggle("on", on);
+    // aria-current rather than a live region: announcing a new room every six
+    // seconds to somebody reading the page would be hostile.
+    if (on) el.setAttribute("aria-current", "true");
+    else el.removeAttribute("aria-current");
+  });
+}
+
+function openRoomDoor(n) {
+  doorAt = n;
+  const stage = $("roomStage");
+  if (!stage) return;
+  stage.classList.remove("open");
+  paintRoom(n);
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    stage.classList.add("open");     // the reduced state is the finished state
+    return;
+  }
+  doorLater(function () { stage.classList.add("open"); }, 240);
+}
+
+function queueRoomDoor() {
+  doorLater(function () {
+    const stage = $("roomStage");
+    if (!stage) return;
+    stage.classList.remove("open");
+    doorLater(function () {
+      stage.classList.add("turning");
+      doorLater(function () {
+        doorAt = (doorAt + 1) % ROOMS.length;
+        paintRoom(doorAt);
+        stage.classList.remove("turning");
+        doorLater(function () { stage.classList.add("open"); }, 420);
+        if (doorRunning) queueRoomDoor();
+      }, DOOR_TURN);
+    }, DOOR_SHUT);
+  }, DOOR_HOLD);
+}
+
+function startRoomDoor() {
+  const stage = $("roomStage");
+  if (!stage) return;
+
+  openRoomDoor(0);
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+  /* Only turns while it is on screen. A timer running behind the draft room —
+     or below the fold — is work nobody asked for, and the landing page is
+     still in the DOM the whole time somebody is drafting. */
+  if (typeof IntersectionObserver === "function") {
+    new IntersectionObserver(function (entries) {
+      const seen = entries[0].isIntersecting;
+      if (seen === doorRunning) return;
+      doorRunning = seen;
+      doorClear();
+      /* Re-open on the way in, not just re-queue. `doorClear()` cancels the
+         pending open that openRoomDoor() scheduled, and queueRoomDoor() only
+         ever shuts a door and turns — so without this the stage arrives on
+         screen closed and stays closed for ever. */
+      if (seen) { openRoomDoor(doorAt); queueRoomDoor(); }
+    }, { threshold: 0.25 }).observe(stage);
+  } else {
+    doorRunning = true;
+    queueRoomDoor();
+  }
+
+  // Reading beats turning: a pointer over the stage stops the clock.
+  stage.addEventListener("mouseenter", function () { doorClear(); });
+  stage.addEventListener("mouseleave", function () { if (doorRunning) queueRoomDoor(); });
 }
 
 /* ---------- the product shot ----------
@@ -5969,6 +6109,18 @@ $("startBtn").addEventListener("click", function () {
 document.addEventListener("click", function (e) {
   if (e.target.id === "resumeBtn") { const d = readSave(); if (d) resumeDraft(d); }
   if (e.target.id === "discardBtn") { clearSave(); showResumeBar(); }
+});
+
+/* Turning the door by hand. Delegated because renderRooms() rebuilds these
+   rows, and the open room is an <a> whose navigation must survive — turning
+   the door to a room you are about to enter is pointless, so a live row is
+   left entirely alone. */
+document.addEventListener("click", function (e) {
+  const row = e.target.closest ? e.target.closest("#homeRooms .rl") : null;
+  if (!row || row.classList.contains("live")) return;
+  doorClear();
+  openRoomDoor(Number(row.dataset.room));
+  if (doorRunning) queueRoomDoor();
 });
 
 /* The year buttons on the game logs. Delegated from the sheet body, which

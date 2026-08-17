@@ -33,12 +33,12 @@
        say script-src 'self' without either giving away 'unsafe-inline' or
        pinning a hash that breaks the site the first time somebody edits it.
        No defer, no async: it must run before the body is drawn. -->
-  <script src="theme.js?v=202608171153"></script>
+  <script src="theme.js?v=202608180200"></script>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <!-- ?v=202608171153 on every local file below, and it has to be bumped on any deploy
+  <!-- ?v=202608180200 on every local file below, and it has to be bumped on any deploy
        that changes one of them.
 
        Without a version in the address a returning visitor runs today's HTML
@@ -53,7 +53,7 @@
 
        A query string rather than a renamed file, because renaming means a
        manifest and a manifest means a build step. This costs one number. -->
-  <link rel="stylesheet" href="style.css?v=202608171153">
+  <link rel="stylesheet" href="style.css?v=202608180200">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -295,7 +295,42 @@
              label rather than a heading over a section. -->
         <h2 class="rooms-head">The Rooms</h2>
         <p class="rooms-sub">One for every part of the season. The Draft Room is open now.</p>
-        <div class="roomgrid" id="homeRooms"></div>
+
+        <!-- A door, and the rooms beside it.
+
+             This was a grid of six cards, five of them greyed out, which is the
+             worst framing available for a roadmap: it reads as five things that
+             are missing. A door you have not opened yet is the same fact told
+             properly, and the placard promises nothing the data does not say.
+
+             Drawn entirely in CSS. No image, for the reason written beside the
+             product shot above it — a picture is a file to rebuild every time
+             the design moves, and it is wrong the first time somebody forgets.
+
+             The interior text is filled by renderRooms() and cycled by
+             startRoomDoor(); the list beside it is the control. -->
+        <div class="roomstage" id="roomStage">
+          <div class="doorway-outer">
+            <div class="doorway">
+              <div class="jamb"></div>
+              <div class="door-room">
+                <div class="door-room-inner">
+                  <span class="door-room-name" id="roomName"></span>
+                  <span class="door-room-status" id="roomStatus"></span>
+                  <span class="door-room-blurb" id="roomBlurb"></span>
+                  <span class="door-room-season" id="roomSeason"></span>
+                </div>
+              </div>
+              <div class="door">
+                <div class="door-face"></div>
+                <div class="placard"><span class="placard-name" id="roomPlacard"></span></div>
+                <div class="knob"></div>
+                <div class="door-shade"></div>
+              </div>
+            </div>
+          </div>
+          <div class="roomlist" id="homeRooms"></div>
+        </div>
 
         <div class="pillars">
           <div class="pillar">
@@ -747,19 +782,19 @@
     <form method="dialog"><button class="primary">Got it</button></form>
   </dialog>
 
-  <!-- Every one of these carries the same ?v=202608171153 as the stylesheet. See the note
+  <!-- Every one of these carries the same ?v=202608180200 as the stylesheet. See the note
        beside it in <head>: bump them together or don't bump them at all. -->
-  <script src="players.js?v=202608171153"></script>
-  <script src="stats.js?v=202608171153"></script>
+  <script src="players.js?v=202608180200"></script>
+  <script src="stats.js?v=202608180200"></script>
   <!-- The rules of a snake draft, with no reference to this page. It loads
        before app.js because app.js is a caller, and it is a separate file
        because a server will eventually have to run the same one. -->
-  <script src="draft-engine.js?v=202608171153"></script>
+  <script src="draft-engine.js?v=202608180200"></script>
   <!-- The socket to a shared room. Loaded always, connected never unless a
        manager asks for it: a solo draft touches nothing. -->
-  <script src="live.js?v=202608171153"></script>
+  <script src="live.js?v=202608180200"></script>
   <!-- Before app.js, which calls backToTop() on the last line of its setup. -->
-  <script src="back-to-top.js?v=202608171153"></script>
-  <script src="app.js?v=202608171153"></script>
+  <script src="back-to-top.js?v=202608180200"></script>
+  <script src="app.js?v=202608180200"></script>
 </body>
 </html>
