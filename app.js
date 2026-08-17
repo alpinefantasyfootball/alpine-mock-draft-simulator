@@ -462,24 +462,36 @@ function renderHeroShot() {
       const p = picks[i];
       if (!p) { html += '<div class="shot-cell empty"></div>'; continue; }
 
-      /* The same card the draft room draws, minus the face.
+      /* The name and the club, and nothing else. This is an excerpt of the
+         board, not a copy of it, and what gets left out is an editorial
+         decision each time rather than a rule.
 
-         Fifty headshots is fifty requests to somebody else's server on the
-         first paint of the marketing page, for decoration the mask starts
-         dissolving at 46% — the landing page loads no third-party image at
-         all today and this is not the thing worth spending that on. Everything
-         else is free and is what makes it read as a real board.
+         Out already: the faces, because fifty headshots is fifty requests to
+         somebody else's server on the first paint of the marketing page, for
+         decoration the mask starts dissolving at 46%.
 
-         Names and arrows go through the same two functions the board uses, so
-         the picture cannot start claiming a different product from the one a
-         click away. */
+         Out now: the arrow and the pick number, which were carried across
+         from the board and did not survive being looked at.
+
+         **The pick numbers zigzag, and that is what read as jumbled.** Row one
+         runs 1.01 to 1.10 left to right and row two runs 2.10 back to 2.01,
+         which is correct — it is what a snake is — and on the working board it
+         is information somebody is actively tracking. On a graphic you glance
+         at, it is fifty four-character numbers alternating direction with no
+         pattern for the eye to lock onto.
+
+         **And there is no way to demote them.** The usual fix for two elements
+         competing is to make one smaller or dimmer, and both are shut here:
+         `--fs-2xs` is the bottom of the type scale, and dimming is the exact
+         opacity bug that had to be taken out of this file and the board's. So
+         the pick number would compete with the player's name at equal weight
+         for ever, in a 103×54px box whose entire job is to show the name.
+
+         `shortName()` stays. "J. Gibbs" reads as a person where "Gibbs" read
+         as a row in a table, which is the half of that change that worked. */
       html += '<div class="shot-cell ' + p.pos + (s === SHOT_MINE ? " mine" : "") + '">' +
               "<b>" + escHtml(shortName(p)) + "</b>" +
-              "<s>" + p.pos + " &middot; " + escHtml(p.team) + "</s>" +
-              '<span class="cell-foot">' +
-                '<span class="cell-dir">' + boardArrow(r, s, SHOT_TEAMS) + "</span>" +
-                '<span class="cell-pick">' + DraftEngine.pickCode(i + 1, SHOT_TEAMS) + "</span>" +
-              "</span></div>";
+              "<s>" + p.pos + " &middot; " + escHtml(p.team) + "</s></div>";
     }
   }
   el.innerHTML = html;

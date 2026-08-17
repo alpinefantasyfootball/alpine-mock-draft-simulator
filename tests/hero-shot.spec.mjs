@@ -67,7 +67,11 @@ test.describe("the hero product shot", () => {
         return { checked, worst: +worst.toFixed(2), fails: fails.slice(0, 6), total: fails.length };
       });
 
-      expect(r.checked, "there were cards to measure").toBeGreaterThan(100);
+      /* Two lines per card across fifty cards, so a hundred exactly. The guard
+         is here to catch the selector matching nothing rather than to pin the
+         count — it was `> 100` and went red the moment the foot came off, which
+         is a test failing on arithmetic rather than on the thing it watches. */
+      expect(r.checked, "there were cards to measure").toBeGreaterThanOrEqual(80);
       expect(r.total ? r.fails : [], "every line clears 4.5:1").toEqual([]);
 
       /* The mask fades the lower rows towards transparent, and that is not a
@@ -77,85 +81,90 @@ test.describe("the hero product shot", () => {
       expect(r.worst).toBeGreaterThanOrEqual(4.5);
     });
 
-  test("it draws the same card the draft room draws", async ({ context }) => {
+  test("a card is a name and a club, and nothing else", async ({ context }) => {
     const page = await openLanding(context);
 
-    /* The point of the shot is that it is the product, not a picture of it.
-       Both boards go through shortName() and boardArrow(), so this asserts
-       the rendered result rather than that they call the same function —
-       a second renderer growing its own idea of a card is the failure. */
+    /* The shot is an excerpt of the board, not a copy of it, and this is the
+       assertion that keeps it one.
+
+       It carried the board's arrow and pick number for a commit. The pick
+       numbers zigzag — row one runs 1.01 to 1.10 and row two runs 2.10 back to
+       2.01, which is what a snake is and is information on the working board —
+       and on a graphic somebody glances at it is fifty four-character numbers
+       alternating direction with nothing for the eye to hold. They could not
+       be demoted either: `--fs-2xs` is the floor of the type scale and dimming
+       is the opacity bug this same file measures, so they would compete with
+       the player's name at equal weight for ever.
+
+       Written as a test rather than left to judgement because the pull is
+       always towards adding one more true fact to a cell that has room. */
     const r = await page.evaluate(() => {
-      const cells = [...document.querySelectorAll(".shot-cell:not(.empty)")];
-      return cells.map((c) => ({
-        name: c.querySelector("b").textContent,
-        sub: c.querySelector("s").textContent,
-        dir: c.querySelector(".cell-dir") && c.querySelector(".cell-dir").textContent.trim(),
-        pick: c.querySelector(".cell-pick") && c.querySelector(".cell-pick").textContent.trim()
-      }));
-    });
-
-    expect(r.length, "the shot is fully drawn").toBeGreaterThan(40);
-    r.forEach((c) => {
-      expect(c.dir, "every card has an arrow").toBeTruthy();
-      expect(c.pick, "every card has a pick").toMatch(/^\d+\.\d\d$/);
-      expect(c.sub, "position and club").toMatch(/^[A-Z]{1,3} · [A-Z]{2,3}$/);
-    });
-
-    // A defense is not initialised, same rule as the board.
-    const dst = r.filter((c) => c.sub.startsWith("DST"));
-    dst.forEach((c) => expect(c.name).not.toMatch(/^[A-Z]\. /));
-  });
-
-  test("the arrows describe a real snake", async ({ context }) => {
-    const page = await openLanding(context);
-
-    /* Ten teams, fixed, whatever league the visitor has set up — the shot is
-       an advert rather than their draft.
-
-       The league is moved to twelve and the shot redrawn before anything is
-       read, and that is the whole point of this test. `renderHeroShot()` runs
-       once at startup today, when `league.teams` is still the default ten, so
-       a version reading `league.teams` instead of the shot's own count is
-       indistinguishable on the page as it currently loads. It is a latent bug
-       rather than a live one, and the parameter exists so it stays that way —
-       which means the test has to drive the function rather than the page, or
-       it asserts nothing at all. Confirmed: without this the mutation passes. */
-    const r = await page.evaluate(() => {
-      document.querySelectorAll("details.setupbox").forEach((d) => (d.open = true));
-      const el = document.getElementById("teamCount");
-      el.value = "12";
-      el.dispatchEvent(new Event("change", { bubbles: true }));
-      renderHeroShot();
-
       const cells = [...document.querySelectorAll(".shot-cell:not(.empty)")];
       return {
-        leagueTeams: league.teams,
-        cards: cells.map((c) => {
-          const [round, inRound] = c.querySelector(".cell-pick").textContent.trim().split(".").map(Number);
-          return { round, inRound, dir: c.querySelector(".cell-dir").textContent.trim() };
-        })
+        cards: cells.map((c) => ({
+          name: c.querySelector("b").textContent,
+          sub: c.querySelector("s").textContent
+        })),
+        extras: cells.reduce((n, c) => n + c.querySelectorAll(":scope > *").length, 0),
+        feet: document.querySelectorAll(".shot-cell .cell-foot, .shot-cell .cell-pick, .shot-cell .cell-dir").length,
+        faces: document.querySelectorAll(".shot-cell .cell-face").length
       };
     });
 
-    expect(r.leagueTeams, "the visitor's league really did change").toBe(12);
+    expect(r.cards.length, "the shot is fully drawn").toBeGreaterThan(40);
+    expect(r.feet, "no arrow and no pick number").toBe(0);
+    expect(r.faces, "and no face").toBe(0);
+    expect(r.extras, "exactly two elements per card").toBe(r.cards.length * 2);
 
-    const TEAMS = 10;
-    const wrong = r.cards.filter((x) => {
-      const want = x.inRound === TEAMS ? "↓" : (x.round % 2 === 0 ? "←" : "→");
-      return x.dir !== want;
+    r.cards.forEach((c) => {
+      expect(c.sub, "position and club").toMatch(/^[A-Z]{1,3} · [A-Z]{2,3}$/);
+      expect(c.name.trim().length, "and a name").toBeGreaterThan(0);
     });
-    expect(wrong, "every arrow matches its own pick number").toEqual([]);
-    expect(new Set(r.cards.map((x) => x.dir)).size, "all three arrows occur").toBe(3);
 
-    // Each round holds every pick number exactly once, whichever way it runs.
-    const byRound = {};
-    r.cards.forEach((x) => { (byRound[x.round] = byRound[x.round] || []).push(x.inRound); });
-    Object.keys(byRound).forEach((round) => {
-      expect(byRound[round].slice().sort((a, b) => a - b),
-             `round ${round} holds 1..${TEAMS}`)
-        .toEqual([...Array(TEAMS)].map((_, i) => i + 1));
-    });
+    /* shortName() stays: "J. Gibbs" reads as a person where "Gibbs" read as a
+       row in a table. That was the half of the card change that worked, and it
+       is the one thing the shot still shares with the board. */
+    const initialled = r.cards.filter((c) => /^[A-Z]\. /.test(c.name));
+    expect(initialled.length, "most names carry an initial")
+      .toBeGreaterThan(r.cards.length / 2);
+
+    // A defense is not initialised, same rule as the board.
+    r.cards.filter((c) => c.sub.startsWith("DST"))
+      .forEach((c) => expect(c.name).not.toMatch(/^[A-Z]\. /));
   });
+
+  test("it is a ten-team room whatever league the visitor has set",
+    async ({ context }) => {
+      const page = await openLanding(context);
+
+      /* The shot is an advert, not a preview of their draft: ten seats and
+         five rounds, fixed, from SHOT_TEAMS and SHOT_ROUNDS.
+
+         The league is moved to twelve and the shot redrawn before anything is
+         read, and that is deliberate. `renderHeroShot()` runs once at startup,
+         when `league.teams` is still the default ten, so a version that read
+         `league.teams` would draw an identical shot and no page-level check
+         could tell them apart. It is a latent bug rather than a live one, and
+         the only way to assert against it is to drive the function rather than
+         the page. A version of this test that skipped that step passed against
+         the mutation it was written for. */
+      const r = await page.evaluate(() => {
+        document.querySelectorAll("details.setupbox").forEach((d) => (d.open = true));
+        const el = document.getElementById("teamCount");
+        el.value = "12";
+        el.dispatchEvent(new Event("change", { bubbles: true }));
+        renderHeroShot();
+
+        const cells = [...document.querySelectorAll(".shot-cell")];
+        const cols = getComputedStyle(document.getElementById("heroShot"))
+          .gridTemplateColumns.split(" ").length - 1;   // less the round gutter
+        return { leagueTeams: league.teams, cells: cells.length, cols };
+      });
+
+      expect(r.leagueTeams, "the visitor's league really did change").toBe(12);
+      expect(r.cols, "still ten seats wide").toBe(10);
+      expect(r.cells, "still ten by five").toBe(50);
+    });
 
   test("no card is clipped, and the landing page loads no headshots",
     async ({ context }) => {
