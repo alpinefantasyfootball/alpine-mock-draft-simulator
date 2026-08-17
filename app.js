@@ -3628,10 +3628,16 @@ function renderBoard() {
       } else {
         const c = onTheClock();
         const isNow = c && c.round === r && c.slot === s;
+        /* Which pick of the round this is, not which seat. The engine owns
+           that mirror — this line used to be `s + 1`, which is the same fact
+           written down twice and drifting in the half of the board where the
+           two disagree. */
+        const inRound = DraftEngine.pickInRound(r, s, league.teams);
+
         // The cell on the clock is the clock. Looking away from where the
         // pick lands to find out how long is left is the thing this removes.
         html += `<div class="cell empty ${isNow ? "now" : ""}"${isNow ? ' id="boardClock"' : ""}>${
-          isNow && clockShowing() ? clockText() : r + "." + String(s + 1).padStart(2, "0")
+          isNow && clockShowing() ? clockText() : r + "." + String(inRound).padStart(2, "0")
         }</div>`;
       }
     }
