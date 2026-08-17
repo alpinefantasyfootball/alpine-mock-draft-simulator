@@ -129,6 +129,14 @@ box is worse than no box.
 point it at a local stub so the whole path can be driven without a key or a
 network. Leave it unset in production.
 
+`/news` answers are cached at the edge for fifteen minutes (`NEWS_TTL`), keyed
+by player rather than by request URL, because the free tier is a thousand calls
+a month and a draft is the same dozen players opened repeatedly. Measured at 50
+requests across 5 players costing 5 upstream calls. Failures are never cached —
+pinning an outage for the TTL would turn a blip into fifteen minutes of silence
+— and the CORS headers are rebuilt per request rather than served from the
+cached entry.
+
 Only the shape `{ title, summary, source, at, url }` reaches the page.
 Normalising here rather than passing the provider's payload through means
 swapping provider is a change to `fetchUpstreamNews()` and nothing else, and
