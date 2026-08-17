@@ -1831,9 +1831,21 @@ tr.drafted .ovr { color: var(--ink-light); }
    The doorway carries its own ground — a navy wall and a lit room — so it is
    the same object in both themes, the same licence .hero-band already takes.
    The list beside it uses page tokens, because it is page furniture. */
+/* The list is capped rather than left to fill the column.
+
+   At 1fr it ran to 624px for rows whose longest line is about 140px, so the
+   selected row drew as a wide, mostly empty rectangle and the door and the
+   list read as two objects with a gap rather than one composition. Capped at
+   the door's own width they read as a pair.
+
+   480 rather than 420 for both: the wider door carries the placard better and
+   drops the blurb from four lines to three, and the block then spans about
+   92% of the content column, which reads as left-anchored under a
+   left-aligned heading. Matching the pillars' right edge exactly needs a
+   560px list, which puts the rows back where they started. */
 .roomstage {
   display: grid;
-  grid-template-columns: minmax(0, 420px) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 480px) minmax(0, 1fr);
   gap: 40px; align-items: center; margin-bottom: 46px;
 }
 
@@ -1841,7 +1853,7 @@ tr.drafted .ovr { color: var(--ink-light); }
    bigger. At a short perspective the panel renders oversize and spills out of
    the section over whatever sits above it; 2600px holds it to about 16%, and
    the padding absorbs the rest instead of letting it overlap. */
-.doorway-outer { perspective: 2600px; padding: 44px 0; }
+.doorway-outer { perspective: 2600px; padding: 58px 0; }
 
 /* No overflow on this, ever — it is the door's 3D ancestor. Any value but
    visible establishes a flattening context that preserve-3d cannot cross, and
@@ -1982,7 +1994,7 @@ tr.drafted .ovr { color: var(--ink-light); }
 .placard::after { right: 6px; }
 
 /* ---------- the list beside the door ---------- */
-.roomlist { display: flex; flex-direction: column; gap: 18px; }
+.roomlist { display: flex; flex-direction: column; gap: 18px; max-width: 480px; }
 .rl-group { display: flex; flex-direction: column; gap: 4px; }
 /* The rule above each phase is what makes the three read as one timeline
    rather than three unrelated lists — carried over from the season columns
