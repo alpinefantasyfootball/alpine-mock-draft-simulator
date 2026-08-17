@@ -3039,6 +3039,20 @@ function lastName(name) {
   return parts[parts.length - 1];
 }
 
+/* "J. Cook" — the form a draft board uses, because a surname alone stops
+   being an answer the moment two of them share it.
+
+   A defense keeps its club. `lastName()` already drops the word "Defense", so
+   initialising what is left produces "L. Chargers", which is nobody: the first
+   word of a team name is not a first name. This is the same rule as deciding a
+   player's type from `player.pos` rather than from the shape of their data. */
+function shortName(player) {
+  if (player.pos === "DST") return lastName(player.name);
+  const parts = player.name.trim().split(/\s+/);
+  if (parts.length < 2) return player.name;
+  return parts[0][0] + ". " + lastName(player.name);
+}
+
 function initials(name) {
   const parts = name.replace(/[^A-Za-z .'-]/g, "").split(" ");
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
@@ -3602,6 +3616,41 @@ function renderPlayers() {
   }).join("");
 }
 
+/* Which way the pick order leaves this cell.
+
+   A snake board is read for its turns, and the turn is the one thing the
+   numbers alone make you work out: the last pick of a round hands straight
+   over to the first pick of the next, which is why the two ends of the room
+   pick twice in a row and the middle never does. So the last pick of any
+   round points down and everything else points the way its round runs.
+
+   `pickInRound` rather than a second copy of the mirror — the whole point of
+   putting it in the engine was that this is the third place that wants it. */
+function boardArrow(round, slot) {
+  if (DraftEngine.pickInRound(round, slot, league.teams) === league.teams) return "&darr;";
+  return round % 2 === 0 ? "&larr;" : "&rarr;";
+}
+
+/* The headshot, or nothing at all.
+
+   `avatar()` is deliberately not reused. It draws initials underneath as a
+   fallback and carries the `.avatar` class, which is hidden outright inside
+   the rail and is the player photo on the sheet — a 20px board face wants
+   neither. Nothing is drawn when there is no id, rather than a placeholder:
+   140 grey circles is a worse board than 140 cards, six of which have no
+   picture.
+
+   `data-drop-on-error` is how a 404 disappears. It has to be that rather than
+   an inline `onerror`, because an inline handler is a script the CSP would
+   have to allow, and allowing those means allowing the ones somebody else
+   writes into a chat message. */
+function boardFace(player) {
+  const url = photoUrl(player);
+  return url
+    ? `<img class="cell-face" src="${url}" alt="" loading="lazy" data-drop-on-error>`
+    : "";
+}
+
 function renderBoard() {
   const grid = $("boardGrid");
 
@@ -3622,9 +3671,14 @@ function renderBoard() {
     for (let s = 0; s < league.teams; s++) {
       const pick = state.picks.find((p) => p.round === r && p.slot === s);
       if (pick) {
-        const last = lastName(pick.player.name);
-        html += `<div class="cell ${pick.player.pos} ${s === state.mySlot ? "mine" : ""}">
-                   <b>${last}</b><s>${pick.player.pos} &middot; ${pick.player.team}</s></div>`;
+        const p = pick.player;
+        html += `<div class="cell ${p.pos} ${s === state.mySlot ? "mine" : ""}">
+                   <b>${shortName(p)}</b><s>${p.pos} &middot; ${p.team}</s>
+                   <span class="cell-foot">
+                     <span class="cell-dir" aria-hidden="true">${boardArrow(r, s)}</span>
+                     <span class="cell-pick">${pickCode(pick.overall)}</span>
+                     ${boardFace(p)}
+                   </span></div>`;
       } else {
         const c = onTheClock();
         const isNow = c && c.round === r && c.slot === s;

@@ -1233,6 +1233,46 @@ team defense has no height, weight, age or college — it is eleven people —
 so `bioLine()` gives it its own line rather than a strip of dashes, and
 `ourRead()` calls it "this defense" rather than "him".
 
+## The board card
+
+Five things per cell: who, what and where, which way the pick order is
+travelling, which pick it was, and a face. It was a surname and a position.
+
+**The arrow is there for the turn, which is the one thing the numbers do not
+tell you on sight.** Down on the last pick of a round, along the way its round
+runs otherwise — and it asks `DraftEngine.pickInRound()` rather than deriving
+the mirror again, which is the third caller and the reason that function
+exists.
+
+**A defense keeps its club.** `lastName()` drops the word "Defense", so
+initialising what is left gives "L. Chargers", which is nobody: the first word
+of a team name is not a first name.
+
+**`avatar()` is deliberately not reused for the face.** It draws initials
+underneath as a fallback and carries `.avatar`, which is hidden outright inside
+the rail and is the player photo on the sheet. A 20px board face wants neither,
+and a missing photo draws nothing at all — 140 grey circles is a worse board
+than 140 cards, six of which have no picture.
+
+**The row owns the height, not the cell.** A row is as tall as its tallest
+cell, so a floor on the cell gives a uniform board only while the floor happens
+to exceed the card's natural height. Set at 56 against cards that came out 58,
+the board had two row heights and every row jumped 2px the moment its first
+pick landed — on a pane that is simultaneously trying to keep the live pick
+centred. `grid-auto-rows` states it once; `grid-template-rows: auto` leaves the
+header sizing to itself.
+
+**140 headshots cost one request each and nothing per render.** Measured:
+`renderBoard()` goes 5.3ms to 15.2ms and the whole `render()` 34ms to 41ms,
+once per pick — and across ~90 rebuilds the browser made exactly 140 requests,
+because the DOM churn re-uses the cache. The board being rebuilt from scratch
+on every change is not a reason to fear images on it.
+
+**Centring the empty cells was not cosmetic tidying.** They were pinned to the
+top, which was 6px above and 25 below at 42px and became 6 above and 41 below
+at 58. Nobody would have called the old one wrong; the new one read as a number
+that had slipped its box.
+
 ## Contrast
 
 Every one of these was found in a single sweep, and none of them announced
@@ -1287,6 +1327,20 @@ runs down. At a 4.6 backdrop the minimum workable alpha is **0.98**, and
 even a solid `#F2F6F9` only reaches 4.27. There is no opacity that reads as
 secondary and stays legible; the choice is not a real one. Hierarchy on a
 strong colour comes from size and weight.
+
+**And `opacity` is a third way to lie about a colour, after alpha and
+gradients.** The board card's `POS · TEAM` line carried `opacity: .85` for as
+long as the board has existed, measuring 3.74 (QB), 3.79 (RB), 3.82 (WR and
+TE), 3.81 (K) and 4.02 (DST) — all six under the bar, on every card on screen.
+It survived every sweep this project has run, including the one that caught the
+header labels above, because a walker reading `color` sees `#fff` and reports
+4.62: the opacity is a property on the *element*, not a channel in the colour,
+so it never appears in the value being measured.
+
+The solids are darkened to put white at exactly 4.6, which is the other half of
+it — there is no margin to spend, so *any* translucency takes them under.
+**A sweep has to composite `opacity` against the backdrop the same way it
+composites alpha**, and `tests/board-card.spec.mjs` now does.
 
 **A disabled control is exempt, which is how a regression hid in one.**
 `.primary:disabled` was white on `--ink-light` at 3.88. Lightening
