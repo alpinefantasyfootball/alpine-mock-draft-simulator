@@ -1154,15 +1154,20 @@ tr.drafted .ovr { color: var(--ink-light); }
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
-/* margin-top: auto pins this to the bottom of the card, so a wrapped or
+/* Deliberately not scoped to .board: the hero shot draws the same card and
+   wears the same three classes, so there is one declaration of what a card's
+   foot looks like rather than two that agree until somebody edits one. The
+   face below is board-only, which is why that one keeps its scope.
+
+   margin-top: auto pins the foot to the bottom of the card, so a wrapped or
    ellipsised name never pushes the face out of line with its neighbours. */
-.board .cell-foot {
+.cell-foot {
   display: flex; align-items: center; gap: 4px;
   margin-top: auto; padding-top: 3px;
 }
 
-.board .cell-dir  { font-weight: 700; line-height: 1; }
-.board .cell-pick { font-variant-numeric: tabular-nums; }
+.cell-dir  { font-weight: 700; line-height: 1; }
+.cell-pick { font-variant-numeric: tabular-nums; }
 
 /* Pushed to the right edge by the margin rather than by a spacer, so a card
    whose photo failed to load closes up instead of leaving a hole — the
@@ -2123,6 +2128,11 @@ a.room.live:hover {
 .hero-shot {
   display: grid;
   grid-template-columns: 26px repeat(10, minmax(88px, 1fr));
+  /* The header row sizes to itself; every round row after it is one card
+     tall. Stated here rather than as a min-height on the cell, for the reason
+     written beside the board's own grid. */
+  grid-template-rows: auto;
+  grid-auto-rows: 54px;
   gap: 3px;
   overflow: hidden;
   pointer-events: none;
@@ -2144,17 +2154,28 @@ a.room.live:hover {
 .shot-hd.me { color: var(--band-ink); }
 .shot-rd { display: flex; align-items: center; justify-content: center; padding-bottom: 0; }
 
+/* A column, so the foot sits at the bottom of the card the way the board's
+   does. The height is on the row rather than here — same reason as the board:
+   a floor on the cell gives a uniform grid only while it happens to exceed
+   what the content actually needs. */
 .shot-cell {
-  border-radius: var(--r-xs); padding: 5px 6px; min-height: 34px;
+  border-radius: var(--r-xs); padding: 5px 6px;
   color: #fff; overflow: hidden;
+  display: flex; flex-direction: column;
 }
 .shot-cell b {
   display: block; font-size: var(--fs-2xs); font-weight: 700;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+/* `opacity: .78` here, measuring 3.38 to 3.66 across the six solids — the same
+   bug as the board's sub-line and worse, on the first screen a visitor sees.
+   Both were invisible to every sweep for the same reason: opacity is a
+   property on the element, not a channel in the colour, so a walker reading
+   `color` reports 4.62 and moves on. Weight carries the hierarchy instead. */
 .shot-cell s {
   display: block; text-decoration: none; font-size: var(--fs-2xs);
-  opacity: .78; white-space: nowrap;
+  font-weight: 400; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
 }
 /* The same six solids the board uses, so the shot cannot drift from it. */
 .shot-cell.QB  { background: var(--qb); }
@@ -2178,10 +2199,18 @@ a.room.live:hover {
 
   /* At the desktop floor of 88px a phone shows 3.4 of the ten columns, and
      three and a bit columns reads as a picture that failed to load rather
-     than one that is cropped. 58px shows just over five — half the room,
-     which reads as a board — and the surnames that no longer fit ellipsise,
-     which is honest truncation rather than a broken layout. */
-  .hero-shot { grid-template-columns: 20px repeat(10, minmax(58px, 1fr)); }
+     than one that is cropped. So the floor drops here, and where it drops to
+     is set by how much of a name survives.
+
+     It was 58px, chosen when a cell held a surname alone — 38 of the 50 names
+     on the shot fitted. The card carries an initial now, which is about 14px
+     more, and at 58px that collapses to **11 of 50**: a board of "G. Pic…"
+     and "A. Bro…", which is not truncation, it is a different graphic.
+
+     70px puts it back to 35 of 50 and still shows 4.8 of the ten columns —
+     near enough the half-room that made 58 the answer the first time. The
+     foot wants 41px at its widest, so it is never what decides this. */
+  .hero-shot { grid-template-columns: 20px repeat(10, minmax(70px, 1fr)); }
 }
 
 /* ---------- the "not yet" dialog ----------

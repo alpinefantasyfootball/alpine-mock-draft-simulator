@@ -461,9 +461,25 @@ function renderHeroShot() {
       const i = (r - 1) * SHOT_TEAMS + (r % 2 ? s : SHOT_TEAMS - 1 - s);
       const p = picks[i];
       if (!p) { html += '<div class="shot-cell empty"></div>'; continue; }
+
+      /* The same card the draft room draws, minus the face.
+
+         Fifty headshots is fifty requests to somebody else's server on the
+         first paint of the marketing page, for decoration the mask starts
+         dissolving at 46% — the landing page loads no third-party image at
+         all today and this is not the thing worth spending that on. Everything
+         else is free and is what makes it read as a real board.
+
+         Names and arrows go through the same two functions the board uses, so
+         the picture cannot start claiming a different product from the one a
+         click away. */
       html += '<div class="shot-cell ' + p.pos + (s === SHOT_MINE ? " mine" : "") + '">' +
-              "<b>" + escHtml(lastName(p.name)) + "</b>" +
-              "<s>" + p.pos + " &middot; " + escHtml(p.team) + "</s></div>";
+              "<b>" + escHtml(shortName(p)) + "</b>" +
+              "<s>" + p.pos + " &middot; " + escHtml(p.team) + "</s>" +
+              '<span class="cell-foot">' +
+                '<span class="cell-dir">' + boardArrow(r, s, SHOT_TEAMS) + "</span>" +
+                '<span class="cell-pick">' + DraftEngine.pickCode(i + 1, SHOT_TEAMS) + "</span>" +
+              "</span></div>";
     }
   }
   el.innerHTML = html;
@@ -3625,9 +3641,14 @@ function renderPlayers() {
    round points down and everything else points the way its round runs.
 
    `pickInRound` rather than a second copy of the mirror — the whole point of
-   putting it in the engine was that this is the third place that wants it. */
-function boardArrow(round, slot) {
-  if (DraftEngine.pickInRound(round, slot, league.teams) === league.teams) return "&darr;";
+   putting it in the engine was that this is the third place that wants it.
+
+   `teams` is a parameter rather than read from `league`, because the hero shot
+   draws a fixed ten-team room whatever league the visitor has set up. One
+   function for both boards: the landing page claiming a different snake from
+   the product is the drift this signature exists to prevent. */
+function boardArrow(round, slot, teams) {
+  if (DraftEngine.pickInRound(round, slot, teams) === teams) return "&darr;";
   return round % 2 === 0 ? "&larr;" : "&rarr;";
 }
 
@@ -3675,7 +3696,7 @@ function renderBoard() {
         html += `<div class="cell ${p.pos} ${s === state.mySlot ? "mine" : ""}">
                    <b>${shortName(p)}</b><s>${p.pos} &middot; ${p.team}</s>
                    <span class="cell-foot">
-                     <span class="cell-dir" aria-hidden="true">${boardArrow(r, s)}</span>
+                     <span class="cell-dir" aria-hidden="true">${boardArrow(r, s, league.teams)}</span>
                      <span class="cell-pick">${pickCode(pick.overall)}</span>
                      ${boardFace(p)}
                    </span></div>`;

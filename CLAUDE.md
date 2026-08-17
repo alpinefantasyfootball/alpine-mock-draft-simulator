@@ -832,6 +832,35 @@ way, not reasoned about.
   That is deliberate and it is the *only* exception: the clipped part is
   decoration with a duplicate one click away, not content with no way to
   reach it. Anything else that trips that check is still a bug.
+
+  **It draws the board card, minus the face.** Same `shortName()`, same
+  `boardArrow()`, same `pickCode()` as the draft room, because a graphic that
+  drifts from the product is a lie the app tells about itself. Fifty headshots
+  is fifty requests to somebody else's server on the first paint of the
+  marketing page, for decoration the mask starts dissolving at 46% — the
+  landing page loads no third-party image at all, and a test now asserts that.
+
+  **`boardArrow()` takes `teams` rather than reading `league`, and the bug
+  that guards against is latent rather than live.** `renderHeroShot()` runs
+  once at startup, when `league.teams` is still the default ten, so a version
+  reading `league.teams` draws an identical shot and no page-level test can
+  tell the two apart. The test moves the league to twelve and calls the
+  function directly. **A mutation that passes is not a test** — this one did,
+  first time round, and the comment above it claimed otherwise.
+
+  **The phone floor moved 58px → 70px, and the reason is the initial.** At
+  58px, with a surname alone, 38 of the 50 names fitted. The card carries
+  "G. Pickens" now, which is about 14px more, and at 58px that collapses to
+  **11 of 50** — a board of "G. Pic…" and "A. Bro…", which is not truncation
+  but a different graphic. 70px puts it back to 35 and still shows 4.8 of the
+  ten columns. The foot wants 41px at its widest, so it never decides this.
+
+  **A flex column compresses rather than overflows, so clipping does not
+  report as clipping.** The row height was set to 48px against a card wanting
+  54, and the `POS · TEAM` line was cut in half on every cell — with
+  `scrollHeight === clientHeight`, so an overflow sweep saw nothing at all.
+  Measure a free-standing clone of the card against the row instead, which is
+  what the test does.
 - **The centred wordmark needs a breakpoint.** `.shell-inner` is
   `1fr auto 1fr`, so each side gets the same width. Below about 540px the
   sides need ~191px of links and get ~110px, and because the links are
