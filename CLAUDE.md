@@ -939,6 +939,31 @@ way, not reasoned about.
 
 ## Hard-won rules — do not undo these
 
+**A pick number is not a seat number, and for half the board they are the
+same.** `pickCode()` returned the seat, so every even round came out mirrored:
+in a ten-team league the first pick of round two was labelled `2.10` and the
+last was labelled `2.01`. Odd rounds were correct, which is why it lasted as
+long as the app has existed — at any moment half the board agreed with it.
+
+The mirror lives in `DraftEngine.pickInRound()` now and nowhere else, because
+the board was computing its own copy of it inline. Anything holding a round
+and a seat and wanting a label asks the engine.
+
+**The tell was two correct numbers side by side disagreeing.** The header
+prints `Pick 2.10 (11 Overall)`, and 11 overall in a ten-team league can only
+be the first pick of round two. Nothing about the arithmetic was wrong —
+`pickInfo()` had the seat right the whole time — only what the result was
+called. That is the same failure as the standings printing starter strength
+under a column of totals, and it is found the same way: read what the screen
+says and check it against what the app computed.
+
+**Uniqueness is the obvious test and it does not catch this.** Reading the
+seat still hands out every code in a round exactly once, because each overall
+number in a round has its own seat — the set is right and only the assignment
+is backwards. What catches it is that a pick code must be derivable from the
+overall number and the league size alone, with no reference to the snake at
+all. Test that property, not the count.
+
 **Decide a player's type from `player.pos`, never from whether a stat is
 present.** Christian McCaffrey threw one pass in 2025, and a check of
 `if (stats.pa)` rendered him with quarterback columns and no receiving line

@@ -51,9 +51,30 @@
     return { round: round, slot: slot - 1 };
   }
 
+  /* The inverse of pickInfo: which pick of its own round a seat holds.
+
+     In an odd round that is simply the seat. In an even round it is mirrored,
+     and that mirror is the entire difference between a seat number and a pick
+     number — which is why it is written down once, here, rather than by each
+     caller that happens to have a round and a seat in hand. */
+  function pickInRound(round, slot, teams) {
+    return (round % 2 === 0) ? (teams - slot) : (slot + 1);
+  }
+
+  /* The label a draft actually uses: the round, then which pick of that round.
+
+     Not the seat. For half the board those are the same number, which is how
+     this was wrong for as long as it existed: it read the seat, so odd rounds
+     were right and even rounds were mirrored. In a ten-team league the first
+     pick of round two came out "2.10" and the last came out "2.01".
+
+     The header is where it was self-contradicting — "Pick 2.10 (11 Overall)",
+     when 11 overall can only be the first pick of the round. Two correct
+     numbers side by side disagreeing, which is the tell worth remembering:
+     nothing about the arithmetic was wrong, only what it was called. */
   function pickCode(overall, teams) {
     const p = pickInfo(overall, teams);
-    return p.round + "." + String(p.slot + 1).padStart(2, "0");
+    return p.round + "." + String(pickInRound(p.round, p.slot, teams)).padStart(2, "0");
   }
 
   /* Whose turn it is, from the number of picks already made. Deliberately
@@ -134,6 +155,7 @@
   return {
     totalPicks: totalPicks,
     pickInfo: pickInfo,
+    pickInRound: pickInRound,
     pickCode: pickCode,
     onTheClock: onTheClock,
     draftOver: draftOver,

@@ -58,6 +58,60 @@ check("round 3 turns back", E.pickInfo(21, 10), { round: 3, slot: 0 });
 check("last pick", E.pickInfo(140, 10), { round: 14, slot: 0 });
 check("pick code pads", E.pickCode(2, 10), "1.02");
 
+/* A pick code is round-then-pick-of-round, never round-then-seat. The two
+   agree for every odd round, which is why reading the seat looked correct
+   for as long as it did — so the cases that matter are all even. */
+check("first pick of an even round", E.pickCode(11, 10), "2.01");
+check("last pick of an even round",  E.pickCode(20, 10), "2.10");
+check("odd rounds are unchanged",    E.pickCode(21, 10), "3.01");
+check("the very last pick",          E.pickCode(140, 10), "14.10");
+
+/* Two invariants, and only the second one catches the bug this was written
+   for. That is worth saying rather than leaving to be discovered.
+
+   Uniqueness is the obvious check and it is useless here: reading the seat
+   still hands out every code in a round exactly once, because each overall
+   number in a round has its own seat. The set is right and the assignment is
+   backwards, so the count cannot see it. It is kept because it is a genuine
+   property worth holding, not because it defends this.
+
+   What catches it is the second: a pick code has to be derivable from the
+   overall number and the league size alone, with no reference to the snake.
+   That is what makes it a pick number rather than a seat number, and a
+   mirrored round fails it 10 times out of 10. */
+[8, 10, 12, 13, 14, 24].forEach(function (teams) {
+  const cfg = { teams: teams, rounds: 14 };
+  const codes = {};
+  let mismatched = 0;
+  for (let n = 1; n <= E.totalPicks(cfg); n++) {
+    const code = E.pickCode(n, teams);
+    codes[code] = (codes[code] || 0) + 1;
+    // The code has to be derivable from the overall number alone, with no
+    // reference to the snake at all: that is what makes it a pick number.
+    const round   = Math.ceil(n / teams);
+    const inRound = n - (round - 1) * teams;
+    if (code !== round + "." + String(inRound).padStart(2, "0")) mismatched++;
+  }
+  const counts = Object.keys(codes).map((k) => codes[k]);
+  check("every pick code is unique at " + teams + " teams",
+        [Object.keys(codes).length, Math.max.apply(null, counts)],
+        [E.totalPicks(cfg), 1]);
+  check("and counts up through each round at " + teams + " teams", mismatched, 0);
+});
+
+/* pickInRound is the inverse of pickInfo, so a round trip through both has to
+   land back on the pick it started from. This is the assertion that stops the
+   mirror in one drifting from the mirror in the other. */
+[8, 10, 12, 13, 14, 24].forEach(function (teams) {
+  let wrong = 0;
+  for (let n = 1; n <= teams * 14; n++) {
+    const p = E.pickInfo(n, teams);
+    const back = (p.round - 1) * teams + E.pickInRound(p.round, p.slot, teams);
+    if (back !== n) wrong++;
+  }
+  check("pickInRound inverts pickInfo at " + teams + " teams", wrong, 0);
+});
+
 // every seat appears exactly `rounds` times, in every league size we offer
 [4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24].forEach(function (teams) {
   const cfg = { teams: teams, rounds: 14 };
