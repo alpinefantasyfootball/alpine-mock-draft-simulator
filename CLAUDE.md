@@ -1458,6 +1458,65 @@ region and measures 5.15. **Both a false alarm and a real miss came out of
 the same shortcut.** Composite the alpha, and interpolate the gradient at
 the element's own position.
 
+## The draft room header
+
+**A logo in the corner is the way out only to somebody who already knows
+that.** `#homeBtn` had been the mark alone, doing two jobs and announcing the
+second. It is a chevron and the mark in one control now — one way out rather
+than two competing in a 390px bar.
+
+**What draft this is belongs in the header, because the setup screen folds
+away.** Four rounds in there was no way to check whether this was a 14-round
+league without leaving it. It comes from `leagueSummary()`, which is the
+string the shut setup box already shows — never a second copy of the same
+lookup. It stands down under 760px: it is reference rather than state, so it
+is the first of the four things on that bar that can wait.
+
+**Sound is synthesised, not played from a file.** Three cues do not justify
+the first binary assets in a repository that has none, a tone generated in the
+page cannot 404 or be served stale behind a cache, and it costs no request.
+Same argument as the door being drawn and the product shot generated. The
+`AudioContext` is made on the first gesture that needs it and never at load —
+one created at load sits suspended for ever, so the first cue is silent with
+nothing to say why. It never throws: Web Audio is a runtime dependency on
+somebody's hardware, and it fails by going quiet the way the score strip fails
+by disappearing.
+
+**`soundCue()` fires on the change, not on the state.** `renderHeader()` runs
+on every pick, every tick and every rebuild, so "is it my turn" is true
+hundreds of times for one turn.
+
+**A class is not a style; it is a control.** The sound button was given
+`theme-toggle` to inherit its look, and that class is what `themeBtns()`
+selects, what `syncThemeButton()` writes `aria-pressed` onto, and what the
+delegated handler switches the theme on. It loaded showing "on" it had never
+been given and would have changed the theme when pressed. The shared shape is
+`.hdrbtn` now and each button keeps its own name. This is the `.home` /
+`.avatar` / `initials()` collision again — except **checking the stylesheet
+for the name would not have found it**, because the clash was in behaviour.
+Grep the script too.
+
+**A media query carries no specificity.** The phone rules for `.count` were
+written *above* the rules they override and changed nothing, while
+`matchMedia` agreed the query matched — which reads exactly like a rule that
+is not applying at all. Source order still decides at equal weight.
+
+**And the label and the value measure the same width, so trimming either
+alone does nothing.** "Time left" and "0:59" are both 60px; the block is as
+wide as its widest child either way. Two reasonable-looking fixes moved the
+header by zero pixels before both together moved it by seven.
+
+**Check the brace balance after moving a block.** A slice that ended at the
+first `}` after a one-line rule left `@media (max-width: 400px)` open, so it
+swallowed every rule below it and the whole stylesheet became conditional on a
+phone width. The board's rings vanished at desktop and nothing in the header
+looked wrong. One line catches it:
+
+```js
+const s = css.replace(/\/\*[\s\S]*?\*\//g, "");
+s.split("{").length === s.split("}").length
+```
+
 ## Claim and proof
 
 Three claims down the landing page with the thing each one claims running

@@ -184,6 +184,8 @@ const $ = (id) => document.getElementById(id);
 const appbar     = $("appbar");
 const statusLine = $("statusLine");
 const pickLabel  = $("pickLabel");
+const pickText   = $("pickText");
+const leagueLabel = $("leagueLabel");
 const countBlock = $("countBlock");
 const rightLabel = $("rightLabel");
 const rightValue = $("rightValue");
@@ -238,6 +240,130 @@ function syncThemeButton() {
 }
 
 syncThemeButton();
+
+
+/* ---- 2b. Sound ------------------------------------------
+   Three cues, synthesised in the page. No audio files, and
+   that is a decision rather than a shortcut: three tones do
+   not justify the first binary assets in a repository that
+   has none, a generated tone cannot 404 or be served stale
+   behind a cache, and it costs no request on a page that
+   currently loads no third-party media at all. Same
+   argument as the door being drawn and the product shot
+   being generated.
+
+   A draft is the one screen in this app where somebody
+   legitimately looks away — the whole point of a clock is
+   that it runs while you are doing something else — so this
+   is the one screen where sound earns its place. It is off
+   until asked for, and the preference is remembered.     */
+
+const SOUND_KEY = "draftroom.sound";
+
+let soundWanted = false;
+try { soundWanted = localStorage.getItem(SOUND_KEY) === "on"; } catch (err) {}
+
+/* One context, made on the first gesture that needs it and never before.
+
+   Browsers refuse to start an AudioContext outside a user gesture, and one
+   created at load sits in "suspended" for ever — so the first cue would be
+   silent with nothing to say why. Pressing the toggle is a gesture, and so is
+   starting a draft. */
+let audio = null;
+
+function audioContext() {
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  if (!Ctx) return null;                 // no Web Audio: the app is unaffected
+  if (!audio) audio = new Ctx();
+  if (audio.state === "suspended") audio.resume();
+  return audio;
+}
+
+/* A note. Sine rather than square, and an envelope rather than a straight
+   gain: an abrupt start or stop on a raw oscillator is a click, which is
+   audible as a fault rather than as a sound somebody chose. */
+function tone(freq, startAt, ms, peak) {
+  const ctx = audioContext();
+  if (!ctx) return;
+  const osc = ctx.createOscillator();
+  const amp = ctx.createGain();
+  const t0 = ctx.currentTime + startAt;
+  const t1 = t0 + ms / 1000;
+
+  osc.type = "sine";
+  osc.frequency.setValueAtTime(freq, t0);
+  amp.gain.setValueAtTime(0.0001, t0);
+  amp.gain.exponentialRampToValueAtTime(peak, t0 + 0.012);
+  amp.gain.exponentialRampToValueAtTime(0.0001, t1);
+
+  osc.connect(amp).connect(ctx.destination);
+  osc.start(t0);
+  osc.stop(t1 + 0.02);
+}
+
+/* Never throws, and that is the contract rather than politeness. Web Audio
+   is a runtime dependency on the browser's own hardware — a device with no
+   output, a context the browser declines to resume, a policy we did not
+   anticipate — and none of that may reach a draft. It fails by going quiet,
+   the same way the score strip fails by disappearing. */
+function play(cue) {
+  if (!soundWanted) return;
+  try {
+    if (cue === "turn") { tone(587.33, 0, 110, 0.16); tone(880.00, 0.10, 190, 0.16); }
+    else if (cue === "tick") { tone(1046.50, 0, 55, 0.09); }
+    else if (cue === "done") {
+      tone(523.25, 0, 220, 0.13); tone(659.25, 0.09, 220, 0.13); tone(783.99, 0.18, 320, 0.13);
+    }
+  } catch (err) {}
+}
+
+/* What has already been said, so a cue fires on the change rather than on
+   every render. renderHeader() runs on every pick, every tick and every
+   rebuild, so "is it my turn" is true hundreds of times for one turn. */
+const saidAt = { mine: false, tick: null, over: false };
+
+function soundCue() {
+  if (!state.started) { saidAt.mine = false; saidAt.tick = null; saidAt.over = false; return; }
+
+  if (draftOver()) {
+    if (!saidAt.over) { saidAt.over = true; play("done"); }
+    return;
+  }
+
+  const mine = isMyTurn();
+  if (mine && !saidAt.mine) play("turn");
+  saidAt.mine = mine;
+
+  /* The last five seconds, once each. Only on your own clock: a countdown
+     running against somebody else is not a thing to be hurried by, and in a
+     twelve-team room it would tick sixty times a round. */
+  const left = state.timeLeft;
+  if (mine && clockShowing() && !state.paused && left > 0 && left <= 5) {
+    if (saidAt.tick !== left) { saidAt.tick = left; play("tick"); }
+  } else {
+    saidAt.tick = null;
+  }
+}
+
+function syncSoundButton() {
+  const btn = $("soundBtn");
+  if (!btn) return;
+  const label = soundWanted ? "Turn draft sounds off" : "Turn draft sounds on";
+  btn.setAttribute("aria-pressed", String(soundWanted));
+  btn.setAttribute("aria-label", label);
+  btn.title = label;
+}
+
+function toggleSound() {
+  soundWanted = !soundWanted;
+  try { localStorage.setItem(SOUND_KEY, soundWanted ? "on" : "off"); } catch (err) {}
+  syncSoundButton();
+  // The press is the gesture that lets the context start, and hearing the
+  // thing you just switched on is the only confirmation worth giving.
+  if (soundWanted) play("turn");
+}
+
+syncSoundButton();
 
 
 /* ---- 2c. The site shell ---------------------------------
@@ -352,7 +478,7 @@ function renderRooms() {
       '<a class="navlink" href="docs/draft-room-how-it-works.html">How it works</a>' +
       '<button class="navbtn js-install" type="button" hidden>Install</button>' +
       '<button class="navlink js-login" type="button">Log in</button>' +
-      '<button class="theme-toggle" type="button" aria-pressed="true">' +
+      '<button class="hdrbtn theme-toggle" type="button" aria-pressed="true">' +
         '<svg class="i-sun" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true" ' +
              'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">' +
           '<circle cx="12" cy="12" r="4.2"/>' +
@@ -3640,15 +3766,24 @@ function renderHeader() {
 
   if (!state.started) {
     statusLine.textContent = "The Draft Room";
+    soundCue();                      // resets what has been said
     return;
   }
+
+  /* What this draft is, beside what it is doing. The shape was only ever on
+     the setup screen, which folds away the moment a draft starts, so four
+     rounds in there was no way to check whether this was a 14-round league
+     without leaving it. Through leagueSummary(), never a second copy of the
+     same lookup — it is the string the setup box already shows shut. */
+  leagueLabel.textContent = leagueSummary();
 
   if (draftOver()) {
     appbar.classList.add("live");
     statusLine.textContent = "Draft complete";
-    pickLabel.textContent  = totalPicks() + " picks made";
+    pickText.textContent   = totalPicks() + " picks made";
     rightLabel.textContent = "Rounds";
     rightValue.textContent = league.rounds;
+    soundCue();
     return;
   }
 
@@ -3658,7 +3793,7 @@ function renderHeader() {
     const urgent = state.clockLength && !state.paused && state.timeLeft <= 10;
     appbar.classList.add(urgent ? "urgent" : "my-turn");
     statusLine.textContent = "You're on the clock!";
-    pickLabel.textContent  = "Pick " + pickCode(overall) + " (" + overall + " Overall)";
+    pickText.textContent   = "Pick " + pickCode(overall) + " (" + overall + " Overall)";
     if (state.clockLength) {
       rightLabel.textContent = state.paused ? "Paused" : "Time left";
       rightValue.textContent = clockText();
@@ -3668,7 +3803,7 @@ function renderHeader() {
     }
   } else {
     appbar.classList.add("live");
-    pickLabel.textContent = "Pick " + pickCode(overall) + " (" + overall + " Overall)";
+    pickText.textContent = "Pick " + pickCode(overall) + " (" + overall + " Overall)";
 
     /* Somebody else is up. Solo that is a CPU with no countdown of its own, so
        the useful number is how long until you are back; in a room there is a
@@ -3691,6 +3826,11 @@ function renderHeader() {
       rightValue.textContent = gap;
     }
   }
+
+  /* Last, and out of every branch above rather than at the top: the cues are
+     about the state this render has just settled on, and a draft that has
+     ended is not a turn that has started. */
+  soundCue();
 }
 
 // "Last one in the tier" is the most actionable thing a draft board can
@@ -6582,6 +6722,11 @@ $("sheetTabs").addEventListener("click", function (e) {
 // The mark now leaves for the landing page rather than discarding: the draft
 // stays in memory and in the save, and the route change is what goes back.
 $("homeBtn").addEventListener("click", function () { go("home"); });
+
+document.addEventListener("click", function (e) {
+  const btn = e.target.closest ? e.target.closest("#soundBtn") : null;
+  if (btn) toggleSound();
+});
 
 // Delegated, because the panel's toggle does not exist until the rooms are
 // rendered, and the same goes for its Log in and Install.

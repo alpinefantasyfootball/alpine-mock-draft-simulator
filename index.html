@@ -33,12 +33,12 @@
        say script-src 'self' without either giving away 'unsafe-inline' or
        pinning a hash that breaks the site the first time somebody edits it.
        No defer, no async: it must run before the body is drawn. -->
-  <script src="theme.js?v=202608180256"></script>
+  <script src="theme.js?v=202608181158"></script>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <!-- ?v=202608180256 on every local file below, and it has to be bumped on any deploy
+  <!-- ?v=202608181158 on every local file below, and it has to be bumped on any deploy
        that changes one of them.
 
        Without a version in the address a returning visitor runs today's HTML
@@ -53,7 +53,7 @@
 
        A query string rather than a renamed file, because renaming means a
        manifest and a manifest means a build step. This costs one number. -->
-  <link rel="stylesheet" href="style.css?v=202608180256">
+  <link rel="stylesheet" href="style.css?v=202608181158">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -111,7 +111,7 @@
           <button class="navbtn js-install" id="installBtn" type="button" hidden>Install</button>
           <button class="navlink js-login" id="loginBtn" type="button">Log in</button>
           <button class="cta" id="signupBtn" type="button">Sign up</button>
-          <button class="theme-toggle" type="button" aria-pressed="true">
+          <button class="hdrbtn theme-toggle" type="button" aria-pressed="true">
             <svg class="i-sun" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"
                  fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
               <circle cx="12" cy="12" r="4.2"/>
@@ -136,15 +136,33 @@
              sized as a square without squashing it.
              width and height are set here as well as in the CSS, because a cached
              or missing stylesheet once let this shape fill the whole screen. -->
-        <button class="home" id="homeBtn" type="button" title="Back to draft setup"
-                aria-label="Back to draft setup">
+        <button class="home" id="homeBtn" type="button" title="Leave the draft"
+                aria-label="Leave the draft">
+          <!-- The chevron is the affordance and the mark is the brand, in one
+               control rather than two. The mark alone had carried both jobs
+               and only ever announced the second: it is a logo, and a logo in
+               the corner of an app is the way out only to somebody who
+               already knows that. -->
+          <svg class="i-back" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"
+               fill="none" stroke="currentColor" stroke-width="2.4"
+               stroke-linecap="round" stroke-linejoin="round">
+            <path d="M15 5 8 12l7 7"/>
+          </svg>
           <svg class="mark" width="31" height="36" viewBox="0 0 662 774"
                aria-hidden="true" focusable="false"><use href="#jukeMark"/></svg>
         </button>
 
         <div class="appbar-text">
           <h1 id="statusLine">The Draft Room</h1>
-          <p id="pickLabel" hidden></p>
+          <!-- What this draft is, under what it is doing. The shape was only
+               ever visible on the setup screen, which folds away the moment
+               the draft starts — so a manager four rounds in had no way to
+               check whether they were in a 14-round league or a 15-round one
+               without leaving. It comes from leagueSummary(), never from a
+               second copy of the same lookup. -->
+          <p class="appbar-meta" id="pickLabel" hidden>
+            <span id="pickText"></span><span class="appbar-league" id="leagueLabel"></span>
+          </p>
         </div>
 
         <!-- The counter carries the pick clock and the wait until your turn, so
@@ -158,7 +176,27 @@
             <span class="count-value" id="rightValue"></span>
           </div>
 
-          <button class="theme-toggle" id="themeBtn" type="button" aria-pressed="true">
+          <!-- Sound. Synthesised rather than played from a file: three cues
+               do not justify the first binary assets in the repository, and a
+               tone generated in the page cannot 404, cannot be cached stale
+               and costs no request. -->
+          <button class="hdrbtn sound-toggle" id="soundBtn" type="button"
+                  aria-pressed="false" title="Sound" aria-label="Sound">
+            <svg class="i-sound-on" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"
+                 fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 9.5h3.2L12 5.6v12.8L7.2 14.5H4z" fill="currentColor" stroke="none"/>
+              <path d="M15.6 9.2a4 4 0 0 1 0 5.6M18.2 6.6a7.6 7.6 0 0 1 0 10.8"/>
+            </svg>
+            <svg class="i-sound-off" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"
+                 fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 9.5h3.2L12 5.6v12.8L7.2 14.5H4z" fill="currentColor" stroke="none"/>
+              <path d="m16 9.5 5 5M21 9.5l-5 5"/>
+            </svg>
+          </button>
+
+          <button class="hdrbtn theme-toggle" id="themeBtn" type="button" aria-pressed="true">
             <svg class="i-sun" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"
                  fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
               <circle cx="12" cy="12" r="4.2"/>
@@ -829,19 +867,19 @@
     <form method="dialog"><button class="primary">Got it</button></form>
   </dialog>
 
-  <!-- Every one of these carries the same ?v=202608180256 as the stylesheet. See the note
+  <!-- Every one of these carries the same ?v=202608181158 as the stylesheet. See the note
        beside it in <head>: bump them together or don't bump them at all. -->
-  <script src="players.js?v=202608180256"></script>
-  <script src="stats.js?v=202608180256"></script>
+  <script src="players.js?v=202608181158"></script>
+  <script src="stats.js?v=202608181158"></script>
   <!-- The rules of a snake draft, with no reference to this page. It loads
        before app.js because app.js is a caller, and it is a separate file
        because a server will eventually have to run the same one. -->
-  <script src="draft-engine.js?v=202608180256"></script>
+  <script src="draft-engine.js?v=202608181158"></script>
   <!-- The socket to a shared room. Loaded always, connected never unless a
        manager asks for it: a solo draft touches nothing. -->
-  <script src="live.js?v=202608180256"></script>
+  <script src="live.js?v=202608181158"></script>
   <!-- Before app.js, which calls backToTop() on the last line of its setup. -->
-  <script src="back-to-top.js?v=202608180256"></script>
-  <script src="app.js?v=202608180256"></script>
+  <script src="back-to-top.js?v=202608181158"></script>
+  <script src="app.js?v=202608181158"></script>
 </body>
 </html>

@@ -439,17 +439,34 @@ body {
 .appbar.my-turn .mark,
 .appbar.urgent .mark { --mark-ink: #fff; }
 
-.appbar.my-turn .theme-toggle,
-.appbar.urgent .theme-toggle {
+/* Both header toggles share .hdrbtn and nothing else.
+
+   The sound button was given the class `theme-toggle` first, purely to
+   inherit its look — and that class is not a style, it is a control:
+   themeBtns() selects it, syncThemeButton() writes aria-pressed onto
+   everything it finds, and the delegated click handler switches the theme on
+   anything matching it. So the sound button loaded showing "on" it had never
+   been given and would have changed the theme when pressed.
+
+   Exactly the collision this project already has a rule about — .home was
+   taken, .avatar was taken, initials() was taken. Checking the sheet for a
+   name catches the first two; this one needed checking the *script* as well,
+   because the clash was in behaviour rather than in appearance. */
+.sound-toggle .i-sound-off { display: none; }
+.sound-toggle[aria-pressed="false"] .i-sound-on { display: none; }
+.sound-toggle[aria-pressed="false"] .i-sound-off { display: block; }
+
+.appbar.my-turn .hdrbtn,
+.appbar.urgent .hdrbtn {
   border-color: rgba(255,255,255,.22);
   background: rgba(255,255,255,.10); color: #fff;
 }
 
-.appbar.my-turn .theme-toggle:hover,
-.appbar.urgent .theme-toggle:hover { background: rgba(255,255,255,.20); border-color: rgba(255,255,255,.38); }
+.appbar.my-turn .hdrbtn:hover,
+.appbar.urgent .hdrbtn:hover { background: rgba(255,255,255,.20); border-color: rgba(255,255,255,.38); }
 
-.appbar.my-turn .theme-toggle:focus-visible,
-.appbar.urgent .theme-toggle:focus-visible,
+.appbar.my-turn .hdrbtn:focus-visible,
+.appbar.urgent .hdrbtn:focus-visible,
 .appbar.my-turn .home:focus-visible,
 .appbar.urgent .home:focus-visible { outline-color: #fff; }
 
@@ -471,6 +488,10 @@ body {
   padding: 7px; margin: -7px;
 }
 
+/* The chevron sits tight against the mark and reads as one control with it,
+   which is the point: two separate buttons in a header this narrow would be
+   two ways out rather than one. */
+.i-back { flex: none; margin-right: 2px; opacity: .9; }
 .home:hover { opacity: .78; }
 .home:focus-visible { outline: 2px solid var(--blue); outline-offset: 4px; border-radius: var(--r-sm); }
 
@@ -508,6 +529,44 @@ body {
 .appbar-text p {
   margin: 0; font-size: var(--fs-xs); color: var(--ink-mid);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* The pick and the league on one line, with a divider drawn rather than
+   typed — a literal middot in the markup would still be there when the
+   league half is hidden below 760px, leaving a line that ends in a dot. */
+.appbar-league::before {
+  content: "\00b7"; margin: 0 6px; color: var(--ink-light);
+}
+.appbar.my-turn .appbar-league::before,
+.appbar.urgent .appbar-league::before { color: #fff; }
+
+/* Under 760 the header is the pick, the counter and two toggles, and the
+   league summary is the one of the four that can wait. It is reference
+   rather than state: nothing about it changes during a draft. */
+@media (max-width: 760px) { .appbar-league { display: none; } }
+
+/* Below 560 the mark comes off the draft header and the chevron carries the
+   way out on its own.
+
+   Measured rather than chosen: "You're on the clock!" is about 165px at 16px
+   bold, and at 390px the header has 143px left for it once the padding, the
+   chevron, the mark, the counter and two toggles have taken theirs — so the
+   most important sentence in the app was rendering as "You're on the c…".
+   Dropping the mark returns 174px and it fits.
+
+   It is the one place the draft header stops matching the landing one, and
+   the trade is the right way round: a chevron alone is the universal back
+   affordance on a phone, and the brand is still on every other screen. */
+@media (max-width: 560px) {
+  .appbar .home .mark { display: none; }
+  .appbar .i-back { margin-right: 0; }
+  /* And the spacing tightens with it. Measured at 390px: the header had 147px
+     for a headline that wants about 175, and the mark alone does not close
+     that. 18px of padding, three 12px gaps and the counter's own 10px inset
+     are 30 more, spent on air either side of a sentence that is being cut in
+     half. */
+  .appbar-inner { padding-left: 12px; padding-right: 12px; gap: 8px; }
+  .appbar-right { gap: 8px; padding-left: 6px; }
 }
 
 /* Solid, not rgba(255,255,255,.82).
@@ -549,13 +608,35 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/* ---------- theme toggle ----------
+/* At 360 the headline was still short, and the counter is where the pixels
+   are — but not where you would look for them. The value is the big number
+   and shrinking it does nothing: "Time left" and "0:59" measure 60px each,
+   and 0.1em of tracking over nine uppercase characters is most of it. But
+   they measure 60px *each*, so trimming either one on its own changes
+   nothing at all — the block is as wide as its widest child either way, and
+   both first attempts here looked reasonable and moved the header by zero
+   pixels. Both together return the seven that let "You're on the clock!"
+   finish its own sentence on a 360px phone. --fs-lg is still on the type
+   scale and the digits are still the largest thing on the right.
+
+   It sits *below* the two rules it overrides, and it has to: a media query
+   carries no extra specificity, so at equal weight the later declaration
+   wins whether or not a query wrapped it. Written above them first, it
+   matched — matchMedia agreed it matched — and changed nothing, which reads
+   exactly like a rule that is not applying at all. */
+@media (max-width: 400px) {
+  .count-label { letter-spacing: .04em; }
+  .count-value { font-size: var(--fs-lg); }
+}
+
+
+/* ---------- header toggles ----------
    It lives on the header, which is dark under both themes, so it is
    styled once against navy rather than switching with everything else. */
 
 /* There is one toggle per header, so the base is styled for a normal surface
    and the draft header — which is navy under both themes — overrides it. */
-.theme-toggle {
+.hdrbtn {
   flex: none;
   display: flex; align-items: center; justify-content: center;
   /* Icon only, so this changes nothing on screen — but a button with no
@@ -570,8 +651,8 @@ body {
   transition: background .15s ease, border-color .15s ease, color .15s ease;
 }
 
-.theme-toggle:hover { background: var(--fill-hi); color: var(--ink); }
-.theme-toggle:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+.hdrbtn:hover { background: var(--fill-hi); color: var(--ink); }
+.hdrbtn:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
 
 
 /* One icon each way round: the sun offers the light theme, so it shows
