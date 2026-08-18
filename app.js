@@ -3873,9 +3873,18 @@ function renderBoard() {
            two disagree. */
         const inRound = DraftEngine.pickInRound(r, s, league.teams);
 
+        /* `mine` goes on an empty cell too, and that is the half of this
+           that was missing. The class only ever went on a filled one, so the
+           board marked where you had been and not where you were going —
+           which is the one question a snake board exists to answer, and four
+           rounds out in a twelve-team room it was a counting exercise done
+           by hand. The gold column is drawn from the same `state.mySlot` the
+           header already uses. */
+        const isMine = s === state.mySlot;
+
         // The cell on the clock is the clock. Looking away from where the
         // pick lands to find out how long is left is the thing this removes.
-        html += `<div class="cell empty ${isNow ? "now" : ""}"${isNow ? ' id="boardClock"' : ""}>${
+        html += `<div class="cell empty ${isNow ? "now" : ""} ${isMine ? "mine" : ""}"${isNow ? ' id="boardClock"' : ""}>${
           isNow && clockShowing() ? clockText() : r + "." + String(inRound).padStart(2, "0")
         }</div>`;
       }

@@ -1458,6 +1458,59 @@ region and measures 5.15. **Both a false alarm and a real miss came out of
 the same shortcut.** Composite the alpha, and interpolate the gradient at
 the element's own position.
 
+## Whose it is, and where the draft is
+
+Two marks on the board, and they were one colour between them.
+
+**Gold is identity, and it is the third meaning after orange and blue.**
+Orange acts, blue states — and *whose* is neither. It had been blue in four of
+the six places a seat is marked, navy in a fifth and translucent white in the
+sixth, while blue was simultaneously carrying focus rings, the selected tab,
+`--link`, `.draft-btn` and the header when the clock is yours. A colour doing
+five jobs is not a signal. `--mine` is the mark now, everywhere a seat is
+yours: the board column and its head, the pick cards, the pick lines, the
+standings row and the product shot.
+
+**`--mine` is a mark and never type.** #FFD166 is 1.4:1 as text on a light
+card. The chat author's name stays `--link` for that reason, and it is not an
+inconsistency: that is a name in a paragraph, not a ring on a cell.
+
+**A ring on the board is a pair, because no single colour can survive what it
+lands on.** It sits on six position solids — which are fixed across themes —
+*and* on an empty cell, which is near-black in dark and near-white in light.
+Measured: gold clears 3:1 on every solid (3.2 at worst) and 9.5 on a dark
+empty cell, and reaches **1.26** on a light one. The keyline `--ring-edge` is
+the exact complement — 4.1 on the solids, 16.7 on a light cell, 1.2 on a dark
+one. So the ring is 2px of colour with 1px of keyline inside it, one half
+always has the surface, and the two clear 11.7 against each other so the pair
+always reads as an edge. `--live-ring` is white and takes the identical
+construction for the identical reason.
+
+The bar here is 1.4.11's **3:1**, not 4.5 — these are marks rather than text,
+which is the one place in this project where the lower bar is the right one.
+Do not "fix" the pair by finding a single colour. There isn't one, and the
+arithmetic above is why.
+
+**Both are inset `box-shadow`, never a `border` and never an `outline`.** A
+border is inside the box under `box-sizing: border-box`, so the 2px dashed
+border the live cell used to carry ate 2px of its padding — that cell was 4px
+narrower inside than every other cell on the board and its text sat 2px high.
+An outline does not follow `border-radius` in every engine and cannot be
+layered, which the keyline needs. Same family as the ring-versus-border note
+on the player sheet headshot.
+
+**`mine` goes on an empty cell too, and that is the whole feature.** The class
+only ever went on a filled one, so the board marked where you had *been* and
+never where you were *going* — and when you pick again is the one question a
+snake board exists to answer. Four rounds out in a twelve-team room it was a
+counting exercise done by hand. Nothing failed and nothing logged: every cell
+that was marked was marked correctly, which is why no check caught it. This is
+the dead-control failure from the rail's "My Team" row in a different shape —
+the defect is in what is *absent*, and absence renders, contrasts and passes.
+
+**Your own turn draws both rings, nested.** It is the one cell on the board
+where the two facts coincide, and letting either win throws the other away.
+
 ## Security
 
 The zone is set beyond Cloudflare's defaults, and the defaults were not

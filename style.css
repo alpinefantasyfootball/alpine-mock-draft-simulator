@@ -168,7 +168,37 @@
   --good:        #4FBF7F;
 
   --row-bad:     #2A171B;   /* a whole row tinted with bad news */
-  --row-blue:    #16222F;   /* a whole row tinted as yours      */
+  /* ---- yours ----
+
+     Identity, and it is a third meaning after the two this file already
+     names: orange acts, blue states, and gold is *whose*. It had been blue
+     in four of the six places a seat is marked, navy in a fifth and
+     translucent white in the sixth — and blue was already carrying focus
+     rings, the selected tab, --link, .draft-btn and the header when the
+     clock is yours. A colour doing five jobs is not a signal.
+
+     --mine and --ring-edge do not move between themes, and that is the
+     point rather than an oversight. A ring on the board lands on six
+     position solids — which are themselves fixed across themes — and on an
+     empty cell, which is near-black in one theme and near-white in the
+     other. Measured, no single value survives that: gold clears 3:1 on
+     every solid (3.2 worst) and on a dark empty cell (9.5) and reaches
+     1.26 on a light one; the keyline is the exact complement, 4.1 on the
+     solids and 16.7 on a light cell and 1.2 on a dark one. So the ring is
+     a *pair* — 2px of gold with 1px of keyline inside it — and between
+     them one always clears 3:1 on whatever it is sitting on, while the
+     two clear 11.7 against each other so the pair always reads as an
+     edge. --live-ring is white and takes the identical construction for
+     the identical reason.
+
+     **Gold is a mark and never type.** #FFD166 as text is 1.4:1 on a light
+     card, which is why the chat author's name stays --link: that is a name
+     in a paragraph, not a ring on a cell. */
+  --mine:        #FFD166;   /* the ring on a seat that is yours */
+  --ring-edge:   #0B1017;   /* what makes a ring survive any surface under it */
+  --live-ring:   #FFFFFF;   /* the pick on the clock, wherever it lands */
+  --row-mine:    #221C10;   /* a whole row tinted as yours      */
+  --pale-mine:   #332608;   /* your line in the room standings  */
 
   /* Tints: a soft background with a legible foreground on it. Used by
      the injury chips, the tier chips, the bye bars and the callouts. */
@@ -332,7 +362,10 @@
   --good:        #1B7343;
 
   --row-bad:     #FEF6F7;
-  --row-blue:    #F7FAFF;
+  /* --mine, --ring-edge and --live-ring are deliberately absent here: they
+     are built as a pair that survives both themes. See the dark block. */
+  --row-mine:    #FFF8E8;
+  --pale-mine:   #FDF3DA;
 
   --t-good-bg:#E6F5EC;   --t-good-fg:#1B7343;
   --t-bad-bg:#FBE1E5;    --t-bad-fg:#A32530;
@@ -1143,7 +1176,10 @@ tr.drafted .ovr { color: var(--ink-light); }
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
-.board .hd.me { background: var(--navy); color: #fff; }
+/* The head of the marked column, so the gold reads as one continuous column
+   rather than as a run of separately outlined cells. Navy and white stay —
+   gold is a mark and never type. */
+.board .hd.me { background: var(--navy); color: #fff; box-shadow: inset 0 -3px 0 var(--mine); }
 
 .board .rd {
   background: var(--well); color: var(--ink-light);
@@ -1169,9 +1205,48 @@ tr.drafted .ovr { color: var(--ink-light); }
   color: var(--ink-light); font-variant-numeric: tabular-nums;
   display: flex; align-items: center; justify-content: center;
 }
-/* Blue text on a card, not blue under white, so it takes the lighter --link. */
-.board .cell.now   { background: var(--card); border: 2px dashed var(--blue); color: var(--link); font-weight: 700; }
-.board .cell.mine  { outline: 2px solid var(--blue); outline-offset: -2px; }
+/* Two rings, and they answer two different questions.
+
+   Gold is *whose*: every cell in your column, drafted or not. The empty ones
+   are the half that was missing — the class only went on a filled cell, so
+   the board could tell you where you had been and not where you were going,
+   which is the one thing a snake board is for. Four rounds out, in a
+   twelve-team room, "when do I pick again" was a counting exercise.
+
+   White is *where the draft is*, and it moves a cell at a time. It used to be
+   a dashed blue border, which is the same blue as the outline beside it, the
+   focus ring, the selected tab and the header on your turn.
+
+   Both are drawn as inset box-shadows rather than as a border or an outline,
+   and that is not a style preference:
+
+   - A `border` is inside the box under `box-sizing: border-box`, so 2px of it
+     eats 2px of the cell's padding — the on-the-clock cell was 4px narrower
+     inside than every other cell on the board, and its text sat 2px higher.
+   - An `outline` does not follow `border-radius` in every engine, and it
+     cannot be layered, which the keyline needs.
+
+   The keyline is the second half of the pair. See --mine: no single colour
+   clears 3:1 on both a position solid and an empty cell in both themes, so
+   the ring is gold-then-keyline and one of the two always has the surface. */
+.board .cell.now {
+  background: var(--card); color: var(--link); font-weight: 700;
+  box-shadow: inset 0 0 0 2px var(--live-ring), inset 0 0 0 3px var(--ring-edge);
+}
+.board .cell.mine {
+  box-shadow: inset 0 0 0 2px var(--mine), inset 0 0 0 3px var(--ring-edge);
+}
+/* Your own turn is both facts at once, so it draws both: white on the inside,
+   where the draft is, and your gold immediately outside it. Letting one win
+   would throw away the other, and this is the single cell on the board where
+   they coincide. */
+.board .cell.now.mine {
+  box-shadow:
+    inset 0 0 0 2px var(--live-ring),
+    inset 0 0 0 3px var(--ring-edge),
+    inset 0 0 0 5px var(--mine),
+    inset 0 0 0 6px var(--ring-edge);
+}
 
 .board .cell.QB  { background: var(--qb); }
 .board .cell.RB  { background: var(--rb); }
@@ -1302,7 +1377,7 @@ tr.drafted .ovr { color: var(--ink-light); }
   border-radius: var(--r-md); padding: 10px 12px; margin-bottom: 8px;
 }
 
-.pick-card.mine { border-color: var(--blue); background: var(--row-blue); }
+.pick-card.mine { border-color: var(--mine); background: var(--row-mine); }
 .pick-no { flex: none; width: 38px; font-family: Poppins, sans-serif; font-weight: 700; font-size: var(--fs-sm); color: var(--ink-mid); }
 .pick-team { font-size: var(--fs-xs); color: var(--ink-light); margin-bottom: 2px; }
 .pick-name { font-weight: 600; font-size: var(--fs-sm); line-height: 1.2; }
@@ -1364,7 +1439,10 @@ tr.drafted .ovr { color: var(--ink-light); }
 
 .standings { width: 100%; }
 .standings td.rk { width: 26px; color: var(--ink-light); font-variant-numeric: tabular-nums; }
-.standings tr.me { background: var(--blue-pale); }
+/* --pale-mine rather than --blue-pale: --blue-pale is still the hover on a
+   ghost button and the selected sheet tab, which are states. This row is an
+   identity. */
+.standings tr.me { background: var(--pale-mine); }
 .standings tr.me td { font-weight: 600; }
 .standings td.gr { text-align: right; font-family: Poppins, sans-serif; font-weight: 700; }
 
@@ -2678,7 +2756,9 @@ a.room.live:hover {
 .shot-cell.K   { background: var(--k); }
 .shot-cell.DST { background: var(--dst); }
 .shot-cell.empty { background: rgba(255,255,255,.06); }
-.shot-cell.mine { outline: 2px solid rgba(255,255,255,.55); outline-offset: -2px; }
+/* The shot is an excerpt of the real board, so it marks a seat the way the
+   board does. Translucent white was picked before there was a rule to follow. */
+.shot-cell.mine { box-shadow: inset 0 0 0 2px var(--mine), inset 0 0 0 3px var(--ring-edge); }
 
 @media (max-width: 620px) {
   /* The flat region of the gradient tracks the strip, and the strip is the
@@ -3412,7 +3492,7 @@ button.rtm:focus-visible {
   font-size: var(--fs-xs); color: var(--ink-mid);
 }
 
-.pickline.mine { border-left-color: var(--blue); background: var(--row-blue); }
+.pickline.mine { border-left-color: var(--mine); background: var(--row-mine); }
 
 .pickno {
   flex: none; font-size: var(--fs-2xs); font-weight: 700;
