@@ -35,6 +35,23 @@
 export const SITE = process.env.JUKE_SITE || "http://localhost:8765";
 export const WORKER_HTTP = process.env.JUKE_WORKER_HTTP || "http://127.0.0.1:8787";
 
+/* What "local" means, written once and asked twice.
+
+   Two different questions need it and they are not the same question, which
+   is why both are derived here rather than each caller answering for itself.
+   The config asks about the *site*, because that is what decides whether
+   there are servers to start. The news suite asks about the *worker*,
+   because the provider key lives there: a `wrangler dev` this suite starts
+   has none and the deployed one does, so the test for the keyless path can
+   only pass against the local one.
+
+   They move together in every sane run — see the note above — but they are
+   two variables, and a run that points them apart should get the honest
+   answer to each rather than one of them standing in for both. */
+const isLocal = (url) => url.includes("localhost") || url.includes("127.0.0.1");
+export const LOCAL_SITE = isLocal(SITE);
+export const LOCAL_WORKER = isLocal(WORKER_HTTP);
+
 /* Installed before any page script runs.
 
    WebSocket is wrapped rather than the socket being listened to after the
