@@ -19,7 +19,7 @@
 
 import { test, expect } from "@playwright/test";
 import { openApp } from "./helpers.mjs";
-import { WORKER_HTTP } from "./helpers.mjs";
+import { WORKER_HTTP, LOCAL_WORKER } from "./helpers.mjs";
 
 async function start(page) {
   await page.click("#startBtn");
@@ -61,6 +61,21 @@ async function crosswalk(page, name, theirId = "T-TEST-1") {
 test.describe("latest news", () => {
   test("with no provider key the sheet is complete and the panel is absent",
     async ({ context }) => {
+      /* The one test here that cannot be pointed at production. It asserts
+         the *absence* of news, and the deployed worker has TANK01_KEY — so
+         aimed there it fails by succeeding: the panel opens, the tab
+         appears, and the run reports a regression that is really a
+         configured provider. That is a worse outcome than not running,
+         because a suite with a permanent known failure in it stops being
+         read.
+
+         Skipped rather than deleted or loosened. The keyless path is what a
+         fresh checkout sees and would be the easiest thing in the world to
+         ship broken, so it still has to run somewhere — and locally, where
+         the suite starts its own keyless worker, it does. */
+      test.skip(!LOCAL_WORKER,
+        "asserts the keyless path; the deployed worker has a provider key");
+
       const page = await openApp(context);
       await start(page);
 

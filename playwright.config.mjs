@@ -22,12 +22,7 @@ import { defineConfig } from "@playwright/test";
    they had ever disagreed except a suite quietly testing a server nobody was
    running. The helpers own them because that is where the env override lives. */
 export { SITE, WORKER_HTTP } from "./tests/helpers.mjs";
-import { SITE, WORKER_HTTP } from "./tests/helpers.mjs";
-
-/* Only start servers when the suite is actually pointed at localhost. Aimed at
-   the deployed site there is nothing to start, and a webServer block waiting on
-   a port nobody will ever listen on just times the run out before it begins. */
-const LOCAL = SITE.includes("localhost") || SITE.includes("127.0.0.1");
+import { SITE, WORKER_HTTP, LOCAL_SITE } from "./tests/helpers.mjs";
 
 export default defineConfig({
   testDir: "./tests",
@@ -54,7 +49,12 @@ export default defineConfig({
      until somebody creates a room. Waiting for a URL therefore waits for a
      2xx that is never coming, and the suite times out with both servers up
      and perfectly healthy. A listening port is the honest question here. */
-  webServer: !LOCAL ? undefined : [
+  /* Only start servers when the suite is actually pointed at localhost. Aimed
+     at the deployed site there is nothing to start, and a webServer block
+     waiting on a port nobody will ever listen on just times the run out
+     before it begins. LOCAL_SITE comes from the helpers beside SITE itself,
+     so what counts as local is decided in one place. */
+  webServer: !LOCAL_SITE ? undefined : [
     {
       /* `py` is the Windows launcher and is the only thing that works there;
          it does not exist anywhere else, so the suite could not start its own
