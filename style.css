@@ -663,9 +663,30 @@ body {
 
 /* ---------- tabs ---------- */
 
-.tabs {
-  display: flex; gap: 6px; padding: 10px 12px;
+/* ---------- the tab row ----------
+
+   Navigation on the left, the things you do to the draft on the right, in one
+   band. They were stacked: a 53px tab bar over a 43px action bar, under a
+   57px header, which is 153px of chrome before a single player's name — 17%
+   of a 900px screen spent on furniture, for four controls nobody presses
+   twice in a draft.
+
+   The 43px goes to the board rather than being pocketed, so nothing below
+   this moves and the board gains a whole round.
+
+   The band carries the paint. Neither child does, which is what lets the
+   wrapper be the thing that hides: an empty band with a background and a
+   bottom border still draws a line across the screen. */
+.tabrow {
+  display: flex; align-items: center; gap: 14px;
+  padding: 0 12px;
   background: var(--card); border-bottom: 1px solid var(--line);
+}
+.tabrow[hidden] { display: none; }
+
+.tabs {
+  display: flex; gap: 6px; padding: 10px 0;
+  flex: 1 1 auto; min-width: 0;
   overflow-x: auto;
 }
 
@@ -680,10 +701,12 @@ body {
 
 /* ---------- action bar ---------- */
 
+/* Right of the tabs, and it does not shrink: these are the controls somebody
+   reaches for when something has gone wrong, and a Discard button that has
+   scrolled out of reach is worse than one taking up room. */
 .actionbar {
-  display: flex; gap: 8px; padding: 8px 12px;
-  background: var(--card); border-bottom: 1px solid var(--line);
-  overflow-x: auto;
+  display: flex; gap: 8px; padding: 8px 0;
+  flex: none;
 }
 
 .mini {
@@ -703,6 +726,24 @@ body {
 .mini:disabled { opacity: .45; cursor: default; }
 .mini.active { background: var(--navy); color: #fff; }
 .mini.active:hover { background: var(--navy-soft); }
+
+/* Stacked again on a phone. The tab strip already scrolls sideways at this
+   width, and feeding the action buttons into the same scroller puts "Discard
+   draft" behind five tabs — which is the one control that must not be hard to
+   reach. Vertical space is scarcer here and this spends 43px of it; that is
+   the right way round.
+
+   Below the rules it overrides, and that is not a filing preference: a media
+   query carries no specificity, so at equal weight source order still
+   decides. Written above them — which is where it went the first time — the
+   query matched, every rule in it was inert, and the tab strip rendered
+   471px wide inside a 390px phone. */
+@media (max-width: 760px) {
+  .tabrow { flex-direction: column; align-items: stretch; gap: 0; padding: 0; }
+  .tabs { padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  .actionbar { padding: 8px 12px; overflow-x: auto; }
+}
+
 
 /* ---------- live pick ticker ---------- */
 
@@ -3362,7 +3403,10 @@ a.room.live:hover {
 }
 
 .boardpane .board-scroll {
-  max-height: min(38vh, 340px);
+  /* 43px taller than it was, which is exactly what merging the tab and action
+     bars gave back — spent here rather than pocketed, so nothing below the
+     board moves and it gains a whole round. It showed 5.9 of fourteen. */
+  max-height: min(43vh, 383px);
   overflow: auto;
   overscroll-behavior: contain;   /* the page does not move when this ends */
 }

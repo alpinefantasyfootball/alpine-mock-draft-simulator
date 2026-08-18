@@ -190,8 +190,13 @@ const countBlock = $("countBlock");
 const rightLabel = $("rightLabel");
 const rightValue = $("rightValue");
 const shellbar   = $("shellbar");
-const tabsNav    = $("tabs");
 const actionbar  = $("actionbar");
+/* The band both of those sit in. It carries the hidden flag for the pair,
+   rather than each of them carrying its own: they have only ever been shown
+   and hidden together, in four places, and two flags that must agree is one
+   flag with a second copy. It also has to be the wrapper that hides — an
+   empty band still draws its background and its bottom border. */
+const tabrow     = $("tabrow");
 
 // Toggles live in both headers and, on a phone, inside the rooms panel, which
 // is rendered rather than static. So nothing caches the set: it is queried when
@@ -1104,8 +1109,7 @@ function applyRoute() {
   appbar.hidden   = !onDraft;
   $("view-home").hidden = onDraft;
   $("view-app").hidden  = !onDraft;
-  tabsNav.hidden   = !(onDraft && state.started);
-  actionbar.hidden = !(onDraft && state.started);
+  tabrow.hidden = !(onDraft && state.started);
 
   if (!onDraft) {
     // Leaving is not discarding. The draft stays in memory and in the save;
@@ -2055,8 +2059,7 @@ function checkDraftFinished() {
    broadcast saying the host has begun, which is the only signal a guest
    ever gets. */
 function enterDraftUI() {
-  tabsNav.hidden   = false;
-  actionbar.hidden = false;
+  tabrow.hidden = false;
   showPanel("tab-suggest");
   document.querySelectorAll(".tabs button").forEach(function (b) { b.classList.remove("on"); });
   document.querySelector('.tabs button[data-tab="tab-suggest"]').classList.add("on");
@@ -2498,8 +2501,7 @@ function goHome() {
   state.picks = [];
   state.started = false;
   state.paused = false;
-  tabsNav.hidden = true;
-  actionbar.hidden = true;
+  tabrow.hidden = true;
   showPanel("tab-setup");
   // Back to the setup screen, where the league can be changed again, so the
   // board is rebuilt rather than just redrawn.
@@ -5627,8 +5629,7 @@ function resumeDraft(data) {
   state.queue = Array.isArray(data.queue) ? data.queue.slice() : [];
   pruneQueue();
 
-  tabsNav.hidden = false;
-  actionbar.hidden = false;
+  tabrow.hidden = false;
   $("resumeBar").hidden = true;
 
   /* A finished draft reopens on its analysis, not on suggestions — the

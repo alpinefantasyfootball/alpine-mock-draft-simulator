@@ -33,12 +33,12 @@
        say script-src 'self' without either giving away 'unsafe-inline' or
        pinning a hash that breaks the site the first time somebody edits it.
        No defer, no async: it must run before the body is drawn. -->
-  <script src="theme.js?v=202608181158"></script>
+  <script src="theme.js?v=202608181218"></script>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <!-- ?v=202608181158 on every local file below, and it has to be bumped on any deploy
+  <!-- ?v=202608181218 on every local file below, and it has to be bumped on any deploy
        that changes one of them.
 
        Without a version in the address a returning visitor runs today's HTML
@@ -53,7 +53,7 @@
 
        A query string rather than a renamed file, because renaming means a
        manifest and a manifest means a build step. This costs one number. -->
-  <link rel="stylesheet" href="style.css?v=202608181158">
+  <link rel="stylesheet" href="style.css?v=202608181218">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -211,7 +211,13 @@
 
     </header>
 
-    <nav class="tabs" id="tabs" hidden>
+    <!-- One band, two jobs. The tabs and the action bar were stacked, which
+         is 43px of a second full-width bar for four controls nobody presses
+         twice in a draft — on top of a 57px header and a 53px tab row, that
+         was 153px of chrome before a single player's name. They share a row
+         now: navigation left, the things you do to the draft right. -->
+    <div class="tabrow" id="tabrow" hidden>
+      <nav class="tabs" id="tabs">
       <button class="on" data-tab="tab-suggest">Suggestions</button>
       <button data-tab="tab-players">Players</button>
       <button data-tab="tab-team">My Team</button>
@@ -221,12 +227,13 @@
 
     <!-- The first three only mean anything while a draft is running, so they
          are swapped for the way out once it finishes. -->
-    <div class="actionbar" id="actionbar" hidden>
+      <div class="actionbar" id="actionbar">
       <button class="mini go" data-action="new-draft" id="newDraftBtn" hidden>New mock draft</button>
       <button class="mini" id="pauseBtn">Pause clock</button>
       <button class="mini" id="undoBtn">Undo</button>
       <button class="mini" id="autoBtn">Auto-draft the rest</button>
       <button class="mini danger" id="restartBtn">Discard draft</button>
+    </div>
     </div>
 
     <div class="ticker" id="ticker" hidden></div>
@@ -867,19 +874,19 @@
     <form method="dialog"><button class="primary">Got it</button></form>
   </dialog>
 
-  <!-- Every one of these carries the same ?v=202608181158 as the stylesheet. See the note
+  <!-- Every one of these carries the same ?v=202608181218 as the stylesheet. See the note
        beside it in <head>: bump them together or don't bump them at all. -->
-  <script src="players.js?v=202608181158"></script>
-  <script src="stats.js?v=202608181158"></script>
+  <script src="players.js?v=202608181218"></script>
+  <script src="stats.js?v=202608181218"></script>
   <!-- The rules of a snake draft, with no reference to this page. It loads
        before app.js because app.js is a caller, and it is a separate file
        because a server will eventually have to run the same one. -->
-  <script src="draft-engine.js?v=202608181158"></script>
+  <script src="draft-engine.js?v=202608181218"></script>
   <!-- The socket to a shared room. Loaded always, connected never unless a
        manager asks for it: a solo draft touches nothing. -->
-  <script src="live.js?v=202608181158"></script>
+  <script src="live.js?v=202608181218"></script>
   <!-- Before app.js, which calls backToTop() on the last line of its setup. -->
-  <script src="back-to-top.js?v=202608181158"></script>
-  <script src="app.js?v=202608181158"></script>
+  <script src="back-to-top.js?v=202608181218"></script>
+  <script src="app.js?v=202608181218"></script>
 </body>
 </html>

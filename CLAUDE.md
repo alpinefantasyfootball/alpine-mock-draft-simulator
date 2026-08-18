@@ -1460,6 +1460,24 @@ the element's own position.
 
 ## The draft room header
 
+**Three stacked bars is 153px before a player's name.** A 57px header, a 53px
+tab row and a 43px action bar, on a 900px screen — 17% of it spent on
+furniture, and the action bar held four controls nobody presses twice in a
+draft. Tabs and actions share one band now: navigation left, the things you do
+to the draft right. **The 43px goes to the board rather than being pocketed**,
+so nothing below it moves and the board gains a whole round — it showed 5.9 of
+fourteen.
+
+**The band carries the paint and the `hidden` flag; neither child does.** An
+empty band still draws its background and its bottom border, so the wrapper
+has to be the thing that hides. And the two were only ever shown and hidden
+together, in four places — two flags that must agree is one flag with a second
+copy.
+
+**They stack again below 760px.** The tab strip already scrolls sideways
+there, and feeding the actions into the same scroller puts "Discard draft"
+behind five tabs.
+
 **A logo in the corner is the way out only to somebody who already knows
 that.** `#homeBtn` had been the mark alone, doing two jobs and announcing the
 second. It is a chevron and the mark in one control now — one way out rather
@@ -1506,16 +1524,21 @@ alone does nothing.** "Time left" and "0:59" are both 60px; the block is as
 wide as its widest child either way. Two reasonable-looking fixes moved the
 header by zero pixels before both together moved it by seven.
 
-**Check the brace balance after moving a block.** A slice that ended at the
-first `}` after a one-line rule left `@media (max-width: 400px)` open, so it
-swallowed every rule below it and the whole stylesheet became conditional on a
-phone width. The board's rings vanished at desktop and nothing in the header
-looked wrong. One line catches it:
+**Run `python scripts/check_css.py` after moving a block, and do not count
+braces.** A slice that ended at the first `}` after a one-line rule left a
+media query open *and* an orphan `}` where the block used to be — so every
+rule below the query silently became conditional on a phone width. The board's
+gold rings vanished at desktop and nothing looked wrong.
 
-```js
-const s = css.replace(/\/\*[\s\S]*?\*\//g, "");
-s.split("{").length === s.split("}").length
-```
+It happened twice in one sitting, and the second time is the lesson: **the
+brace count balanced both times.** An unclosed block and a stray closer cancel
+exactly, so `count("{") === count("}")` passes a file it should reject. The
+script walks the depth instead, which catches each half on its own — a `}` at
+depth zero, and a non-zero depth at the end.
+
+The tell in the browser is a rule that is demonstrably matching and doing
+nothing: `matchMedia` agrees the query applies, the computed style disagrees.
+That reads like a specificity problem and is not one.
 
 ## Claim and proof
 
@@ -1851,6 +1874,10 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   and says so plainly if none is there rather than looking like a failure.
   Node is installed user-scope via winget, so a new terminal sees it and an
   already-open one does not.
+- Stylesheet: `python scripts/check_css.py` — brace depth through
+  `style.css`. Two lines of output and it takes no arguments; run it after
+  moving a block. Counting braces does not do this job and demonstrably
+  passed a broken file twice.
 - Crosswalk: `python scripts/test_crosswalk.py` — the source-id join against a
   handful of players, including two Josh Allens, a collision and a player
   neither side shares. Needs nothing but the standard library.
