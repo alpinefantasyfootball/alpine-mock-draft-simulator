@@ -1511,6 +1511,14 @@ the defect is in what is *absent*, and absence renders, contrasts and passes.
 **Your own turn draws both rings, nested.** It is the one cell on the board
 where the two facts coincide, and letting either win throws the other away.
 
+**The direction arrow is on every cell, and it was on drafted ones only.**
+Same failure as the gold column, found in the same screenshot: the snake was
+legible over the half of the board that had already happened and not over the
+half still to be played. That is backwards — the turn matters *before* the
+picks land, which is when somebody is working out whether their wait is one
+pick or nineteen. It yields to the clock and only to the clock; two facts in a
+74px box is one too many and the countdown is the one being watched.
+
 ## Security
 
 The zone is set beyond Cloudflare's defaults, and the defaults were not

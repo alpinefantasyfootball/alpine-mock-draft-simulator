@@ -3882,11 +3882,27 @@ function renderBoard() {
            header already uses. */
         const isMine = s === state.mySlot;
 
+        /* The arrow goes on an empty cell too, and it is the same argument
+           as the gold column beside it. A drafted cell has always carried the
+           direction the order is travelling; an undrafted one carried a bare
+           code, so the snake was legible over the half of the board that has
+           already happened and not over the half you are about to play. That
+           is backwards — the turn matters *before* the picks land, which is
+           when you are working out whether the wait is one pick or nineteen.
+
+           It yields to the clock, and only to the clock. The cell on the
+           clock shows the countdown instead — two facts in a 74px box is one
+           too many, and the countdown is the one somebody is watching. When
+           there is no clock to show, that cell takes the arrow like any
+           other. */
+        const face = isNow && clockShowing()
+          ? clockText()
+          : `<span class="cell-dir" aria-hidden="true">${boardArrow(r, s, league.teams)}</span>` +
+            `<span class="cell-pick">${r}.${String(inRound).padStart(2, "0")}</span>`;
+
         // The cell on the clock is the clock. Looking away from where the
         // pick lands to find out how long is left is the thing this removes.
-        html += `<div class="cell empty ${isNow ? "now" : ""} ${isMine ? "mine" : ""}"${isNow ? ' id="boardClock"' : ""}>${
-          isNow && clockShowing() ? clockText() : r + "." + String(inRound).padStart(2, "0")
-        }</div>`;
+        html += `<div class="cell empty ${isNow ? "now" : ""} ${isMine ? "mine" : ""}"${isNow ? ' id="boardClock"' : ""}>${face}</div>`;
       }
     }
   }

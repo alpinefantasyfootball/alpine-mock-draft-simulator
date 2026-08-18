@@ -1203,7 +1203,7 @@ tr.drafted .ovr { color: var(--ink-light); }
    by eye first, then measured. */
 .board .cell.empty {
   color: var(--ink-light); font-variant-numeric: tabular-nums;
-  display: flex; align-items: center; justify-content: center;
+  display: flex; align-items: center; justify-content: center; gap: 4px;
 }
 /* Two rings, and they answer two different questions.
 

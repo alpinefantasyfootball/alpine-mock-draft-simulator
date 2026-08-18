@@ -137,19 +137,32 @@ test.describe("the draft board card", () => {
 
     /* The turn is the one thing the pick numbers do not tell you on sight, and
        it is why the ends of the room pick twice in a row. Down on the last
-       pick of a round; along the way its round runs otherwise. */
+       pick of a round; along the way its round runs otherwise.
+
+       Every cell carrying an arrow, not just the drafted ones. The arrow was
+       on filled cells alone, so the snake was legible over the half of the
+       board that had already happened and not over the half still to play —
+       which is backwards, because the turn matters while you are working out
+       whether your wait is one pick or nineteen. The only cell without one is
+       the cell on the clock, which is showing a countdown instead. */
     const r = await page.evaluate(() => {
-      const cells = [...document.querySelectorAll(".board .cell:not(.empty)")];
+      const cells = [...document.querySelectorAll(".board .cell")];
       const rows = [];
       cells.forEach((c) => {
+        const dir = c.querySelector(".cell-dir");
+        if (!dir) return;
         const code = c.querySelector(".cell-pick").textContent.trim();
         const [round, inRound] = code.split(".").map(Number);
-        rows.push({ round, inRound, dir: c.querySelector(".cell-dir").textContent.trim() });
+        rows.push({ round, inRound, dir: dir.textContent.trim(),
+                    drafted: !c.classList.contains("empty") });
       });
       return { rows, teams: league.teams };
     });
 
     expect(r.rows.length).toBeGreaterThan(30);
+    // Or widening the selector proved nothing.
+    expect(r.rows.some((x) => x.drafted), "drafted cells are covered").toBe(true);
+    expect(r.rows.some((x) => !x.drafted), "and so are the picks still to come").toBe(true);
     const wrong = r.rows.filter((x) => {
       const want = x.inRound === r.teams ? "↓" : (x.round % 2 === 0 ? "←" : "→");
       return x.dir !== want;
