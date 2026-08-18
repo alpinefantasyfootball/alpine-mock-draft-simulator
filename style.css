@@ -2591,14 +2591,141 @@ a.room.live:hover {
 .landing-resume .sub { font-size: var(--fs-xs); color: var(--ink-mid); margin-top: 3px; }
 .landing-resume .btnrow { margin-left: auto; display: flex; gap: 8px; }
 
-.pillars {
-  display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;
-  border-top: 1px solid var(--line); padding-top: 30px;
-}
-@media (max-width: 760px) { .pillars { grid-template-columns: 1fr; } }
+/* ---------- claim and proof ----------
 
-.pillar b { display: block; font-size: var(--fs-sm); font-weight: 700; margin-bottom: 5px; }
-.pillar span { font-size: var(--fs-sm); color: var(--ink-mid); line-height: 1.6; }
+   Three claims down the left, and the thing each one claims running on the
+   right. The list is the control as well as the index, the same shape the
+   rooms door uses, and for the same reason: a visitor who wants to look at
+   one of them should not have to wait for the timer to come round.
+
+   The stage is a fixed minimum height. Three stages of different lengths in a
+   box that sizes to its contents means the section grows and shrinks under
+   the reader every seven seconds, and anything below it walks up and down the
+   page — which is the failure a carousel usually ships with. */
+.proof {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 44px; align-items: center;
+  border-top: 1px solid var(--line); padding-top: 34px;
+}
+
+.proof-eyebrow {
+  margin: 0 0 6px; font-size: var(--fs-2xs); font-weight: 700;
+  letter-spacing: .12em; text-transform: uppercase; color: var(--link);
+}
+.proof-head { margin: 0 0 8px; font-size: var(--fs-2xl); line-height: 1.1; }
+.proof-sub {
+  margin: 0 0 20px; font-size: var(--fs-sm); line-height: 1.6; color: var(--ink-mid);
+  max-width: 44ch;
+}
+
+.proof-list { display: flex; flex-direction: column; gap: 4px; }
+
+/* A button, not a div with a colour on it. This section is a control and the
+   landing page has already shipped one thing that looked clickable and was
+   not — see the rail's "My Team" row, which rendered, contrasted and did
+   nothing for as long as it existed. */
+.pf {
+  display: block; width: 100%; text-align: left; font: inherit;
+  background: transparent; border: 1px solid transparent;
+  border-left: 3px solid transparent;
+  border-radius: var(--r-sm); padding: 11px 14px;
+  color: var(--ink-mid); cursor: pointer;
+  transition: background .15s ease, border-color .15s ease;
+}
+.pf:hover { background: var(--fill); }
+.pf:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.pf.on {
+  background: var(--fill); border-color: var(--line);
+  border-left-color: var(--orange); color: var(--ink);
+}
+.pf b { display: block; font-size: var(--fs-sm); font-weight: 700; color: var(--ink); margin-bottom: 3px; }
+.pf span { display: block; font-size: var(--fs-xs); line-height: 1.55; }
+
+.proof-stage {
+  min-height: 306px;
+  display: flex; align-items: center;
+}
+.proof-stage.empty { display: none; }
+
+.pstage {
+  width: 100%;
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--r-md); padding: 16px 18px 18px;
+  box-shadow: var(--elev-2);
+}
+.pstage-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  margin-bottom: 10px;
+}
+.pstage-label {
+  font-size: var(--fs-2xs); font-weight: 700;
+  letter-spacing: .1em; text-transform: uppercase; color: var(--ink-light);
+}
+.pstage-stamp { font-size: var(--fs-2xs); color: var(--ink-light); font-variant-numeric: tabular-nums; }
+
+/* The dial is the rule being changed, and the point of the claim, so it is
+   the one thing in the stage drawn at full strength. */
+.pstage-dial { display: flex; gap: 4px; }
+.pd {
+  min-width: 30px; text-align: center;
+  padding: 2px 7px; border-radius: var(--r-pill);
+  font-size: var(--fs-xs); font-weight: 700;
+  background: var(--fill); color: var(--ink-light);
+  transition: background .3s ease, color .3s ease;
+}
+.pd.on { background: var(--orange-cta); color: #fff; }
+
+.pstage-note { margin: 0 0 10px; font-size: var(--fs-xs); color: var(--ink-mid); }
+.pstage-foot { margin: 11px 0 0; font-size: var(--fs-2xs); line-height: 1.5; color: var(--ink-light); }
+
+.pstage-rows { list-style: none; margin: 0; padding: 0; }
+.prow {
+  display: flex; align-items: center; gap: 9px;
+  padding: 7px 0; border-bottom: 1px solid var(--hairline);
+  font-size: var(--fs-sm);
+}
+.prow:last-child { border-bottom: 0; }
+.prow-rank {
+  width: 14px; flex: none; text-align: right;
+  font-size: var(--fs-xs); color: var(--ink-light); font-variant-numeric: tabular-nums;
+}
+.prow-name {
+  flex: 1 1 auto; min-width: 0; font-weight: 600; color: var(--ink);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.prow-num { flex: none; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--ink); }
+.prow-score { color: var(--orange-ink); }
+
+/* The subtraction, printed rather than asserted. Tabular figures so the three
+   numbers line up down the column as the players change. */
+.prow-sums {
+  flex: none; display: flex; align-items: baseline; gap: 3px;
+  font-size: var(--fs-xs); color: var(--ink-mid); font-variant-numeric: tabular-nums;
+}
+.prow-sums b { font-weight: 700; color: var(--ink); }
+.prow-sums i { font-style: normal; color: var(--ink-light); padding: 0 1px; }
+.prow-gap { color: var(--ink) !important; }
+
+/* Every chip carries its own ground, the same contract the board head's
+   roster strip runs under: white on a position solid, so the surface behind
+   it is never part of the sum. */
+.pos-chip {
+  flex: none; min-width: 30px; text-align: center;
+  padding: 2px 5px; border-radius: var(--r-xs);
+  font-size: var(--fs-2xs); font-weight: 700; color: #fff;
+}
+.pos-chip.QB  { background: var(--qb); }
+.pos-chip.RB  { background: var(--rb); }
+.pos-chip.WR  { background: var(--wr); }
+.pos-chip.TE  { background: var(--te); }
+.pos-chip.K   { background: var(--k); }
+.pos-chip.DST { background: var(--dst); }
+
+@media (max-width: 860px) {
+  .proof { grid-template-columns: 1fr; gap: 26px; }
+  .proof-stage { min-height: 0; }
+  .prow-sums { display: none; }   /* the name and the score survive; the sum is the first thing a phone gives up */
+}
 
 .landing-foot { margin: 38px 0 0; text-align: center; font-size: var(--fs-xs); color: var(--ink-light); }
 .landing-foot p { margin: 0 0 4px; }

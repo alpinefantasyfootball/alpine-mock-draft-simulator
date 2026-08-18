@@ -1458,6 +1458,58 @@ region and measures 5.15. **Both a false alarm and a real miss came out of
 the same shortcut.** Composite the alpha, and interpolate the gradient at
 the element's own position.
 
+## Claim and proof
+
+Three claims down the landing page with the thing each one claims running
+beside them. It replaced three paragraphs — claims with nothing to check them
+against, which is the weakest thing a page can say about a product whose whole
+pitch is that its numbers are inspectable.
+
+**Every stage runs on live data, and that is the rule the section exists
+under.** The same `board`, the same projections and the same `pointsUnder()`
+the draft room uses. A hand-written table of plausible names is
+indistinguishable on screen tonight and wrong the first morning the pipeline
+moves — the same argument that keeps the product shot generated and the door
+drawn rather than photographed. Nothing in it is a name anybody chose.
+
+**`pointsUnder(block, rules)` takes its rule table rather than reading
+`league.rules`.** That is what lets one screen price the same player under
+standard, half and full PPR at once without swapping a global the whole draft
+reads and swapping it back — which works until something throws halfway
+through. `fantasyPoints()` is now a one-line call into it and no arithmetic
+moved.
+
+**A proof whose subject cannot move is worse than no proof.** The scoring
+claim first sorted the board by projected points, which is six quarterbacks:
+every row correct, and not one of them changing by a single point across the
+three settings, under a headline reading "change a rule, every number moves".
+The pool is now filtered by `s.p[STAT_KEYS.rec] > 0` — the players the rule
+can actually touch, asked of the data rather than of a list of positions. At
+0 the top six are all backs; at 1 point a catch, three receivers are in and
+Derrick Henry is gone.
+
+**A cross-position measure cannot be demonstrated on one position.** The Juke
+score stage had the same origin bug and a worse consequence: top four by raw
+points is four quarterbacks, and the entire purpose of points above
+replacement is to say an elite tight end beats the twenty-fifth receiver. It
+takes the best player at each position now. Allen projecting 406 points and
+scoring 48 beside Gibbs projecting 300 and scoring 100 *is* the argument.
+
+**A stage with nothing to say draws nothing.** `paintProof()` falls through to
+the next claim when a builder returns `""`, bounded by the number of claims so
+a short board cannot spin. Same contract as the score strip: it fails by
+disappearing rather than leaving a heading over an empty frame.
+
+**The stage has a floor height.** Three stages of different lengths in a box
+that sizes to its contents makes the section grow and shrink under the reader
+every seven seconds and walks everything below it up and down the page.
+
+**`scoringFormats()` is a function, not a const.** It derives from
+`REC_BY_FORMAT` and `SCORING_NAMES` — a third list of the same three formats
+would be the copy nobody remembers — and it sits near the top of the file
+where a `const` reading either of those would be inside their temporal dead
+zone and throw on load.
+
 ## Whose it is, and where the draft is
 
 Two marks on the board, and they were one colour between them.

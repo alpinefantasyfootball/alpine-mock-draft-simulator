@@ -500,6 +500,304 @@ function startRoomDoor() {
   stage.addEventListener("mouseleave", function () { if (doorRunning) queueRoomDoor(); });
 }
 
+/* ---------- the proof section ----------
+
+   Three claims with the thing they claim running beside them.
+
+   It replaced three paragraphs of prose, which is the weakest thing a landing
+   page can say about a product whose whole pitch is that the numbers are
+   inspectable: a claim with nothing to check it against is exactly what every
+   other fantasy site also says.
+
+   **Every stage is drawn from live data, and that is the rule this section
+   exists under.** The same `board`, the same projections and the same
+   `pointsUnder()` the draft room runs on. A hand-written table of plausible
+   names would be indistinguishable on screen tonight and wrong the first
+   morning the pipeline moved — the same argument that keeps the product shot
+   generated and the door drawn rather than photographed. Nothing in here is a
+   name we chose: whoever tonight's data says is WR1 is who turns up.
+
+   **A stage that has nothing to say draws nothing.** buildProjections() runs
+   at startup, but a visitor arriving before the data has been parsed, or with
+   a board that came back short, must not get an empty frame with a heading
+   over it. Each builder returns "" and paintProof() falls through to the next
+   claim rather than rendering a hole. Same contract as the score strip. */
+
+const PROOF_HOLD = 7000;
+
+const PROOFS = [
+  {
+    title: "Change a rule. Every number moves.",
+    blurb: "All 38 scoring rules are yours to edit, and the projections, the " +
+           "rankings and the grade all re-score. Not a preset — the rules.",
+    build: proofScoring
+  },
+  {
+    title: "The score shows its working.",
+    blurb: "A Juke score is projected points above what a replacement starter " +
+           "at that position gets you, as a share of the best on the board.",
+    build: proofJukeScore
+  },
+  {
+    title: "Rebuilt every morning.",
+    blurb: "Real ADP from Fantasy Football Calculator and projections from " +
+           "Sleeper, fetched and rebuilt daily. No hand-maintained list.",
+    build: proofFreshness
+  }
+];
+
+let proofAt = 0, proofTimer = null, proofRunning = false;
+
+/* The three formats, from the two places that already know about them:
+   REC_BY_FORMAT for the rule and SCORING_NAMES for the label. A third list
+   here would be the same fact written down again, and it would be the copy
+   nobody remembers when a format is added.
+
+   A function rather than a const because both of those are declared later in
+   the file: a const up here would read them inside their temporal dead zone
+   and throw on load. */
+function scoringFormats() {
+  return Object.keys(REC_BY_FORMAT).map(function (key) {
+    return { key: key, rec: REC_BY_FORMAT[key], name: SCORING_NAMES[key] };
+  });
+}
+
+/* The players a proof talks about.
+
+   Sorted by tonight's projection rather than by ADP: this section is about
+   what the model says, and opening it with the market's order would be the
+   wrong argument in the wrong place. `keep` narrows it per claim, because the
+   two stages want different populations and picking one for both is how the
+   first build of this section ended up arguing against itself. */
+function proofPool(n, keep) {
+  return board
+    .filter(function (p) {
+      const s = statOf(p);
+      if (!s || !s.p || !(s.p.gp > 0) || FORCED_LATE[p.pos]) return false;
+      return keep ? keep(p, s) : true;
+    })
+    .sort(function (a, b) { return (b.projPts || 0) - (a.projPts || 0); })
+    .slice(0, n);
+}
+
+/* Claim one: the same players, priced three ways.
+
+   The formats are the three the setup screen offers, and they differ by one
+   rule out of 38 — which is the point being made. Receivers climb and backs
+   fall as a catch goes from nothing to a point, and that reordering is the
+   whole proof: it is not a filter or a different list, it is the same twelve
+   players scored again. */
+function proofScoring() {
+  /* Only the players the rule actually touches, and asked of the data rather
+     than of a list of positions. The first build sorted the whole board by
+     projected points, which is six quarterbacks — true, and the worst
+     possible illustration of a reception rule, because not one of those six
+     moves by a single point across the three settings. A claim whose proof
+     holds still is worse than no proof.
+
+     `rec` on the projection is the honest test: a player this rule can move
+     is a player projected to catch something. */
+  const pool = proofPool(14, function (p, s) { return s.p[STAT_KEYS.rec] > 0; });
+  if (pool.length < 6) return "";
+
+  const formats = scoringFormats();
+  const fmt = formats[proofScoring.at % formats.length];
+  const rules = rulesForFormat(fmt.key);
+
+  const ranked = pool
+    .map(function (p) { return { p: p, pts: pointsUnder(statOf(p).p, rules) }; })
+    .sort(function (a, b) { return b.pts - a.pts; })
+    .slice(0, 6);
+
+  return '<div class="pstage">' +
+    '<div class="pstage-head">' +
+      '<span class="pstage-label">Points per reception</span>' +
+      '<span class="pstage-dial">' + formats.map(function (f) {
+        return '<span class="pd' + (f.key === fmt.key ? " on" : "") + '">' + f.rec + '</span>';
+      }).join("") + '</span>' +
+    '</div>' +
+    '<p class="pstage-note">' + escHtml(fmt.name) + '</p>' +
+    '<ol class="pstage-rows">' + ranked.map(function (r, i) {
+      return '<li class="prow">' +
+        '<span class="prow-rank">' + (i + 1) + '</span>' +
+        '<span class="pos-chip ' + r.p.pos + '">' + r.p.pos + '</span>' +
+        '<span class="prow-name">' + escHtml(shortName(r.p)) + '</span>' +
+        '<span class="prow-num">' + Math.round(r.pts) + '</span>' +
+      '</li>';
+    }).join("") + '</ol>' +
+  '</div>';
+}
+proofScoring.at = 0;
+
+/* Claim two: the Juke score, with the subtraction printed.
+
+   The one number the app has that a projection feed does not, and the
+   complaint it has always drawn is that a bare 0 reads as "worthless" and a
+   bare 100 as "perfect" — it is a ranking against the pool, not a rating of
+   the player. So the stage prints the sum rather than the verdict: his
+   points, what a replacement starter at his position is projected for, and
+   the gap between them. */
+function proofJukeScore() {
+  /* One player per position, best first, rather than the top four overall.
+
+     The top four overall are four quarterbacks — they score the most raw
+     points and always will — which makes the stage read as a claim about
+     quarterbacks and hides the only thing the number is for. Points above
+     replacement is a *cross-position* measure: it exists to say that an elite
+     tight end is worth more than the twenty-fifth receiver, and it cannot say
+     that on a list where every row is the same position. */
+  const best = {};
+  proofPool(400, function (p) { return REPLACEMENT_PTS[p.pos] > 0; })
+    .forEach(function (p) {
+      if (overallScore(p) === null) return;
+      if (!best[p.pos] || overallScore(p) > overallScore(best[p.pos])) best[p.pos] = p;
+    });
+
+  const rows = Object.keys(best)
+    .map(function (pos) { return best[pos]; })
+    .sort(function (a, b) { return overallScore(b) - overallScore(a); })
+    .slice(0, 4);
+  if (rows.length < 3) return "";
+
+  return '<div class="pstage">' +
+    '<div class="pstage-head">' +
+      '<span class="pstage-label">Projected points, less replacement</span>' +
+    '</div>' +
+    '<ol class="pstage-rows">' + rows.map(function (p) {
+      const repl = Math.round(REPLACEMENT_PTS[p.pos]);
+      const gap  = Math.round(p.projPts) - repl;
+      return '<li class="prow prow-sum">' +
+        '<span class="pos-chip ' + p.pos + '">' + p.pos + '</span>' +
+        '<span class="prow-name">' + escHtml(shortName(p)) + '</span>' +
+        '<span class="prow-sums">' +
+          '<b>' + Math.round(p.projPts) + '</b>' +
+          '<i>&minus;</i>' + repl +
+          '<i>=</i><b class="prow-gap">' + (gap > 0 ? "+" : "") + gap + '</b>' +
+        '</span>' +
+        '<span class="prow-num prow-score">' + Math.round(overallScore(p)) + '</span>' +
+      '</li>';
+    }).join("") + '</ol>' +
+    '<p class="pstage-foot">Replacement is the last starter at that position in a ' +
+      league.teams + '-team league, derived rather than typed.</p>' +
+  '</div>';
+}
+
+/* Claim three: where the numbers came from, and when.
+
+   PLAYERS_META is written by the pipeline itself, so this cannot claim a
+   freshness the data does not have — if the nightly run fails, the date on
+   screen stops moving and says so. */
+function proofFreshness() {
+  if (typeof PLAYERS_META === "undefined") return "";
+  const pool = board.slice(0, 5);
+  if (!pool.length) return "";
+
+  return '<div class="pstage">' +
+    '<div class="pstage-head">' +
+      '<span class="pstage-label">Average draft position</span>' +
+      '<span class="pstage-stamp">' + escHtml(PLAYERS_META.generated) + '</span>' +
+    '</div>' +
+    '<ol class="pstage-rows">' + pool.map(function (p, i) {
+      return '<li class="prow">' +
+        '<span class="prow-rank">' + (i + 1) + '</span>' +
+        '<span class="pos-chip ' + p.pos + '">' + p.pos + '</span>' +
+        '<span class="prow-name">' + escHtml(shortName(p)) + '</span>' +
+        '<span class="prow-num">' + p.adp.toFixed(1) + '</span>' +
+      '</li>';
+    }).join("") + '</ol>' +
+    '<p class="pstage-foot">' + PLAYERS_META.count + ' players, ' +
+      PLAYERS_META.projected + ' with a projection, one ADP set per scoring format.</p>' +
+  '</div>';
+}
+
+function paintProof(n) {
+  const stage = $("proofStage");
+  if (!stage) return;
+
+  /* A builder that has nothing to say returns "", and the section moves on
+     rather than drawing a heading over an empty frame. Bounded by the number
+     of claims so an empty board cannot spin here. */
+  let html = "", tries = 0;
+  while (tries++ < PROOFS.length) {
+    html = PROOFS[n].build();
+    if (html) break;
+    n = (n + 1) % PROOFS.length;
+  }
+  proofAt = n;
+  stage.innerHTML = html;
+  stage.classList.toggle("empty", !html);
+
+  document.querySelectorAll("#proofList .pf").forEach(function (el) {
+    const on = Number(el.dataset.proof) === n;
+    el.classList.toggle("on", on);
+    // aria-current rather than a live region: announcing a new claim every
+    // seven seconds to somebody reading the page would be hostile.
+    if (on) el.setAttribute("aria-current", "true");
+    else el.removeAttribute("aria-current");
+  });
+}
+
+function renderProof() {
+  const list = $("proofList");
+  if (!list) return;
+
+  list.innerHTML = PROOFS.map(function (c, i) {
+    return '<button class="pf" type="button" data-proof="' + i + '">' +
+      '<b>' + escHtml(c.title) + '</b>' +
+      '<span>' + escHtml(c.blurb) + '</span>' +
+    '</button>';
+  }).join("");
+
+  paintProof(0);
+  startProofCycle();
+}
+
+/* Claim one advances *within* itself before the section moves on, because the
+   reordering is the argument and a single frame of it proves nothing. */
+function stepProof() {
+  if (proofAt === 0 && proofScoring.at < scoringFormats().length - 1) {
+    proofScoring.at += 1;
+    paintProof(0);
+    return;
+  }
+  proofScoring.at = 0;
+  paintProof((proofAt + 1) % PROOFS.length);
+}
+
+function queueProof() {
+  clearTimeout(proofTimer);
+  proofTimer = setTimeout(function () {
+    stepProof();
+    if (proofRunning) queueProof();
+  }, proofAt === 0 ? PROOF_HOLD / 2 : PROOF_HOLD);
+}
+
+function startProofCycle() {
+  const sec = $("proof");
+  if (!sec) return;
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+  /* Only cycles while it is on screen. A timer running behind the draft room
+     — or below the fold — is work nobody asked for, and the landing page is
+     still in the DOM the whole time somebody is drafting. */
+  if (typeof IntersectionObserver === "function") {
+    new IntersectionObserver(function (entries) {
+      const seen = entries[0].isIntersecting;
+      if (seen === proofRunning) return;
+      proofRunning = seen;
+      if (seen) queueProof();
+      else clearTimeout(proofTimer);
+    }, { threshold: 0.3 }).observe(sec);
+  } else {
+    proofRunning = true;
+    queueProof();
+  }
+
+  // Reading beats advancing: a pointer over the section stops the clock.
+  sec.addEventListener("mouseenter", function () { clearTimeout(proofTimer); });
+  sec.addEventListener("mouseleave", function () { if (proofRunning) queueProof(); });
+}
+
 /* ---------- the product shot ----------
 
    A first-time visitor never saw what this app looks like. The landing page
@@ -2475,16 +2773,27 @@ function didPlay(block) {
   return Object.keys(block).some((k) => k !== "w" && k !== "gp" && block[k]);
 }
 
-function fantasyPoints(block) {
+/* Scoring, under a rule table handed in rather than read off the league.
+
+   Split out of fantasyPoints() so the landing page can price the same player
+   under standard, half and full PPR at once without swapping league.rules and
+   swapping it back — which is a global the whole draft reads, and restoring it
+   correctly is the kind of thing that works until an exception is thrown
+   halfway through. Nothing about the arithmetic moved. */
+function pointsUnder(block, rules) {
   if (!block) return 0;
   let total = 0;
-  Object.keys(league.rules).forEach(function (rule) {
+  Object.keys(rules).forEach(function (rule) {
     const key = STAT_KEYS[rule];
     const value = key ? block[key] : 0;
-    if (value) total += value * league.rules[rule];
+    if (value) total += value * rules[rule];
   });
   // A tenth of a point, the precision the raw data arrives in.
   return Math.round(total * 10) / 10;
+}
+
+function fantasyPoints(block) {
+  return pointsUnder(block, league.rules);
 }
 
 // Points per game, formatted, from a games count the caller has to supply.
@@ -6212,6 +6521,19 @@ document.addEventListener("click", function (e) {
   if (doorRunning) queueRoomDoor();
 });
 
+/* Choosing a claim by hand. Delegated for the same reason the door's rows
+   are: renderProof() rebuilds these buttons, so a listener attached to one
+   would be thrown away the next time the section drew. Picking a claim also
+   restarts its own inner cycle, or claim one would resume mid-reorder. */
+document.addEventListener("click", function (e) {
+  const btn = e.target.closest ? e.target.closest("#proofList .pf") : null;
+  if (!btn) return;
+  clearTimeout(proofTimer);
+  proofScoring.at = 0;
+  paintProof(Number(btn.dataset.proof));
+  if (proofRunning) queueProof();
+});
+
 /* The year buttons on the game logs. Delegated from the sheet body, which
    openSheet() rewrites wholesale, and it repaints only the logs view rather
    than reopening the sheet — reopening would throw away which tab you were
@@ -6511,6 +6833,7 @@ refreshSetup();
 // setup screen has been built rather than before.
 renderRooms();
 renderHeroShot();      // after refreshSetup(), which is what fills `board`
+renderProof();         // and for the same reason: every stage reads `board`
 applyRoute();
 
 /* An invite code in the address bar means someone followed a link, so the
