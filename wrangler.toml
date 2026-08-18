@@ -1,8 +1,0 @@
-#:schema node_modules/wrangler/config-schema.json
-name = "juke"
-compatibility_date = "2026-08-18"
-
-[[d1_databases]]
-binding = "DB"
-database_name = "juke_db"
-database_id = "89995115-4083-4dc6-ad4a-0344345a1205"
