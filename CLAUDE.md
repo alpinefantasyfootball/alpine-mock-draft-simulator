@@ -1120,6 +1120,42 @@ manifest and a manifest is a build step. The daily workflow bumps it too,
 when it commits new player data — a nightly rebuild behind a cache is a
 rebuild nobody sees.
 
+**Which makes the daily bump a merge conflict with every branch that also
+bumped it.** The nightly rewrites `?v=` in those same two files at 11:00 UTC,
+and they are the two files any change to an asset has to touch. So a pull
+request does not have to be stale to collide — it only has to exist at 11:00.
+The design pass was open for **one hour** and came back `CONFLICTING`, four
+hunks in `index.html` and three in the how-it-works page, every one of them a
+version string and nothing else.
+
+The resolution is the branch's stamp, being the newer of the two, but **prove
+that before taking it rather than after**:
+
+```bash
+BASE=$(git merge-base <branch> origin/main)
+git diff $BASE origin/main -- index.html docs/draft-room-how-it-works.html
+```
+
+If the only thing main changed in those files is `?v=`, taking the branch
+whole loses nothing. Merge main *into* the branch and the branch is then
+`--ours` — worth saying out loud, because merging the other way round makes
+`--ours` main and throws away the edit you are trying to land.
+
+If main changed anything else in them, the two have to be reconciled by hand
+and taking either side blind silently drops one of them. The check is two
+seconds and it is the difference between a resolution and a guess.
+
+Merging the same day is the actual fix. A pull request here decays on a
+schedule.
+
+**And a clone that has been fetching is not a clone that has pulled.** GitHub
+Desktop fetches roughly hourly, so `origin/main` sits perfectly current while
+the working copy is days behind and every file on disk is stale. Twelve
+commits and two days of it read exactly like changes that never merged.
+`git status` says `[behind 12]` when that is what has happened, and
+`git log --oneline main..origin/main` says what is missing. Check that before
+concluding anything is stuck.
+
 **Do not request the new `?v=` URL until the deploy has actually landed.**
 This is the one way the scheme bites you, and it is easy to do while trying
 to be careful. GitHub Pages publishes `index.html` and the assets a moment
@@ -1937,14 +1973,77 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   fact in two places and would have failed as a suite quietly testing a server
   nobody was running.
 
-- **End to end: `npm install` once, then `npx playwright test`.** Forty-seven
-  tests, about fifteen minutes, and it starts the static server and `wrangler dev`
-  itself. It drives the real pages in a real browser — a solo draft at both
-  shapes, a full two-manager room draft to completion, a dropped socket
-  reconnecting, leaving and rejoining, the phone layout, what the player sheet
-  says about the Juke score, that every club's colour is drawn where no text
-  can land on it, that a news payload cannot put script in the page, and that
-  the positions we refuse to rank are refused consistently.
+- **A test that asserts an absence cannot be pointed at production.**
+  `news.spec.mjs` has one — with no provider key the panel and the tab stay
+  hidden — and the deployed worker has a key, so aimed at production it **fails
+  by succeeding**: the panel opens, the tab appears, and the run reports a
+  regression that is really a configured provider. It was the only red in 87
+  against the live site, and it is the worst kind of red, because a suite
+  carrying a permanent known failure stops being read at all.
+
+  It skips on `LOCAL_WORKER` now. **Verify a skip in both directions or it is a
+  deletion.** A skip that fires everywhere is indistinguishable in the output
+  from one that fires correctly — a dash and a test name — and the suite goes
+  green having quietly stopped checking. Both were run: against production,
+  1 skipped and 6 passed; locally against the keyless `wrangler dev` the suite
+  starts itself, 7 passed.
+
+  `LOCAL_SITE` and `LOCAL_WORKER` are two exports rather than one because they
+  answer different questions. The config asks about the **site**, because that
+  is what decides whether there are servers to start; this asks about the
+  **worker**, because that is where the key lives. They move together in any
+  sane run, and deriving one from the other would be the wrong fact answering
+  the right question.
+
+- **Do not pipe the run into `tee`.** A pipeline's exit status is the last
+  command's, so `npx playwright test | tee log` reports **0 on a red run** —
+  which is exactly what happened the first time this suite was pointed at
+  production, and the failure was only noticed by reading the output. An
+  exit code that lies is worse in verification tooling than anywhere else,
+  because the whole point of the tool is to be believed. Redirect to a file
+  instead, or `set -o pipefail`.
+
+- **CI is `tests.yml` and it is a floor, not a gate — and it does not cover
+  itself.** It runs the two Python suites on `pull_request` and on `push` to
+  main; the browser suite is deliberately not in it. Three things follow that
+  have each cost something:
+
+  - **A pull request opened after its last push has no checks at all.** The
+    workflow fires on the `pull_request` event, so a branch pushed first and
+    turned into a PR afterwards shows `no checks reported` and sits there
+    looking reviewed. The design pass was open for an hour that way, with 996
+    lines of CSS and 598 of JavaScript that nothing had run.
+  - **`update-players.yml` is unproven by any pull request.** It runs on
+    `schedule` and `workflow_dispatch` only, so a change to it is not
+    exercised until 11:00 UTC or until somebody presses the button.
+  - **Pressing that button is not free.** The job rebuilds `players.js` and
+    `stats.js`, commits if the feeds moved, rewrites every `?v=` and triggers
+    a Pages deploy. It is a real data commit, so run it to answer a question
+    worth a commit.
+
+  **When bumping the action versions, the thing to check in this repository is
+  `persist-credentials`.** `update-players.yml` ends in `git push`, and
+  `actions/checkout@v6` changed where credentials are persisted — the default
+  is still `true`, verified in v7.0.1's own `action.yml` and then verified
+  again by dispatching the workflow and watching the push land. Read the notes
+  for every major you skip, not just the one you land on: v5 was the node24
+  bump, v6 moved the credentials, v7 blocked fork checkouts for
+  `pull_request_target` and `workflow_run`, which this repository does not use.
+
+- **End to end: `npm install` once, then `npx playwright test`.** Eighty-seven
+  tests across fifteen spec files, measured at about five minutes against
+  production, and it starts the static server and `wrangler dev` itself when
+  it is pointed at localhost.
+
+  It drives the real pages in a real browser — a solo draft at both shapes, a
+  full two-manager room draft to completion, a dropped socket reconnecting,
+  leaving and rejoining, the phone layout, what the player sheet says about
+  the Juke score, that every club's colour is drawn where no text can land on
+  it, that a news payload cannot put script in the page, that the positions we
+  refuse to rank are refused consistently, and — since the design pass — that
+  the door is door-shaped rather than book-shaped, that a board cell is a
+  card, what the draft header says, and that a claim on the landing page
+  carries its proof.
 
   **The static server is `py` on Windows and `python3` everywhere else**, picked
   in `playwright.config.mjs` from `process.platform`. It was `py` outright,
