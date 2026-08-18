@@ -1,4 +1,5 @@
-/* The two rings on the draft board: whose column it is, and where the draft is.
+/* What the draft board says beyond the picks themselves: whose column it is,
+   where the draft is, what every team holds, and how far away a pick is.
 
    Both were blue before this — the same blue as the focus ring, the selected
    tab, --link, .draft-btn and the header when the clock is yours. A colour
@@ -151,5 +152,138 @@ test.describe("the board's two rings", () => {
         expect(bad, `every ring holds its surface in ${theme}`).toEqual([]);
         await context.close();
       }
+    });
+});
+
+/* Two readings the board could always have offered and did not, both from
+   data the app already had. The roster strip is `state.picks` grouped; the
+   overall number is snake arithmetic the engine already owns. Neither is new
+   information — they are the difference between a board you read and a board
+   you do sums against. */
+test.describe("what the board tells you about everybody else", () => {
+  test("the roster strip counts what each team holds, and skips the two the app schedules itself",
+    async ({ context }) => {
+      const page = await openApp(context);
+      // Deep enough that kickers and defenses are legal and actually drafted.
+      await draftInto(page, 140);
+
+      const r = await page.evaluate(() => {
+        const heads = [...document.querySelectorAll(".board .hd")].slice(1);
+        return {
+          teams: league.teams,
+          shown: heads.map((h) => [...h.querySelectorAll(".hd-pos")].map((c) => ({
+            pos: [...c.classList].find((x) => x !== "hd-pos"),
+            n: Number(c.textContent)
+          }))),
+          truth: heads.map((_, s) => POSITIONS.map((p) => ({ pos: p, n: countAt(s, p) }))),
+          // Somebody really did take one, or the exclusion below proves nothing.
+          forcedDrafted: state.picks.filter((p) => FORCED_LATE[p.player.pos]).length
+        };
+      });
+
+      expect(r.shown.length, "one strip per team").toBe(r.teams);
+      expect(r.forcedDrafted, "kickers and defenses were drafted").toBeGreaterThan(0);
+
+      r.shown.forEach((strip, s) => {
+        const truth = r.truth[s];
+        /* Counted positions are derived from FORCED_LATE rather than listed.
+           K and DST are the two the app schedules itself — cpuScore() refuses
+           them until the closing rounds — so counting them is eight columns
+           of "0 0" and then eight of "1 1". */
+        expect(strip.map((c) => c.pos), `team ${s} counts the chosen positions`)
+          .toEqual(["QB", "RB", "WR", "TE"]);
+        strip.forEach((chip) => {
+          const want = truth.find((t) => t.pos === chip.pos).n;
+          expect(chip.n, `team ${s} ${chip.pos}`).toBe(want);
+        });
+      });
+
+      // And the strip is not uniformly zero, which would pass every line above.
+      expect(new Set(r.shown.flat().map((c) => c.n)).size,
+        "teams differ from each other").toBeGreaterThan(1);
+    });
+
+  test("a count is white on its own solid, so the header behind it never matters",
+    async ({ browser }) => {
+      for (const theme of ["dark", "light"]) {
+        const context = await browser.newContext();
+        const page = await openApp(context);
+        await draftInto(page, 60);
+        await page.evaluate((t) => document.documentElement.setAttribute("data-theme", t), theme);
+
+        /* This is the test the design was chosen for. Colouring the *text* by
+           position was tried first and measured: the light-theme --*-fg tones
+           run 4.85 to 5.69 on --board-hd and 2.15 to 2.52 on the navy of your
+           own column — so the one team a manager looks at most is the one
+           that would have failed, in one theme only. A chip carrying its own
+           ground cannot have that bug, and this asserts it cannot come back. */
+        const bad = await page.evaluate(({ contrast }) => {
+          eval(contrast);
+          const kill = document.createElement("style");
+          kill.textContent = "* { transition: none !important }";
+          document.head.appendChild(kill);
+          const out = [];
+          document.querySelectorAll(".board .hd-pos").forEach((chip) => {
+            const st = getComputedStyle(chip);
+            const r = ratio(st.color, st.backgroundColor);
+            if (r < 4.5) out.push({ cls: chip.className, fg: st.color,
+                                    bg: st.backgroundColor, ratio: Math.round(r * 100) / 100 });
+          });
+          document.head.removeChild(kill);
+          return out;
+        }, { contrast: CONTRAST });
+
+        expect(bad, `every count clears 4.5:1 on its own chip in ${theme}`).toEqual([]);
+
+        // Including on your own column, which is the case that broke.
+        const onMine = await page.evaluate(() =>
+          document.querySelectorAll(".board .hd.me .hd-pos").length);
+        expect(onMine, "your own column has a strip too").toBe(4);
+        await context.close();
+      }
+    });
+
+  test("the number in the corner is the pick that cell really is",
+    async ({ context }) => {
+      const page = await openApp(context);
+      await draftInto(page, 26);
+
+      const r = await page.evaluate(() => {
+        const cells = [...document.querySelectorAll(".board .cell")];
+        const seen = [], mismatched = [];
+        cells.forEach((c) => {
+          const ovr = c.querySelector(".cell-ovr");
+          if (!ovr) return;
+          const n = Number(ovr.textContent);
+          seen.push(n);
+          /* The property, not the arithmetic: a pick code has to be derivable
+             from the overall number and the league size alone, with no
+             reference to the snake at all. Testing overallOf() against a copy
+             of overallOf() would prove nothing — this is the same check that
+             catches a seat number printed as a pick number. */
+          const code = c.querySelector(".cell-pick");
+          if (code && DraftEngine.pickCode(n, league.teams) !== code.textContent.trim()) {
+            mismatched.push({ n, printed: code.textContent.trim() });
+          }
+        });
+        return {
+          mismatched, seen,
+          drafted: state.picks.map((p) => p.overall),
+          total: league.teams * league.rounds,
+          // No corner number on a cell somebody already drafted.
+          onDrafted: document.querySelectorAll(".board .cell:not(.empty) .cell-ovr").length
+        };
+      });
+
+      expect(r.mismatched, "every corner number agrees with its own pick code").toEqual([]);
+      expect(r.onDrafted, "a drafted cell does not carry one").toBe(0);
+
+      /* Every pick in the draft accounted for exactly once, between the cells
+         still to come and the picks already made. Uniqueness alone would not
+         catch a mirrored assignment, but combined with the pick-code check
+         above it pins both the set and the placement. */
+      const all = [...r.seen, ...r.drafted].sort((a, b) => a - b);
+      expect(all.length, "no pick counted twice").toBe(r.total);
+      expect(all).toEqual(Array.from({ length: r.total }, (_, i) => i + 1));
     });
 });

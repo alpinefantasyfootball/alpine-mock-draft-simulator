@@ -3811,6 +3811,42 @@ function renderPlayers() {
    draws a fixed ten-team room whatever league the visitor has set up. One
    function for both boards: the landing page claiming a different snake from
    the product is the drift this signature exists to prevent. */
+/* What a team has, at a glance, under its name on the board.
+
+   The one thing a board cannot otherwise tell you is what everybody else
+   still needs, and it is in `state.picks` already — so this is a read of data
+   the app has rather than anything new. It is what makes the column above a
+   pick legible: three running backs and no quarterback is a team about to
+   take a quarterback.
+
+   **Which positions get counted is derived, not listed.** FORCED_LATE already
+   names the two the app itself schedules — cpuScore() refuses a kicker before
+   the last two rounds and a defense before the last three, and the
+   suggestions never offer one earlier. Counting a position nobody is choosing
+   is eight columns of "0 0" until the closing rounds and then eight of "1 1".
+   Listing QB, RB, WR and TE here instead would be the league shape written
+   down a second time, which is the failure this project has already paid for
+   twice.
+
+   **Each count carries its own ground, and that is what makes it safe.** A
+   chip is white on a position solid, which is the contract those colours were
+   darkened to meet, so it does not matter whether it lands on the board head
+   or on the navy of your own column — the header behind it is never part of
+   the sum. Colouring the *text* instead was measured first and does not
+   survive: the light-theme --*-fg tones are 4.85 to 5.69 on --board-hd and
+   2.15 to 2.52 on your own column's navy, so the one team a manager looks at
+   most would be the one that failed. */
+const COUNTED_POSITIONS = POSITIONS.filter(function (p) { return !FORCED_LATE[p]; });
+
+function rosterStrip(slot) {
+  return '<span class="hd-roster">' + COUNTED_POSITIONS.map(function (pos) {
+    const n = countAt(slot, pos);
+    // Empty is drawn as empty rather than dropped: a gap where a chip should
+    // be is the fact somebody is reading this strip for.
+    return `<span class="hd-pos ${n ? pos : "none"}">${n}</span>`;
+  }).join("") + "</span>";
+}
+
 function boardArrow(round, slot, teams) {
   if (DraftEngine.pickInRound(round, slot, teams) === teams) return "&darr;";
   return round % 2 === 0 ? "&larr;" : "&rarr;";
@@ -3848,7 +3884,10 @@ function renderBoard() {
   let html = `<div class="hd"></div>`;
 
   for (let s = 0; s < league.teams; s++) {
-    html += `<div class="hd ${s === state.mySlot ? "me" : ""}">${s === state.mySlot ? "YOU" : cpuName(s).split(" ")[0]}</div>`;
+    html += `<div class="hd ${s === state.mySlot ? "me" : ""}">` +
+              `<span class="hd-name">${s === state.mySlot ? "YOU" : cpuName(s).split(" ")[0]}</span>` +
+              rosterStrip(s) +
+            `</div>`;
   }
 
   for (let r = 1; r <= league.rounds; r++) {
@@ -3900,9 +3939,22 @@ function renderBoard() {
           : `<span class="cell-dir" aria-hidden="true">${boardArrow(r, s, league.teams)}</span>` +
             `<span class="cell-pick">${r}.${String(inRound).padStart(2, "0")}</span>`;
 
+        /* How far away this pick is, which "5.01" cannot say on its own.
+
+           Only on a cell nobody has drafted yet. On a filled one it is the
+           sixth fact in a 74px box and answers a question nobody has — the
+           pick already happened. On an empty one it turns "when do I pick
+           again" from arithmetic into reading, which is the same thing the
+           gold column and the arrow are for.
+
+           DraftEngine.overallOf() rather than the sum written out here: the
+           mirror is inside it, and a caller holding a round and a seat must
+           never work that out again. */
+        const ovr = `<span class="cell-ovr">${DraftEngine.overallOf(r, s, league.teams)}</span>`;
+
         // The cell on the clock is the clock. Looking away from where the
         // pick lands to find out how long is left is the thing this removes.
-        html += `<div class="cell empty ${isNow ? "now" : ""} ${isMine ? "mine" : ""}"${isNow ? ' id="boardClock"' : ""}>${face}</div>`;
+        html += `<div class="cell empty ${isNow ? "now" : ""} ${isMine ? "mine" : ""}"${isNow ? ' id="boardClock"' : ""}>${ovr}${face}</div>`;
       }
     }
   }

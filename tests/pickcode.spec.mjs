@@ -83,7 +83,16 @@ test.describe("a pick is named by its place in the round", () => {
       const out = [];
       for (let r = 0; r < league.rounds; r++) {
         out.push(cells.slice(r * league.teams, (r + 1) * league.teams)
-          .map((c) => (c.classList.contains("now") ? null : c.textContent.trim())));
+          /* .cell-pick, not the cell's whole text. An empty cell also carries
+             the direction the order is travelling and the overall number of
+             the pick, so reading textContent here answers "2→1.02" — which is
+             three correct facts and not the one this test is about. It read
+             the whole cell only because the cell used to hold one thing. */
+          .map((c) => {
+            if (c.classList.contains("now")) return null;
+            const code = c.querySelector(".cell-pick");
+            return code && code.textContent.trim();
+          }));
       }
       return { out, teams: league.teams };
     });

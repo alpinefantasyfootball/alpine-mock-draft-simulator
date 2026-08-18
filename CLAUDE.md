@@ -1511,6 +1511,30 @@ the defect is in what is *absent*, and absence renders, contrasts and passes.
 **Your own turn draws both rings, nested.** It is the one cell on the board
 where the two facts coincide, and letting either win throws the other away.
 
+**What each team holds is on the board, and which positions get counted is
+derived.** `FORCED_LATE` already names the two the app schedules itself, so
+`COUNTED_POSITIONS` is `POSITIONS` minus those — listing QB, RB, WR and TE
+would be the league shape written down a second time. Counting a kicker is
+eight columns of "0" until the closing rounds and eight of "1" after them.
+
+**Each count carries its own ground, and that is the whole reason it is a chip
+rather than coloured text.** White on a position solid is the contract those
+colours were darkened to meet, so the header behind it is never part of the
+sum. Colouring the text was measured first and does not survive: the
+light-theme `--*-fg` tones run 4.85–5.69 on `--board-hd` and **2.15–2.52 on
+the navy of `.hd.me`** — so the one team a manager looks at most is the one
+that fails, in one theme only.
+
+**The overall pick number goes on an undrafted cell and nowhere else.** On a
+filled one it is a sixth fact in a 74px box answering a question nobody has;
+on an empty one it turns "when do I pick again" from arithmetic into reading.
+It comes from `DraftEngine.overallOf()` — the mirror lives inside that, and a
+caller holding a round and a seat must never work it out again. **Test the
+property, not the arithmetic**: a corner number is right when
+`pickCode(overall, teams)` equals the code printed in the same cell. Checking
+`overallOf()` against a second copy of `overallOf()` proves nothing, and the
+seat-versus-pick-number bug is exactly what this catches.
+
 **The direction arrow is on every cell, and it was on drafted ones only.**
 Same failure as the gold column, found in the same screenshot: the snake was
 legible over the half of the board that had already happened and not over the

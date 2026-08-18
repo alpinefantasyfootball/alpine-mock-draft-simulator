@@ -1172,9 +1172,44 @@ tr.drafted .ovr { color: var(--ink-light); }
 .board .hd {
   background: var(--board-hd); color: var(--ink-mid);
   font-size: var(--fs-2xs); font-weight: 700; text-align: center;
-  padding: 5px 2px; border-radius: var(--r-xs);
+  padding: 5px 3px 4px; border-radius: var(--r-xs);
+}
+/* The name owns the truncation, not the head. It used to sit on .hd itself,
+   which was fine while a head held one line of text and clips the roster
+   strip the moment it holds two. */
+.board .hd-name {
+  display: block;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+
+/* What each team has, four chips wide. See rosterStrip(): the positions are
+   derived from FORCED_LATE rather than listed, so a league that changes shape
+   cannot leave this behind.
+
+   Every chip carries its own ground — white on a position solid, which is the
+   contract those colours were darkened to meet — so the strip is legible on
+   the board head and on the navy of your own column alike, and the header
+   behind it is never part of the sum. */
+.board .hd-roster {
+  display: flex; gap: 2px; justify-content: center; margin-top: 3px;
+}
+.board .hd-pos {
+  flex: 1 1 0; min-width: 0;
+  border-radius: var(--r-xs);
+  font-size: var(--fs-2xs); font-weight: 700; line-height: 1.3;
+  color: #fff;
+}
+/* Nothing there yet, and drawn rather than dropped: the gap is the fact
+   somebody is reading the strip for. Muted fill and the tertiary tone, which
+   is the same pair a disabled control uses and clears its own bar — a
+   position colour at zero would say "has one". */
+.board .hd-pos.none { background: var(--fill); color: var(--ink-light); }
+.board .hd-pos.QB  { background: var(--qb); }
+.board .hd-pos.RB  { background: var(--rb); }
+.board .hd-pos.WR  { background: var(--wr); }
+.board .hd-pos.TE  { background: var(--te); }
+.board .hd-pos.K   { background: var(--k); }
+.board .hd-pos.DST { background: var(--dst); }
 
 /* The head of the marked column, so the gold reads as one continuous column
    rather than as a run of separately outlined cells. Navy and white stay —
@@ -1201,10 +1236,24 @@ tr.drafted .ovr { color: var(--ink-light); }
    have called the old one wrong; the new one reads as a number that has slipped
    its box. Same failure as the lopsided tab pill, and found the same way —
    by eye first, then measured. */
+/* --ink-mid rather than --ink-light, so the pick code and the overall number
+   in the corner are not the same weight. Two numbers in one cell at one tone
+   is two numbers competing; the code is the one being read. */
 .board .cell.empty {
-  color: var(--ink-light); font-variant-numeric: tabular-nums;
+  position: relative;
+  color: var(--ink-mid); font-variant-numeric: tabular-nums;
   display: flex; align-items: center; justify-content: center; gap: 4px;
 }
+/* How far away the pick is. Corner, tertiary tone, and out of the flow so it
+   cannot push the code off centre. */
+.board .cell-ovr {
+  position: absolute; top: 3px; right: 5px;
+  font-size: var(--fs-2xs); font-weight: 400; color: var(--ink-light);
+}
+/* The clock owns the cell it is in, so the corner number stands down. Two
+   facts in a 74px box is one too many and the countdown is the one being
+   watched — the same rule the direction arrow follows one line up. */
+.board .cell.now .cell-ovr { display: none; }
 /* Two rings, and they answer two different questions.
 
    Gold is *whose*: every cell in your column, drafted or not. The empty ones
