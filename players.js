@@ -2,7 +2,7 @@
    Alpine Draft Room - player data
    GENERATED FILE. Edit scripts/build_players.py instead.
 
-   Generated : 2026-08-18 11:55 UTC
+   Generated : 2026-08-18 14:51 UTC
    Players   : standard 210 · half 221 · ppr 265
    Seasons   : 2018-2025
    Matched   : 221 of the half set carry a Sleeper id
@@ -15,7 +15,7 @@
    Player, injury and stat data: Sleeper.
    ========================================================== */
 
-const PLAYERS_META = { generated: "2026-08-18 11:55 UTC", count: 221, matched: 221, flagged: 32, projected: 265, unmatched: 0 };
+const PLAYERS_META = { generated: "2026-08-18 14:51 UTC", count: 221, matched: 221, flagged: 32, projected: 265, unmatched: 0 };
 
 /* One ordered list per scoring format. app.js picks the set that
    matches league.scoring when a draft starts, and works out every
@@ -61,7 +61,7 @@ const ADP_SETS = {
   { id: "12526", name: "Tetairoa McMillan", pos: "WR", team: "CAR", bye: 5, adp: 35.7, inj: "" },
   { id: "12514", name: "Emeka Egbuka", pos: "WR", team: "TB", bye: 10, adp: 35.9, inj: "Q" },
   { id: "7525", name: "DeVonta Smith", pos: "WR", team: "PHI", bye: 10, adp: 38.7, inj: "Q" },
-  { id: "8146", name: "Garrett Wilson", pos: "WR", team: "NYJ", bye: 13, adp: 41.0, inj: "Q" },
+  { id: "8146", name: "Garrett Wilson", pos: "WR", team: "NYJ", bye: 13, adp: 41.0, inj: "" },
   { id: "7543", name: "Travis Etienne Jr.", pos: "RB", team: "NO", bye: 8, adp: 41.5, inj: "" },
   { id: "6790", name: "D'Andre Swift", pos: "RB", team: "CHI", bye: 10, adp: 41.9, inj: "" },
   { id: "11620", name: "Rome Odunze", pos: "WR", team: "CHI", bye: 10, adp: 42.0, inj: "" },
@@ -87,7 +87,7 @@ const ADP_SETS = {
   { id: "12519", name: "Luther Burden III", pos: "WR", team: "CHI", bye: 10, adp: 59.7, inj: "Q" },
   { id: "11628", name: "Marvin Harrison Jr.", pos: "WR", team: "ARI", bye: 14, adp: 62.5, inj: "" },
   { id: "5967", name: "Tony Pollard", pos: "RB", team: "TEN", bye: 9, adp: 63.7, inj: "Q" },
-  { id: "9487", name: "Parker Washington", pos: "WR", team: "JAX", bye: 7, adp: 63.9, inj: "" },
+  { id: "9487", name: "Parker Washington", pos: "WR", team: "JAX", bye: 7, adp: 63.9, inj: "Q" },
   { id: "3294", name: "Dak Prescott", pos: "QB", team: "DAL", bye: 14, adp: 64.6, inj: "" },
   { id: "7611", name: "Rhamondre Stevenson", pos: "RB", team: "NE", bye: 11, adp: 67.7, inj: "" },
   { id: "11631", name: "Brian Thomas Jr.", pos: "WR", team: "JAX", bye: 7, adp: 68.3, inj: "" },
@@ -264,7 +264,7 @@ const ADP_SETS = {
   { id: "8150", name: "Kyren Williams", pos: "RB", team: "LAR", bye: 11, adp: 27.2, inj: "" },
   { id: "11632", name: "Malik Nabers", pos: "WR", team: "NYG", bye: 8, adp: 27.7, inj: "Q" },
   { id: "8155", name: "Breece Hall", pos: "RB", team: "NYJ", bye: 13, adp: 28.4, inj: "Q" },
-  { id: "8146", name: "Garrett Wilson", pos: "WR", team: "NYJ", bye: 13, adp: 30.9, inj: "Q" },
+  { id: "8146", name: "Garrett Wilson", pos: "WR", team: "NYJ", bye: 13, adp: 30.9, inj: "" },
   { id: "7525", name: "DeVonta Smith", pos: "WR", team: "PHI", bye: 10, adp: 31.3, inj: "Q" },
   { id: "4984", name: "Josh Allen", pos: "QB", team: "BUF", bye: 7, adp: 31.5, inj: "" },
   { id: "13287", name: "Jeremiyah Love", pos: "RB", team: "ARI", bye: 14, adp: 31.7, inj: "Q" },
@@ -301,7 +301,7 @@ const ADP_SETS = {
   { id: "8228", name: "Jaylen Warren", pos: "RB", team: "PIT", bye: 9, adp: 62.3, inj: "" },
   { id: "5846", name: "DK Metcalf", pos: "WR", team: "PIT", bye: 9, adp: 63.8, inj: "Q" },
   { id: "11628", name: "Marvin Harrison Jr.", pos: "WR", team: "ARI", bye: 14, adp: 64.1, inj: "" },
-  { id: "9487", name: "Parker Washington", pos: "WR", team: "JAX", bye: 7, adp: 64.5, inj: "" },
+  { id: "9487", name: "Parker Washington", pos: "WR", team: "JAX", bye: 7, adp: 64.5, inj: "Q" },
   { id: "5967", name: "Tony Pollard", pos: "RB", team: "TEN", bye: 9, adp: 64.7, inj: "Q" },
   { id: "3294", name: "Dak Prescott", pos: "QB", team: "DAL", bye: 14, adp: 66.4, inj: "" },
   { id: "12518", name: "Tyler Warren", pos: "TE", team: "IND", bye: 13, adp: 69.5, inj: "" },
@@ -484,7 +484,7 @@ const ADP_SETS = {
   { id: "8144", name: "Chris Olave", pos: "WR", team: "NO", bye: 8, adp: 21.9, inj: "" },
   { id: "8151", name: "Kenneth Walker", pos: "RB", team: "KC", bye: 5, adp: 23.4, inj: "" },
   { id: "9997", name: "Zay Flowers", pos: "WR", team: "BAL", bye: 13, adp: 24.4, inj: "" },
-  { id: "8146", name: "Garrett Wilson", pos: "WR", team: "NYJ", bye: 13, adp: 27.2, inj: "Q" },
+  { id: "8146", name: "Garrett Wilson", pos: "WR", team: "NYJ", bye: 13, adp: 27.2, inj: "" },
   { id: "11632", name: "Malik Nabers", pos: "WR", team: "NYG", bye: 8, adp: 27.8, inj: "Q" },
   { id: "7525", name: "DeVonta Smith", pos: "WR", team: "PHI", bye: 10, adp: 28.4, inj: "Q" },
   { id: "13287", name: "Jeremiyah Love", pos: "RB", team: "ARI", bye: 14, adp: 28.9, inj: "Q" },
@@ -527,7 +527,7 @@ const ADP_SETS = {
   { id: "5846", name: "DK Metcalf", pos: "WR", team: "PIT", bye: 9, adp: 64.9, inj: "Q" },
   { id: "3294", name: "Dak Prescott", pos: "QB", team: "DAL", bye: 14, adp: 65.4, inj: "" },
   { id: "11628", name: "Marvin Harrison Jr.", pos: "WR", team: "ARI", bye: 14, adp: 65.4, inj: "" },
-  { id: "9487", name: "Parker Washington", pos: "WR", team: "JAX", bye: 7, adp: 65.7, inj: "" },
+  { id: "9487", name: "Parker Washington", pos: "WR", team: "JAX", bye: 7, adp: 65.7, inj: "Q" },
   { id: "5967", name: "Tony Pollard", pos: "RB", team: "TEN", bye: 9, adp: 67.2, inj: "Q" },
   { id: "7611", name: "Rhamondre Stevenson", pos: "RB", team: "NE", bye: 11, adp: 71.3, inj: "" },
   { id: "11631", name: "Brian Thomas Jr.", pos: "WR", team: "JAX", bye: 7, adp: 72.6, inj: "" },
@@ -719,7 +719,7 @@ const ADP_SETS = {
   { id: "6149", name: "Darius Slayton", pos: "WR", team: "NYG", bye: 8, adp: 174.9, inj: "" },
   { id: "CIN", name: "Cincinnati Defense", pos: "DST", team: "CIN", bye: 6, adp: 175.0, inj: "" },
   { id: "12487", name: "Terrance Ferguson", pos: "TE", team: "LAR", bye: 11, adp: 176.7, inj: "" },
-  { id: "13296", name: "Caleb Douglas", pos: "WR", team: "MIA", bye: 6, adp: 177.2, inj: "Q" },
+  { id: "13296", name: "Caleb Douglas", pos: "WR", team: "MIA", bye: 6, adp: 177.2, inj: "" },
   { id: "12535", name: "Isaac TeSlaa", pos: "WR", team: "DET", bye: 6, adp: 178.9, inj: "" },
   { id: "11626", name: "Xavier Legette", pos: "WR", team: "CAR", bye: 5, adp: 190.0, inj: "" },
   { id: "7600", name: "Pat Freiermuth", pos: "TE", team: "PIT", bye: 9, adp: 190.2, inj: "" },
