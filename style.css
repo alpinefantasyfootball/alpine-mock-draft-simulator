@@ -168,7 +168,37 @@
   --good:        #4FBF7F;
 
   --row-bad:     #2A171B;   /* a whole row tinted with bad news */
-  --row-blue:    #16222F;   /* a whole row tinted as yours      */
+  /* ---- yours ----
+
+     Identity, and it is a third meaning after the two this file already
+     names: orange acts, blue states, and gold is *whose*. It had been blue
+     in four of the six places a seat is marked, navy in a fifth and
+     translucent white in the sixth — and blue was already carrying focus
+     rings, the selected tab, --link, .draft-btn and the header when the
+     clock is yours. A colour doing five jobs is not a signal.
+
+     --mine and --ring-edge do not move between themes, and that is the
+     point rather than an oversight. A ring on the board lands on six
+     position solids — which are themselves fixed across themes — and on an
+     empty cell, which is near-black in one theme and near-white in the
+     other. Measured, no single value survives that: gold clears 3:1 on
+     every solid (3.2 worst) and on a dark empty cell (9.5) and reaches
+     1.26 on a light one; the keyline is the exact complement, 4.1 on the
+     solids and 16.7 on a light cell and 1.2 on a dark one. So the ring is
+     a *pair* — 2px of gold with 1px of keyline inside it — and between
+     them one always clears 3:1 on whatever it is sitting on, while the
+     two clear 11.7 against each other so the pair always reads as an
+     edge. --live-ring is white and takes the identical construction for
+     the identical reason.
+
+     **Gold is a mark and never type.** #FFD166 as text is 1.4:1 on a light
+     card, which is why the chat author's name stays --link: that is a name
+     in a paragraph, not a ring on a cell. */
+  --mine:        #FFD166;   /* the ring on a seat that is yours */
+  --ring-edge:   #0B1017;   /* what makes a ring survive any surface under it */
+  --live-ring:   #FFFFFF;   /* the pick on the clock, wherever it lands */
+  --row-mine:    #221C10;   /* a whole row tinted as yours      */
+  --pale-mine:   #332608;   /* your line in the room standings  */
 
   /* Tints: a soft background with a legible foreground on it. Used by
      the injury chips, the tier chips, the bye bars and the callouts. */
@@ -225,6 +255,51 @@
   --k-bg:#251E3C;   --k-fg:#B4A0EC;   --k:#7F62CF;    /* white 4.61 */
   --dst-bg:#232B33; --dst-fg:#A8B7C2; --dst:#607483;  /* white 4.86 */
 
+  /* ---- elevation ----
+
+     Four steps, and no rule below may write a raw box-shadow for a lifted
+     surface. They replaced fourteen distinct shadow values across eighteen
+     declarations, every one picked locally by eye — the same failure as the
+     26 font sizes and 15 radii, and the one DESIGN-DIRECTION.md names as the
+     difference between "clean" and "designed": nobody notices any single
+     shadow, and the sum of them is what reads as a product.
+
+     Two things make this a system rather than a list.
+
+     **One light source, and it is directly above.** Every step offsets down
+     the Y axis only. A shadow that leans left beside one that leans right is
+     two light sources in one composition, which is the thing the eye catches
+     without being able to name it. The door is the single exception and says
+     so where it sits: it is a lit object with its own interior light, not a
+     card on a page.
+
+     **Two layers, always.** A tight, dark contact shadow for where the object
+     meets the surface, and a broad, soft ambient one for the room light it
+     blocks. One blurred layer is what flat design does; both is what makes a
+     surface look like it is actually above another one. That is most of the
+     difference between these and what they replaced.
+
+     They live here rather than beside the type and radius scales because a
+     shadow is a colour: on a dark page it has to be near-black and deep to
+     register at all, and the same value on a light page reads as grime.
+
+     Three things below still write a shadow by hand, and none of them is a
+     lifted surface: `.sug.top` is a blue state glow rather than a height,
+     `--team` is a ring drawn as a shadow because a border would eat the
+     headshot, and the doorway's handle, placard and sill are detail on a lit
+     object with an interior light of its own. The door says so where it sits.
+     Anything else with a literal here is a rule that forgot. */
+  --elev-1: 0 1px 2px rgba(3, 8, 16, .48);
+  --elev-2: 0 2px 4px rgba(3, 8, 16, .42), 0 6px 14px rgba(3, 8, 16, .36);
+  --elev-3: 0 4px 8px rgba(3, 8, 16, .42), 0 14px 30px rgba(3, 8, 16, .40);
+  --elev-4: 0 8px 16px rgba(3, 8, 16, .46), 0 28px 60px rgba(3, 8, 16, .48);
+  /* The one that casts upwards, and the single exception to the overhead
+     light. A sheet rising from the bottom edge of the screen has no floor
+     below it to cast onto, so the shadow's whole job there is to separate its
+     top edge from the page it is covering. Named rather than written inline
+     so "no raw box-shadow for a lifted surface" stays literally true. */
+  --elev-up: 0 -8px 28px rgba(3, 8, 16, .44);
+
   /* Tells the browser to draw the parts we don't control — select popups,
      checkboxes, scrollbars — to match. Without it a dark page gets white
      dropdowns. */
@@ -272,13 +347,25 @@
   --track:       #EDF1F5;
   --board-hd:    #E9EDF1;
 
+  /* Same geometry, a fraction of the weight, and tinted with the page's own
+     navy rather than black — a neutral grey shadow on a cool light page reads
+     as dirt. See the note on the dark set for why there are two layers. */
+  --elev-1: 0 1px 2px rgba(20, 35, 56, .10);
+  --elev-2: 0 2px 4px rgba(20, 35, 56, .07), 0 6px 14px rgba(20, 35, 56, .10);
+  --elev-3: 0 4px 8px rgba(20, 35, 56, .08), 0 14px 30px rgba(20, 35, 56, .12);
+  --elev-4: 0 8px 16px rgba(20, 35, 56, .10), 0 28px 60px rgba(20, 35, 56, .18);
+  --elev-up: 0 -8px 28px rgba(20, 35, 56, .16);
+
   --mark-ink:    #152A49;
 
   --danger:      #C0392F;
   --good:        #1B7343;
 
   --row-bad:     #FEF6F7;
-  --row-blue:    #F7FAFF;
+  /* --mine, --ring-edge and --live-ring are deliberately absent here: they
+     are built as a pair that survives both themes. See the dark block. */
+  --row-mine:    #FFF8E8;
+  --pale-mine:   #FDF3DA;
 
   --t-good-bg:#E6F5EC;   --t-good-fg:#1B7343;
   --t-bad-bg:#FBE1E5;    --t-bad-fg:#A32530;
@@ -352,17 +439,34 @@ body {
 .appbar.my-turn .mark,
 .appbar.urgent .mark { --mark-ink: #fff; }
 
-.appbar.my-turn .theme-toggle,
-.appbar.urgent .theme-toggle {
+/* Both header toggles share .hdrbtn and nothing else.
+
+   The sound button was given the class `theme-toggle` first, purely to
+   inherit its look — and that class is not a style, it is a control:
+   themeBtns() selects it, syncThemeButton() writes aria-pressed onto
+   everything it finds, and the delegated click handler switches the theme on
+   anything matching it. So the sound button loaded showing "on" it had never
+   been given and would have changed the theme when pressed.
+
+   Exactly the collision this project already has a rule about — .home was
+   taken, .avatar was taken, initials() was taken. Checking the sheet for a
+   name catches the first two; this one needed checking the *script* as well,
+   because the clash was in behaviour rather than in appearance. */
+.sound-toggle .i-sound-off { display: none; }
+.sound-toggle[aria-pressed="false"] .i-sound-on { display: none; }
+.sound-toggle[aria-pressed="false"] .i-sound-off { display: block; }
+
+.appbar.my-turn .hdrbtn,
+.appbar.urgent .hdrbtn {
   border-color: rgba(255,255,255,.22);
   background: rgba(255,255,255,.10); color: #fff;
 }
 
-.appbar.my-turn .theme-toggle:hover,
-.appbar.urgent .theme-toggle:hover { background: rgba(255,255,255,.20); border-color: rgba(255,255,255,.38); }
+.appbar.my-turn .hdrbtn:hover,
+.appbar.urgent .hdrbtn:hover { background: rgba(255,255,255,.20); border-color: rgba(255,255,255,.38); }
 
-.appbar.my-turn .theme-toggle:focus-visible,
-.appbar.urgent .theme-toggle:focus-visible,
+.appbar.my-turn .hdrbtn:focus-visible,
+.appbar.urgent .hdrbtn:focus-visible,
 .appbar.my-turn .home:focus-visible,
 .appbar.urgent .home:focus-visible { outline-color: #fff; }
 
@@ -384,6 +488,10 @@ body {
   padding: 7px; margin: -7px;
 }
 
+/* The chevron sits tight against the mark and reads as one control with it,
+   which is the point: two separate buttons in a header this narrow would be
+   two ways out rather than one. */
+.i-back { flex: none; margin-right: 2px; opacity: .9; }
 .home:hover { opacity: .78; }
 .home:focus-visible { outline: 2px solid var(--blue); outline-offset: 4px; border-radius: var(--r-sm); }
 
@@ -421,6 +529,44 @@ body {
 .appbar-text p {
   margin: 0; font-size: var(--fs-xs); color: var(--ink-mid);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* The pick and the league on one line, with a divider drawn rather than
+   typed — a literal middot in the markup would still be there when the
+   league half is hidden below 760px, leaving a line that ends in a dot. */
+.appbar-league::before {
+  content: "\00b7"; margin: 0 6px; color: var(--ink-light);
+}
+.appbar.my-turn .appbar-league::before,
+.appbar.urgent .appbar-league::before { color: #fff; }
+
+/* Under 760 the header is the pick, the counter and two toggles, and the
+   league summary is the one of the four that can wait. It is reference
+   rather than state: nothing about it changes during a draft. */
+@media (max-width: 760px) { .appbar-league { display: none; } }
+
+/* Below 560 the mark comes off the draft header and the chevron carries the
+   way out on its own.
+
+   Measured rather than chosen: "You're on the clock!" is about 165px at 16px
+   bold, and at 390px the header has 143px left for it once the padding, the
+   chevron, the mark, the counter and two toggles have taken theirs — so the
+   most important sentence in the app was rendering as "You're on the c…".
+   Dropping the mark returns 174px and it fits.
+
+   It is the one place the draft header stops matching the landing one, and
+   the trade is the right way round: a chevron alone is the universal back
+   affordance on a phone, and the brand is still on every other screen. */
+@media (max-width: 560px) {
+  .appbar .home .mark { display: none; }
+  .appbar .i-back { margin-right: 0; }
+  /* And the spacing tightens with it. Measured at 390px: the header had 147px
+     for a headline that wants about 175, and the mark alone does not close
+     that. 18px of padding, three 12px gaps and the counter's own 10px inset
+     are 30 more, spent on air either side of a sentence that is being cut in
+     half. */
+  .appbar-inner { padding-left: 12px; padding-right: 12px; gap: 8px; }
+  .appbar-right { gap: 8px; padding-left: 6px; }
 }
 
 /* Solid, not rgba(255,255,255,.82).
@@ -462,13 +608,35 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/* ---------- theme toggle ----------
+/* At 360 the headline was still short, and the counter is where the pixels
+   are — but not where you would look for them. The value is the big number
+   and shrinking it does nothing: "Time left" and "0:59" measure 60px each,
+   and 0.1em of tracking over nine uppercase characters is most of it. But
+   they measure 60px *each*, so trimming either one on its own changes
+   nothing at all — the block is as wide as its widest child either way, and
+   both first attempts here looked reasonable and moved the header by zero
+   pixels. Both together return the seven that let "You're on the clock!"
+   finish its own sentence on a 360px phone. --fs-lg is still on the type
+   scale and the digits are still the largest thing on the right.
+
+   It sits *below* the two rules it overrides, and it has to: a media query
+   carries no extra specificity, so at equal weight the later declaration
+   wins whether or not a query wrapped it. Written above them first, it
+   matched — matchMedia agreed it matched — and changed nothing, which reads
+   exactly like a rule that is not applying at all. */
+@media (max-width: 400px) {
+  .count-label { letter-spacing: .04em; }
+  .count-value { font-size: var(--fs-lg); }
+}
+
+
+/* ---------- header toggles ----------
    It lives on the header, which is dark under both themes, so it is
    styled once against navy rather than switching with everything else. */
 
 /* There is one toggle per header, so the base is styled for a normal surface
    and the draft header — which is navy under both themes — overrides it. */
-.theme-toggle {
+.hdrbtn {
   flex: none;
   display: flex; align-items: center; justify-content: center;
   /* Icon only, so this changes nothing on screen — but a button with no
@@ -483,8 +651,8 @@ body {
   transition: background .15s ease, border-color .15s ease, color .15s ease;
 }
 
-.theme-toggle:hover { background: var(--fill-hi); color: var(--ink); }
-.theme-toggle:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+.hdrbtn:hover { background: var(--fill-hi); color: var(--ink); }
+.hdrbtn:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
 
 
 /* One icon each way round: the sun offers the light theme, so it shows
@@ -495,9 +663,30 @@ body {
 
 /* ---------- tabs ---------- */
 
-.tabs {
-  display: flex; gap: 6px; padding: 10px 12px;
+/* ---------- the tab row ----------
+
+   Navigation on the left, the things you do to the draft on the right, in one
+   band. They were stacked: a 53px tab bar over a 43px action bar, under a
+   57px header, which is 153px of chrome before a single player's name — 17%
+   of a 900px screen spent on furniture, for four controls nobody presses
+   twice in a draft.
+
+   The 43px goes to the board rather than being pocketed, so nothing below
+   this moves and the board gains a whole round.
+
+   The band carries the paint. Neither child does, which is what lets the
+   wrapper be the thing that hides: an empty band with a background and a
+   bottom border still draws a line across the screen. */
+.tabrow {
+  display: flex; align-items: center; gap: 14px;
+  padding: 0 12px;
   background: var(--card); border-bottom: 1px solid var(--line);
+}
+.tabrow[hidden] { display: none; }
+
+.tabs {
+  display: flex; gap: 6px; padding: 10px 0;
+  flex: 1 1 auto; min-width: 0;
   overflow-x: auto;
 }
 
@@ -512,10 +701,12 @@ body {
 
 /* ---------- action bar ---------- */
 
+/* Right of the tabs, and it does not shrink: these are the controls somebody
+   reaches for when something has gone wrong, and a Discard button that has
+   scrolled out of reach is worse than one taking up room. */
 .actionbar {
-  display: flex; gap: 8px; padding: 8px 12px;
-  background: var(--card); border-bottom: 1px solid var(--line);
-  overflow-x: auto;
+  display: flex; gap: 8px; padding: 8px 0;
+  flex: none;
 }
 
 .mini {
@@ -535,6 +726,24 @@ body {
 .mini:disabled { opacity: .45; cursor: default; }
 .mini.active { background: var(--navy); color: #fff; }
 .mini.active:hover { background: var(--navy-soft); }
+
+/* Stacked again on a phone. The tab strip already scrolls sideways at this
+   width, and feeding the action buttons into the same scroller puts "Discard
+   draft" behind five tabs — which is the one control that must not be hard to
+   reach. Vertical space is scarcer here and this spends 43px of it; that is
+   the right way round.
+
+   Below the rules it overrides, and that is not a filing preference: a media
+   query carries no specificity, so at equal weight source order still
+   decides. Written above them — which is where it went the first time — the
+   query matched, every rule in it was inert, and the tab strip rendered
+   471px wide inside a 390px phone. */
+@media (max-width: 760px) {
+  .tabrow { flex-direction: column; align-items: stretch; gap: 0; padding: 0; }
+  .tabs { padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  .actionbar { padding: 8px 12px; overflow-x: auto; }
+}
+
 
 /* ---------- live pick ticker ---------- */
 
@@ -1085,11 +1294,49 @@ tr.drafted .ovr { color: var(--ink-light); }
 .board .hd {
   background: var(--board-hd); color: var(--ink-mid);
   font-size: var(--fs-2xs); font-weight: 700; text-align: center;
-  padding: 5px 2px; border-radius: var(--r-xs);
+  padding: 5px 3px 4px; border-radius: var(--r-xs);
+}
+/* The name owns the truncation, not the head. It used to sit on .hd itself,
+   which was fine while a head held one line of text and clips the roster
+   strip the moment it holds two. */
+.board .hd-name {
+  display: block;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
-.board .hd.me { background: var(--navy); color: #fff; }
+/* What each team has, four chips wide. See rosterStrip(): the positions are
+   derived from FORCED_LATE rather than listed, so a league that changes shape
+   cannot leave this behind.
+
+   Every chip carries its own ground — white on a position solid, which is the
+   contract those colours were darkened to meet — so the strip is legible on
+   the board head and on the navy of your own column alike, and the header
+   behind it is never part of the sum. */
+.board .hd-roster {
+  display: flex; gap: 2px; justify-content: center; margin-top: 3px;
+}
+.board .hd-pos {
+  flex: 1 1 0; min-width: 0;
+  border-radius: var(--r-xs);
+  font-size: var(--fs-2xs); font-weight: 700; line-height: 1.3;
+  color: #fff;
+}
+/* Nothing there yet, and drawn rather than dropped: the gap is the fact
+   somebody is reading the strip for. Muted fill and the tertiary tone, which
+   is the same pair a disabled control uses and clears its own bar — a
+   position colour at zero would say "has one". */
+.board .hd-pos.none { background: var(--fill); color: var(--ink-light); }
+.board .hd-pos.QB  { background: var(--qb); }
+.board .hd-pos.RB  { background: var(--rb); }
+.board .hd-pos.WR  { background: var(--wr); }
+.board .hd-pos.TE  { background: var(--te); }
+.board .hd-pos.K   { background: var(--k); }
+.board .hd-pos.DST { background: var(--dst); }
+
+/* The head of the marked column, so the gold reads as one continuous column
+   rather than as a run of separately outlined cells. Navy and white stay —
+   gold is a mark and never type. */
+.board .hd.me { background: var(--navy); color: #fff; box-shadow: inset 0 -3px 0 var(--mine); }
 
 .board .rd {
   background: var(--well); color: var(--ink-light);
@@ -1111,13 +1358,66 @@ tr.drafted .ovr { color: var(--ink-light); }
    have called the old one wrong; the new one reads as a number that has slipped
    its box. Same failure as the lopsided tab pill, and found the same way —
    by eye first, then measured. */
+/* --ink-mid rather than --ink-light, so the pick code and the overall number
+   in the corner are not the same weight. Two numbers in one cell at one tone
+   is two numbers competing; the code is the one being read. */
 .board .cell.empty {
-  color: var(--ink-light); font-variant-numeric: tabular-nums;
-  display: flex; align-items: center; justify-content: center;
+  position: relative;
+  color: var(--ink-mid); font-variant-numeric: tabular-nums;
+  display: flex; align-items: center; justify-content: center; gap: 4px;
 }
-/* Blue text on a card, not blue under white, so it takes the lighter --link. */
-.board .cell.now   { background: var(--card); border: 2px dashed var(--blue); color: var(--link); font-weight: 700; }
-.board .cell.mine  { outline: 2px solid var(--blue); outline-offset: -2px; }
+/* How far away the pick is. Corner, tertiary tone, and out of the flow so it
+   cannot push the code off centre. */
+.board .cell-ovr {
+  position: absolute; top: 3px; right: 5px;
+  font-size: var(--fs-2xs); font-weight: 400; color: var(--ink-light);
+}
+/* The clock owns the cell it is in, so the corner number stands down. Two
+   facts in a 74px box is one too many and the countdown is the one being
+   watched — the same rule the direction arrow follows one line up. */
+.board .cell.now .cell-ovr { display: none; }
+/* Two rings, and they answer two different questions.
+
+   Gold is *whose*: every cell in your column, drafted or not. The empty ones
+   are the half that was missing — the class only went on a filled cell, so
+   the board could tell you where you had been and not where you were going,
+   which is the one thing a snake board is for. Four rounds out, in a
+   twelve-team room, "when do I pick again" was a counting exercise.
+
+   White is *where the draft is*, and it moves a cell at a time. It used to be
+   a dashed blue border, which is the same blue as the outline beside it, the
+   focus ring, the selected tab and the header on your turn.
+
+   Both are drawn as inset box-shadows rather than as a border or an outline,
+   and that is not a style preference:
+
+   - A `border` is inside the box under `box-sizing: border-box`, so 2px of it
+     eats 2px of the cell's padding — the on-the-clock cell was 4px narrower
+     inside than every other cell on the board, and its text sat 2px higher.
+   - An `outline` does not follow `border-radius` in every engine, and it
+     cannot be layered, which the keyline needs.
+
+   The keyline is the second half of the pair. See --mine: no single colour
+   clears 3:1 on both a position solid and an empty cell in both themes, so
+   the ring is gold-then-keyline and one of the two always has the surface. */
+.board .cell.now {
+  background: var(--card); color: var(--link); font-weight: 700;
+  box-shadow: inset 0 0 0 2px var(--live-ring), inset 0 0 0 3px var(--ring-edge);
+}
+.board .cell.mine {
+  box-shadow: inset 0 0 0 2px var(--mine), inset 0 0 0 3px var(--ring-edge);
+}
+/* Your own turn is both facts at once, so it draws both: white on the inside,
+   where the draft is, and your gold immediately outside it. Letting one win
+   would throw away the other, and this is the single cell on the board where
+   they coincide. */
+.board .cell.now.mine {
+  box-shadow:
+    inset 0 0 0 2px var(--live-ring),
+    inset 0 0 0 3px var(--ring-edge),
+    inset 0 0 0 5px var(--mine),
+    inset 0 0 0 6px var(--ring-edge);
+}
 
 .board .cell.QB  { background: var(--qb); }
 .board .cell.RB  { background: var(--rb); }
@@ -1248,7 +1548,7 @@ tr.drafted .ovr { color: var(--ink-light); }
   border-radius: var(--r-md); padding: 10px 12px; margin-bottom: 8px;
 }
 
-.pick-card.mine { border-color: var(--blue); background: var(--row-blue); }
+.pick-card.mine { border-color: var(--mine); background: var(--row-mine); }
 .pick-no { flex: none; width: 38px; font-family: Poppins, sans-serif; font-weight: 700; font-size: var(--fs-sm); color: var(--ink-mid); }
 .pick-team { font-size: var(--fs-xs); color: var(--ink-light); margin-bottom: 2px; }
 .pick-name { font-weight: 600; font-size: var(--fs-sm); line-height: 1.2; }
@@ -1310,7 +1610,10 @@ tr.drafted .ovr { color: var(--ink-light); }
 
 .standings { width: 100%; }
 .standings td.rk { width: 26px; color: var(--ink-light); font-variant-numeric: tabular-nums; }
-.standings tr.me { background: var(--blue-pale); }
+/* --pale-mine rather than --blue-pale: --blue-pale is still the hover on a
+   ghost button and the selected sheet tab, which are states. This row is an
+   identity. */
+.standings tr.me { background: var(--pale-mine); }
 .standings tr.me td { font-weight: 600; }
 .standings td.gr { text-align: right; font-family: Poppins, sans-serif; font-weight: 700; }
 
@@ -1340,7 +1643,7 @@ tr.drafted .ovr { color: var(--ink-light); }
   max-height: calc(100vh - 60px);
   display: flex; flex-direction: column;
   background: var(--card); border-radius: var(--r-lg); overflow: hidden;
-  box-shadow: 0 24px 60px rgba(6,12,22,.45);
+  box-shadow: var(--elev-4);
 }
 
 @media (max-width: 620px) {
@@ -1826,160 +2129,270 @@ tr.drafted .ovr { color: var(--ink-light); }
    different numbers of rooms and that is the point: they read as a timeline
    rather than as a grid with gaps in it. align-items: start keeps each
    column its own height instead of stretching the short ones. */
-/* ---------- the door, and the rooms turning through it ----------
+/* ---------- the doorway, and the rooms turning through it ----------
 
-   The doorway carries its own ground — a navy wall and a lit room — so it is
-   the same object in both themes, the same licence .hero-band already takes.
-   The list beside it uses page tokens, because it is page furniture. */
-/* The list is capped rather than left to fill the column, and the cap is 560
-   so the block's right edge lands on the pillars' below it.
+   Rebuilt after somebody who had never seen the page called it "the books
+   with the room names". That is the correct read of what was there: a 4:5
+   panel, hinged on its left edge, swinging open, with two embossed rectangles
+   on its face. Every one of those is a hardback cover. None of them is a door.
 
-   At 1fr it ran to 624px for rows whose longest line is 124px, so the selected
-   row drew as a wide, mostly empty rectangle and the door and the list read as
-   two objects with a gap rather than one composition.
+   What makes a door read as a door is construction, not detail, and there are
+   five parts to it. Grain, brass and a knob are the last of the five and the
+   old version had only those.
 
-   It was 480 first, on the argument that tighter rows beat a flush edge. That
-   was measured afterwards and the argument does not survive it: the row is
-   124px of text either way, so 480 leaves 356px empty and 560 leaves 436 —
-   80px of slack, not tight against loose. The real gain was 624 → 480; going
-   to 560 gives a quarter of it back and buys an edge shared with every other
-   section on the page. Alignment is a property somebody can see; 80px inside
-   an already three-quarters-empty row is not.
+   **Proportion.** A door is 36 by 80 inches — 1:2.2. The old opening was
+   1:0.8, which is a book, a tablet or a picture frame. The opening is 1:2.15
+   now, and it is the single change that does most of the work.
 
-   The door stays 480: it carries the placard better than 420 and drops the
-   blurb from four lines to three. */
+   **A wall with thickness.** A door is a hole cut in something. The old jamb
+   was a 12px flat border, which is a mount rather than a wall. The reveal —
+   the sides of the hole, seen through the opening — is *painted* rather than
+   built from real 3D faces, and that is measured rather than lazy: the
+   perspective has to stay long or the swinging panel magnifies until it
+   spills over the section above it, and at that focal length a 40px reveal on
+   a 280px doorway resolves to about three pixels of visible offset. Real
+   geometry that renders as three pixels costs the same as a gradient and
+   reads as nothing.
+
+   **Thickness on the door itself.** This one *is* real 3D and has to be. The
+   panel turns 64 degrees, so its leading edge swings round to face the reader,
+   and a painted edge does not survive that. `.door-edge` is a face at 90
+   degrees to the panel. After the proportion it is the strongest cue in here,
+   because it is the one a book cover cannot fake.
+
+   **A floor.** Books float; doors stand on something. The sill, the contact
+   shadow under the leading edge and the light the open room throws onto the
+   floor are one object between them, and without them the whole assembly is
+   a rectangle on a background again.
+
+   **A handle at human height.** The old knob was 13px on a 456px panel —
+   2.9% of the width, dead centre vertically. A real handle sits at 1.05m on a
+   2.03m door, which is 48% down, and is about 7% of the width. Small and
+   centred reads as a clasp, which is one more thing books have and doors
+   do not.
+
+   Two constraints inherited from the version this replaces, both still live:
+
+   Nothing between .doorway-outer and .door may set an overflow. Any value but
+   visible establishes a flattening context that `transform-style: preserve-3d`
+   cannot cross, and the door stops swinging and starts squashing. The
+   interior clips; the frame does not.
+
+   `margin: auto` is never used to centre the doorway. An auto margin on a
+   grid item defeats the default stretch and makes the item shrink-wrap its
+   content — and every child of .doorway is absolutely positioned, so its
+   intrinsic width is zero. The two together collapse the whole thing while it
+   still reports a perfectly healthy max-width. `justify-self` instead.
+
+   The door swings *towards* the reader. Away is what it really does seen from
+   inside the room, and at that angle it is edge-on, unlit and invisible — the
+   physics is right and there is no picture.
+
+   The whole assembly is dark under both themes, the same licence .hero-band
+   takes, which is what lets everything in here name white and the navies
+   directly. It is a lit object rather than a page surface, and it is the one
+   place --elev-* does not apply: those model a single overhead light on a
+   flat page, and this has a light of its own coming out of it. */
+
+/* The list is capped at 560 so the block's right edge lands on the pillars'
+   below it. At 1fr it ran to 624px for rows whose longest line is 124px, so
+   the door and the list read as two objects with a gap rather than as one
+   composition. */
 .roomstage {
   display: grid;
   grid-template-columns: minmax(0, 480px) minmax(0, 1fr);
   gap: 40px; align-items: center; margin-bottom: 46px;
 }
 
-/* A door swung towards the reader brings its far edge closer, and closer means
-   bigger. At a short perspective the panel renders oversize and spills out of
-   the section over whatever sits above it; 2600px holds it to about 16%, and
-   the padding absorbs the rest instead of letting it overlap. */
-.doorway-outer { perspective: 2600px; padding: 58px 0; }
+/* The door and its card. Relative, because the card overlaps the doorway. */
+.doorstage { position: relative; min-height: 560px; display: flex; align-items: center; }
 
-/* No overflow on this, ever — it is the door's 3D ancestor. Any value but
-   visible establishes a flattening context that preserve-3d cannot cross, and
-   the door stops swinging and starts squashing. The interior clips instead,
-   which is why .door-room is a sibling of the door rather than its parent. */
+/* 2000px is a long lens and it is not a taste decision. A door swung towards
+   the reader brings its leading edge closer, and closer means bigger: the
+   magnification is P / (P - w·sin θ), which at 228px of door and 64 degrees is
+   1.11 here and would be 1.42 at 700px. The shorter lens gives a far better
+   reveal and renders the panel half again as tall as its own frame, over
+   whatever sits above it.
+
+   The angle is set by how much lit room is left to see, and that is a
+   three-way trade rather than a preference: the panel covers cos θ of the
+   opening, the card covers a fixed strip on the right, and what remains
+   between them is the whole point of opening it. At 58° and a 264px card the
+   room showed through a 59px slot — a door ajar rather than a door open.
+   64° and 250px give 104px of the 228, which is 46% of the opening. Past
+   about 73° the placard starts to squeeze and the panel stops reading as a
+   door at all. */
+.doorway-outer {
+  position: relative;
+  perspective: 2000px;
+  width: 280px; padding: 44px 0;
+}
+
 .doorway {
-  position: relative; aspect-ratio: 4 / 5;
+  position: relative; width: 100%; aspect-ratio: 280 / 560;
+  transform-style: preserve-3d;
+}
+
+/* ---- the wall ---- */
+
+/* Lit from above, like everything else on the page. The grain is two
+   near-invisible gradients rather than an image: at 4% alpha it does nothing
+   you could point at and it stops 300 by 560 pixels of flat navy reading as
+   a swatch. */
+.wall {
+  position: absolute; inset: 0;
+  border-radius: var(--r-sm);
+  background:
+    linear-gradient(180deg, #2B4A6C 0%, #1B3350 42%, #0E1E36 100%),
+    repeating-linear-gradient(90deg, rgba(255,255,255,.04) 0 1px, transparent 1px 7px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .13),
+    inset 0 -40px 60px -40px rgba(0, 0, 0, .55);
+}
+
+/* Light from the open room falling on the wall around the opening. It is the
+   cheapest thing in here and it is most of why the room reads as lit rather
+   than as a dark rectangle with a picture in it. */
+.wall-spill {
+  position: absolute; inset: 0; border-radius: var(--r-sm);
+  background: radial-gradient(58% 42% at 50% 62%, rgba(237, 96, 17, .20), transparent 70%);
+  opacity: 0; transition: opacity .7s ease .12s;
+}
+.roomstage.open .wall-spill { opacity: 1; }
+
+/* ---- the opening ----
+
+   1:2.15, against a real door's 1:2.2. The inner shadow is the reveal: a hard
+   dark line at the head, softer down the sides, and the two thin gradient
+   edges below are the lit and unlit faces of the wall's thickness. */
+.opening {
+  position: absolute; left: 26px; right: 26px; top: 26px; bottom: 0;
+  transform-style: preserve-3d;
+  box-shadow:
+    inset 0 8px 14px -6px rgba(0, 0, 0, .85),
+    inset 8px 0 14px -8px rgba(0, 0, 0, .70),
+    inset -8px 0 14px -8px rgba(0, 0, 0, .55),
+    0 0 0 1px rgba(0, 0, 0, .45);
+}
+/* The reveal's two faces. The left one takes the light and the right one is
+   in shade, which is the whole reason a hole looks like a hole. */
+.opening::before, .opening::after {
+  content: ""; position: absolute; top: 0; bottom: 0; width: 5px;
+  pointer-events: none; z-index: 3;
+}
+.opening::before { left: 0;  background: linear-gradient(90deg, rgba(255,255,255,.16), transparent); }
+.opening::after  { right: 0; background: linear-gradient(270deg, rgba(0,0,0,.55), transparent); }
+
+/* Seen only while the room turns. Without it the swap rotates to edge-on and
+   you look straight through the wall. */
+.shaft {
+  position: absolute; inset: 0;
+  background: linear-gradient(180deg, #060C16, #02060C);
+}
+
+/* Room and door together, so a change of room reads as a drum revolving
+   inside a fixed frame rather than as the wall itself spinning. */
+.swap {
+  position: absolute; inset: 0;
   transform-style: preserve-3d;
   transition: transform .46s cubic-bezier(.6, 0, .3, 1);
 }
-.roomstage.turning .doorway { transform: rotateY(90deg); }
+.roomstage.turning .swap { transform: rotateY(90deg); }
 
-.jamb {
-  position: absolute; inset: 0;
-  background: linear-gradient(180deg, var(--navy-soft), var(--navy-deep));
-  border-radius: 10px 10px var(--r-xs) var(--r-xs);
-  box-shadow: 0 24px 50px rgba(6, 12, 22, .45);
-}
+/* ---- the room beyond ---- */
 
 .door-room {
-  position: absolute; inset: 12px; overflow: hidden;
-  border-radius: 6px 6px 2px 2px;
+  position: absolute; inset: 0; overflow: hidden;
+  background: linear-gradient(180deg, #14263F 0%, #0A1526 62%, #060D18 100%);
+}
+/* The far wall, lit warm, and low enough that the light reads as coming from
+   inside the room rather than from a lamp pointed at the reader. */
+.room-far {
+  position: absolute; inset: 0;
   background:
-    radial-gradient(130% 90% at 78% 10%, rgba(237, 96, 17, .20), transparent 62%),
-    linear-gradient(180deg, #11223D, #070F1D);
+    radial-gradient(72% 44% at 50% 30%, rgba(237, 96, 17, .30), transparent 68%),
+    radial-gradient(120% 60% at 50% 100%, rgba(237, 96, 17, .18), transparent 70%);
 }
-.door-room::before {
-  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 40%;
-  background: linear-gradient(0deg, rgba(237, 96, 17, .14), transparent);
-}
-
-/* Clear of the swing. The open door covers about 47% of the frame, and text
-   under it is hidden by the thing that is supposed to be revealing it. */
-.door-room-inner {
-  position: absolute; left: 50%; right: 18px; bottom: 22px;
-  display: flex; flex-direction: column; align-items: flex-start;
-}
-/* Literal white, not a token.
-
-   This was `var(--band-ink)`, which is declared on `.hero-band` rather than on
-   `:root` — so out here it resolves to nothing, the property falls back to
-   inherit, and the room's name picked up the page's dark ink and vanished
-   against a dark interior in the light theme. The room carries its own ground
-   in both themes, which is exactly the case where naming white directly is
-   allowed. */
-.door-room-name {
-  font-size: var(--fs-base); font-weight: 700; color: #fff;
-  line-height: 1.2; margin-bottom: 7px;
-}
-.door-room-status {
-  font-size: var(--fs-2xs); font-weight: 700;
-  letter-spacing: .12em; text-transform: uppercase;
-  color: #FFB98A; margin-bottom: 9px;
-}
-.door-room-status.soon { color: #9FB3CA; }
-.door-room-blurb { font-size: var(--fs-sm); line-height: 1.45; color: #D9E3EF; }
-.door-room-season {
-  font-size: var(--fs-2xs); font-weight: 700;
-  letter-spacing: .12em; text-transform: uppercase;
-  color: #8194AC; margin-top: 12px;
+/* A floor inside the room, which is what gives the interior a bottom. The
+   opening runs to the ground, so without it the room is a lit fog. */
+.room-floor {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 26%;
+  background: linear-gradient(0deg, rgba(237, 96, 17, .26), rgba(6, 13, 24, .10));
+  box-shadow: inset 0 1px 0 rgba(255, 200, 150, .18);
 }
 
-/* The interior text arrives once the door is out of the way, rather than
-   sitting there waiting to be uncovered. */
-.door-room-inner > * {
-  opacity: 0; transform: translateY(6px);
-  transition: opacity .4s ease, transform .4s ease;
-}
-.roomstage.open .door-room-inner > * { opacity: 1; transform: none; }
-.roomstage.open .door-room-name   { transition-delay: .30s; }
-.roomstage.open .door-room-status { transition-delay: .38s; }
-.roomstage.open .door-room-blurb  { transition-delay: .44s; }
-.roomstage.open .door-room-season { transition-delay: .52s; }
+/* ---- the door ---- */
 
 .door {
-  position: absolute; inset: 12px;
-  transform-origin: left center; transform: rotateY(0deg);
+  position: absolute; inset: 0;
+  transform-origin: left center; transform: rotateY(0deg) translateZ(-3px);
   transition: transform .78s cubic-bezier(.22, .9, .24, 1.06);
   transform-style: preserve-3d;
-  border-radius: 6px 6px 2px 2px;
-  box-shadow: 18px 6px 34px rgba(6, 12, 22, .42);
   display: flex; align-items: center; justify-content: center;
 }
-.roomstage.open .door { transform: rotateY(-62deg); }
+.roomstage.open .door { transform: rotateY(-64deg) translateZ(-3px); }
 
+/* Stiles, rails and two panels, at the proportions a real six-panel door
+   uses: a tall upper panel, a lock rail at handle height, a shorter lower
+   one. The old face carried two equal 30% rectangles, which is a book cover's
+   embossing rather than joinery. */
 .door-face {
   position: absolute; inset: 0; overflow: hidden;
-  border-radius: 6px 6px 2px 2px;
-  background: linear-gradient(102deg, #24406B 0%, #1A3053 46%, #14263F 100%);
-  border: 1px solid rgba(255, 255, 255, .10);
+  background:
+    linear-gradient(102deg, #2A4972 0%, #1C3459 46%, #142743 100%);
+  border: 1px solid rgba(255, 255, 255, .12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .10);
 }
 .door-face::before, .door-face::after {
-  content: ""; position: absolute; left: 14%; right: 14%;
-  border: 1px solid rgba(255, 255, 255, .07);
-  border-radius: 3px;
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, .35);
+  content: ""; position: absolute; left: 11%; right: 11%;
+  border-radius: var(--r-xs);
+  background: linear-gradient(160deg, rgba(0,0,0,.22), rgba(255,255,255,.05));
+  box-shadow:
+    inset 0 2px 3px rgba(0, 0, 0, .55),
+    inset 0 -1px 0 rgba(255, 255, 255, .10);
 }
-.door-face::before { top: 7%; height: 30%; }
-.door-face::after { bottom: 7%; height: 30%; }
+.door-face::before { top: 8%;  height: 35%; }
+.door-face::after  { top: 57%; height: 32%; }
+
+/* The panel's thickness, and the only genuinely 3D piece besides the swing.
+   rotateY(-90deg) about the right edge lays this face straight back into the
+   opening; at 58 degrees open it turns towards the reader and catches the
+   light. Take this out and the door is a sheet of paper again. */
+.door-edge {
+  position: absolute; top: 0; bottom: 0; right: 0; width: 9px;
+  transform-origin: right center; transform: rotateY(-90deg);
+  background: linear-gradient(180deg, #4B6E99, #22395C);
+}
 
 /* A swung door turns away from the light. Without this the panel is as bright
    open as shut, which is the tell that it is a rectangle rather than a door. */
 .door-shade {
-  position: absolute; inset: 0; border-radius: 6px 6px 2px 2px;
-  background: linear-gradient(270deg, rgba(0, 0, 0, .50), rgba(0, 0, 0, .10));
+  position: absolute; inset: 0;
+  background: linear-gradient(270deg, rgba(0, 0, 0, .52), rgba(0, 0, 0, .08));
   opacity: 0; transition: opacity .78s ease;
 }
 .roomstage.open .door-shade { opacity: 1; }
 
-.knob {
-  position: absolute; right: 9%; top: 50%;
-  width: 13px; height: 13px; margin-top: -6px; border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #E6CE86, #C9A227 55%, #9A7B18);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, .55);
+/* 1.05m on a 2.03m door is 48% down, and a lever is about 7% of the width.
+   A backplate and a lever, rather than a 13px stud in the vertical centre. */
+.handle {
+  position: absolute; right: 6%; top: 48%;
+  width: 7px; height: 34px; margin-top: -17px; border-radius: var(--r-pill);
+  background: linear-gradient(140deg, #E8D294, #C9A227 55%, #8E7015);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .6), inset 0 1px 0 rgba(255, 255, 255, .5);
+}
+.handle::before {
+  content: ""; position: absolute; right: 4px; top: 9px;
+  width: 24px; height: 6px; border-radius: var(--r-pill);
+  background: linear-gradient(180deg, #EBD79F, #B8901D);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .55), inset 0 1px 0 rgba(255, 255, 255, .45);
 }
 
 /* The placard. Brass rather than a brand colour on purpose — it is furniture,
    and it must not read as a position solid or a club mark. */
 .placard {
-  position: relative; width: 74%; padding: 10px 12px; text-align: center;
-  border-radius: 3px;
+  position: relative; width: 74%; padding: 9px 10px; text-align: center;
+  border-radius: var(--r-xs);
   background: linear-gradient(158deg, #E6CE86, #C9A227 52%, #9A7B18);
   border: 1px solid rgba(0, 0, 0, .35);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .45), 0 3px 8px rgba(0, 0, 0, .5);
@@ -1997,6 +2410,108 @@ tr.drafted .ovr { color: var(--ink-light); }
 }
 .placard::before { left: 6px; }
 .placard::after { right: 6px; }
+
+/* ---- the ground ----
+
+   Three elements that are one object: the sill the door closes onto, the
+   light the open room throws forward, and the shadow the assembly casts.
+   Together they are what stops the whole thing floating. */
+.sill {
+  position: absolute; left: 18px; right: 18px; bottom: -6px; height: 8px;
+  border-radius: 0 0 var(--r-xs) var(--r-xs);
+  background: linear-gradient(180deg, #35547A, #16263D);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, .6);
+}
+.floor-spill {
+  position: absolute; left: -14%; right: -14%; bottom: 4px; height: 76px;
+  border-radius: 50%;
+  background: radial-gradient(50% 60% at 50% 0%, rgba(237, 96, 17, .34), transparent 72%);
+  filter: blur(9px);
+  opacity: 0; transition: opacity .7s ease .18s;
+  pointer-events: none;
+}
+.roomstage.open .floor-spill { opacity: 1; }
+.floor-shadow {
+  position: absolute; left: 4%; right: 4%; bottom: 12px; height: 46px;
+  border-radius: 50%;
+  background: radial-gradient(50% 58% at 50% 50%, rgba(3, 8, 16, .60), transparent 72%);
+  filter: blur(11px);
+  pointer-events: none;
+}
+
+/* ---- the room's own words ----
+
+   Outside the opening, overlapping it, which is the arrangement that lets the
+   door be door-shaped at all. It carries its own dark ground under both
+   themes, so white and the band tones are legal on it. */
+.room-card {
+  position: absolute; right: 0; top: 50%; transform: translateY(-50%);
+  width: 250px; z-index: 2;
+  padding: 18px 20px 20px;
+  border-radius: var(--r-md);
+  border: 1px solid rgba(255, 255, 255, .13);
+  background: linear-gradient(158deg, rgba(26, 48, 78, .96), rgba(9, 19, 34, .97));
+  box-shadow: var(--elev-4);
+  backdrop-filter: blur(6px);
+}
+/* The card arrives once the door is out of the way, rather than sitting there
+   waiting to be uncovered. */
+.room-card > * {
+  opacity: 0; transform: translateX(-8px);
+  transition: opacity .42s ease, transform .42s ease;
+}
+.roomstage.open .room-card > * { opacity: 1; transform: none; }
+.roomstage.open .door-room-status { transition-delay: .30s; }
+.roomstage.open .door-room-name   { transition-delay: .36s; }
+.roomstage.open .door-room-blurb  { transition-delay: .42s; }
+.roomstage.open .door-room-season { transition-delay: .48s; }
+.roomstage.open .room-enter       { transition-delay: .54s; }
+
+.door-room-status {
+  display: inline-block; margin-bottom: 9px;
+  padding: 3px 9px; border-radius: var(--r-pill);
+  font-size: var(--fs-2xs); font-weight: 700;
+  letter-spacing: .12em; text-transform: uppercase;
+  color: #FFC49B; background: rgba(237, 96, 17, .18);
+  border: 1px solid rgba(237, 96, 17, .38);
+}
+.door-room-status.soon {
+  color: #A9BED6; background: rgba(255, 255, 255, .07);
+  border-color: rgba(255, 255, 255, .16);
+}
+/* Literal white, not a token. --band-ink is declared on .hero-band rather
+   than on :root, so out here it resolves to nothing, the property falls back
+   to inherit, and the room's name picks up the page's dark ink and vanishes
+   against a dark card in the light theme. The card carries its own ground in
+   both themes, which is exactly the case where naming white is allowed. */
+.door-room-name {
+  margin: 0 0 8px; font-size: var(--fs-lg); font-weight: 700;
+  color: #fff; line-height: 1.2;
+}
+.door-room-blurb {
+  margin: 0; font-size: var(--fs-sm); line-height: 1.5; color: #D3DFEC;
+}
+.door-room-season {
+  display: block; margin-top: 12px;
+  font-size: var(--fs-2xs); font-weight: 700;
+  letter-spacing: .12em; text-transform: uppercase; color: #8DA2BB;
+}
+/* Deliberately not orange. One primary action per screen and the hero above
+   already has it; this is the same destination reached from further down the
+   page, so it states rather than shouts. */
+.room-enter {
+  display: inline-block; margin-top: 14px;
+  padding: 8px 14px; border-radius: var(--r-sm);
+  font-size: var(--fs-sm); font-weight: 700; text-decoration: none;
+  color: #fff; background: rgba(255, 255, 255, .10);
+  border: 1px solid rgba(255, 255, 255, .22);
+  transition: background .15s ease, border-color .15s ease;
+}
+.room-enter:hover { background: rgba(255, 255, 255, .17); border-color: rgba(255, 255, 255, .34); }
+.room-enter:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.room-enter::after { content: " \2192"; }
+.room-enter[hidden] { display: none; }
+
 
 /* ---------- the list beside the door ---------- */
 .roomlist { display: flex; flex-direction: column; gap: 18px; max-width: 560px; }
@@ -2034,31 +2549,36 @@ tr.drafted .ovr { color: var(--ink-light); }
 
 @media (max-width: 760px) {
   .roomstage { grid-template-columns: 1fr; gap: 22px; }
-  /* justify-self, never `margin: 0 auto`: an auto margin on a grid item
+
+  /* The card can no longer overlap the doorway — at this width there is
+     nothing to overlap into — so the stage stops being a canvas and becomes
+     a column, and the card goes under the door.
+
+     justify-self, never `margin: 0 auto`: an auto margin on a grid item
      defeats stretch and makes it shrink-wrap, and every child of .doorway is
      absolutely positioned — so its intrinsic width is zero and the whole
      doorway collapses while still reporting a healthy max-width. */
-  .doorway-outer { width: 100%; max-width: 320px; justify-self: center; padding: 30px 0; }
+  .doorstage {
+    flex-direction: column; align-items: center;
+    min-height: 0; justify-self: center; width: 100%;
+  }
+  .doorway-outer { width: min(74vw, 250px); padding: 24px 0 12px; }
+  .room-card {
+    position: static; transform: none;
+    width: 100%; max-width: 340px; margin-top: 6px;
+  }
+  .roomstage.open .room-card > * { transform: none; }
 
-  /* The door opens further on a phone, and the text column moves left to use
-     what the swing gives back.
+  /* The door opens further on a phone.
 
-     A swung door covers cos(θ) of the frame, so opening it *further* is what
-     frees up width — the intuition runs the other way and it is wrong. At 48°
-     and 54° the panel ran straight over the text it is supposed to be
-     revealing; that was measured rather than reasoned, after reasoning got it
-     backwards.
-
-     At the desktop 62° the text column is about 130px on a 320px frame, and
-     "The Draft Room" wraps to two lines on the one panel whose whole job is
-     the room's name. 68° gives 142px and one line, and drops the blurb from
-     six lines to four. Past about 73° the placard starts to squeeze and the
-     door stops reading as a door — 79px of visible face against 107 here.
-
-     Phone only. Desktop has width to spare and 62° reads better on a door
-     that size. */
-  .roomstage.open .door { transform: rotateY(-68deg); }
-  .door-room-inner { left: 42%; }
+     A swung door covers cos(θ) of the opening, so opening it *further* is
+     what shows more of the room behind it — the intuition runs the other way
+     and it is wrong. It mattered more when the copy sat inside the opening
+     and the panel ran over the words it was supposed to be revealing; now
+     that the card is outside, this is simply about how much lit room a
+     250px-wide doorway can show. Past about 73° the placard starts to squeeze
+     and the door stops reading as a door. */
+  .roomstage.open .door { transform: rotateY(-66deg) translateZ(-3px); }
 }
 
 /* The header panel is a flat list and can reflow to any column count. The
@@ -2193,14 +2713,141 @@ a.room.live:hover {
 .landing-resume .sub { font-size: var(--fs-xs); color: var(--ink-mid); margin-top: 3px; }
 .landing-resume .btnrow { margin-left: auto; display: flex; gap: 8px; }
 
-.pillars {
-  display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;
-  border-top: 1px solid var(--line); padding-top: 30px;
-}
-@media (max-width: 760px) { .pillars { grid-template-columns: 1fr; } }
+/* ---------- claim and proof ----------
 
-.pillar b { display: block; font-size: var(--fs-sm); font-weight: 700; margin-bottom: 5px; }
-.pillar span { font-size: var(--fs-sm); color: var(--ink-mid); line-height: 1.6; }
+   Three claims down the left, and the thing each one claims running on the
+   right. The list is the control as well as the index, the same shape the
+   rooms door uses, and for the same reason: a visitor who wants to look at
+   one of them should not have to wait for the timer to come round.
+
+   The stage is a fixed minimum height. Three stages of different lengths in a
+   box that sizes to its contents means the section grows and shrinks under
+   the reader every seven seconds, and anything below it walks up and down the
+   page — which is the failure a carousel usually ships with. */
+.proof {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 44px; align-items: center;
+  border-top: 1px solid var(--line); padding-top: 34px;
+}
+
+.proof-eyebrow {
+  margin: 0 0 6px; font-size: var(--fs-2xs); font-weight: 700;
+  letter-spacing: .12em; text-transform: uppercase; color: var(--link);
+}
+.proof-head { margin: 0 0 8px; font-size: var(--fs-2xl); line-height: 1.1; }
+.proof-sub {
+  margin: 0 0 20px; font-size: var(--fs-sm); line-height: 1.6; color: var(--ink-mid);
+  max-width: 44ch;
+}
+
+.proof-list { display: flex; flex-direction: column; gap: 4px; }
+
+/* A button, not a div with a colour on it. This section is a control and the
+   landing page has already shipped one thing that looked clickable and was
+   not — see the rail's "My Team" row, which rendered, contrasted and did
+   nothing for as long as it existed. */
+.pf {
+  display: block; width: 100%; text-align: left; font: inherit;
+  background: transparent; border: 1px solid transparent;
+  border-left: 3px solid transparent;
+  border-radius: var(--r-sm); padding: 11px 14px;
+  color: var(--ink-mid); cursor: pointer;
+  transition: background .15s ease, border-color .15s ease;
+}
+.pf:hover { background: var(--fill); }
+.pf:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.pf.on {
+  background: var(--fill); border-color: var(--line);
+  border-left-color: var(--orange); color: var(--ink);
+}
+.pf b { display: block; font-size: var(--fs-sm); font-weight: 700; color: var(--ink); margin-bottom: 3px; }
+.pf span { display: block; font-size: var(--fs-xs); line-height: 1.55; }
+
+.proof-stage {
+  min-height: 306px;
+  display: flex; align-items: center;
+}
+.proof-stage.empty { display: none; }
+
+.pstage {
+  width: 100%;
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--r-md); padding: 16px 18px 18px;
+  box-shadow: var(--elev-2);
+}
+.pstage-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  margin-bottom: 10px;
+}
+.pstage-label {
+  font-size: var(--fs-2xs); font-weight: 700;
+  letter-spacing: .1em; text-transform: uppercase; color: var(--ink-light);
+}
+.pstage-stamp { font-size: var(--fs-2xs); color: var(--ink-light); font-variant-numeric: tabular-nums; }
+
+/* The dial is the rule being changed, and the point of the claim, so it is
+   the one thing in the stage drawn at full strength. */
+.pstage-dial { display: flex; gap: 4px; }
+.pd {
+  min-width: 30px; text-align: center;
+  padding: 2px 7px; border-radius: var(--r-pill);
+  font-size: var(--fs-xs); font-weight: 700;
+  background: var(--fill); color: var(--ink-light);
+  transition: background .3s ease, color .3s ease;
+}
+.pd.on { background: var(--orange-cta); color: #fff; }
+
+.pstage-note { margin: 0 0 10px; font-size: var(--fs-xs); color: var(--ink-mid); }
+.pstage-foot { margin: 11px 0 0; font-size: var(--fs-2xs); line-height: 1.5; color: var(--ink-light); }
+
+.pstage-rows { list-style: none; margin: 0; padding: 0; }
+.prow {
+  display: flex; align-items: center; gap: 9px;
+  padding: 7px 0; border-bottom: 1px solid var(--hairline);
+  font-size: var(--fs-sm);
+}
+.prow:last-child { border-bottom: 0; }
+.prow-rank {
+  width: 14px; flex: none; text-align: right;
+  font-size: var(--fs-xs); color: var(--ink-light); font-variant-numeric: tabular-nums;
+}
+.prow-name {
+  flex: 1 1 auto; min-width: 0; font-weight: 600; color: var(--ink);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.prow-num { flex: none; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--ink); }
+.prow-score { color: var(--orange-ink); }
+
+/* The subtraction, printed rather than asserted. Tabular figures so the three
+   numbers line up down the column as the players change. */
+.prow-sums {
+  flex: none; display: flex; align-items: baseline; gap: 3px;
+  font-size: var(--fs-xs); color: var(--ink-mid); font-variant-numeric: tabular-nums;
+}
+.prow-sums b { font-weight: 700; color: var(--ink); }
+.prow-sums i { font-style: normal; color: var(--ink-light); padding: 0 1px; }
+.prow-gap { color: var(--ink) !important; }
+
+/* Every chip carries its own ground, the same contract the board head's
+   roster strip runs under: white on a position solid, so the surface behind
+   it is never part of the sum. */
+.pos-chip {
+  flex: none; min-width: 30px; text-align: center;
+  padding: 2px 5px; border-radius: var(--r-xs);
+  font-size: var(--fs-2xs); font-weight: 700; color: #fff;
+}
+.pos-chip.QB  { background: var(--qb); }
+.pos-chip.RB  { background: var(--rb); }
+.pos-chip.WR  { background: var(--wr); }
+.pos-chip.TE  { background: var(--te); }
+.pos-chip.K   { background: var(--k); }
+.pos-chip.DST { background: var(--dst); }
+
+@media (max-width: 860px) {
+  .proof { grid-template-columns: 1fr; gap: 26px; }
+  .proof-stage { min-height: 0; }
+  .prow-sums { display: none; }   /* the name and the score survive; the sum is the first thing a phone gives up */
+}
 
 .landing-foot { margin: 38px 0 0; text-align: center; font-size: var(--fs-xs); color: var(--ink-light); }
 .landing-foot p { margin: 0 0 4px; }
@@ -2407,7 +3054,9 @@ a.room.live:hover {
 .shot-cell.K   { background: var(--k); }
 .shot-cell.DST { background: var(--dst); }
 .shot-cell.empty { background: rgba(255,255,255,.06); }
-.shot-cell.mine { outline: 2px solid rgba(255,255,255,.55); outline-offset: -2px; }
+/* The shot is an excerpt of the real board, so it marks a seat the way the
+   board does. Translucent white was picked before there was a rule to follow. */
+.shot-cell.mine { box-shadow: inset 0 0 0 2px var(--mine), inset 0 0 0 3px var(--ring-edge); }
 
 @media (max-width: 620px) {
   /* The flat region of the gradient tracks the strip, and the strip is the
@@ -2446,7 +3095,7 @@ a.room.live:hover {
   border: 0; border-radius: var(--r-lg); padding: 24px 26px;
   width: min(420px, calc(100vw - 32px));
   background: var(--card); color: var(--ink);
-  box-shadow: 0 24px 60px rgba(6,12,22,.45);
+  box-shadow: var(--elev-4);
 }
 
 .dlg::backdrop { background: rgba(6,12,22,.55); }
@@ -2582,7 +3231,7 @@ a.room.live:hover {
   display: flex; align-items: center; justify-content: center;
   border: 0; border-radius: 50%;
   background: var(--navy); color: #fff;
-  box-shadow: 0 6px 20px rgba(6,12,22,.38);
+  box-shadow: var(--elev-3);
   cursor: pointer;
   /* Out of the way when it is not wanted: invisible, unclickable, and
      untabbable — the tabIndex is handled in JavaScript alongside this. */
@@ -2754,7 +3403,10 @@ a.room.live:hover {
 }
 
 .boardpane .board-scroll {
-  max-height: min(38vh, 340px);
+  /* 43px taller than it was, which is exactly what merging the tab and action
+     bars gave back — spent here rather than pocketed, so nothing below the
+     board moves and it gains a whole round. It showed 5.9 of fourteen. */
+  max-height: min(43vh, 383px);
   overflow: auto;
   overscroll-behavior: contain;   /* the page does not move when this ends */
 }
@@ -2905,7 +3557,7 @@ button.rtm:focus-visible {
     color: #fff; background: var(--navy);
     border: 1px solid var(--navy-soft); border-radius: var(--r-pill);
     padding: 10px 16px; cursor: pointer;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, .35);
+    box-shadow: var(--elev-3);
   }
 
   /* Out of the layout until asked for, so it leaves no gap under the panel. */
@@ -2923,7 +3575,7 @@ button.rtm:focus-visible {
     background: var(--sunken);
     border-top: 1px solid var(--line);
     border-radius: var(--r-lg) var(--r-lg) 0 0;
-    box-shadow: 0 -8px 28px rgba(0, 0, 0, .4);
+    box-shadow: var(--elev-up);
   }
 
   body.rail-open .rail .railcard { flex: none; }
@@ -3141,7 +3793,7 @@ button.rtm:focus-visible {
   font-size: var(--fs-xs); color: var(--ink-mid);
 }
 
-.pickline.mine { border-left-color: var(--blue); background: var(--row-blue); }
+.pickline.mine { border-left-color: var(--mine); background: var(--row-mine); }
 
 .pickno {
   flex: none; font-size: var(--fs-2xs); font-weight: 700;
@@ -3194,7 +3846,7 @@ button.rtm:focus-visible {
   position: absolute; right: 0; top: 22px; z-index: 5;
   display: flex; gap: 2px; padding: 4px;
   background: var(--card); border: 1px solid var(--line);
-  border-radius: var(--r-sm); box-shadow: 0 6px 18px rgba(0, 0, 0, .28);
+  border-radius: var(--r-sm); box-shadow: var(--elev-2);
 }
 
 .reactpicker button {
@@ -3213,7 +3865,7 @@ button.rtm:focus-visible {
   font-family: Inter, sans-serif; font-size: var(--fs-xs); font-weight: 600;
   color: #fff; background: var(--blue);
   border: 0; border-radius: var(--r-pill); padding: 5px 12px;
-  cursor: pointer; box-shadow: 0 4px 12px rgba(0, 0, 0, .3);
+  cursor: pointer; box-shadow: var(--elev-2);
 }
 
 .chattyping {
@@ -3319,7 +3971,7 @@ button.rtm:focus-visible {
     color: #fff; background: var(--navy);
     border: 1px solid var(--navy-soft); border-radius: var(--r-pill);
     padding: 10px 16px; cursor: pointer;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, .35);
+    box-shadow: var(--elev-3);
   }
 
   /* Out of the layout entirely until it is asked for, so the dock does not
@@ -3336,7 +3988,7 @@ button.rtm:focus-visible {
     height: 78vh; max-height: 78vh; width: auto;
     border-radius: var(--r-lg) var(--r-lg) 0 0;
     border-left: 0; border-right: 0; border-bottom: 0;
-    box-shadow: 0 -8px 28px rgba(0, 0, 0, .4);
+    box-shadow: var(--elev-up);
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 

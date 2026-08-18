@@ -184,12 +184,19 @@ const $ = (id) => document.getElementById(id);
 const appbar     = $("appbar");
 const statusLine = $("statusLine");
 const pickLabel  = $("pickLabel");
+const pickText   = $("pickText");
+const leagueLabel = $("leagueLabel");
 const countBlock = $("countBlock");
 const rightLabel = $("rightLabel");
 const rightValue = $("rightValue");
 const shellbar   = $("shellbar");
-const tabsNav    = $("tabs");
 const actionbar  = $("actionbar");
+/* The band both of those sit in. It carries the hidden flag for the pair,
+   rather than each of them carrying its own: they have only ever been shown
+   and hidden together, in four places, and two flags that must agree is one
+   flag with a second copy. It also has to be the wrapper that hides — an
+   empty band still draws its background and its bottom border. */
+const tabrow     = $("tabrow");
 
 // Toggles live in both headers and, on a phone, inside the rooms panel, which
 // is rendered rather than static. So nothing caches the set: it is queried when
@@ -238,6 +245,130 @@ function syncThemeButton() {
 }
 
 syncThemeButton();
+
+
+/* ---- 2b. Sound ------------------------------------------
+   Three cues, synthesised in the page. No audio files, and
+   that is a decision rather than a shortcut: three tones do
+   not justify the first binary assets in a repository that
+   has none, a generated tone cannot 404 or be served stale
+   behind a cache, and it costs no request on a page that
+   currently loads no third-party media at all. Same
+   argument as the door being drawn and the product shot
+   being generated.
+
+   A draft is the one screen in this app where somebody
+   legitimately looks away — the whole point of a clock is
+   that it runs while you are doing something else — so this
+   is the one screen where sound earns its place. It is off
+   until asked for, and the preference is remembered.     */
+
+const SOUND_KEY = "draftroom.sound";
+
+let soundWanted = false;
+try { soundWanted = localStorage.getItem(SOUND_KEY) === "on"; } catch (err) {}
+
+/* One context, made on the first gesture that needs it and never before.
+
+   Browsers refuse to start an AudioContext outside a user gesture, and one
+   created at load sits in "suspended" for ever — so the first cue would be
+   silent with nothing to say why. Pressing the toggle is a gesture, and so is
+   starting a draft. */
+let audio = null;
+
+function audioContext() {
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  if (!Ctx) return null;                 // no Web Audio: the app is unaffected
+  if (!audio) audio = new Ctx();
+  if (audio.state === "suspended") audio.resume();
+  return audio;
+}
+
+/* A note. Sine rather than square, and an envelope rather than a straight
+   gain: an abrupt start or stop on a raw oscillator is a click, which is
+   audible as a fault rather than as a sound somebody chose. */
+function tone(freq, startAt, ms, peak) {
+  const ctx = audioContext();
+  if (!ctx) return;
+  const osc = ctx.createOscillator();
+  const amp = ctx.createGain();
+  const t0 = ctx.currentTime + startAt;
+  const t1 = t0 + ms / 1000;
+
+  osc.type = "sine";
+  osc.frequency.setValueAtTime(freq, t0);
+  amp.gain.setValueAtTime(0.0001, t0);
+  amp.gain.exponentialRampToValueAtTime(peak, t0 + 0.012);
+  amp.gain.exponentialRampToValueAtTime(0.0001, t1);
+
+  osc.connect(amp).connect(ctx.destination);
+  osc.start(t0);
+  osc.stop(t1 + 0.02);
+}
+
+/* Never throws, and that is the contract rather than politeness. Web Audio
+   is a runtime dependency on the browser's own hardware — a device with no
+   output, a context the browser declines to resume, a policy we did not
+   anticipate — and none of that may reach a draft. It fails by going quiet,
+   the same way the score strip fails by disappearing. */
+function play(cue) {
+  if (!soundWanted) return;
+  try {
+    if (cue === "turn") { tone(587.33, 0, 110, 0.16); tone(880.00, 0.10, 190, 0.16); }
+    else if (cue === "tick") { tone(1046.50, 0, 55, 0.09); }
+    else if (cue === "done") {
+      tone(523.25, 0, 220, 0.13); tone(659.25, 0.09, 220, 0.13); tone(783.99, 0.18, 320, 0.13);
+    }
+  } catch (err) {}
+}
+
+/* What has already been said, so a cue fires on the change rather than on
+   every render. renderHeader() runs on every pick, every tick and every
+   rebuild, so "is it my turn" is true hundreds of times for one turn. */
+const saidAt = { mine: false, tick: null, over: false };
+
+function soundCue() {
+  if (!state.started) { saidAt.mine = false; saidAt.tick = null; saidAt.over = false; return; }
+
+  if (draftOver()) {
+    if (!saidAt.over) { saidAt.over = true; play("done"); }
+    return;
+  }
+
+  const mine = isMyTurn();
+  if (mine && !saidAt.mine) play("turn");
+  saidAt.mine = mine;
+
+  /* The last five seconds, once each. Only on your own clock: a countdown
+     running against somebody else is not a thing to be hurried by, and in a
+     twelve-team room it would tick sixty times a round. */
+  const left = state.timeLeft;
+  if (mine && clockShowing() && !state.paused && left > 0 && left <= 5) {
+    if (saidAt.tick !== left) { saidAt.tick = left; play("tick"); }
+  } else {
+    saidAt.tick = null;
+  }
+}
+
+function syncSoundButton() {
+  const btn = $("soundBtn");
+  if (!btn) return;
+  const label = soundWanted ? "Turn draft sounds off" : "Turn draft sounds on";
+  btn.setAttribute("aria-pressed", String(soundWanted));
+  btn.setAttribute("aria-label", label);
+  btn.title = label;
+}
+
+function toggleSound() {
+  soundWanted = !soundWanted;
+  try { localStorage.setItem(SOUND_KEY, soundWanted ? "on" : "off"); } catch (err) {}
+  syncSoundButton();
+  // The press is the gesture that lets the context start, and hearing the
+  // thing you just switched on is the only confirmation worth giving.
+  if (soundWanted) play("turn");
+}
+
+syncSoundButton();
 
 
 /* ---- 2c. The site shell ---------------------------------
@@ -352,7 +483,7 @@ function renderRooms() {
       '<a class="navlink" href="docs/draft-room-how-it-works.html">How it works</a>' +
       '<button class="navbtn js-install" type="button" hidden>Install</button>' +
       '<button class="navlink js-login" type="button">Log in</button>' +
-      '<button class="theme-toggle" type="button" aria-pressed="true">' +
+      '<button class="hdrbtn theme-toggle" type="button" aria-pressed="true">' +
         '<svg class="i-sun" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true" ' +
              'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">' +
           '<circle cx="12" cy="12" r="4.2"/>' +
@@ -413,6 +544,18 @@ function paintRoom(n) {
   $("roomSeason").textContent  = r.season;
   $("roomStatus").textContent  = r.live ? "Open now" : "Not open yet";
   $("roomStatus").className    = "door-room-status" + (r.live ? "" : " soon");
+
+  /* The way in, on the card, for a room that has one. The list beside the
+     door is still the index; this is the same destination offered where
+     somebody has just finished reading what the room is for, which is the
+     moment they are most likely to want it. Hidden rather than disabled for
+     the rooms that do not exist — a control that cannot act must not merely
+     fail, it must not be offered. */
+  const enter = $("roomEnter");
+  if (enter) {
+    enter.hidden = !r.live;
+    if (r.live) enter.setAttribute("href", r.href);
+  }
 
   const rows = document.querySelectorAll("#homeRooms .rl");
   rows.forEach(function (el) {
@@ -486,6 +629,304 @@ function startRoomDoor() {
   // Reading beats turning: a pointer over the stage stops the clock.
   stage.addEventListener("mouseenter", function () { doorClear(); });
   stage.addEventListener("mouseleave", function () { if (doorRunning) queueRoomDoor(); });
+}
+
+/* ---------- the proof section ----------
+
+   Three claims with the thing they claim running beside them.
+
+   It replaced three paragraphs of prose, which is the weakest thing a landing
+   page can say about a product whose whole pitch is that the numbers are
+   inspectable: a claim with nothing to check it against is exactly what every
+   other fantasy site also says.
+
+   **Every stage is drawn from live data, and that is the rule this section
+   exists under.** The same `board`, the same projections and the same
+   `pointsUnder()` the draft room runs on. A hand-written table of plausible
+   names would be indistinguishable on screen tonight and wrong the first
+   morning the pipeline moved — the same argument that keeps the product shot
+   generated and the door drawn rather than photographed. Nothing in here is a
+   name we chose: whoever tonight's data says is WR1 is who turns up.
+
+   **A stage that has nothing to say draws nothing.** buildProjections() runs
+   at startup, but a visitor arriving before the data has been parsed, or with
+   a board that came back short, must not get an empty frame with a heading
+   over it. Each builder returns "" and paintProof() falls through to the next
+   claim rather than rendering a hole. Same contract as the score strip. */
+
+const PROOF_HOLD = 7000;
+
+const PROOFS = [
+  {
+    title: "Change a rule. Every number moves.",
+    blurb: "All 38 scoring rules are yours to edit, and the projections, the " +
+           "rankings and the grade all re-score. Not a preset — the rules.",
+    build: proofScoring
+  },
+  {
+    title: "The score shows its working.",
+    blurb: "A Juke score is projected points above what a replacement starter " +
+           "at that position gets you, as a share of the best on the board.",
+    build: proofJukeScore
+  },
+  {
+    title: "Rebuilt every morning.",
+    blurb: "Real ADP from Fantasy Football Calculator and projections from " +
+           "Sleeper, fetched and rebuilt daily. No hand-maintained list.",
+    build: proofFreshness
+  }
+];
+
+let proofAt = 0, proofTimer = null, proofRunning = false;
+
+/* The three formats, from the two places that already know about them:
+   REC_BY_FORMAT for the rule and SCORING_NAMES for the label. A third list
+   here would be the same fact written down again, and it would be the copy
+   nobody remembers when a format is added.
+
+   A function rather than a const because both of those are declared later in
+   the file: a const up here would read them inside their temporal dead zone
+   and throw on load. */
+function scoringFormats() {
+  return Object.keys(REC_BY_FORMAT).map(function (key) {
+    return { key: key, rec: REC_BY_FORMAT[key], name: SCORING_NAMES[key] };
+  });
+}
+
+/* The players a proof talks about.
+
+   Sorted by tonight's projection rather than by ADP: this section is about
+   what the model says, and opening it with the market's order would be the
+   wrong argument in the wrong place. `keep` narrows it per claim, because the
+   two stages want different populations and picking one for both is how the
+   first build of this section ended up arguing against itself. */
+function proofPool(n, keep) {
+  return board
+    .filter(function (p) {
+      const s = statOf(p);
+      if (!s || !s.p || !(s.p.gp > 0) || FORCED_LATE[p.pos]) return false;
+      return keep ? keep(p, s) : true;
+    })
+    .sort(function (a, b) { return (b.projPts || 0) - (a.projPts || 0); })
+    .slice(0, n);
+}
+
+/* Claim one: the same players, priced three ways.
+
+   The formats are the three the setup screen offers, and they differ by one
+   rule out of 38 — which is the point being made. Receivers climb and backs
+   fall as a catch goes from nothing to a point, and that reordering is the
+   whole proof: it is not a filter or a different list, it is the same twelve
+   players scored again. */
+function proofScoring() {
+  /* Only the players the rule actually touches, and asked of the data rather
+     than of a list of positions. The first build sorted the whole board by
+     projected points, which is six quarterbacks — true, and the worst
+     possible illustration of a reception rule, because not one of those six
+     moves by a single point across the three settings. A claim whose proof
+     holds still is worse than no proof.
+
+     `rec` on the projection is the honest test: a player this rule can move
+     is a player projected to catch something. */
+  const pool = proofPool(14, function (p, s) { return s.p[STAT_KEYS.rec] > 0; });
+  if (pool.length < 6) return "";
+
+  const formats = scoringFormats();
+  const fmt = formats[proofScoring.at % formats.length];
+  const rules = rulesForFormat(fmt.key);
+
+  const ranked = pool
+    .map(function (p) { return { p: p, pts: pointsUnder(statOf(p).p, rules) }; })
+    .sort(function (a, b) { return b.pts - a.pts; })
+    .slice(0, 6);
+
+  return '<div class="pstage">' +
+    '<div class="pstage-head">' +
+      '<span class="pstage-label">Points per reception</span>' +
+      '<span class="pstage-dial">' + formats.map(function (f) {
+        return '<span class="pd' + (f.key === fmt.key ? " on" : "") + '">' + f.rec + '</span>';
+      }).join("") + '</span>' +
+    '</div>' +
+    '<p class="pstage-note">' + escHtml(fmt.name) + '</p>' +
+    '<ol class="pstage-rows">' + ranked.map(function (r, i) {
+      return '<li class="prow">' +
+        '<span class="prow-rank">' + (i + 1) + '</span>' +
+        '<span class="pos-chip ' + r.p.pos + '">' + r.p.pos + '</span>' +
+        '<span class="prow-name">' + escHtml(shortName(r.p)) + '</span>' +
+        '<span class="prow-num">' + Math.round(r.pts) + '</span>' +
+      '</li>';
+    }).join("") + '</ol>' +
+  '</div>';
+}
+proofScoring.at = 0;
+
+/* Claim two: the Juke score, with the subtraction printed.
+
+   The one number the app has that a projection feed does not, and the
+   complaint it has always drawn is that a bare 0 reads as "worthless" and a
+   bare 100 as "perfect" — it is a ranking against the pool, not a rating of
+   the player. So the stage prints the sum rather than the verdict: his
+   points, what a replacement starter at his position is projected for, and
+   the gap between them. */
+function proofJukeScore() {
+  /* One player per position, best first, rather than the top four overall.
+
+     The top four overall are four quarterbacks — they score the most raw
+     points and always will — which makes the stage read as a claim about
+     quarterbacks and hides the only thing the number is for. Points above
+     replacement is a *cross-position* measure: it exists to say that an elite
+     tight end is worth more than the twenty-fifth receiver, and it cannot say
+     that on a list where every row is the same position. */
+  const best = {};
+  proofPool(400, function (p) { return REPLACEMENT_PTS[p.pos] > 0; })
+    .forEach(function (p) {
+      if (overallScore(p) === null) return;
+      if (!best[p.pos] || overallScore(p) > overallScore(best[p.pos])) best[p.pos] = p;
+    });
+
+  const rows = Object.keys(best)
+    .map(function (pos) { return best[pos]; })
+    .sort(function (a, b) { return overallScore(b) - overallScore(a); })
+    .slice(0, 4);
+  if (rows.length < 3) return "";
+
+  return '<div class="pstage">' +
+    '<div class="pstage-head">' +
+      '<span class="pstage-label">Projected points, less replacement</span>' +
+    '</div>' +
+    '<ol class="pstage-rows">' + rows.map(function (p) {
+      const repl = Math.round(REPLACEMENT_PTS[p.pos]);
+      const gap  = Math.round(p.projPts) - repl;
+      return '<li class="prow prow-sum">' +
+        '<span class="pos-chip ' + p.pos + '">' + p.pos + '</span>' +
+        '<span class="prow-name">' + escHtml(shortName(p)) + '</span>' +
+        '<span class="prow-sums">' +
+          '<b>' + Math.round(p.projPts) + '</b>' +
+          '<i>&minus;</i>' + repl +
+          '<i>=</i><b class="prow-gap">' + (gap > 0 ? "+" : "") + gap + '</b>' +
+        '</span>' +
+        '<span class="prow-num prow-score">' + Math.round(overallScore(p)) + '</span>' +
+      '</li>';
+    }).join("") + '</ol>' +
+    '<p class="pstage-foot">Replacement is the last starter at that position in a ' +
+      league.teams + '-team league, derived rather than typed.</p>' +
+  '</div>';
+}
+
+/* Claim three: where the numbers came from, and when.
+
+   PLAYERS_META is written by the pipeline itself, so this cannot claim a
+   freshness the data does not have — if the nightly run fails, the date on
+   screen stops moving and says so. */
+function proofFreshness() {
+  if (typeof PLAYERS_META === "undefined") return "";
+  const pool = board.slice(0, 5);
+  if (!pool.length) return "";
+
+  return '<div class="pstage">' +
+    '<div class="pstage-head">' +
+      '<span class="pstage-label">Average draft position</span>' +
+      '<span class="pstage-stamp">' + escHtml(PLAYERS_META.generated) + '</span>' +
+    '</div>' +
+    '<ol class="pstage-rows">' + pool.map(function (p, i) {
+      return '<li class="prow">' +
+        '<span class="prow-rank">' + (i + 1) + '</span>' +
+        '<span class="pos-chip ' + p.pos + '">' + p.pos + '</span>' +
+        '<span class="prow-name">' + escHtml(shortName(p)) + '</span>' +
+        '<span class="prow-num">' + p.adp.toFixed(1) + '</span>' +
+      '</li>';
+    }).join("") + '</ol>' +
+    '<p class="pstage-foot">' + PLAYERS_META.count + ' players, ' +
+      PLAYERS_META.projected + ' with a projection, one ADP set per scoring format.</p>' +
+  '</div>';
+}
+
+function paintProof(n) {
+  const stage = $("proofStage");
+  if (!stage) return;
+
+  /* A builder that has nothing to say returns "", and the section moves on
+     rather than drawing a heading over an empty frame. Bounded by the number
+     of claims so an empty board cannot spin here. */
+  let html = "", tries = 0;
+  while (tries++ < PROOFS.length) {
+    html = PROOFS[n].build();
+    if (html) break;
+    n = (n + 1) % PROOFS.length;
+  }
+  proofAt = n;
+  stage.innerHTML = html;
+  stage.classList.toggle("empty", !html);
+
+  document.querySelectorAll("#proofList .pf").forEach(function (el) {
+    const on = Number(el.dataset.proof) === n;
+    el.classList.toggle("on", on);
+    // aria-current rather than a live region: announcing a new claim every
+    // seven seconds to somebody reading the page would be hostile.
+    if (on) el.setAttribute("aria-current", "true");
+    else el.removeAttribute("aria-current");
+  });
+}
+
+function renderProof() {
+  const list = $("proofList");
+  if (!list) return;
+
+  list.innerHTML = PROOFS.map(function (c, i) {
+    return '<button class="pf" type="button" data-proof="' + i + '">' +
+      '<b>' + escHtml(c.title) + '</b>' +
+      '<span>' + escHtml(c.blurb) + '</span>' +
+    '</button>';
+  }).join("");
+
+  paintProof(0);
+  startProofCycle();
+}
+
+/* Claim one advances *within* itself before the section moves on, because the
+   reordering is the argument and a single frame of it proves nothing. */
+function stepProof() {
+  if (proofAt === 0 && proofScoring.at < scoringFormats().length - 1) {
+    proofScoring.at += 1;
+    paintProof(0);
+    return;
+  }
+  proofScoring.at = 0;
+  paintProof((proofAt + 1) % PROOFS.length);
+}
+
+function queueProof() {
+  clearTimeout(proofTimer);
+  proofTimer = setTimeout(function () {
+    stepProof();
+    if (proofRunning) queueProof();
+  }, proofAt === 0 ? PROOF_HOLD / 2 : PROOF_HOLD);
+}
+
+function startProofCycle() {
+  const sec = $("proof");
+  if (!sec) return;
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+  /* Only cycles while it is on screen. A timer running behind the draft room
+     — or below the fold — is work nobody asked for, and the landing page is
+     still in the DOM the whole time somebody is drafting. */
+  if (typeof IntersectionObserver === "function") {
+    new IntersectionObserver(function (entries) {
+      const seen = entries[0].isIntersecting;
+      if (seen === proofRunning) return;
+      proofRunning = seen;
+      if (seen) queueProof();
+      else clearTimeout(proofTimer);
+    }, { threshold: 0.3 }).observe(sec);
+  } else {
+    proofRunning = true;
+    queueProof();
+  }
+
+  // Reading beats advancing: a pointer over the section stops the clock.
+  sec.addEventListener("mouseenter", function () { clearTimeout(proofTimer); });
+  sec.addEventListener("mouseleave", function () { if (proofRunning) queueProof(); });
 }
 
 /* ---------- the product shot ----------
@@ -668,8 +1109,7 @@ function applyRoute() {
   appbar.hidden   = !onDraft;
   $("view-home").hidden = onDraft;
   $("view-app").hidden  = !onDraft;
-  tabsNav.hidden   = !(onDraft && state.started);
-  actionbar.hidden = !(onDraft && state.started);
+  tabrow.hidden = !(onDraft && state.started);
 
   if (!onDraft) {
     // Leaving is not discarding. The draft stays in memory and in the save;
@@ -1619,8 +2059,7 @@ function checkDraftFinished() {
    broadcast saying the host has begun, which is the only signal a guest
    ever gets. */
 function enterDraftUI() {
-  tabsNav.hidden   = false;
-  actionbar.hidden = false;
+  tabrow.hidden = false;
   showPanel("tab-suggest");
   document.querySelectorAll(".tabs button").forEach(function (b) { b.classList.remove("on"); });
   document.querySelector('.tabs button[data-tab="tab-suggest"]').classList.add("on");
@@ -2062,8 +2501,7 @@ function goHome() {
   state.picks = [];
   state.started = false;
   state.paused = false;
-  tabsNav.hidden = true;
-  actionbar.hidden = true;
+  tabrow.hidden = true;
   showPanel("tab-setup");
   // Back to the setup screen, where the league can be changed again, so the
   // board is rebuilt rather than just redrawn.
@@ -2463,16 +2901,27 @@ function didPlay(block) {
   return Object.keys(block).some((k) => k !== "w" && k !== "gp" && block[k]);
 }
 
-function fantasyPoints(block) {
+/* Scoring, under a rule table handed in rather than read off the league.
+
+   Split out of fantasyPoints() so the landing page can price the same player
+   under standard, half and full PPR at once without swapping league.rules and
+   swapping it back — which is a global the whole draft reads, and restoring it
+   correctly is the kind of thing that works until an exception is thrown
+   halfway through. Nothing about the arithmetic moved. */
+function pointsUnder(block, rules) {
   if (!block) return 0;
   let total = 0;
-  Object.keys(league.rules).forEach(function (rule) {
+  Object.keys(rules).forEach(function (rule) {
     const key = STAT_KEYS[rule];
     const value = key ? block[key] : 0;
-    if (value) total += value * league.rules[rule];
+    if (value) total += value * rules[rule];
   });
   // A tenth of a point, the precision the raw data arrives in.
   return Math.round(total * 10) / 10;
+}
+
+function fantasyPoints(block) {
+  return pointsUnder(block, league.rules);
 }
 
 // Points per game, formatted, from a games count the caller has to supply.
@@ -3319,15 +3768,24 @@ function renderHeader() {
 
   if (!state.started) {
     statusLine.textContent = "The Draft Room";
+    soundCue();                      // resets what has been said
     return;
   }
+
+  /* What this draft is, beside what it is doing. The shape was only ever on
+     the setup screen, which folds away the moment a draft starts, so four
+     rounds in there was no way to check whether this was a 14-round league
+     without leaving it. Through leagueSummary(), never a second copy of the
+     same lookup — it is the string the setup box already shows shut. */
+  leagueLabel.textContent = leagueSummary();
 
   if (draftOver()) {
     appbar.classList.add("live");
     statusLine.textContent = "Draft complete";
-    pickLabel.textContent  = totalPicks() + " picks made";
+    pickText.textContent   = totalPicks() + " picks made";
     rightLabel.textContent = "Rounds";
     rightValue.textContent = league.rounds;
+    soundCue();
     return;
   }
 
@@ -3337,7 +3795,7 @@ function renderHeader() {
     const urgent = state.clockLength && !state.paused && state.timeLeft <= 10;
     appbar.classList.add(urgent ? "urgent" : "my-turn");
     statusLine.textContent = "You're on the clock!";
-    pickLabel.textContent  = "Pick " + pickCode(overall) + " (" + overall + " Overall)";
+    pickText.textContent   = "Pick " + pickCode(overall) + " (" + overall + " Overall)";
     if (state.clockLength) {
       rightLabel.textContent = state.paused ? "Paused" : "Time left";
       rightValue.textContent = clockText();
@@ -3347,7 +3805,7 @@ function renderHeader() {
     }
   } else {
     appbar.classList.add("live");
-    pickLabel.textContent = "Pick " + pickCode(overall) + " (" + overall + " Overall)";
+    pickText.textContent = "Pick " + pickCode(overall) + " (" + overall + " Overall)";
 
     /* Somebody else is up. Solo that is a CPU with no countdown of its own, so
        the useful number is how long until you are back; in a room there is a
@@ -3370,6 +3828,11 @@ function renderHeader() {
       rightValue.textContent = gap;
     }
   }
+
+  /* Last, and out of every branch above rather than at the top: the cues are
+     about the state this render has just settled on, and a draft that has
+     ended is not a turn that has started. */
+  soundCue();
 }
 
 // "Last one in the tier" is the most actionable thing a draft board can
@@ -3799,6 +4262,42 @@ function renderPlayers() {
    draws a fixed ten-team room whatever league the visitor has set up. One
    function for both boards: the landing page claiming a different snake from
    the product is the drift this signature exists to prevent. */
+/* What a team has, at a glance, under its name on the board.
+
+   The one thing a board cannot otherwise tell you is what everybody else
+   still needs, and it is in `state.picks` already — so this is a read of data
+   the app has rather than anything new. It is what makes the column above a
+   pick legible: three running backs and no quarterback is a team about to
+   take a quarterback.
+
+   **Which positions get counted is derived, not listed.** FORCED_LATE already
+   names the two the app itself schedules — cpuScore() refuses a kicker before
+   the last two rounds and a defense before the last three, and the
+   suggestions never offer one earlier. Counting a position nobody is choosing
+   is eight columns of "0 0" until the closing rounds and then eight of "1 1".
+   Listing QB, RB, WR and TE here instead would be the league shape written
+   down a second time, which is the failure this project has already paid for
+   twice.
+
+   **Each count carries its own ground, and that is what makes it safe.** A
+   chip is white on a position solid, which is the contract those colours were
+   darkened to meet, so it does not matter whether it lands on the board head
+   or on the navy of your own column — the header behind it is never part of
+   the sum. Colouring the *text* instead was measured first and does not
+   survive: the light-theme --*-fg tones are 4.85 to 5.69 on --board-hd and
+   2.15 to 2.52 on your own column's navy, so the one team a manager looks at
+   most would be the one that failed. */
+const COUNTED_POSITIONS = POSITIONS.filter(function (p) { return !FORCED_LATE[p]; });
+
+function rosterStrip(slot) {
+  return '<span class="hd-roster">' + COUNTED_POSITIONS.map(function (pos) {
+    const n = countAt(slot, pos);
+    // Empty is drawn as empty rather than dropped: a gap where a chip should
+    // be is the fact somebody is reading this strip for.
+    return `<span class="hd-pos ${n ? pos : "none"}">${n}</span>`;
+  }).join("") + "</span>";
+}
+
 function boardArrow(round, slot, teams) {
   if (DraftEngine.pickInRound(round, slot, teams) === teams) return "&darr;";
   return round % 2 === 0 ? "&larr;" : "&rarr;";
@@ -3836,7 +4335,10 @@ function renderBoard() {
   let html = `<div class="hd"></div>`;
 
   for (let s = 0; s < league.teams; s++) {
-    html += `<div class="hd ${s === state.mySlot ? "me" : ""}">${s === state.mySlot ? "YOU" : cpuName(s).split(" ")[0]}</div>`;
+    html += `<div class="hd ${s === state.mySlot ? "me" : ""}">` +
+              `<span class="hd-name">${s === state.mySlot ? "YOU" : cpuName(s).split(" ")[0]}</span>` +
+              rosterStrip(s) +
+            `</div>`;
   }
 
   for (let r = 1; r <= league.rounds; r++) {
@@ -3861,11 +4363,49 @@ function renderBoard() {
            two disagree. */
         const inRound = DraftEngine.pickInRound(r, s, league.teams);
 
+        /* `mine` goes on an empty cell too, and that is the half of this
+           that was missing. The class only ever went on a filled one, so the
+           board marked where you had been and not where you were going —
+           which is the one question a snake board exists to answer, and four
+           rounds out in a twelve-team room it was a counting exercise done
+           by hand. The gold column is drawn from the same `state.mySlot` the
+           header already uses. */
+        const isMine = s === state.mySlot;
+
+        /* The arrow goes on an empty cell too, and it is the same argument
+           as the gold column beside it. A drafted cell has always carried the
+           direction the order is travelling; an undrafted one carried a bare
+           code, so the snake was legible over the half of the board that has
+           already happened and not over the half you are about to play. That
+           is backwards — the turn matters *before* the picks land, which is
+           when you are working out whether the wait is one pick or nineteen.
+
+           It yields to the clock, and only to the clock. The cell on the
+           clock shows the countdown instead — two facts in a 74px box is one
+           too many, and the countdown is the one somebody is watching. When
+           there is no clock to show, that cell takes the arrow like any
+           other. */
+        const face = isNow && clockShowing()
+          ? clockText()
+          : `<span class="cell-dir" aria-hidden="true">${boardArrow(r, s, league.teams)}</span>` +
+            `<span class="cell-pick">${r}.${String(inRound).padStart(2, "0")}</span>`;
+
+        /* How far away this pick is, which "5.01" cannot say on its own.
+
+           Only on a cell nobody has drafted yet. On a filled one it is the
+           sixth fact in a 74px box and answers a question nobody has — the
+           pick already happened. On an empty one it turns "when do I pick
+           again" from arithmetic into reading, which is the same thing the
+           gold column and the arrow are for.
+
+           DraftEngine.overallOf() rather than the sum written out here: the
+           mirror is inside it, and a caller holding a round and a seat must
+           never work that out again. */
+        const ovr = `<span class="cell-ovr">${DraftEngine.overallOf(r, s, league.teams)}</span>`;
+
         // The cell on the clock is the clock. Looking away from where the
         // pick lands to find out how long is left is the thing this removes.
-        html += `<div class="cell empty ${isNow ? "now" : ""}"${isNow ? ' id="boardClock"' : ""}>${
-          isNow && clockShowing() ? clockText() : r + "." + String(inRound).padStart(2, "0")
-        }</div>`;
+        html += `<div class="cell empty ${isNow ? "now" : ""} ${isMine ? "mine" : ""}"${isNow ? ' id="boardClock"' : ""}>${ovr}${face}</div>`;
       }
     }
   }
@@ -5089,8 +5629,7 @@ function resumeDraft(data) {
   state.queue = Array.isArray(data.queue) ? data.queue.slice() : [];
   pruneQueue();
 
-  tabsNav.hidden = false;
-  actionbar.hidden = false;
+  tabrow.hidden = false;
   $("resumeBar").hidden = true;
 
   /* A finished draft reopens on its analysis, not on suggestions — the
@@ -6123,6 +6662,19 @@ document.addEventListener("click", function (e) {
   if (doorRunning) queueRoomDoor();
 });
 
+/* Choosing a claim by hand. Delegated for the same reason the door's rows
+   are: renderProof() rebuilds these buttons, so a listener attached to one
+   would be thrown away the next time the section drew. Picking a claim also
+   restarts its own inner cycle, or claim one would resume mid-reorder. */
+document.addEventListener("click", function (e) {
+  const btn = e.target.closest ? e.target.closest("#proofList .pf") : null;
+  if (!btn) return;
+  clearTimeout(proofTimer);
+  proofScoring.at = 0;
+  paintProof(Number(btn.dataset.proof));
+  if (proofRunning) queueProof();
+});
+
 /* The year buttons on the game logs. Delegated from the sheet body, which
    openSheet() rewrites wholesale, and it repaints only the logs view rather
    than reopening the sheet — reopening would throw away which tab you were
@@ -6171,6 +6723,11 @@ $("sheetTabs").addEventListener("click", function (e) {
 // The mark now leaves for the landing page rather than discarding: the draft
 // stays in memory and in the save, and the route change is what goes back.
 $("homeBtn").addEventListener("click", function () { go("home"); });
+
+document.addEventListener("click", function (e) {
+  const btn = e.target.closest ? e.target.closest("#soundBtn") : null;
+  if (btn) toggleSound();
+});
 
 // Delegated, because the panel's toggle does not exist until the rooms are
 // rendered, and the same goes for its Log in and Install.
@@ -6422,6 +6979,7 @@ refreshSetup();
 // setup screen has been built rather than before.
 renderRooms();
 renderHeroShot();      // after refreshSetup(), which is what fills `board`
+renderProof();         // and for the same reason: every stage reads `board`
 applyRoute();
 
 /* An invite code in the address bar means someone followed a link, so the

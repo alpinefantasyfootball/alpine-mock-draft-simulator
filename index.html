@@ -33,12 +33,12 @@
        say script-src 'self' without either giving away 'unsafe-inline' or
        pinning a hash that breaks the site the first time somebody edits it.
        No defer, no async: it must run before the body is drawn. -->
-  <script src="theme.js?v=202608181155"></script>
+  <script src="theme.js?v=202608181218"></script>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <!-- ?v=202608181155 on every local file below, and it has to be bumped on any deploy
+  <!-- ?v=202608181218 on every local file below, and it has to be bumped on any deploy
        that changes one of them.
 
        Without a version in the address a returning visitor runs today's HTML
@@ -53,7 +53,7 @@
 
        A query string rather than a renamed file, because renaming means a
        manifest and a manifest means a build step. This costs one number. -->
-  <link rel="stylesheet" href="style.css?v=202608181155">
+  <link rel="stylesheet" href="style.css?v=202608181218">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -111,7 +111,7 @@
           <button class="navbtn js-install" id="installBtn" type="button" hidden>Install</button>
           <button class="navlink js-login" id="loginBtn" type="button">Log in</button>
           <button class="cta" id="signupBtn" type="button">Sign up</button>
-          <button class="theme-toggle" type="button" aria-pressed="true">
+          <button class="hdrbtn theme-toggle" type="button" aria-pressed="true">
             <svg class="i-sun" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"
                  fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
               <circle cx="12" cy="12" r="4.2"/>
@@ -136,15 +136,33 @@
              sized as a square without squashing it.
              width and height are set here as well as in the CSS, because a cached
              or missing stylesheet once let this shape fill the whole screen. -->
-        <button class="home" id="homeBtn" type="button" title="Back to draft setup"
-                aria-label="Back to draft setup">
+        <button class="home" id="homeBtn" type="button" title="Leave the draft"
+                aria-label="Leave the draft">
+          <!-- The chevron is the affordance and the mark is the brand, in one
+               control rather than two. The mark alone had carried both jobs
+               and only ever announced the second: it is a logo, and a logo in
+               the corner of an app is the way out only to somebody who
+               already knows that. -->
+          <svg class="i-back" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"
+               fill="none" stroke="currentColor" stroke-width="2.4"
+               stroke-linecap="round" stroke-linejoin="round">
+            <path d="M15 5 8 12l7 7"/>
+          </svg>
           <svg class="mark" width="31" height="36" viewBox="0 0 662 774"
                aria-hidden="true" focusable="false"><use href="#jukeMark"/></svg>
         </button>
 
         <div class="appbar-text">
           <h1 id="statusLine">The Draft Room</h1>
-          <p id="pickLabel" hidden></p>
+          <!-- What this draft is, under what it is doing. The shape was only
+               ever visible on the setup screen, which folds away the moment
+               the draft starts — so a manager four rounds in had no way to
+               check whether they were in a 14-round league or a 15-round one
+               without leaving. It comes from leagueSummary(), never from a
+               second copy of the same lookup. -->
+          <p class="appbar-meta" id="pickLabel" hidden>
+            <span id="pickText"></span><span class="appbar-league" id="leagueLabel"></span>
+          </p>
         </div>
 
         <!-- The counter carries the pick clock and the wait until your turn, so
@@ -158,7 +176,27 @@
             <span class="count-value" id="rightValue"></span>
           </div>
 
-          <button class="theme-toggle" id="themeBtn" type="button" aria-pressed="true">
+          <!-- Sound. Synthesised rather than played from a file: three cues
+               do not justify the first binary assets in the repository, and a
+               tone generated in the page cannot 404, cannot be cached stale
+               and costs no request. -->
+          <button class="hdrbtn sound-toggle" id="soundBtn" type="button"
+                  aria-pressed="false" title="Sound" aria-label="Sound">
+            <svg class="i-sound-on" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"
+                 fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 9.5h3.2L12 5.6v12.8L7.2 14.5H4z" fill="currentColor" stroke="none"/>
+              <path d="M15.6 9.2a4 4 0 0 1 0 5.6M18.2 6.6a7.6 7.6 0 0 1 0 10.8"/>
+            </svg>
+            <svg class="i-sound-off" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"
+                 fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 9.5h3.2L12 5.6v12.8L7.2 14.5H4z" fill="currentColor" stroke="none"/>
+              <path d="m16 9.5 5 5M21 9.5l-5 5"/>
+            </svg>
+          </button>
+
+          <button class="hdrbtn theme-toggle" id="themeBtn" type="button" aria-pressed="true">
             <svg class="i-sun" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"
                  fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
               <circle cx="12" cy="12" r="4.2"/>
@@ -173,7 +211,13 @@
 
     </header>
 
-    <nav class="tabs" id="tabs" hidden>
+    <!-- One band, two jobs. The tabs and the action bar were stacked, which
+         is 43px of a second full-width bar for four controls nobody presses
+         twice in a draft — on top of a 57px header and a 53px tab row, that
+         was 153px of chrome before a single player's name. They share a row
+         now: navigation left, the things you do to the draft right. -->
+    <div class="tabrow" id="tabrow" hidden>
+      <nav class="tabs" id="tabs">
       <button class="on" data-tab="tab-suggest">Suggestions</button>
       <button data-tab="tab-players">Players</button>
       <button data-tab="tab-team">My Team</button>
@@ -183,12 +227,13 @@
 
     <!-- The first three only mean anything while a draft is running, so they
          are swapped for the way out once it finishes. -->
-    <div class="actionbar" id="actionbar" hidden>
+      <div class="actionbar" id="actionbar">
       <button class="mini go" data-action="new-draft" id="newDraftBtn" hidden>New mock draft</button>
       <button class="mini" id="pauseBtn">Pause clock</button>
       <button class="mini" id="undoBtn">Undo</button>
       <button class="mini" id="autoBtn">Auto-draft the rest</button>
       <button class="mini danger" id="restartBtn">Discard draft</button>
+    </div>
     </div>
 
     <div class="ticker" id="ticker" hidden></div>
@@ -310,42 +355,89 @@
              The interior text is filled by renderRooms() and cycled by
              startRoomDoor(); the list beside it is the control. -->
         <div class="roomstage" id="roomStage">
-          <div class="doorway-outer">
-            <div class="doorway">
-              <div class="jamb"></div>
-              <div class="door-room">
-                <div class="door-room-inner">
-                  <span class="door-room-name" id="roomName"></span>
-                  <span class="door-room-status" id="roomStatus"></span>
-                  <span class="door-room-blurb" id="roomBlurb"></span>
-                  <span class="door-room-season" id="roomSeason"></span>
+          <div class="doorstage">
+            <div class="doorway-outer">
+              <div class="doorway">
+
+                <!-- The wall the opening is cut into. The reveal — the sides of
+                     the hole you see through it — is painted onto .opening
+                     rather than built from 3D faces, for the reason in the
+                     stylesheet: at the focal length the swing needs, real
+                     geometry resolves to about three pixels. -->
+                <div class="wall"></div>
+                <div class="wall-spill"></div>
+
+                <div class="opening">
+                  <!-- Seen only while the room turns, so the swap reads as a
+                       drum revolving inside a fixed frame rather than as the
+                       wall itself spinning. -->
+                  <div class="shaft"></div>
+
+                  <div class="swap">
+                    <div class="door-room">
+                      <div class="room-far"></div>
+                      <div class="room-floor"></div>
+                    </div>
+
+                    <div class="door">
+                      <div class="door-face"></div>
+                      <div class="placard"><span class="placard-name" id="roomPlacard"></span></div>
+                      <div class="handle"></div>
+                      <!-- Real 3D, and it has to be: the panel turns 64 degrees,
+                           so its leading edge faces the reader and a painted one
+                           would not survive that. -->
+                      <div class="door-edge"></div>
+                      <div class="door-shade"></div>
+                    </div>
+                  </div>
                 </div>
+
+                <div class="sill"></div>
               </div>
-              <div class="door">
-                <div class="door-face"></div>
-                <div class="placard"><span class="placard-name" id="roomPlacard"></span></div>
-                <div class="knob"></div>
-                <div class="door-shade"></div>
-              </div>
+
+              <div class="floor-spill"></div>
+              <div class="floor-shadow"></div>
+            </div>
+
+            <!-- The room's own words, on a card outside the opening.
+
+                 They used to sit inside it, and that is why the opening was a
+                 4:5 rectangle: the copy set the shape, and the shape is what
+                 made it read as a book. A door-shaped opening is 228px wide
+                 with half of that behind the swung panel, so there is nowhere
+                 in it for a sentence to go. -->
+            <div class="room-card">
+              <span class="door-room-status" id="roomStatus"></span>
+              <h3 class="door-room-name" id="roomName"></h3>
+              <p class="door-room-blurb" id="roomBlurb"></p>
+              <span class="door-room-season" id="roomSeason"></span>
+              <a class="room-enter" id="roomEnter" href="#/draft" hidden>Enter the room</a>
             </div>
           </div>
+
           <div class="roomlist" id="homeRooms"></div>
         </div>
 
-        <div class="pillars">
-          <div class="pillar">
-            <b>Real ADP, refreshed daily</b>
-            <span>Fantasy Football Calculator, one set per scoring format, rebuilt every morning.</span>
+        <!-- Three claims, each with the thing it claims running beside it.
+
+             This was three paragraphs of text — the claims with nothing to
+             check them against, which is the weakest thing a page can say
+             about a product whose entire pitch is that its numbers are
+             inspectable. Every stage here is drawn from the same board, the
+             same projections and the same scoring the draft room uses, so a
+             claim cannot drift from the product: if the pipeline changes
+             tonight, the proof changes with it. Filled by renderProof() and
+             cycled by startProofCycle(); the list is also the control. -->
+        <section class="proof" id="proof">
+          <div class="proof-side">
+            <p class="proof-eyebrow">No black box</p>
+            <h2 class="proof-head">Show your working</h2>
+            <p class="proof-sub">Every number Juke prints is one you can follow. Here are three of
+              them, live, off tonight&rsquo;s data.</p>
+            <div class="proof-list" id="proofList"></div>
           </div>
-          <div class="pillar">
-            <b>Projections you can re-score</b>
-            <span>Sleeper stats back to 2018, and all 38 scoring rules are yours to edit. Change one and everything recalculates.</span>
-          </div>
-          <div class="pillar">
-            <b>A grade that explains itself</b>
-            <span>Every number the app computes is written down on one page. No black box, no panel of experts.</span>
-          </div>
-        </div>
+          <div class="proof-stage" id="proofStage" aria-live="off"></div>
+        </section>
 
         <footer class="landing-foot">
           <p id="homeMeta"></p>
@@ -782,19 +874,19 @@
     <form method="dialog"><button class="primary">Got it</button></form>
   </dialog>
 
-  <!-- Every one of these carries the same ?v=202608181155 as the stylesheet. See the note
+  <!-- Every one of these carries the same ?v=202608181218 as the stylesheet. See the note
        beside it in <head>: bump them together or don't bump them at all. -->
-  <script src="players.js?v=202608181155"></script>
-  <script src="stats.js?v=202608181155"></script>
+  <script src="players.js?v=202608181218"></script>
+  <script src="stats.js?v=202608181218"></script>
   <!-- The rules of a snake draft, with no reference to this page. It loads
        before app.js because app.js is a caller, and it is a separate file
        because a server will eventually have to run the same one. -->
-  <script src="draft-engine.js?v=202608181155"></script>
+  <script src="draft-engine.js?v=202608181218"></script>
   <!-- The socket to a shared room. Loaded always, connected never unless a
        manager asks for it: a solo draft touches nothing. -->
-  <script src="live.js?v=202608181155"></script>
+  <script src="live.js?v=202608181218"></script>
   <!-- Before app.js, which calls backToTop() on the last line of its setup. -->
-  <script src="back-to-top.js?v=202608181155"></script>
-  <script src="app.js?v=202608181155"></script>
+  <script src="back-to-top.js?v=202608181218"></script>
+  <script src="app.js?v=202608181218"></script>
 </body>
 </html>

@@ -1458,6 +1458,225 @@ region and measures 5.15. **Both a false alarm and a real miss came out of
 the same shortcut.** Composite the alpha, and interpolate the gradient at
 the element's own position.
 
+## The draft room header
+
+**Three stacked bars is 153px before a player's name.** A 57px header, a 53px
+tab row and a 43px action bar, on a 900px screen — 17% of it spent on
+furniture, and the action bar held four controls nobody presses twice in a
+draft. Tabs and actions share one band now: navigation left, the things you do
+to the draft right. **The 43px goes to the board rather than being pocketed**,
+so nothing below it moves and the board gains a whole round — it showed 5.9 of
+fourteen.
+
+**The band carries the paint and the `hidden` flag; neither child does.** An
+empty band still draws its background and its bottom border, so the wrapper
+has to be the thing that hides. And the two were only ever shown and hidden
+together, in four places — two flags that must agree is one flag with a second
+copy.
+
+**They stack again below 760px.** The tab strip already scrolls sideways
+there, and feeding the actions into the same scroller puts "Discard draft"
+behind five tabs.
+
+**A logo in the corner is the way out only to somebody who already knows
+that.** `#homeBtn` had been the mark alone, doing two jobs and announcing the
+second. It is a chevron and the mark in one control now — one way out rather
+than two competing in a 390px bar.
+
+**What draft this is belongs in the header, because the setup screen folds
+away.** Four rounds in there was no way to check whether this was a 14-round
+league without leaving it. It comes from `leagueSummary()`, which is the
+string the shut setup box already shows — never a second copy of the same
+lookup. It stands down under 760px: it is reference rather than state, so it
+is the first of the four things on that bar that can wait.
+
+**Sound is synthesised, not played from a file.** Three cues do not justify
+the first binary assets in a repository that has none, a tone generated in the
+page cannot 404 or be served stale behind a cache, and it costs no request.
+Same argument as the door being drawn and the product shot generated. The
+`AudioContext` is made on the first gesture that needs it and never at load —
+one created at load sits suspended for ever, so the first cue is silent with
+nothing to say why. It never throws: Web Audio is a runtime dependency on
+somebody's hardware, and it fails by going quiet the way the score strip fails
+by disappearing.
+
+**`soundCue()` fires on the change, not on the state.** `renderHeader()` runs
+on every pick, every tick and every rebuild, so "is it my turn" is true
+hundreds of times for one turn.
+
+**A class is not a style; it is a control.** The sound button was given
+`theme-toggle` to inherit its look, and that class is what `themeBtns()`
+selects, what `syncThemeButton()` writes `aria-pressed` onto, and what the
+delegated handler switches the theme on. It loaded showing "on" it had never
+been given and would have changed the theme when pressed. The shared shape is
+`.hdrbtn` now and each button keeps its own name. This is the `.home` /
+`.avatar` / `initials()` collision again — except **checking the stylesheet
+for the name would not have found it**, because the clash was in behaviour.
+Grep the script too.
+
+**A media query carries no specificity.** The phone rules for `.count` were
+written *above* the rules they override and changed nothing, while
+`matchMedia` agreed the query matched — which reads exactly like a rule that
+is not applying at all. Source order still decides at equal weight.
+
+**And the label and the value measure the same width, so trimming either
+alone does nothing.** "Time left" and "0:59" are both 60px; the block is as
+wide as its widest child either way. Two reasonable-looking fixes moved the
+header by zero pixels before both together moved it by seven.
+
+**Run `python scripts/check_css.py` after moving a block, and do not count
+braces.** A slice that ended at the first `}` after a one-line rule left a
+media query open *and* an orphan `}` where the block used to be — so every
+rule below the query silently became conditional on a phone width. The board's
+gold rings vanished at desktop and nothing looked wrong.
+
+It happened twice in one sitting, and the second time is the lesson: **the
+brace count balanced both times.** An unclosed block and a stray closer cancel
+exactly, so `count("{") === count("}")` passes a file it should reject. The
+script walks the depth instead, which catches each half on its own — a `}` at
+depth zero, and a non-zero depth at the end.
+
+The tell in the browser is a rule that is demonstrably matching and doing
+nothing: `matchMedia` agrees the query applies, the computed style disagrees.
+That reads like a specificity problem and is not one.
+
+## Claim and proof
+
+Three claims down the landing page with the thing each one claims running
+beside them. It replaced three paragraphs — claims with nothing to check them
+against, which is the weakest thing a page can say about a product whose whole
+pitch is that its numbers are inspectable.
+
+**Every stage runs on live data, and that is the rule the section exists
+under.** The same `board`, the same projections and the same `pointsUnder()`
+the draft room uses. A hand-written table of plausible names is
+indistinguishable on screen tonight and wrong the first morning the pipeline
+moves — the same argument that keeps the product shot generated and the door
+drawn rather than photographed. Nothing in it is a name anybody chose.
+
+**`pointsUnder(block, rules)` takes its rule table rather than reading
+`league.rules`.** That is what lets one screen price the same player under
+standard, half and full PPR at once without swapping a global the whole draft
+reads and swapping it back — which works until something throws halfway
+through. `fantasyPoints()` is now a one-line call into it and no arithmetic
+moved.
+
+**A proof whose subject cannot move is worse than no proof.** The scoring
+claim first sorted the board by projected points, which is six quarterbacks:
+every row correct, and not one of them changing by a single point across the
+three settings, under a headline reading "change a rule, every number moves".
+The pool is now filtered by `s.p[STAT_KEYS.rec] > 0` — the players the rule
+can actually touch, asked of the data rather than of a list of positions. At
+0 the top six are all backs; at 1 point a catch, three receivers are in and
+Derrick Henry is gone.
+
+**A cross-position measure cannot be demonstrated on one position.** The Juke
+score stage had the same origin bug and a worse consequence: top four by raw
+points is four quarterbacks, and the entire purpose of points above
+replacement is to say an elite tight end beats the twenty-fifth receiver. It
+takes the best player at each position now. Allen projecting 406 points and
+scoring 48 beside Gibbs projecting 300 and scoring 100 *is* the argument.
+
+**A stage with nothing to say draws nothing.** `paintProof()` falls through to
+the next claim when a builder returns `""`, bounded by the number of claims so
+a short board cannot spin. Same contract as the score strip: it fails by
+disappearing rather than leaving a heading over an empty frame.
+
+**The stage has a floor height.** Three stages of different lengths in a box
+that sizes to its contents makes the section grow and shrink under the reader
+every seven seconds and walks everything below it up and down the page.
+
+**`scoringFormats()` is a function, not a const.** It derives from
+`REC_BY_FORMAT` and `SCORING_NAMES` — a third list of the same three formats
+would be the copy nobody remembers — and it sits near the top of the file
+where a `const` reading either of those would be inside their temporal dead
+zone and throw on load.
+
+## Whose it is, and where the draft is
+
+Two marks on the board, and they were one colour between them.
+
+**Gold is identity, and it is the third meaning after orange and blue.**
+Orange acts, blue states — and *whose* is neither. It had been blue in four of
+the six places a seat is marked, navy in a fifth and translucent white in the
+sixth, while blue was simultaneously carrying focus rings, the selected tab,
+`--link`, `.draft-btn` and the header when the clock is yours. A colour doing
+five jobs is not a signal. `--mine` is the mark now, everywhere a seat is
+yours: the board column and its head, the pick cards, the pick lines, the
+standings row and the product shot.
+
+**`--mine` is a mark and never type.** #FFD166 is 1.4:1 as text on a light
+card. The chat author's name stays `--link` for that reason, and it is not an
+inconsistency: that is a name in a paragraph, not a ring on a cell.
+
+**A ring on the board is a pair, because no single colour can survive what it
+lands on.** It sits on six position solids — which are fixed across themes —
+*and* on an empty cell, which is near-black in dark and near-white in light.
+Measured: gold clears 3:1 on every solid (3.2 at worst) and 9.5 on a dark
+empty cell, and reaches **1.26** on a light one. The keyline `--ring-edge` is
+the exact complement — 4.1 on the solids, 16.7 on a light cell, 1.2 on a dark
+one. So the ring is 2px of colour with 1px of keyline inside it, one half
+always has the surface, and the two clear 11.7 against each other so the pair
+always reads as an edge. `--live-ring` is white and takes the identical
+construction for the identical reason.
+
+The bar here is 1.4.11's **3:1**, not 4.5 — these are marks rather than text,
+which is the one place in this project where the lower bar is the right one.
+Do not "fix" the pair by finding a single colour. There isn't one, and the
+arithmetic above is why.
+
+**Both are inset `box-shadow`, never a `border` and never an `outline`.** A
+border is inside the box under `box-sizing: border-box`, so the 2px dashed
+border the live cell used to carry ate 2px of its padding — that cell was 4px
+narrower inside than every other cell on the board and its text sat 2px high.
+An outline does not follow `border-radius` in every engine and cannot be
+layered, which the keyline needs. Same family as the ring-versus-border note
+on the player sheet headshot.
+
+**`mine` goes on an empty cell too, and that is the whole feature.** The class
+only ever went on a filled one, so the board marked where you had *been* and
+never where you were *going* — and when you pick again is the one question a
+snake board exists to answer. Four rounds out in a twelve-team room it was a
+counting exercise done by hand. Nothing failed and nothing logged: every cell
+that was marked was marked correctly, which is why no check caught it. This is
+the dead-control failure from the rail's "My Team" row in a different shape —
+the defect is in what is *absent*, and absence renders, contrasts and passes.
+
+**Your own turn draws both rings, nested.** It is the one cell on the board
+where the two facts coincide, and letting either win throws the other away.
+
+**What each team holds is on the board, and which positions get counted is
+derived.** `FORCED_LATE` already names the two the app schedules itself, so
+`COUNTED_POSITIONS` is `POSITIONS` minus those — listing QB, RB, WR and TE
+would be the league shape written down a second time. Counting a kicker is
+eight columns of "0" until the closing rounds and eight of "1" after them.
+
+**Each count carries its own ground, and that is the whole reason it is a chip
+rather than coloured text.** White on a position solid is the contract those
+colours were darkened to meet, so the header behind it is never part of the
+sum. Colouring the text was measured first and does not survive: the
+light-theme `--*-fg` tones run 4.85–5.69 on `--board-hd` and **2.15–2.52 on
+the navy of `.hd.me`** — so the one team a manager looks at most is the one
+that fails, in one theme only.
+
+**The overall pick number goes on an undrafted cell and nowhere else.** On a
+filled one it is a sixth fact in a 74px box answering a question nobody has;
+on an empty one it turns "when do I pick again" from arithmetic into reading.
+It comes from `DraftEngine.overallOf()` — the mirror lives inside that, and a
+caller holding a round and a seat must never work it out again. **Test the
+property, not the arithmetic**: a corner number is right when
+`pickCode(overall, teams)` equals the code printed in the same cell. Checking
+`overallOf()` against a second copy of `overallOf()` proves nothing, and the
+seat-versus-pick-number bug is exactly what this catches.
+
+**The direction arrow is on every cell, and it was on drafted ones only.**
+Same failure as the gold column, found in the same screenshot: the snake was
+legible over the half of the board that had already happened and not over the
+half still to be played. That is backwards — the turn matters *before* the
+picks land, which is when somebody is working out whether their wait is one
+pick or nineteen. It yields to the clock and only to the clock; two facts in a
+74px box is one too many and the countdown is the one being watched.
+
 ## Security
 
 The zone is set beyond Cloudflare's defaults, and the defaults were not
@@ -1655,6 +1874,10 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   and says so plainly if none is there rather than looking like a failure.
   Node is installed user-scope via winget, so a new terminal sees it and an
   already-open one does not.
+- Stylesheet: `python scripts/check_css.py` — brace depth through
+  `style.css`. Two lines of output and it takes no arguments; run it after
+  moving a block. Counting braces does not do this job and demonstrably
+  passed a broken file twice.
 - Crosswalk: `python scripts/test_crosswalk.py` — the source-id join against a
   handful of players, including two Josh Allens, a collision and a player
   neither side shares. Needs nothing but the standard library.

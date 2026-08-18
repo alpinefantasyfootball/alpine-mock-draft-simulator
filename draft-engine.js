@@ -61,6 +61,18 @@
     return (round % 2 === 0) ? (teams - slot) : (slot + 1);
   }
 
+  /* Which overall pick a seat holds in a given round — the other inverse of
+     pickInfo, and the one the board wants for a cell nobody has drafted yet.
+
+     It is here rather than in the caller for the same reason pickInRound is:
+     it is snake arithmetic, the mirror is inside it, and a caller holding a
+     round and a seat must never work it out again. The board printed "5.01"
+     and had no way to say that is the 41st pick of the draft without either
+     asking this or writing the mirror down a second time. */
+  function overallOf(round, slot, teams) {
+    return (round - 1) * teams + pickInRound(round, slot, teams);
+  }
+
   /* The label a draft actually uses: the round, then which pick of that round.
 
      Not the seat. For half the board those are the same number, which is how
@@ -156,6 +168,7 @@
     totalPicks: totalPicks,
     pickInfo: pickInfo,
     pickInRound: pickInRound,
+    overallOf: overallOf,
     pickCode: pickCode,
     onTheClock: onTheClock,
     draftOver: draftOver,

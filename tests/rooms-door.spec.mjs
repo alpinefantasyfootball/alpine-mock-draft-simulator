@@ -117,6 +117,103 @@ test.describe("the rooms door", () => {
         .toBeGreaterThan(shut.h * 1.03);
     });
 
+  /* Written after somebody who had never seen the page called it "the books
+     with the room names". Every assertion here is one of the five things that
+     separate a door from a book cover, and the old build failed four of them
+     while passing every test above. A shape can be correct in 3D, correctly
+     animated, correctly contrasted and still be the wrong object. */
+  test("the doorway is door-shaped, not book-shaped", async ({ browser }) => {
+    const page = await openLanding(browser);
+
+    const r = await page.evaluate(() => {
+      const o = document.querySelector(".opening").getBoundingClientRect();
+      const w = document.querySelector(".wall").getBoundingClientRect();
+      const edge = document.querySelector(".door-edge");
+      const handle = document.querySelector(".handle").getBoundingClientRect();
+      const door = document.querySelector(".door").getBoundingClientRect();
+      return {
+        openingRatio: o.width / o.height,
+        // The opening is a hole cut in something, so the wall has to be
+        // bigger than it on three sides. A flush edge is a mount, not a wall.
+        wallPad: { l: o.left - w.left, r: w.right - o.right, t: o.top - w.top },
+        edgeTransform: getComputedStyle(edge).transform,
+        // 1.05m on a 2.03m door. Centred is a clasp, which is what books have.
+        handleDown: (handle.top + handle.height / 2 - door.top) / door.height
+      };
+    });
+
+    /* A real door is 36 by 80 inches. The version this replaced was 1:0.8,
+       which is the proportion of a hardback, a tablet or a picture frame, and
+       it is the single biggest reason nobody read it as a door. */
+    expect(r.openingRatio, "the opening is about 1:2.2").toBeLessThan(0.55);
+    expect(r.openingRatio, "and not a letterbox either").toBeGreaterThan(0.38);
+
+    expect(r.wallPad.l, "wall to the left of the opening").toBeGreaterThan(12);
+    expect(r.wallPad.r, "wall to the right of it").toBeGreaterThan(12);
+    expect(r.wallPad.t, "and a head above it").toBeGreaterThan(12);
+
+    /* The panel's thickness, and the one piece besides the swing that is
+       genuinely 3D. It has to be: at 64 degrees the leading edge turns to
+       face the reader, and a painted edge does not survive that. A matrix3d
+       is the proof it is a real face rather than a 2D strip. */
+    expect(r.edgeTransform, "the door has an edge, in 3D").toMatch(/^matrix3d/);
+
+    expect(r.handleDown, "the handle is at human height, not centred")
+      .toBeGreaterThan(0.40);
+    expect(r.handleDown).toBeLessThan(0.58);
+  });
+
+  test("the open door actually shows the room behind it", async ({ browser }) => {
+    const page = await openLanding(browser);
+    await page.waitForTimeout(1500);
+
+    /* The point of opening a door is to see through it, and that is a
+       three-way trade rather than a preference: the panel covers cos(theta)
+       of the opening and the card covers a strip on the right. Built at 58
+       degrees with a 264px card, the gap between them was 59px — a door ajar
+       rather than a door open — and nothing in the suite could tell.
+
+       Measured against the opening rather than in pixels, so it survives the
+       doorway being resized. */
+    const gap = await page.evaluate(() => {
+      const o = document.querySelector(".opening").getBoundingClientRect();
+      const door = document.querySelector(".door").getBoundingClientRect();
+      const card = document.querySelector(".room-card").getBoundingClientRect();
+      return (Math.min(o.right, card.left) - door.right) / o.width;
+    });
+
+    expect(gap, "a third of the opening at least is lit room").toBeGreaterThan(0.33);
+  });
+
+  test("the room's words are on the card, and the way in is only offered for a room that has one",
+    async ({ browser }) => {
+      const page = await openLanding(browser);
+      await page.waitForTimeout(1500);
+
+      const live = await page.evaluate(() => {
+        const e = document.getElementById("roomEnter");
+        const card = document.querySelector(".room-card").getBoundingClientRect();
+        const name = document.getElementById("roomName").getBoundingClientRect();
+        return {
+          hidden: e.hidden,
+          href: e.getAttribute("href"),
+          // The copy is outside the opening now, which is what lets the door
+          // be door-shaped at all.
+          nameInCard: name.left >= card.left && name.right <= card.right
+        };
+      });
+      expect(live.nameInCard, "the name is on the card").toBe(true);
+      expect(live.hidden, "the open room offers the way in").toBe(false);
+      expect(live.href).toBe("#/draft");
+
+      /* A control that cannot act must not merely fail; it must not be
+         offered. There is nowhere for The Waiver Room to send anybody. */
+      await page.click('#homeRooms .rl[data-room="2"]');
+      await page.waitForTimeout(1400);
+      expect(await page.evaluate(() => document.getElementById("roomEnter").hidden),
+        "a planned room offers nothing").toBe(true);
+    });
+
   test("the doorway survives phone width", async ({ browser }) => {
     const page = await openLanding(browser, { viewport: { width: 390, height: 900 } });
 
