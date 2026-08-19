@@ -1,5 +1,27 @@
 import { motion } from 'framer-motion'
-import { Timer } from 'lucide-react'
+import { LogOut, Pause, Play, RotateCcw, Timer } from 'lucide-react'
+
+function IconButton({ onClick, disabled, danger, title, children }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      aria-label={title}
+      className={
+        'flex h-9 w-9 shrink-0 items-center justify-center rounded-full border transition-colors duration-200 ' +
+        (disabled
+          ? 'cursor-not-allowed border-slate-800 bg-slate-950/60 text-white/20'
+          : danger
+            ? 'border-slate-800 bg-slate-950/60 text-white/60 hover:border-rose-500/50 hover:text-rose-400'
+            : 'border-slate-800 bg-slate-950/60 text-white/60 hover:border-teal-400/50 hover:text-teal-300')
+      }
+    >
+      {children}
+    </button>
+  )
+}
 
 // The countdown's glow reuses the same pulse-glow keyframe the tailwind
 // config already defines for this exact colour (teal, 0.4 alpha) rather
@@ -13,6 +35,15 @@ export default function DraftRoomStatusBar({
   urgent,
   autopick,
   onToggleAutopick,
+  showPause,
+  paused,
+  pauseDisabled,
+  onTogglePause,
+  showUndo,
+  onUndo,
+  discardLabel,
+  discardDanger,
+  onDiscard,
 }) {
   return (
     <div className="z-30 flex h-16 shrink-0 items-center gap-3 border-b border-slate-800 bg-slate-900/80 px-4 backdrop-blur-md sm:gap-4 sm:px-6">
@@ -58,7 +89,23 @@ export default function DraftRoomStatusBar({
         </div>
       </div>
 
-      <div className="ml-auto flex items-center gap-3 sm:gap-5">
+      <div className="ml-auto flex items-center gap-2 sm:gap-3">
+        {showPause && (
+          <IconButton onClick={onTogglePause} disabled={pauseDisabled} title={paused ? 'Resume clock' : 'Pause clock'}>
+            {paused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+          </IconButton>
+        )}
+        {showUndo && (
+          <IconButton onClick={onUndo} title="Undo">
+            <RotateCcw className="h-4 w-4" />
+          </IconButton>
+        )}
+        <IconButton onClick={onDiscard} danger={discardDanger} title={discardLabel}>
+          <LogOut className="h-4 w-4" />
+        </IconButton>
+
+        <div className="h-6 w-px bg-slate-800" />
+
         <button
           type="button"
           onClick={onToggleAutopick}

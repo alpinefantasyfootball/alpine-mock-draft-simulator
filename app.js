@@ -6543,6 +6543,34 @@ window.JukeEngine = {
     return state.autoMe;
   },
   autoPickForMe: autoPickForMe,
+  // Undo, Pause and Discard for the React draft room page — reusing the
+  // exact functions the legacy action bar calls, including the visibility
+  // rules renderActionBar() already encodes (see CLAUDE.md's "Everything
+  // the room decides has to be locked" section): Undo is solo-only — in a
+  // room it un-drafts a copy the next broadcast overwrites anyway, so it
+  // has to be hidden rather than merely made to fail. Pause is the host's
+  // in a room (togglePause() already refuses anyone else via Live.pause()
+  // being ignored server-side, but the button should not be offered in the
+  // first place, same reasoning as Undo). Neither state.paused nor "am I
+  // the host" existed on the bridge before this, so both are added as
+  // plain reads.
+  undo: undo,
+  paused: () => state.paused,
+  // renderPauseButton() disables the button at clockLength 0 — pausing a
+  // clock that was never running is meaningless — so this is bridged too,
+  // rather than the Pause control here always being clickable when the
+  // legacy one sometimes isn't.
+  clockLength: () => state.clockLength,
+  hasRoom: hasRoom,
+  isHost: () => hasRoom() && !!Live.room().isHost,
+  draftOver: draftOver,
+  // restart() is clearSave() + goHome() — the exact real "Discard draft" /
+  // "Leave the room" action (the label itself is real too: renderActionBar()
+  // already picks between them by hasRoom(), reused here rather than
+  // re-deciding it). goHome() disconnects a room first if one is active, so
+  // this is a real departure, not a local reset that the next broadcast
+  // undoes.
+  restart: restart,
   currentTheme: currentTheme,
   setTheme:     setTheme,
   soundWanted:  () => soundWanted,

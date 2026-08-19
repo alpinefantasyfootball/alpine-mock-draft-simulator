@@ -132,6 +132,20 @@ export default function DraftRoom() {
   const rightValue = info.started ? info.rightValue : 'Idle'
   const urgent = !!info.urgent
 
+  // Same gating renderActionBar() already uses in app.js: Undo is
+  // solo-only (a room's copy just gets overwritten by the next
+  // broadcast — see the bridge comment on `undo`), Pause is the host's in
+  // a room, and both disappear once the draft is over. Discard/"Leave the
+  // room" stays offered either way; only its label and danger styling
+  // change.
+  const draftIsOver = engine.draftOver()
+  const hasRoomVal = engine.hasRoom()
+  const isHost = engine.isHost()
+  const showPause = !draftIsOver && (!hasRoomVal || isHost)
+  const showUndo = !draftIsOver && !hasRoomVal
+  const paused = engine.paused()
+  const pauseDisabled = engine.clockLength() === 0
+
   const lineup = engine.seatedLineup()
   const rules = engine.rulesForFormat(league.scoring)
   const pointsFor = (player) => {
@@ -173,6 +187,15 @@ export default function DraftRoom() {
     else setSoloAutopick((a) => !a)
   }
 
+  // Undo/Pause/Discard are all real, direct calls into app.js — undo()
+  // pops picks off state.picks until it's my turn again, togglePause()
+  // stops the clock (or sends Live.pause() in a room), and restart() is
+  // clearSave()+goHome(), the exact "Discard draft"/"Leave the room"
+  // action. None of them are reimplemented here.
+  const handleUndo = () => engine.undo()
+  const handleTogglePause = () => engine.togglePause()
+  const handleDiscard = () => engine.restart()
+
   return (
     <div className="fixed inset-0 z-40 flex flex-col bg-[#0B0E14] text-white">
       <Header />
@@ -186,6 +209,15 @@ export default function DraftRoom() {
           urgent={urgent}
           autopick={autopick}
           onToggleAutopick={handleToggleAutopick}
+          showPause={showPause}
+          paused={paused}
+          pauseDisabled={pauseDisabled}
+          onTogglePause={handleTogglePause}
+          showUndo={showUndo}
+          onUndo={handleUndo}
+          discardLabel={hasRoomVal ? 'Leave the room' : 'Discard draft'}
+          discardDanger={!hasRoomVal}
+          onDiscard={handleDiscard}
         />
 
         <div className="flex flex-1 flex-col overflow-hidden lg:flex-row">
