@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import RoomCard from './RoomCard.jsx'
 import { DraftIcon, ProspectIcon, WaiverIcon, TradeIcon, StrategyIcon, LeagueIcon } from './icons.jsx'
 
@@ -72,6 +72,10 @@ export default function RoomNavigation() {
   const [active, setActive] = useState(0)
   const [paused, setPaused] = useState(false)
   const [dims, setDims] = useState(() => getDims(typeof window !== 'undefined' ? window.innerWidth : 1280))
+  // A ref, not state — updated inside a touchmove handler that can fire
+  // many times a second, and a swipe only needs to be decided once per
+  // gesture rather than triggering a re-render on every pixel of movement.
+  const touchState = useRef(null)
 
   useEffect(() => {
     function onResize() {
@@ -106,7 +110,27 @@ export default function RoomNavigation() {
           if (e.key === 'ArrowLeft') prev()
           if (e.key === 'ArrowRight') next()
         }}
-        className="relative mx-auto w-full max-w-[900px] outline-none"
+        onTouchStart={(e) => {
+          touchState.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, swiped: false }
+          setPaused(true)
+        }}
+        onTouchMove={(e) => {
+          const start = touchState.current
+          if (!start || start.swiped) return
+          const dx = e.touches[0].clientX - start.x
+          const dy = e.touches[0].clientY - start.y
+          // Horizontal intent only — a mostly-vertical drag is the page
+          // scrolling, not a swipe, and must not be eaten here.
+          if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy)) return
+          start.swiped = true
+          if (dx < 0) next()
+          else prev()
+        }}
+        onTouchEnd={() => {
+          touchState.current = null
+          setPaused(false)
+        }}
+        className="relative mx-auto w-full max-w-[900px] touch-pan-y outline-none"
         style={{ height: dims.cardH + 64, perspective: 1400 }}
       >
         {rooms.map((room, i) => {

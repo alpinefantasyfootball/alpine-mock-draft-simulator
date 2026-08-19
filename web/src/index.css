@@ -13,3 +13,10 @@ body {
   background-color: theme('colors.obsidian');
   color: #E7ECF3;
 }
+
+/* Tailwind 3 has no backdrop: variant, so ::backdrop is styled directly.
+   ComingSoonModal.jsx is the only <dialog> in web/src today. */
+.coming-soon-dialog::backdrop {
+  background: rgba(11, 14, 20, 0.7);
+  backdrop-filter: blur(4px);
+}

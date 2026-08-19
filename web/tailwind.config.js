@@ -37,9 +37,19 @@ export default {
           '0%, 100%': { boxShadow: '0 0 15px rgba(0,229,255,0.4)' },
           '50%': { boxShadow: '0 0 30px rgba(0,229,255,0.7), 0 0 18px rgba(123,31,162,0.5)' },
         },
+        // A JS-driven restart-on-complete loop (Framer Motion's animate())
+        // measurably hitched at the wraparound — every restart cost a real
+        // frame of JS between onComplete firing and the next animate() call.
+        // A native CSS loop has no such seam: the browser repeats the
+        // keyframe on the compositor thread with nothing for JS to do.
+        marquee: {
+          '0%': { transform: 'translateX(0%)' },
+          '100%': { transform: 'translateX(-50%)' },
+        },
       },
       animation: {
         'pulse-glow': 'pulse-glow 1.8s ease-in-out infinite',
+        marquee: 'marquee 45s linear infinite',
       },
     },
   },

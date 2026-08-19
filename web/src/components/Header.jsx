@@ -1,16 +1,11 @@
+import { useRef } from 'react'
 import Ticker from './Ticker.jsx'
 import JukeLogo from './juke-logo/JukeLogo.jsx'
-
-// Same "not live yet" dialog the rest of the site already uses (#soonDlg,
-// wired by app.js's notYet()) — a second, React-only "coming soon" message
-// would be one more copy of the same fact to keep in sync.
-function notYet(title, body) {
-  if (typeof window !== 'undefined' && window.JukeEngine) {
-    window.JukeEngine.notYet(title, body)
-  }
-}
+import ComingSoonModal from './ComingSoonModal.jsx'
 
 export default function Header() {
+  const modalRef = useRef(null)
+
   return (
     <header className="fixed inset-x-0 top-0 z-50 border-b border-white/5 bg-obsidian/80 backdrop-blur-md">
       <div className="mx-auto flex h-16 max-w-7xl items-center gap-6 px-6">
@@ -24,7 +19,7 @@ export default function Header() {
           <button
             type="button"
             onClick={() =>
-              notYet(
+              modalRef.current?.open(
                 'Accounts are not live yet',
                 'There is nothing to log into so far. Your drafts save to this device, ' +
                   'so you can close the tab and pick up where you left off.'
@@ -37,7 +32,7 @@ export default function Header() {
           <button
             type="button"
             onClick={() =>
-              notYet(
+              modalRef.current?.open(
                 'Sign-up is coming',
                 'Juke does not have accounts yet. Everything here is free and needs no ' +
                   'sign-up, and your drafts already save to this device.'
@@ -50,6 +45,8 @@ export default function Header() {
           </button>
         </nav>
       </div>
+
+      <ComingSoonModal ref={modalRef} />
     </header>
   )
 }
