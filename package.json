@@ -1,7 +1,7 @@
 {
   "name": "juke-tests",
   "private": true,
-  "description": "Dev-only. The app has no build step, no bundler and no runtime dependency — open index.html and it runs. This file exists so `npm install` can fetch the end-to-end test runner, which drives the real pages in a real browser. Nothing here is served, imported or required by the site.",
+  "description": "Dev-only. Fetches the end-to-end test runner, which drives the real pages in a real browser (built via web/, the one part of the site with a real build step — see CLAUDE.md's Stack section). Nothing here is served, imported or required by the site.",
   "scripts": {
     "test": "playwright test",
     "test:headed": "playwright test --headed"

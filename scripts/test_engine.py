@@ -391,8 +391,8 @@ def main():
               + ", ".join(RUNTIMES) + ").")
         print()
         print("The engine is plain JavaScript with no imports, so any of them")
-        print("will run it. Install one and re-run, or open index.html and")
-        print("exercise it through the app instead.")
+        print("will run it. Install one and re-run, or run 'npm run dev' in")
+        print("web/ and exercise it through the app instead.")
         return 2
 
     harness = (HARNESS
