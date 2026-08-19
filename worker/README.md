@@ -18,7 +18,9 @@ the multi-user section of `CLAUDE.md`.
 | File | Role |
 |---|---|
 | `draft-room.js` | The Durable Object. Sockets, storage, the alarm — and nothing else. |
-| `wrangler.toml` | Binding and migration. One class, `DraftRoom`. |
+| `store.js` | The D1 cache: the player pool and the headlines. Every function answers "no" to a missing binding rather than throwing. |
+| `migrations/` | The SQL. `0001_init.sql` creates `players`, `player_news` and `news_lookups`. |
+| `wrangler.toml` | Bindings, the DO migration and the cron. One class, `DraftRoom`; one database, `juke_db`. |
 | `../room.js` | Who is sitting where, what has been picked, how long is left. Pure. |
 | `../draft-engine.js` | The rules of a snake draft. Pure. |
 
@@ -137,12 +139,126 @@ pinning an outage for the TTL would turn a blip into fifteen minutes of silence
 — and the CORS headers are rebuilt per request rather than served from the
 cached entry.
 
+That edge cache is now the first of three tiers rather than the only one: D1
+sits behind it and the provider behind that. See **The cache database** below,
+which is where the arithmetic that actually protects the allowance lives.
+
 Only the shape `{ title, summary, source, at, url }` reaches the page.
 Normalising here rather than passing the provider's payload through means
 swapping provider is a change to `fetchUpstreamNews()` and nothing else, and
 it keeps the number of fields the page has to escape down to what it draws.
 **`source` is never dropped** — we link and attribute rather than republish,
 and an unattributed headline is the version of this that is not allowed.
+
+## The cache database
+
+D1, bound as `DB`, created as `juke_db`. Two tables that matter and one that
+looks like bookkeeping and is not.
+
+**It is a cache and never a source of truth.** `players.js` and `stats.js` are
+still the board, still generated nightly by `scripts/build_players.py`, and a
+room still pins the version it started on because the CPU wobble reads a
+player's position in that array. A board built out of D1 instead would be the
+league shape written down twice, in the one place where two clients disagreeing
+forks a live draft. The worker reads these tables; the page never does.
+
+**Nothing depends on it existing.** Every function in `store.js` returns early
+on a missing `env.DB`, so `wrangler dev` with no `database_id`, and the whole
+existing test suite, behave exactly as they did. That is what lets
+`test-sockets.mjs` still pass 87 assertions without a database anywhere.
+
+### The three tiers in front of Tank01
+
+`/news` now asks three things in order, and each exists for a different reason:
+
+1. **`caches.default`, fifteen minutes** — the *freshness* tier. Per
+   colocation and evictable, so on its own the worst case is an upstream call
+   per player per quarter hour per data centre.
+2. **D1, twelve hours (`NEWS_DB_TTL`)** — the *quota* tier. One database,
+   global, durable. This is the one that makes a thousand calls a month work:
+   it caps the spend at two calls per player per day for everybody at once,
+   which is about sixteen distinct players a day across a month. A D1 hit fills
+   the edge cache on the way past.
+3. **The provider**, and only then.
+
+`x-juke-cache` says which answered: `hit`, `db` or `miss`.
+
+**A cache hit has to be indistinguishable from a miss, and that took three
+goes.** `usableNews()` in `store.js` is the single normalisation both paths run
+— the same filter, the same dedup, the same ordering — because the divergences
+each hid somewhere different: an unlinkable card dropped on the way into the
+database but not on the way out of the provider; the feed's duplicate story
+deduped by the primary key but not by the response; and the response in the
+provider's order against a read-back sorted newest-first. Nobody would call any
+of those wrong on its own, and a developer with a warm cache and a developer
+with a cold one would see different pages and both look right. `published_text`
+exists for the same reason: `timestamp` is for `ORDER BY` and the text is what
+the card draws, and reformatting the integer for display would have been a
+fourth one.
+
+**An error is never stored; an empty answer is.** "He has no news today" is a
+fact worth keeping and re-asking for it would spend the allowance on exactly
+the players who have nothing — which is what `news_lookups` is for, because an
+empty answer writes zero rows to `player_news` and that is indistinguishable
+from never having asked. Verified by taking the stub down and confirming a
+known-empty player still answers `db` with `items: []` and no `error`.
+
+**The licence rule is in the schema.** `content` is a clipped summary with a
+`CHECK (length(content) <= 400)`, `source` cannot be empty, and the url must be
+http(s). We link and attribute; we do not republish, and a column that will not
+physically hold an article body cannot quietly start holding one.
+
+### The pool sync
+
+`[triggers] crons = ["30 11 * * *"]`, half an hour after the Python pipeline, on
+`scheduled()`. Measured on a real run: **4385 rows**, all 32 team defenses named
+correctly. It upserts and never deletes — a player who has left the league is a
+row whose `last_updated` stopped moving, not a row to remove — so a
+half-succeeded fetch cannot empty the table.
+
+**`position` is Sleeper's own value and is not the set the sync admits on.** A
+row gets in if either `position` or `fantasy_positions` names a position we
+draft, so 111 fullbacks are stored as `FB`, plus a few punters and corners
+Sleeper tags loosely. `WHERE position IN ('QB','RB',…)` therefore returns fewer
+rows than the table holds. The alternative — storing the qualifying fantasy
+position — would make the column filterable and make this table disagree with
+every other Sleeper-keyed thing in the project.
+
+**CPU is the open question.** The Sleeper pool is about five megabytes and
+`res.json()` parses all of it, which is real CPU rather than the I/O the plan
+limits are generous about. If it trips, the fix is not to tune the parse —
+there is no streaming parser without a dependency, which this project does not
+add. It is to move the sync into `build_players.py`, which already fetches this
+exact endpoint every morning where CPU is free, and write through D1's HTTP
+API. Read the CPU time on a real run before deciding.
+
+### Running it
+
+```bash
+cd worker
+wrangler d1 migrations apply juke_db --local     # local sqlite, no account
+wrangler d1 migrations apply juke_db --remote    # the real database
+```
+
+`--local` needs no account and no `database_id`; `--remote` needs the real id in
+`wrangler.toml`, which `wrangler d1 info juke_db` prints. Trigger the cron
+locally with `curl "http://127.0.0.1:8787/cdn-cgi/local/scheduled"`, and note
+the response returns immediately because the work is in `waitUntil` — read the
+log line, not the status code.
+
+A local key goes in `worker/.dev.vars`, which is gitignored:
+
+```
+TANK01_KEY = "…"
+GIPHY_KEY = "…"
+```
+
+**`--var` on the command line works and a stale `workerd` will make you think
+it does not.** `wrangler dev` leaves `workerd.exe` processes behind when its
+parent is killed, two can hold port 8787 at once, and the old one answers — so
+a route came back `configured: false` with the key visibly bound in the new
+process's own startup log. Check `netstat -ano | grep :8787` before believing a
+binding is missing.
 
 ## Not done yet
 

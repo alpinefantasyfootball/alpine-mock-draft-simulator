@@ -25,6 +25,11 @@
 // and the browser loads the same two files.
 import Room from "../room.js";
 
+/* The D1 cache. Every function in there answers "no" to a missing binding
+   rather than throwing, so this file works unchanged with no database — which
+   is what keeps `wrangler dev --local` and the keyless news test running. */
+import { syncPlayerPool, cachedNews, storeNews, usableNews } from "./store.js";
+
 /* How long after the last socket closes before the room is forgotten. Long
    enough that a phone locking, a tunnel, or closing a laptop for lunch does
    not destroy a draft; short enough that abandoned rooms do not accumulate
@@ -486,7 +491,7 @@ async function fetchUpstreamNews(env, playerId, base) {
   const body = await res.json();
 
   const rows = Array.isArray(body) ? body : (body.body || body.data || []);
-  return (Array.isArray(rows) ? rows : []).map(function (n) {
+  const mapped = (Array.isArray(rows) ? rows : []).map(function (n) {
     const url = String(n.link || n.url || "").slice(0, 400);
     return {
       title: String(n.title || n.headline || "").slice(0, 200),
@@ -495,7 +500,17 @@ async function fetchUpstreamNews(env, playerId, base) {
       at: publishedAt(n),
       url: url
     };
-  }).filter((n) => n.title && n.url).slice(0, NEWS_MAX);
+  });
+
+  /* One shared normalisation rather than a filter written out here, and the
+     reason is in usableNews(): the cache reads its list back through the same
+     filter, the same dedup and the same ordering, and any of the three
+     differing means a cache hit draws different cards from a cache miss.
+
+     It also drops a `javascript:` link before it is ever sent, which the old
+     `n.title && n.url` did not: that let a card the page refuses to build
+     travel all the way to the page to be refused. */
+  return usableNews(mapped).slice(0, NEWS_MAX);
 }
 
 /* Who actually wrote it.
@@ -532,7 +547,7 @@ function publishedAt(row) {
   return /\d{4}|\d{1,2}[/-]\d{1,2}/.test(raw) ? raw.slice(0, 40) : "";
 }
 
-async function playerNews(request, env) {
+async function playerNews(request, env, ctx) {
   const cors = corsFor(request);
   const headers = Object.assign({ "content-type": "application/json" }, cors);
 
@@ -572,6 +587,33 @@ async function playerNews(request, env) {
       { headers: Object.assign({}, headers, { "x-juke-cache": "hit" }) });
   }
 
+  /* The second tier, and the one that actually protects the allowance.
+
+     The cache above is the *freshness* tier: fifteen minutes, and per
+     colocation, so ten managers in ten cities miss it ten times over, and an
+     eviction costs an upstream call whenever it happens. This one is the
+     *quota* tier — one database, global, durable, twelve hours — so the worst
+     case stops being "once per player per quarter hour per data centre" and
+     becomes twice a player a day for everybody at once. On a thousand calls a
+     month that is the difference between the feature working and the feature
+     being rationed by the middle of the month.
+
+     A D1 hit fills the edge cache on the way past, or every reader in this
+     colocation would keep paying for a database round trip to learn something
+     the machine they are talking to could have told them. */
+  const stored = await cachedNews(env, playerId);
+  if (stored) {
+    const body = JSON.stringify({ configured: true, items: stored });
+    after(ctx, cache.put(key, new Response(body, {
+      headers: {
+        "content-type": "application/json",
+        "cache-control": "public, max-age=" + NEWS_TTL
+      }
+    })));
+    return new Response(body,
+      { headers: Object.assign({}, headers, { "x-juke-cache": "db" }) });
+  }
+
   try {
     const items = await fetchUpstreamNews(env, playerId, env.TANK01_BASE || NEWS_BASE);
     const body = JSON.stringify({ configured: true, items });
@@ -589,6 +631,13 @@ async function playerNews(request, env) {
         "cache-control": "public, max-age=" + NEWS_TTL
       }
     }));
+
+    /* Behind the response, not in front of it. A reader is waiting on
+       headlines they already have; they are not waiting on a cache whose whole
+       job is to make the *next* reader faster, and a database hiccup must not
+       turn an answer we successfully fetched into an error. storeNews() catches
+       its own failures for the same reason. */
+    after(ctx, storeNews(env, playerId, items));
 
     return new Response(body,
       { headers: Object.assign({}, headers, { "x-juke-cache": "miss" }) });
@@ -616,7 +665,7 @@ function newsCacheKey(playerId) {
 }
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
     if (url.pathname === "/news") {
@@ -626,7 +675,7 @@ export default {
           "access-control-max-age": "86400"
         }, corsFor(request)) });
       }
-      return playerNews(request, env);
+      return playerNews(request, env, ctx);
     }
 
     if (url.pathname === "/giphy") {
@@ -644,8 +693,48 @@ export default {
 
     const id = env.DRAFT_ROOM.idFromName(match[1]);
     return env.DRAFT_ROOM.get(id).fetch(request);
+  },
+
+  /* The nightly pool refresh. Declared in wrangler.toml under [triggers].
+
+     It is a *cache* refresh and nothing depends on it having run: the board
+     comes from players.js, which scripts/build_players.py regenerates from the
+     same Sleeper endpoint every morning. So this failing costs the worker a
+     staler copy of a list it uses for its own lookups, and costs the app
+     nothing at all — which is why syncPlayerPool() logs rather than throws.
+
+     `waitUntil` because a scheduled handler that returns before its work is
+     done has its work cancelled. */
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(syncPlayerPool(env).then(function (n) {
+      // Count what was written, not what was fetched. A count that disagrees
+      // with the rows underneath it is how you stop reading the log at all.
+      console.log(n === null ? "player pool sync: skipped or failed"
+                             : "player pool sync: " + n + " rows");
+    }));
   }
 };
+
+/* Run something after the response has gone.
+
+   Two things this has to survive, and both of them are on the news path, whose
+   entire contract is that it fails by disappearing.
+
+   **`ctx` may not be there.** A bare `ctx.waitUntil` throws when this route is
+   driven from anywhere but the fetch handler, and it would throw *after* a
+   perfectly good answer had been assembled.
+
+   **The promise is never awaited, so its rejection is nobody's.** An unhandled
+   rejection on a page that is otherwise fine is exactly what the catch inside
+   fetchUpstreamNews() exists to prevent, and a cache write is no different: it
+   is swallowed here so a caller cannot forget to. */
+function after(ctx, promise) {
+  const quiet = Promise.resolve(promise).catch(function (err) {
+    console.error("deferred work failed:", err && err.message);
+  });
+  if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(quiet);
+  return quiet;
+}
 
 function json(body, status) {
   return new Response(JSON.stringify(body), {

@@ -22,6 +22,12 @@ playwright-report/
 # else's half-finished draft.
 worker/.wrangler/
 
+# Local secrets for `wrangler dev`. The two proxied routes need a key and the
+# keys live in the worker, never in the page — so testing them locally means
+# putting real ones in a file next to wrangler.toml. There are no secrets in
+# this repository and there must not be.
+worker/.dev.vars
+
 # Folder metadata the operating system writes on its own. This repository
 # lives inside OneDrive, which drops a desktop.ini in any folder it has
 # been given an icon or a localised name for — so it reappears on its own

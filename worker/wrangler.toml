@@ -15,6 +15,39 @@ class_name = "DraftRoom"
 tag = "v1"
 new_sqlite_classes = ["DraftRoom"]
 
+# The cache database. Player pool and headlines, so the two upstream feeds
+# are asked as rarely as we can manage — Tank01's free tier is a thousand
+# calls a month, which one sweep of the board would spend a fifth of.
+#
+# Nothing the page renders comes from here. players.js and stats.js are still
+# the board, still generated nightly, still the version a room pins itself to.
+#
+# `migrations_dir` is D1's, and is not the [[migrations]] block above: that one
+# introduces a Durable Object class and has nothing to do with SQL. Two
+# unrelated things with one name, in one file — read the section header.
+[[d1_databases]]
+binding = "DB"
+database_name = "juke_db"
+database_id = "89995115-4083-4dc6-ad4a-0344345a1205"
+migrations_dir = "migrations"
+
+# The pool sync is NOT scheduled yet, deliberately, and this comment is the
+# note explaining why rather than a leftover.
+#
+#   [triggers]
+#   crons = ["30 11 * * *"]
+#
+# Half past, when it is turned on, because scripts/build_players.py runs at
+# 11:00 UTC and there is no reason for the two to fetch Sleeper in the same
+# minute. They are independent — this one failing does not touch the
+# generated files.
+#
+# It stays commented because **nothing reads the players table yet.** Arming
+# it today buys a nightly 5MB fetch, a full parse and ~11,000 upserts to fill
+# a cache with no reader, and that parse is the one thing in this worker most
+# likely to trip a CPU limit. Uncomment it in the change that adds the first
+# consumer, so the cost and the thing paying for it land together.
+
 # The site stays on GitHub Pages. This worker is only the room, so the
 # static app keeps working with no backend at all — which is the point:
 # a solo mock draft must not depend on anything being up.
