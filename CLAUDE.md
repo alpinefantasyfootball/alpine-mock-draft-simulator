@@ -745,10 +745,18 @@ way, not reasoned about.
   the element. Small enough to be invisible as a number and quite visible as a
   lopsided chip — it was spotted by eye before it was measured. The padding is
   `9px 12px 8px` now, so 8 + the border is the 9 the top already had.
-- **Two scales, and no rule below them may write a raw px.** Eight type
-  steps — 10, 12, 14, 16, 19, 23, 32, 42 — and five radii — 4, 8, 12, 16,
-  pill. They live in their own `:root` block above the colours, because
-  they do not move between themes and should not be read as if they might.
+- **Two scales and two faces, and no rule below them may write a raw px or
+  name a typeface.** Eight type steps — 10, 12, 14, 16, 19, 23, 32, 42 — five
+  radii — 4, 8, 12, 16, pill — and `--font-display` / `--font-body`. They live
+  in their own `:root` block above the colours, because they do not move
+  between themes and should not be read as if they might.
+
+  The faces joined them for the third instance of the same lesson: they were
+  written out as literals 43 times, and the proof it mattered is that three of
+  those were in page-local `<style>` blocks — two in a 404 page written an hour
+  earlier — which a find-and-replace across `style.css` would have left behind,
+  in the one place nobody looks. **A comment naming a face is the same drift as
+  a rule naming one**, so the wordmark's note was rewritten with them.
 
   They replaced 26 font sizes and 15 radii: every half step from 8.5px to
   16px and every integer from 2 to 12, each chosen per element by eye. The
@@ -768,8 +776,13 @@ way, not reasoned about.
   nothing on screen and keeps that audit honest.
 - **One primary action colour, and it is `--orange-cta`.** Orange means
   act; blue means state — focus rings, the selected tab, the header when
-  the clock is yours. They were split for a long time, `.cta` orange and
-  `.primary` blue, which meant the same control was two colours depending
+  the clock is yours. **This is why orange may not also be a surface** — an
+  orange hero band was built and it swallowed the CTA whole. See "Tried and
+  rejected: orange as a surface"; the 4px rule across the top of both headers
+  is the whole of what orange gets outside a control.
+
+  The act/state split itself was hard won. `.cta` was orange and `.primary`
+  blue for a long time, which meant the same control was two colours depending
   on the screen: "Resume" on a saved draft was orange on the landing page
   and blue three lines into the draft view, from the same two words in the
   same codebase.
@@ -1520,6 +1533,109 @@ region and measures 5.15. **Both a false alarm and a real miss came out of
 the same shortcut.** Composite the alpha, and interpolate the gradient at
 the element's own position.
 
+## The rebrand, and the three things that did not survive it
+
+Measured on 18 August 2026 by running `getComputedStyle` over six live
+competitor sites and weighting each colour by the screen area it covers — the
+values as shipped, not as published in a brand guide.
+
+**Juke was wearing Sleeper's clothes, and the evidence was two decisions
+rather than a vibe.** Same two typefaces, exactly: Poppins for display and
+Inter for body. Ground within nine points of lightness — Juke `#0E151E`
+against Sleeper `#05091D`, cards `#18212D` against `#131B38`, blue-grey
+secondary text on both. Three of the seven platforms surveyed were on Poppins.
+
+Two things fell out of the survey that are worth keeping:
+
+- **Five of six competitors use a light ground.** Dark navy is not what
+  fantasy football looks like; it is what *Sleeper* looks like, and Juke
+  defaulted to dark. Underdog is the most distinctive brand in the category
+  and went the other way entirely — white, `#FFFF00`, a heavy condensed face.
+- **Nobody uses orange.** It is the one unclaimed position in the category and
+  Juke already held it in the mark.
+
+**Type is the fastest identity signal, which is why the face went first.** It
+is read before anything is consciously looked at. The risk was apparent size,
+because a condensed face usually costs it — measured at 42px against Poppins,
+Barlow Condensed came out **cap height 107%, x-height 116%, width 83%**.
+Taller *and* narrower, so headings did not weaken, 10 and 12px text gained a
+sixth of its x-height, and board cells gained horizontal room. No type-scale
+adjustment was needed, which was checked rather than hoped.
+
+**Moving a ground means holding luminance, not HSL lightness.** They are not
+the same thing: luminance weights green heavily, so shifting hue at constant
+lightness silently walks every contrast ratio in the section above. Solved for
+matched luminance instead, the whole contrast section stayed true word for
+word — page 15.46 against a documented 15.43, `--ink-light` on `--fill` 4.84
+against 4.85, and the gold ring **9.51 against a documented 9.5**, because an
+empty cell *is* `--fill` and `--fill` kept its luminance. Do it this way and
+there is nothing to re-derive.
+
+**Cleveland is the club that runs out of room first.** All 32 accents still
+clear the documented 12 CIE76 bar against the card, worst Green Bay at 14.3.
+But Cleveland went 29.2 to 19.1 on a neutral ground and 16.7 on the warmer one
+that was rejected. Warming the ground pulls the warm clubs closer, and brown
+against a warm charcoal is the pair that fails first.
+
+### Tried and rejected: a warm ground
+
+The first attempt was hue 28 at 13% saturation, and it read sepia. **Orange is
+hue 21, so a warm ground is analogous to it** — the accent stopped fighting the
+background and the CTA went quiet.
+
+The bind is worth understanding before anybody tries again: orange's complement
+is about 201, and Sleeper occupies 214 to 233. **The best ground for this accent
+is roughly where the competitor already lives.** A considered neutral is the way
+out of that, which is why the ground is 5% saturation and not 0 — near
+indistinguishable from grey on screen, still lets the orange carry, and a bias
+toward the accent is what separates a chosen neutral from an inherited one.
+
+### Tried and rejected: orange as a surface
+
+An orange hero band was built, screenshotted and thrown away. It **swallowed
+the CTA whole** and took the eyebrow with it, and the product shot's position
+solids fought the ground.
+
+**A colour cannot be the ground and the call to action at once.** Orange is
+load-bearing under the one-primary-action rule, so flooding a surface with it
+forces a different CTA colour, which breaks the rule that took real work to
+establish.
+
+So the survey's own conclusion — *orange is only about 1% of the landing page,
+spend more of it* — **was wrong, and is retracted here.** The 1% is not
+under-use. It is what makes the accent work. What orange can have is somewhere
+nothing is clickable and the area is tiny, which is the 4px rule across the top
+of `.shellbar` and `.appbar`.
+
+### Tried and rejected: position colour as a left rail
+
+Both variants were built against a real board and neither earned its place:
+
+- **Neutral cell with a 3px rail.** Prettier, calmer, higher-contrast text —
+  and at working zoom the rails are nearly invisible. Scanning the grid for
+  position runs is what a draft board is *for*, and it stops working.
+- **Tinted fill with a 4px rail**, reusing the `--*-bg` / `--*-fg` pair the
+  badges and avatars already use. Better, still worse than the solids: those
+  tints were drawn for 20px badges and read muddy at cell size.
+
+**The argument for it was that a rail frees the cell to carry white text at
+full contrast, and that solved a problem which does not exist.** The six solids
+were already darkened until white clears 4.6:1 on each — measured, documented
+and passing. Trading a working information channel for a fix that had already
+been made is a bad trade, and it is the shape of mistake to watch for: a
+redesign justified by a constraint that was lifted years ago.
+
+### What did work, and why the pattern is worth copying
+
+Three of six proposals died on contact. The two that shipped were the ones with
+a **measurable invariant** — a font swap that could be checked against cap
+height, and a recolour that could be checked against luminance. The three that
+died were the ones justified by taste or by a stale constraint.
+
+Prototype in the browser before writing to the file. Every rejection above cost
+one injected stylesheet and one screenshot, and none of them touched the
+repository.
+
 ## The draft room header
 
 **Three stacked bars is 153px before a player's name.** A 57px header, a 53px
@@ -1585,6 +1701,31 @@ is not applying at all. Source order still decides at equal weight.
 alone does nothing.** "Time left" and "0:59" are both 60px; the block is as
 wide as its widest child either way. Two reasonable-looking fixes moved the
 header by zero pixels before both together moved it by seven.
+
+**The pick is the fact and the state is the label.** The bar led with "You're
+on the clock!" at 16px bold and buried the pick underneath at 12px — and by the
+time that sentence is readable the whole header has turned blue, so the largest
+type on it was saying what the colour said first. The pick number takes the
+19px display line now and the state drops to a 10px caps label above it; in the
+resting state that same slot carries whose turn it is. One structure, two
+contents, and it came out **61px against the 62 it replaced**, because the
+padding moved off `.appbar-inner` and into the four segments.
+
+**`--seg` is a property, not a colour.** The dividers between those segments
+have to survive three grounds — the resting card, the blue gradient and the red
+one — so the state blocks override it, the same way `--mark-ink` reverses the
+logo. The first build used a flat `rgba(255,255,255,.16)`: right on the two
+gradients, nearly invisible on the resting card, completely invisible in light.
+Same class as naming `--band-ink` outside `.hero-band`.
+
+**Two traps for whoever measures this bar next, both of which produced a
+convincing wrong answer.** A draft opens on *your own turn*, so `.appbar`
+already carries `.my-turn` — a check reading "the resting state" without
+stripping it measures one ground three times and calls it three, which is how
+the divider test first passed against nothing at all. And `.appbar` transitions
+`color`, so a reading taken in a non-compositing pane without killing
+transitions reports the value it is moving *from*: that produced a 2.93 and a
+1.01 on a header that was perfectly legible.
 
 **Run `python scripts/check_css.py` after moving a block, and do not count
 braces.** A slice that ended at the first `}` after a one-line rule left a
