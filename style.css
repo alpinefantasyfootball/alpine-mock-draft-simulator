@@ -21,9 +21,37 @@
    The radius scale replaced 15 values — every integer from 2 to
    12. Four steps and a pill, by the job each does: an inline
    mark, a control, a card, an overlay.
+
+   And the two faces, for the third time the same lesson: they
+   were written out as literals 44 times between them, so
+   changing one meant a find-and-replace across the file and
+   missing one meant a heading in the wrong typeface that
+   nobody would spot. They are tokens now. No rule below may
+   name a face directly.
    ========================================================== */
 
 :root {
+  /* Display. Condensed, because a scoreboard, a jersey nameplate
+     and a broadcast lower-third are all condensed caps, and that
+     is the cheapest way for an interface to read as sport
+     without loading a photograph of one.
+
+     It replaced Poppins, which was not a bad face — it was
+     Sleeper's. Measured off the running sites in August 2026,
+     Juke shared *both* of its typefaces with the competitor it
+     most needs to be told apart from, and three of the seven
+     platforms surveyed were on Poppins. Type is the fastest
+     identity signal there is, because it is read before
+     anything is consciously looked at. */
+  --font-display: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
+
+  /* Body stays a neutral grotesque and stays Inter, deliberately.
+     It is the one face here that is infrastructure rather than
+     identity — drawn for screen UI at small sizes, which is what
+     most of this app is — and the distinctiveness is bought in
+     the display face where it costs no legibility. */
+  --font-body: Inter, system-ui, sans-serif;
+
   --fs-2xs:  10px;   /* board cells, badges, uppercase micro-labels */
   --fs-xs:   12px;   /* hints, meta, field labels, small buttons    */
   --fs-sm:   14px;   /* card body, blurbs, nav, tabs                */
@@ -149,18 +177,18 @@
      and the darkest in light. --fill-hi is lighter again but never carries
      this tone: every rule that hovers to --fill-hi either sets --ink or
      starts from --ink-mid, which clears it at 5.30. */
-  --ink:         #E6ECF3;
-  --ink-mid:     #A2B0BE;   /* 6.21 on --fill */
-  --ink-light:   #8E9BA9;   /* 4.85 on --fill, the worst surface it meets */
+  --ink:         #ECEBEB;
+  --ink-mid:     #B0AEAC;   /* 6.20 on --fill */
+  --ink-light:   #9C9996;   /* 4.84 on --fill, the worst surface it meets */
 
-  --page:        #0E151E;
-  --card:        #18212D;
-  --line:        #2A3441;
+  --page:        #151413;
+  --card:        #22201F;
+  --line:        #353330;
   --hairline:    #222C38;   /* the rules between rows inside a card */
-  --sunken:      #131C26;   /* a panel set into a card: stat boxes, table heads */
-  --well:        #1E2836;   /* slot chips, round numbers */
-  --fill:        #232E3C;   /* empty board cells, small buttons */
-  --fill-hi:     #2D3948;   /* those buttons, hovered */
+  --sunken:      #1C1B1A;   /* a panel set into a card: stat boxes, table heads */
+  --well:        #292725;   /* slot chips, round numbers */
+  --fill:        #2F2D2B;   /* empty board cells, small buttons */
+  --fill-hi:     #3A3835;   /* those buttons, hovered */
   --track:       #242F3D;   /* the unfilled part of a bar or meter */
   --board-hd:    #212B38;
 
@@ -332,18 +360,18 @@
      whatever the worst surface allows, and --ink-mid is placed above it.
      Body text getting darker in light is the side effect, and it is the
      right side effect. */
-  --ink:         #16202C;
-  --ink-mid:     #4C5763;   /* 6.44 on --fill */
-  --ink-light:   #5E6A76;   /* 4.83 on --fill, the worst surface it meets */
+  --ink:         #201F1E;
+  --ink-mid:     #585553;   /* 6.44 on --fill */
+  --ink-light:   #6B6865;   /* 4.83 on --fill, the worst surface it meets */
 
-  --page:        #F5F7FA;
+  --page:        #F7F7F6;
   --card:        #FFFFFF;
-  --line:        #E4E9EF;
+  --line:        #E9E8E7;
   --hairline:    #F1F4F7;
-  --sunken:      #F7F9FB;
-  --well:        #F0F3F6;
-  --fill:        #EDF0F3;
-  --fill-hi:     #E6EBF1;
+  --sunken:      #F9F9F8;
+  --well:        #F3F2F2;
+  --fill:        #F0EFEF;
+  --fill-hi:     #EBEAE9;
   --track:       #EDF1F5;
   --board-hd:    #E9EDF1;
 
@@ -393,7 +421,7 @@ body {
   margin: 0;
   background: var(--page);
   color: var(--ink);
-  font-family: Inter, system-ui, sans-serif;
+  font-family: var(--font-body);
   font-size: var(--fs-base);
   -webkit-font-smoothing: antialiased;
 }
@@ -521,7 +549,7 @@ body {
    overflow, which is what happens if only nowrap is set. */
 .appbar-text h1 {
   margin: 0;
-  font-family: Poppins, sans-serif;
+  font-family: var(--font-display);
   font-size: var(--fs-base); font-weight: 700; letter-spacing: -0.01em;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
@@ -603,7 +631,7 @@ body {
 .appbar.urgent .count-label { color: #fff; }
 
 .count-value {
-  display: block; font-family: Poppins, sans-serif;
+  display: block; font-family: var(--font-display);
   font-size: var(--fs-xl); font-weight: 700; line-height: 1.1;
   font-variant-numeric: tabular-nums;
 }
@@ -691,7 +719,7 @@ body {
 }
 
 .tabs button {
-  flex: none; font-family: Inter, sans-serif;
+  flex: none; font-family: var(--font-body);
   font-size: var(--fs-sm); font-weight: 600; color: var(--ink-mid);
   background: none; border: 0; border-radius: var(--r-pill);
   padding: 8px 16px; cursor: pointer; white-space: nowrap;
@@ -710,7 +738,7 @@ body {
 }
 
 .mini {
-  flex: none; font-family: Inter, sans-serif;
+  flex: none; font-family: var(--font-body);
   font-size: var(--fs-xs); font-weight: 600; color: var(--ink-mid);
   background: var(--fill); border: 0; border-radius: var(--r-sm);
   padding: 6px 12px; cursor: pointer; white-space: nowrap;
@@ -761,7 +789,7 @@ body {
 }
 
 .tick-pick {
-  flex: none; font-family: Poppins, sans-serif; font-weight: 700;
+  flex: none; font-family: var(--font-display); font-weight: 700;
   font-size: var(--fs-xs); color: var(--cyan); width: 34px;
   font-variant-numeric: tabular-nums;
 }
@@ -803,7 +831,7 @@ body {
 .setup { border-top: 3px solid var(--orange); }
 
 .setup h2 {
-  margin: 0 0 20px; font-family: Poppins, sans-serif;
+  margin: 0 0 20px; font-family: var(--font-display);
   font-size: var(--fs-xl); font-weight: 700; letter-spacing: -0.02em;
 }
 
@@ -819,7 +847,7 @@ body {
 
 select {
   flex: 1; width: 100%;
-  font-family: Inter, sans-serif; font-size: var(--fs-sm); color: var(--ink);
+  font-family: var(--font-body); font-size: var(--fs-sm); color: var(--ink);
   background: var(--card); border: 1px solid var(--line);
   border-radius: var(--r-sm); padding: 10px 12px; cursor: pointer;
 }
@@ -874,7 +902,7 @@ select {
 .hint.bad { color: var(--danger); font-weight: 600; }
 
 .ghost {
-  flex: none; font-family: Inter, sans-serif;
+  flex: none; font-family: var(--font-body);
   font-size: var(--fs-sm); font-weight: 600; color: var(--link);
   background: var(--card); border: 1px solid var(--line);
   border-radius: var(--r-sm); padding: 10px 16px; cursor: pointer;
@@ -958,7 +986,7 @@ select {
 
 .rule input {
   flex: none; width: 66px; text-align: right;
-  font-family: Inter, sans-serif; font-size: var(--fs-sm); color: var(--ink);
+  font-family: var(--font-body); font-size: var(--fs-sm); color: var(--ink);
   background: var(--card); border: 1px solid var(--line);
   border-radius: var(--r-sm); padding: 5px 7px;
 }
@@ -973,7 +1001,7 @@ select {
 }
 
 .primary {
-  font-family: Inter, sans-serif; font-weight: 600; color: #fff;
+  font-family: var(--font-body); font-weight: 600; color: #fff;
   background: var(--orange-cta); border: 0; border-radius: var(--r-sm);
   padding: 9px 18px; font-size: var(--fs-sm); cursor: pointer;
 }
@@ -995,7 +1023,7 @@ select {
 .pos-filter { display: flex; gap: 4px; margin-bottom: 12px; overflow-x: auto; }
 
 .pos-filter button {
-  flex: none; font-family: Inter, sans-serif;
+  flex: none; font-family: var(--font-body);
   font-size: var(--fs-sm); font-weight: 600; color: var(--ink-mid);
   background: none; border: 0; padding: 7px 12px;
   cursor: pointer; border-bottom: 2px solid transparent;
@@ -1053,7 +1081,7 @@ tr.conflict .nm { color: var(--t-bad-fg); }
   width: 46px; height: 46px; flex: none;
   border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  font-family: Poppins, sans-serif; font-weight: 700; font-size: var(--fs-base);
+  font-family: var(--font-display); font-weight: 700; font-size: var(--fs-base);
   letter-spacing: -0.02em;
 }
 
@@ -1118,7 +1146,7 @@ tr.conflict .nm { color: var(--t-bad-fg); }
 .sug-body { flex: 1; min-width: 0; }
 
 .sug-name {
-  font-family: Poppins, sans-serif;
+  font-family: var(--font-display);
   font-size: var(--fs-base); font-weight: 600; letter-spacing: -0.01em;
   line-height: 1.2;
 }
@@ -1154,7 +1182,7 @@ tr.conflict .nm { color: var(--t-bad-fg); }
    thing and were the same kind of thing before this rule existed. */
 .toolbar input[type="search"] {
   flex: 1 1 190px; min-width: 0;
-  font-family: Inter, sans-serif; font-size: var(--fs-sm); color: var(--ink);
+  font-family: var(--font-body); font-size: var(--fs-sm); color: var(--ink);
   background: var(--card); border: 1px solid var(--line);
   border-radius: var(--r-sm); padding: 9px 12px;
   -webkit-appearance: none; appearance: none;
@@ -1231,7 +1259,7 @@ th.num { text-align: right; }
    So the division is by rank, not by whether the control does something:
    orange for the page-level action, blue for a repeated inline one. */
 .draft-btn {
-  font-family: Inter, sans-serif; font-size: var(--fs-sm); font-weight: 600;
+  font-family: var(--font-body); font-size: var(--fs-sm); font-weight: 600;
   color: #fff; background: var(--blue); border: 0;
   border-radius: var(--r-sm); padding: 7px 14px; cursor: pointer; white-space: nowrap;
 }
@@ -1549,7 +1577,7 @@ tr.drafted .ovr { color: var(--ink-light); }
 }
 
 .pick-card.mine { border-color: var(--mine); background: var(--row-mine); }
-.pick-no { flex: none; width: 38px; font-family: Poppins, sans-serif; font-weight: 700; font-size: var(--fs-sm); color: var(--ink-mid); }
+.pick-no { flex: none; width: 38px; font-family: var(--font-display); font-weight: 700; font-size: var(--fs-sm); color: var(--ink-mid); }
 .pick-team { font-size: var(--fs-xs); color: var(--ink-light); margin-bottom: 2px; }
 .pick-name { font-weight: 600; font-size: var(--fs-sm); line-height: 1.2; }
 .pick-meta { display: flex; align-items: center; gap: 6px; margin-top: 3px; font-size: var(--fs-xs); color: var(--ink-mid); }
@@ -1566,11 +1594,11 @@ tr.drafted .ovr { color: var(--ink-light); }
   flex: none; width: 78px; height: 78px; border-radius: var(--r-lg);
   background: rgba(255,255,255,.13);
   display: flex; align-items: center; justify-content: center;
-  font-family: Poppins, sans-serif; font-weight: 700; font-size: var(--fs-2xl);
+  font-family: var(--font-display); font-weight: 700; font-size: var(--fs-2xl);
   letter-spacing: -0.03em;
 }
 
-.grade-hero h3 { margin: 0 0 3px; font-family: Poppins, sans-serif; font-size: var(--fs-lg); font-weight: 700; }
+.grade-hero h3 { margin: 0 0 3px; font-family: var(--font-display); font-size: var(--fs-lg); font-weight: 700; }
 .grade-hero p  { margin: 0; font-size: var(--fs-sm); color: rgba(255,255,255,.78); line-height: 1.5; }
 
 .bars { background: var(--card); border: 1px solid var(--line); border-radius: var(--r-md); padding: 14px 16px; margin-bottom: 16px; }
@@ -1615,7 +1643,7 @@ tr.drafted .ovr { color: var(--ink-light); }
    identity. */
 .standings tr.me { background: var(--pale-mine); }
 .standings tr.me td { font-weight: 600; }
-.standings td.gr { text-align: right; font-family: Poppins, sans-serif; font-weight: 700; }
+.standings td.gr { text-align: right; font-family: var(--font-display); font-weight: 700; }
 
 .byebar { display: flex; gap: 3px; margin-top: 4px; }
 .byebar i {
@@ -1690,7 +1718,7 @@ tr.drafted .ovr { color: var(--ink-light); }
   width: 62px; height: 62px; font-size: var(--fs-lg);
   box-shadow: 0 0 0 3px var(--team);
 }
-.sheet-head h3 { margin: 0; font-family: Poppins, sans-serif; font-size: var(--fs-lg); font-weight: 700; letter-spacing: -.02em; }
+.sheet-head h3 { margin: 0; font-family: var(--font-display); font-size: var(--fs-lg); font-weight: 700; letter-spacing: -.02em; }
 .sheet-head .sub { display: flex; align-items: center; gap: 7px; margin-top: 4px; font-size: var(--fs-sm); color: rgba(255,255,255,.80); }
 .sheet-head .facts { margin-top: 5px; font-size: var(--fs-xs); color: rgba(255,255,255,.62); font-variant-numeric: tabular-nums; }
 
@@ -1811,7 +1839,7 @@ tr.drafted .ovr { color: var(--ink-light); }
 .yearpick { display: flex; gap: 4px; margin-bottom: 10px; }
 
 .yearpick button {
-  font-family: Inter, sans-serif; font-size: var(--fs-xs); font-weight: 600;
+  font-family: var(--font-body); font-size: var(--fs-xs); font-weight: 600;
   color: var(--ink-mid); background: var(--fill);
   border: 1px solid var(--line); border-radius: var(--r-sm);
   padding: 5px 11px; cursor: pointer; font-variant-numeric: tabular-nums;
@@ -1837,7 +1865,7 @@ tr.drafted .ovr { color: var(--ink-light); }
 }
 
 .sheet-tabs button {
-  flex: none; font-family: Inter, sans-serif; font-size: var(--fs-sm); font-weight: 600;
+  flex: none; font-family: var(--font-body); font-size: var(--fs-sm); font-weight: 600;
   color: var(--ink-mid); background: none; border: 0; border-radius: var(--r-pill);
   padding: 7px 14px; cursor: pointer; white-space: nowrap;
 }
@@ -1868,7 +1896,7 @@ tr.drafted .ovr { color: var(--ink-light); }
 @media (max-width: 520px) { .statgrid { grid-template-columns: repeat(2, 1fr); } }
 .statbox { background: var(--sunken); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 9px 10px; text-align: center; }
 .statbox .k { font-size: var(--fs-2xs); letter-spacing: .09em; text-transform: uppercase; color: var(--ink-light); font-weight: 700; }
-.statbox .v { font-family: Poppins, sans-serif; font-weight: 700; font-size: var(--fs-lg); margin-top: 2px; }
+.statbox .v { font-family: var(--font-display); font-weight: 700; font-size: var(--fs-lg); margin-top: 2px; }
 
 /* Stat tables can outgrow a phone once receiving, rushing and returns
    are all present, so they scroll sideways inside the sheet. */
@@ -2027,7 +2055,7 @@ tr.drafted .ovr { color: var(--ink-light); }
 .depthcol h5 { margin: 0 0 6px; font-size: var(--fs-2xs); letter-spacing: .09em; text-transform: uppercase; color: var(--ink-light); font-weight: 700; }
 .depthrow { display: flex; align-items: center; gap: 9px; padding: 7px 0; border-bottom: 1px solid var(--hairline); font-size: var(--fs-sm); }
 .depthrow:last-child { border-bottom: 0; }
-.depthrow .ord { width: 20px; font-family: Poppins, sans-serif; font-weight: 700; color: var(--ink-light); font-size: var(--fs-xs); }
+.depthrow .ord { width: 20px; font-family: var(--font-display); font-weight: 700; color: var(--ink-light); font-size: var(--fs-xs); }
 .depthrow.self { font-weight: 600; color: var(--link); }
 
 .name-link { cursor: pointer; }
@@ -2067,18 +2095,20 @@ tr.drafted .ovr { color: var(--ink-light); }
 
 .shell-brand { display: flex; align-items: center; gap: 9px; text-decoration: none; }
 
-/* Poppins, not Montserrat. Poppins is already loaded for the rest of the app,
-   so the wordmark costs no extra font request. */
+/* The display face, which is already loaded for the rest of the app, so the
+   wordmark costs no extra font request. It named Poppins directly until the
+   faces became tokens — a comment naming a typeface is the same drift as a
+   rule naming one, and this is the copy that would have been left behind. */
 /* --mark-ink, not --ink: the word is half the logo, and --ink is a slightly
    different near-black, which made the shield read navy next to a black
    wordmark. One colour, one lockup. */
 .wordmark {
-  font-family: Poppins, sans-serif; font-weight: 700; font-size: var(--fs-lg);
+  font-family: var(--font-display); font-weight: 700; font-size: var(--fs-lg);
   letter-spacing: -0.01em; color: var(--mark-ink); line-height: 1;
 }
 
 .navbtn, .navlink {
-  font-family: Inter, sans-serif; font-size: var(--fs-sm); font-weight: 600;
+  font-family: var(--font-body); font-size: var(--fs-sm); font-weight: 600;
   border: 0; border-radius: var(--r-sm); padding: 8px 12px;
   cursor: pointer; text-decoration: none; white-space: nowrap;
 }
@@ -2091,7 +2121,7 @@ tr.drafted .ovr { color: var(--ink-light); }
 /* Brand orange is only 3.34:1 against white, so a filled button that carries
    white text uses the darker --orange-cta. */
 .cta {
-  font-family: Inter, sans-serif; font-size: var(--fs-sm); font-weight: 700;
+  font-family: var(--font-body); font-size: var(--fs-sm); font-weight: 700;
   color: #fff; background: var(--orange-cta); border: 0; border-radius: var(--r-sm);
   padding: 9px 16px; cursor: pointer; text-decoration: none; white-space: nowrap;
 }
@@ -2117,7 +2147,7 @@ tr.drafted .ovr { color: var(--ink-light); }
 
 .rooms-head {
   margin: 0 0 4px;
-  font-family: Poppins, sans-serif; font-size: var(--fs-xl); font-weight: 700;
+  font-family: var(--font-display); font-size: var(--fs-xl); font-weight: 700;
   letter-spacing: -.02em; color: var(--ink);
 }
 
@@ -2684,14 +2714,14 @@ a.room.live:hover {
    headline rather than competing with it. */
 .hero-slogan {
   margin: 0 0 10px;
-  font-family: Inter, sans-serif;
+  font-family: var(--font-body);
   font-size: var(--fs-xs); font-weight: 700;
   letter-spacing: .18em; text-transform: uppercase;
   color: var(--orange-ink);
 }
 
 .hero h1 {
-  margin: 0 0 16px; font-family: Poppins, sans-serif;
+  margin: 0 0 16px; font-family: var(--font-display);
   font-size: var(--fs-3xl); font-weight: 700; letter-spacing: -0.03em; line-height: 1.12;
 }
 
@@ -3099,7 +3129,7 @@ a.room.live:hover {
 }
 
 .dlg::backdrop { background: rgba(6,12,22,.55); }
-.dlg h3 { margin: 0 0 8px; font-family: Poppins, sans-serif; font-size: var(--fs-lg); font-weight: 700; }
+.dlg h3 { margin: 0 0 8px; font-family: var(--font-display); font-size: var(--fs-lg); font-weight: 700; }
 .dlg p { margin: 0 0 18px; font-size: var(--fs-sm); line-height: 1.6; color: var(--ink-mid); }
 
 /* ---------- the score strip ----------
@@ -3303,7 +3333,7 @@ a.room.live:hover {
 .qrow.next .qn { color: var(--orange-cta); }
 
 .qn {
-  font-family: Inter, sans-serif; font-size: var(--fs-xs); font-weight: 700;
+  font-family: var(--font-body); font-size: var(--fs-xs); font-weight: 700;
   color: var(--ink-light); width: 16px; flex: none;
   font-variant-numeric: tabular-nums;
 }
@@ -3437,7 +3467,7 @@ a.room.live:hover {
 }
 
 .railhead {
-  margin: 0 0 8px; font-family: Inter, sans-serif;
+  margin: 0 0 8px; font-family: var(--font-body);
   font-size: var(--fs-2xs); letter-spacing: .1em; text-transform: uppercase;
   color: var(--ink-light); font-weight: 700;
 }
@@ -3553,7 +3583,7 @@ button.rtm:focus-visible {
     position: fixed; left: 14px; z-index: 60;
     /* Level with the chat launcher, which sits at the right on this rail. */
     bottom: calc(74px + env(safe-area-inset-bottom, 0px));
-    font-family: Inter, sans-serif; font-size: var(--fs-sm); font-weight: 600;
+    font-family: var(--font-body); font-size: var(--fs-sm); font-weight: 600;
     color: #fff; background: var(--navy);
     border: 1px solid var(--navy-soft); border-radius: var(--r-pill);
     padding: 10px 16px; cursor: pointer;
@@ -3605,7 +3635,7 @@ button.rtm:focus-visible {
 
 .linkrow input {
   flex: 1; min-width: 0;
-  font-family: Inter, sans-serif; font-size: var(--fs-sm);
+  font-family: var(--font-body); font-size: var(--fs-sm);
   color: var(--ink-mid); background: var(--sunken);
   border: 1px solid var(--line); border-radius: var(--r-sm); padding: 8px 10px;
 }
@@ -3697,7 +3727,7 @@ button.rtm:focus-visible {
 }
 
 .chathead h3 {
-  margin: 0; font-family: Inter, sans-serif;
+  margin: 0; font-family: var(--font-body);
   font-size: var(--fs-2xs); letter-spacing: .1em; text-transform: uppercase;
   color: var(--ink-light); font-weight: 700;
 }
@@ -3811,7 +3841,7 @@ button.rtm:focus-visible {
 
 .reactchip {
   display: inline-flex; align-items: center; gap: 3px;
-  font-family: Inter, sans-serif; font-size: var(--fs-xs); line-height: 1;
+  font-family: var(--font-body); font-size: var(--fs-xs); line-height: 1;
   color: var(--ink-mid); background: var(--fill);
   border: 1px solid var(--line); border-radius: var(--r-md);
   padding: 2px 6px; cursor: pointer;
@@ -3862,7 +3892,7 @@ button.rtm:focus-visible {
 .chatjump {
   position: absolute; left: 50%; transform: translateX(-50%);
   bottom: 96px; z-index: 4;
-  font-family: Inter, sans-serif; font-size: var(--fs-xs); font-weight: 600;
+  font-family: var(--font-body); font-size: var(--fs-xs); font-weight: 600;
   color: #fff; background: var(--blue);
   border: 0; border-radius: var(--r-pill); padding: 5px 12px;
   cursor: pointer; box-shadow: var(--elev-2);
@@ -3903,7 +3933,7 @@ button.rtm:focus-visible {
 .quicksay { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
 
 .quicksay button {
-  font-family: Inter, sans-serif; font-size: var(--fs-xs); line-height: 1;
+  font-family: var(--font-body); font-size: var(--fs-xs); line-height: 1;
   color: var(--ink-mid); background: var(--fill);
   border: 1px solid var(--line); border-radius: var(--r-md);
   padding: 5px 9px; cursor: pointer;
@@ -3914,7 +3944,7 @@ button.rtm:focus-visible {
 
 .chatform input {
   flex: 1; min-width: 0;
-  font-family: Inter, sans-serif; font-size: var(--fs-sm);
+  font-family: var(--font-body); font-size: var(--fs-sm);
   color: var(--ink); background: var(--card);
   border: 1px solid var(--line); border-radius: var(--r-sm); padding: 8px 10px;
 }
@@ -3928,7 +3958,7 @@ button.rtm:focus-visible {
 
 .namerow input {
   width: 100%; box-sizing: border-box;
-  font-family: Inter, sans-serif; font-size: var(--fs-sm);
+  font-family: var(--font-body); font-size: var(--fs-sm);
   color: var(--ink); background: var(--sunken);
   border: 1px solid var(--line); border-radius: var(--r-sm); padding: 9px 11px;
 }
@@ -3967,7 +3997,7 @@ button.rtm:focus-visible {
     /* Above the action bar, which is itself pinned to the bottom, and clear
        of the home indicator on a phone with no bezel. */
     bottom: calc(74px + env(safe-area-inset-bottom, 0px));
-    font-family: Inter, sans-serif; font-size: var(--fs-sm); font-weight: 600;
+    font-family: var(--font-body); font-size: var(--fs-sm); font-weight: 600;
     color: #fff; background: var(--navy);
     border: 1px solid var(--navy-soft); border-radius: var(--r-pill);
     padding: 10px 16px; cursor: pointer;

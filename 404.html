@@ -11,15 +11,15 @@
        /a/b/c gets this page rendered *at that address* — a relative "style.css"
        would then resolve to /a/b/style.css and 404 as well, leaving an unstyled
        page as the answer to a missing one. -->
-  <script src="/theme.js?v=202608190004"></script>
+  <script src="/theme.js?v=202608190038"></script>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
   <!-- Same ?v= as index.html, and bumped with it by the nightly workflow,
        which now lists this file alongside the other two. -->
-  <link rel="stylesheet" href="/style.css?v=202608190004">
+  <link rel="stylesheet" href="/style.css?v=202608190038">
 
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
@@ -37,13 +37,13 @@
       max-width: 560px; margin: 0 auto;
     }
     .nf-code {
-      font-family: Poppins, sans-serif;
+      font-family: var(--font-display);
       font-size: var(--fs-3xl); font-weight: 700; line-height: 1;
       color: var(--orange-ink);
       letter-spacing: -.02em;
     }
     .nf h1 {
-      font-family: Poppins, sans-serif;
+      font-family: var(--font-display);
       font-size: var(--fs-xl); font-weight: 700; line-height: 1.2;
       margin: 0; color: var(--ink);
       text-wrap: balance;
