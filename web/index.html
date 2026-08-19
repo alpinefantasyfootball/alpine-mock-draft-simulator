@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Juke &middot; Fantasy Football</title>
+
+  <!-- Without these, Google writes its own snippet from whatever page text it
+       likes, and a link pasted into Slack or iMessage renders as a bare URL.
+       og:image has to be absolute, so it points at the live domain even when
+       you are testing locally. -->
+  <meta name="description" content="Free fantasy football mock drafts against opponents that understand ADP, tiers and replacement level, plus a draft grade that shows its working.">
+  <link rel="canonical" href="https://jukeff.com/">
+  <meta name="theme-color" content="#0B0E14">
+
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Juke">
+  <meta property="og:url" content="https://jukeff.com/">
+  <meta property="og:title" content="Juke &middot; Fantasy Football">
+  <meta property="og:description" content="Free fantasy football mock drafts against opponents that understand ADP, tiers and replacement level, plus a draft grade that shows its working.">
+  <meta property="og:image" content="https://jukeff.com/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="The Juke shield on navy, above the line: fantasy football mock drafts, free and without an account.">
+  <meta name="twitter:card" content="summary_large_image">
+
+  <!-- The theme is set before anything paints, rather than in app.js at the
+       foot of the body, because by then the page has already been drawn: a
+       reader who chose light would watch it flash dark first. No stored
+       choice means no attribute, and no attribute means the dark default
+       that lives in :root.
+
+       A file rather than an inline script, so a Content-Security-Policy can
+       say script-src 'self' without either giving away 'unsafe-inline' or
+       pinning a hash that breaks the site the first time somebody edits it.
+       No defer, no async: it must run before the body is drawn.
+
+       Root-relative (/theme.js, not theme.js): this file is built by Vite
+       now, and Vite's HTML transform only leaves absolute (leading-/) asset
+       references alone — a relative one it tries to resolve against this
+       project's own source tree, where this file does not live. Root-
+       relative is also just correct at runtime regardless of the build: it
+       resolves the same way whether you are at "/" or "/#/draft". -->
+  <script src="/theme.js?v=202608191900"></script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <!-- Barlow Condensed and Inter are the Draft Room's fonts, unchanged.
+       Archivo is the new homepage's — the rebrand is homepage-only for now,
+       so both load together rather than the Draft Room losing its type. -->
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600;700&family=Archivo:wght@400..900&display=swap" rel="stylesheet">
+  <!-- ?v=202608191900 on every local file below, and it has to be bumped on any deploy
+       that changes one of them.
+
+       Without a version in the address a returning visitor runs today's HTML
+       against last week's JavaScript — which is not a blank page but
+       something worse: a page that half works. It is how the room lost its
+       chat window entirely, because the markup hides the panel and only the
+       newer app.js knows to show it.
+
+       A query string rather than a renamed file, because renaming means a
+       manifest and a manifest means a build step for these files — and it
+       still does not, on purpose: only the legacy Draft Room files below
+       keep this convention. The React homepage bundle is Vite's own
+       content-hashed output, injected automatically, which makes this exact
+       bug structurally impossible for that half of the page. -->
+  <link rel="stylesheet" href="/style.css?v=202608191900">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/juke-app-icon-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Juke">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="icon" href="/juke-favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="/juke-app-icon-192.png" sizes="192x192">
+</head>
+<body>
+
+  <!-- The mark is defined once and referenced by each header that needs it,
+       rather than repeating 2.7KB of traced path data per header. width and
+       height stay on every <svg> that uses it, because a cached or missing
+       stylesheet once let this shape grow to fill the whole screen.
+
+       Kept for the Draft Room header (.appbar) below — the rebrand is
+       homepage-only, so the old mark stays exactly where it still appears. -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="jukeMark" viewBox="0 0 662 774">
+      <path class="mark-body" fill-rule="evenodd" d="M 330 0 L 661 95 L 662 262 L 661 313 L 658 351 L 651 396 L 642 434 L 628 477 L 613 513 L 580 573 L 555 608 L 537 628 L 537 630 L 514 653 L 511 658 L 509 658 L 478 688 L 476 688 L 463 700 L 439 716 L 437 719 L 402 741 L 364 761 L 332 774 L 328 774 L 304 764 L 263 743 L 202 703 L 177 681 L 175 681 L 167 672 L 165 672 L 133 640 L 133 638 L 118 623 L 118 621 L 114 618 L 114 616 L 110 613 L 89 585 L 67 550 L 47 511 L 23 448 L 12 406 L 6 373 L 0 307 L 0 95 Z M 331 42 L 40 126 L 40 299 L 44 352 L 52 398 L 59 426 L 70 460 L 85 496 L 105 534 L 127 568 L 146 591 L 146 593 L 151 597 L 151 599 L 182 632 L 184 632 L 197 646 L 199 646 L 216 662 L 259 693 L 285 707 L 286 709 L 300 715 L 301 717 L 330 730 L 353 721 L 356 718 L 381 706 L 420 681 L 444 663 L 447 659 L 449 659 L 493 618 L 493 616 L 510 599 L 510 597 L 515 593 L 515 591 L 519 588 L 537 564 L 540 557 L 543 555 L 544 551 L 556 534 L 577 494 L 601 430 L 615 367 L 621 307 L 620 125 Z M 328 101 L 331 102 L 332 126 L 331 178 L 277 180 L 230 186 L 227 187 L 227 185 L 240 170 L 240 168 L 273 134 L 299 115 Z M 308 216 L 331 216 L 331 263 L 292 263 L 292 284 L 320 284 L 320 306 L 318 308 L 292 308 L 292 329 L 320 330 L 320 352 L 292 353 L 293 374 L 320 375 L 320 396 L 292 397 L 292 419 L 319 419 L 320 442 L 292 443 L 292 463 L 331 463 L 331 505 L 331 514 L 308 514 L 252 510 L 200 503 L 185 472 L 176 446 L 168 411 L 165 386 L 165 344 L 170 310 L 182 268 L 200 228 L 255 220 Z M 244 226 L 242 227 L 230 250 L 217 286 L 210 317 L 206 354 L 207 395 L 213 433 L 224 467 L 235 488 L 241 499 L 243 499 L 237 475 L 229 422 L 226 386 L 226 340 L 233 283 Z M 343 284 L 369 284 L 372 291 L 372 301 L 371 305 L 367 307 L 342 307 L 341 287 Z M 342 329 L 368 329 L 372 336 L 372 346 L 369 350 L 368 352 L 342 352 Z M 343 374 L 368 374 L 371 377 L 372 382 L 372 391 L 369 396 L 343 397 L 341 393 L 341 377 Z M 343 419 L 369 419 L 372 426 L 372 436 L 369 442 L 342 442 L 341 422 Z M 225 545 L 278 551 L 332 553 L 332 565 L 313 578 L 297 588 L 273 598 L 240 565 Z"/>
+      <path class="mark-accent" fill-rule="evenodd" d="M 582 156 L 584 161 L 585 179 L 583 255 L 579 294 L 571 339 L 561 378 L 542 431 L 523 472 L 521 473 L 503 507 L 471 552 L 427 599 L 425 599 L 417 608 L 415 608 L 410 614 L 408 614 L 404 619 L 402 619 L 383 635 L 332 667 L 326 666 L 287 647 L 254 625 L 255 623 L 287 614 L 310 603 L 334 589 L 336 586 L 352 576 L 368 561 L 370 561 L 400 531 L 400 529 L 406 524 L 406 522 L 422 504 L 449 463 L 466 430 L 479 399 L 495 350 L 506 297 L 511 244 L 443 255 L 410 258 L 402 257 L 472 227 L 513 206 L 550 182 Z"/>
+    </symbol>
+  </svg>
+
+  <!-- ============ EVERYTHING THAT STAYS PINNED TO THE TOP ============ -->
+  <div class="sticky-top">
+
+    <!-- The landing header. Superseded by the React Header component (see
+         #view-home below) — the rebrand replaces it visually — but the
+         element stays in the document, hidden, because app.js's routing and
+         event-wiring code looks it up unconditionally (applyRoute() sets
+         shellbar.hidden on every route change; closeRooms(), called from
+         inside applyRoute() and from two permanent document-level
+         listeners, looks up its children the same way). Deleting it outright
+         throws on the very first route render and takes the Draft Room down
+         with it, home route or not — a plain `hidden` attribute is not
+         enough on its own, since applyRoute() actively sets it to `false`
+         on the home route. The inline style wins over that regardless of
+         what app.js does to the attribute. -->
+    <header class="shellbar" id="shellbar" style="display:none !important" aria-hidden="true">
+      <div class="shell-inner">
+
+        <div class="shell-side">
+          <button class="navbtn" id="roomsBtn" type="button"
+                  aria-expanded="false" aria-controls="roomsPanel">
+            <span class="burger" aria-hidden="true"><i></i><i></i><i></i></span>
+            <span class="rooms-label">Rooms <span class="chev" aria-hidden="true"></span></span>
+          </button>
+        </div>
+
+        <a class="shell-brand" href="#/" aria-label="Juke home">
+          <svg class="mark sm" width="27" height="32" viewBox="0 0 662 774"
+               aria-hidden="true" focusable="false"><use href="#jukeMark"/></svg>
+          <span class="wordmark">JUKE</span>
+        </a>
+
+        <div class="shell-side end">
+          <button class="navbtn js-install" id="installBtn" type="button" hidden>Install</button>
+          <button class="navlink js-login" id="loginBtn" type="button">Log in</button>
+          <button class="cta" id="signupBtn" type="button">Sign up</button>
+          <button class="hdrbtn theme-toggle" type="button" aria-pressed="true">
+            <svg class="i-sun" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"
+                 fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <circle cx="12" cy="12" r="4.2"/>
+              <path d="M12 2.4v2.2M12 19.4v2.2M4.2 12H2M22 12h-2.2M6.5 6.5 4.9 4.9M19.1 19.1l-1.6-1.6M17.5 6.5l1.6-1.6M4.9 19.1l1.6-1.6"/>
+            </svg>
+            <svg class="i-moon" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M20.5 14.9A8.7 8.7 0 0 1 9.1 3.5a8.7 8.7 0 1 0 11.4 11.4Z" fill="currentColor"/>
+            </svg>
+          </button>
+        </div>
+
+      </div>
+      <div class="rooms-panel" id="roomsPanel" hidden></div>
+    </header>
+
+    <header class="appbar" id="appbar" hidden>
+      <div class="appbar-inner">
+
+        <button class="home" id="homeBtn" type="button" title="Leave the draft"
+                aria-label="Leave the draft">
+          <svg class="i-back" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"
+               fill="none" stroke="currentColor" stroke-width="2.4"
+               stroke-linecap="round" stroke-linejoin="round">
+            <path d="M15 5 8 12l7 7"/>
+          </svg>
+          <svg class="mark" width="31" height="36" viewBox="0 0 662 774"
+               aria-hidden="true" focusable="false"><use href="#jukeMark"/></svg>
+        </button>
+
+        <div class="appbar-text">
+          <h1 id="statusLine">The Draft Room</h1>
+          <p class="appbar-meta" id="pickLabel" hidden>
+            <span id="pickText"></span><span class="appbar-league" id="leagueLabel"></span>
+          </p>
+        </div>
+
+        <div class="appbar-right">
+          <div class="count" id="countBlock" hidden>
+            <span class="count-label" id="rightLabel">Players</span>
+            <span class="count-value" id="rightValue"></span>
+          </div>
+
+          <button class="hdrbtn sound-toggle" id="soundBtn" type="button"
+                  aria-pressed="false" title="Sound" aria-label="Sound">
+            <svg class="i-sound-on" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"
+                 fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 9.5h3.2L12 5.6v12.8L7.2 14.5H4z" fill="currentColor" stroke="none"/>
+              <path d="M15.6 9.2a4 4 0 0 1 0 5.6M18.2 6.6a7.6 7.6 0 0 1 0 10.8"/>
+            </svg>
+            <svg class="i-sound-off" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"
+                 fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 9.5h3.2L12 5.6v12.8L7.2 14.5H4z" fill="currentColor" stroke="none"/>
+              <path d="m16 9.5 5 5M21 9.5l-5 5"/>
+            </svg>
+          </button>
+
+          <button class="hdrbtn theme-toggle" id="themeBtn" type="button" aria-pressed="true">
+            <svg class="i-sun" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"
+                 fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <circle cx="12" cy="12" r="4.2"/>
+              <path d="M12 2.4v2.2M12 19.4v2.2M4.2 12H2M22 12h-2.2M6.5 6.5 4.9 4.9M19.1 19.1l-1.6-1.6M17.5 6.5l1.6-1.6M4.9 19.1l1.6-1.6"/>
+            </svg>
+            <svg class="i-moon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M20.5 14.9A8.7 8.7 0 0 1 9.1 3.5a8.7 8.7 0 1 0 11.4 11.4Z" fill="currentColor"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+    </header>
+
+    <div class="tabrow" id="tabrow" hidden>
+      <nav class="tabs" id="tabs">
+      <button class="on" data-tab="tab-suggest">Suggestions</button>
+      <button data-tab="tab-players">Players</button>
+      <button data-tab="tab-team">My Team</button>
+      <button data-tab="tab-picks">Picks</button>
+      <button data-tab="tab-grades">Analysis</button>
+    </nav>
+
+      <div class="actionbar" id="actionbar">
+      <button class="mini go" data-action="new-draft" id="newDraftBtn" hidden>New mock draft</button>
+      <button class="mini" id="pauseBtn">Pause clock</button>
+      <button class="mini" id="undoBtn">Undo</button>
+      <button class="mini" id="autoBtn">Auto-draft the rest</button>
+      <button class="mini danger" id="restartBtn">Discard draft</button>
+    </div>
+    </div>
+
+    <div class="ticker" id="ticker" hidden></div>
+
+  </div>
+
+  <main>
+
+    <!-- ---------- LANDING ---------- -->
+    <!-- The id stays here on purpose: applyRoute() already does
+         $("view-home").hidden = onDraft, so mounting the new homepage into
+         this element's existing id needs zero changes to routing. Only the
+         contents changed — everything that used to render in here
+         (renderRooms/startRoomDoor, renderProof/startProofCycle,
+         renderHeroShot) is gone, replaced by the React tree mounted below. -->
+    <section class="landing" id="view-home">
+      <div id="root"></div>
+    </section>
+
+    <!-- Elements app.js's routing/home code touches unconditionally —
+         renderHome() (called from applyRoute() on every non-draft route)
+         and the score-strip listeners wired once at boot. Not part of the
+         page anyone sees; permanently hidden. They have to exist anyway, or
+         app.js throws on the first unguarded lookup and the Draft Room never
+         boots, on any route. See the note on #shellbar above — same reason. -->
+    <div id="legacy-home" style="display:none !important" aria-hidden="true">
+      <div class="scores-wrap" id="scoreWrap" hidden>
+        <button class="scores-arrow left" id="scoreLeft" type="button"
+                aria-label="Scroll scores left">&#8249;</button>
+        <div class="scores" id="scoreStrip"></div>
+        <button class="scores-arrow right" id="scoreRight" type="button"
+                aria-label="Scroll scores right">&#8250;</button>
+      </div>
+      <div class="landing-resume" id="homeResume" hidden></div>
+      <p id="homeMeta"></p>
+    </div>
+
+    <!-- ---------- THE DRAFT ROOM ---------- -->
+    <div id="view-app" hidden>
+
+    <!-- ---------- SETUP ---------- -->
+    <section class="panel on" id="tab-setup">
+      <div class="resume" id="resumeBar" hidden></div>
+
+      <div class="setup">
+        <h2>Draft setup</h2>
+
+        <div class="field">
+          <label for="draftSlot">Draft position</label>
+          <div class="field-row">
+            <select id="draftSlot"></select>
+            <button class="ghost" id="randomizeBtn">Randomize</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="pickClock">Pick clock</label>
+          <select id="pickClock">
+            <option value="0">None</option>
+            <option value="30">30 seconds</option>
+            <option value="45">45 seconds</option>
+            <option value="60" selected>60 seconds</option>
+            <option value="120">120 seconds</option>
+          </select>
+          <p class="hint">When the clock runs out, the top suggestion is drafted for you. You can pause it at any time once the draft starts.</p>
+        </div>
+
+        <details class="setupbox" id="leagueBox">
+          <summary>
+            <span>League</span>
+            <span class="box-sum" id="leagueSummary"></span>
+          </summary>
+
+        <div class="field">
+          <label for="teamCount">Teams, rounds and scoring</label>
+          <div class="field-row wordy">
+            <select id="teamCount"></select>
+            <select id="roundCount"></select>
+            <select id="scoring"></select>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Starting lineup</label>
+          <div class="field-row">
+            <select id="startQB"></select>
+            <select id="startRB"></select>
+            <select id="startWR"></select>
+          </div>
+          <div class="field-row" style="margin-top:8px">
+            <select id="startTE"></select>
+            <select id="startFLEX"></select>
+            <select id="startDST"></select>
+          </div>
+          <div class="field-row" style="margin-top:8px">
+            <select id="startK"></select>
+            <select id="startSFLEX"></select>
+            <select id="benchCount"></select>
+          </div>
+          <p class="hint" id="rosterSum"></p>
+        </div>
+
+        </details>
+
+        <details class="setupbox scoring" id="scoringBox">
+          <summary>
+            <span>Scoring</span>
+            <span class="box-sum" id="scoringSummary"></span>
+          </summary>
+          <div id="scoringFields"></div>
+          <button class="ghost" type="button" id="resetScoring">Reset to defaults</button>
+        </details>
+
+        <details class="setupbox" id="friendsBox">
+          <summary>
+            <span id="friendsTitle">Draft with friends</span>
+            <span class="box-sum" id="friendsSum">Send a link and draft together</span>
+          </summary>
+
+        <div class="field" id="inviteBox">
+          <p class="hint" id="inviteHint">Create a room and send the link. Anyone who opens
+            it takes a seat; the rest are drafted by the CPU.</p>
+
+          <div class="namerow">
+            <input type="text" id="displayName" maxlength="20" autocomplete="nickname"
+                   placeholder="Your name" aria-label="Your name in the room">
+          </div>
+
+          <div class="field-row" id="inviteStart">
+            <button class="ghost" type="button" id="createRoomBtn">Create a room</button>
+          </div>
+
+          <div id="inviteLive" hidden>
+            <div class="linkrow">
+              <input type="text" id="inviteLink" readonly aria-label="Invite link">
+              <button class="ghost" type="button" id="copyLinkBtn">Copy</button>
+            </div>
+            <p class="hint" id="inviteStatus"></p>
+            <div class="seatlist" id="seatList"></div>
+            <button class="ghost" type="button" id="leaveRoomBtn">Leave the room</button>
+          </div>
+        </div>
+
+        </details>
+
+        <div class="chatslot" id="lobbyChatSlot"></div>
+
+        <p class="hint bad" id="setupProblemMsg" hidden></p>
+
+        <button class="primary big" id="startBtn">Start your draft</button>
+        <p class="freshness" id="freshness"></p>
+        <p class="freshness"><a href="docs/draft-room-how-it-works.html">How the Draft Room works</a></p>
+      </div>
+    </section>
+
+    <div class="draftshell" id="draftShell" hidden>
+
+      <div class="draftmain">
+        <div class="boardpane">
+          <div class="board-scroll" id="boardScroll">
+            <div class="board" id="boardGrid"></div>
+          </div>
+          <div class="legend">
+            <span><i class="sw QB"></i>QB</span><span><i class="sw RB"></i>RB</span>
+            <span><i class="sw WR"></i>WR</span><span><i class="sw TE"></i>TE</span>
+            <span><i class="sw K"></i>K</span><span><i class="sw DST"></i>D/ST</span>
+          </div>
+        </div>
+
+        <div class="worksplit">
+          <div class="workmain" id="workMain"><!-- panels are moved in here by app.js --></div>
+
+          <aside class="rail" id="rail">
+            <button class="raildismiss" id="railDismiss" type="button"
+                    aria-label="Close">&times;</button>
+            <section class="railcard">
+              <h3 class="railhead" id="railRosterHead">Your roster</h3>
+              <ul class="railslots" id="railRoster"></ul>
+            </section>
+
+            <section class="railcard">
+              <h3 class="railhead" id="railQueueHead">Your queue</h3>
+              <div id="queueList"></div>
+            </section>
+          </aside>
+        </div>
+      </div>
+
+      <div class="chatslot" id="draftChatSlot"></div>
+    </div>
+
+    <section class="chatdock" id="chatDock" hidden aria-label="Room chat">
+      <header class="chathead">
+        <h3>Room chat</h3>
+        <span class="chatpresence" id="chatPresence"></span>
+        <button class="chatdismiss" id="chatDismiss" type="button"
+                aria-label="Close chat">&times;</button>
+      </header>
+
+      <div class="chatscroll" id="chatLog" aria-live="polite" aria-label="Messages"></div>
+
+      <button class="chatjump" id="chatJump" type="button" hidden></button>
+
+      <p class="chattyping" id="chatTyping" aria-live="polite"></p>
+
+      <p class="chatoffline" id="chatOffline" role="status" hidden>
+        Reconnecting to the room…</p>
+
+      <div class="gifbox" id="gifBox" hidden>
+        <div class="chatform">
+          <input type="text" id="gifQuery" maxlength="60" autocomplete="off"
+                 placeholder="Search GIFs" aria-label="Search GIFs">
+          <button class="ghost" type="button" id="gifClose">Close</button>
+        </div>
+        <div class="gifresults" id="gifResults"></div>
+      </div>
+
+      <div class="chatfoot">
+        <div class="quicksay" id="chatReactions">
+          <button type="button" data-say="Nice pick">Nice pick</button>
+          <button type="button" data-say="Reach.">Reach.</button>
+          <button type="button" data-say="Wow.">Wow.</button>
+        </div>
+
+        <form class="chatform" id="chatForm">
+          <input type="text" id="chatInput" maxlength="500" autocomplete="off"
+                 placeholder="Say something" aria-label="Message the room">
+          <button class="ghost gifbtn" type="button" id="gifBtn" aria-label="Add a GIF">GIF</button>
+          <button class="primary sendbtn" type="submit" id="chatSend" aria-label="Send">Send</button>
+        </form>
+      </div>
+    </section>
+
+    <button class="chatfab" id="chatFab" type="button" hidden>
+      <span>Chat</span>
+      <span class="chatbadge" id="chatBadge" hidden></span>
+    </button>
+
+    <button class="railfab" id="railFab" type="button" hidden>
+      <span id="railFabText">Roster</span>
+    </button>
+
+    <!-- ---------- SUGGESTIONS ---------- -->
+    <section class="panel" id="tab-suggest">
+      <div class="pos-filter" id="suggestFilter">
+        <button class="on" data-pos="ALL">All</button>
+        <button data-pos="QB">QB</button>
+        <button data-pos="RB">RB</button>
+        <button data-pos="WR">WR</button>
+        <button data-pos="TE">TE</button>
+        <button data-pos="K">K</button>
+        <button data-pos="DST">D/ST</button>
+      </div>
+      <div id="suggestList"></div>
+    </section>
+
+    <!-- ---------- PLAYERS ---------- -->
+    <section class="panel" id="tab-players">
+      <div class="toolbar">
+        <input type="search" id="playerSearch" placeholder="Search players or teams" autocomplete="off">
+        <label class="check">
+          <input type="checkbox" id="hideDrafted">
+          <span>Hide drafted</span>
+        </label>
+        <label class="check">
+          <input type="checkbox" id="roomyRows">
+          <span>Roomy rows</span>
+        </label>
+      </div>
+
+      <div class="pos-filter" id="playerFilter">
+        <button class="on" data-pos="ALL">All</button>
+        <button data-pos="QB">QB</button>
+        <button data-pos="RB">RB</button>
+        <button data-pos="WR">WR</button>
+        <button data-pos="TE">TE</button>
+        <button data-pos="K">K</button>
+        <button data-pos="DST">D/ST</button>
+      </div>
+
+      <div class="tblscroll">
+        <table id="playerTable" class="compact stats">
+          <thead id="playerHead"></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ---------- MY TEAM ---------- -->
+    <section class="panel" id="tab-team">
+      <p class="section-label">Starters</p>
+      <ul class="roster" id="startersList"></ul>
+      <p class="section-label">Bench</p>
+      <ul class="roster" id="benchList"></ul>
+    </section>
+
+    <!-- ---------- ANALYSIS ---------- -->
+    <section class="panel" id="tab-grades">
+      <div id="gradesBody"></div>
+    </section>
+
+    <!-- ---------- PICKS ---------- -->
+    <section class="panel" id="tab-picks">
+      <div id="picksList"></div>
+    </section>
+
+    </div>
+
+  </main>
+
+  <!-- ============ PLAYER DETAIL ============ -->
+  <div class="sheet-backdrop" id="sheetBackdrop" hidden></div>
+  <div class="sheet" id="sheet" hidden>
+    <div class="sheet-head" id="sheetHead"></div>
+    <nav class="sheet-tabs" id="sheetTabs">
+      <button class="on" data-view="v-overview">Overview</button>
+      <button data-view="v-news" id="newsTab" hidden>Latest News</button>
+      <button data-view="v-logs">Game Logs</button>
+      <button data-view="v-seasons">Seasons</button>
+      <button data-view="v-depth">Depth Chart</button>
+    </nav>
+    <div class="sheet-body" id="sheetBody"></div>
+  </div>
+
+  <dialog class="dlg" id="soonDlg">
+    <h3 id="soonTitle"></h3>
+    <p id="soonBody"></p>
+    <form method="dialog"><button class="primary">Got it</button></form>
+  </dialog>
+
+  <!-- Every one of these carries the same ?v=202608191900 as the stylesheet. See the note
+       beside it in <head>: bump them together or don't bump them at all.
+       Root-relative for the same reason theme.js and style.css are above. -->
+  <script src="/players.js?v=202608191900"></script>
+  <script src="/stats.js?v=202608191900"></script>
+  <!-- The rules of a snake draft, with no reference to this page. It loads
+       before app.js because app.js is a caller, and it is a separate file
+       because a server will eventually have to run the same one. -->
+  <script src="/draft-engine.js?v=202608191900"></script>
+  <!-- The socket to a shared room. Loaded always, connected never unless a
+       manager asks for it: a solo draft touches nothing. -->
+  <script src="/live.js?v=202608191900"></script>
+  <!-- Before app.js, which calls backToTop() on the last line of its setup. -->
+  <script src="/back-to-top.js?v=202608191900"></script>
+  <script src="/app.js?v=202608191900"></script>
+
+  <!-- The React homepage. A module script, so it runs after the classic
+       scripts above regardless of source order — modules always behave as
+       if deferred — which is what guarantees window.JukeEngine (set near
+       the end of app.js's boot sequence) exists before this ever runs. -->
+  <script type="module" src="/src/main.jsx"></script>
+</body>
+</html>

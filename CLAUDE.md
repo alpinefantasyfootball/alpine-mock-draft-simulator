@@ -31,38 +31,92 @@ else.
 
 ## Stack
 
-Plain HTML, CSS and JavaScript. **No framework, no build step, no npm, no
-bundler.** Open `index.html` in a browser and it runs. Keep it that way —
-the owner is learning web development and a build step would put the
-project out of reach.
+Plain HTML, CSS and JavaScript, and that rule still governs everything it
+always did: `app.js`, `draft-engine.js`, `room.js`, `live.js`, `style.css`,
+the worker. **No framework, no build step, no npm, no bundler** for any of
+that — it is still true today, not a historical claim. Python 3 standard
+library only in the pipeline. No pip dependencies.
 
-Python 3 standard library only in the pipeline. No pip dependencies.
+**`web/` is the one deliberate exception, and it is scoped to the
+homepage.** React, Vite, Tailwind and Framer Motion, building the marketing
+page at `jukeff.com/` — not the Draft Room, not the pipeline, not the
+worker. This is a real reversal of the rule above, made because the owner
+is now building more pages in this stack rather than because the original
+reason (a build step would put the project out of reach) stopped being
+true. Everything else in this file that says "no build step" is still
+correct about the thing it was said about.
+
+**One page, two script worlds, one seam between them.** `web/index.html` is
+the real page Cloudflare Pages serves. It loads the legacy files
+(`app.js`, `draft-engine.js`, `live.js`, `theme.js`, `back-to-top.js`,
+`players.js`, `stats.js`, `style.css`) as plain classic `<script src>`
+tags, root-relative and still `?v=`-stamped exactly as before, alongside
+Vite's own content-hashed, `type="module"` bundle for the React homepage.
+A classic script blocks and a module script runs deferred, so `app.js`
+has always finished — `window.JukeEngine` included — before React's entry
+script executes; there is no timing hazard to guard against, only one to
+understand. `window.JukeEngine` (set at the end of `app.js`'s boot
+sequence) is the only channel between the two: `board`, `league`, `ROOMS`,
+scoring, and a handful of read functions, exposed rather than
+reimplemented. Scoring logic living twice, once in `app.js` and once in a
+React component, is exactly the "nothing about the league shape may be
+written down twice" failure this file already has a rule about — the
+superflex bug was that failure in the CPU; a second scoring engine in
+`web/src` would be the same failure in the browser.
+
+**The Draft Room markup still lives inside `web/index.html`, hidden.**
+`#view-home`'s *id* is what `applyRoute()` toggles, so that id stays put
+and React mounts into its contents; everything `app.js` touches
+unconditionally at boot (`#shellbar`, the score strip, `#homeResume`) moved
+into a sibling container hidden with `display: none !important` rather
+than being deleted, because `app.js` is a classic script and an unguarded
+`$(id)` lookup against a missing element throws — and that exception kills
+every remaining top-level statement in the file, Draft Room boot code
+included. Deleting that markup outright would silently break drafting on
+every page load, not just the home route.
+
+**`index.html` at the repository root still exists, unmodified, and is not
+dead code yet.** Cloudflare Pages currently builds from the repo root with
+no build step, so that file is what is actually live at `jukeff.com` until
+the dashboard is switched to **Root directory: `web`, Build command:
+`npm run build`, Output directory: `dist`** — a manual, one-time change
+only the account owner can make. Deleting the root `index.html` before
+that switch happens would 404 the whole site the moment this branch
+reaches `main`. Once the dashboard points at `web/` and a deploy from it is
+confirmed live, the root `index.html` becomes true dead weight and should
+be removed in its own follow-up commit — not bundled into the change that
+depends on it still being there as a fallback.
 
 ## Files
 
 | File | Role |
 |---|---|
-| `index.html` | Markup. Sticky header, tabs, action bar, panels, player sheet. |
+| `index.html` | The pre-migration landing + Draft Room page. Still what Cloudflare Pages serves today; superseded by `web/index.html` once the dashboard points at `web/`. See the Stack section before deleting it. |
 | `404.html` | The not-found page. **Every path in it is absolute**, because Pages serves it at whatever address missed — a relative `style.css` on `/a/b/c` misses too. |
-| `_headers` | The security headers, served by the origin. Replaced a Cloudflare Transform Rule; see the hosting note. |
+| `_headers` | The security headers, served by the origin. Replaced a Cloudflare Transform Rule; see the hosting note. Copied into `web/dist/` at build time — Pages reads `_headers` from the output directory, not the repo root, once a build step exists. |
 | `.gitattributes` | Marks the eight binaries as binary. Text is deliberately not declared. |
-| `style.css` | All styling. Colours defined once at the top, reused by name. |
-| `app.js` | Everything else: draft engine, CPU logic, analysis, rendering. |
+| `style.css` | All styling for the legacy pages (Draft Room, `404.html`, the how-it-works doc). Colours defined once at the top, reused by name. Not used by `web/src` — Tailwind owns the homepage's styling. |
+| `app.js` | Everything else: draft engine, CPU logic, analysis, rendering, and — at the end of its boot sequence — `window.JukeEngine`, the bridge `web/src` reads real data through. |
 | `back-to-top.js` | The back-to-top button. Its own file because the how-it-works page uses it and has no reason to load `app.js`. |
 | `draft-engine.js` | The rules of a snake draft — turn order, legality, the CPU wobble. No DOM, no globals, no dependencies, so a server can run the identical file. |
-| `room.js` | One shared draft: seats, picks, the clock. Pure, and time is always passed in rather than read. Loaded by the worker only; the page consumes the view it sends. |
+| `room.js` | One shared draft: seats, picks, the clock. Pure, and time is always passed in rather than read. Loaded by the worker only; the page consumes the view it sends. Not copied into `web/dist/` — nothing client-side ever references it. |
 | `live.js` | The client end of a room: one socket, the invite code, and the messages. Knows nothing about the board or how anything is drawn. |
 | `worker/` | The Cloudflare Durable Object behind an invite link, plus the two proxied routes whose keys may not be in the page (`/giphy`, `/news`) and its `wrangler.toml`. Deployed to `juke-draft-room.jukeff.workers.dev`; **a change here needs `wrangler deploy`** — the site deploys itself from git and the worker does not. See `worker/README.md`. |
 | `worker/store.js` | The D1 cache: Sleeper's pool and Tank01 headlines. A cache and never a source of truth, and a missing binding is a normal condition rather than a fault. |
 | `worker/migrations/` | D1 schema, applied with `wrangler d1 migrations apply`. The database is not to be shaped by hand — see the note on three variants of one schema. |
+| `web/index.html` | The real homepage entry Vite builds from. Loads the legacy files above as root-relative classic scripts, alongside Vite's own hashed module bundle for React. The Draft Room markup lives here too, hidden — see the Stack section. |
+| `web/src/` | The React homepage: `Homepage.jsx` composes `Header`, `LiveScoresTicker`, `ResumeBanner`, `Hero`, `RoomNavigation`, `ShowYourWorking`. Every one of them reads real data through `window.JukeEngine` (or `window.DraftEngine` directly, for `pickCode()`) rather than inventing sample content — the header ticker used to be six fabricated stats and is now five real ones read off the live board. |
+| `web/vite.config.js` | The Vite build config, plus a dev-server middleware that serves the same `LEGACY_FILES`/`LEGACY_DIRS` list `copy-legacy-assets.mjs` uses, from the true repo root, so `window.JukeEngine` carries real data under `vite dev` too — not just after a full build. |
+| `web/scripts/copy-legacy-assets.mjs` | Copies the legacy files into `web/dist/` after `vite build`, chained as this package's `build` script. Fails loudly (`process.exit(1)`) and lists exactly what's missing rather than shipping a partial site quietly. |
+| `web/package.json` | A real build, with real dependencies (React, Vite, Tailwind, Framer Motion) — unlike the repo-root `package.json`, which stays Playwright-only. This is the one place in the project a `npm install` is required before anything runs. |
 | `scripts/test_engine.py` | Runs `draft-engine.js` and `room.js` in node/deno/bun and asserts the rules from outside a browser. |
 | `scripts/test_crosswalk.py` | The source-id join, without the network. A bad join does not look like a failure, which is why it is not left to a pipeline run. |
-| `tests/` | End-to-end tests: the real pages, in a real browser, two managers in a real room. `playwright.config.mjs` starts both servers itself. |
-| `package.json` | **Dev only.** Fetches the test runner and nothing else. The app still has no build step, no bundler and no runtime dependency. |
+| `tests/` | End-to-end tests: the real pages, in a real browser, two managers in a real room. `playwright.config.mjs` now builds `web/` and serves `web/dist` rather than the repo root, so every spec runs against the same artifact a Cloudflare Pages deploy produces. |
+| `package.json` (repo root) | **Dev only.** Fetches the test runner and nothing else. Unrelated to `web/package.json` — this one still has no build step, no bundler and no runtime dependency. |
 | `players.js` | **GENERATED.** 260 players by ADP. Never edit by hand. |
 | `stats.js` | **GENERATED.** Stats, projections, depth charts by Sleeper ID. `pp` holds what we projected for seasons already played, so a forecast can be graded against what happened. |
 | `scripts/build_players.py` | The pipeline that writes the two generated files. |
-| `.github/workflows/update-players.yml` | Runs the pipeline daily at 11:00 UTC. |
+| `.github/workflows/update-players.yml` | Runs the pipeline daily at 11:00 UTC, and bumps `?v=` in `web/index.html` (not the root `index.html`) alongside `404.html` and the how-it-works doc. |
 | `og-image.png` | **GENERATED.** 1200x630 link-preview card, from `scripts/build_og.html`. Clicking download works in a real browser and not in a headless one; the reliable route is below. |
 | `unmatched.txt` | **GENERATED.** Feed rows that failed to join, plus unscored stat keys. |
 

@@ -425,517 +425,6 @@ const ROOMS = [
     blurb: "Analytics across the whole league, from playoff odds to the final wrap-up." }
 ];
 
-function roomCard(room) {
-  const body = "<b>" + room.name + "</b>" +
-               '<span class="blurb">' + room.blurb + "</span>" +
-               '<span class="pill' + (room.live ? "" : " grey") + '">' +
-               (room.live ? "Open" : "Planned") + "</span>";
-  // "live" rather than styling off a.room: the tag already says it is a link,
-  // and the stylesheet is asking a different question — which room is open —
-  // that will still need answering the day a second one is.
-  return room.live
-    ? '<a class="room live" href="' + room.href + '">' + body + "</a>"
-    : '<div class="room soon">' + body + "</div>";
-}
-
-/* The landing page draws the arc: one column per phase, rooms stacked under
-   it. Columns of different lengths are normal and read as intentional, where
-   a phase heading over a single card reads as an unfinished section.
-
-   The header panel stays a flat list. It is navigation — somewhere to go,
-   not a story about the season — and three headings inside a dropdown would
-   be structure for its own sake. Both still read the same ROOMS, so they
-   cannot disagree about what exists. */
-/* The list beside the door.
-
-   Still grouped by phase, because the arc is the point — the columns it
-   replaces existed to say "this covers the whole year" without a line of
-   marketing copy, and a flat list of six would throw that away. Stacked
-   rather than in three columns now, since it sits in one column beside the
-   doorway.
-
-   Every row is a button. The open room is also a link, and both need to work:
-   pressing "The Draft Room" should take you into it, pressing any other should
-   turn the door to it. */
-function roomRow(room, index) {
-  const meta = room.live ? "Live now" : room.season;
-  const body = `<span class="rl-name">${escHtml(room.name)}</span>` +
-               `<span class="rl-meta">${escHtml(meta)}</span>`;
-  return room.live
-    ? `<a class="rl live" href="${room.href}" data-room="${index}">${body}</a>`
-    : `<button class="rl" type="button" data-room="${index}">${body}</button>`;
-}
-
-function seasonGroup(season) {
-  const rooms = ROOMS.filter(function (r) { return r.season === season; });
-  if (!rooms.length) return "";
-  return `<div class="rl-group">
-      <p class="rl-phase">${season}</p>
-      ${rooms.map(function (r) { return roomRow(r, ROOMS.indexOf(r)); }).join("")}
-    </div>`;
-}
-
-// Written down once and rendered into both the header panel and the landing
-// page, so the two can never disagree about what exists.
-function renderRooms() {
-  const html = ROOMS.map(roomCard).join("");
-
-  // Below the breakpoint the header cannot hold How it works, Log in, Install
-  // and the theme toggle without them landing on top of the wordmark, so they
-  // move in here. The stylesheet decides when this row is visible; the markup
-  // is the same either way.
-  $("roomsPanel").innerHTML =
-    '<div class="rooms-inner">' + html + "</div>" +
-    '<div class="rooms-extra">' +
-      '<a class="navlink" href="docs/draft-room-how-it-works.html">How it works</a>' +
-      '<button class="navbtn js-install" type="button" hidden>Install</button>' +
-      '<button class="navlink js-login" type="button">Log in</button>' +
-      '<button class="hdrbtn theme-toggle" type="button" aria-pressed="true">' +
-        '<svg class="i-sun" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true" ' +
-             'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">' +
-          '<circle cx="12" cy="12" r="4.2"/>' +
-          '<path d="M12 2.4v2.2M12 19.4v2.2M4.2 12H2M22 12h-2.2M6.5 6.5 4.9 4.9M19.1 19.1l-1.6-1.6M17.5 6.5l1.6-1.6M4.9 19.1l1.6-1.6"/>' +
-        "</svg>" +
-        '<svg class="i-moon" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true">' +
-          '<path d="M20.5 14.9A8.7 8.7 0 0 1 9.1 3.5a8.7 8.7 0 1 0 11.4 11.4Z" fill="currentColor"/>' +
-        "</svg>" +
-      "</button>" +
-    "</div>";
-
-  $("homeRooms").innerHTML = SEASONS.map(seasonGroup).join("");
-  syncThemeButton();                 // the panel just gained a toggle
-  startRoomDoor();
-}
-
-/* ---------- the door ----------
-
-   One doorway, and the rooms turning through it. The placard carries the name,
-   the room behind it carries what the room is for, and the list beside it is
-   both the index and the control.
-
-   Everything comes from ROOMS, so the placards cannot drift from the app — the
-   same rule the product shot follows, and for the same reason.
-
-   Three things this has to get right, none of them obvious:
-
-   `margin: auto` is never used to centre the doorway. An auto margin on a grid
-   item defeats the default stretch and makes the item shrink-wrap its content
-   — and every child of .doorway is absolutely positioned, so its intrinsic
-   width is zero. The two together collapse the whole thing to nothing while
-   still reporting a healthy max-width. `justify-self` instead.
-
-   Nothing between the doorway and the door may set an overflow. Any value but
-   visible establishes a flattening context that `transform-style: preserve-3d`
-   cannot cross, and the door renders as a flat strip rather than swinging. The
-   interior clips; the frame does not.
-
-   The door swings *towards* the reader. Away is what it really does seen from
-   inside the room, and at that angle it is edge-on, unlit and invisible — the
-   physics is right and there is no picture. Towards costs about 47% of the
-   frame, which is why the interior text starts at half. */
-const DOOR_HOLD  = 6000;   // how long a room stays open
-const DOOR_SHUT  = 820;    // the door closing
-const DOOR_TURN  = 460;    // edge-on, where the swap happens
-
-let doorAt = 0, doorTimers = [], doorRunning = false;
-
-function doorClear() { doorTimers.forEach(clearTimeout); doorTimers = []; }
-function doorLater(fn, ms) { doorTimers.push(setTimeout(fn, ms)); }
-
-function paintRoom(n) {
-  const r = ROOMS[n];
-  if (!r || !$("roomPlacard")) return;
-  $("roomPlacard").textContent = r.name;
-  $("roomName").textContent    = r.name;
-  $("roomBlurb").textContent   = r.blurb;
-  $("roomSeason").textContent  = r.season;
-  $("roomStatus").textContent  = r.live ? "Open now" : "Not open yet";
-  $("roomStatus").className    = "door-room-status" + (r.live ? "" : " soon");
-
-  /* The way in, on the card, for a room that has one. The list beside the
-     door is still the index; this is the same destination offered where
-     somebody has just finished reading what the room is for, which is the
-     moment they are most likely to want it. Hidden rather than disabled for
-     the rooms that do not exist — a control that cannot act must not merely
-     fail, it must not be offered. */
-  const enter = $("roomEnter");
-  if (enter) {
-    enter.hidden = !r.live;
-    if (r.live) enter.setAttribute("href", r.href);
-  }
-
-  const rows = document.querySelectorAll("#homeRooms .rl");
-  rows.forEach(function (el) {
-    const on = Number(el.dataset.room) === n;
-    el.classList.toggle("on", on);
-    // aria-current rather than a live region: announcing a new room every six
-    // seconds to somebody reading the page would be hostile.
-    if (on) el.setAttribute("aria-current", "true");
-    else el.removeAttribute("aria-current");
-  });
-}
-
-function openRoomDoor(n) {
-  doorAt = n;
-  const stage = $("roomStage");
-  if (!stage) return;
-  stage.classList.remove("open");
-  paintRoom(n);
-  if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
-    stage.classList.add("open");     // the reduced state is the finished state
-    return;
-  }
-  doorLater(function () { stage.classList.add("open"); }, 240);
-}
-
-function queueRoomDoor() {
-  doorLater(function () {
-    const stage = $("roomStage");
-    if (!stage) return;
-    stage.classList.remove("open");
-    doorLater(function () {
-      stage.classList.add("turning");
-      doorLater(function () {
-        doorAt = (doorAt + 1) % ROOMS.length;
-        paintRoom(doorAt);
-        stage.classList.remove("turning");
-        doorLater(function () { stage.classList.add("open"); }, 420);
-        if (doorRunning) queueRoomDoor();
-      }, DOOR_TURN);
-    }, DOOR_SHUT);
-  }, DOOR_HOLD);
-}
-
-function startRoomDoor() {
-  const stage = $("roomStage");
-  if (!stage) return;
-
-  openRoomDoor(0);
-  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-
-  /* Only turns while it is on screen. A timer running behind the draft room —
-     or below the fold — is work nobody asked for, and the landing page is
-     still in the DOM the whole time somebody is drafting. */
-  if (typeof IntersectionObserver === "function") {
-    new IntersectionObserver(function (entries) {
-      const seen = entries[0].isIntersecting;
-      if (seen === doorRunning) return;
-      doorRunning = seen;
-      doorClear();
-      /* Re-open on the way in, not just re-queue. `doorClear()` cancels the
-         pending open that openRoomDoor() scheduled, and queueRoomDoor() only
-         ever shuts a door and turns — so without this the stage arrives on
-         screen closed and stays closed for ever. */
-      if (seen) { openRoomDoor(doorAt); queueRoomDoor(); }
-    }, { threshold: 0.25 }).observe(stage);
-  } else {
-    doorRunning = true;
-    queueRoomDoor();
-  }
-
-  // Reading beats turning: a pointer over the stage stops the clock.
-  stage.addEventListener("mouseenter", function () { doorClear(); });
-  stage.addEventListener("mouseleave", function () { if (doorRunning) queueRoomDoor(); });
-}
-
-/* ---------- the proof section ----------
-
-   Three claims with the thing they claim running beside them.
-
-   It replaced three paragraphs of prose, which is the weakest thing a landing
-   page can say about a product whose whole pitch is that the numbers are
-   inspectable: a claim with nothing to check it against is exactly what every
-   other fantasy site also says.
-
-   **Every stage is drawn from live data, and that is the rule this section
-   exists under.** The same `board`, the same projections and the same
-   `pointsUnder()` the draft room runs on. A hand-written table of plausible
-   names would be indistinguishable on screen tonight and wrong the first
-   morning the pipeline moved — the same argument that keeps the product shot
-   generated and the door drawn rather than photographed. Nothing in here is a
-   name we chose: whoever tonight's data says is WR1 is who turns up.
-
-   **A stage that has nothing to say draws nothing.** buildProjections() runs
-   at startup, but a visitor arriving before the data has been parsed, or with
-   a board that came back short, must not get an empty frame with a heading
-   over it. Each builder returns "" and paintProof() falls through to the next
-   claim rather than rendering a hole. Same contract as the score strip. */
-
-const PROOF_HOLD = 7000;
-
-const PROOFS = [
-  {
-    title: "Change a rule. Every number moves.",
-    blurb: "All 38 scoring rules are yours to edit, and the projections, the " +
-           "rankings and the grade all re-score. Not a preset — the rules.",
-    build: proofScoring
-  },
-  {
-    title: "The score shows its working.",
-    blurb: "A Juke score is projected points above what a replacement starter " +
-           "at that position gets you, as a share of the best on the board.",
-    build: proofJukeScore
-  },
-  {
-    title: "Rebuilt every morning.",
-    blurb: "Real ADP from Fantasy Football Calculator and projections from " +
-           "Sleeper, fetched and rebuilt daily. No hand-maintained list.",
-    build: proofFreshness
-  }
-];
-
-let proofAt = 0, proofTimer = null, proofRunning = false;
-
-/* The three formats, from the two places that already know about them:
-   REC_BY_FORMAT for the rule and SCORING_NAMES for the label. A third list
-   here would be the same fact written down again, and it would be the copy
-   nobody remembers when a format is added.
-
-   A function rather than a const because both of those are declared later in
-   the file: a const up here would read them inside their temporal dead zone
-   and throw on load. */
-function scoringFormats() {
-  return Object.keys(REC_BY_FORMAT).map(function (key) {
-    return { key: key, rec: REC_BY_FORMAT[key], name: SCORING_NAMES[key] };
-  });
-}
-
-/* The players a proof talks about.
-
-   Sorted by tonight's projection rather than by ADP: this section is about
-   what the model says, and opening it with the market's order would be the
-   wrong argument in the wrong place. `keep` narrows it per claim, because the
-   two stages want different populations and picking one for both is how the
-   first build of this section ended up arguing against itself. */
-function proofPool(n, keep) {
-  return board
-    .filter(function (p) {
-      const s = statOf(p);
-      if (!s || !s.p || !(s.p.gp > 0) || FORCED_LATE[p.pos]) return false;
-      return keep ? keep(p, s) : true;
-    })
-    .sort(function (a, b) { return (b.projPts || 0) - (a.projPts || 0); })
-    .slice(0, n);
-}
-
-/* Claim one: the same players, priced three ways.
-
-   The formats are the three the setup screen offers, and they differ by one
-   rule out of 38 — which is the point being made. Receivers climb and backs
-   fall as a catch goes from nothing to a point, and that reordering is the
-   whole proof: it is not a filter or a different list, it is the same twelve
-   players scored again. */
-function proofScoring() {
-  /* Only the players the rule actually touches, and asked of the data rather
-     than of a list of positions. The first build sorted the whole board by
-     projected points, which is six quarterbacks — true, and the worst
-     possible illustration of a reception rule, because not one of those six
-     moves by a single point across the three settings. A claim whose proof
-     holds still is worse than no proof.
-
-     `rec` on the projection is the honest test: a player this rule can move
-     is a player projected to catch something. */
-  const pool = proofPool(14, function (p, s) { return s.p[STAT_KEYS.rec] > 0; });
-  if (pool.length < 6) return "";
-
-  const formats = scoringFormats();
-  const fmt = formats[proofScoring.at % formats.length];
-  const rules = rulesForFormat(fmt.key);
-
-  const ranked = pool
-    .map(function (p) { return { p: p, pts: pointsUnder(statOf(p).p, rules) }; })
-    .sort(function (a, b) { return b.pts - a.pts; })
-    .slice(0, 6);
-
-  return '<div class="pstage">' +
-    '<div class="pstage-head">' +
-      '<span class="pstage-label">Points per reception</span>' +
-      '<span class="pstage-dial">' + formats.map(function (f) {
-        return '<span class="pd' + (f.key === fmt.key ? " on" : "") + '">' + f.rec + '</span>';
-      }).join("") + '</span>' +
-    '</div>' +
-    '<p class="pstage-note">' + escHtml(fmt.name) + '</p>' +
-    '<ol class="pstage-rows">' + ranked.map(function (r, i) {
-      return '<li class="prow">' +
-        '<span class="prow-rank">' + (i + 1) + '</span>' +
-        '<span class="pos-chip ' + r.p.pos + '">' + r.p.pos + '</span>' +
-        '<span class="prow-name">' + escHtml(shortName(r.p)) + '</span>' +
-        '<span class="prow-num">' + Math.round(r.pts) + '</span>' +
-      '</li>';
-    }).join("") + '</ol>' +
-  '</div>';
-}
-proofScoring.at = 0;
-
-/* Claim two: the Juke score, with the subtraction printed.
-
-   The one number the app has that a projection feed does not, and the
-   complaint it has always drawn is that a bare 0 reads as "worthless" and a
-   bare 100 as "perfect" — it is a ranking against the pool, not a rating of
-   the player. So the stage prints the sum rather than the verdict: his
-   points, what a replacement starter at his position is projected for, and
-   the gap between them. */
-function proofJukeScore() {
-  /* One player per position, best first, rather than the top four overall.
-
-     The top four overall are four quarterbacks — they score the most raw
-     points and always will — which makes the stage read as a claim about
-     quarterbacks and hides the only thing the number is for. Points above
-     replacement is a *cross-position* measure: it exists to say that an elite
-     tight end is worth more than the twenty-fifth receiver, and it cannot say
-     that on a list where every row is the same position. */
-  const best = {};
-  proofPool(400, function (p) { return REPLACEMENT_PTS[p.pos] > 0; })
-    .forEach(function (p) {
-      if (overallScore(p) === null) return;
-      if (!best[p.pos] || overallScore(p) > overallScore(best[p.pos])) best[p.pos] = p;
-    });
-
-  const rows = Object.keys(best)
-    .map(function (pos) { return best[pos]; })
-    .sort(function (a, b) { return overallScore(b) - overallScore(a); })
-    .slice(0, 4);
-  if (rows.length < 3) return "";
-
-  return '<div class="pstage">' +
-    '<div class="pstage-head">' +
-      '<span class="pstage-label">Projected points, less replacement</span>' +
-    '</div>' +
-    '<ol class="pstage-rows">' + rows.map(function (p) {
-      const repl = Math.round(REPLACEMENT_PTS[p.pos]);
-      const gap  = Math.round(p.projPts) - repl;
-      return '<li class="prow prow-sum">' +
-        '<span class="pos-chip ' + p.pos + '">' + p.pos + '</span>' +
-        '<span class="prow-name">' + escHtml(shortName(p)) + '</span>' +
-        '<span class="prow-sums">' +
-          '<b>' + Math.round(p.projPts) + '</b>' +
-          '<i>&minus;</i>' + repl +
-          '<i>=</i><b class="prow-gap">' + (gap > 0 ? "+" : "") + gap + '</b>' +
-        '</span>' +
-        '<span class="prow-num prow-score">' + Math.round(overallScore(p)) + '</span>' +
-      '</li>';
-    }).join("") + '</ol>' +
-    '<p class="pstage-foot">Replacement is the last starter at that position in a ' +
-      league.teams + '-team league, derived rather than typed.</p>' +
-  '</div>';
-}
-
-/* Claim three: where the numbers came from, and when.
-
-   PLAYERS_META is written by the pipeline itself, so this cannot claim a
-   freshness the data does not have — if the nightly run fails, the date on
-   screen stops moving and says so. */
-function proofFreshness() {
-  if (typeof PLAYERS_META === "undefined") return "";
-  const pool = board.slice(0, 5);
-  if (!pool.length) return "";
-
-  return '<div class="pstage">' +
-    '<div class="pstage-head">' +
-      '<span class="pstage-label">Average draft position</span>' +
-      '<span class="pstage-stamp">' + escHtml(PLAYERS_META.generated) + '</span>' +
-    '</div>' +
-    '<ol class="pstage-rows">' + pool.map(function (p, i) {
-      return '<li class="prow">' +
-        '<span class="prow-rank">' + (i + 1) + '</span>' +
-        '<span class="pos-chip ' + p.pos + '">' + p.pos + '</span>' +
-        '<span class="prow-name">' + escHtml(shortName(p)) + '</span>' +
-        '<span class="prow-num">' + p.adp.toFixed(1) + '</span>' +
-      '</li>';
-    }).join("") + '</ol>' +
-    '<p class="pstage-foot">' + PLAYERS_META.count + ' players, ' +
-      PLAYERS_META.projected + ' with a projection, one ADP set per scoring format.</p>' +
-  '</div>';
-}
-
-function paintProof(n) {
-  const stage = $("proofStage");
-  if (!stage) return;
-
-  /* A builder that has nothing to say returns "", and the section moves on
-     rather than drawing a heading over an empty frame. Bounded by the number
-     of claims so an empty board cannot spin here. */
-  let html = "", tries = 0;
-  while (tries++ < PROOFS.length) {
-    html = PROOFS[n].build();
-    if (html) break;
-    n = (n + 1) % PROOFS.length;
-  }
-  proofAt = n;
-  stage.innerHTML = html;
-  stage.classList.toggle("empty", !html);
-
-  document.querySelectorAll("#proofList .pf").forEach(function (el) {
-    const on = Number(el.dataset.proof) === n;
-    el.classList.toggle("on", on);
-    // aria-current rather than a live region: announcing a new claim every
-    // seven seconds to somebody reading the page would be hostile.
-    if (on) el.setAttribute("aria-current", "true");
-    else el.removeAttribute("aria-current");
-  });
-}
-
-function renderProof() {
-  const list = $("proofList");
-  if (!list) return;
-
-  list.innerHTML = PROOFS.map(function (c, i) {
-    return '<button class="pf" type="button" data-proof="' + i + '">' +
-      '<b>' + escHtml(c.title) + '</b>' +
-      '<span>' + escHtml(c.blurb) + '</span>' +
-    '</button>';
-  }).join("");
-
-  paintProof(0);
-  startProofCycle();
-}
-
-/* Claim one advances *within* itself before the section moves on, because the
-   reordering is the argument and a single frame of it proves nothing. */
-function stepProof() {
-  if (proofAt === 0 && proofScoring.at < scoringFormats().length - 1) {
-    proofScoring.at += 1;
-    paintProof(0);
-    return;
-  }
-  proofScoring.at = 0;
-  paintProof((proofAt + 1) % PROOFS.length);
-}
-
-function queueProof() {
-  clearTimeout(proofTimer);
-  proofTimer = setTimeout(function () {
-    stepProof();
-    if (proofRunning) queueProof();
-  }, proofAt === 0 ? PROOF_HOLD / 2 : PROOF_HOLD);
-}
-
-function startProofCycle() {
-  const sec = $("proof");
-  if (!sec) return;
-  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-
-  /* Only cycles while it is on screen. A timer running behind the draft room
-     — or below the fold — is work nobody asked for, and the landing page is
-     still in the DOM the whole time somebody is drafting. */
-  if (typeof IntersectionObserver === "function") {
-    new IntersectionObserver(function (entries) {
-      const seen = entries[0].isIntersecting;
-      if (seen === proofRunning) return;
-      proofRunning = seen;
-      if (seen) queueProof();
-      else clearTimeout(proofTimer);
-    }, { threshold: 0.3 }).observe(sec);
-  } else {
-    proofRunning = true;
-    queueProof();
-  }
-
-  // Reading beats advancing: a pointer over the section stops the clock.
-  sec.addEventListener("mouseenter", function () { clearTimeout(proofTimer); });
-  sec.addEventListener("mouseleave", function () { if (proofRunning) queueProof(); });
-}
-
 /* ---------- the product shot ----------
 
    A first-time visitor never saw what this app looks like. The landing page
@@ -1025,64 +514,6 @@ function shotPicks() {
     picks[n - 1] = best;
   }
   return picks;
-}
-
-function renderHeroShot() {
-  const el = $("heroShot");
-  // board is empty until the setup screen has been read. Decoration is not
-  // worth a broken landing page, so this simply does nothing until it is not.
-  if (!el || !board.length) return;
-
-  const picks = shotPicks();
-
-  let html = '<div class="shot-rd"></div>';
-  for (let s = 0; s < SHOT_TEAMS; s++) {
-    html += '<div class="shot-hd' + (s === SHOT_MINE ? " me" : "") + '">' +
-            (s === SHOT_MINE ? "YOU" : escHtml(cpuName(s).split(" ")[0])) + "</div>";
-  }
-
-  for (let r = 1; r <= SHOT_ROUNDS; r++) {
-    html += '<div class="shot-rd">' + r + "</div>";
-    for (let s = 0; s < SHOT_TEAMS; s++) {
-      // Snake: odd rounds run left to right, even rounds back the other way,
-      // so seat `s` in round `r` took the pick at this overall number.
-      const i = (r - 1) * SHOT_TEAMS + (r % 2 ? s : SHOT_TEAMS - 1 - s);
-      const p = picks[i];
-      if (!p) { html += '<div class="shot-cell empty"></div>'; continue; }
-
-      /* The name and the club, and nothing else. This is an excerpt of the
-         board, not a copy of it, and what gets left out is an editorial
-         decision each time rather than a rule.
-
-         Out already: the faces, because fifty headshots is fifty requests to
-         somebody else's server on the first paint of the marketing page, for
-         decoration the mask starts dissolving at 46%.
-
-         Out now: the arrow and the pick number, which were carried across
-         from the board and did not survive being looked at.
-
-         **The pick numbers zigzag, and that is what read as jumbled.** Row one
-         runs 1.01 to 1.10 left to right and row two runs 2.10 back to 2.01,
-         which is correct — it is what a snake is — and on the working board it
-         is information somebody is actively tracking. On a graphic you glance
-         at, it is fifty four-character numbers alternating direction with no
-         pattern for the eye to lock onto.
-
-         **And there is no way to demote them.** The usual fix for two elements
-         competing is to make one smaller or dimmer, and both are shut here:
-         `--fs-2xs` is the bottom of the type scale, and dimming is the exact
-         opacity bug that had to be taken out of this file and the board's. So
-         the pick number would compete with the player's name at equal weight
-         for ever, in a 103×54px box whose entire job is to show the name.
-
-         `shortName()` stays. "J. Gibbs" reads as a person where "Gibbs" read
-         as a row in a table, which is the half of that change that worked. */
-      html += '<div class="shot-cell ' + p.pos + (s === SHOT_MINE ? " mine" : "") + '">' +
-              "<b>" + escHtml(shortName(p)) + "</b>" +
-              "<s>" + p.pos + " &middot; " + escHtml(p.team) + "</s></div>";
-    }
-  }
-  el.innerHTML = html;
 }
 
 function closeRooms() {
@@ -1300,11 +731,14 @@ function nudgeScores(direction) {
   });
 }
 
-function loadScores() {
+// DOM-free half of the fetch, so anything holding a real board (the
+// draft room, and now the JukeEngine bridge below) can ask for scores
+// without a #scoreStrip to write into. loadScores() is the DOM half.
+function fetchScores() {
   const cached = cachedScores();
-  if (cached) { renderScores(cached); return; }
+  if (cached) return Promise.resolve(cached);
 
-  fetch(SCORES_URL, { mode: "cors" })
+  return fetch(SCORES_URL, { mode: "cors" })
     .then(function (res) {
       if (!res.ok) throw new Error("scores " + res.status);
       return res.json();
@@ -1314,11 +748,14 @@ function loadScores() {
       try {
         sessionStorage.setItem("juke.scores", JSON.stringify({ at: Date.now(), games }));
       } catch (err) {}                          // private mode, or a full quota
-      renderScores(games);
-    })
-    .catch(function () {
-      $("scoreWrap").hidden = true;
+      return games;
     });
+}
+
+function loadScores() {
+  fetchScores().then(renderScores).catch(function () {
+    $("scoreWrap").hidden = true;
+  });
 }
 
 /* ---- 3. The player board -------------------------------
@@ -6657,31 +6094,6 @@ document.addEventListener("click", function (e) {
   if (e.target.id === "discardBtn") { clearSave(); showResumeBar(); }
 });
 
-/* Turning the door by hand. Delegated because renderRooms() rebuilds these
-   rows, and the open room is an <a> whose navigation must survive — turning
-   the door to a room you are about to enter is pointless, so a live row is
-   left entirely alone. */
-document.addEventListener("click", function (e) {
-  const row = e.target.closest ? e.target.closest("#homeRooms .rl") : null;
-  if (!row || row.classList.contains("live")) return;
-  doorClear();
-  openRoomDoor(Number(row.dataset.room));
-  if (doorRunning) queueRoomDoor();
-});
-
-/* Choosing a claim by hand. Delegated for the same reason the door's rows
-   are: renderProof() rebuilds these buttons, so a listener attached to one
-   would be thrown away the next time the section drew. Picking a claim also
-   restarts its own inner cycle, or claim one would resume mid-reorder. */
-document.addEventListener("click", function (e) {
-  const btn = e.target.closest ? e.target.closest("#proofList .pf") : null;
-  if (!btn) return;
-  clearTimeout(proofTimer);
-  proofScoring.at = 0;
-  paintProof(Number(btn.dataset.proof));
-  if (proofRunning) queueProof();
-});
-
 /* The year buttons on the game logs. Delegated from the sheet body, which
    openSheet() rewrites wholesale, and it repaints only the logs view rather
    than reopening the sheet — reopening would throw away which tab you were
@@ -6984,10 +6396,34 @@ refreshSetup();
 
 // The route has the last word on what is visible, so it runs after the
 // setup screen has been built rather than before.
-renderRooms();
-renderHeroShot();      // after refreshSetup(), which is what fills `board`
-renderProof();         // and for the same reason: every stage reads `board`
 applyRoute();
+
+/* The one deliberate seam between this file and anything built with a
+   bundler (the React homepage lives at web/, and loads as a module script,
+   so it does not share this file's top-level scope the way players.js and
+   stats.js do). Nothing here is a second implementation of a rule — every
+   entry is the same function or the same live reference the rest of this
+   file already uses, handed out rather than duplicated. board() and
+   rooms() return live references on purpose: call them fresh on each use
+   rather than caching across a route change, the same way this file does. */
+window.JukeEngine = {
+  board:        () => board,
+  league:       () => league,
+  rooms:        () => ROOMS,
+  overallScore: overallScore,
+  shotPicks:    shotPicks,
+  fetchScores:  fetchScores,
+  readSave:     readSave,
+  settingsText: settingsText,
+  notYet:       notYet,
+  shortName:    shortName,
+  statOf:       statOf,
+  pointsUnder:  pointsUnder,
+  rulesForFormat: rulesForFormat,
+  statKeys:     () => (typeof STAT_KEYS === "undefined" ? null : STAT_KEYS),
+  forcedLate:   () => FORCED_LATE,
+  playersMeta:  () => (typeof PLAYERS_META === "undefined" ? null : PLAYERS_META)
+};
 
 /* An invite code in the address bar means someone followed a link, so the
    room is joined before anything else happens. Not the host: the room

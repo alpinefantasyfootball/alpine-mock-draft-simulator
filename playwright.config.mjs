@@ -56,17 +56,23 @@ export default defineConfig({
      so what counts as local is decided in one place. */
   webServer: !LOCAL_SITE ? undefined : [
     {
-      /* `py` is the Windows launcher and is the only thing that works there;
-         it does not exist anywhere else, so the suite could not start its own
-         static server on Linux or macOS at all — it failed with "py: not
-         found" before a single test ran. Same reason CLAUDE.md tells you to
-         run the pipeline as `py scripts/build_players.py`: this project is
-         developed on Windows. Picked per platform rather than changed, so the
-         Windows path is untouched. */
-      command: (process.platform === "win32" ? "py" : "python3") + " -m http.server 8765",
+      /* index.html moved to web/index.html and picked up a real build step —
+         see CLAUDE.md's Stack section. So "start the static server" is now
+         "build the React bundle, copy the legacy files beside it, then serve
+         that output" rather than serving the repo root as-is; every spec
+         navigates through the built artifact, the same thing a Cloudflare
+         Pages deploy produces, not raw source.
+
+         `py` is the Windows launcher and is the only thing that works there;
+         it does not exist anywhere else, so this failed with "py: not found"
+         on Linux/macOS before a single test ran. Same reason CLAUDE.md tells
+         you to run the pipeline as `py scripts/build_players.py`. Picked per
+         platform rather than changed, so the Windows path is untouched. */
+      command: "npm --prefix web run build && " +
+        (process.platform === "win32" ? "py" : "python3") + " -m http.server 8765 --directory web/dist",
       port: 8765,
       reuseExistingServer: true,
-      timeout: 30 * 1000
+      timeout: 120 * 1000
     },
     {
       command: "npx --yes wrangler@4 dev -c worker/wrangler.toml --port 8787 --local",

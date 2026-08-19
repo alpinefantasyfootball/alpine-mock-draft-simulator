@@ -16,6 +16,16 @@
         "--port", "8787", "--local"
       ],
       "port": 8787
+    },
+    {
+      "name": "web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix", "web",
+        "run", "dev", "--",
+        "--port", "5173", "--strictPort"
+      ],
+      "port": 5173
     }
   ]
 }

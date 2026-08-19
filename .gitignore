@@ -16,6 +16,12 @@ node_modules/
 test-results/
 playwright-report/
 
+# web/'s build output. Cloudflare Pages builds this itself on every deploy
+# (Root directory: web, Build command: npm run build, Output directory:
+# dist) — a checked-in copy would be yesterday's data behind a hashed
+# filename nobody bumped.
+web/dist/
+
 # wrangler's local state: the Durable Object storage it fakes for
 # `wrangler dev`, its bundle cache and its temp files. 18MB of machine-local
 # scratch that is rebuilt on demand, and a checked-in copy would be someone
