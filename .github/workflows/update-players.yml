@@ -57,15 +57,18 @@ jobs:
             exit 0
           fi
 
-          # The generated files are cached for four hours by the CDN, so new
-          # data behind an unchanged address is data nobody sees until the
-          # afternoon. Bumping the stamp is what actually ships the rebuild —
-          # see the note beside ?v= in index.html. Down to the minute, because
-          # this workflow also has a Run button and can fire twice in a day.
+          # New data behind an unchanged address is data nobody sees, so
+          # bumping the stamp is what actually ships the rebuild — see the
+          # note beside ?v= in index.html. Down to the minute, because this
+          # workflow also has a Run button and can fire twice in a day.
+          #
+          # 404.html is in this list for the same reason the other two are: it
+          # loads style.css and theme.js by the same versioned address. It is
+          # the easiest one to forget, because nobody visits it on purpose.
           STAMP=$(date -u +%Y%m%d%H%M)
           sed -i -E "s/\?v=[0-9A-Za-z._-]+/?v=$STAMP/g" \
-            index.html docs/draft-room-how-it-works.html
-          git add index.html docs/draft-room-how-it-works.html
+            index.html 404.html docs/draft-room-how-it-works.html
+          git add index.html 404.html docs/draft-room-how-it-works.html
 
           git commit -m "Update player data ($(date -u +%Y-%m-%d))"
           git push

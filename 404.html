@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Page not found &middot; Juke</title>
+  <meta name="robots" content="noindex">
+
+  <!-- **Every path here is absolute, and that is the whole trick of this file.**
+       Cloudflare Pages serves 404.html for a miss at any depth, so a request to
+       /a/b/c gets this page rendered *at that address* — a relative "style.css"
+       would then resolve to /a/b/style.css and 404 as well, leaving an unstyled
+       page as the answer to a missing one. -->
+  <script src="/theme.js?v=202608190004"></script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Same ?v= as index.html, and bumped with it by the nightly workflow,
+       which now lists this file alongside the other two. -->
+  <link rel="stylesheet" href="/style.css?v=202608190004">
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+  <link rel="icon" href="/favicon.ico" sizes="any">
+
+  <style>
+    /* Only tokens the stylesheet already defines in both themes. A literal
+       here would be invisible under one of them. */
+    .nf {
+      min-height: 78vh;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 18px; text-align: center;
+      padding: 40px 20px 64px;
+      max-width: 560px; margin: 0 auto;
+    }
+    .nf-code {
+      font-family: Poppins, sans-serif;
+      font-size: var(--fs-3xl); font-weight: 700; line-height: 1;
+      color: var(--orange-ink);
+      letter-spacing: -.02em;
+    }
+    .nf h1 {
+      font-family: Poppins, sans-serif;
+      font-size: var(--fs-xl); font-weight: 700; line-height: 1.2;
+      margin: 0; color: var(--ink);
+      text-wrap: balance;
+    }
+    .nf p {
+      margin: 0; font-size: var(--fs-base); line-height: 1.6;
+      color: var(--ink-mid); max-width: 44ch;
+    }
+    .nf-acts { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 6px; }
+    .nf-acts a {
+      font-size: var(--fs-base); font-weight: 600;
+      padding: 11px 20px; border-radius: var(--r-pill);
+      text-decoration: none; display: inline-block;
+    }
+    .nf-go { background: var(--orange-cta); color: #fff; }
+    .nf-go:hover { background: var(--orange-cta-hover); }
+    .nf-alt { color: var(--link); border: 1px solid var(--line); }
+    .nf-alt:hover { background: var(--fill); }
+    .nf-acts a:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+  </style>
+</head>
+<body>
+
+  <main class="nf">
+    <!-- The mark, inlined rather than referenced, because this page must render
+         correctly when every other request from it has already missed. It is
+         662 x 774 and sizing it square squashes it. -->
+    <svg width="46" height="54" viewBox="0 0 662 774" aria-hidden="true" focusable="false">
+      <path d="M120 90h150v420c0 70-40 110-110 110H90V500h50c20 0 30-10 30-35V90z" fill="var(--mark-ink)"/>
+      <path d="M300 560c90 90 240 80 300-30l60 40c-80 150-300 150-400 30z" fill="var(--orange)"/>
+    </svg>
+
+    <span class="nf-code">404</span>
+    <h1>There is nothing at this address</h1>
+    <p>The link may be old, or mistyped. Nothing has gone wrong with your draft &mdash;
+      a saved one is still where you left it.</p>
+
+    <div class="nf-acts">
+      <a class="nf-go" href="/">Go to Juke</a>
+      <a class="nf-alt" href="/#/draft">Open the Draft Room</a>
+    </div>
+  </main>
+
+</body>
+</html>
