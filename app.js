@@ -6481,6 +6481,68 @@ window.JukeEngine = {
   // tick and pause toggle — the same cadence the legacy DOM writes already
   // ran on — so the header can re-read rather than poll.
   headerInfo: headerInfo,
+  // Added for the React draft room page (web/src/components/DraftRoom.jsx).
+  // All four are reads of state that already exists, not a second copy of
+  // it: picks() and mySlot() are the same state.picks/state.mySlot the
+  // legacy board and rail already read directly, and teamLabel()/
+  // seatedLineup() are the exact functions that already decide a seat's
+  // name and a roster's starter/bench split — seatedLineup() is where the
+  // FLEX gets filled correctly (see the bestLineup() note in CLAUDE.md
+  // about sorting by posRank instead of aboveReplacement), so the roster
+  // dock reads it rather than re-deciding which bench player counts as
+  // which slot. onTheClock() and pickCode() are not re-bridged here because
+  // they are already pure/global on window.DraftEngine — call
+  // DraftEngine.onTheClock(league(), picks().length) and
+  // DraftEngine.pickCode(overall, league().teams) directly.
+  picks:        () => state.picks,
+  mySlot:       () => state.mySlot,
+  teamLabel:    teamLabel,
+  seatedLineup: seatedLineup,
+  // The Draft button's real submission path. Wraps draftAndAdvance() rather
+  // than reimplementing it — that one function already knows the solo vs.
+  // room difference (mutate locally and kick off runCPUs(), or send
+  // Live.pick() and wait for the room to broadcast), so this stays the only
+  // place a pick is ever submitted, same as the legacy Draft buttons.
+  //
+  // draftAndAdvance()/makePick() do not check state.mySlot on their own:
+  // makePick() passes onTheClock().slot as the "seat" to DraftEngine's
+  // rejectPick(), which trivially matches itself, so NOT_YOUR_TURN can
+  // never fire from that call site. The legacy UI never notices because its
+  // Draft buttons are only ever rendered while isMyTurn() is true. A React
+  // button has no equivalent structural guarantee, so the turn check is
+  // repeated here rather than trusted to the caller — the same reasoning as
+  // "the engine is where legality lives, not each caller" elsewhere in this
+  // file. Returns null on success, or a DraftEngine.REJECT.* reason string.
+  draftPlayer: function (player) {
+    if (!isMyTurn()) return "not-your-turn";
+    draftAndAdvance(player);
+    return null;
+  },
+  // The Autopick toggle's real path — and room vs. solo are asymmetric on
+  // purpose, the same way autoDraftRest() already treats them differently.
+  // A room has a real, persistent "keep drafting for me" flag already
+  // (state.autoMe), driven by driveMyAutopilot() — which the room's own
+  // broadcast handler already re-invokes after every update (see the call
+  // beside adoptRoom() a few hundred lines up), so toggling the flag once
+  // here is enough; nothing further has to be re-triggered from React.
+  // Solo has no equivalent flag to toggle — "Auto-draft the rest" there is
+  // a one-shot loop that finishes the whole draft immediately, not a
+  // resumable per-turn toggle, so it is not what a persistent "Autopick:
+  // ON" switch should mean. The page drives its own turn-by-turn loop for
+  // that case instead, off autoPickForMe() — bridged here as a pure read,
+  // the exact function (queueTop() -> suggestions()[0] -> bestLeft()) that
+  // autoDraftRest()'s own solo loop already uses for my seat, so a second
+  // "what would I draft" rule never gets invented in React.
+  inRoom: inRoom,
+  autoMe:  () => state.autoMe,
+  toggleRoomAutopilot: function () {
+    if (!inRoom()) return state.autoMe;
+    state.autoMe = !state.autoMe;
+    render();
+    driveMyAutopilot();
+    return state.autoMe;
+  },
+  autoPickForMe: autoPickForMe,
   currentTheme: currentTheme,
   setTheme:     setTheme,
   soundWanted:  () => soundWanted,
