@@ -1,0 +1,20 @@
+# How git should handle the file types in this repository.
+#
+# Only the binaries are declared. Text is deliberately left alone: this machine
+# runs core.autocrlf=true, every text file is stored LF and checked out CRLF,
+# and that has worked since the beginning. Adding `* text=auto` would
+# re-normalise the whole tree and produce a diff touching every file for no
+# behavioural gain — a large, unreviewable change to fix nothing.
+
+# `binary` is git's macro for `-text -diff`: never translate line endings, and
+# never try to produce a textual diff.
+#
+# Git's own content detection has been getting these right on its own, which is
+# why nothing has broken. This makes it a rule rather than a lucky guess. The
+# case it guards against is a PNG whose leading bytes happen to look textual to
+# the heuristic: the signature is 89 50 4E 47 0D 0A 1A 0A, and those 0D 0A bytes
+# are exactly what an end-of-line filter rewrites. A share card that has had its
+# own signature edited is not a corrupted image, it is not an image at all, and
+# it fails in somebody else's link preview rather than here.
+*.png binary
+*.ico binary
