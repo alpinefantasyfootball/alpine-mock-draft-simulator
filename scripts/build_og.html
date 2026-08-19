@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <title>Build the Juke share card</title>
-<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@700&family=Inter:wght@500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700&family=Inter:wght@500&display=swap" rel="stylesheet">
 <style>
   body { margin:0; padding:24px; background:#0E151E; color:#E6ECF3;
          font-family: Inter, system-ui, sans-serif; }
@@ -42,7 +42,7 @@ const TAGLINE = 'Fantasy football mock drafts, free and without an account';
   const img = await new Promise(r => { const i = new Image();
     i.onload = () => r(i); i.src = URL.createObjectURL(new Blob([svg], {type:'image/svg+xml'})); });
 
-  await document.fonts.load('700 112px Poppins');
+  await document.fonts.load('700 112px "Barlow Condensed"');
   await document.fonts.load('500 34px Inter');
   await document.fonts.ready;
 
@@ -50,7 +50,7 @@ const TAGLINE = 'Fantasy football mock drafts, free and without an account';
   x.fillStyle = NAVY; x.fillRect(0, 0, 1200, 630);
 
   const markH = 200, markW = Math.round(markH * 662 / 774);
-  x.font = '700 112px Poppins, sans-serif';
+  x.font = '700 112px "Barlow Condensed", sans-serif';
   const gap = 34, total = markW + gap + x.measureText('JUKE').width;
   const startX = (1200 - total) / 2, midY = 285;
 
