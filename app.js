@@ -375,10 +375,17 @@ syncSoundButton();
    Two views behind one hash route: the landing page at "#/"
    and the Draft Room at "#/draft".
 
-   Hash routing rather than real paths, because GitHub Pages
-   serves static files and has no rewrite to send /draft back
-   to index.html. It also keeps the back button working, which
-   matters most to the person pressing it mid-draft.        */
+   Hash routing rather than real paths. It was forced at first
+   -- GitHub Pages has no rewrite to send /draft back to
+   index.html -- and that constraint went away with the move to
+   Cloudflare Pages, where a _redirects file does exactly that.
+
+   What holds it now is the reason that was always better: the
+   hash keeps the back button working, which matters most to the
+   person pressing it mid-draft. Every saved link, every invite
+   and the installed app's start_url are also written this way,
+   so real paths are a feature with a migration behind them
+   rather than a tidy-up.                                    */
 
 /* The three phases of a fantasy season, in the order they happen.
 
