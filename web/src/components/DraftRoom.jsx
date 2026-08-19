@@ -117,6 +117,10 @@ export default function DraftRoom() {
     if (!stat || !stat.p) return null
     return engine.pointsUnder(stat.p, rules)
   }
+  // overallScore() is the same "Juke score" used everywhere else on the
+  // site — points above replacement at the player's position, as a share
+  // of the best such figure on the board. Not a second value metric.
+  const valueFor = (player) => engine.overallScore(player)
 
   const availablePlayers = board
     .filter((p) => !p.drafted)
@@ -177,6 +181,7 @@ export default function DraftRoom() {
             posFilter={posFilter}
             onPosFilter={setPosFilter}
             pointsFor={pointsFor}
+            valueFor={valueFor}
             onDraft={handleDraft}
             myTurn={myTurn}
           />

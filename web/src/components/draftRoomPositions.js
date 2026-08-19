@@ -16,3 +16,16 @@ export const POS_BADGE = {
 }
 
 export const POS_LIST = ['QB', 'RB', 'WR', 'TE']
+
+// Same position -> hue mapping as POS_BADGE, applied to a whole drafted
+// grid cell instead of just the badge inside it — a semi-transparent tint
+// + matching border, never a solid fill, so player name and team stay
+// readable at 74px-cell scale without a second contrast pass.
+export const POS_CELL = {
+  QB: 'border-violet-500/30 bg-violet-500/10',
+  RB: 'border-emerald-500/30 bg-emerald-500/10',
+  WR: 'border-sky-500/30 bg-sky-500/10',
+  TE: 'border-amber-500/30 bg-amber-500/10',
+  K: 'border-teal-500/30 bg-teal-500/10',
+  DST: 'border-slate-500/30 bg-slate-500/10',
+}

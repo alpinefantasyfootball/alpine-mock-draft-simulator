@@ -1,17 +1,21 @@
-import { useMemo } from 'react'
 import { motion } from 'framer-motion'
-import { POS_BADGE } from './draftRoomPositions.js'
+import { POS_BADGE, POS_CELL } from './draftRoomPositions.js'
 
 // Real data only: `picks` is window.JukeEngine.picks() (state.picks itself,
 // {overall, round, slot, player}), the same array the legacy board reads
 // via `state.picks.find(p => p.round === r && p.slot === s)` — this just
 // indexes it once into a map instead of re-scanning it per cell.
+//
+// Not memoized on `picks` itself: state.picks is mutated in place
+// (Array.push in makePick()), so the array reference never changes and a
+// useMemo keyed on it would freeze this map at whatever it was on first
+// mount — every filled cell after that would silently render as empty.
+// Rebuilding on every render is the same "render() redraws everything, no
+// partial updates" trade this codebase already makes deliberately (see
+// CLAUDE.md's Conventions section), and it costs nothing at ~280 entries.
 export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLabelOf }) {
-  const byCell = useMemo(() => {
-    const map = new Map()
-    picks.forEach((p) => map.set(p.round + '-' + p.slot, p))
-    return map
-  }, [picks])
+  const byCell = new Map()
+  picks.forEach((p) => byCell.set(p.round + '-' + p.slot, p))
 
   const teams = league.teams
   const rounds = league.rounds
@@ -50,7 +54,23 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
                 return (
                   <div key={round + '-' + s} className="border-b border-r border-slate-800/70 p-1">
                     {pick ? (
-                      <div className="flex h-full flex-col justify-center rounded-md border border-white/10 bg-white/[0.04] p-1.5 backdrop-blur-sm">
+                      // layoutId matches the same player's row in
+                      // PlayerQueueSidebar.jsx — while both are mounted
+                      // (the instant a real pick lands: the sidebar row
+                      // exiting, this cell appearing), Framer Motion
+                      // computes the shared FLIP transition between them
+                      // on its own, so the card visibly moves from the
+                      // queue into its cell rather than just popping in.
+                      <motion.div
+                        layoutId={'player-' + (pick.player.id || pick.player.name)}
+                        initial={{ opacity: 0, scale: 0.85 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ type: 'spring', stiffness: 400, damping: 32 }}
+                        className={
+                          'flex h-full flex-col justify-center rounded-md border p-1.5 backdrop-blur-sm ' +
+                          (POS_CELL[pick.player.pos] || 'border-white/10 bg-white/[0.04]')
+                        }
+                      >
                         <div className="flex items-center justify-between gap-1">
                           <span
                             className={
@@ -63,7 +83,7 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
                           <span className="text-[9px] font-medium text-white/35">{pick.player.team}</span>
                         </div>
                         <p className="mt-0.5 truncate text-[11px] font-medium text-white/90">{pick.player.name}</p>
-                      </div>
+                      </motion.div>
                     ) : isCurrent ? (
                       <motion.div
                         animate={{ opacity: [1, 0.75, 1] }}

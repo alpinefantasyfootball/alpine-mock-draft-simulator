@@ -15,7 +15,7 @@ export default function DraftRoomStatusBar({
   onToggleAutopick,
 }) {
   return (
-    <div className="z-30 flex h-16 shrink-0 items-center gap-4 border-b border-slate-800 bg-slate-900/80 px-4 backdrop-blur-md sm:px-6">
+    <div className="z-30 flex h-16 shrink-0 items-center gap-3 border-b border-slate-800 bg-slate-900/80 px-4 backdrop-blur-md sm:gap-4 sm:px-6">
       <div className="flex min-w-0 flex-col justify-center">
         <span className="truncate font-display text-sm font-bold text-white sm:text-base">
           {roundText}
@@ -31,31 +31,34 @@ export default function DraftRoomStatusBar({
         </span>
       </div>
 
-      <div className="ml-auto flex items-center gap-3 sm:gap-5">
-        <div
-          className={
-            'flex items-center gap-2 rounded-xl border px-3 py-1.5 transition-colors duration-300 ' +
-            (myTurn
-              ? urgent
-                ? 'animate-pulse-glow border-red-500/70 bg-red-500/10'
-                : 'animate-pulse-glow border-teal-400/70 bg-teal-500/10'
-              : 'border-slate-800 bg-slate-950/60')
-          }
-        >
-          <Timer className={'h-4 w-4 shrink-0 ' + (myTurn ? (urgent ? 'text-red-400' : 'text-teal-300') : 'text-white/40')} />
-          <div className="flex flex-col leading-none">
-            <span className="text-[9px] font-semibold uppercase tracking-wide text-white/40">{rightLabel}</span>
-            <span
-              className={
-                'font-display text-lg font-bold tabular-nums ' +
-                (myTurn ? (urgent ? 'text-red-300' : 'text-teal-300') : 'text-white/80')
-              }
-            >
-              {rightValue}
-            </span>
-          </div>
+      {/* Right next to the round/pick text on purpose — this is the one
+          number a manager is watching while it's their turn, not a status
+          detail to push off to the far edge of the bar. */}
+      <div
+        className={
+          'flex shrink-0 items-center gap-2 rounded-xl border px-3 py-1.5 transition-colors duration-300 ' +
+          (myTurn
+            ? urgent
+              ? 'animate-pulse-glow border-red-500 bg-red-500/10'
+              : 'animate-pulse-glow border-teal-400 bg-teal-500/10'
+            : 'border-slate-800 bg-slate-950/60')
+        }
+      >
+        <Timer className={'h-5 w-5 shrink-0 ' + (myTurn ? (urgent ? 'text-red-400' : 'text-teal-300') : 'text-white/40')} />
+        <div className="flex flex-col leading-none">
+          <span className="text-[9px] font-semibold uppercase tracking-wide text-white/40">{rightLabel}</span>
+          <span
+            className={
+              'font-display text-xl font-bold tabular-nums ' +
+              (myTurn ? (urgent ? 'text-red-300' : 'text-teal-300') : 'text-white/80')
+            }
+          >
+            {rightValue}
+          </span>
         </div>
+      </div>
 
+      <div className="ml-auto flex items-center gap-3 sm:gap-5">
         <button
           type="button"
           onClick={onToggleAutopick}

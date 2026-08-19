@@ -2,6 +2,10 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { Search } from 'lucide-react'
 import { POS_BADGE, POS_LIST } from './draftRoomPositions.js'
 
+function formatAdp(adp) {
+  return typeof adp === 'number' && Number.isFinite(adp) ? adp.toFixed(1) : null
+}
+
 const FILTERS = ['ALL', ...POS_LIST]
 
 // Real, undrafted board players only — this is `board()` filtered/sorted at
@@ -16,6 +20,7 @@ export default function PlayerQueueSidebar({
   posFilter,
   onPosFilter,
   pointsFor,
+  valueFor,
   onDraft,
   myTurn,
 }) {
@@ -62,10 +67,12 @@ export default function PlayerQueueSidebar({
         <AnimatePresence initial={false}>
           {players.map((player) => {
             const pts = pointsFor(player)
+            const adp = formatAdp(player.adp)
+            const value = valueFor(player)
             return (
               <motion.div
                 key={player.id || player.name}
-                layout
+                layoutId={'player-' + (player.id || player.name)}
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, x: 32, scale: 0.94, transition: { duration: 0.28 } }}
@@ -85,6 +92,15 @@ export default function PlayerQueueSidebar({
                   <p className="truncate text-sm font-medium text-white/90">{player.name}</p>
                   <p className="truncate text-[11px] text-white/40">
                     {player.team} &middot; {pts != null ? pts.toFixed(1) + ' pts' : 'No projection'}
+                  </p>
+                  {/* Both real: adp is the board's own ADP field, and value
+                      is overallScore() — points above replacement as a
+                      share of the best such figure on the board, the same
+                      "Juke score" used everywhere else on the site. Neither
+                      is invented for this row. */}
+                  <p className="mt-0.5 flex items-center gap-2 text-[10px] font-medium text-teal-400/80">
+                    {adp && <span>ADP {adp}</span>}
+                    {value != null && <span>Value {Math.round(value)}</span>}
                   </p>
                 </div>
 
