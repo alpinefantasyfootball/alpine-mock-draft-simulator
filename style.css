@@ -445,6 +445,11 @@ body {
 .appbar {
   position: relative; overflow: hidden;
   background: var(--card);
+  /* The same brand rule as .shellbar, and deliberately outside the state
+     transition below: my-turn and urgent repaint the bar and clear its bottom
+     border, and the top one survives both. A brand mark that disappears when
+     the clock turns blue is a state signal wearing a brand's clothes. */
+  border-top: 4px solid var(--orange);
   border-bottom: 1px solid var(--line);
   color: var(--ink);
   transition: background .35s ease, color .35s ease, border-color .35s ease;
@@ -2078,7 +2083,25 @@ tr.drafted .ovr { color: var(--ink-light); }
    The site shell — everything outside a running draft
    ========================================================== */
 
-.shellbar { background: var(--card); border-bottom: 1px solid var(--line); }
+/* The brand rule. Four pixels of --orange across the top of every header, and
+   it is the one place orange appears that is not a control.
+
+   That distinction is the whole design of it. Orange means act, and the rule
+   only holds while orange is the loudest thing on a screen — an orange hero
+   band was built and thrown away for exactly this reason: it swallowed the
+   CTA whole, and the eyebrow with it. A colour cannot be the ground and the
+   call to action at once. So the brand gets orange where nothing is clickable
+   and the area is tiny, which buys presence at the top of every page for none
+   of the accent's power.
+
+   --orange rather than --orange-cta: nothing sits on top of it, so it takes
+   the brand value rather than the darkened one that exists to carry white
+   text. It is byte-identical in both themes, so it needs no light override. */
+.shellbar {
+  background: var(--card);
+  border-top: 4px solid var(--orange);
+  border-bottom: 1px solid var(--line);
+}
 
 /* Three zones with the brand in the middle. The centre only holds its place
    if the two sides carry similar weight, which is why the left has a second
