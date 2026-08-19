@@ -6639,6 +6639,17 @@ window.JukeEngine = {
   // function that keeps the legacy dock from storing them twice (see
   // CLAUDE.md). Bridged directly rather than re-merged in React.
   chatStream: chatStream,
+  // The real queue — state.queue is an array of player names, and these
+  // four are the exact functions the legacy rail's star/move buttons
+  // already call (queueToggle()/queueMove() themselves don't render;
+  // the caller does, same as the legacy delegated click handler does
+  // here). queueTop() is what autoPickForMe() and the clock-expiry pick
+  // already prefer over the model's own opinion — starring a player here
+  // is the same real plan, not a second, cosmetic-only "favorites" list.
+  queue: () => state.queue,
+  queued: queued,
+  queueToggle: function (name) { queueToggle(name); render(); },
+  queueMove: function (name, delta) { queueMove(name, delta); render(); },
   currentTheme: currentTheme,
   setTheme:     setTheme,
   soundWanted:  () => soundWanted,

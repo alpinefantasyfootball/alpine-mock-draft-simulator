@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { Search } from 'lucide-react'
+import { Search, Star } from 'lucide-react'
 import { POS_BADGE, POS_LIST } from './draftRoomPositions.js'
 
 function formatAdp(adp) {
@@ -23,6 +23,8 @@ export default function PlayerQueueSidebar({
   valueFor,
   onDraft,
   myTurn,
+  queuedNames,
+  onToggleQueue,
 }) {
   return (
     <div className="flex min-h-[200px] flex-1 flex-col overflow-hidden bg-slate-900/40 lg:flex-[3] lg:min-w-[280px]">
@@ -63,12 +65,13 @@ export default function PlayerQueueSidebar({
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto p-3">
+      <div className="flex-1 overflow-y-auto p-3 pb-64">
         <AnimatePresence initial={false}>
           {players.map((player) => {
             const pts = pointsFor(player)
             const adp = formatAdp(player.adp)
             const value = valueFor(player)
+            const queued = queuedNames.has(player.name)
             return (
               <motion.div
                 key={player.id || player.name}
@@ -79,6 +82,15 @@ export default function PlayerQueueSidebar({
                 transition={{ type: 'spring', stiffness: 380, damping: 32 }}
                 className="mb-2 flex items-center gap-2.5 rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2.5"
               >
+                <button
+                  type="button"
+                  onClick={() => onToggleQueue(player.name)}
+                  title={queued ? 'Remove from your queue' : 'Add to your queue'}
+                  className="shrink-0 text-white/25 transition-colors duration-150 hover:text-amber-300"
+                >
+                  <Star className={'h-4 w-4 ' + (queued ? 'fill-amber-300 text-amber-300' : '')} />
+                </button>
+
                 <span
                   className={
                     'shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold ' +

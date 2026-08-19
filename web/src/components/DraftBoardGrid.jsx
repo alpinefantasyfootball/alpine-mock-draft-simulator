@@ -13,10 +13,24 @@ import { POS_BADGE, POS_CELL } from './draftRoomPositions.js'
 // Rebuilding on every render is the same "render() redraws everything, no
 // partial updates" trade this codebase already makes deliberately (see
 // CLAUDE.md's Conventions section), and it costs nothing at ~280 entries.
+// Positive = fell past ADP = a bargain (green); negative = taken early =
+// a reach (red). Same "pick number minus rank" convention the real grade
+// calculation uses for its own draft-value component (see CLAUDE.md's
+// "The draft value gap is pick number minus board rank, in that order" —
+// getting this backwards was a real, shipped bug there), just measured
+// against the player's raw adp instead of the board's integer rank, which
+// is what gives this its one decimal place rather than a whole number.
+function adpGap(pick) {
+  const adp = pick.player.adp
+  if (typeof adp !== 'number' || !Number.isFinite(adp)) return null
+  return pick.overall - adp
+}
+
 export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLabelOf }) {
   const byCell = new Map()
   picks.forEach((p) => byCell.set(p.round + '-' + p.slot, p))
 
+  const DE = typeof window !== 'undefined' ? window.DraftEngine : null
   const teams = league.teams
   const rounds = league.rounds
   const cols = `64px repeat(${teams}, minmax(112px, 1fr))`
@@ -51,6 +65,8 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
               {Array.from({ length: teams }, (_, s) => {
                 const pick = byCell.get(round + '-' + s)
                 const isCurrent = !!onClock && onClock.round === round && onClock.slot === s
+                const gap = pick ? adpGap(pick) : null
+                const code = pick && DE ? DE.pickCode(pick.overall, teams) : null
                 return (
                   <div key={round + '-' + s} className="border-b border-r border-slate-800/70 p-1">
                     {pick ? (
@@ -67,10 +83,13 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
                         animate={{ opacity: 1, scale: 1 }}
                         transition={{ type: 'spring', stiffness: 400, damping: 32 }}
                         className={
-                          'flex h-full flex-col justify-center rounded-md border p-1.5 backdrop-blur-sm ' +
+                          'relative flex h-full flex-col justify-center rounded-md border p-1.5 pt-3 backdrop-blur-sm ' +
                           (POS_CELL[pick.player.pos] || 'border-white/10 bg-white/[0.04]')
                         }
                       >
+                        {code && (
+                          <span className="absolute left-1 top-0.5 text-[10px] text-slate-400">{code}</span>
+                        )}
                         <div className="flex items-center justify-between gap-1">
                           <span
                             className={
@@ -83,6 +102,12 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
                           <span className="text-[9px] font-medium text-white/35">{pick.player.team}</span>
                         </div>
                         <p className="mt-0.5 truncate text-[11px] font-medium text-white/90">{pick.player.name}</p>
+                        {gap != null && (
+                          <span className={'text-[9px] font-semibold ' + (gap >= 0 ? 'text-emerald-400' : 'text-rose-400')}>
+                            {gap >= 0 ? '+' : ''}
+                            {gap.toFixed(1)}
+                          </span>
+                        )}
                       </motion.div>
                     ) : isCurrent ? (
                       <motion.div

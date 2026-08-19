@@ -2,7 +2,7 @@ import { useEffect, useReducer, useRef, useState } from 'react'
 import Header from './Header.jsx'
 import ConfigureDraftForm from './ConfigureDraftForm.jsx'
 import RoomPanel from './RoomPanel.jsx'
-import ChatDock from './ChatDock.jsx'
+import DraftLogDock from './DraftLogDock.jsx'
 import DraftRoomStatusBar from './DraftRoomStatusBar.jsx'
 import DraftBoardGrid from './DraftBoardGrid.jsx'
 import PlayerQueueSidebar from './PlayerQueueSidebar.jsx'
@@ -122,7 +122,7 @@ export default function DraftRoom() {
             <RoomPanel />
           </div>
         </div>
-        <ChatDock />
+        <DraftLogDock />
       </div>
     )
   }
@@ -204,6 +204,12 @@ export default function DraftRoom() {
   const handleTogglePause = () => engine.togglePause()
   const handleDiscard = () => engine.restart()
 
+  // The real queue (state.queue, an array of player names) — queueToggle()
+  // is the exact function the legacy rail's star button already calls.
+  // queuedNames as a Set just makes the sidebar's per-row lookup cheap.
+  const queuedNames = new Set(engine.queue() || [])
+  const handleToggleQueue = (name) => engine.queueToggle(name)
+
   return (
     <div className="fixed inset-0 z-40 flex flex-col bg-[#0B0E14] text-white">
       <Header />
@@ -246,12 +252,14 @@ export default function DraftRoom() {
             valueFor={valueFor}
             onDraft={handleDraft}
             myTurn={myTurn}
+            queuedNames={queuedNames}
+            onToggleQueue={handleToggleQueue}
           />
         </div>
 
         <RosterDock lineup={lineup} benchSize={league.bench} />
       </div>
-      <ChatDock />
+      <DraftLogDock />
     </div>
   )
 }
