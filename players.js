@@ -2,11 +2,11 @@
    Alpine Draft Room - player data
    GENERATED FILE. Edit scripts/build_players.py instead.
 
-   Generated : 2026-08-18 14:51 UTC
+   Generated : 2026-08-19 02:02 UTC
    Players   : standard 210 · half 221 · ppr 265
    Seasons   : 2018-2025
    Matched   : 221 of the half set carry a Sleeper id
-   Flagged   : 32 carry an injury designation
+   Flagged   : 35 carry an injury designation
    Projected : 265 have 2026 projections
 
    ADP: Fantasy Football Calculator, one set per scoring format.
@@ -15,7 +15,7 @@
    Player, injury and stat data: Sleeper.
    ========================================================== */
 
-const PLAYERS_META = { generated: "2026-08-18 14:51 UTC", count: 221, matched: 221, flagged: 32, projected: 265, unmatched: 0 };
+const PLAYERS_META = { generated: "2026-08-19 02:02 UTC", count: 221, matched: 221, flagged: 35, projected: 265, unmatched: 0 };
 
 /* One ordered list per scoring format. app.js picks the set that
    matches league.scoring when a draft starts, and works out every
@@ -78,7 +78,7 @@ const ADP_SETS = {
   { id: "8167", name: "Christian Watson", pos: "WR", team: "GB", bye: 11, adp: 51.7, inj: "" },
   { id: "7526", name: "Jaylen Waddle", pos: "WR", team: "DEN", bye: 10, adp: 52.2, inj: "Q" },
   { id: "4881", name: "Lamar Jackson", pos: "QB", team: "BAL", bye: 13, adp: 52.7, inj: "" },
-  { id: "2216", name: "Mike Evans", pos: "WR", team: "SF", bye: 8, adp: 52.9, inj: "" },
+  { id: "2216", name: "Mike Evans", pos: "WR", team: "SF", bye: 8, adp: 52.9, inj: "Q" },
   { id: "5892", name: "David Montgomery", pos: "RB", team: "HOU", bye: 8, adp: 54.6, inj: "" },
   { id: "6770", name: "Joe Burrow", pos: "QB", team: "CIN", bye: 6, adp: 54.7, inj: "" },
   { id: "12529", name: "TreVeyon Henderson", pos: "RB", team: "NE", bye: 11, adp: 57.7, inj: "" },
@@ -97,13 +97,13 @@ const ADP_SETS = {
   { id: "11566", name: "Jayden Daniels", pos: "QB", team: "WAS", bye: 7, adp: 71.6, inj: "" },
   { id: "13286", name: "Jadarian Price", pos: "RB", team: "SEA", bye: 11, adp: 72.6, inj: "" },
   { id: "7021", name: "Rico Dowdle", pos: "RB", team: "PIT", bye: 9, adp: 73.7, inj: "" },
-  { id: "9754", name: "Quentin Johnston", pos: "WR", team: "LAC", bye: 7, adp: 74.4, inj: "" },
+  { id: "9754", name: "Quentin Johnston", pos: "WR", team: "LAC", bye: 7, adp: 74.4, inj: "Q" },
   { id: "7594", name: "Chuba Hubbard", pos: "RB", team: "CAR", bye: 5, adp: 74.8, inj: "Q" },
   { id: "421", name: "Matthew Stafford", pos: "QB", team: "LAR", bye: 11, adp: 75.0, inj: "" },
   { id: "12518", name: "Tyler Warren", pos: "TE", team: "IND", bye: 13, adp: 77.4, inj: "" },
   { id: "6904", name: "Jalen Hurts", pos: "QB", team: "PHI", bye: 10, adp: 77.5, inj: "" },
   { id: "10232", name: "Michael Wilson", pos: "WR", team: "ARI", bye: 14, adp: 78.6, inj: "" },
-  { id: "6806", name: "J.K. Dobbins", pos: "RB", team: "DEN", bye: 10, adp: 79.0, inj: "Q" },
+  { id: "6806", name: "J.K. Dobbins", pos: "RB", team: "DEN", bye: 10, adp: 79.0, inj: "" },
   { id: "9756", name: "Jordan Addison", pos: "WR", team: "MIN", bye: 6, adp: 81.4, inj: "" },
   { id: "4037", name: "Chris Godwin Jr.", pos: "WR", team: "TB", bye: 10, adp: 81.7, inj: "" },
   { id: "10222", name: "Jayden Reed", pos: "WR", team: "GB", bye: 11, adp: 84.0, inj: "" },
@@ -143,7 +143,7 @@ const ADP_SETS = {
   { id: "5022", name: "Dallas Goedert", pos: "TE", team: "PHI", bye: 10, adp: 111.3, inj: "" },
   { id: "8134", name: "Khalil Shakir", pos: "WR", team: "BUF", bye: 7, adp: 111.7, inj: "" },
   { id: "8154", name: "Brian Robinson", pos: "RB", team: "ATL", bye: 11, adp: 116.2, inj: "" },
-  { id: "12484", name: "Jayden Higgins", pos: "WR", team: "HOU", bye: 8, adp: 116.4, inj: "" },
+  { id: "12484", name: "Jayden Higgins", pos: "WR", team: "HOU", bye: 8, adp: 116.4, inj: "Q" },
   { id: "LAR", name: "LA Rams Defense", pos: "DST", team: "LAR", bye: 11, adp: 117.9, inj: "" },
   { id: "MIN", name: "Minnesota Defense", pos: "DST", team: "MIN", bye: 6, adp: 118.9, inj: "" },
   { id: "11563", name: "Bo Nix", pos: "QB", team: "DEN", bye: 10, adp: 119.7, inj: "" },
@@ -193,7 +193,7 @@ const ADP_SETS = {
   { id: "12015", name: "Harrison Mevis", pos: "K", team: "LAR", bye: 11, adp: 149.5, inj: "" },
   { id: "9480", name: "Brenton Strange", pos: "TE", team: "JAX", bye: 7, adp: 149.6, inj: "" },
   { id: "5849", name: "Kyler Murray", pos: "QB", team: "MIN", bye: 6, adp: 149.7, inj: "" },
-  { id: "4035", name: "Alvin Kamara", pos: "RB", team: "NO", bye: 8, adp: 150.1, inj: "" },
+  { id: "4035", name: "Alvin Kamara", pos: "RB", team: "NO", bye: 8, adp: 150.1, inj: "Q" },
   { id: "8161", name: "Malik Willis", pos: "QB", team: "MIA", bye: 6, adp: 150.4, inj: "" },
   { id: "11786", name: "Cam Little", pos: "K", team: "JAX", bye: 7, adp: 150.9, inj: "" },
   { id: "9225", name: "Tank Bigsby", pos: "RB", team: "PHI", bye: 10, adp: 151.4, inj: "Q" },
@@ -213,7 +213,7 @@ const ADP_SETS = {
   { id: "13276", name: "Omar Cooper Jr.", pos: "WR", team: "NYJ", bye: 13, adp: 159.4, inj: "" },
   { id: "BAL", name: "Baltimore Defense", pos: "DST", team: "BAL", bye: 13, adp: 159.6, inj: "" },
   { id: "11783", name: "Ryan Flournoy", pos: "WR", team: "DAL", bye: 14, adp: 159.6, inj: "" },
-  { id: "12457", name: "Jaydon Blue", pos: "RB", team: "DAL", bye: 14, adp: 160.0, inj: "" },
+  { id: "12457", name: "Jaydon Blue", pos: "RB", team: "DAL", bye: 14, adp: 160.0, inj: "Q" },
   { id: "11792", name: "Will Reichard", pos: "K", team: "MIN", bye: 6, adp: 160.9, inj: "" },
   { id: "BUF", name: "Buffalo Defense", pos: "DST", team: "BUF", bye: 7, adp: 160.9, inj: "" },
   { id: "11625", name: "Adonai Mitchell", pos: "WR", team: "NYJ", bye: 13, adp: 161.3, inj: "" },
@@ -287,7 +287,7 @@ const ADP_SETS = {
   { id: "4983", name: "DJ Moore", pos: "WR", team: "BUF", bye: 7, adp: 51.0, inj: "Q" },
   { id: "12512", name: "Quinshon Judkins", pos: "RB", team: "CLE", bye: 11, adp: 51.7, inj: "" },
   { id: "11564", name: "Drake Maye", pos: "QB", team: "NE", bye: 11, adp: 52.2, inj: "" },
-  { id: "2216", name: "Mike Evans", pos: "WR", team: "SF", bye: 8, adp: 52.8, inj: "" },
+  { id: "2216", name: "Mike Evans", pos: "WR", team: "SF", bye: 8, adp: 52.8, inj: "Q" },
   { id: "12490", name: "Bhayshul Tuten", pos: "RB", team: "JAX", bye: 7, adp: 53.7, inj: "" },
   { id: "8142", name: "Alec Pierce", pos: "WR", team: "IND", bye: 13, adp: 54.5, inj: "PUP" },
   { id: "5892", name: "David Montgomery", pos: "RB", team: "HOU", bye: 8, adp: 55.1, inj: "" },
@@ -321,12 +321,12 @@ const ADP_SETS = {
   { id: "SEA", name: "Seattle Defense", pos: "DST", team: "SEA", bye: 11, adp: 82.2, inj: "" },
   { id: "7553", name: "Kyle Pitts Sr.", pos: "TE", team: "ATL", bye: 11, adp: 83.6, inj: "" },
   { id: "9500", name: "Josh Downs", pos: "WR", team: "IND", bye: 13, adp: 84.2, inj: "" },
-  { id: "9754", name: "Quentin Johnston", pos: "WR", team: "LAC", bye: 7, adp: 84.6, inj: "" },
+  { id: "9754", name: "Quentin Johnston", pos: "WR", team: "LAC", bye: 7, adp: 84.6, inj: "Q" },
   { id: "11560", name: "Caleb Williams", pos: "QB", team: "CHI", bye: 10, adp: 86.0, inj: "" },
   { id: "8183", name: "Brock Purdy", pos: "QB", team: "SF", bye: 8, adp: 87.2, inj: "" },
   { id: "DEN", name: "Denver Defense", pos: "DST", team: "DEN", bye: 10, adp: 87.9, inj: "" },
   { id: "12489", name: "RJ Harvey", pos: "RB", team: "DEN", bye: 10, adp: 88.4, inj: "" },
-  { id: "6806", name: "J.K. Dobbins", pos: "RB", team: "DEN", bye: 10, adp: 88.8, inj: "Q" },
+  { id: "6806", name: "J.K. Dobbins", pos: "RB", team: "DEN", bye: 10, adp: 88.8, inj: "" },
   { id: "10859", name: "Sam LaPorta", pos: "TE", team: "DET", bye: 6, adp: 90.0, inj: "" },
   { id: "5947", name: "Jakobi Meyers", pos: "WR", team: "JAX", bye: 7, adp: 90.2, inj: "" },
   { id: "10222", name: "Jayden Reed", pos: "WR", team: "GB", bye: 11, adp: 90.3, inj: "" },
@@ -359,7 +359,7 @@ const ADP_SETS = {
   { id: "11646", name: "Jalen Coker", pos: "WR", team: "CAR", bye: 5, adp: 114.7, inj: "" },
   { id: "8408", name: "Jordan Mason", pos: "RB", team: "MIN", bye: 6, adp: 115.9, inj: "" },
   { id: "11563", name: "Bo Nix", pos: "QB", team: "DEN", bye: 10, adp: 116.7, inj: "" },
-  { id: "12484", name: "Jayden Higgins", pos: "WR", team: "HOU", bye: 8, adp: 118.9, inj: "" },
+  { id: "12484", name: "Jayden Higgins", pos: "WR", team: "HOU", bye: 8, adp: 118.9, inj: "Q" },
   { id: "8676", name: "Rashid Shaheed", pos: "WR", team: "SEA", bye: 11, adp: 120.2, inj: "" },
   { id: "12508", name: "Jaxson Dart", pos: "QB", team: "NYG", bye: 8, adp: 120.7, inj: "" },
   { id: "13298", name: "KC Concepcion", pos: "WR", team: "CLE", bye: 11, adp: 121.2, inj: "" },
@@ -401,7 +401,7 @@ const ADP_SETS = {
   { id: "8110", name: "Jake Ferguson", pos: "TE", team: "DAL", bye: 14, adp: 148.3, inj: "" },
   { id: "9508", name: "Tyjae Spears", pos: "RB", team: "TEN", bye: 9, adp: 148.6, inj: "" },
   { id: "11610", name: "Malik Washington", pos: "WR", team: "MIA", bye: 6, adp: 149.5, inj: "" },
-  { id: "4035", name: "Alvin Kamara", pos: "RB", team: "NO", bye: 8, adp: 149.7, inj: "" },
+  { id: "4035", name: "Alvin Kamara", pos: "RB", team: "NO", bye: 8, adp: 149.7, inj: "Q" },
   { id: "6804", name: "Jordan Love", pos: "QB", team: "GB", bye: 11, adp: 150.3, inj: "" },
   { id: "11575", name: "Ray Davis", pos: "RB", team: "BUF", bye: 7, adp: 150.7, inj: "" },
   { id: "12711", name: "Tyler Loop", pos: "K", team: "BAL", bye: 13, adp: 151.5, inj: "" },
@@ -511,7 +511,7 @@ const ADP_SETS = {
   { id: "11564", name: "Drake Maye", pos: "QB", team: "NE", bye: 11, adp: 50.1, inj: "" },
   { id: "4983", name: "DJ Moore", pos: "WR", team: "BUF", bye: 7, adp: 50.3, inj: "Q" },
   { id: "12512", name: "Quinshon Judkins", pos: "RB", team: "CLE", bye: 11, adp: 51.8, inj: "" },
-  { id: "2216", name: "Mike Evans", pos: "WR", team: "SF", bye: 8, adp: 53.4, inj: "" },
+  { id: "2216", name: "Mike Evans", pos: "WR", team: "SF", bye: 8, adp: 53.4, inj: "Q" },
   { id: "12490", name: "Bhayshul Tuten", pos: "RB", team: "JAX", bye: 7, adp: 54.4, inj: "" },
   { id: "6770", name: "Joe Burrow", pos: "QB", team: "CIN", bye: 6, adp: 55.8, inj: "" },
   { id: "4881", name: "Lamar Jackson", pos: "QB", team: "BAL", bye: 13, adp: 55.9, inj: "" },
@@ -553,13 +553,13 @@ const ADP_SETS = {
   { id: "DEN", name: "Denver Defense", pos: "DST", team: "DEN", bye: 10, adp: 88.9, inj: "" },
   { id: "7567", name: "Kenny Gainwell", pos: "RB", team: "TB", bye: 10, adp: 89.5, inj: "" },
   { id: "11560", name: "Caleb Williams", pos: "QB", team: "CHI", bye: 10, adp: 91.9, inj: "" },
-  { id: "9754", name: "Quentin Johnston", pos: "WR", team: "LAC", bye: 7, adp: 92.5, inj: "" },
+  { id: "9754", name: "Quentin Johnston", pos: "WR", team: "LAC", bye: 7, adp: 92.5, inj: "Q" },
   { id: "10222", name: "Jayden Reed", pos: "WR", team: "GB", bye: 11, adp: 92.8, inj: "" },
   { id: "7523", name: "Trevor Lawrence", pos: "QB", team: "JAX", bye: 7, adp: 92.9, inj: "" },
   { id: "2449", name: "Stefon Diggs", pos: "WR", team: "WAS", bye: 7, adp: 93.7, inj: "" },
   { id: "13281", name: "Jordyn Tyson", pos: "WR", team: "NO", bye: 8, adp: 96.9, inj: "D" },
   { id: "HOU", name: "Houston Defense", pos: "DST", team: "HOU", bye: 8, adp: 97.4, inj: "" },
-  { id: "6806", name: "J.K. Dobbins", pos: "RB", team: "DEN", bye: 10, adp: 98.3, inj: "Q" },
+  { id: "6806", name: "J.K. Dobbins", pos: "RB", team: "DEN", bye: 10, adp: 98.3, inj: "" },
   { id: "4046", name: "Patrick Mahomes", pos: "QB", team: "KC", bye: 5, adp: 99.4, inj: "Q" },
   { id: "9756", name: "Jordan Addison", pos: "WR", team: "MIN", bye: 6, adp: 99.4, inj: "" },
   { id: "4199", name: "Aaron Jones Sr.", pos: "RB", team: "MIN", bye: 6, adp: 100.1, inj: "" },
@@ -590,7 +590,7 @@ const ADP_SETS = {
   { id: "8408", name: "Jordan Mason", pos: "RB", team: "MIN", bye: 6, adp: 123.1, inj: "" },
   { id: "13298", name: "KC Concepcion", pos: "WR", team: "CLE", bye: 11, adp: 125.1, inj: "" },
   { id: "NE", name: "New England Defense", pos: "DST", team: "NE", bye: 11, adp: 126.5, inj: "" },
-  { id: "12484", name: "Jayden Higgins", pos: "WR", team: "HOU", bye: 8, adp: 128.0, inj: "" },
+  { id: "12484", name: "Jayden Higgins", pos: "WR", team: "HOU", bye: 8, adp: 128.0, inj: "Q" },
   { id: "8676", name: "Rashid Shaheed", pos: "WR", team: "SEA", bye: 11, adp: 128.1, inj: "" },
   { id: "PHI", name: "Philadelphia Defense", pos: "DST", team: "PHI", bye: 10, adp: 129.1, inj: "" },
   { id: "4892", name: "Baker Mayfield", pos: "QB", team: "TB", bye: 10, adp: 129.6, inj: "" },
@@ -617,7 +617,7 @@ const ADP_SETS = {
   { id: "7049", name: "Jauan Jennings", pos: "WR", team: "MIN", bye: 6, adp: 143.5, inj: "" },
   { id: "8259", name: "Cameron Dicker", pos: "K", team: "LAC", bye: 7, adp: 143.5, inj: "" },
   { id: "LAC", name: "LA Chargers Defense", pos: "DST", team: "LAC", bye: 7, adp: 144.5, inj: "" },
-  { id: "4035", name: "Alvin Kamara", pos: "RB", team: "NO", bye: 8, adp: 144.7, inj: "" },
+  { id: "4035", name: "Alvin Kamara", pos: "RB", team: "NO", bye: 8, adp: 144.7, inj: "Q" },
   { id: "4195", name: "Jake Elliott", pos: "K", team: "PHI", bye: 10, adp: 144.8, inj: "" },
   { id: "13346", name: "Denzel Boston", pos: "WR", team: "CLE", bye: 11, adp: 144.9, inj: "" },
   { id: "7571", name: "Rashod Bateman", pos: "WR", team: "BAL", bye: 13, adp: 146.1, inj: "" },
@@ -633,7 +633,7 @@ const ADP_SETS = {
   { id: "11610", name: "Malik Washington", pos: "WR", team: "MIA", bye: 6, adp: 151.4, inj: "" },
   { id: "11655", name: "Tyrone Tracy Jr.", pos: "RB", team: "NYG", bye: 8, adp: 151.4, inj: "" },
   { id: "12492", name: "Pat Bryant", pos: "WR", team: "DEN", bye: 10, adp: 151.6, inj: "" },
-  { id: "13414", name: "Kaelon Black", pos: "RB", team: "SF", bye: 8, adp: 151.7, inj: "Q" },
+  { id: "13414", name: "Kaelon Black", pos: "RB", team: "SF", bye: 8, adp: 151.7, inj: "" },
   { id: "8180", name: "Jalen Nailor", pos: "WR", team: "LV", bye: 13, adp: 151.7, inj: "" },
   { id: "10236", name: "Dalton Kincaid", pos: "TE", team: "BUF", bye: 7, adp: 151.9, inj: "" },
   { id: "13413", name: "Cyrus Allen", pos: "WR", team: "KC", bye: 5, adp: 152.7, inj: "" },
@@ -693,7 +693,7 @@ const ADP_SETS = {
   { id: "6803", name: "Brandon Aiyuk", pos: "WR", team: "SF", bye: 8, adp: 166.6, inj: "DNR" },
   { id: "DAL", name: "Dallas Defense", pos: "DST", team: "DAL", bye: 14, adp: 166.9, inj: "" },
   { id: "5844", name: "T.J. Hockenson", pos: "TE", team: "MIN", bye: 6, adp: 167.1, inj: "" },
-  { id: "12457", name: "Jaydon Blue", pos: "RB", team: "DAL", bye: 14, adp: 167.5, inj: "" },
+  { id: "12457", name: "Jaydon Blue", pos: "RB", team: "DAL", bye: 14, adp: 167.5, inj: "Q" },
   { id: "12713", name: "Andy Borregales", pos: "K", team: "NE", bye: 11, adp: 167.8, inj: "" },
   { id: "TEN", name: "Tennessee Defense", pos: "DST", team: "TEN", bye: 9, adp: 168.0, inj: "" },
   { id: "8117", name: "Jalen Tolbert", pos: "WR", team: "MIA", bye: 6, adp: 168.7, inj: "" },
