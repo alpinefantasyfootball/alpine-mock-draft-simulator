@@ -452,17 +452,47 @@ body {
   border-top: 4px solid var(--orange);
   border-bottom: 1px solid var(--line);
   color: var(--ink);
+
+  /* The segment divider. A broadcast bug is hard-edged sections rather than
+     one soft bar, and the rules between them have to survive three different
+     grounds: the resting card, the blue gradient and the red one.
+
+     So it is a property, overridden per state, exactly the way --mark-ink
+     reverses the logo on a coloured bar. The first version of this was a flat
+     rgba(255,255,255,.16), which is correct on the two gradients, nearly
+     invisible on the resting dark card, and completely invisible in light —
+     the same mistake as naming --band-ink outside .hero-band. */
+  --seg: var(--line);
   transition: background .35s ease, color .35s ease, border-color .35s ease;
 }
 
+/* Stretch, not centre, and no gap: each segment carries its own padding and
+   its own rule, so the dividers run the full height of the bar the way they
+   do on a score bug. The padding that used to live here is distributed into
+   the segments below. */
 .appbar-inner {
   max-width: 1120px; margin: 0 auto; width: 100%;
-  display: flex; align-items: center; gap: 12px;
-  padding: 10px 18px;
+  display: flex; align-items: stretch; gap: 0;
+  padding: 0;
+  min-height: 52px;
+}
+
+.appbar .home { padding: 0 15px; border-right: 1px solid var(--seg); }
+
+.appbar-text {
+  padding: 7px 16px;
+  display: flex; flex-direction: column; justify-content: center;
+  border-right: 1px solid var(--seg);
+}
+
+.appbar .hdrbtn {
+  width: auto; height: auto; border-radius: 0;
+  padding: 0 13px;
+  border: 0; border-left: 1px solid var(--seg);
 }
 
 .appbar.my-turn,
-.appbar.urgent { color: #fff; border-bottom-color: transparent; }
+.appbar.urgent { color: #fff; border-bottom-color: transparent; --seg: rgba(255,255,255,.26); }
 
 .appbar.my-turn { background: linear-gradient(120deg, var(--hdr-blue-deep) 0%, var(--hdr-blue) 50%, var(--hdr-cyan) 130%); }
 .appbar.urgent  { background: linear-gradient(120deg, var(--hdr-red-deep) 0%, var(--hdr-red) 60%, var(--hdr-red-lift) 100%); }
@@ -552,16 +582,40 @@ body {
    header cannot hold that next to the counter and the toggle. It has to end
    in an ellipsis rather than be sliced through a letter by the bar's own
    overflow, which is what happens if only nowrap is set. */
+/* **The state is the label and the pick is the fact**, which is the inversion
+   this bar is really about. It used to lead with "You're on the clock!" at
+   16px bold and bury the pick number underneath at 12px — and by the time
+   that sentence is readable the whole header has already turned blue, so the
+   largest type on the bar was saying something the colour had said first.
+   The pick number is what a drafter actually tracks, and in the resting state
+   the same slot carries whose turn it is. One structure, two contents.
+
+   The ellipsis stays. Team names run to "Bone-Thugs-N-Montgomery" and have to
+   end in a dot rather than be sliced through a letter by the bar's overflow,
+   which is what happens if only nowrap is set. */
 .appbar-text h1 {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: var(--fs-base); font-weight: 700; letter-spacing: -0.01em;
+  margin: 0 0 1px;
+  font-family: var(--font-body);
+  font-size: var(--fs-2xs); font-weight: 700;
+  letter-spacing: .12em; text-transform: uppercase;
+  color: var(--ink-light);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
 .appbar-text p {
-  margin: 0; font-size: var(--fs-xs); color: var(--ink-mid);
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--fs-lg); font-weight: 700; line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* The league summary rides inside that line and must not inherit the display
+   face or the size — it is reference, not the fact. */
+.appbar-league {
+  font-family: var(--font-body); font-size: var(--fs-2xs);
+  font-weight: 500; letter-spacing: 0; color: var(--ink-light);
 }
 
 /* The pick and the league on one line, with a divider drawn rather than
@@ -593,13 +647,15 @@ body {
 @media (max-width: 560px) {
   .appbar .home .mark { display: none; }
   .appbar .i-back { margin-right: 0; }
-  /* And the spacing tightens with it. Measured at 390px: the header had 147px
-     for a headline that wants about 175, and the mark alone does not close
-     that. 18px of padding, three 12px gaps and the counter's own 10px inset
-     are 30 more, spent on air either side of a sentence that is being cut in
-     half. */
-  .appbar-inner { padding-left: 12px; padding-right: 12px; gap: 8px; }
-  .appbar-right { gap: 8px; padding-left: 6px; }
+  /* And the segments tighten with it. The old version of this reclaimed
+     18px of bar padding and three 12px gaps, none of which exist any more —
+     the segments carry their own padding now, so that is where the pixels
+     have to come from. Same amount recovered, taken from the four insets
+     rather than from air between them. */
+  .appbar .home   { padding: 0 10px; }
+  .appbar-text    { padding-left: 11px; padding-right: 11px; }
+  .count          { padding-left: 11px; padding-right: 11px; }
+  .appbar .hdrbtn { padding: 0 9px; }
 }
 
 /* Solid, not rgba(255,255,255,.82).
@@ -616,16 +672,30 @@ body {
    bold headline. Same for .count-label below, which was .68 and measured
    2.48 — the worst contrast on the page a manager stares at while their
    own clock runs down. */
+/* Solid white on all three, never an alpha. The note above is the whole
+   reason: at 12px on the lightest end of the blue gradient the minimum
+   workable alpha is 0.98, so "translucent to read as secondary" is not a
+   choice that exists here. The label is secondary by being 10px uppercase
+   under a 19px display line, which costs no contrast at all. */
+.appbar.my-turn .appbar-text h1,
+.appbar.urgent .appbar-text h1,
 .appbar.my-turn .appbar-text p,
-.appbar.urgent .appbar-text p { color: #fff; }
+.appbar.urgent .appbar-text p,
+.appbar.my-turn .appbar-league,
+.appbar.urgent .appbar-league { color: #fff; }
 
 .appbar-right {
   margin-left: auto;
-  display: flex; align-items: center; gap: 12px;
-  padding-left: 10px;
+  display: flex; align-items: stretch; gap: 0;
+  padding-left: 0;
 }
 
-.count { text-align: right; }
+.count {
+  text-align: right;
+  padding: 6px 16px;
+  display: flex; flex-direction: column; justify-content: center;
+  border-left: 1px solid var(--seg);
+}
 
 .count-label {
   display: block; font-size: var(--fs-2xs); letter-spacing: .1em;
@@ -637,7 +707,7 @@ body {
 
 .count-value {
   display: block; font-family: var(--font-display);
-  font-size: var(--fs-xl); font-weight: 700; line-height: 1.1;
+  font-size: var(--fs-2xl); font-weight: 700; line-height: 1;
   font-variant-numeric: tabular-nums;
 }
 

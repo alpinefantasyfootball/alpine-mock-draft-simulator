@@ -154,4 +154,104 @@ test.describe("the draft room header", () => {
     expect(r.overflow, "the header does not leak sideways").toBe(false);
     await context.close();
   });
+
+  /* The score bug. Three properties, and each one was a real mistake in the
+     prototype before it was a test. */
+
+  test("the pick is the fact and the state is the label", async ({ context }) => {
+    const page = await openApp(context);
+    await startDraft(page);
+
+    const r = await page.evaluate(() => {
+      const h1 = document.querySelector(".appbar-text h1");
+      const p  = document.querySelector(".appbar-text p");
+      const px = (el) => parseFloat(getComputedStyle(el).fontSize);
+      return {
+        label: px(h1), fact: px(p),
+        labelUpper: getComputedStyle(h1).textTransform,
+        factTabular: getComputedStyle(p).fontVariantNumeric
+      };
+    });
+
+    /* The inversion is the whole point: the header used to lead with "You're
+       on the clock!" at 16px and bury the pick at 12px, which is the largest
+       type on the bar saying what the colour already said. */
+    expect(r.fact, "the pick number outsizes the state label").toBeGreaterThan(r.label);
+    expect(r.labelUpper, "and the label is a label").toBe("uppercase");
+    expect(r.factTabular, "a clock-adjacent number does not wobble").toContain("tabular-nums");
+    await context.close();
+  });
+
+  test("the segment rule survives all three grounds", async ({ context }) => {
+    const page = await openApp(context);
+    await startDraft(page);
+
+    const r = await page.evaluate(() => {
+      /* A frozen transition reports the value a property is moving *from*,
+         and .appbar transitions colour — so this measures nothing at all
+         without killing them first. That is not hypothetical: it produced a
+         2.93 and a 1.01 on a header that was perfectly legible. */
+      const kill = document.createElement("style");
+      kill.textContent = "*{transition:none !important}";
+      document.head.appendChild(kill);
+
+      const seg = () => getComputedStyle(document.querySelector(".appbar-text")).borderRightColor;
+      const bar = document.getElementById("appbar");
+
+      /* A draft opens on your own turn, so the bar is already .my-turn here
+         and both "resting" readings come back as the coloured rule — which is
+         how the first version of this test failed: it was measuring one
+         ground three times and calling it three grounds. Strip the state
+         before reading the resting ones. */
+      bar.classList.remove("my-turn", "urgent");
+
+      const dark = seg();
+      document.documentElement.setAttribute("data-theme", "light");
+      const light = seg();
+      document.documentElement.removeAttribute("data-theme");
+
+      bar.classList.add("my-turn");
+      const turn = seg();
+      bar.classList.remove("my-turn");
+
+      kill.remove();
+      return { dark, light, turn };
+    });
+
+    /* The first build used a flat rgba(255,255,255,.16): right on the two
+       gradients, invisible on the resting card and invisible in light. The
+       token has to actually differ per ground, so assert that it does. */
+    expect(r.dark, "resting dark and resting light are not the same rule").not.toBe(r.light);
+    expect(r.turn, "and the coloured state gets its own").not.toBe(r.dark);
+    for (const v of [r.dark, r.light, r.turn]) {
+      expect(v, "and none of them is fully transparent").not.toMatch(/,\s*0\)$/);
+    }
+    await context.close();
+  });
+
+  test("nothing in the bar is washed out with opacity", async ({ context }) => {
+    const page = await openApp(context);
+    await startDraft(page);
+
+    const r = await page.evaluate(() => {
+      const bar = document.getElementById("appbar");
+      bar.classList.add("my-turn");
+      const out = [...bar.querySelectorAll(".appbar-text h1, .appbar-text p, .count-label, .appbar-league")]
+        .map((e) => ({ cls: e.className || e.tagName, op: getComputedStyle(e).opacity,
+                       col: getComputedStyle(e).color }));
+      bar.classList.remove("my-turn");
+      return out;
+    });
+
+    /* The most saturated surface in the app. At 12px the lightest end of the
+       blue gradient gives pure white 4.64, so the minimum workable alpha is
+       0.98 — there is no opacity that reads as secondary and stays legible.
+       The prototype used .72 on the label and would have shipped the exact
+       bug the contrast sweep was written to catch. */
+    for (const el of r) {
+      expect(el.op, `${el.cls} is not translucent on a coloured bar`).toBe("1");
+      expect(el.col, `${el.cls} is solid white there`).toBe("rgb(255, 255, 255)");
+    }
+    await context.close();
+  });
 });
