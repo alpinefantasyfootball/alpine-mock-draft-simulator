@@ -1,5 +1,6 @@
 import { useEffect, useReducer, useRef, useState } from 'react'
 import Header from './Header.jsx'
+import ConfigureDraftForm from './ConfigureDraftForm.jsx'
 import DraftRoomStatusBar from './DraftRoomStatusBar.jsx'
 import DraftBoardGrid from './DraftBoardGrid.jsx'
 import PlayerQueueSidebar from './PlayerQueueSidebar.jsx'
@@ -79,22 +80,7 @@ export default function DraftRoom() {
   // Off-room it's just the local switch above.
   const autopick = roomActive ? !!(engine && engine.autoMe()) : soloAutopick
 
-  // Progress persists because state.started does: saveDraft() already runs
-  // on every render() — which fires after every real pick — but it's a
-  // silent no-op while state.started is false (see saveDraft() in app.js),
-  // and nothing on this page ever set it. This is the one-time fix, not a
-  // second save mechanism: readSave()/resumeDraft()/startDraft() are the
-  // exact functions the legacy "Resume" banner and "Start your draft"
-  // button already call. Guarded by headerInfo().started rather than a ref,
-  // since that reads the same shared state a StrictMode double-invoke would
-  // — the second call sees started:true and skips, no extra bookkeeping.
-  useEffect(() => {
-    if (!engine) return
-    if (engine.headerInfo().started) return
-    const save = engine.readSave()
-    if (save && save.picks && save.picks.length) engine.resumeDraft(save)
-    else engine.startDraft({ mySlot: 0, clockLength: 60 })
-  }, [engine])
+  const started = engine ? !!engine.headerInfo().started : false
 
   // Solo autopick's real submission path: the exact same engine.draftPlayer
   // the Draft button uses (draftAndAdvance() underneath), just triggered
@@ -105,14 +91,33 @@ export default function DraftRoom() {
   // itself off every room broadcast once toggled on (see the bridge
   // comment on toggleRoomAutopilot), so this effect only ever acts off-room.
   useEffect(() => {
-    if (!active || !engine || roomActive || !soloAutopick || !myTurn) return
+    if (!active || !engine || !started || roomActive || !soloAutopick || !myTurn) return
     if (lastAutoPickedOverall.current === overall) return
     lastAutoPickedOverall.current = overall
     const choice = engine.autoPickForMe()
     if (choice) engine.draftPlayer(choice)
-  }, [active, engine, roomActive, soloAutopick, myTurn, overall])
+  }, [active, engine, started, roomActive, soloAutopick, myTurn, overall])
 
   if (!active || !engine) return null
+
+  // Before a draft exists, this is the exact same real form the setup
+  // page uses — league size, scoring, pick clock, draft position, and its
+  // own Resume/Discard for a save in progress — rather than this page
+  // guessing at a seat and a clock length nobody chose. It calls the same
+  // startDraft()/resumeDraft() the live board below reacts to, so the
+  // instant one of them sets state.started, the effect above and this
+  // check both pick it up on the next "juke:header" tick and this page
+  // swaps to the live board on its own.
+  if (!started) {
+    return (
+      <div className="fixed inset-0 z-40 flex flex-col overflow-y-auto bg-[#0B0E14] pt-16 text-white">
+        <Header />
+        <div className="mx-auto flex w-full max-w-xl flex-1 items-center px-6 py-10">
+          <ConfigureDraftForm />
+        </div>
+      </div>
+    )
+  }
 
   const code = onClock && DE ? DE.pickCode(overall, league.teams) : null
   const pickInRound = onClock && DE ? DE.pickInRound(onClock.round, onClock.slot, league.teams) : null
