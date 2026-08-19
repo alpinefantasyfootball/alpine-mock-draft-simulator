@@ -18,11 +18,11 @@
 */
 
 import { test, expect } from "@playwright/test";
-import { openApp } from "./helpers.mjs";
+import { openApp, clickLegacyStart } from "./helpers.mjs";
 import { WORKER_HTTP, LOCAL_WORKER } from "./helpers.mjs";
 
 async function start(page) {
-  await page.click("#startBtn");
+  await clickLegacyStart(page);
   expect(await page.evaluate(() => state.started), "draft started").toBe(true);
 }
 

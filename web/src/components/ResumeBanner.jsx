@@ -2,35 +2,25 @@ import { useEffect, useState } from 'react'
 
 // Mirrors app.js's renderHome(): a saved draft (localStorage, readSave())
 // is the most useful thing this page can offer a returning visitor, so it
-// is real state from the bridge, not a prototype placeholder. Same
-// PLAYERS_META provenance line the old #homeMeta showed underneath it.
-function useResumeData() {
+// is real state from the bridge, not a prototype placeholder.
+function useSave() {
   const [save, setSave] = useState(null)
-  const [meta, setMeta] = useState(null)
 
   useEffect(() => {
     const engine = typeof window !== 'undefined' ? window.JukeEngine : null
     if (!engine) return
     const data = engine.readSave()
     setSave(data && data.picks && data.picks.length ? data : null)
-    setMeta(engine.playersMeta())
   }, [])
 
-  return { save, meta }
+  return save
 }
 
 export default function ResumeBanner() {
-  const { save, meta } = useResumeData()
+  const save = useSave()
   const engine = typeof window !== 'undefined' ? window.JukeEngine : null
 
-  if (!save) {
-    if (!meta) return null
-    return (
-      <div className="mx-auto max-w-7xl px-6 pt-6 text-center text-xs text-white/35">
-        {meta.count} players &middot; ADP and projections refreshed {meta.generated}
-      </div>
-    )
-  }
+  if (!save) return null
 
   const total = save.league.teams * save.league.rounds
   const made = save.picks.length

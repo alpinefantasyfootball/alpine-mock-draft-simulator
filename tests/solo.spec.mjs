@@ -8,16 +8,7 @@
    a single pick. */
 
 import { test, expect } from "@playwright/test";
-import { openApp } from "./helpers.mjs";
-
-/* The League controls live inside a collapsed <details> now, because the
-   setup screen was asking sixty questions before it would let anybody draft.
-   Playwright's selectOption waits for the control to be visible, so a test
-   that changes the league has to open the box first — which is what a person
-   does too, and is the point of the test driving the real screen. */
-async function openLeagueBox(page) {
-  await page.evaluate(() => { document.getElementById("leagueBox").open = true; });
-}
+import { openApp, setLegacyField, clickLegacyStart } from "./helpers.mjs";
 
 async function runSoloDraft(page, setup) {
   await page.evaluate(async (fields) => {
@@ -32,7 +23,7 @@ async function runSoloDraft(page, setup) {
   const refused = await page.evaluate(() => document.getElementById("startBtn").disabled);
   expect(refused, "the Start button refused this league").toBe(false);
 
-  await page.click("#startBtn");
+  await clickLegacyStart(page);
   expect(await page.evaluate(() => state.started), "the draft actually started").toBe(true);
 
   return page.evaluate(async () => {
@@ -109,10 +100,9 @@ for (const pos of ["ALL", "QB", "RB", "WR", "TE", "K", "DST"]) {
     const context = await browser.newContext();
     const page = await openApp(context);
 
-    await openLeagueBox(page);
-    await page.selectOption("#teamCount", "12");
-    await page.selectOption("#draftSlot", "10");        // the 11th spot
-    await page.click("#startBtn");
+    await setLegacyField(page, "teamCount", "12");
+    await setLegacyField(page, "draftSlot", "10");        // the 11th spot
+    await clickLegacyStart(page);
     expect(await page.evaluate(() => state.started)).toBe(true);
 
     await page.click(`#suggestFilter button[data-pos="${pos}"]`);
@@ -169,9 +159,8 @@ test("every lineup fields the best eligible player", async ({ browser }) => {
   const context = await browser.newContext();
   const page = await openApp(context);
 
-  await openLeagueBox(page);
-  await page.selectOption("#teamCount", "12");
-  await page.click("#startBtn");
+  await setLegacyField(page, "teamCount", "12");
+  await clickLegacyStart(page);
   await page.evaluate(async () => { autoDraftRest(); await new Promise((r) => setTimeout(r, 2000)); });
 
   const out = await page.evaluate(() => {
@@ -213,7 +202,7 @@ test("every lineup fields the best eligible player", async ({ browser }) => {
 test("solo still says 'Auto-draft the rest', because solo it is the truth", async ({ browser }) => {
   const context = await browser.newContext();
   const page = await openApp(context);
-  await page.click("#startBtn");
+  await clickLegacyStart(page);
   await expect(page.locator("#autoBtn")).toHaveText("Auto-draft the rest");
   await context.close();
 });
@@ -231,7 +220,7 @@ test("solo still says 'Auto-draft the rest', because solo it is the truth", asyn
 test("a filled starting slot is not a cap, and does not claim to be", async ({ browser }) => {
   const context = await browser.newContext();
   const page = await openApp(context);
-  await page.click("#startBtn");
+  await clickLegacyStart(page);
 
   const out = await page.evaluate(async () => {
     const chip = (pos) => {
@@ -321,7 +310,7 @@ test("a filled starting slot is not a cap, and does not claim to be", async ({ b
 test("the rail's My Team goes to My Team", async ({ browser }) => {
   const context = await browser.newContext();
   const page = await openApp(context);
-  await page.click("#startBtn");
+  await clickLegacyStart(page);
 
   await page.evaluate(() => {
     let g = 0;

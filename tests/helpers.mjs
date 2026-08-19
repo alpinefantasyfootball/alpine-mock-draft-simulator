@@ -113,6 +113,34 @@ function instrumentation() {
   };
 }
 
+/* The legacy setup screen — readSetup(), setupProblem(), #startBtn's own
+   click handler — is unchanged and still what most of these tests exercise;
+   it is only hidden now, in favour of web/src/components/DraftSettings.jsx
+   (see CLAUDE.md's "setup screen" section). Playwright's real click() and
+   selectOption() wait on visibility, which a deliberately display:none
+   element never satisfies — a test that needs this exact mechanism (rounds,
+   bench, starters: settings the new page does not expose) drives it via
+   evaluate() instead, same as it always read/wrote these ids, just without
+   the actionability wait. */
+export function setLegacyField(page, id, value) {
+  return page.evaluate(([id, value]) => {
+    const el = document.getElementById(id);
+    el.value = String(value);
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  }, [id, value]);
+}
+
+export function clickLegacyStart(page) {
+  return page.evaluate(() => document.getElementById("startBtn").click());
+}
+
+// Same reasoning, generalised: any id inside the hidden .setup or
+// .appbar-inner subtrees (#homeBtn, #soundBtn, #themeBtn, ...) needs this
+// rather than page.click(), which waits on visibility that is never coming.
+export function clickHidden(page, id) {
+  return page.evaluate((id) => document.getElementById(id).click(), id);
+}
+
 export async function openApp(context, path = "#/draft") {
   const page = await context.newPage();
   await page.addInitScript(instrumentation);
