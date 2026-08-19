@@ -75,23 +75,34 @@ every remaining top-level statement in the file, Draft Room boot code
 included. Deleting that markup outright would silently break drafting on
 every page load, not just the home route.
 
-**`index.html` at the repository root still exists, unmodified, and is not
-dead code yet.** Cloudflare Pages currently builds from the repo root with
-no build step, so that file is what is actually live at `jukeff.com` until
-the dashboard is switched to **Root directory: `web`, Build command:
-`npm run build`, Output directory: `dist`** — a manual, one-time change
-only the account owner can make. Deleting the root `index.html` before
-that switch happens would 404 the whole site the moment this branch
-reaches `main`. Once the dashboard points at `web/` and a deploy from it is
-confirmed live, the root `index.html` becomes true dead weight and should
-be removed in its own follow-up commit — not bundled into the change that
-depends on it still being there as a fallback.
+**There used to be an `index.html` at the repository root too, kept
+deliberately for one release as a fallback.** Cloudflare Pages had always
+built from the repo root with no build step, so that file was what was
+actually live at `jukeff.com` until the dashboard was switched to **Root
+directory: `web`, Build command: `npm run build`, Output directory:
+`dist`** — a manual, account-owner-only change. Deleting it before that
+switch would have 404'd the whole site the moment the migration branch
+reached `main`. It was removed only after the dashboard switch and the new
+deploy were both confirmed live — same rule as everywhere else in this
+file: prove the replacement works before deleting what it replaces, and
+check the running site, not just the build log.
+
+**Which means the "open a file, no server, no build" workflow no longer
+reaches the whole app.** `web/index.html`'s legacy `<script src>` tags are
+root-relative (`/app.js?v=...`) on purpose, so Vite's HTML transform leaves
+them alone during a build — but a root-relative path resolves against the
+filesystem root under `file://`, not against the HTML file's own folder,
+so it 404s there. Opening `web/index.html` straight from disk no longer
+works, and neither does opening a built `web/dist/index.html` the same
+way. Something has to serve it — `vite dev`, or `web/dist` over any static
+server — before either the homepage or the Draft Room render at all. This
+is the real, ongoing cost of the one deliberate build-step exception in
+the Stack section above, not a one-time migration hiccup.
 
 ## Files
 
 | File | Role |
 |---|---|
-| `index.html` | The pre-migration landing + Draft Room page. Still what Cloudflare Pages serves today; superseded by `web/index.html` once the dashboard points at `web/`. See the Stack section before deleting it. |
 | `404.html` | The not-found page. **Every path in it is absolute**, because Pages serves it at whatever address missed — a relative `style.css` on `/a/b/c` misses too. |
 | `_headers` | The security headers, served by the origin. Replaced a Cloudflare Transform Rule; see the hosting note. Copied into `web/dist/` at build time — Pages reads `_headers` from the output directory, not the repo root, once a build step exists. |
 | `.gitattributes` | Marks the eight binaries as binary. Text is deliberately not declared. |
@@ -2187,8 +2198,10 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   `py scripts/build_players.py`. A bare `python` reaches the Microsoft Store
   stub and fails with "Python was not found" unless the installer's
   "Add python.exe to PATH" box was ticked, which it usually isn't.
-- App: open `index.html` directly in a browser. `file://` works because the
-  data files load via `<script src>` rather than fetch.
+- App: `cd web && npm run dev`, or build and serve `web/dist` over any
+  static server. Opening a file directly no longer works — see the Stack
+  section on why `file://` broke once the legacy scripts became
+  root-relative.
 - **In a headless or hidden browser, disable transitions before you measure
   a colour.** A pane that is not compositing produces no frames, so a CSS
   transition never advances — it sits frozen at its starting value, and
