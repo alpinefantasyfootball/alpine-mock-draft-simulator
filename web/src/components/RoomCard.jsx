@@ -1,9 +1,13 @@
+import { motion } from 'framer-motion'
+
 export default function RoomCard({ room }) {
   return (
-    <div
+    <motion.div
+      whileHover={{ y: -10, scale: 1.05 }}
+      transition={{ type: 'spring', stiffness: 300, damping: 20 }}
       className="group relative flex h-full w-full flex-col justify-between rounded-2xl glass-panel p-6 text-left
-                 shadow-glass transition-all duration-300 ease-out
-                 hover:scale-105 hover:border-teal/70 hover:shadow-card-hover"
+                 shadow-glass transition-colors duration-300 ease-out
+                 hover:border-teal/70 hover:shadow-card-hover"
     >
       <div>
         <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-white/5 text-teal">
@@ -34,6 +38,6 @@ export default function RoomCard({ room }) {
           </a>
         )}
       </div>
-    </div>
+    </motion.div>
   )
 }

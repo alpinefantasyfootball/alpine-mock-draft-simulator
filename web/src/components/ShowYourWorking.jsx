@@ -101,7 +101,14 @@ export default function ShowYourWorking() {
   }, [ppr, pool])
 
   return (
-    <section id="show-your-working" className="relative mx-auto max-w-7xl px-6 py-24">
+    <section id="show-your-working" className="relative isolate mx-auto mt-24 max-w-7xl px-6 py-24">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 -z-10"
+        style={{
+          background: 'radial-gradient(700px circle at 50% 35%, rgba(0,229,255,0.10), transparent 70%)',
+        }}
+      />
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         whileInView={{ opacity: 1, y: 0 }}
