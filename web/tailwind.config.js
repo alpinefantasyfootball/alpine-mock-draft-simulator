@@ -32,6 +32,15 @@ export default {
         display: ['"Poppins"', 'system-ui', 'sans-serif'],
         body: ['"Inter"', 'system-ui', 'sans-serif'],
       },
+      keyframes: {
+        'pulse-glow': {
+          '0%, 100%': { boxShadow: '0 0 15px rgba(0,229,255,0.4)' },
+          '50%': { boxShadow: '0 0 30px rgba(0,229,255,0.7), 0 0 18px rgba(123,31,162,0.5)' },
+        },
+      },
+      animation: {
+        'pulse-glow': 'pulse-glow 1.8s ease-in-out infinite',
+      },
     },
   },
   plugins: [

@@ -880,6 +880,23 @@ way, not reasoned about.
   away is worse than the wall of controls this replaced. It opens and never
   closes itself: shutting the box the moment the arithmetic came right would
   take the screen away mid-edit.
+
+  **This describes the markup, not what a solo drafter sees any more.**
+  `web/src/components/DraftSettings.jsx` replaced it — league size, scoring,
+  pick clock and draft position only, real roster construction left at
+  whatever it already is — mounted into `#setup-root` beside the original,
+  which stays in the DOM `display:none !important` for the same reason
+  `#shellbar` does: unguarded listeners on `#randomizeBtn`/`#startBtn`/the
+  `LOCKABLE` ids throw on a missing element and take app.js's boot sequence
+  down with them. Everything this section describes — `setupProblem()`,
+  `leagueSummary()`, the League/Scoring/Draft-with-friends disclosures — is
+  still real and still runs, just unreachable by a mouse. "Draft with
+  friends" has no React equivalent yet and is reachable from neither screen;
+  redesigning it is scoped into the mock-draft-room pass, not this one.
+  `window.JukeEngine` grew `setLeague`, `setupProblem`, `teamCounts`,
+  `scoringNames`, `startDraft`, `resumeDraft` and `clearSave` for this —
+  `startDraft()` is the Start button's own sequence with `readSetup()`'s DOM
+  read removed, since React already calls `setLeague()` directly.
 - **The hero product shot is generated, not an image.** `renderHeroShot()`
   draws the opening rounds of a real board from the same `board` array, the
   same valuation and the same position solids the draft uses. A PNG would be
@@ -1744,6 +1761,39 @@ one injected stylesheet and one screenshot, and none of them touched the
 repository.
 
 ## The draft room header
+
+**`web/src/components/AppHeader.jsx` replaced `.appbar` visually, and every
+rule below is still what it draws from.** Same reason `DraftSettings.jsx`
+replaced `.setup` rather than deleting it: `.appbar-inner` is hidden
+`display:none !important`, not removed, because `renderHeader()` writes into
+`#statusLine`/`#pickText`/`#leagueLabel`/etc. on every render, tick and pause
+toggle, and unguarded top-level listeners on `#homeBtn`/`#soundBtn`/
+`themeBtns()` throw on a missing element. `renderHeader()` itself now calls a
+pure `headerInfo()` first and paints its result — the same function
+`window.JukeEngine.headerInfo()` bridges to React, so the branching below (my
+turn, urgent, whose turn, the clock, the pick code) is computed exactly once.
+`headerInfo()` fires `window.dispatchEvent(new Event("juke:header"))` at the
+end of every call, which is what tells the React header to re-read rather
+than poll.
+
+**Which means the tests in `appbar.spec.mjs` verify `headerInfo()`'s output
+via the hidden legacy DOM, not the React header's own rendering.** They still
+matter — a wrong `headerInfo()` is wrong for both — but nothing here
+automatically catches a React-side rendering bug that disagrees with data
+`headerInfo()` got right. That was checked by hand across all five states
+(resting, my-turn, urgent, someone-else's-turn, draft-over) plus real
+computed-contrast measurements on the two new gradients, not by a new spec.
+
+**The new gradients are not the old ones, and had to be measured the same
+way.** My-turn uses a deep teal ramp (`#0A4650` → `#0E6B78` → `#0F7C8E`,
+10.47 / 6.19 / 4.89 against white) rather than brand teal (`#00E5FF`), which
+measures nowhere close to 4.5:1 — the obvious first choice for the lightest
+stop, `#12889C`, measured 4.18 and had to be darkened further, same story as
+`--hdr-cyan` originally being `#12A3DC` at 2.88. Urgent reuses the legacy red
+ramp exactly (10.30 / 6.19 / 4.60) rather than reinventing verified-safe
+values for no reason. And the labels are solid white when lit, not
+translucent — `text-white/80` measures the same false economy this section
+already found once, below.
 
 **Three stacked bars is 153px before a player's name.** A 57px header, a 53px
 tab row and a 43px action bar, on a 900px screen — 17% of it spent on

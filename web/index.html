@@ -142,8 +142,14 @@
       <div class="rooms-panel" id="roomsPanel" hidden></div>
     </header>
 
+    <!-- Redesigned as web/src/components/AppHeader.jsx, mounted into
+         #appbar-root below. Kept in the DOM, hidden rather than deleted —
+         app.js has unguarded top-level listeners on #homeBtn/#soundBtn/
+         themeBtns() and renderHeader() writes into #statusLine/#pickText/
+         etc. on every tick, same reason #setup and #shellbar are hidden
+         this way rather than removed. -->
     <header class="appbar" id="appbar" hidden>
-      <div class="appbar-inner">
+      <div class="appbar-inner" style="display:none !important" aria-hidden="true">
 
         <button class="home" id="homeBtn" type="button" title="Leave the draft"
                 aria-label="Leave the draft">
@@ -198,6 +204,7 @@
         </div>
       </div>
 
+      <div id="appbar-root"></div>
     </header>
 
     <div class="tabrow" id="tabrow" hidden>
@@ -258,9 +265,16 @@
 
     <!-- ---------- SETUP ---------- -->
     <section class="panel on" id="tab-setup">
-      <div class="resume" id="resumeBar" hidden></div>
+      <!-- Redesigned as web/src/components/DraftSettings.jsx, mounted into
+           #setup-root below. Everything from here through the matching
+           closing </div> stays in the DOM, hidden rather than deleted: app.js
+           has unguarded top-level listeners on these exact ids (#randomizeBtn,
+           #startBtn, the LOCKABLE list, etc.) that throw on a missing element
+           and take the rest of app.js's boot sequence down with them — the
+           same reason #shellbar is hidden this way rather than removed. -->
+      <div class="resume" id="resumeBar" hidden style="display:none !important" aria-hidden="true"></div>
 
-      <div class="setup">
+      <div class="setup" style="display:none !important" aria-hidden="true">
         <h2>Draft setup</h2>
 
         <div class="field">
@@ -369,6 +383,8 @@
         <p class="freshness" id="freshness"></p>
         <p class="freshness"><a href="docs/draft-room-how-it-works.html">How the Draft Room works</a></p>
       </div>
+
+      <div id="setup-root"></div>
     </section>
 
     <div class="draftshell" id="draftShell" hidden>

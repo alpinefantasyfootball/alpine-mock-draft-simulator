@@ -5,7 +5,7 @@
    having them here. */
 
 import { test, expect, devices } from "@playwright/test";
-import { openApp, createRoom } from "./helpers.mjs";
+import { openApp, createRoom, clickLegacyStart } from "./helpers.mjs";
 
 /* The phone is emulated on Chromium rather than run on WebKit.
 
@@ -29,7 +29,7 @@ test("no field is under 16px, or iOS zooms in and stays there", async ({ browser
   expect(await page.evaluate(() => matchMedia("(pointer: coarse)").matches)).toBe(true);
 
   await createRoom(page);          // the chat box only exists inside a room
-  await page.click("#startBtn");   // and the player search only inside a draft
+  await clickLegacyStart(page);   // and the player search only inside a draft
   await page.waitForTimeout(500);
 
   const small = await page.evaluate(() =>
@@ -64,7 +64,7 @@ test("the lobby chat does not sit on top of the Start button", async ({ browser 
 test("nothing overflows sideways that cannot scroll or ellipsise", async ({ browser }) => {
   const context = await browser.newContext(PHONE);
   const page = await openApp(context);
-  await page.click("#startBtn");
+  await clickLegacyStart(page);
   await page.waitForTimeout(500);
 
   /* An element wider than its box is not a fault on its own — a truncated

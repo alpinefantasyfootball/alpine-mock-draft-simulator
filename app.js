@@ -3200,83 +3200,96 @@ function isRisky(player)    { return RISKY.indexOf(player.inj) >= 0; }
 // top 150 who has already been ruled out is worth shouting about.
 function adpConflict(player) { return isRuledOut(player) && player.adp <= 150; }
 
-function renderHeader() {
-  appbar.className = "appbar";
-
-  // The pick line and the counter both describe a draft in progress, so
-  // before one starts the header is just the name and the theme toggle.
-  // The player count lives under the setup card, on the freshness line,
-  // which is where the rest of the data's provenance already is.
-  pickLabel.hidden  = !state.started;
-  countBlock.hidden = !state.started;
-
-  if (!state.started) {
-    statusLine.textContent = "The Draft Room";
-    soundCue();                      // resets what has been said
-    return;
-  }
+/* Everything renderHeader() needs to decide, as data rather than as DOM
+   writes — so the React header (web/src/components/AppHeader.jsx) reads the
+   exact same branching this one paints from, rather than a second copy of
+   it. Every helper called here already existed for renderHeader() alone;
+   none of this is new business logic. */
+function headerInfo() {
+  if (!state.started) return { started: false };
 
   /* What this draft is, beside what it is doing. The shape was only ever on
      the setup screen, which folds away the moment a draft starts, so four
      rounds in there was no way to check whether this was a 14-round league
      without leaving it. Through leagueSummary(), never a second copy of the
      same lookup — it is the string the setup box already shows shut. */
-  leagueLabel.textContent = leagueSummary();
+  const leagueSum = leagueSummary();
 
   if (draftOver()) {
-    appbar.classList.add("live");
-    statusLine.textContent = "Draft complete";
-    pickText.textContent   = totalPicks() + " picks made";
-    rightLabel.textContent = "Rounds";
-    rightValue.textContent = league.rounds;
-    soundCue();
-    return;
+    return {
+      started: true, over: true, myTurn: false, urgent: false,
+      leagueSummary: leagueSum,
+      statusLine: "Draft complete",
+      pickText: totalPicks() + " picks made",
+      rightLabel: "Rounds", rightValue: String(league.rounds)
+    };
   }
 
   const overall = currentOverall();
 
   if (isMyTurn()) {
-    const urgent = state.clockLength && !state.paused && state.timeLeft <= 10;
-    appbar.classList.add(urgent ? "urgent" : "my-turn");
-    statusLine.textContent = "You're on the clock!";
-    pickText.textContent   = "Pick " + pickCode(overall) + " (" + overall + " Overall)";
-    if (state.clockLength) {
-      rightLabel.textContent = state.paused ? "Paused" : "Time left";
-      rightValue.textContent = clockText();
-    } else {
-      rightLabel.textContent = "Available";
-      rightValue.textContent = board.filter((p) => !p.drafted).length;
-    }
-  } else {
-    appbar.classList.add("live");
-    pickText.textContent = "Pick " + pickCode(overall) + " (" + overall + " Overall)";
-
-    /* Somebody else is up. Solo that is a CPU with no countdown of its own, so
-       the useful number is how long until you are back; in a room there is a
-       real clock running on a real person and it belongs on screen for
-       everybody, not only for whoever it is running against.
-
-       "Your turn in" moves onto the status line rather than being dropped —
-       it is the other thing worth knowing while you wait, and the right-hand
-       block only has room for one. */
-    const gap = picksUntilMyTurn();
-
-    if (hasRoom() && clockShowing()) {
-      statusLine.textContent = teamLabel(pickInfo(overall).slot) +
-        (gap ? " · you are in " + gap : "");
-      rightLabel.textContent = state.paused ? "Paused" : "Time left";
-      rightValue.textContent = clockText();
-    } else {
-      statusLine.textContent = teamLabel(pickInfo(overall).slot);
-      rightLabel.textContent = "Your turn in";
-      rightValue.textContent = gap;
-    }
+    const urgent = !!state.clockLength && !state.paused && state.timeLeft <= 10;
+    return {
+      started: true, over: false, myTurn: true, urgent,
+      leagueSummary: leagueSum,
+      statusLine: "You're on the clock!",
+      pickText: "Pick " + pickCode(overall) + " (" + overall + " Overall)",
+      rightLabel: state.clockLength ? (state.paused ? "Paused" : "Time left") : "Available",
+      rightValue: state.clockLength ? clockText() : String(board.filter((p) => !p.drafted).length)
+    };
   }
+
+  /* Somebody else is up. Solo that is a CPU with no countdown of its own, so
+     the useful number is how long until you are back; in a room there is a
+     real clock running on a real person and it belongs on screen for
+     everybody, not only for whoever it is running against.
+
+     "Your turn in" moves onto the status line rather than being dropped —
+     it is the other thing worth knowing while you wait, and the right-hand
+     block only has room for one. */
+  const gap = picksUntilMyTurn();
+  const showClock = hasRoom() && clockShowing();
+
+  return {
+    started: true, over: false, myTurn: false, urgent: false,
+    leagueSummary: leagueSum,
+    statusLine: teamLabel(pickInfo(overall).slot) + (showClock && gap ? " · you are in " + gap : ""),
+    pickText: "Pick " + pickCode(overall) + " (" + overall + " Overall)",
+    rightLabel: showClock ? (state.paused ? "Paused" : "Time left") : "Your turn in",
+    rightValue: showClock ? clockText() : String(gap)
+  };
+}
+
+function renderHeader() {
+  const info = headerInfo();
+  appbar.className = "appbar";
+
+  // The pick line and the counter both describe a draft in progress, so
+  // before one starts the header is just the name and the theme toggle.
+  // The player count lives under the setup card, on the freshness line,
+  // which is where the rest of the data's provenance already is.
+  pickLabel.hidden  = !info.started;
+  countBlock.hidden = !info.started;
+
+  if (!info.started) {
+    statusLine.textContent = "The Draft Room";
+    soundCue();                      // resets what has been said
+    window.dispatchEvent(new Event("juke:header"));
+    return;
+  }
+
+  leagueLabel.textContent = info.leagueSummary;
+  statusLine.textContent  = info.statusLine;
+  pickText.textContent    = info.pickText;
+  rightLabel.textContent  = info.rightLabel;
+  rightValue.textContent  = info.rightValue;
+  appbar.classList.add(info.myTurn ? (info.urgent ? "urgent" : "my-turn") : "live");
 
   /* Last, and out of every branch above rather than at the top: the cues are
      about the state this render has just settled on, and a draft that has
      ended is not a turn that has started. */
   soundCue();
+  window.dispatchEvent(new Event("juke:header"));
 }
 
 // "Last one in the tier" is the most actionable thing a draft board can
@@ -6422,7 +6435,57 @@ window.JukeEngine = {
   rulesForFormat: rulesForFormat,
   statKeys:     () => (typeof STAT_KEYS === "undefined" ? null : STAT_KEYS),
   forcedLate:   () => FORCED_LATE,
-  playersMeta:  () => (typeof PLAYERS_META === "undefined" ? null : PLAYERS_META)
+  playersMeta:  () => (typeof PLAYERS_META === "undefined" ? null : PLAYERS_META),
+  // Added for the React settings page (web/src/components/DraftSettings.jsx).
+  // setLeague patches the one real league object rather than a second copy of
+  // it — the same object readSetup() has always written to, so nothing about
+  // roster math, pool size or the CPU wobble can drift between the two.
+  teamCounts:   () => TEAM_COUNTS,
+  scoringNames: () => SCORING_NAMES,
+  setLeague: function (patch) {
+    Object.assign(league, patch);
+    // The format preset owns exactly one rule, at the moment it is chosen —
+    // same side effect readSetup() has always applied, kept in one place.
+    if (patch.scoring) league.rules.rec = REC_BY_FORMAT[patch.scoring];
+  },
+  setupProblem: setupProblem,
+  resumeDraft:  resumeDraft,
+  clearSave:    clearSave,
+  // Everything the Start button does, minus the DOM read readSetup() used to
+  // do — React already wrote the league directly via setLeague(). mySlot is
+  // 0-indexed, matching slotSelect's own values (label is 1st, value is 0).
+  startDraft: function (opts) {
+    if (typeof Live !== "undefined" && Live.room()) {
+      if (inRoom()) { Live.start(); return true; }
+      renderInvite();
+      return false;
+    }
+    if (setupProblem()) return false;
+    state.mySlot      = opts.mySlot;
+    state.clockLength = opts.clockLength;
+    state.started     = true;
+    buildBoard();
+    state.seed = Math.floor(Math.random() * 1000000);
+    applyJitter();
+    enterDraftUI();
+    render();
+    runCPUs();
+    return true;
+  },
+  // Added for the React header (web/src/components/AppHeader.jsx), which
+  // replaces .appbar the same way DraftSettings.jsx replaced .setup — hidden
+  // rather than deleted, for the same unguarded-listener reason. headerInfo()
+  // is the exact branching renderHeader() itself now runs (see the comment
+  // above that function); nothing here recomputes it a second way. The
+  // "juke:header" event fires from renderHeader() itself, on every render,
+  // tick and pause toggle — the same cadence the legacy DOM writes already
+  // ran on — so the header can re-read rather than poll.
+  headerInfo: headerInfo,
+  currentTheme: currentTheme,
+  setTheme:     setTheme,
+  soundWanted:  () => soundWanted,
+  toggleSound:  toggleSound,
+  togglePause:  togglePause
 };
 
 /* An invite code in the address bar means someone followed a link, so the
