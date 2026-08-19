@@ -177,18 +177,18 @@
      and the darkest in light. --fill-hi is lighter again but never carries
      this tone: every rule that hovers to --fill-hi either sets --ink or
      starts from --ink-mid, which clears it at 5.30. */
-  --ink:         #E6ECF3;
-  --ink-mid:     #A2B0BE;   /* 6.21 on --fill */
-  --ink-light:   #8E9BA9;   /* 4.85 on --fill, the worst surface it meets */
+  --ink:         #ECEBEB;
+  --ink-mid:     #B0AEAC;   /* 6.20 on --fill */
+  --ink-light:   #9C9996;   /* 4.84 on --fill, the worst surface it meets */
 
-  --page:        #0E151E;
-  --card:        #18212D;
-  --line:        #2A3441;
+  --page:        #151413;
+  --card:        #22201F;
+  --line:        #353330;
   --hairline:    #222C38;   /* the rules between rows inside a card */
-  --sunken:      #131C26;   /* a panel set into a card: stat boxes, table heads */
-  --well:        #1E2836;   /* slot chips, round numbers */
-  --fill:        #232E3C;   /* empty board cells, small buttons */
-  --fill-hi:     #2D3948;   /* those buttons, hovered */
+  --sunken:      #1C1B1A;   /* a panel set into a card: stat boxes, table heads */
+  --well:        #292725;   /* slot chips, round numbers */
+  --fill:        #2F2D2B;   /* empty board cells, small buttons */
+  --fill-hi:     #3A3835;   /* those buttons, hovered */
   --track:       #242F3D;   /* the unfilled part of a bar or meter */
   --board-hd:    #212B38;
 
@@ -360,18 +360,18 @@
      whatever the worst surface allows, and --ink-mid is placed above it.
      Body text getting darker in light is the side effect, and it is the
      right side effect. */
-  --ink:         #16202C;
-  --ink-mid:     #4C5763;   /* 6.44 on --fill */
-  --ink-light:   #5E6A76;   /* 4.83 on --fill, the worst surface it meets */
+  --ink:         #201F1E;
+  --ink-mid:     #585553;   /* 6.44 on --fill */
+  --ink-light:   #6B6865;   /* 4.83 on --fill, the worst surface it meets */
 
-  --page:        #F5F7FA;
+  --page:        #F7F7F6;
   --card:        #FFFFFF;
-  --line:        #E4E9EF;
+  --line:        #E9E8E7;
   --hairline:    #F1F4F7;
-  --sunken:      #F7F9FB;
-  --well:        #F0F3F6;
-  --fill:        #EDF0F3;
-  --fill-hi:     #E6EBF1;
+  --sunken:      #F9F9F8;
+  --well:        #F3F2F2;
+  --fill:        #F0EFEF;
+  --fill-hi:     #EBEAE9;
   --track:       #EDF1F5;
   --board-hd:    #E9EDF1;
 
