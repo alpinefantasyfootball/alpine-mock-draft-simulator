@@ -108,7 +108,12 @@ export default function AppHeader() {
           className={`flex shrink-0 items-center gap-1.5 border-r px-3.5 transition-opacity duration-150 hover:opacity-75 ${seg}`}
         >
           <ChevronLeft className={`h-4 w-4 ${lit ? 'text-white' : 'text-white/70'}`} />
-          <JukeMark width={20} mono className={lit ? 'text-white' : 'text-teal-400'} />
+          {/* Two-tone (teal shape, purple stem) at rest — the same colours
+              Header.jsx's JukeLogo uses on the homepage, on the same flat
+              dark background. mono only kicks in once the bar is lit: a
+              two-tone mark doesn't read against a saturated gradient, same
+              reason the legacy header reverses --mark-ink there. */}
+          <JukeMark width={20} mono={lit} className={lit ? 'text-white' : undefined} />
         </button>
 
         <div className={`flex min-w-0 flex-col justify-center gap-0.5 border-r px-4 py-1.5 ${seg}`}>
