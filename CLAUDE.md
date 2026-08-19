@@ -11,10 +11,23 @@ league and now configurable from the setup screen: 8 to 14 teams, 8 to 20
 rounds, any starting lineup, and standard, half or full PPR. That original
 league is still what every control defaults to.
 
-Live at `jukeff.com`, hosted on GitHub Pages straight off `main` via the
-`CNAME` file. **It serves from the domain root, not a project path** — which
-is why `manifest.json` uses `start_url: "/"`. A path-scoped `start_url` here
-makes the installed app launch into a 404.
+Live at `jukeff.com`, served by **Cloudflare Pages**, built from `main` on
+every push. **It serves from the domain root, not a project path** — which is
+why `manifest.json` uses `start_url: "/"`. A path-scoped `start_url` here makes
+the installed app launch into a 404.
+
+It was GitHub Pages until 18 August 2026, via a `CNAME` file that is now gone.
+Three things moved with it and each one is written up where it belongs: the
+security headers become `_headers` in this repository rather than a Cloudflare
+Transform Rule, the caching behaviour changes completely (see the `?v=` section),
+and there is now no reason of *hosting* for the hash route, only a reason of
+scope.
+
+**One host, not two.** Both deploy paths were live at once for a day — a push to
+`main` produced a GitHub Pages build *and* a Cloudflare Pages build, and the
+apex spent that day in a redirect loop while `www` was fine. If a change to the
+site appears not to land, check which origin answered before checking anything
+else.
 
 ## Stack
 
@@ -944,10 +957,17 @@ way, not reasoned about.
   the exception and fades itself, on purpose, with its own mask.
 
 - **Two views, one hash route.** `#/` is the landing page, `#/draft` is the
-  Draft Room. Hash routing because GitHub Pages has no rewrite to send a real
-  `/draft` path back to `index.html`, and because it keeps the back button
-  working for someone mid-draft. `applyRoute()` is the only thing that decides
-  what is visible; `render()` must never fight it.
+  Draft Room. `applyRoute()` is the only thing that decides what is visible;
+  `render()` must never fight it.
+
+  Hash routing was originally forced: GitHub Pages has no rewrite to send a
+  real `/draft` path back to `index.html`. **That constraint is gone** — a
+  `_redirects` file on Cloudflare Pages does exactly that rewrite. What holds
+  it in place now is the second reason, which was always the better one: the
+  hash keeps the back button working for somebody mid-draft, and every saved
+  link, every invite and the installed app's `start_url` are written the way
+  they are today. Moving to real paths is a feature with a migration, not a
+  tidy-up, and it should be done deliberately or not at all.
 - **Leaving the draft is not discarding it.** Navigating home stops the CPU
   timer and the clock and leaves everything else alone, so nothing advances
   off-screen. Returning hands the clock back or restarts the room. Only
@@ -1156,40 +1176,46 @@ commits and two days of it read exactly like changes that never merged.
 `git log --oneline main..origin/main` says what is missing. Check that before
 concluding anything is stuck.
 
-**Do not request the new `?v=` URL until the deploy has actually landed.**
-This is the one way the scheme bites you, and it is easy to do while trying
-to be careful. GitHub Pages publishes `index.html` and the assets a moment
-apart, so a verification poll fired too early asks for `app.js?v=<new>` while
-Pages is still serving the old body at that path — and Cloudflare caches that
-answer against the fresh address for the full ten minutes. New HTML, old
-JavaScript, at a URL specifically designed to prevent exactly that. It has
-happened once, on the profile deploy.
+**Cloudflare Pages sends `Cache-Control: public, max-age=0, must-revalidate`
+on everything, and that changes what `?v=` is for.** Measured 18 August 2026 on
+both `index.html` and `app.js?v=…`: max-age zero, an `ETag`, and
+`cf-cache-status: REVALIDATED`. So a browser re-asks about every file on every
+load and gets a 304 when nothing moved. There is no ten-minute window any more
+and no four-hour one; there is a round trip per asset instead.
 
-Wait for `curl https://jukeff.com/` to come back asking for the new version
-*and* give the assets a moment after that, or verify with an extra throwaway
-query (`?v=<new>&bust=1`), which reaches the origin without poisoning the
-real address. If it does happen, Caching → Configuration → Custom Purge, one
-URL per line, fixes it in seconds.
+**The old trap is gone with it, and it is worth knowing why rather than just
+that.** Under GitHub Pages, `index.html` and the assets published a moment
+apart, so a verification poll fired too early asked for `app.js?v=<new>` while
+the old body was still at that path — and Cloudflare then cached that answer
+against the fresh address for the full ten minutes. New HTML, old JavaScript,
+at a URL designed to prevent exactly that. It happened once, on the profile
+deploy. **A Cloudflare Pages deployment is an atomic snapshot**, so the HTML
+and the assets it names go live together and there is no window to race. That
+is the platform's contract rather than something measured here, and it is the
+single biggest operational improvement from the move.
 
-That window used to be four hours. It was Cloudflare's Browser Cache TTL
-overriding GitHub Pages, which sends ten minutes; the zone is now set to
-**Respect Existing Headers**, so `Cache-Control: max-age=600` reaches the
-browser unchanged. If a stale asset ever reappears, check that setting first
-— but the `?v=` is what actually closes the hole, and it works whoever is
-serving the file.
+**Keep bumping `?v=` anyway.** It costs one number, it is what makes an asset
+address change when its content changes, and it is the only part of this that
+does not depend on who is serving the file — which is the whole reason it
+survived the move unchanged. It is also the precondition for the improvement
+below.
 
-**The pages themselves carry no `?v=`, so checking a deploy needs the same
-throwaway query.** `?v=` protects everything `index.html` *loads* and can do
-nothing for `index.html` itself, or for
-`docs/draft-room-how-it-works.html` — those are cached under their own plain
-addresses for the same ten minutes. `curl` will show you the new page while
-the browser sitting next to it still shows the old one, because they hold
-separate caches, and a forced reload does not always clear the browser's:
-after the how-it-works rewrite the tab kept serving the previous copy until
-it was loaded as `…draft-room-how-it-works.html?cb=1`. So when the change is
-to a page rather than to an asset, verify it with a throwaway query too, and
-do not conclude a deploy failed because a tab you already had open disagrees
-with `curl`. Only the assets get a version; the pages get patience.
+**The obvious next win is `immutable`, and it has a trap in it.** Assets under
+a `?v=` stamp are immutable by construction, so `max-age=31536000, immutable`
+would remove the revalidation round trip entirely. `_headers` matches on
+**path, not query**, so that rule would apply to `/app.js` however it is
+addressed — and a deploy that changed `app.js` *without* bumping the stamp
+would then be cached for a year in every browser that had loaded it. The
+nightly always bumps. A hand-run rebuild does not, which this file already
+warns about in the section above. Do not set this until that hole is closed.
+
+**Verifying a deploy is now simpler, and the throwaway query is still the
+honest way to do it.** `curl https://jukeff.com/` shows the new version as soon
+as the deployment promotes. A browser tab you already had open may still
+disagree, because it holds its own cache and a forced reload does not always
+clear it — after the how-it-works rewrite one kept serving the previous copy
+until it was loaded as `…draft-room-how-it-works.html?cb=1`. So do not conclude
+a deploy failed because a tab disagrees with `curl`.
 
 **`og:image` must be an absolute URL, and it is baked to `jukeff.com`.**
 Link previews are fetched by Slack, iMessage and Twitter from their own

@@ -1,0 +1,25 @@
+# Response headers, served by the origin.
+#
+# These four used to be a Cloudflare "Security headers" Transform Rule, because
+# GitHub Pages cannot set a header at all and the edge was the only place they
+# could live. Cloudflare Pages can, so they move into the repository, where they
+# are diffed and reviewed like everything else rather than living in a dashboard
+# nobody opens.
+#
+# **Every value below is byte-identical to what the Transform Rule sends today**,
+# read back off the live response rather than retyped from the dashboard. That is
+# deliberate and it is the whole migration plan: while both exist the browser
+# receives two identical policies and enforces the same thing twice, so deleting
+# the rule is provably a no-op rather than a change nobody watched. Change a value
+# here only after the rule is gone.
+#
+# Two headers are missing from this file on purpose. `Strict-Transport-Security`
+# and `X-Content-Type-Options` come from the HSTS dialog under SSL/TLS, not from
+# the Transform Rule, and setting them here as well would send each one twice.
+# They stay where they are.
+
+/*
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' https://sleepercdn.com https://*.giphy.com; connect-src 'self' https://juke-draft-room.jukeff.workers.dev wss://juke-draft-room.jukeff.workers.dev https://site.api.espn.com; manifest-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'
