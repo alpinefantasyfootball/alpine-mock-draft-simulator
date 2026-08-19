@@ -43,13 +43,18 @@ Python 3 standard library only in the pipeline. No pip dependencies.
 | File | Role |
 |---|---|
 | `index.html` | Markup. Sticky header, tabs, action bar, panels, player sheet. |
+| `404.html` | The not-found page. **Every path in it is absolute**, because Pages serves it at whatever address missed — a relative `style.css` on `/a/b/c` misses too. |
+| `_headers` | The security headers, served by the origin. Replaced a Cloudflare Transform Rule; see the hosting note. |
+| `.gitattributes` | Marks the eight binaries as binary. Text is deliberately not declared. |
 | `style.css` | All styling. Colours defined once at the top, reused by name. |
 | `app.js` | Everything else: draft engine, CPU logic, analysis, rendering. |
 | `back-to-top.js` | The back-to-top button. Its own file because the how-it-works page uses it and has no reason to load `app.js`. |
 | `draft-engine.js` | The rules of a snake draft — turn order, legality, the CPU wobble. No DOM, no globals, no dependencies, so a server can run the identical file. |
 | `room.js` | One shared draft: seats, picks, the clock. Pure, and time is always passed in rather than read. Loaded by the worker only; the page consumes the view it sends. |
 | `live.js` | The client end of a room: one socket, the invite code, and the messages. Knows nothing about the board or how anything is drawn. |
-| `worker/` | The Cloudflare Durable Object behind an invite link, plus the two proxied routes whose keys may not be in the page (`/giphy`, `/news`) and its `wrangler.toml`. Deployed to `juke-draft-room.jukeff.workers.dev`; a change here needs `wrangler deploy` before the page can use it. See `worker/README.md`. |
+| `worker/` | The Cloudflare Durable Object behind an invite link, plus the two proxied routes whose keys may not be in the page (`/giphy`, `/news`) and its `wrangler.toml`. Deployed to `juke-draft-room.jukeff.workers.dev`; **a change here needs `wrangler deploy`** — the site deploys itself from git and the worker does not. See `worker/README.md`. |
+| `worker/store.js` | The D1 cache: Sleeper's pool and Tank01 headlines. A cache and never a source of truth, and a missing binding is a normal condition rather than a fault. |
+| `worker/migrations/` | D1 schema, applied with `wrangler d1 migrations apply`. The database is not to be shaped by hand — see the note on three variants of one schema. |
 | `scripts/test_engine.py` | Runs `draft-engine.js` and `room.js` in node/deno/bun and asserts the rules from outside a browser. |
 | `scripts/test_crosswalk.py` | The source-id join, without the network. A bad join does not look like a failure, which is why it is not left to a pipeline run. |
 | `tests/` | End-to-end tests: the real pages, in a real browser, two managers in a real room. `playwright.config.mjs` starts both servers itself. |
@@ -58,7 +63,7 @@ Python 3 standard library only in the pipeline. No pip dependencies.
 | `stats.js` | **GENERATED.** Stats, projections, depth charts by Sleeper ID. `pp` holds what we projected for seasons already played, so a forecast can be graded against what happened. |
 | `scripts/build_players.py` | The pipeline that writes the two generated files. |
 | `.github/workflows/update-players.yml` | Runs the pipeline daily at 11:00 UTC. |
-| `og-image.png` | **GENERATED.** 1200x630 link-preview card. Rebuild by opening `scripts/build_og.html` in a browser and clicking download. |
+| `og-image.png` | **GENERATED.** 1200x630 link-preview card, from `scripts/build_og.html`. Clicking download works in a real browser and not in a headless one; the reliable route is below. |
 | `unmatched.txt` | **GENERATED.** Feed rows that failed to join, plus unscored stat keys. |
 
 ## Data
@@ -1189,6 +1194,43 @@ commits and two days of it read exactly like changes that never merged.
 `git log --oneline main..origin/main` says what is missing. Check that before
 concluding anything is stuck.
 
+**The site deploys itself and the worker does not, and that gap is invisible.**
+Cloudflare Pages builds from git on every push, so a merge is a deploy. The
+worker is not in that build: it ships only when somebody runs
+`wrangler deploy -c worker/wrangler.toml`. The D1 cache was merged, correct,
+and doing nothing at all because of it — the route answered normally, the edge
+cache even reported `miss` then `hit`, and the only thing that gave it away was
+querying the database and finding zero rows after a miss that should have
+written some. **Ask the database, not the response**: a worker change that is
+merged but not deployed looks exactly like one that is working.
+
+**Nothing in the tree is unpublished.** Pages serves the output directory as it
+finds it and has no ignore list, so anything committed to the repository root
+is live on the domain whether or not a page links to it. A 1.4MB piece of logo
+artwork sat at `jukeff.com/image_71380e33.png` for six days, referenced by
+nothing, returning 200 to anybody who asked. A `brand/` directory would have
+been just as public and harder to notice. Assets that are not the site belong
+somewhere that is not the site.
+
+**A redirect rule can be named for the opposite of what it does.** `jukeff.com`
+spent a day in an infinite loop — every path, 301 to itself — behind a rule
+called "Redirect Root to WWW" whose target was `https://jukeff.com`. The `www.`
+was never typed. The name is what makes it hard to see: it reads as correct in
+a list, and the rule matched and redirected exactly as configured.
+
+The diagnosis is worth keeping, because it separates a broken *rule* from a
+broken *host*. If DNS resolves, TLS completes on a certificate issued for that
+exact hostname, and the response carries the zone's own security headers, then
+everything downstream is provisioned and waiting — whatever is wrong happens
+before the origin is reached. **Cloudflare only issues a per-hostname
+certificate for an attached, verified custom domain**, so the certificate alone
+is evidence the host is fine.
+
+And prefer disabling a rule to editing one. The apex came back on a single
+toggle, instantly reversible, with `www` untouched throughout because the rule
+never matched it. Fixing the target *and* the direction in one edit would have
+changed two things at once on a site that was down.
+
 **Cloudflare Pages sends `Cache-Control: public, max-age=0, must-revalidate`
 on everything, and that changes what `?v=` is for.** Measured 18 August 2026 on
 both `index.html` and `app.js?v=…`: max-age zero, an `ETag`, and
@@ -2170,6 +2212,37 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   because the whole point of the tool is to be believed. Redirect to a file
   instead, or `set -o pipefail`.
 
+- **Regenerating `og-image.png` needs node, not a click.** The card is drawn to
+  a canvas by `scripts/build_og.html`, which hangs the PNG off a download link.
+  That works in a real browser and does not work in a headless or sandboxed one
+  — the click lands a `.tmp` in Downloads that is cleaned up before it is
+  renamed. Playwright runs in node and has a filesystem, so it reads the same
+  data URL and writes the bytes: same artifact, no manual step, and no new
+  dependency, because the test runner is already here.
+
+  **Refuse to write if the face did not load.** `document.fonts.check` before
+  reading the canvas — a share card silently generated in a fallback is worse
+  than not regenerating one, because it looks finished and fails in somebody
+  else's link preview.
+
+  And read the PNG signature and dimensions back off the file afterwards. A
+  byte count proves a file was written, not that it is an image.
+
+- **This repository lives in OneDrive, and OneDrive puts files back.** It is
+  already recorded for `desktop.ini`; it also happens to real assets. A freshly
+  committed `og-image.png` was replaced by an older copy *after* the commit, so
+  `git status` showed it dirty and the working file no longer matched the blob.
+
+  The tell is the timestamp: the file's mtime was two minutes **older** than the
+  commit. Nothing this side of a restore does that.
+
+  It briefly looked like line-ending corruption and was not, which is the more
+  useful half of the lesson. A CRLF filter would rewrite the `0D 0A` inside the
+  PNG signature itself, and the signature was intact and the chunks walked
+  cleanly to `IEND`. **Check the signature before blaming the filter.** The
+  committed blob was correct throughout and so was the deployed card;
+  `git checkout --` on the path was the whole repair.
+
 - **CI is `tests.yml` and it is a floor, not a gate — and it does not cover
   itself.** It runs the two Python suites on `pull_request` and on `push` to
   main; the browser suite is deliberately not in it. Three things follow that
@@ -2197,7 +2270,7 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   bump, v6 moved the credentials, v7 blocked fork checkouts for
   `pull_request_target` and `workflow_run`, which this repository does not use.
 
-- **End to end: `npm install` once, then `npx playwright test`.** Eighty-seven
+- **End to end: `npm install` once, then `npx playwright test`.** Ninety
   tests across fifteen spec files, measured at about five minutes against
   production, and it starts the static server and `wrangler dev` itself when
   it is pointed at localhost.
