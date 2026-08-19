@@ -1,6 +1,8 @@
 import { useEffect, useReducer, useRef, useState } from 'react'
 import Header from './Header.jsx'
 import ConfigureDraftForm from './ConfigureDraftForm.jsx'
+import RoomPanel from './RoomPanel.jsx'
+import ChatDock from './ChatDock.jsx'
 import DraftRoomStatusBar from './DraftRoomStatusBar.jsx'
 import DraftBoardGrid from './DraftBoardGrid.jsx'
 import PlayerQueueSidebar from './PlayerQueueSidebar.jsx'
@@ -112,9 +114,15 @@ export default function DraftRoom() {
     return (
       <div className="fixed inset-0 z-40 flex flex-col overflow-y-auto bg-[#0B0E14] pt-16 text-white">
         <Header />
-        <div className="mx-auto flex w-full max-w-xl flex-1 items-center px-6 py-10">
-          <ConfigureDraftForm />
+        <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col items-stretch gap-6 px-6 py-10 lg:flex-row">
+          <div className="lg:basis-1/2">
+            <ConfigureDraftForm />
+          </div>
+          <div className="lg:basis-1/2">
+            <RoomPanel />
+          </div>
         </div>
+        <ChatDock />
       </div>
     )
   }
@@ -243,6 +251,7 @@ export default function DraftRoom() {
 
         <RosterDock lineup={lineup} benchSize={league.bench} />
       </div>
+      <ChatDock />
     </div>
   )
 }

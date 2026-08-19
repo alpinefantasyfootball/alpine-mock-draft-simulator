@@ -6571,6 +6571,74 @@ window.JukeEngine = {
   // this is a real departure, not a local reset that the next broadcast
   // undoes.
   restart: restart,
+  // Rooms and chat, for the React draft room page. None of this is a
+  // second implementation of Live/room.js — every entry below is either a
+  // plain read off Live or a direct call into the exact function the
+  // legacy lobby already uses.
+  //
+  // The one real design decision: Live.onChange()/Live.onTyping() are
+  // single-slot callbacks (see live.js), not an event bus, so this file
+  // never calls them a second time from here — doing that would silently
+  // replace onRoomChange() and stop adoptRoom()/driveRoomCPUs()/
+  // driveMyAutopilot()/resetClock() from ever running again. createRoom()
+  // and joinRoomByCode() below both go through the real joinRoom(), the
+  // one function that already registers Live.onChange(onRoomChange) and
+  // Live.onTyping(onRoomTyping) correctly — and onRoomChange() already
+  // ends by calling render(), which already fires "juke:header" via
+  // renderHeader(). So this page's existing useJukeTick() hook picks up
+  // every room change (a pick, a chat line, a seat swap) for free; no
+  // second event is needed. onTyping() below is the one exception: its
+  // only existing consumer (onRoomTyping) just feeds a typing indicator in
+  // the legacy, permanently-hidden chat dock, so replacing that single
+  // slot from React has no visible legacy consequence — unlike onChange.
+  room: () => Live.room(),
+  liveStatus: () => Live.status(),
+  liveReason: () => Live.reason(),
+  codeInUrl: () => Live.codeInUrl(),
+  memberId: () => Live.memberId(),
+  myName: () => Live.name(),
+  setMyName: (name) => Live.setName(name),
+  // The real createRoomBtn sequence, minus readSetup(): that call exists
+  // there to pull league settings out of legacy DOM inputs this page
+  // never renders, and this page's ConfigureDraftForm already keeps the
+  // one real `league` object current via setLeague() on every change — a
+  // second read off empty/default DOM elements would overwrite an
+  // already-correct league with defaults, not update it.
+  createRoom: function () {
+    if (setupProblem()) return null;
+    const code = Live.newCode();
+    location.hash = "#/draft-room?room=" + code;
+    joinRoom(code, true);
+    return code;
+  },
+  joinRoomByCode: function (code) {
+    if (!code) return;
+    location.hash = "#/draft-room?room=" + code;
+    joinRoom(code, false);
+  },
+  // Mirrors leaveRoomBtn's handler, minus its redirect to #/draft — this
+  // page stays on its own route and only drops ?room= from the hash, so a
+  // reload lands back on setup rather than rejoining what was just left
+  // on purpose (same reasoning goHome() already documents for Discard).
+  leaveRoom: function () {
+    Live.disconnect();
+    location.hash = "#/draft-room";
+    renderInvite();
+    renderChat();
+  },
+  sendChat: (text, gif) => Live.chat(text, gif || null),
+  sendReaction: (id, emoji) => Live.react(id, emoji),
+  onTyping: (fn) => Live.onTyping(fn),
+  sendTyping: (on) => Live.typing(!!on),
+  claimSeat: (seat) => Live.claimSeat(seat),
+  swapSeats: (a, b) => Live.swapSeats(a, b),
+  gifSearch: (q) => Live.gifSearch(q),
+  safeGif: safeGif,
+  // chatStream() is the real merge of room.chat and room.picks into one
+  // timeline by `at` — picks are not chat messages, and this is the same
+  // function that keeps the legacy dock from storing them twice (see
+  // CLAUDE.md). Bridged directly rather than re-merged in React.
+  chatStream: chatStream,
   currentTheme: currentTheme,
   setTheme:     setTheme,
   soundWanted:  () => soundWanted,
