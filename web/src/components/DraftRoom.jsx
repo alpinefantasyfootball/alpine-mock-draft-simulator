@@ -79,6 +79,23 @@ export default function DraftRoom() {
   // Off-room it's just the local switch above.
   const autopick = roomActive ? !!(engine && engine.autoMe()) : soloAutopick
 
+  // Progress persists because state.started does: saveDraft() already runs
+  // on every render() — which fires after every real pick — but it's a
+  // silent no-op while state.started is false (see saveDraft() in app.js),
+  // and nothing on this page ever set it. This is the one-time fix, not a
+  // second save mechanism: readSave()/resumeDraft()/startDraft() are the
+  // exact functions the legacy "Resume" banner and "Start your draft"
+  // button already call. Guarded by headerInfo().started rather than a ref,
+  // since that reads the same shared state a StrictMode double-invoke would
+  // — the second call sees started:true and skips, no extra bookkeeping.
+  useEffect(() => {
+    if (!engine) return
+    if (engine.headerInfo().started) return
+    const save = engine.readSave()
+    if (save && save.picks && save.picks.length) engine.resumeDraft(save)
+    else engine.startDraft({ mySlot: 0, clockLength: 60 })
+  }, [engine])
+
   // Solo autopick's real submission path: the exact same engine.draftPlayer
   // the Draft button uses (draftAndAdvance() underneath), just triggered
   // automatically instead of by a click, with the pick chosen by
