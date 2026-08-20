@@ -6790,6 +6790,12 @@ window.JukeEngine = {
   openHistoryDraft: openHistoryDraft,
   inProgressSummary: inProgressSummary,
   resumeSavedDraft:  resumeSavedDraft,
+  // Added for the Draft Insights Dashboard (DraftInsightsDashboard.jsx).
+  // The exact grade the legacy Analysis tab paints — same weights, same
+  // scaleAcross(), same clamped letter scale — handed out whole so the
+  // React view can never disagree with the standings about what anyone
+  // scored. Indexed by slot, like analyseDraft() has always returned it.
+  draftAnalysis: () => analyseDraft(),
   // Everything the Start button does, minus the DOM read readSetup() used to
   // do — React already wrote the league directly via setLeague(). mySlot is
   // 0-indexed, matching slotSelect's own values (label is 1st, value is 0).

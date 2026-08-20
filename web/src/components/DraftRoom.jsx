@@ -9,6 +9,7 @@ import DraftBoardGrid from './DraftBoardGrid.jsx'
 import { SORT_DEFAULT_DIR } from './PlayerQueueSidebar.jsx'
 import PlayerHub from './PlayerHub.jsx'
 import RosterDock from './RosterDock.jsx'
+import DraftInsightsDashboard from './DraftInsightsDashboard.jsx'
 
 function useEngine() {
   const [ready, setReady] = useState(false)
@@ -110,6 +111,24 @@ export default function DraftRoom() {
   const autopick = roomActive ? !!(engine && engine.autoMe()) : soloAutopick
 
   const started = engine ? !!engine.headerInfo().started : false
+  // Computed up here, with the other pre-early-return fallbacks, so the
+  // insights effect below can watch it — the later render code reuses this
+  // same value rather than asking engine.draftOver() a second time.
+  const draftIsOver = engine && started ? !!engine.draftOver() : false
+
+  // The Insights dashboard opens itself on the edge — "the draft just
+  // became over", not "the draft is over" — same reasoning as
+  // checkDraftFinished()/revealAnalysis() in app.js: acting on the state
+  // would drag the overlay back over the board on every re-render after
+  // the user closed it to look around. The effect's dep array IS the edge
+  // detector: it only re-fires when draftIsOver actually changes. A draft
+  // reopened from the Locker mounts with draftIsOver already true, so the
+  // first run fires too — which is right, since "Analyze Draft" is exactly
+  // a request for this screen.
+  const [showInsights, setShowInsights] = useState(false)
+  useEffect(() => {
+    if (draftIsOver) setShowInsights(true)
+  }, [draftIsOver])
 
   // Solo autopick's real submission path: the exact same engine.draftPlayer
   // the Draft button uses (draftAndAdvance() underneath), just triggered
@@ -205,8 +224,8 @@ export default function DraftRoom() {
   // broadcast — see the bridge comment on `undo`), Pause is the host's in
   // a room, and both disappear once the draft is over. Discard/"Leave the
   // room" stays offered either way; only its label and danger styling
-  // change.
-  const draftIsOver = engine.draftOver()
+  // change. draftIsOver itself is computed above the early returns, where
+  // the insights effect needs it.
   const hasRoomVal = engine.hasRoom()
   const isHost = engine.isHost()
   const showPause = !draftIsOver && (!hasRoomVal || isHost)
@@ -458,6 +477,31 @@ export default function DraftRoom() {
 
         <RosterDock lineup={lineup} benchSize={league.bench} />
       </div>
+
+      {/* Opens itself on the draft-over edge (see the effect near the top)
+          and closes to the board, leaving a pill to reopen — the analysis
+          is the most valuable screen in the app (CLAUDE.md: the last pick
+          lands and it opens itself), so it must never be more than one
+          press away from a finished board. z-[65] for the pill keeps it
+          above the fixed status bar (z-50); the dashboard itself is z-[70],
+          over everything in this view. */}
+      {draftIsOver && showInsights && (
+        <DraftInsightsDashboard
+          engine={engine}
+          league={league}
+          mySlot={mySlot}
+          onClose={() => setShowInsights(false)}
+        />
+      )}
+      {draftIsOver && !showInsights && (
+        <button
+          type="button"
+          onClick={() => setShowInsights(true)}
+          className="fixed left-1/2 top-16 z-[65] -translate-x-1/2 rounded-full border border-teal-400/40 bg-slate-950/90 px-4 py-1.5 text-xs font-semibold text-teal-300 shadow-[0_0_15px_rgba(0,229,255,0.2)] backdrop-blur transition-colors duration-200 hover:border-teal-400 hover:bg-teal-400/10"
+        >
+          Draft Insights
+        </button>
+      )}
     </div>
   )
 }
