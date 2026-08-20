@@ -26,7 +26,7 @@ function adpGap(pick) {
   return pick.overall - adp
 }
 
-export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLabelOf }) {
+export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLabelOf, onTeamClick }) {
   const byCell = new Map()
   picks.forEach((p) => byCell.set(p.round + '-' + p.slot, p))
 
@@ -62,18 +62,39 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
         <div className="sticky left-0 top-0 z-20 flex items-center justify-center border-b border-r border-slate-800 bg-slate-900/95 py-1 text-[10px] font-semibold uppercase tracking-wide text-white/30">
           Rd
         </div>
-        {Array.from({ length: teams }, (_, s) => (
-          <div
-            key={'hd-' + s}
-            className={
-              'sticky top-0 z-10 truncate border-b border-r border-slate-800 bg-slate-900/95 px-2 py-1 text-center text-xs font-semibold ' +
-              (s === mySlot ? 'text-teal-400' : 'text-white/60')
-            }
-            title={teamLabelOf(s)}
-          >
-            {s === mySlot ? 'YOU' : teamLabelOf(s)}
-          </div>
-        ))}
+        {/* A real <button> only while there's somewhere for the click to
+            go — DraftRoom passes onTeamClick once the draft is over, when
+            every team has a full Insights report to open. Before that the
+            header is the same inert label it always was, per the
+            dead-control rule: nothing may look pressable and do nothing. */}
+        {Array.from({ length: teams }, (_, s) =>
+          onTeamClick ? (
+            <button
+              key={'hd-' + s}
+              type="button"
+              onClick={() => onTeamClick(s)}
+              className={
+                'sticky top-0 z-10 truncate border-b border-r border-slate-800 bg-slate-900/95 px-2 py-1 text-center text-xs font-semibold ' +
+                'transition-colors duration-150 hover:bg-teal-500/10 hover:text-teal-300 ' +
+                (s === mySlot ? 'text-teal-400' : 'text-white/60')
+              }
+              title={'View ' + teamLabelOf(s) + "'s draft insights"}
+            >
+              {s === mySlot ? 'YOU' : teamLabelOf(s)}
+            </button>
+          ) : (
+            <div
+              key={'hd-' + s}
+              className={
+                'sticky top-0 z-10 truncate border-b border-r border-slate-800 bg-slate-900/95 px-2 py-1 text-center text-xs font-semibold ' +
+                (s === mySlot ? 'text-teal-400' : 'text-white/60')
+              }
+              title={teamLabelOf(s)}
+            >
+              {s === mySlot ? 'YOU' : teamLabelOf(s)}
+            </div>
+          )
+        )}
 
         {Array.from({ length: rounds }, (_, ri) => {
           const round = ri + 1

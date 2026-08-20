@@ -188,12 +188,24 @@ function TimelineRow({ pick, gap, maxAbs, shortName }) {
 // it is real: the grade is engine.draftAnalysis() — the identical
 // analyseDraft() the legacy standings print — and every bar is
 // replacementGap() over the real seated lineup.
-export default function DraftInsightsDashboard({ engine, league, mySlot, onClose }) {
+//
+// viewSlot is whose report this is — yours by default, any team's via the
+// standings rows below or a board header click (DraftRoom owns the state
+// so a header click can pick the team and open the overlay in one
+// gesture). Every figure derives from viewSlot; mySlot is only for
+// telling "you" apart from a team that needs naming.
+export default function DraftInsightsDashboard({ engine, league, mySlot, viewSlot, onViewSlot, onClose }) {
   const analysis = engine.draftAnalysis()
-  const mine = analysis && analysis[mySlot]
+  const mine = analysis && analysis[viewSlot]
   if (!mine) return null
 
-  const lineup = engine.seatedLineup(mySlot)
+  const isMe = viewSlot === mySlot
+  const teamName = engine.teamLabel(viewSlot)
+  // "you took" / "Bijan Mustard took"; "your pick" / "their pick".
+  const subject = isMe ? 'you' : teamName
+  const poss = isMe ? 'your' : 'their'
+
+  const lineup = engine.seatedLineup(viewSlot)
   const seats = lineup?.seats || []
   const gaps = seats.map((seat) => (seat.player ? engine.replacementGap(seat.player) : null))
   const maxAbs = Math.max(1, ...gaps.filter((g) => g !== null).map((g) => Math.abs(g)))
@@ -205,37 +217,37 @@ export default function DraftInsightsDashboard({ engine, league, mySlot, onClose
   // FORCED_LATE is a lookup object ({ K: true, DST: true }), not a list —
   // the same shape freelyChosen() in app.js tests it with.
   const forced = engine.forcedLate() || {}
-  const myPicks = picks.filter((p) => p.slot === mySlot).slice().sort((a, b) => a.overall - b.overall)
+  const teamPicks = picks.filter((p) => p.slot === viewSlot).slice().sort((a, b) => a.overall - b.overall)
 
-  /* The value timeline judges only the picks you were free to time — the
-     same FORCED_LATE exclusion the grade's value component applies, and
-     for the same documented reason: the app itself schedules kickers and
-     defenses into the closing rounds, and their long-draft ADP makes every
-     one of them read as a reach. Naming a kicker your worst pick was a
-     real bug once; it does not come back through a new panel. */
-  const timeline = myPicks
+  /* The value timeline judges only the picks this team was free to time —
+     the same FORCED_LATE exclusion the grade's value component applies,
+     and for the same documented reason: the app itself schedules kickers
+     and defenses into the closing rounds, and their long-draft ADP makes
+     every one of them read as a reach. Naming a kicker the worst pick was
+     a real bug once; it does not come back through a new panel. */
+  const timeline = teamPicks
     .filter((p) => !forced[p.player.pos])
     .map((p) => ({ pick: p, gap: p.overall - p.player.overall }))
   const tlMax = Math.max(1, ...timeline.map((t) => Math.abs(t.gap)))
 
-  /* The one that got away: at each of your turns, every player somebody
-     else took before your next turn was a player you could have had and
-     then couldn't — the biggest replacementGap() upgrade among them is the
-     sliding-doors pick. Your last pick has no next turn, so it has no
-     window. K/DST and no-projection players fall out naturally: their gap
-     is null on either side of the comparison. */
+  /* The one that got away: at each of this team's turns, every player
+     somebody else took before their next turn was a player they could
+     have had and then couldn't — the biggest replacementGap() upgrade
+     among them is the sliding-doors pick. The last pick has no next turn,
+     so it has no window. K/DST and no-projection players fall out
+     naturally: their gap is null on either side of the comparison. */
   let missed = null
-  myPicks.forEach((minePick, i) => {
-    const next = myPicks[i + 1]
+  teamPicks.forEach((teamPick, i) => {
+    const next = teamPicks[i + 1]
     if (!next) return
-    const myGap = engine.replacementGap(minePick.player)
-    if (myGap === null) return
+    const ownGap = engine.replacementGap(teamPick.player)
+    if (ownGap === null) return
     picks.forEach((p) => {
-      if (p.slot === mySlot || p.overall <= minePick.overall || p.overall >= next.overall) return
+      if (p.slot === viewSlot || p.overall <= teamPick.overall || p.overall >= next.overall) return
       const theirGap = engine.replacementGap(p.player)
       if (theirGap === null) return
-      const delta = theirGap - myGap
-      if (delta > (missed ? missed.delta : 0)) missed = { theirs: p, mine: minePick, delta }
+      const delta = theirGap - ownGap
+      if (delta > (missed ? missed.delta : 0)) missed = { theirs: p, mine: teamPick, delta }
     })
   })
   const realMiss = missed && missed.delta >= MISS_FLOOR ? missed : null
@@ -248,17 +260,31 @@ export default function DraftInsightsDashboard({ engine, league, mySlot, onClose
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-teal-400">Draft complete</p>
-            <h1 className="font-display text-2xl font-bold text-white">Draft Insights</h1>
+            <h1 className="font-display text-2xl font-bold text-white">
+              Draft Insights <span className="text-white/40">·</span>{' '}
+              <span className={isMe ? 'text-teal-300' : 'text-[#B784E0]'}>{teamName}</span>
+            </h1>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            title="View the board"
-            aria-label="Close insights and view the board"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-800 bg-slate-950/60 text-white/60 transition-colors duration-150 hover:border-teal-400/50 hover:text-white"
-          >
-            <X className="h-4 w-4" />
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            {!isMe && (
+              <button
+                type="button"
+                onClick={() => onViewSlot(mySlot)}
+                className="rounded-full border border-teal-400/40 px-3 py-1.5 text-xs font-semibold text-teal-300 transition-colors duration-150 hover:border-teal-400 hover:bg-teal-400/10"
+              >
+                Back to your team
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              title="View the board"
+              aria-label="Close insights and view the board"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-800 bg-slate-950/60 text-white/60 transition-colors duration-150 hover:border-teal-400/50 hover:text-white"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
         </div>
 
         {/* Summary card — the grade, large and glowing, in the two brand
@@ -317,18 +343,18 @@ export default function DraftInsightsDashboard({ engine, league, mySlot, onClose
           {realMiss ? (
             <p className="mt-2 text-sm leading-relaxed text-white/60">
               <span className="font-semibold text-[#B784E0]">{realMiss.theirs.player.name}</span>{' '}
-              was still on the board when you took {realMiss.mine.player.name} in round{' '}
+              was still on the board when {subject} took {realMiss.mine.player.name} in round{' '}
               {realMiss.mine.round} — {engine.teamLabel(realMiss.theirs.slot)} got him{' '}
               {realMiss.theirs.overall - realMiss.mine.overall === 1
                 ? 'with the very next pick'
                 : `${realMiss.theirs.overall - realMiss.mine.overall} picks later`}
               , and he projects{' '}
               <span className="font-semibold text-teal-300">+{Math.round(realMiss.delta)} more points</span>{' '}
-              over a replacement starter than your pick does.
+              over a replacement starter than {poss} pick does.
             </p>
           ) : (
             <p className="mt-2 text-sm leading-relaxed text-white/60">
-              Nothing got away. At every turn, nobody taken before your next pick out-valued your
+              Nothing got away. At every turn, nobody taken before {poss} next pick out-valued {poss}{' '}
               choice by more than the projection can honestly measure — that is the mark of a draft
               with no real regrets in it.
             </p>
@@ -376,7 +402,7 @@ export default function DraftInsightsDashboard({ engine, league, mySlot, onClose
           >
             <h2 className="font-display text-sm font-bold uppercase tracking-wide text-white/80">Draft Value Timeline</h2>
             <p className="mb-3 mt-0.5 text-xs text-white/35">
-              Where each pick landed against the board's rank — right means he fell to you
+              Where each pick landed against the board's rank — right means he fell to {isMe ? 'you' : 'them'}
             </p>
             <div className="flex flex-col gap-1.5">
               {timeline.map((t) => (
@@ -391,7 +417,7 @@ export default function DraftInsightsDashboard({ engine, league, mySlot, onClose
             </div>
             <p className="mt-3 text-[10px] leading-relaxed text-white/25">
               Kickers and defenses sit this out too — the app schedules those picks itself, so their
-              timing says nothing about your drafting.
+              timing says nothing about the drafting.
             </p>
           </motion.section>
 
@@ -406,30 +432,40 @@ export default function DraftInsightsDashboard({ engine, league, mySlot, onClose
                 CLAUDE.md's standings rule: a column between the rank and
                 the letter showing anything else makes the table look
                 broken, and once did. */}
-            <p className="mb-3 mt-0.5 text-xs text-white/35">Every team's weighted score, best to worst</p>
+            <p className="mb-3 mt-0.5 text-xs text-white/35">
+              Every team's weighted score, best to worst — click any team to view their report
+            </p>
             <div className="flex flex-col gap-1">
+              {/* Each row is the switcher for this whole dashboard: the
+                  viewed team carries the ring, your own row keeps its teal
+                  name so "where am I" survives while reading somebody
+                  else's report. */}
               {standings.map((t) => (
-                <div
+                <button
                   key={t.slot}
+                  type="button"
+                  onClick={() => onViewSlot(t.slot)}
                   className={
-                    'flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs ' +
-                    (t.slot === mySlot
+                    'flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors duration-150 ' +
+                    (t.slot === viewSlot
                       ? 'border border-teal-400/40 bg-teal-500/10 font-semibold text-white'
-                      : 'text-white/60')
+                      : 'text-white/60 hover:bg-white/5 hover:text-white')
                   }
                 >
                   <span className="w-5 shrink-0 text-right tabular-nums text-white/35">{t.rank}</span>
-                  <span className="min-w-0 flex-1 truncate">{engine.teamLabel(t.slot)}</span>
+                  <span className={'min-w-0 flex-1 truncate ' + (t.slot === mySlot ? 'text-teal-300' : '')}>
+                    {engine.teamLabel(t.slot)}
+                  </span>
                   <span className="w-8 shrink-0 text-right font-semibold tabular-nums">{Math.round(t.total)}</span>
                   <span
                     className={
                       'w-8 shrink-0 rounded px-1 py-0.5 text-center text-[10px] font-bold ' +
-                      (t.slot === mySlot ? 'bg-teal-400/20 text-teal-300' : 'bg-white/5 text-white/50')
+                      (t.slot === viewSlot ? 'bg-teal-400/20 text-teal-300' : 'bg-white/5 text-white/50')
                     }
                   >
                     {t.grade}
                   </span>
-                </div>
+                </button>
               ))}
             </div>
           </motion.section>

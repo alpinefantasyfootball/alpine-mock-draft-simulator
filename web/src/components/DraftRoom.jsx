@@ -126,9 +126,17 @@ export default function DraftRoom() {
   // first run fires too — which is right, since "Analyze Draft" is exactly
   // a request for this screen.
   const [showInsights, setShowInsights] = useState(false)
+  // Which team's report the dashboard is showing. Yours on the auto-open
+  // and from the reopen pill; a board header click opens that column's
+  // team instead. State lives here rather than inside the dashboard so a
+  // header click can pick the team and open the overlay in one gesture.
+  const [insightsSlot, setInsightsSlot] = useState(0)
   useEffect(() => {
-    if (draftIsOver) setShowInsights(true)
-  }, [draftIsOver])
+    if (draftIsOver) {
+      setInsightsSlot(mySlot)
+      setShowInsights(true)
+    }
+  }, [draftIsOver, mySlot])
 
   // Solo autopick's real submission path: the exact same engine.draftPlayer
   // the Draft button uses (draftAndAdvance() underneath), just triggered
@@ -426,6 +434,11 @@ export default function DraftRoom() {
               mySlot={mySlot}
               onClock={onClock}
               teamLabelOf={(slot) => engine.teamLabel(slot)}
+              onTeamClick={
+                draftIsOver
+                  ? (slot) => { setInsightsSlot(slot); setShowInsights(true) }
+                  : undefined
+              }
             />
           </div>
 
@@ -496,13 +509,15 @@ export default function DraftRoom() {
           engine={engine}
           league={league}
           mySlot={mySlot}
+          viewSlot={insightsSlot}
+          onViewSlot={setInsightsSlot}
           onClose={() => setShowInsights(false)}
         />
       )}
       {draftIsOver && !showInsights && (
         <button
           type="button"
-          onClick={() => setShowInsights(true)}
+          onClick={() => { setInsightsSlot(mySlot); setShowInsights(true) }}
           className="fixed left-1/2 top-16 z-[65] -translate-x-1/2 rounded-full border border-teal-400/40 bg-slate-950/90 px-4 py-1.5 text-xs font-semibold text-teal-300 shadow-[0_0_15px_rgba(0,229,255,0.2)] backdrop-blur transition-colors duration-200 hover:border-teal-400 hover:bg-teal-400/10"
         >
           Draft Insights
