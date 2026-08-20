@@ -33,7 +33,32 @@ function adpGap(pick) {
 // to live, never re-derived here.
 function boardArrow(DE, round, slot, teams) {
   if (!DE) return null
-  return DE.pickInRound(round, slot, teams) === teams ? '↓' : (round % 2 === 0 ? '←' : '→')
+  return DE.pickInRound(round, slot, teams) === teams ? 'down' : (round % 2 === 0 ? 'left' : 'right')
+}
+
+/* One glyph, rotated - never three different characters. The down arrow is a
+   vertical stem and the right arrow is a thin cross-stroke, so a face draws
+   the first far heavier than the second: measured in the board's own font
+   (Inter 600), down carries 2.5x the ink of right - 305 pixels against 122.
+   Nothing in CSS repairs that, because it is the glyph and not the styling.
+   A rotated right arrow is the same glyph at the same weight by construction,
+   so all three directions match whatever face the board ends up in.
+
+   aria-hidden because the direction is decoration here: the pick code and the
+   overall number in the same cell already say where the pick sits. */
+const ARROW_SPIN = { right: 'rotate(0deg)', down: 'rotate(90deg)', left: 'rotate(180deg)' }
+
+function Arrow({ dir, className }) {
+  if (!dir) return null
+  return (
+    <span
+      aria-hidden="true"
+      className={className}
+      style={{ display: 'inline-block', transform: ARROW_SPIN[dir] }}
+    >
+      →
+    </span>
+  )
 }
 
 // Gold is identity — CLAUDE.md's "Whose it is, and where the draft is":
@@ -41,11 +66,24 @@ function boardArrow(DE, round, slot, teams) {
 // box-shadow (never border/outline, which eats into border-box padding),
 // and it marks the *whole* column, filled and empty alike, because "when
 // do I pick again" is the question an empty cell has to answer too.
+/* Two pixels of gold and no keyline, which departs from the legacy board's
+   documented pair - and the reason is that this board's surfaces are not that
+   board's surfaces. Measured against every ground a ring actually lands on
+   here (the five translucent position blocks composited over #0B0E14, plus an
+   empty cell), gold runs 11.25:1 at worst against a 3:1 bar, while the
+   #0B1017 keyline measures 1.01 to 1.12. It is invisible, and it was a third
+   of the ring's thickness spent on nothing.
+
+   The keyline earns its place on the legacy board because that one is
+   theme-aware, and a light-theme empty cell is near-white where gold falls to
+   1.26. This board is hardcoded dark - bg-[#0B0E14], no theme variants - so
+   that case does not arise. Give this board a light theme and the pair has to
+   come back: measure before assuming it still does not. */
 function mineRing(isMine, isCurrent) {
   if (!isMine) return ''
   return isCurrent
-    ? 'shadow-[0_0_15px_rgba(0,229,255,0.4),inset_0_0_0_2px_#FFD166,inset_0_0_0_3px_#0B1017]'
-    : 'shadow-[inset_0_0_0_2px_#FFD166,inset_0_0_0_3px_#0B1017]'
+    ? 'shadow-[0_0_15px_rgba(0,229,255,0.4),inset_0_0_0_2px_#FFD166]'
+    : 'shadow-[inset_0_0_0_2px_#FFD166]'
 }
 
 export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLabelOf, onTeamClick }) {
@@ -194,9 +232,7 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
                           (POS_CELL_BLOCK[pick.player.pos] || 'border border-white/10 bg-white/[0.04] text-white/90')
                         }
                       >
-                        {arrow && (
-                          <span className="absolute right-1 top-0.5 text-[9px] opacity-40">{arrow}</span>
-                        )}
+                        <Arrow dir={arrow} className="absolute right-1 top-0.5 text-[9px] opacity-40" />
                         <div className="flex items-center justify-between gap-1 leading-none">
                           <span className="flex items-center gap-1 text-[10px] font-bold">
                             {pick.player.pos}
@@ -224,18 +260,14 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
                           <span className="absolute left-1 top-0.5 text-[10px] font-normal normal-case text-teal-300/60">{overall}</span>
                         )}
                         On the clock
-                        {arrow && (
-                          <span className="absolute right-1 top-0.5 text-[9px] font-normal normal-case text-teal-300/60">{arrow}</span>
-                        )}
+                        <Arrow dir={arrow} className="absolute right-1 top-0.5 text-[9px] font-normal normal-case text-teal-300/60" />
                       </motion.div>
                     ) : (
                       <div className="relative h-full min-h-[46px] rounded-md border border-dashed border-slate-800">
                         {overall != null && (
                           <span className="absolute left-1 top-0.5 text-[10px] text-slate-500">{overall}</span>
                         )}
-                        {arrow && (
-                          <span className="absolute right-1 top-0.5 text-[9px] text-white/20">{arrow}</span>
-                        )}
+                        <Arrow dir={arrow} className="absolute right-1 top-0.5 text-[9px] text-white/20" />
                       </div>
                     )}
                   </div>
