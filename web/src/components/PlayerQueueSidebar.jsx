@@ -48,7 +48,17 @@ const GRID_COLS = 'lg:grid lg:grid-cols-[minmax(120px,1fr)_40px_44px_32px_64px] 
 export const SORT_COLUMNS = [
   { key: 'adp', label: 'ADP', dir: 'asc' },
   { key: 'pts', label: 'Proj Pts', dir: 'desc' },
-  { key: 'value', label: 'Value', dir: 'desc' },
+  /* "VORP", not "Value" — the column is the Juke score, which is value
+     over a replacement starter, and calling it Value made a 0 read as
+     "worthless, do not draft." It is not: Justin Herbert projects 338
+     points and scores 0 because he is QB11 in a league that starts ten
+     quarterbacks, so the eleventh-best is free. The market agrees — his
+     ADP is 108. Naming the measure is what makes the number legible,
+     and it is the same fix as giving the floor a name rather than
+     re-curving the scale. Not to be confused with the grade's own
+     "Value" component (draft-value, pick number vs board rank), which
+     keeps that name in the Insights dashboard. */
+  { key: 'value', label: 'VORP', dir: 'desc' },
 ]
 
 // Derived rather than a second hand-written copy, so DraftRoom.jsx (which
@@ -415,7 +425,7 @@ export default function PlayerQueueSidebar({
                   <p className="min-w-0 flex-1 truncate text-[11px] text-white/40">
                     {adp && <span>ADP {adp}</span>}
                     {pts != null && <span> · {pts.toFixed(1)} pts</span>}
-                    {value != null && <span> · Value {Math.round(value)}</span>}
+                    {value != null && <span> · VORP {Math.round(value)}</span>}
                   </p>
                   {draftedBy ? (
                     <span className="shrink-0 rounded-lg border border-slate-800 bg-slate-950/60 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-white/30">

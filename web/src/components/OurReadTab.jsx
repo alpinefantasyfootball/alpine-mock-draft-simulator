@@ -55,7 +55,15 @@ export default function OurReadTab({ engine, player }) {
     )
   }
 
-  const belowReplacement = r.gap !== null && r.gap < 0
+  /* Three bands, not two. A gap of exactly 0 is the case that reads worst
+     as a bare score — Justin Herbert projects 338 points and lands here
+     because he is QB11 in a league that starts ten quarterbacks — so it
+     belongs with "about replacement level", not with the genuinely
+     positive gaps. 20 points is roughly three games across a season:
+     inside that band either way, the honest sentence is "you can wait". */
+  const nearReplacement = r.gap !== null && r.gap <= 0 && Math.abs(r.gap) <= 20
+  const belowReplacement = r.gap !== null && r.gap < 0 && Math.abs(r.gap) > 20
+  const aboveReplacement = r.gap !== null && r.gap > 0
   const scoreTone =
     r.score === null ? 'text-white/40' : r.score >= 55 ? 'text-teal-300' : r.score >= 18 ? 'text-white/80' : 'text-white/50'
 
@@ -85,6 +93,23 @@ export default function OurReadTab({ engine, player }) {
                 0 reading as "worthless": it names the floor and gives the
                 distance to it, which is the only thing separating two
                 players who both score 0. */}
+            {/* A near-replacement player at a shallow position is the case
+                that reads worst as a bare 0 — Justin Herbert projects 338
+                points and scores 0 because he is QB11 in a league that
+                starts ten quarterbacks. That is scarcity, not a low
+                opinion of him, and it needs saying in those words rather
+                than the generic below-replacement note. 20 points is
+                roughly three games' difference over a season: inside it,
+                the honest sentence is "you can wait". */}
+            {nearReplacement && (
+              <p className="mt-2 text-[11px] leading-relaxed text-amber-300/80">
+                <span className="font-semibold">About replacement level</span> — this is roughly what a
+                freely available {player.pos} is worth, because startable {player.pos} territory runs to{' '}
+                <span className="font-semibold">{r.replacementRank}</span> on this board. The projected
+                points are real; a low score here means you can wait rather than spend a pick, not that
+                the player is bad.
+              </p>
+            )}
             {belowReplacement && (
               <p className="mt-2 text-[11px] leading-relaxed text-amber-300/80">
                 <span className="font-semibold">Below replacement</span> — {Math.abs(r.gap)} points under a
@@ -94,7 +119,7 @@ export default function OurReadTab({ engine, player }) {
                 were above replacement the next.
               </p>
             )}
-            {!belowReplacement && r.gap !== null && (
+            {aboveReplacement && (
               <p className="mt-2 text-[11px] leading-relaxed text-teal-300/80">
                 <span className="font-semibold">+{r.gap} points</span> above a replacement starter — startable{' '}
                 {player.pos} territory begins at{' '}
