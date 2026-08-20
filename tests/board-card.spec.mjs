@@ -17,7 +17,7 @@
 */
 
 import { test, expect } from "@playwright/test";
-import { openApp } from "./helpers.mjs";
+import { openApp, LEGACY_VIEW } from "./helpers.mjs";
 
 /* The headshots come from sleepercdn, so every test here stubs it. Not to
    avoid the network: to make the answer the same on a machine that can reach
@@ -51,7 +51,7 @@ async function draftInto(page, picks, teams = 10) {
 test.describe("the draft board card", () => {
   test("every line clears 4.5:1 on its own solid, opacity composited",
     async ({ context }) => {
-      const page = await openApp(context);
+      const page = await openApp(context, LEGACY_VIEW);
       await stubFaces(page);
       await draftInto(page, 60);
 
@@ -102,7 +102,7 @@ test.describe("the draft board card", () => {
 
   test("the name is an initial and a surname, and a defense keeps its club",
     async ({ context }) => {
-      const page = await openApp(context);
+      const page = await openApp(context, LEGACY_VIEW);
       await stubFaces(page);
       await draftInto(page, 20);
 
@@ -131,7 +131,7 @@ test.describe("the draft board card", () => {
     });
 
   test("the arrow turns down on the last pick of every round", async ({ context }) => {
-    const page = await openApp(context);
+    const page = await openApp(context, LEGACY_VIEW);
     await stubFaces(page);
     await draftInto(page, 40);
 
@@ -175,7 +175,7 @@ test.describe("the draft board card", () => {
   });
 
   test("the pick on the card is the pick the app computed", async ({ context }) => {
-    const page = await openApp(context);
+    const page = await openApp(context, LEGACY_VIEW);
     await stubFaces(page);
     await draftInto(page, 45);
 
@@ -196,7 +196,7 @@ test.describe("the draft board card", () => {
 
   test("a face is drawn per card, and a failed one leaves no hole",
     async ({ context }) => {
-      const good = await openApp(context);
+      const good = await openApp(context, LEGACY_VIEW);
       await stubFaces(good);
       await draftInto(good, 30);
 
@@ -218,7 +218,7 @@ test.describe("the draft board card", () => {
          removes the element rather than leaving a broken-image box, and the
          foot closes up because the face was positioned by a margin rather
          than by a spacer. */
-      const bad = await openApp(context);
+      const bad = await openApp(context, LEGACY_VIEW);
       await stubFaces(bad, { fail: true });
       await draftInto(bad, 30);
       await bad.waitForTimeout(1200);
@@ -235,7 +235,7 @@ test.describe("the draft board card", () => {
     });
 
   test("a filled row is the same height as an empty one", async ({ context }) => {
-    const page = await openApp(context);
+    const page = await openApp(context, LEGACY_VIEW);
     await stubFaces(page);
     await draftInto(page, 15);
 

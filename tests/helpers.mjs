@@ -141,7 +141,13 @@ export function clickHidden(page, id) {
   return page.evaluate((id) => document.getElementById(id).click(), id);
 }
 
-export async function openApp(context, path = "#/draft") {
+/* Two doors on purpose. The default is the real product; LEGACY_VIEW is the
+   retired vanilla board, which is unreachable in the UI but still rendered by
+   app.js and still covered by the board-card and board-marks specs. Those
+   specs pass it explicitly. Anything testing the product must NOT. */
+export const LEGACY_VIEW = "#/draft-legacy";
+
+export async function openApp(context, path = "#/draft-room") {
   const page = await context.newPage();
   await page.addInitScript(instrumentation);
   await page.goto(`${SITE}/index.html${path}`);

@@ -20,6 +20,11 @@ async function twoManagers(browser) {
   const code = await createRoom(host);
 
   const guestCtx = await browser.newContext();
+  // Deliberately the PRE-RETIREMENT invite shape. #/draft redirects to
+  // #/draft-room now, and every invite sent before that change looks like
+  // this — so this line is the regression test for the redirect carrying the
+  // room code across. Do not "modernise" it; the other join in this file
+  // already uses the new shape.
   const guest = await openApp(guestCtx, `#/draft?room=${code}`);
   await guest.waitForFunction(() => Live.room() && Live.room().yourSeat >= 0);
 
@@ -143,7 +148,7 @@ test("leaving the draft leaves the room, and the link brings you back", async ({
   await host.evaluate(() => goHome());
 
   expect(await host.evaluate(() => Live.status()), "the room was actually left").toBe("off");
-  expect(await host.evaluate(() => location.hash), "and the code is out of the address").toBe("#/draft");
+  expect(await host.evaluate(() => location.hash), "and the code is out of the address").toBe("#/draft-room");
 
   // The bug was being dragged back by the next broadcast a moment later.
   await host.waitForTimeout(6000);
@@ -151,7 +156,7 @@ test("leaving the draft leaves the room, and the link brings you back", async ({
 
   // The way back in is the link, and it arrives as a hash change on a tab
   // that is already on the site — which is the case that used to do nothing.
-  await host.evaluate((c) => { location.hash = `#/draft?room=${c}`; }, code);
+  await host.evaluate((c) => { location.hash = `#/draft-room?room=${c}`; }, code);
   await host.waitForFunction(() => Live.status() === "open", null, { timeout: 30000 });
 
   const back = await roomView(host);

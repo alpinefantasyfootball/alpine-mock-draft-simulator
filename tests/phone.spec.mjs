@@ -5,7 +5,7 @@
    having them here. */
 
 import { test, expect, devices } from "@playwright/test";
-import { openApp, createRoom, clickLegacyStart } from "./helpers.mjs";
+import { openApp, createRoom, clickLegacyStart, LEGACY_VIEW } from "./helpers.mjs";
 
 /* The phone is emulated on Chromium rather than run on WebKit.
 
@@ -22,7 +22,7 @@ const PHONE = { ...devices["iPhone 13"], defaultBrowserType: undefined };
 
 test("no field is under 16px, or iOS zooms in and stays there", async ({ browser }) => {
   const context = await browser.newContext(PHONE);
-  const page = await openApp(context);
+  const page = await openApp(context, LEGACY_VIEW);
 
   // A coarse pointer is what the rule keys on, so a test on a fine one proves
   // nothing about the phone it was written for.
@@ -44,7 +44,7 @@ test("no field is under 16px, or iOS zooms in and stays there", async ({ browser
 
 test("the lobby chat does not sit on top of the Start button", async ({ browser }) => {
   const context = await browser.newContext(PHONE);
-  const page = await openApp(context);
+  const page = await openApp(context, LEGACY_VIEW);
   await createRoom(page);
 
   /* `top: 8px` from the docked chat's sticky rule survives into the lobby's
@@ -63,7 +63,7 @@ test("the lobby chat does not sit on top of the Start button", async ({ browser 
 
 test("nothing overflows sideways that cannot scroll or ellipsise", async ({ browser }) => {
   const context = await browser.newContext(PHONE);
-  const page = await openApp(context);
+  const page = await openApp(context, LEGACY_VIEW);
   await clickLegacyStart(page);
   await page.waitForTimeout(500);
 

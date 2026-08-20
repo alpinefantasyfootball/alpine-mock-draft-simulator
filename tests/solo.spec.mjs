@@ -8,7 +8,7 @@
    a single pick. */
 
 import { test, expect } from "@playwright/test";
-import { openApp, setLegacyField, clickLegacyStart } from "./helpers.mjs";
+import { openApp, setLegacyField, clickLegacyStart, LEGACY_VIEW } from "./helpers.mjs";
 
 async function runSoloDraft(page, setup) {
   await page.evaluate(async (fields) => {
@@ -48,7 +48,7 @@ async function runSoloDraft(page, setup) {
 
 test("the default league drafts to the end", async ({ browser }) => {
   const context = await browser.newContext();
-  const page = await openApp(context);
+  const page = await openApp(context, LEGACY_VIEW);
 
   const out = await runSoloDraft(page, {});
 
@@ -68,7 +68,7 @@ test("the default league drafts to the end", async ({ browser }) => {
    league the app will not run. */
 test("twelve teams, fifteen rounds, full PPR, bench six", async ({ browser }) => {
   const context = await browser.newContext();
-  const page = await openApp(context);
+  const page = await openApp(context, LEGACY_VIEW);
 
   const out = await runSoloDraft(page, {
     teamCount: 12, roundCount: 15, scoring: "ppr", benchCount: 6
@@ -98,7 +98,7 @@ test("twelve teams, fifteen rounds, full PPR, bench six", async ({ browser }) =>
 for (const pos of ["ALL", "QB", "RB", "WR", "TE", "K", "DST"]) {
   test(`auto-draft finishes with the ${pos} filter showing`, async ({ browser }) => {
     const context = await browser.newContext();
-    const page = await openApp(context);
+    const page = await openApp(context, LEGACY_VIEW);
 
     await setLegacyField(page, "teamCount", "12");
     await setLegacyField(page, "draftSlot", "10");        // the 11th spot
@@ -157,7 +157,7 @@ for (const pos of ["ALL", "QB", "RB", "WR", "TE", "K", "DST"]) {
    lineup being wrong moves everybody's grade. */
 test("every lineup fields the best eligible player", async ({ browser }) => {
   const context = await browser.newContext();
-  const page = await openApp(context);
+  const page = await openApp(context, LEGACY_VIEW);
 
   await setLegacyField(page, "teamCount", "12");
   await clickLegacyStart(page);
@@ -201,7 +201,7 @@ test("every lineup fields the best eligible player", async ({ browser }) => {
 
 test("solo still says 'Auto-draft the rest', because solo it is the truth", async ({ browser }) => {
   const context = await browser.newContext();
-  const page = await openApp(context);
+  const page = await openApp(context, LEGACY_VIEW);
   await clickLegacyStart(page);
   await expect(page.locator("#autoBtn")).toHaveText("Auto-draft the rest");
   await context.close();
@@ -219,7 +219,7 @@ test("solo still says 'Auto-draft the rest', because solo it is the truth", asyn
    board actually allows — because the bug was entirely the gap between them. */
 test("a filled starting slot is not a cap, and does not claim to be", async ({ browser }) => {
   const context = await browser.newContext();
-  const page = await openApp(context);
+  const page = await openApp(context, LEGACY_VIEW);
   await clickLegacyStart(page);
 
   const out = await page.evaluate(async () => {
@@ -309,7 +309,7 @@ test("a filled starting slot is not a cap, and does not claim to be", async ({ b
    the players it was telling you about. */
 test("the rail's My Team goes to My Team", async ({ browser }) => {
   const context = await browser.newContext();
-  const page = await openApp(context);
+  const page = await openApp(context, LEGACY_VIEW);
   await clickLegacyStart(page);
 
   await page.evaluate(() => {

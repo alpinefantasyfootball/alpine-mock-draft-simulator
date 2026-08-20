@@ -373,7 +373,11 @@ syncSoundButton();
 
 /* ---- 2c. The site shell ---------------------------------
    Two views behind one hash route: the landing page at "#/"
-   and the Draft Room at "#/draft".
+   and the Draft Room at "#/draft-room".
+
+   "#/draft" was the Draft Room and is retired -- applyRoute()
+   redirects it. Its markup (#view-app) is still here and still
+   written to on every render; it is unreachable, not deleted.
 
    Hash routing rather than real paths. It was forced at first
    -- GitHub Pages has no rewrite to send /draft back to
@@ -541,12 +545,26 @@ function toggleRooms() {
 /* The hash can now carry an invite code — #/draft?room=ABC — so the path
    is read up to the query rather than compared whole. #/draft on its own
    still means what it always did. */
+/* "draft-legacy" is not a route anybody is meant to find. #/draft is retired
+   and redirects (see applyRoute), but the vanilla board it used to show is
+   still live code - app.js renders into it on every tick - and it still has
+   about twenty tests written against it that encode real, hard-won lessons:
+   the row-height rule, the face that removes itself, the gold ring pair.
+   Retiring the route without a door would have quietly deleted all of them,
+   which is a much bigger decision than the one being made here.
+
+   So the old view keeps an address that only the suite uses. Nothing in the
+   product links to it and nothing should. It goes away when those specs are
+   rewritten against the React board, which is real work and is not this
+   change. */
 function route() {
   const path = location.hash.replace(/^#\/?/, "").split("?")[0];
-  return path === "draft" ? "draft" : "home";
+  return (path === "draft" || path === "draft-legacy") ? "draft" : "home";
 }
 
-function go(where) { location.hash = where === "draft" ? "#/draft" : "#/"; }
+// No callers today. Kept pointing at the live route so it cannot
+// quietly resurrect the retired one if something calls it later.
+function go(where) { location.hash = where === "draft" ? "#/draft-room" : "#/"; }
 
 /* #/draft-room is the new React draft room (web/src/components/DraftRoom.jsx,
    mounted into #draftroom-root — see the comment beside that id in
@@ -562,6 +580,37 @@ function onDraftRoomRoute() {
 }
 
 function applyRoute() {
+  /* #/draft is retired. Every Draft Room feature built since the React
+     rewrite lives only on #/draft-room, so the old route was a second,
+     older product still reachable from a bookmark, a shared link, or the
+     resume banner - and it looked enough like the real thing that somebody
+     landing there would not know they were on it.
+
+     The redirect sits at the router rather than at each caller because the
+     callers are not the whole problem: a link someone saved last week is,
+     and no amount of editing this file reaches that. replace() rather than
+     assignment, so the dead route does not become a back-button trap
+     between the two rooms.
+
+     The #view-app markup stays exactly where it is. It is unreachable now,
+     not deleted - app.js is a classic script and renderHeader(),
+     renderInvite() and a dozen listeners still write into those ids on
+     every render, so deleting them throws and takes the whole boot
+     sequence with it. Unreachable is the goal; absent is a different and
+     much larger change. */
+  if (location.hash.replace(/^#\/?/, "").split("?")[0] === "draft") {
+    /* Carry the hash's own query across. An invite link is
+       "#/draft?room=ABC1" and route() strips the query to decide the path,
+       so redirecting to a bare "#/draft-room" would silently drop the room
+       code and drop a guest onto an empty setup screen instead of into the
+       draft they were invited to. Every invite sent before today is exactly
+       that shape, which is the whole reason this redirect exists. */
+    const q = location.hash.indexOf("?");
+    const tail = q >= 0 ? location.hash.slice(q) : "";
+    location.replace(location.pathname + location.search + "#/draft-room" + tail);
+    return;
+  }
+
   const onDraft = route() === "draft";
 
   shellbar.hidden = onDraft;
@@ -618,7 +667,7 @@ function renderHome() {
   bar.innerHTML =
     "<div><p><b>" + (done ? "Your finished draft" : "You have a draft in progress") + "</b></p>" +
     '<p class="sub">' + settingsText(saved) + " \u00b7 " + made + " of " + total + " picks</p></div>" +
-    '<div class="btnrow"><a class="cta" href="#/draft">' +
+    '<div class="btnrow"><a class="cta" href="#/draft-room">' +
     (done ? "Reopen it" : "Resume") + "</a></div>";
 }
 
@@ -1974,7 +2023,7 @@ function goHome() {
      on the setup screen rather than walking straight back in. */
   if (typeof Live !== "undefined" && Live.room()) {
     Live.disconnect();
-    if (location.hash.indexOf("room=") >= 0) location.hash = "#/draft";
+    if (location.hash.indexOf("room=") >= 0) location.hash = "#/draft-room";
     renderInvite();
     renderChat();
   }
@@ -6264,7 +6313,7 @@ $("copyLinkBtn").addEventListener("click", function () {
 
 $("leaveRoomBtn").addEventListener("click", function () {
   Live.disconnect();
-  location.hash = "#/draft";
+  location.hash = "#/draft-room";
   renderInvite();
   renderChat();
   refreshSetup();

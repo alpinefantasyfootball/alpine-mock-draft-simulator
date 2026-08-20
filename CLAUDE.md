@@ -1056,9 +1056,42 @@ way, not reasoned about.
   a light-theme fade loses its contrast on the way down. The product shot is
   the exception and fades itself, on purpose, with its own mask.
 
-- **Two views, one hash route.** `#/` is the landing page, `#/draft` is the
-  Draft Room. `applyRoute()` is the only thing that decides what is visible;
-  `render()` must never fight it.
+- **Two views, one hash route.** `#/` is the landing page, `#/draft-room` is
+  the Draft Room. `applyRoute()` is the only thing that decides what is
+  visible; `render()` must never fight it.
+
+  **`#/draft` is retired, and it was a whole second product.** It was the
+  Draft Room, and every feature built since the React rewrite — the new
+  settings screen, the Locker, Draft Fit, the Insights dashboard, the
+  horizontal desktop layout — exists only on `#/draft-room`. The old route
+  went on rendering `#view-app` perfectly happily, which is what made it
+  dangerous: somebody landing there saw a working draft room, just last
+  month's one, with nothing on screen to say so. It was still reachable from
+  a bookmark, a shared link, and — the live path — the homepage's own resume
+  banner, which pointed at it until this change. Reported as "my friend is
+  still seeing the old draft room", which is exactly what was happening.
+
+  `applyRoute()` redirects it now. **The redirect lives at the router, not
+  at the callers**, because the callers were never the whole problem: a link
+  somebody saved last week is, and no edit to `app.js` reaches that. It uses
+  `location.replace()` so the dead route cannot become a back-button trap
+  bouncing between the two rooms.
+
+  **And it has to carry the hash's own query.** An invite is
+  `#/draft?room=ABC1`, and `route()` strips the query to decide the path — so
+  a redirect to a bare `#/draft-room` silently drops the room code and lands
+  a guest on an empty setup screen instead of in the draft they were invited
+  to. Every invite sent before the change is that shape, which is most of the
+  reason the redirect exists at all. `tests/room.spec.mjs` keeps one guest
+  join on the **old** link shape on purpose, as the regression test for it;
+  the comment there says not to modernise it.
+
+  **`#view-app` is unreachable, not deleted.** `app.js` is a classic script
+  and `renderHeader()`, `renderInvite()` and a dozen listeners still write
+  into those ids on every render — deleting the markup throws and takes the
+  whole boot sequence with it, drafting included. Same rule as `#shellbar`
+  and the legacy `.setup`. Unreachable is the goal; absent is a different and
+  much larger change.
 
   Hash routing was originally forced: GitHub Pages has no rewrite to send a
   real `/draft` path back to `index.html`. **That constraint is gone** — a

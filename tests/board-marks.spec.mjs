@@ -21,7 +21,7 @@
 */
 
 import { test, expect } from "@playwright/test";
-import { openApp } from "./helpers.mjs";
+import { openApp, LEGACY_VIEW } from "./helpers.mjs";
 
 async function draftInto(page, picks) {
   await page.evaluate((n) => {
@@ -54,7 +54,7 @@ const CONTRAST = `
 test.describe("the board's two rings", () => {
   test("your column is marked all the way down, drafted or not",
     async ({ context }) => {
-      const page = await openApp(context);
+      const page = await openApp(context, LEGACY_VIEW);
       await draftInto(page, 26);
 
       const r = await page.evaluate(() => {
@@ -84,7 +84,7 @@ test.describe("the board's two rings", () => {
 
   test("the live ring is on the pick that is on the clock, and moves with it",
     async ({ context }) => {
-      const page = await openApp(context);
+      const page = await openApp(context, LEGACY_VIEW);
       await draftInto(page, 26);
 
       const first = await page.evaluate(() => {
@@ -111,7 +111,7 @@ test.describe("the board's two rings", () => {
     async ({ browser }) => {
       for (const theme of ["dark", "light"]) {
         const context = await browser.newContext();
-        const page = await openApp(context);
+        const page = await openApp(context, LEGACY_VIEW);
         await draftInto(page, 60);
         await page.evaluate((t) => document.documentElement.setAttribute("data-theme", t), theme);
 
@@ -163,7 +163,7 @@ test.describe("the board's two rings", () => {
 test.describe("what the board tells you about everybody else", () => {
   test("the roster strip counts what each team holds, and skips the two the app schedules itself",
     async ({ context }) => {
-      const page = await openApp(context);
+      const page = await openApp(context, LEGACY_VIEW);
       // Deep enough that kickers and defenses are legal and actually drafted.
       await draftInto(page, 140);
 
@@ -207,7 +207,7 @@ test.describe("what the board tells you about everybody else", () => {
     async ({ browser }) => {
       for (const theme of ["dark", "light"]) {
         const context = await browser.newContext();
-        const page = await openApp(context);
+        const page = await openApp(context, LEGACY_VIEW);
         await draftInto(page, 60);
         await page.evaluate((t) => document.documentElement.setAttribute("data-theme", t), theme);
 
@@ -245,7 +245,7 @@ test.describe("what the board tells you about everybody else", () => {
 
   test("the number in the corner is the pick that cell really is",
     async ({ context }) => {
-      const page = await openApp(context);
+      const page = await openApp(context, LEGACY_VIEW);
       await draftInto(page, 26);
 
       const r = await page.evaluate(() => {
