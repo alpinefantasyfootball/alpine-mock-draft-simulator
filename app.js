@@ -409,7 +409,15 @@ const SEASONS = ["Pre-season", "In-season", "Post-season"];
    its own — power rankings mid-season overlap with what the other rooms
    already tell you — and because that leaves no phase standing empty. */
 const ROOMS = [
-  { name: "The Draft Room", href: "#/draft", live: true, season: "Pre-season",
+  // #/draft-room, not #/draft: that's the legacy vanilla route
+  // applyRoute() still toggles (#view-app, hidden-not-deleted DOM — see
+  // CLAUDE.md), but every real Draft Room feature built since the React
+  // rewrite only exists on #/draft-room (DraftRoom.jsx, outside
+  // applyRoute() entirely — see main.jsx). This one string is read by both
+  // the header's rooms panel and the homepage's room-door section (see
+  // RoomNavigation.jsx), so it was the single place sending every "start a
+  // draft" entry point in the product back to the old page.
+  { name: "The Draft Room", href: "#/draft-room", live: true, season: "Pre-season",
     blurb: "Mock drafts against a board that knows ADP, tiers and replacement level." },
   { name: "The Prospect Room", live: false, season: "Pre-season",
     blurb: "College production turned into an NFL projection, before the rookie drafts." },

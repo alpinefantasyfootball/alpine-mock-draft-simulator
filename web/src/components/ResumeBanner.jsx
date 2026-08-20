@@ -37,8 +37,13 @@ export default function ResumeBanner() {
             {engine ? engine.settingsText(save.league) : ''} &middot; {made} of {total} picks
           </p>
         </div>
+        {/* #/draft-room, not #/draft — see the comment on ROOMS[0].href in
+            app.js. A save resumed onto the legacy route would still work
+            (state.started reads the same localStorage save either way),
+            it would just silently drop a returning manager onto the page
+            none of this session's work touched. */}
         <a
-          href="#/draft"
+          href="#/draft-room"
           className="rounded-full bg-gradient-to-r from-[#00E5FF] to-[#7B1FA2] px-5 py-2 text-sm font-semibold text-white
                      shadow-glass transition-all duration-200 hover:scale-105"
         >

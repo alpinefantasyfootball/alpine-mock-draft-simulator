@@ -70,8 +70,11 @@ export default function Hero() {
         </p>
 
         <div className="mt-9 flex flex-wrap items-center gap-6">
+          {/* #/draft-room, not #/draft — see the comment on ROOMS[0].href
+              in app.js. This is the product's actual "start" button, so it
+              was the most direct way this bug shipped. */}
           <a
-            href="#/draft"
+            href="#/draft-room"
             className="rounded-full bg-gradient-to-r from-[#00E5FF] to-[#7B1FA2] px-7 py-3.5 text-base font-semibold text-white
                        shadow-glass transition-all duration-200 hover:scale-105 hover:shadow-[0_0_15px_rgba(0,229,255,0.4)]"
           >
