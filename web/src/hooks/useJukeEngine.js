@@ -1,0 +1,27 @@
+import { useEffect, useReducer, useState } from 'react'
+
+// Shared by every React island that reads window.JukeEngine (DraftSettings'
+// own tree, the header). Was two copies — one per component that needed it
+// — which is the same class of drift CLAUDE.md already has a rule about for
+// league shape: one implementation, handed out rather than duplicated.
+export function useEngine() {
+  const [ready, setReady] = useState(false)
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.JukeEngine) setReady(true)
+  }, [])
+  return ready ? window.JukeEngine : null
+}
+
+// "juke:header" fires from renderHeader() on every render, tick and pause
+// toggle — including the render() inside onRoomChange() (see the bridge
+// comment on room()/createRoom() in app.js) and the render() refreshSetup()
+// runs on the way back to the setup screen — so anything reading engine
+// state can re-render on any of those without registering a second listener.
+export function useJukeTick(engine) {
+  const [, force] = useReducer((x) => x + 1, 0)
+  useEffect(() => {
+    if (!engine) return
+    window.addEventListener('juke:header', force)
+    return () => window.removeEventListener('juke:header', force)
+  }, [engine])
+}

@@ -1,18 +1,14 @@
+import { useReducer, useState } from 'react'
+import { useEngine, useJukeTick } from '../hooks/useJukeEngine.js'
 import DraftHistoryCard from './DraftHistoryCard.jsx'
+import DraftInProgressCard from './DraftInProgressCard.jsx'
 
-// No real draft-history persistence exists yet — app.js's SAVE_KEY holds
-// exactly one draft (the current one), never a log of past ones. This is
-// sample data standing in for that feature, the same way the homepage's
-// prototype content did before it was wired to window.JukeEngine — it
-// should be replaced wholesale once a real history store exists, not
-// extended in place.
-const SAMPLE_DRAFTS = [
-  { id: 'sample-1', leagueType: '12-Team PPR', pickPosition: '4th', dateCompleted: 'Aug 12, 2026', projectedRank: '3rd' },
-  { id: 'sample-2', leagueType: '10-Team Half PPR', pickPosition: '9th', dateCompleted: 'Aug 5, 2026', projectedRank: '1st' },
-  { id: 'sample-3', leagueType: '14-Team Standard', pickPosition: '1st', dateCompleted: 'Jul 28, 2026', projectedRank: '6th' },
+const TABS = [
+  { key: 'progress', label: 'In Progress' },
+  { key: 'completed', label: 'Completed' },
 ]
 
-function EmptyLocker() {
+function EmptyState({ title, body }) {
   const scrollToForm = () => {
     document.getElementById('configure-draft')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
@@ -34,10 +30,8 @@ function EmptyLocker() {
       </svg>
 
       <div>
-        <p className="font-display text-base font-semibold text-white">Your locker is empty</p>
-        <p className="mx-auto mt-2 max-w-xs text-sm leading-relaxed text-white/50">
-          Finish a mock draft and it lands here — league type, your slot, and how the board graded it.
-        </p>
+        <p className="font-display text-base font-semibold text-white">{title}</p>
+        <p className="mx-auto mt-2 max-w-xs text-sm leading-relaxed text-white/50">{body}</p>
       </div>
 
       <button
@@ -53,7 +47,29 @@ function EmptyLocker() {
 }
 
 export default function DraftLocker() {
-  const drafts = SAMPLE_DRAFTS
+  const engine = useEngine()
+  useJukeTick(engine)
+  const [view, setView] = useState('progress')
+  // clearSave() is a plain localStorage write with no juke:header event
+  // behind it (nothing else in app.js needs to hear about it), so the one
+  // save slot this reads doesn't get an automatic re-render — this forces
+  // one immediately after Discard rather than leaving a stale card up until
+  // some unrelated engine event happens to sweep through.
+  const [, forceLocal] = useReducer((x) => x + 1, 0)
+
+  const inProgress = engine ? engine.inProgressSummary() : null
+  const completed = engine ? engine.historyList() : []
+
+  // openHistoryDraft() and resumeSavedDraft() both switch the whole screen
+  // over to the Draft Room's own view (Analysis for a finished draft, the
+  // board for one still running) — app.js's own DOM takes it from here.
+  const analyze = (id) => { if (engine) engine.openHistoryDraft(id) }
+  const resume = () => { if (engine) engine.resumeSavedDraft() }
+  const discard = () => {
+    if (!engine) return
+    engine.clearSave()
+    forceLocal()
+  }
 
   return (
     <div className="relative flex h-full flex-col overflow-hidden rounded-2xl border border-white/10 bg-charcoal/60">
@@ -64,16 +80,49 @@ export default function DraftLocker() {
 
       <div className="relative shrink-0 border-b border-white/5 px-6 py-5">
         <h2 className="font-display text-xl font-bold text-white">Your Draft Locker</h2>
-        <p className="mt-1 text-sm text-white/50">Every mock you've run, and how it graded out.</p>
+        <p className="mt-1 text-sm text-white/50">Every mock you've run — in progress or done.</p>
       </div>
 
-      {drafts.length === 0 ? (
-        <EmptyLocker />
+      <div className="relative flex shrink-0 justify-center border-b border-white/5 px-6 py-4">
+        <div className="inline-flex rounded-full border border-slate-800 bg-slate-950/60 p-1">
+          {TABS.map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setView(tab.key)}
+              aria-pressed={view === tab.key}
+              className={
+                'rounded-full px-5 py-2 text-sm font-semibold transition-colors duration-150 ' +
+                (view === tab.key ? 'bg-teal-500 text-obsidian' : 'text-white/50')
+              }
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {view === 'progress' ? (
+        inProgress ? (
+          <div className="relative flex-1 overflow-y-auto px-6 py-5">
+            <DraftInProgressCard draft={inProgress} onResume={resume} onDiscard={discard} />
+          </div>
+        ) : (
+          <EmptyState
+            title="Nothing in progress"
+            body="Start a mock and it'll sit here while you draft, so you can pick up right where you left off."
+          />
+        )
+      ) : completed.length === 0 ? (
+        <EmptyState
+          title="Your locker is empty"
+          body="Finish a mock draft and it lands here — league type, your slot, and how the board graded it."
+        />
       ) : (
         <div className="relative flex-1 overflow-y-auto px-6 py-5">
           <div className="flex flex-col gap-3">
-            {drafts.map((draft) => (
-              <DraftHistoryCard key={draft.id} draft={draft} />
+            {completed.map((draft) => (
+              <DraftHistoryCard key={draft.id} draft={draft} onAnalyze={() => analyze(draft.id)} />
             ))}
           </div>
         </div>

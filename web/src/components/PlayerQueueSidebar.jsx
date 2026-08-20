@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { ChevronDown, ChevronUp, Search, Star } from 'lucide-react'
+import { Bookmark, ChevronDown, ChevronUp, Search, Star } from 'lucide-react'
 import { POS_BADGE, POS_LIST } from './draftRoomPositions.js'
 import JukeValueAssistant from './JukeValueAssistant.jsx'
 
@@ -67,6 +67,12 @@ export default function PlayerQueueSidebar({
   onSearch,
   posFilter,
   onPosFilter,
+  expBand,
+  onExpBand,
+  watchlistOnly,
+  onWatchlistOnly,
+  showDrafted,
+  onShowDrafted,
   pointsFor,
   valueFor,
   photoFor,
@@ -75,6 +81,7 @@ export default function PlayerQueueSidebar({
   myTurn,
   queuedNames,
   onToggleQueue,
+  draftedByFor,
   onSelectPlayer,
   sortBy,
   sortDir,
@@ -129,6 +136,59 @@ export default function PlayerQueueSidebar({
               {pos === 'ALL' ? 'All' : pos}
             </button>
           ))}
+        </div>
+
+        {/* A second, independent dimension from position — "RB rookies I'm
+            watching" is a real combination, which a single-select list
+            can't hold. Rookies/Veterans stays exclusive with itself (a
+            player can't be both); Watchlist and Drafted are plain toggles
+            that combine freely with everything else here. */}
+        <div className="flex flex-wrap gap-1.5">
+          {[
+            { key: 'rookie', label: 'Rookies' },
+            { key: 'veteran', label: 'Veterans' },
+          ].map((b) => (
+            <button
+              key={b.key}
+              type="button"
+              onClick={() => onExpBand(expBand === b.key ? 'all' : b.key)}
+              className={
+                'rounded-full px-3 py-1 text-xs font-semibold transition-colors duration-150 ' +
+                (expBand === b.key
+                  ? 'bg-teal-500 text-obsidian'
+                  : 'bg-white/5 text-white/50 hover:bg-white/10 hover:text-white')
+              }
+            >
+              {b.label}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => onWatchlistOnly(!watchlistOnly)}
+            aria-pressed={watchlistOnly}
+            className={
+              'flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold transition-colors duration-150 ' +
+              (watchlistOnly
+                ? 'bg-amber-400/90 text-obsidian'
+                : 'bg-white/5 text-white/50 hover:bg-white/10 hover:text-white')
+            }
+          >
+            <Bookmark className={'h-3 w-3 ' + (watchlistOnly ? 'fill-obsidian' : '')} />
+            Watchlist
+          </button>
+          <button
+            type="button"
+            onClick={() => onShowDrafted(!showDrafted)}
+            aria-pressed={showDrafted}
+            className={
+              'rounded-full px-3 py-1 text-xs font-semibold transition-colors duration-150 ' +
+              (showDrafted
+                ? 'bg-teal-500 text-obsidian'
+                : 'bg-white/5 text-white/50 hover:bg-white/10 hover:text-white')
+            }
+          >
+            Drafted
+          </button>
         </div>
 
         {!myTurn && (
@@ -188,6 +248,7 @@ export default function PlayerQueueSidebar({
             const value = valueFor(player)
             const photo = photoFor(player)
             const queued = queuedNames.has(player.name)
+            const draftedBy = player.drafted ? draftedByFor(player) : null
             return (
               <motion.div
                 key={player.id || player.name}
@@ -230,14 +291,22 @@ export default function PlayerQueueSidebar({
                     into the ADP column next to it instead of stopping at
                     this block's own edge. */}
                 <div className="flex min-w-0 items-center gap-2.5 overflow-hidden">
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); onToggleQueue(player.name) }}
-                    title={queued ? 'Remove from your queue' : 'Add to your queue'}
-                    className="shrink-0 text-white/25 transition-colors duration-150 hover:text-amber-300"
-                  >
-                    <Star className={'h-4 w-4 ' + (queued ? 'fill-amber-300 text-amber-300' : '')} />
-                  </button>
+                  {/* Queuing a player who's already gone has nothing to do
+                      — the star's slot holds its place (so the row doesn't
+                      jump width against the ones around it) but stops being
+                      a button. */}
+                  {player.drafted ? (
+                    <Star className="h-4 w-4 shrink-0 text-white/10" />
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); onToggleQueue(player.name) }}
+                      title={queued ? 'Remove from your queue' : 'Add to your queue'}
+                      className="shrink-0 text-white/25 transition-colors duration-150 hover:text-amber-300"
+                    >
+                      <Star className={'h-4 w-4 ' + (queued ? 'fill-amber-300 text-amber-300' : '')} />
+                    </button>
+                  )}
 
                   {/* Real headshot when the board has one (sleepercdn, via
                       the same photoUrl() avatar() already calls) — the
@@ -309,28 +378,34 @@ export default function PlayerQueueSidebar({
                 <span className="hidden text-right text-xs font-semibold text-teal-400/90 tabular-nums lg:block">
                   {value != null ? Math.round(value) : '—'}
                 </span>
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); onDraft(player) }}
-                  disabled={!myTurn}
-                  title={myTurn ? undefined : "Not your turn"}
-                  className={
-                    // lg:flex here is purely a display toggle (this button
-                    // only exists at lg+ — see GRID_COLS), but display:flex
-                    // has its own default alignment (flex-start/flex-start,
-                    // not centered) unlike a plain button's normal text
-                    // flow, which centers "Draft" for free. Same bug shape
-                    // as the sticky header a moment ago: a class added for
-                    // one reason (visibility) silently changed something
-                    // else (alignment) it was never meant to touch.
-                    'hidden shrink-0 items-center justify-center rounded-full px-2.5 py-1.5 text-[11px] font-semibold transition-all duration-200 lg:flex ' +
-                    (myTurn
-                      ? 'bg-gradient-to-r from-[#00E5FF] to-[#7B1FA2] text-white shadow-glass hover:scale-105 hover:shadow-[0_0_15px_rgba(0,229,255,0.4)]'
-                      : 'cursor-not-allowed bg-white/5 text-white/25')
-                  }
-                >
-                  Draft
-                </button>
+                {draftedBy ? (
+                  <span className="hidden truncate text-right text-[10px] font-medium uppercase tracking-wide text-white/30 lg:block">
+                    {draftedBy}
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onDraft(player) }}
+                    disabled={!myTurn}
+                    title={myTurn ? undefined : "Not your turn"}
+                    className={
+                      // lg:flex here is purely a display toggle (this button
+                      // only exists at lg+ — see GRID_COLS), but display:flex
+                      // has its own default alignment (flex-start/flex-start,
+                      // not centered) unlike a plain button's normal text
+                      // flow, which centers "Draft" for free. Same bug shape
+                      // as the sticky header a moment ago: a class added for
+                      // one reason (visibility) silently changed something
+                      // else (alignment) it was never meant to touch.
+                      'hidden shrink-0 items-center justify-center rounded-full px-2.5 py-1.5 text-[11px] font-semibold transition-all duration-200 lg:flex ' +
+                      (myTurn
+                        ? 'bg-gradient-to-r from-[#00E5FF] to-[#7B1FA2] text-white shadow-glass hover:scale-105 hover:shadow-[0_0_15px_rgba(0,229,255,0.4)]'
+                        : 'cursor-not-allowed bg-white/5 text-white/25')
+                    }
+                  >
+                    Draft
+                  </button>
+                )}
 
                 {/* Below lg only: one compact summary line plus a full h-12
                     Draft button — the whole point of this pass is a button
@@ -342,20 +417,26 @@ export default function PlayerQueueSidebar({
                     {pts != null && <span> · {pts.toFixed(1)} pts</span>}
                     {value != null && <span> · Value {Math.round(value)}</span>}
                   </p>
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); onDraft(player) }}
-                    disabled={!myTurn}
-                    title={myTurn ? undefined : 'Not your turn'}
-                    className={
-                      'flex h-12 shrink-0 items-center justify-center rounded-lg px-6 text-sm font-bold transition-all duration-200 ' +
-                      (myTurn
-                        ? 'bg-gradient-to-r from-[#00E5FF] to-[#7B1FA2] text-white shadow-glass active:scale-95'
-                        : 'cursor-not-allowed bg-white/5 text-white/25')
-                    }
-                  >
-                    Draft
-                  </button>
+                  {draftedBy ? (
+                    <span className="shrink-0 rounded-lg border border-slate-800 bg-slate-950/60 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-white/30">
+                      {draftedBy}
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); onDraft(player) }}
+                      disabled={!myTurn}
+                      title={myTurn ? undefined : 'Not your turn'}
+                      className={
+                        'flex h-12 shrink-0 items-center justify-center rounded-lg px-6 text-sm font-bold transition-all duration-200 ' +
+                        (myTurn
+                          ? 'bg-gradient-to-r from-[#00E5FF] to-[#7B1FA2] text-white shadow-glass active:scale-95'
+                          : 'cursor-not-allowed bg-white/5 text-white/25')
+                      }
+                    >
+                      Draft
+                    </button>
+                  )}
                 </div>
               </motion.div>
             )

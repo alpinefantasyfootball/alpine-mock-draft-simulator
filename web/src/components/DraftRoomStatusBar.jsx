@@ -1,6 +1,6 @@
 import { Fragment } from 'react'
 import { motion } from 'framer-motion'
-import { LogOut, Pause, Play, RotateCcw, Timer } from 'lucide-react'
+import { LogOut, Maximize2, Minimize2, Pause, Play, RotateCcw, Timer } from 'lucide-react'
 import Ticker from './Ticker.jsx'
 import JukeLogo from './juke-logo/JukeLogo.jsx'
 
@@ -60,6 +60,8 @@ export default function DraftRoomStatusBar({
   discardLabel,
   discardDanger,
   onDiscard,
+  isolate,
+  onToggleIsolate,
 }) {
   return (
     <Fragment>
@@ -152,6 +154,18 @@ export default function DraftRoomStatusBar({
         <IconButton onClick={onDiscard} danger={discardDanger} title={discardLabel}>
           <LogOut className="h-3.5 w-3.5" />
         </IconButton>
+
+        {/* Isolate hides the queue/profile column and the log/chat dock,
+            leaving just the board — a wide monitor's worth of screen a
+            10-column grid can actually use. Desktop only for now: below lg
+            those panels are already tab-switched rather than side-by-side
+            (see the Draft Hub / Full Board control), so there's nothing
+            here for this button to hide yet. */}
+        <span className="hidden lg:inline-flex">
+          <IconButton onClick={onToggleIsolate} title={isolate ? 'Show panels' : 'Isolate board'}>
+            {isolate ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+          </IconButton>
+        </span>
 
         <div className="hidden h-6 w-px bg-slate-800 sm:block" />
 

@@ -1,8 +1,24 @@
-export default function DraftHistoryCard({ draft }) {
+import { ChevronRight } from 'lucide-react'
+
+// The whole card is the click target, not just the button — but it renders
+// a real <button> inside it for "Analyze Draft", so that button stops its
+// own click from bubbling and firing onAnalyze twice (same pattern RoomCard
+// uses for its "Enter" link inside an equally clickable card).
+export default function DraftHistoryCard({ draft, onAnalyze }) {
+  const analyze = (e) => {
+    e.stopPropagation()
+    onAnalyze()
+  }
+
   return (
     <div
-      className="flex flex-col gap-3 rounded-lg border border-slate-800 bg-slate-900/40 p-6 transition-all duration-200
-                 hover:border-teal-400/70 hover:shadow-card-hover"
+      role="button"
+      tabIndex={0}
+      onClick={onAnalyze}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onAnalyze() } }}
+      className="flex cursor-pointer flex-col gap-3 rounded-lg border border-slate-800 bg-slate-900/40 p-6
+                 transition-all duration-200 hover:scale-[1.01] hover:border-teal-400
+                 hover:shadow-[0_0_15px_rgba(0,229,255,0.2)]"
     >
       <div className="flex items-start justify-between gap-3">
         <div>
@@ -17,10 +33,26 @@ export default function DraftHistoryCard({ draft }) {
         </div>
       </div>
 
-      <div className="flex items-center gap-2 border-t border-white/5 pt-3 text-xs text-white/55">
+      <div className="flex flex-wrap items-center gap-2 border-t border-white/5 pt-3 text-xs text-white/55">
         <span className="rounded-full bg-white/5 px-2.5 py-1 font-medium">
           Pick {draft.pickPosition}
         </span>
+        {draft.round1Pick && (
+          <span className="rounded-full bg-white/5 px-2.5 py-1 font-medium">
+            1st Pick: {draft.round1Pick}
+          </span>
+        )}
+
+        <button
+          type="button"
+          onClick={analyze}
+          className="ml-auto flex items-center gap-1 rounded-full border border-teal-400/40 bg-teal-400/5
+                     px-3 py-1.5 text-xs font-semibold text-teal-300 transition-colors duration-200
+                     hover:border-teal-400 hover:bg-teal-400/15 hover:text-teal-200"
+        >
+          Analyze Draft
+          <ChevronRight className="h-3.5 w-3.5" />
+        </button>
       </div>
     </div>
   )

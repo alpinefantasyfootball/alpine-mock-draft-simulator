@@ -2,11 +2,12 @@ import { useEffect, useReducer, useRef, useState } from 'react'
 import Header from './Header.jsx'
 import ConfigureDraftForm from './ConfigureDraftForm.jsx'
 import RoomPanel from './RoomPanel.jsx'
+import DraftLocker from './DraftLocker.jsx'
 import DraftLogDock from './DraftLogDock.jsx'
 import DraftRoomStatusBar from './DraftRoomStatusBar.jsx'
 import DraftBoardGrid from './DraftBoardGrid.jsx'
-import PlayerQueueSidebar, { SORT_DEFAULT_DIR } from './PlayerQueueSidebar.jsx'
-import PlayerProfileDrawer from './PlayerProfileDrawer.jsx'
+import { SORT_DEFAULT_DIR } from './PlayerQueueSidebar.jsx'
+import PlayerHub from './PlayerHub.jsx'
 import RosterDock from './RosterDock.jsx'
 
 function useEngine() {
@@ -53,15 +54,17 @@ export default function DraftRoom() {
 
   const [search, setSearch] = useState('')
   const [posFilter, setPosFilter] = useState('ALL')
+  // Independent of posFilter rather than folded into it — "RB rookies I'm
+  // watching" is a real combination someone would want, and a single-select
+  // list can't hold three things that all have to be true at once.
+  const [expBand, setExpBand] = useState('all') // 'all' | 'rookie' | 'veteran'
+  const [watchlistOnly, setWatchlistOnly] = useState(false)
+  const [showDrafted, setShowDrafted] = useState(false)
   const [selectedPlayer, setSelectedPlayer] = useState(null)
-  // Below lg, the board and the queue are two exclusive full-width views
-  // ("Draft Hub" / "Full Board") switched by a segmented control, rather
-  // than the board always showing with the queue as an on-demand overlay
-  // sheet — a 10-column grid is what a phone opens onto first is exactly
-  // the pinch-zoom problem this replaces. 'hub' is the default: the thing
-  // a manager needs most (who to draft) shouldn't cost a tap to reach. At
-  // lg+ this is never read — both panels are always visible side by side.
-  const [mobileView, setMobileView] = useState('hub')
+  // Isolate hides the queue/profile column and the log/chat dock, leaving
+  // just the board — see the status bar's own comment on why this is
+  // lg+ only for now.
+  const [isolate, setIsolate] = useState(false)
   // 'board' is the default — the board's own ADP-rank order, same as
   // sortBy === 'adp' asc for undrafted players, but it's its own case so
   // clicking away from a column and never toggling anything back to it
@@ -146,15 +149,40 @@ export default function DraftRoom() {
     return (
       <div className="fixed inset-0 z-[60] flex flex-col overflow-y-auto bg-[#0B0E14] pt-16 text-white">
         <Header />
-        <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col items-stretch gap-6 px-6 py-10 lg:flex-row">
-          <div className="lg:basis-1/2">
+        {/* max-w-7xl, not the two-column screen's old max-w-4xl — three
+            panels at that width would leave each one under 280px, too
+            narrow for the Locker's cards (a league label, a rank pill, an
+            Analyze button) or the room panel's invite link. basis-1/3 each,
+            not a wider Locker: the three are equally-weighted things a
+            manager might be here for — start a new draft, draft with
+            friends, reopen an old one — not one primary action and two
+            secondary ones. */}
+        <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col items-stretch gap-6 px-6 py-10 lg:flex-row">
+          <div className="lg:basis-1/3">
             <ConfigureDraftForm />
           </div>
-          <div className="lg:basis-1/2">
+          <div className="lg:basis-1/3">
             <RoomPanel />
           </div>
+          <div className="lg:basis-1/3">
+            {/* Only this column gets an explicit height — same reason
+                DraftSettings.jsx's own copy of this pairing does it the
+                same way: ConfigureDraftForm and RoomPanel both stretch to
+                match via their own h-full, off this column's real height,
+                rather than three independently-guessed heights that could
+                each disagree. Without it, a Locker with a full page of
+                completed drafts sets the row's height instead of scrolling
+                inside it, and drags the shorter columns down with it. */}
+            <div className="lg:h-[calc(100vh-176px)] lg:min-h-[420px]">
+              <DraftLocker />
+            </div>
+          </div>
         </div>
-        <DraftLogDock />
+        {/* No DraftLogDock here on purpose — "My Queue" and "Draft Log" are
+            both meaningless before a draft exists (nothing queued, nothing
+            picked yet), and it would float over the same corner the Locker
+            now occupies. It still belongs on the live board below, where
+            both tabs have something real to show. */}
       </div>
     )
   }
@@ -216,12 +244,26 @@ export default function DraftRoom() {
   // SLOT_ELIGIBLE.FLEX from app.js, bridged rather than hand-copied — see
   // the bridge comment on photoUrl/initials/flexPositions.
   const flexPositions = engine.flexPositions()
+  const watchlistedNames = new Set(engine.watchlist() || [])
+  // Who took a drafted player, for the showDrafted view — picks() rather
+  // than a second copy of "who has who": teamLabel() is the exact name the
+  // board's own header row already uses for that seat.
+  const draftedByFor = (player) => {
+    const pick = picks.find((p) => p.player.name === player.name)
+    return pick ? engine.teamLabel(pick.slot) : null
+  }
   const availablePlayers = board
-    .filter((p) => !p.drafted)
+    .filter((p) => showDrafted || !p.drafted)
     .filter((p) => {
       if (posFilter === 'ALL') return true
       if (posFilter === 'FLEX') return flexPositions.includes(p.pos)
       return p.pos === posFilter
+    })
+    .filter((p) => !watchlistOnly || watchlistedNames.has(p.name))
+    .filter((p) => {
+      if (expBand === 'all') return true
+      const exp = engine.statOf(p)?.exp
+      return expBand === 'rookie' ? exp === 0 : exp !== undefined && exp > 0
     })
     .filter((p) => !search || p.name.toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => {
@@ -279,7 +321,11 @@ export default function DraftRoom() {
   // The real queue (state.queue, an array of player names) — queueToggle()
   // is the exact function the legacy rail's star button already calls.
   // queuedNames as a Set just makes the sidebar's per-row lookup cheap.
+  // queuePlayers resolves those same names back to board players, for
+  // PlayerHub's mobile Queue tab — the exact resolution DraftLogDock's
+  // desktop "My Queue" tab already does, not a second copy of it.
   const queuedNames = new Set(engine.queue() || [])
+  const queuePlayers = (engine.queue() || []).map((name) => board.find((p) => p.name === name)).filter(Boolean)
   const handleToggleQueue = (name) => engine.queueToggle(name)
 
   return (
@@ -317,58 +363,22 @@ export default function DraftRoom() {
         discardLabel={hasRoomVal ? 'Leave the room' : 'Discard draft'}
         discardDanger={!hasRoomVal}
         onDiscard={handleDiscard}
+        isolate={isolate}
+        onToggleIsolate={() => setIsolate((v) => !v)}
       />
       {/* pt-14 matches DraftRoomStatusBar's own h-14; md:pt-20 adds the
           6-unit ticker strip (top-14, h-6) that only exists at md+ — see
           the comment on that strip in DraftRoomStatusBar.jsx. No bottom
-          padding here for RosterDock: it's `fixed` below lg now (see its
-          own comment) rather than sitting in this flow, so clearance for
-          its collapsed strip is reserved inside each scrollable panel
-          instead (DraftBoardGrid's and PlayerQueueSidebar's own pb-28) —
-          reserving it here too would just shrink the row for no reason,
-          since a fixed element doesn't actually occupy space in it. */}
+          padding here for RosterDock: it's lg+ only now (see its own
+          comment) and PlayerHub's mobile sheet is `fixed`, so neither
+          occupies space in this flow — reserving it here too would just
+          shrink the row for no reason. */}
       <div className="flex flex-1 flex-col overflow-hidden pt-14 md:pt-20">
-        {/* Draft Hub / Full Board — below lg only. A phone that opened
-            straight onto a 10-column grid is the exact "pinch-zoom
-            frustration" this whole pass exists to fix, so the two views
-            are equal, explicit tabs rather than one primary view and one
-            you have to discover. Not sticky: it's the top of the content,
-            not a persistent nav bar, so it scrolls with the rest — the
-            segmented control itself is the "you are here", and switching
-            back is one tap up regardless. */}
-        <div className="flex shrink-0 justify-center border-b border-slate-800 bg-slate-900/60 p-2 lg:hidden">
-          <div className="inline-flex rounded-full border border-slate-800 bg-slate-950/60 p-1">
-            {[
-              { key: 'hub', label: 'Draft Hub' },
-              { key: 'board', label: 'Full Board' },
-            ].map((tab) => (
-              <button
-                key={tab.key}
-                type="button"
-                onClick={() => setMobileView(tab.key)}
-                aria-pressed={mobileView === tab.key}
-                className={
-                  'rounded-full px-5 py-2 text-sm font-semibold transition-colors duration-150 ' +
-                  (mobileView === tab.key ? 'bg-teal-500 text-obsidian' : 'text-white/50')
-                }
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
+        {/* The board stays visible on every width now — see PlayerHub.jsx's
+            file comment for what replaced the old Draft Hub/Full Board
+            toggle below lg (a bottom sheet over the board, not a view that
+            swaps it out). */}
         <div className="relative flex flex-1 flex-col overflow-hidden lg:flex-row">
-          {/* board and queue are two exclusive full-width views below lg
-              (via mobileView) and the same always-visible side-by-side
-              split at lg+ (mobileView is never read there) — same "one
-              mount, repositioned by breakpoint, not duplicated" reasoning
-              as the old overlay sheet this replaced: PlayerQueueSidebar's
-              rows share layoutIds with DraftBoardGrid's cells for the
-              queue-to-board FLIP transition, and a second mounted copy
-              would collide with the first even if CSS-hidden — so this
-              hides with `hidden`, which un-mounts nothing, rather than by
-              conditionally rendering either side out of the tree. */}
           {/* min-w-0 is load-bearing: DraftBoardGrid's own content is
               min-w-max (every column at its real width, deliberately
               wider than any viewport so it can scroll). A flex item's
@@ -379,7 +389,12 @@ export default function DraftRoom() {
               of grid content and pushed the queue panel off the right
               edge of the screen entirely at lg+. Measured: the queue
               wrapper was rendering at x:1894 on a 1345px-wide viewport. */}
-          <div className={(mobileView === 'board' ? 'flex' : 'hidden') + ' min-h-0 min-w-0 flex-1 lg:flex lg:flex-[7]'}>
+          <div
+            className={
+              'flex min-h-0 min-w-0 flex-1 ' +
+              (isolate ? 'lg:flex-1' : 'lg:flex-[6]')
+            }
+          >
             <DraftBoardGrid
               league={league}
               picks={picks}
@@ -389,13 +404,24 @@ export default function DraftRoom() {
             />
           </div>
 
-          <div className={(mobileView === 'hub' ? 'relative flex min-h-0 flex-1' : 'hidden') + ' lg:relative lg:flex lg:flex-[3] lg:min-w-[280px]'}>
-            <PlayerQueueSidebar
+          {/* isolate is lg+ only (its toggle is hidden below lg — see the
+              status bar): at lg+ it hides this column entirely; below lg
+              PlayerHub's own sheet chrome (the handle, the tab bar) stays
+              reachable regardless — isolate is a wide-monitor convenience,
+              not something a phone needs its own equivalent of yet. */}
+          <div className={isolate ? 'lg:hidden' : 'relative flex min-h-0 flex-1 lg:flex lg:flex-[3] lg:min-w-[260px]'}>
+            <PlayerHub
               players={availablePlayers}
               search={search}
               onSearch={setSearch}
               posFilter={posFilter}
               onPosFilter={setPosFilter}
+              expBand={expBand}
+              onExpBand={setExpBand}
+              watchlistOnly={watchlistOnly}
+              onWatchlistOnly={setWatchlistOnly}
+              showDrafted={showDrafted}
+              onShowDrafted={setShowDrafted}
               pointsFor={pointsFor}
               valueFor={valueFor}
               photoFor={photoFor}
@@ -404,6 +430,8 @@ export default function DraftRoom() {
               myTurn={myTurn}
               queuedNames={queuedNames}
               onToggleQueue={handleToggleQueue}
+              draftedByFor={draftedByFor}
+              selectedPlayer={selectedPlayer}
               onSelectPlayer={setSelectedPlayer}
               sortBy={sortBy}
               sortDir={sortDir}
@@ -411,21 +439,25 @@ export default function DraftRoom() {
               recommended={recommended}
               recommendedVorp={recommendedVorp}
               recommendedTierLeft={recommendedTierLeft}
+              queuePlayers={queuePlayers}
+              engine={engine}
+              league={league}
+              mySlot={mySlot}
+              teamLabelOf={(slot) => engine.teamLabel(slot)}
             />
-            <PlayerProfileDrawer
-              player={selectedPlayer}
-              onClose={() => setSelectedPlayer(null)}
-              photoFor={photoFor}
-              initialsFor={initialsFor}
-              pointsFor={pointsFor}
-              valueFor={valueFor}
-            />
+          </div>
+
+          {/* DraftLogDock is lg+ only now — mobile's equivalent (My Queue,
+              plus the new Team and Chat tabs) lives inside PlayerHub's
+              sheet instead, see its own comment. isolate hides this column
+              the same way it hides PlayerHub's at lg+. */}
+          <div className={isolate ? 'lg:hidden' : 'lg:flex lg:min-h-0 lg:flex-[3] lg:min-w-[260px]'}>
+            <DraftLogDock />
           </div>
         </div>
 
         <RosterDock lineup={lineup} benchSize={league.bench} />
       </div>
-      <DraftLogDock />
     </div>
   )
 }

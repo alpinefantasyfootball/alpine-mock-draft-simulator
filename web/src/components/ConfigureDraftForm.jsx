@@ -1,5 +1,6 @@
-import { useEffect, useReducer, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
+import { useEngine, useJukeTick } from '../hooks/useJukeEngine.js'
 
 const ORDINAL_SUFFIX = (n) => {
   const v = n % 100
@@ -62,27 +63,6 @@ function FormSelect({ value, onChange, options, disabled }) {
   )
 }
 
-function useEngine() {
-  const [ready, setReady] = useState(false)
-  useEffect(() => {
-    if (typeof window !== 'undefined' && window.JukeEngine) setReady(true)
-  }, [])
-  return ready ? window.JukeEngine : null
-}
-
-// "juke:header" fires from renderHeader() on every render, tick and pause
-// toggle — including the render() inside onRoomChange() (see the bridge
-// comment on room()/createRoom() in app.js) — so this re-renders on every
-// room change too, without registering a second Live.onChange() listener.
-function useJukeTick(engine) {
-  const [, force] = useReducer((x) => x + 1, 0)
-  useEffect(() => {
-    if (!engine) return
-    window.addEventListener('juke:header', force)
-    return () => window.removeEventListener('juke:header', force)
-  }, [engine])
-}
-
 export default function ConfigureDraftForm() {
   const engine = useEngine()
   useJukeTick(engine)
@@ -92,20 +72,17 @@ export default function ConfigureDraftForm() {
   const [clockLength, setClockLength] = useState(60)
   const [mySlot, setMySlot] = useState(0)
   const [problem, setProblem] = useState('')
-  const [save, setSave] = useState(null)
 
   useEffect(() => {
     if (!engine) return
     const data = engine.readSave()
     const hasSave = data && data.picks && data.picks.length
-    setSave(hasSave ? data : null)
 
-    // resumeDraft() refuses unless the live league already matches the
-    // save's fingerprint (different snake turns, different rounds, a
-    // reordered board under a different scoring format). Defaulting the
-    // form to the save's own settings — not whatever league already
-    // happens to hold — means Resume works on the first click instead of
-    // silently hitting that refusal until the dropdowns are set back by hand.
+    // Defaulting the form to a save's own settings, when there is one still
+    // in progress, means a manager who came here to check on it — the
+    // Locker's "In progress" card links back to this same screen — finds
+    // the dropdowns already describing the draft they're mid-way through,
+    // rather than whatever this screen last happened to hold.
     const source = hasSave ? data.league : engine.league()
     setTeams(source.teams)
     setScoring(source.scoring)
@@ -161,44 +138,10 @@ export default function ConfigureDraftForm() {
     engine.startDraft({ mySlot, clockLength })
   }
 
-  const resume = () => engine && save && engine.resumeDraft(save)
-  const discard = () => {
-    if (!engine) return
-    engine.clearSave()
-    setSave(null)
-  }
-
   return (
     <div id="configure-draft" className="flex h-full flex-col rounded-2xl border border-white/10 bg-charcoal p-6 sm:p-8">
       <h2 className="font-display text-xl font-bold text-white">Configure Draft</h2>
       <p className="mt-1 text-sm text-white/50">Set the shape of the league, then jump in.</p>
-
-      {save && (
-        <div className="mt-5 rounded-xl border border-teal-400/30 bg-teal-400/5 p-4">
-          <p className="text-sm font-semibold text-white">
-            {save.picks.length >= save.league.teams * save.league.rounds ? 'Your finished draft' : 'Draft in progress'}
-          </p>
-          <p className="mt-1 text-xs text-white/50">
-            {save.league.teams} teams &middot; {save.league.rounds} rounds &middot; {save.picks.length} picks made
-          </p>
-          <div className="mt-3 flex gap-3">
-            <button
-              type="button"
-              onClick={resume}
-              className="rounded-full bg-teal-500 px-4 py-1.5 text-xs font-semibold text-obsidian transition-transform duration-200 hover:scale-105"
-            >
-              Resume
-            </button>
-            <button
-              type="button"
-              onClick={discard}
-              className="rounded-full px-4 py-1.5 text-xs font-medium text-white/50 transition-colors hover:text-white"
-            >
-              Discard
-            </button>
-          </div>
-        </div>
-      )}
 
       {hasRoomVal && (
         <p className="mt-5 text-xs leading-relaxed text-white/40">

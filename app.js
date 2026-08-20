@@ -841,6 +841,12 @@ const state = {
   // data on every restart, so a held reference would go stale while a name
   // can be re-resolved or honestly reported as gone.
   queue: [],
+  // Players you're tracking rather than planning to draft — a different
+  // thing from the queue, which is the actual plan the clock falls back
+  // to. Unlike the queue this is never pruned when someone else takes a
+  // player: the watchlist's whole point is noticing that happened, not
+  // reflecting only who is still available.
+  watchlist: [],
   filterSuggest: "ALL",
   filterPlayers: "ALL",
   search: "",
@@ -1502,7 +1508,7 @@ function noteDraftPhase() { draftWasOver = state.started && draftOver(); }
 
 function checkDraftFinished() {
   const over = state.started && draftOver();
-  if (over && !draftWasOver) revealAnalysis();
+  if (over && !draftWasOver) { revealAnalysis(); recordHistory(); }
   draftWasOver = over;
 }
 
@@ -1768,6 +1774,16 @@ function queueMove(name, delta) {
   const to = at + delta;
   if (at < 0 || to < 0 || to >= state.queue.length) return;
   state.queue.splice(to, 0, state.queue.splice(at, 1)[0]);
+}
+
+function watchlistIndex(name) { return state.watchlist.indexOf(name); }
+
+function watchlisted(player) { return watchlistIndex(player.name) >= 0; }
+
+function watchlistToggle(name) {
+  const at = watchlistIndex(name);
+  if (at >= 0) state.watchlist.splice(at, 1);
+  else state.watchlist.push(name);
 }
 
 // Someone else taking your man is the normal case, not an error, so he
@@ -3967,9 +3983,15 @@ function scrollBoardToLive() {
 
    Roster order is draft order, so the first eligible player wins the slot —
    which is why the FLEX ends up holding whoever was taken later rather than
-   whoever is worse. */
-function seatedLineup() {
-  const mine = rosterOf(state.mySlot).slice();
+   whoever is worse.
+
+   Takes an optional slot so the React Team tab can seat any manager's
+   roster, not just yours — added for the mobile redesign's "check anyone's
+   team" tab, without a second copy of the fill-order logic the grade and
+   the legacy My Team view both already depend on being correct. */
+function seatedLineup(slot) {
+  const seat = slot === undefined ? state.mySlot : slot;
+  const mine = rosterOf(seat).slice();
   const used = [];
 
   const seats = lineupSlots().map(function (slot) {
@@ -4620,6 +4642,25 @@ function newsHtml(items) {
      reproduced. Juke does not write these and does not endorse them.</p>`;
 }
 
+// One worker-supplied item, turned into exactly what the React news tab
+// renders — the URL check (safeNewsUrl) and the clipping (NEWS_SUMMARY_MAX)
+// live here rather than in React, for the same reason sourceId() does: a
+// field from a feed we do not control is not something to re-check in two
+// places. Returns null for anything missing a title or a safe link, the
+// same filter newsHtml() already applies before it draws a card.
+function newsItemView(n) {
+  if (!n || !n.title) return null;
+  const url = safeNewsUrl(n.url);
+  if (!url) return null;
+  return {
+    title: n.title,
+    summary: n.summary ? String(n.summary).slice(0, NEWS_SUMMARY_MAX) : "",
+    source: n.source || "",
+    when: String(n.at || "").slice(0, 24),
+    url: url
+  };
+}
+
 /* A link from a feed is a claim, not a fact — the same rule the GIF host gets,
    and checked the same way with URL rather than a substring. Anything that is
    not plain http(s) is dropped: a javascript: or data: href here would be an
@@ -4781,6 +4822,107 @@ function ourRead(player, s, sig) {
       <p class="readnote">Worked out from this board and these projections, under your scoring.
         It is one model's opinion, not a wire report and not a consensus.</p>
     </div>`;
+}
+
+/* ---- data for the React player card ---------------------
+
+   web/src/components/PlayerProfileDrawer.jsx has always had these four
+   tabs; they carried placeholder copy because the real data lives here and
+   nothing had bridged it yet. Each function below reuses the exact same
+   helpers openSheet() already builds the legacy sheet from — logColumns(),
+   cellValue(), didPlay(), logYears(), sourceId() — rather than a second
+   reading of the same stats, which is the "nothing about the league shape
+   may be written down twice" rule applied to a player's data instead. */
+
+// The current season's projected stat line — points, per-game, position
+// rank, the gap against where the board has him, and the underlying
+// counting stats for his position (logColumns() picks those the same way
+// it picks a week's columns, given a one-row sample).
+function projectionSummary(player) {
+  const s = statOf(player);
+  const p = s && s.p;
+  if (!p || !p.gp) return null;
+
+  const cols = logColumns(player, [p]);
+  const stats = cols.keys
+    .map((k, i) => ({ key: k, label: cols.head[i], value: cellValue(p, k) }))
+    .filter((row) => row.key !== "w" && row.key !== "pts" && row.value !== undefined);
+
+  return {
+    points: Math.round(fantasyPoints(p)),
+    perGame: perGame(fantasyPoints(p), projGames(player.pos, p)),
+    posRank: player.projPosRank ? posLabel(player.pos) + player.projPosRank : null,
+    // Positive means the projection likes him better than the board does —
+    // same sign convention as the draft-value gap elsewhere on the sheet.
+    vsAdp: player.projPosRank ? player.posRank - player.projPosRank : null,
+    stats: stats
+  };
+}
+
+// Week-by-week actuals for one year, defaulting to the most recent year
+// this player has, plus the list of years so the tab can draw its own
+// picker. Mirrors logsHtml() exactly, but returns rows rather than markup
+// — React owns how a row is drawn, this only owns which weeks and which
+// columns are correct for this player.
+function gameLogFor(player, year) {
+  const s = statOf(player);
+  const years = logYears(s);
+  const y = years.indexOf(year) >= 0 ? year : years[0];
+  if (!y) return { years: years, year: null, head: [], rows: [], perGameAvg: null };
+
+  const weeks = s.w[y] || [];
+  const cols = logColumns(player, weeks);
+  const played = weeks.filter(didPlay);
+  const scored = played.reduce((a, g) => a + fantasyPoints(g), 0);
+  const avg = played.length ? scored / played.length : 0;
+
+  const rows = weeks.map(function (g) {
+    const blank = !didPlay(g);
+    const points = fantasyPoints(g);
+    return {
+      blank: blank,
+      tone: blank ? "" : points >= avg * 1.4 ? "hi" : points <= avg * 0.5 ? "lo" : "",
+      cells: cols.keys.map(function (k) {
+        const v = k === "w" ? g.w : k === "pts" ? Math.round(points) : cellValue(g, k);
+        return v === undefined ? null : v;
+      })
+    };
+  });
+
+  return { years: years, year: y, head: cols.head, rows: rows, perGameAvg: perGame(scored, played.length) };
+}
+
+// Every drafted-pool teammate who carries a depth-chart entry, grouped by
+// position group and ordered within it — the exact grouping openSheet()
+// already built, just handed back as data instead of painted into one.
+function depthChartFor(player) {
+  const mates = board.filter(function (other) {
+    const os = statOf(other);
+    return other.team === player.team && os && os.depth;
+  });
+  if (!mates.length) return null;
+
+  const groups = {};
+  mates.forEach(function (m) {
+    const g = statOf(m).depth;
+    (groups[g] = groups[g] || []).push(m);
+  });
+
+  return Object.keys(groups).sort().map(function (g) {
+    const list = groups[g].sort((a, b) => (statOf(a).order || 9) - (statOf(b).order || 9));
+    return {
+      group: g,
+      players: list.map(function (m) {
+        return {
+          name: m.name,
+          pos: m.pos,
+          order: statOf(m).order || null,
+          adp: m.adp,
+          isSelf: m === player
+        };
+      })
+    };
+  });
 }
 
 function openSheet(player) {
@@ -5024,6 +5166,7 @@ function saveDraft() {
       fingerprint: settingsFingerprint(league),
       picks: state.picks.map((p) => p.player.name),
       queue: state.queue.slice(),
+      watchlist: state.watchlist.slice(),
       savedAt: Date.now()
     }));
   } catch (err) {
@@ -5093,6 +5236,9 @@ function resumeDraft(data) {
   // anyone taken while the tab was closed, or dropped from the feed since.
   state.queue = Array.isArray(data.queue) ? data.queue.slice() : [];
   pruneQueue();
+  // Not pruned the way the queue is — a watchlist entry that's since been
+  // drafted is exactly the kind of thing worth still seeing on reopen.
+  state.watchlist = Array.isArray(data.watchlist) ? data.watchlist.slice() : [];
 
   tabrow.hidden = false;
   $("resumeBar").hidden = true;
@@ -5115,6 +5261,175 @@ function resumeDraft(data) {
   resetClock();
   render();
   window.scrollTo(0, 0);
+}
+
+
+/* ---- 11d. Draft history ---------------------------------
+
+   The Locker's data: one entry per draft that has actually finished, kept
+   next to the single save above it but never overwritten by it — a save is
+   the one draft you could still be sitting in, history is everything you've
+   already walked away from. Same browser-local storage, same reason: there
+   is no account and no server copy of either. */
+
+const HISTORY_KEY = "juke.draft-history.v1";
+const HISTORY_LIMIT = 25;
+
+function readHistory() {
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY);
+    const data = raw ? JSON.parse(raw) : [];
+    return Array.isArray(data) ? data : [];
+  } catch (err) {
+    return [];
+  }
+}
+
+function writeHistory(list) {
+  try { localStorage.setItem(HISTORY_KEY, JSON.stringify(list)); } catch (err) {}
+}
+
+// Fired from the same edge revealAnalysis() is — "just became over", not
+// "is over" — so reopening an already-finished draft (Resume, or the Locker
+// itself) never records it a second time. The grade is computed and stored
+// now, while board/league/state are still the ones this draft was actually
+// played on: recomputing it later would mean rebuilding a whole historical
+// board — a different ADP set, a different snake shape — just to draw one
+// card in a list.
+function recordHistory() {
+  const mine = analyseDraft()[state.mySlot];
+  const round1 = state.picks.find((p) => p.slot === state.mySlot && p.round === 1);
+  const list = readHistory();
+  list.unshift({
+    id: "h" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
+    completedAt: Date.now(),
+    mySlot: state.mySlot,
+    clockLength: state.clockLength,
+    seed: state.seed,
+    league: JSON.parse(JSON.stringify(league)),
+    // Names, not player objects — same reason saveDraft() stores them this
+    // way: the board is rebuilt from tonight's data on every load, so a held
+    // reference would go stale while a name can be re-resolved.
+    picks: state.picks.map((p) => p.player.name),
+    projectedRank: mine ? mine.rank : null,
+    round1Pick: round1 ? round1.player.name : null
+  });
+  writeHistory(list.slice(0, HISTORY_LIMIT));
+}
+
+// What a Locker card actually shows, derived rather than stored, so a label
+// can never drift from the function that already knows how to say it —
+// scoringLabel() and ordinal() are the same lookups the setup screen and
+// the board already use.
+// "10-Team Half PPR" — one place for this, so the finished-draft cards
+// below and the one still-in-progress card (which has no history entry to
+// read it from) can never print it two different ways.
+function leagueTypeLabel(cfg) {
+  return cfg.teams + "-Team " + scoringLabel(cfg.scoring);
+}
+
+function historySummary(entry) {
+  return {
+    id: entry.id,
+    leagueType: leagueTypeLabel(entry.league),
+    pickPosition: ordinal(entry.mySlot + 1),
+    dateCompleted: new Date(entry.completedAt)
+      .toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" }),
+    projectedRank: entry.projectedRank ? ordinal(entry.projectedRank) : "—",
+    round1Pick: entry.round1Pick || null
+  };
+}
+
+// The Locker's "In progress" card. Null once there's nothing to resume, or
+// once the one save slot has actually finished — that draft already has its
+// own entry in history by the time this is asked, and showing it here too
+// would put the same draft behind two different buttons in two different
+// tabs of the same panel.
+function inProgressSummary() {
+  const data = readSave();
+  if (!data || !data.picks || !data.picks.length) return null;
+  const total = data.league.teams * data.league.rounds;
+  if (data.picks.length >= total) return null;
+  return {
+    leagueType: leagueTypeLabel(data.league),
+    pickPosition: ordinal(data.mySlot + 1),
+    made: data.picks.length,
+    total: total
+  };
+}
+
+// Resumes the one saved draft from the Locker. resumeDraft() below refuses
+// unless the live league already matches the save's fingerprint — a rule
+// that made sense when the same screen held both the dropdowns and the
+// Resume button, so a person could be told to set them back. The Locker has
+// no dropdowns of its own to blame, so this forces `league` to the save's
+// own shape first (the one real league object, same as setLeague() and
+// openHistoryDraft()) and rebuilds the board against it — after which
+// resumeDraft()'s own fingerprint check is comparing a league against
+// itself and always passes, so its refusal branch is simply never reached
+// from here.
+function resumeSavedDraft() {
+  const data = readSave();
+  if (!data) return false;
+  Object.assign(league, JSON.parse(JSON.stringify(data.league)));
+  if (league.superflex === undefined) league.superflex = 0;
+  buildBoard();
+  resumeDraft(data);
+  return true;
+}
+
+// Reopens a finished draft from the Locker onto the Analysis tab. Unlike
+// resumeDraft() above, this never refuses on a settings mismatch — there is
+// no "change the dropdowns to match" step for a history card, it just opens
+// — so it forces `league` to the shape the draft was actually played under
+// first (the one real league object, same as setLeague()), then rebuilds
+// the board against it before touching anything else live.
+function openHistoryDraft(id) {
+  const entry = readHistory().find((h) => h.id === id);
+  if (!entry) return false;
+
+  const entryLeague = JSON.parse(JSON.stringify(entry.league));
+  if (entryLeague.superflex === undefined) entryLeague.superflex = 0;
+
+  // Checked against the entry's own ADP set before anything live changes —
+  // the player list is regenerated every morning, and a name that has since
+  // fallen off the board must not leave the real setup screen half-mutated
+  // on the way to failing.
+  const set = (typeof ADP_SETS !== "undefined" &&
+    (ADP_SETS[entryLeague.scoring] || ADP_SETS[DEFAULT_SET])) || PLAYERS;
+  const names = new Set(set.map((p) => p.name));
+  if (entry.picks.some((name) => !names.has(name))) {
+    alert("That draft could not be reopened because the player list has " +
+          "changed since it finished.");
+    return false;
+  }
+
+  Object.assign(league, entryLeague);
+  buildBoard();
+  const resolved = entry.picks.map((name) => board.find((p) => p.name === name));
+
+  state.mySlot      = entry.mySlot;
+  state.clockLength = entry.clockLength;
+  state.paused      = false;
+  state.seed        = entry.seed;
+  state.started     = true;
+
+  applyJitter();
+  state.picks = [];
+  resolved.forEach(function (player) { makePick(player); });
+  state.queue = [];
+  state.watchlist = [];
+
+  tabrow.hidden = false;
+  revealAnalysis();
+  // Seeded before the render below, so reopening a finished board is not
+  // read as one that has only just finished — same reason resumeDraft() does
+  // this in the same order.
+  noteDraftPhase();
+  resetClock();
+  render();
+  window.scrollTo(0, 0);
+  return true;
 }
 
 function showResumeBar() {
@@ -6446,8 +6761,7 @@ window.JukeEngine = {
   playersMeta:  () => (typeof PLAYERS_META === "undefined" ? null : PLAYERS_META),
   // Added for the React settings page (web/src/components/DraftSettings.jsx).
   // setLeague patches the one real league object rather than a second copy of
-  // it — the same object readSetup() has always written to, so nothing about
-  // roster math, pool size or the CPU wobble can drift between the two.
+  // it — the same object readSetup() has always written to.
   teamCounts:   () => TEAM_COUNTS,
   scoringNames: () => SCORING_NAMES,
   setLeague: function (patch) {
@@ -6455,10 +6769,27 @@ window.JukeEngine = {
     // The format preset owns exactly one rule, at the moment it is chosen —
     // same side effect readSetup() has always applied, kept in one place.
     if (patch.scoring) league.rules.rec = REC_BY_FORMAT[patch.scoring];
+    // readSetup() re-reads teams/scoring off these same two legacy <select>
+    // elements every time refreshSetup() runs — goHome() among other places
+    // — and until this line it always won: the legacy controls are hidden
+    // and nothing else in this file writes to them any more, so they sat
+    // frozen at whatever fillSetupControls() drew at boot, and the next
+    // refreshSetup() silently reverted whatever this function had just set.
+    // Mirroring the value here is what makes `league` the one real object in
+    // both directions, not just this one.
+    if (patch.teams !== undefined)   $("teamCount").value = String(patch.teams);
+    if (patch.scoring !== undefined) $("scoring").value = patch.scoring;
   },
   setupProblem: setupProblem,
   resumeDraft:  resumeDraft,
   clearSave:    clearSave,
+  // Added for the Draft Locker (web/src/components/DraftLocker.jsx). Summary
+  // objects, not raw history entries — a card needs a label and a date, not
+  // a league object and a picks array to derive one from itself.
+  historyList:  () => readHistory().map(historySummary),
+  openHistoryDraft: openHistoryDraft,
+  inProgressSummary: inProgressSummary,
+  resumeSavedDraft:  resumeSavedDraft,
   // Everything the Start button does, minus the DOM read readSetup() used to
   // do — React already wrote the league directly via setLeague(). mySlot is
   // 0-indexed, matching slotSelect's own values (label is 1st, value is 0).
@@ -6515,6 +6846,19 @@ window.JukeEngine = {
   photoUrl:      photoUrl,
   initials:      initials,
   flexPositions: () => SLOT_ELIGIBLE.FLEX,
+  // Added for the React player card's four tabs (PlayerProfileDrawer.jsx),
+  // wiring it to the same data the legacy sheet's Overview/Game Logs/Depth
+  // Chart views already read — see the comment above these four functions.
+  // Latest News goes through window.Live.news() directly (already global,
+  // same as window.DraftEngine) rather than a bridge entry of its own, but
+  // sourceId()/safeNewsUrl() are: the first is how it finds the right id to
+  // ask for, the second is the one thing standing between a hostile feed
+  // and a javascript: link in the page, and neither may be re-typed in React.
+  projectionSummary: projectionSummary,
+  gameLogFor:        gameLogFor,
+  depthChartFor:     depthChartFor,
+  sourceId:          sourceId,
+  newsItemView:      newsItemView,
   // Added for the queue sidebar's "Juke Value Assistant" card
   // (PlayerQueueSidebar.jsx). All three are the exact real functions
   // already driving the legacy Suggestions tab and the tier chips on the
@@ -6682,6 +7026,12 @@ window.JukeEngine = {
   queued: queued,
   queueToggle: function (name) { queueToggle(name); render(); },
   queueMove: function (name, delta) { queueMove(name, delta); render(); },
+  // A separate list from the queue on purpose — see the comment on
+  // state.watchlist. No move/reorder pair: order carries no meaning here,
+  // unlike the queue, so there is nothing for queueMove()'s equivalent to do.
+  watchlist: () => state.watchlist,
+  watchlisted: watchlisted,
+  watchlistToggle: function (name) { watchlistToggle(name); render(); },
   currentTheme: currentTheme,
   setTheme:     setTheme,
   soundWanted:  () => soundWanted,
