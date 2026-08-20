@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import Header from './Header.jsx'
 import LiveScoresTicker from './LiveScoresTicker.jsx'
-import ResumeBanner from './ResumeBanner.jsx'
 import Hero from './Hero.jsx'
 import RoomNavigation from './RoomNavigation.jsx'
 import ShowYourWorking from './ShowYourWorking.jsx'
@@ -28,7 +27,6 @@ export default function Homepage() {
       <LiveScoresTicker onGamesChange={setHasScores} />
 
       <main className={'relative ' + (hasScores ? 'pt-28' : 'pt-16')}>
-        <ResumeBanner />
         <Hero />
 
         <section id="rooms" className="mx-auto max-w-7xl px-6 py-24">
