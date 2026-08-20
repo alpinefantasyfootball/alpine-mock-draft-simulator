@@ -42,6 +42,10 @@ export default function DraftFitTab({ fit, player }) {
   // is the difference between advice and a shrug.
   const tooEarly = legalFromRound !== null && round !== null && round < legalFromRound
 
+  // A gap of one is a spot, not spots. Small, and it is the sort of thing
+  // that makes generated copy read as generated.
+  const spots = (n) => `${n} spot${n === 1 ? '' : 's'}`
+
   // The wait is the whole point of the scarcity row: "8 left in his tier" is
   // patience if you pick again in three and a gamble if you pick again in
   // nineteen. Neither number means much alone, so they are one row.
@@ -139,8 +143,8 @@ export default function DraftFitTab({ fit, player }) {
             note={market === 0
               ? 'Drafted about where we rank him'
               : market > 0
-                ? `We rank him ${market} spots higher than the room does`
-                : `The room rates him ${Math.abs(market)} spots above where we do`}
+                ? `We rank him ${spots(market)} higher than the room does`
+                : `The room rates him ${spots(Math.abs(market))} above where we do`}
           />
         )}
       </div>
