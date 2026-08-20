@@ -14,6 +14,7 @@ import QueueList from './QueueList.jsx'
 import TeamTab from './TeamTab.jsx'
 import AnalysisTab from './AnalysisTab.jsx'
 import DraftInsightsDashboard from './DraftInsightsDashboard.jsx'
+import DraftSettingsModal from './DraftSettingsModal.jsx'
 
 function useEngine() {
   const [ready, setReady] = useState(false)
@@ -102,6 +103,7 @@ export default function DraftRoom() {
      the thing they move actually is. */
   const TRAY = ['hidden', 'default', 'raised']
   const [tray, setTray] = useState('default')
+  const [settingsOpen, setSettingsOpen] = useState(false)
   /* Functional update, not a read of `tray`. Written the obvious way first,
      and two quick clicks moved the tray one step: both handlers closed over
      the same render's `tray`, computed the same next position, and the
@@ -268,9 +270,28 @@ export default function DraftRoom() {
             manager might be here for — start a new draft, draft with
             friends, reopen an old one — not one primary action and two
             secondary ones. */}
+        {settingsOpen && (
+          <DraftSettingsModal
+            engine={engine}
+            started={false}
+            onClose={() => setSettingsOpen(false)}
+          />
+        )}
         <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col items-stretch gap-6 px-6 py-10 lg:flex-row">
           <div className="lg:basis-1/3">
             <ConfigureDraftForm />
+            {/* The full league lives behind this, and before a draft is the
+                only time any of it can be changed. ConfigureDraftForm covers
+                the four settings people actually touch; the lineup and the
+                44 scoring rules are here, where they have not been reachable
+                since this screen replaced the legacy one. */}
+            <button
+              type="button"
+              onClick={() => setSettingsOpen(true)}
+              className="mt-3 w-full rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-2.5 text-sm font-semibold text-white/70 transition-colors duration-150 hover:border-teal-400/40 hover:text-teal-300"
+            >
+              Roster &amp; scoring settings
+            </button>
           </div>
           <div className="lg:basis-1/3">
             <RoomPanel />
@@ -491,6 +512,7 @@ export default function DraftRoom() {
           longer matches that one's (h-16) — they're genuinely different
           bars now, not the same one reused. */}
       <DraftRoomStatusBar
+        onOpenSettings={() => setSettingsOpen(true)}
         roundText={roundText}
         code={code}
         rightLabel={rightLabel}
@@ -741,6 +763,14 @@ export default function DraftRoom() {
           press away from a finished board. z-[65] for the pill keeps it
           above the fixed status bar (z-50); the dashboard itself is z-[70],
           over everything in this view. */}
+      {settingsOpen && (
+        <DraftSettingsModal
+          engine={engine}
+          started={started}
+          onClose={() => setSettingsOpen(false)}
+        />
+      )}
+
       {draftIsOver && showInsights && (
         <DraftInsightsDashboard
           engine={engine}

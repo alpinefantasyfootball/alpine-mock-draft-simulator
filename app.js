@@ -7142,6 +7142,74 @@ window.JukeEngine = {
   suggestions:     suggestions,
   replacementGap:  replacementGap,
   tierRemaining:   tierRemaining,
+
+  /* The scoring editor, as data rather than as markup.
+
+     renderScoringFields() draws thirty-eight fields straight into
+     #scoringFields, which is inside the legacy setup screen and therefore
+     display:none - so the one thing here a competitor does not have has been
+     unreachable by mouse since DraftSettings.jsx replaced that screen. This
+     hands React what it needs to draw the same editor: the groups, the
+     labels, which rules are per-yard, and which ones Sleeper does not
+     forecast so the board's ranking cannot move when you change them.
+
+     It is the metadata that crosses, never the arithmetic. fantasyPoints()
+     and DEFAULT_RULES stay the only place a rule means anything - a second
+     scoring table in web/src is the exact failure CLAUDE.md's "nothing about
+     the league shape may be written down twice" exists to prevent. */
+  scoringEditor: function () {
+    return RULE_GROUPS.map(function (group) {
+      return {
+        title: group[0],
+        rules: group[1].map(function (rule) {
+          return {
+            key: rule,
+            label: RULE_LABELS[rule] || rule,
+            value: league.rules[rule] || 0,
+            perYard: PER_YARD_RULES.indexOf(rule) >= 0,
+            divisor: PER_YARD_RULES.indexOf(rule) >= 0
+              ? divisorFromPoints(league.rules[rule]) : null,
+            // A rule Sleeper does not forecast still scores every past
+            // season correctly; it just cannot move the projection the board
+            // is ranked on. The editor says so on the rule itself.
+            historyOnly: !movesProjection(rule)
+          };
+        })
+      };
+    });
+  },
+
+  /* One rule, then rebuild. Per-yard rules are entered as "1 point every N
+     yards" because that is how a league writes them down, and converted here
+     rather than in the component - pointsFromDivisor() is the existing
+     conversion and there is no reason for a second one. */
+  setScoringRule: function (key, value, asDivisor) {
+    const next = asDivisor ? pointsFromDivisor(value) : Number(value);
+    if (!isFinite(next)) return false;
+    league.rules[key] = next;
+    buildBoard();
+    render();
+    return true;
+  },
+
+  resetScoringRules: function () {
+    league.rules = Object.assign({}, DEFAULT_RULES);
+    buildBoard();
+    render();
+    return true;
+  },
+
+  /* The starting lineup, as the league actually holds it. Every consumer
+     reads this rather than keeping its own idea of what a roster is. */
+  lineup: function () {
+    return {
+      starters: Object.assign({}, league.starters),
+      flex: league.flex,
+      superflex: league.superflex,
+      bench: league.bench,
+      rounds: league.rounds
+    };
+  },
   // Whether to take him *now*, with this roster, at this pick — the one
   // question the sheet could not answer, because every other number on it
   // reads the same at pick 1 and pick 140. Computed engine-side so the cap,

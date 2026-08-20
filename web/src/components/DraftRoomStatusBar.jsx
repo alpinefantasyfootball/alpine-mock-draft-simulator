@@ -1,6 +1,6 @@
 import { Fragment } from 'react'
 import { motion } from 'framer-motion'
-import { LogOut, Pause, Play, RotateCcw, Timer, Volume2, VolumeX } from 'lucide-react'
+import { LogOut, Pause, Play, RotateCcw, Settings, Timer, Volume2, VolumeX } from 'lucide-react'
 import Ticker from './Ticker.jsx'
 import JukeLogo from './juke-logo/JukeLogo.jsx'
 
@@ -62,6 +62,7 @@ export default function DraftRoomStatusBar({
   discardLabel,
   discardDanger,
   onDiscard,
+  onOpenSettings,
 }) {
   return (
     <Fragment>
@@ -153,6 +154,12 @@ export default function DraftRoomStatusBar({
             </IconButton>
           </span>
         )}
+        {/* Everything a league is - the lineup, all 44 scoring rules, and the
+            invite link - lives behind this. Two of those three worked the
+            whole time and simply had no door. */}
+        <IconButton onClick={onOpenSettings} title="Draft settings">
+          <Settings className="h-3.5 w-3.5" />
+        </IconButton>
         <IconButton onClick={onDiscard} danger={discardDanger} title={discardLabel}>
           <LogOut className="h-3.5 w-3.5" />
         </IconButton>
