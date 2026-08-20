@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { POS_CELL_BLOCK } from './draftRoomPositions.js'
 
@@ -97,6 +98,30 @@ function Arrow({ dir, className }) {
    1.26. This board is hardcoded dark - bg-[#0B0E14], no theme variants - so
    that case does not arise. Give this board a light theme and the pair has to
    come back: measure before assuming it still does not. */
+/* Faces are a desktop-only feature, and `hidden lg:block` is not enough to
+   express that. A display:none lazy image mostly does not fetch - measured,
+   134 of 140 never loaded - but "mostly" is doing real work in that sentence,
+   and either way the 280 DOM nodes still ship to a phone that will never draw
+   them. This gates the elements themselves, so a phone builds a board with no
+   images in it at all.
+
+   1024px is Tailwind's own `lg`, which is the breakpoint every other
+   desktop/mobile split in this room already keys on - written here as a number
+   because a media query string is the one place it cannot be read from the
+   theme. If that breakpoint ever moves, it moves here too. */
+function useDesktop() {
+  const [wide, setWide] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches
+  )
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1024px)')
+    const onChange = (e) => setWide(e.matches)
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
+  return wide
+}
+
 function mineRing(isMine, isCurrent) {
   if (!isMine) return ''
   return isCurrent
@@ -104,7 +129,8 @@ function mineRing(isMine, isCurrent) {
     : 'shadow-[inset_0_0_0_2px_#FFD166]'
 }
 
-export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLabelOf, onTeamClick }) {
+export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLabelOf, onTeamClick, photoFor, shortNameOf }) {
+  const desktop = useDesktop()
   const byCell = new Map()
   picks.forEach((p) => byCell.set(p.round + '-' + p.slot, p))
 
@@ -212,6 +238,11 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
                 // number, and half the board agrees with the wrong answer).
                 const code = pick && DE ? DE.pickCode(pick.overall, teams) : null
                 const arrow = boardArrow(DE, round, s, teams)
+                /* Desktop only. A face is the fifth thing this card is
+                   documented to carry and the React rebuild dropped it - but a
+                   phone column is 112px wide and every pixel is already spoken
+                   for, so below lg the cell stays text. */
+                const face = desktop && pick && photoFor ? photoFor(pick.player) : ''
                 return (
                   <div
                     key={round + '-' + s}
@@ -246,10 +277,11 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
                              positioned against — without it the arrow
                              would hunt for the nearest positioned
                              ancestor and land somewhere else entirely. */
-                          'relative flex h-full flex-col justify-center gap-0.5 rounded-md px-1 py-1 backdrop-blur-sm ' +
+                          'relative flex h-full items-center gap-1 rounded-md px-1 py-1 backdrop-blur-sm ' +
                           (POS_CELL_BLOCK[pick.player.pos] || 'border border-white/10 bg-white/[0.04] text-white/90')
                         }
                       >
+                        <div className="flex min-w-0 flex-1 flex-col justify-center gap-0.5">
                         {/* In the flow, not absolutely positioned. A filled
                             cell already puts the team abbreviation in the
                             top-right corner, so an `absolute right-1 top-0.5`
@@ -271,7 +303,18 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
                           </span>
                         </div>
                         <div className="flex items-center justify-between gap-1 leading-none">
-                          <p className="min-w-0 truncate text-xs font-semibold">{pick.player.name}</p>
+                          {/* "J. Gibbs", not "Jahmyr Gibbs". The face has to come out of the
+                              cell's width, and a full name in a ~132px column
+                              truncated 133 of 140 times once it did - which is
+                              a worse legibility problem than the one the face
+                              was added to fix. shortName() is the engine's own
+                              function, the same one the hero shot uses and for
+                              the same reason: an initial plus a surname reads
+                              as a person where a surname alone reads as a row
+                              in a table. Never re-derived here. */}
+                          <p className="min-w-0 truncate text-xs font-semibold">
+                            {shortNameOf ? shortNameOf(pick.player) : pick.player.name}
+                          </p>
                           {gap != null && (
                             <span className={'shrink-0 text-[10px] font-semibold ' + (gap >= 0 ? 'text-emerald-400' : 'text-rose-400')}>
                               {gap >= 0 ? '+' : ''}
@@ -279,6 +322,26 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
                             </span>
                           )}
                         </div>
+                        </div>
+                        {/* No initials underneath and no grey disc when a
+                            photo is missing - the card simply has no face.
+                            140 grey circles is a worse board than 140 cards a
+                            few of which have no picture, which is the same
+                            reason avatar() was never reused here. onError
+                            removes the element rather than leaving a broken
+                            image frame. */}
+                        {face && (
+                          <img
+                            src={face}
+                            alt=""
+                            loading="lazy"
+                            onError={(e) => e.currentTarget.remove()}
+                            className={
+                              'h-7 w-7 shrink-0 rounded-full ' +
+                              (pick.player.pos === 'DST' ? 'object-contain' : 'object-cover')
+                            }
+                          />
+                        )}
                       </motion.div>
                     ) : isCurrent ? (
                       <motion.div

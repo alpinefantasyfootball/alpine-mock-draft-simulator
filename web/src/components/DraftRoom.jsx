@@ -537,6 +537,8 @@ export default function DraftRoom() {
               <AnalysisTab engine={engine} league={league} picks={picks} mySlot={mySlot} />
             ) : (
             <DraftBoardGrid
+              photoFor={photoFor}
+              shortNameOf={engine.shortName}
               league={league}
               picks={picks}
               mySlot={mySlot}
