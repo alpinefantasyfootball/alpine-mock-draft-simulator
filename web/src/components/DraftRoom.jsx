@@ -1,4 +1,5 @@
 import { useEffect, useReducer, useRef, useState } from 'react'
+import { ChevronDown, ChevronUp } from 'lucide-react'
 import Header from './Header.jsx'
 import ConfigureDraftForm from './ConfigureDraftForm.jsx'
 import RoomPanel from './RoomPanel.jsx'
@@ -51,6 +52,30 @@ function useHashActive(prefix) {
   return active
 }
 
+/* Small enough to live here rather than in its own file, and deliberately
+   not IconButton from the status bar: that one is a 28-32px header control
+   with its own hover language, and this sits on top of a busy board where it
+   has to stay legible without shouting. */
+function TrayButton({ onClick, disabled, title, children }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      aria-label={title}
+      className={
+        'flex h-6 w-6 items-center justify-center rounded-md border transition-colors duration-150 ' +
+        (disabled
+          ? 'cursor-not-allowed border-slate-800 bg-slate-950/70 text-white/15'
+          : 'border-slate-700 bg-slate-950/80 text-white/60 hover:border-teal-400/50 hover:text-teal-300')
+      }
+    >
+      {children}
+    </button>
+  )
+}
+
 export default function DraftRoom() {
   const engine = useEngine()
   useJukeTick(engine)
@@ -65,10 +90,31 @@ export default function DraftRoom() {
   const [watchlistOnly, setWatchlistOnly] = useState(false)
   const [showDrafted, setShowDrafted] = useState(false)
   const [selectedPlayer, setSelectedPlayer] = useState(null)
-  // Isolate hides the queue/profile column and the log/chat dock, leaving
-  // just the board — see the status bar's own comment on why this is
-  // lg+ only for now.
-  const [isolate, setIsolate] = useState(false)
+  /* The tray under the board has three positions, not two, and the middle
+     one is the default — the same shape Sleeper's chevrons drive. `hidden`
+     is the old isolate: board only, nothing underneath. `raised` gives the
+     panels the room to read a long player list without leaving the board
+     entirely.
+
+     A boolean could not express this, and the old one lived in the header as
+     a maximise icon — which is a control for a thing that is not the header.
+     The chevrons sit on the board's own bottom-right corner instead, where
+     the thing they move actually is. */
+  const TRAY = ['hidden', 'default', 'raised']
+  const [tray, setTray] = useState('default')
+  /* Functional update, not a read of `tray`. Written the obvious way first,
+     and two quick clicks moved the tray one step: both handlers closed over
+     the same render's `tray`, computed the same next position, and the
+     second set it to where the first already had. The bug only shows up when
+     somebody presses twice faster than a re-render, which is exactly how a
+     person uses a chevron to go from raised straight to hidden. */
+  const moveTray = (dir) => {
+    setTray((current) => {
+      const i = TRAY.indexOf(current)
+      return TRAY[Math.min(TRAY.length - 1, Math.max(0, i + dir))]
+    })
+  }
+  const isolate = tray === 'hidden'
   // 'board' is the default — the board's own ADP-rank order, same as
   // sortBy === 'adp' asc for undrafted players, but it's its own case so
   // clicking away from a column and never toggling anything back to it
@@ -464,8 +510,6 @@ export default function DraftRoom() {
         onDiscard={handleDiscard}
         soundOn={soundOn}
         onToggleSound={handleToggleSound}
-        isolate={isolate}
-        onToggleIsolate={() => setIsolate((v) => !v)}
       />
       {/* pt-14 matches DraftRoomStatusBar's own h-14; md:pt-20 adds the
           6-unit ticker strip (top-14, h-6) that only exists at md+ — see
@@ -529,8 +573,12 @@ export default function DraftRoom() {
 
           <div
             className={
-              'flex min-h-0 min-w-0 flex-1 ' +
-              (isolate ? 'lg:flex-1' : 'lg:flex-none lg:h-[45%]')
+              'relative flex min-h-0 min-w-0 flex-1 ' +
+              (tray === 'hidden'
+                ? 'lg:flex-1'
+                : tray === 'raised'
+                  ? 'lg:flex-none lg:h-[30%]'
+                  : 'lg:flex-none lg:h-[45%]')
             }
           >
             {view === 'analysis' ? (
@@ -551,6 +599,33 @@ export default function DraftRoom() {
               }
             />
             )}
+
+            {/* The tray control, on the board rather than in the header,
+                because the board is the thing it moves. Desktop only: below
+                lg the panels are a fixed bottom sheet with its own tab bar,
+                so there is no tray here to raise or hide.
+
+                Two buttons rather than one cycling button — a single control
+                that wraps around from hidden back to raised is the kind of
+                thing you have to press three times to learn. Each is disabled
+                at its own end of the range, which is also what tells you the
+                range exists. */}
+            <div className="absolute bottom-3 right-3 z-10 hidden flex-col gap-1 lg:flex">
+              <TrayButton
+                onClick={() => moveTray(1)}
+                disabled={tray === 'raised'}
+                title="Show more of the list"
+              >
+                <ChevronUp className="h-3.5 w-3.5" />
+              </TrayButton>
+              <TrayButton
+                onClick={() => moveTray(-1)}
+                disabled={tray === 'hidden'}
+                title={tray === 'default' ? 'Hide the list' : 'Show less of the list'}
+              >
+                <ChevronDown className="h-3.5 w-3.5" />
+              </TrayButton>
+            </div>
           </div>
 
           {/* The panel row. flex-none below lg with no in-flow children —
