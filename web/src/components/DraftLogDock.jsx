@@ -22,6 +22,7 @@ function useJukeTick(engine) {
 const TABS = [
   { key: 'queue', label: 'My Queue' },
   { key: 'log', label: 'Draft Log' },
+  { key: 'picks', label: 'Picks' },
 ]
 
 // Replaces the old chat dock. Not room-specific — a queue and a log of
@@ -65,6 +66,22 @@ export default function DraftLogDock() {
     .filter((p) => p.slot !== mySlot)
     .slice(-10)
     .reverse()
+
+  // The real, unbounded history — every pick, own included, most recent
+  // first, with a "Round N" divider wherever the round changes. Deliberately
+  // separate from recentOthers above: that feed is a narrower, most-recent
+  // activity ticker (last 10, other seats only) with its own reason to
+  // exist, not something this tab replaces. Matches renderPicks() (app.js)
+  // one pass, no separate grouping structure.
+  const pickItems = []
+  let lastRound = null
+  picks.slice().reverse().forEach((pick) => {
+    if (pick.round !== lastRound) {
+      pickItems.push({ type: 'divider', round: pick.round })
+      lastRound = pick.round
+    }
+    pickItems.push({ type: 'pick', pick })
+  })
 
   return (
     <div className="fixed bottom-4 right-4 z-50 flex w-[320px] flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/95 shadow-2xl backdrop-blur-md">
@@ -162,20 +179,47 @@ export default function DraftLogDock() {
                   </div>
                 ))
               )
-            ) : recentOthers.length === 0 ? (
+            ) : tab === 'log' ? (
+              recentOthers.length === 0 ? (
+                <p className="px-2 py-6 text-center text-xs text-white/30">No picks yet.</p>
+              ) : (
+                recentOthers.map((pick) => {
+                  const code = DE ? DE.pickCode(pick.overall, league.teams) : pick.overall
+                  return (
+                    <p key={pick.overall} className="mb-1.5 px-1 text-xs leading-relaxed text-white/60">
+                      <span className="text-white/30">{code}</span>{' '}
+                      <span className="font-medium text-white/80">{engine.teamLabel(pick.slot)}</span> took{' '}
+                      <span className="text-white/90">{pick.player.name}</span>{' '}
+                      <span className="text-white/30">({pick.player.pos})</span>
+                    </p>
+                  )
+                })
+              )
+            ) : pickItems.length === 0 ? (
               <p className="px-2 py-6 text-center text-xs text-white/30">No picks yet.</p>
             ) : (
-              recentOthers.map((pick) => {
-                const code = DE ? DE.pickCode(pick.overall, league.teams) : pick.overall
-                return (
-                  <p key={pick.overall} className="mb-1.5 px-1 text-xs leading-relaxed text-white/60">
-                    <span className="text-white/30">{code}</span>{' '}
-                    <span className="font-medium text-white/80">{engine.teamLabel(pick.slot)}</span> took{' '}
-                    <span className="text-white/90">{pick.player.name}</span>{' '}
-                    <span className="text-white/30">({pick.player.pos})</span>
+              pickItems.map((item) =>
+                item.type === 'divider' ? (
+                  <p key={'round-' + item.round} className="mb-1 mt-2 px-1 text-[10px] font-semibold uppercase tracking-wide text-white/30 first:mt-0">
+                    Round {item.round}
+                  </p>
+                ) : (
+                  <p
+                    key={item.pick.overall}
+                    className={
+                      'mb-1.5 rounded-md border-l-2 px-2 py-1 text-xs leading-relaxed ' +
+                      (item.pick.slot === mySlot
+                        ? 'border-l-[#FFD166] bg-[#FFD166]/5 text-white/80'
+                        : 'border-l-transparent text-white/60')
+                    }
+                  >
+                    <span className="text-white/30">{DE ? DE.pickCode(item.pick.overall, league.teams) : item.pick.overall}</span>{' '}
+                    <span className="font-medium text-white/80">{engine.teamLabel(item.pick.slot)}</span> took{' '}
+                    <span className="text-white/90">{item.pick.player.name}</span>{' '}
+                    <span className="text-white/30">({item.pick.player.pos})</span>
                   </p>
                 )
-              })
+              )
             )}
           </div>
         </>

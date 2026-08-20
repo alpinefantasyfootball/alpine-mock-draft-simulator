@@ -544,15 +544,18 @@
 
   <!-- The new React draft room page (web/src/components/DraftRoom.jsx),
        reached at #/draft-room. Deliberately outside #view-app/#view-home's
-       hidden toggle: applyRoute() never touches this id, so mounting here
-       carries none of the "unguarded lookup throws" risk the other React
-       mounts guard against, and app.js's routing can neither show nor hide
-       it by accident — DraftRoom watches the hash itself and renders
-       nothing when it doesn't match. Not the live draft board yet: it reads
-       real board/pick/roster data through window.JukeEngine, but its Draft
-       button is a local, cosmetic animation only — no pick is actually
-       submitted. Wiring that up touches room sync and CPU turn advancement,
-       a separate, larger change. -->
+       hidden toggle: applyRoute() shows/hides neither this id nor the
+       room/clock/sim state DraftRoom shares with the legacy engine when
+       the hash is #/draft-room (see onDraftRoomRoute() in app.js) — so
+       mounting here carries none of the "unguarded lookup throws" risk the
+       other React mounts guard against, and app.js's routing can neither
+       show, hide, nor tear it down by accident. DraftRoom watches the hash
+       itself and renders nothing when it doesn't match. Its Draft button
+       is real: engine.draftPlayer() is the same draftAndAdvance() the
+       legacy Draft button calls, so a pick here is a real pick. Nothing
+       here links to it yet, and it is still missing real features
+       (chat/GIF, a mobile layout, scouting chips, test coverage) — see
+       CLAUDE.md and the plan history for the current gap list. -->
   <div id="draftroom-root"></div>
 
   <!-- ============ PLAYER DETAIL ============ -->
