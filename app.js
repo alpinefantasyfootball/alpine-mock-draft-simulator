@@ -1052,6 +1052,27 @@ function applyJitter() {
   });
 }
 
+/* One chain, always.
+
+   state.simTimer holds a single handle, so scheduling a step while another is
+   already pending does not replace it - it *orphans* it. The old chain keeps
+   firing, untracked, and stopSim() can then only ever cancel the newest one.
+   Every orphan doubles the rate the board moves at.
+
+   It shows up as the draft accelerating and going erratic the moment autopick
+   is switched on: measured on a real 140-pick draft, CPU picks held a steady
+   ~370ms for a full round, then fell to a median of 108ms with a spread of 18
+   to 389 once autopick started making my picks. The proof it was chains and
+   not a slow render: calling stopSim() at pick 75 left the draft running, and
+   it made 18 more picks in the next two seconds.
+
+   Clearing before scheduling makes the invariant true by construction rather
+   than by every caller remembering it. */
+function scheduleCpuStep() {
+  if (state.simTimer) clearTimeout(state.simTimer);
+  state.simTimer = setTimeout(cpuStep, CPU_DELAY);
+}
+
 function stopSim() {
   if (state.simTimer) { clearTimeout(state.simTimer); state.simTimer = null; }
   state.simulating = false;
@@ -1083,7 +1104,7 @@ render();
 
   render();
 
-  state.simTimer = setTimeout(cpuStep, CPU_DELAY);
+  scheduleCpuStep();
 }
 
 function runCPUs() {
@@ -1092,7 +1113,7 @@ function runCPUs() {
   if (draftOver() || isMyTurn()) { resetClock(); render(); return; }
   state.simulating = true;
   render();
-  state.simTimer = setTimeout(cpuStep, CPU_DELAY);
+  scheduleCpuStep();
 }
 
 // Jump straight to your turn without watching the rest.
