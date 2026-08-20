@@ -274,6 +274,13 @@ export default function DraftRoom() {
   // site — points above replacement at the player's position, as a share
   // of the best such figure on the board. Not a second value metric.
   const valueFor = (player) => engine.overallScore(player)
+  /* The projection block a player's raw counting stats live on — the same
+     `s.p` logColumns() reads in app.js. Handed to the list so its stat
+     columns and its sort read one source. */
+  const projOf = (player) => {
+    const s = engine.statOf(player)
+    return s && s.p ? s.p : null
+  }
 
   // The Value Assistant card's one recommendation — suggestions('ALL')[0],
   // the exact real ranking (adp+jitter) x need x risk x model that already
@@ -317,9 +324,16 @@ export default function DraftRoom() {
     .filter((p) => !search || p.name.toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => {
       if (sortBy === 'board') return a.overall - b.overall
-      // Reuse the exact same readers the grid cells render from (pointsFor/
-      // valueFor), so a sort can never disagree with what's on screen.
-      const reader = sortBy === 'adp' ? (p) => p.adp : sortBy === 'pts' ? pointsFor : valueFor
+      /* Reuse the exact same readers the cells render from, so a sort can
+         never disagree with what is on screen. Anything that is not one
+         of the three derived columns is a raw projection key (rushing
+         yards, targets, and the rest of the scrollable stats), read off
+         the same block those cells draw from. */
+      const reader =
+        sortBy === 'adp' ? (p) => p.adp
+          : sortBy === 'pts' ? pointsFor
+            : sortBy === 'vorp' || sortBy === 'value' ? valueFor
+              : (p) => { const proj = projOf(p); const v = proj ? proj[sortBy] : null; return v || null }
       const av = reader(a)
       const bv = reader(b)
       // "A missing number is not a small number" — Value is null for K/DST
@@ -529,6 +543,7 @@ export default function DraftRoom() {
               recommended={recommended}
               recommendedVorp={recommendedVorp}
               recommendedTierLeft={recommendedTierLeft}
+              projOf={projOf}
               queuePlayers={queuePlayers}
               recentOthers={recentOthers}
               engine={engine}
