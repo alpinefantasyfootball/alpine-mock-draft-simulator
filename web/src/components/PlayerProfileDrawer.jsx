@@ -8,13 +8,20 @@ import ProjectionsTab from './ProjectionsTab.jsx'
 import GameLogsTab from './GameLogsTab.jsx'
 import LatestNewsTab from './LatestNewsTab.jsx'
 import DepthChartTab from './DepthChartTab.jsx'
+import DraftFitTab from './DraftFitTab.jsx'
 
 // Our Read leads: it is the one thing here a projection feed cannot show
 // you about its own numbers, and CLAUDE.md's own note on this is that the
 // explanation used to be reachable only as a title tooltip — "not at all
 // on a phone, and never on the sheet somebody opens because they are
 // confused." First tab, not a tooltip.
-const TABS = ['Our Read', 'Projections', 'Game Logs', 'Latest News', 'Depth Chart']
+// Draft Fit sits second, directly after the model's own read. Our Read says
+// what we think of the player; Draft Fit says what he is worth *to this
+// roster at this pick*, which is the question somebody mid-draft actually
+// opened the sheet to answer. It is hidden outright before a draft is
+// running rather than shown empty — a tab that opens onto "not applicable"
+// is a dead control, and this project has shipped one of those before.
+const BASE_TABS = ['Our Read', 'Projections', 'Game Logs', 'Latest News', 'Depth Chart']
 
 // Slides in over the Player Queue only — DraftRoom.jsx wraps this and
 // PlayerQueueSidebar in one `relative` box, so `absolute inset-0` here
@@ -22,7 +29,21 @@ const TABS = ['Our Read', 'Projections', 'Game Logs', 'Latest News', 'Depth Char
 // per "covering the Player Queue" rather than the whole screen.
 export default function PlayerProfileDrawer({ player, onClose, photoFor, initialsFor }) {
   const engine = useEngine()
-  const [tab, setTab] = useState('Projections')
+  const [tab, setTab] = useState('Our Read')
+
+  // Recomputed on every render rather than memoized: draftFit() is a
+  // question about the board *right now*, and state.picks is mutated in
+  // place (see DraftBoardGrid's own note on why nothing here may be keyed
+  // on that array's identity), so a memo would freeze it at mount.
+  const fit = engine && player ? engine.draftFit(player) : null
+  const TABS = fit ? [BASE_TABS[0], 'Draft Fit', ...BASE_TABS.slice(1)] : BASE_TABS
+
+  // A tab can disappear underneath the reader — the draft ends, or they open
+  // a sheet before starting one — so a selection that no longer exists falls
+  // back rather than rendering nothing at all.
+  useEffect(() => {
+    if (!TABS.includes(tab)) setTab(TABS[0])
+  }, [TABS.join('|'), tab])
 
   // Reset to the first tab on every new player, so opening someone else's
   // drawer never lands on the tab the last player happened to be left on.
@@ -129,8 +150,13 @@ export default function PlayerProfileDrawer({ player, onClose, photoFor, initial
           <div className="flex-1 overflow-y-auto p-4">
             {!engine ? null : tab === 'Our Read' ? (
               <OurReadTab engine={engine} player={player} />
+            ) : tab === 'Draft Fit' ? (
+              <DraftFitTab fit={fit} player={player} />
             ) : tab === 'Projections' ? (
-              <ProjectionsTab summary={engine.projectionSummary(player)} />
+              <ProjectionsTab
+                summary={engine.projectionSummary(player)}
+                record={engine.projectionRecord(player)}
+              />
             ) : tab === 'Game Logs' ? (
               <GameLogsTab engine={engine} player={player} />
             ) : tab === 'Latest News' ? (

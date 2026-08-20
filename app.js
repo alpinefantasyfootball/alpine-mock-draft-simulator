@@ -2304,6 +2304,124 @@ function byeShare(player) {
   return rosterOf(state.mySlot).filter((p) => p.bye === player.bye).length;
 }
 
+/* Everything on the player sheet describes a player. Nothing on it describes
+   a *decision*: every number in the drawer reads identically at pick 1 and at
+   pick 140, with an empty roster or four running backs already on it. The one
+   question somebody actually opens a sheet to answer mid-draft — should I take
+   him, now, with this roster — had no answer anywhere.
+
+   It lives here rather than in the drawer because every part of it is a
+   question about the league's shape, and that may not be written down twice:
+   the cap is needMultiplier()'s (see atPositionCap — the cap is maxAt() for a
+   skill position, the starting requirement for a K or DST, and starters.QB
+   plus the superflex for a quarterback, which is precisely the split that
+   caused the superflex grading bug), the lineup is bestLineup()'s, and the
+   snake is DraftEngine's. React gets the answer, never the rules.
+
+   Returns null before a draft is running: there is no roster to fit against
+   and no next pick to wait for, so every field would be a fact about nothing. */
+function draftFit(player) {
+  if (!state.started || !player) return null;
+
+  const pos = player.pos;
+  const mine = rosterOf(state.mySlot);
+  const nextOverall = nextPickFor(state.mySlot);
+
+  /* Would he start for me today. This is `aboveReplacement` used as the
+     yardstick it actually is — CLAUDE.md's warning is about pricing *depth
+     picks* with it in needMultiplier(), where a bench spot is a lottery
+     ticket rather than a starting decision. Asking whether a player cracks
+     the lineup is the one question replacement level exists to answer, and
+     bestLineup() is asked directly rather than re-deriving it. */
+  const withHim = bestLineup(mine.concat([player]));
+  const startsNow = withHim.some((s) => s.player === player);
+
+  return {
+    /* How many comparable players are left, and how long the wait is. The
+       two only mean something together: eight left in his tier is patience
+       when you pick again in three, and a gamble when you pick again in
+       nineteen. */
+    tierLeft: tierRemaining(player),
+    posLeft: board.filter((p) => p.pos === pos && !p.drafted).length,
+    nextOverall: nextOverall,
+    picksAway: nextOverall === null ? null : nextOverall - (state.picks.length + 1),
+
+    /* Whether the market expects him to survive that wait. His own ADP
+       against the pick I next hold — not a probability, which the data does
+       not support, just the two numbers side by side. */
+    adp: typeof player.adp === "number" ? player.adp : null,
+
+    have: countAt(state.mySlot, pos),
+    atCap: atPositionCap(pos),
+    startsNow: startsNow,
+
+    /* A bye clash counts starters I already hold in his week. byeShare()
+       answers it and the grade's own bye component is built on the same
+       idea, so this is a read of an existing measure rather than a second
+       one. */
+    byeClash: byeShare(player),
+    bye: player.bye || null,
+
+    /* Underrated or overrated *within his own position* — board rank against
+       the projection's rank. It cannot compare across positions and is not
+       asked to: overallScore() already does that job on the Our Read tab.
+
+       Null for the positions we refuse to rank. Withholding has to be
+       complete or it is worse than not withholding: a sheet that prints a
+       dash in the Juke score strip and then hands out a market verdict three
+       lines below has told the reader to distrust a number and then argued
+       from it. K ranks at r 0.37 / -0.09 / 0.57 and DST at 0.32 / 0.06 /
+       0.25 — marketGap() rests on projPosRank, which is the very ordering
+       those numbers say is noise. */
+    unranked: UNRANKED_POSITIONS.indexOf(pos) >= 0,
+    market: UNRANKED_POSITIONS.indexOf(pos) >= 0 ? null : marketGap(player),
+
+    /* The round this position becomes a pick the app would actually make.
+       Derived by asking needFromCount() itself rather than repeating "last
+       round minus one" — those cutoffs are already measured back from
+       league.rounds in one place, and a second copy is exactly the league
+       shape written down twice. Null for everything but K and DST, which
+       are the only positions the app schedules on the manager's behalf. */
+    legalFromRound: earliestRoundFor(pos),
+    /* Null once the board is full: onTheClock() has no pick to describe and
+       returns null, and reading .round off it threw — on the player sheet,
+       opened on a finished draft, which is precisely when somebody browses
+       what is left. The timing banner reads a null round as "no longer a
+       question", which it is. */
+    round: onClockRound()
+  };
+}
+
+/* The first round in which a position is not gated out on timing alone.
+   Asked with an empty roster at that position, so a 999 can only be the
+   timing rule rather than a roster cap. Returns null when nothing gates it,
+   which is every position except the two the app drafts for you. */
+function onClockRound() {
+  const now = DraftEngine.onTheClock(league, state.picks.length);
+  return now ? now.round : null;
+}
+
+function earliestRoundFor(pos) {
+  if (!FORCED_LATE[pos]) return null;
+  for (let r = 1; r <= league.rounds; r++) {
+    if (needFromCount(0, pos, r) !== 999) return r;
+  }
+  return null;
+}
+
+/* The next pick this seat holds, as an overall number, or null if the draft
+   has none left for them. Walks forward from the current pick rather than
+   doing arithmetic on the snake — DraftEngine.onTheClock() already owns turn
+   order, and a second derivation of it is the seat-versus-pick-number bug
+   waiting to happen. */
+function nextPickFor(slot) {
+  const total = league.teams * league.rounds;
+  for (let overall = state.picks.length + 1; overall <= total; overall++) {
+    if (DraftEngine.onTheClock(league, overall - 1).slot === slot) return overall;
+  }
+  return null;
+}
+
 
 /* ---- 10a. Player stats and draft signals ---------------
 
@@ -6954,6 +7072,12 @@ window.JukeEngine = {
   suggestions:     suggestions,
   replacementGap:  replacementGap,
   tierRemaining:   tierRemaining,
+  // Whether to take him *now*, with this roster, at this pick — the one
+  // question the sheet could not answer, because every other number on it
+  // reads the same at pick 1 and pick 140. Computed engine-side so the cap,
+  // the lineup and the snake stay written down once. Null before a draft
+  // starts, which the tab renders as its own state rather than as zeros.
+  draftFit:        draftFit,
   // The Draft button's real submission path. Wraps draftAndAdvance() rather
   // than reimplementing it — that one function already knows the solo vs.
   // room difference (mutate locally and kick off runCPUs(), or send
