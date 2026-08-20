@@ -138,6 +138,9 @@ export default function DraftRoom() {
   // finished team's report are different questions, and one resetting
   // the other would be a surprise.
   const [rosterSlot, setRosterSlot] = useState(0)
+  // Which of the combined Queue/Roster panel's two tabs is showing. Queue
+  // first: it is the one that changes as the draft runs.
+  const [sideTab, setSideTab] = useState('queue')
   useEffect(() => {
     if (draftIsOver) {
       setInsightsSlot(mySlot)
@@ -482,7 +485,7 @@ export default function DraftRoom() {
             {/* Players — the widest panel, as it is on Sleeper: it carries
                 the search, the filter chips, the sortable grid and the
                 profile drawer that slides over it. */}
-            <div className="relative flex min-h-0 flex-1 lg:flex-[4] lg:min-w-0">
+            <div className="relative flex min-h-0 flex-1 lg:flex-[5] lg:min-w-0">
             <PlayerHub
               players={availablePlayers}
               search={search}
@@ -520,32 +523,47 @@ export default function DraftRoom() {
             />
             </div>
 
-            {/* The other three panels are lg+ only — below lg these same
-                three views are tabs inside PlayerHub's sheet (Queue, Team,
-                Chat), which is why nothing here needs a mobile branch. */}
-            <div className="hidden lg:flex lg:min-h-0 lg:flex-[2] lg:min-w-0">
-              <SidePanel title="Queue" count={queuePlayers.length}>
-                <div className="p-2">
-                  <QueueList players={queuePlayers} myTurn={myTurn} engine={engine} />
-                </div>
-              </SidePanel>
-            </div>
+            {/* The other panels are lg+ only — below lg these same views
+                are tabs inside PlayerHub's sheet (Queue, Team, Chat),
+                which is why nothing here needs a mobile branch.
 
-            {/* Roster, not the old bottom strip: the strip could only show
-                a surname per slot across the full width, where a real
-                column shows the whole lineup and can carry any seat — the
-                same any-team switcher the Insights dashboard has. */}
-            <div className="hidden lg:flex lg:min-h-0 lg:flex-[2] lg:min-w-0">
-              <SidePanel title="Roster">
-                <TeamTab
-                  compact
-                  engine={engine}
-                  league={league}
-                  mySlot={mySlot}
-                  viewSlot={rosterSlot}
-                  onViewSlot={setRosterSlot}
-                  teamLabelOf={(slot) => engine.teamLabel(slot)}
-                />
+                Queue and Roster share one tabbed panel rather than taking
+                a column each. Four columns was one too many: at 1600px it
+                gave each side panel 320px, and neither of these two needs
+                that constantly — a queue is usually a handful of names and
+                a roster is read in glances, while the player grid it was
+                taking width from is the surface the whole screen exists
+                for. Combined, Players goes 640px -> 800px at that width,
+                and the pair still gets 480px between them. */}
+            <div className="hidden lg:flex lg:min-h-0 lg:flex-[3] lg:min-w-0">
+              <SidePanel
+                tabs={[
+                  { key: 'queue', label: 'Queue', count: queuePlayers.length },
+                  { key: 'roster', label: 'Roster' },
+                ]}
+                active={sideTab}
+                onTab={setSideTab}
+              >
+                {sideTab === 'queue' ? (
+                  <div className="p-2">
+                    <QueueList players={queuePlayers} myTurn={myTurn} engine={engine} />
+                  </div>
+                ) : (
+                  /* Roster, not the old bottom strip: the strip could only
+                     show a surname per slot across the full width, where a
+                     real panel shows the whole lineup and can carry any
+                     seat — the same any-team switcher the Insights
+                     dashboard has. */
+                  <TeamTab
+                    compact
+                    engine={engine}
+                    league={league}
+                    mySlot={mySlot}
+                    viewSlot={rosterSlot}
+                    onViewSlot={setRosterSlot}
+                    teamLabelOf={(slot) => engine.teamLabel(slot)}
+                  />
+                )}
               </SidePanel>
             </div>
 
