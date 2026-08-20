@@ -76,7 +76,20 @@ export default defineConfig({
     },
     {
       command: "npx --yes wrangler@4 dev -c worker/wrangler.toml --port 8787 --local",
-      port: 8787,
+      /* `url`, not `port`, and the difference is the whole point.
+
+         With `port`, reuseExistingServer accepts whatever happens to be
+         listening on 8787 - which during one debugging session was a plain
+         `python -m http.server`, cheerfully adopted as the draft room. The
+         suite then tests a static file server and fails in ways that name
+         nothing.
+
+         /news answers 403 without an Origin header, which is the worker
+         refusing before it reads a key, and Playwright counts 400-403 as
+         "ready" while a 404 is not ready at all. So our worker satisfies this
+         and anything else on the port does not: a stray listener now fails
+         fast with a port conflict instead of quietly poisoning the run. */
+      url: "http://127.0.0.1:8787/news?id=1",
       reuseExistingServer: true,
       timeout: 120 * 1000
     }

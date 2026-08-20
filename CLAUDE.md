@@ -2270,6 +2270,65 @@ A cached stylesheet once let the logo expand to fill the entire screen.
 
 ## Testing
 
+- **"Local wrangler crash-loops on this machine" was never true, and it cost
+  a day.** It was carried across sessions as a known fact, quoted as the
+  reason the room suite could not be run locally, and repeated in a commit
+  message. Wrangler starts fine and always did: `Ready on
+  http://127.0.0.1:8787`, and `worker/test-sockets.mjs` passes its 87
+  assertions against it. Three unrelated things were being read as one
+  symptom.
+
+  **An orphaned `wrangler dev` outlives the run that started it.** Kill a
+  Playwright run, and its `webServer` children keep going — one was found
+  still alive and still respawning `workerd` several hours later. The next
+  run then finds port 8787 occupied, and `reuseExistingServer` adopts the
+  zombie, so you are testing against whatever that process was started with.
+
+  **`pkill` from Git Bash does not reach these processes.** It reports
+  success and kills nothing, so cleanup that looks done is not, and the
+  measurement afterwards is against the thing you thought you had stopped.
+  That produced a confidently wrong result mid-diagnosis: an "is a stray
+  server rejected?" check that passed because a surviving worker was quietly
+  answering for it. Use PowerShell — `Get-Process workerd | Stop-Process
+  -Force`, plus the `node.exe` whose command line contains `wrangler`.
+
+  **And the flood of `Uncaught Error: Network connection lost.` was a
+  browser tab.** A tab left on a room invite reconnects on a backoff, because
+  `live.js` is built to; every attempt was one line in the log. The log
+  stopped growing the moment the tab was navigated away. A repeating error is
+  not evidence of a loop in the thing printing it.
+
+  **The lesson is the one this file keeps arriving at from new directions.**
+  Every check that mattered here was one command — which process holds the
+  port, what is its parent, does the log still grow. None was run for a day,
+  because the conclusion was already written down. **A diagnosis inherited
+  from an earlier session is a claim, not a fact**, and the older it is the
+  more it deserves the two seconds it takes to re-check.
+
+- **A single-socket send has to be wrapped, the same as a broadcast.**
+  `send()` and `relay()` always caught a dead socket; `reject()` and the two
+  other per-socket sends did not. That is backwards — a refusal is sent
+  milliseconds after the upgrade, to a client that had a reason to give up,
+  so it is the path *most* likely to find the socket already gone. Every
+  attempt threw an uncaught error inside the Durable Object, which is not
+  free: it fills the log the next real fault has to be found in. `tell()` is
+  the guarded single-socket send now. Measured: twelve connect-and-drop
+  refusals produced twelve uncaught errors before, and none after.
+
+  Two still appear when Playwright force-closes a browser mid-upgrade. That
+  is a client vanishing between `accept()` and the response, it is not a
+  loop, and it has not been chased further.
+
+- **The worker's `webServer` entry checks identity, not occupancy.** With
+  `port: 8787`, `reuseExistingServer` accepts anything listening — during one
+  session it adopted a `python -m http.server` as the draft room, and the
+  suite then tested a static file server. It uses
+  `url: "http://127.0.0.1:8787/news?id=1"` instead: our worker answers **403**
+  there (`originAllowed()` refusing before the key is read) and Playwright
+  counts 400–403 as ready, while a stray server answers 404 and is refused.
+  Verified in both directions, which is the only way a check like this means
+  anything.
+
 - Room over sockets: `cd worker && wrangler dev --port 8787 --local`, then
   `node worker/test-sockets.mjs` in another terminal. Seventy-six assertions
   against the real Durable Object runtime, no Cloudflare account needed.

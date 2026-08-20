@@ -162,9 +162,26 @@ export class DraftRoom {
     await this.scheduleAlarm();
   }
 
+  /* One socket, and it may already be gone.
+
+     send() and relay() have always wrapped their sends, because a socket can
+     die between the moment it is listed and the moment it is written to. The
+     single-socket sends did not, and a WebSocket is *most* likely to be dead
+     on exactly these paths: a refusal happens milliseconds after the upgrade,
+     to a client that had a reason to give up. A page reconnecting in a loop -
+     which live.js does on purpose - produced one uncaught "Network connection
+     lost" per attempt, and an uncaught error in a Durable Object is not free
+     noise: it fills the log the next real fault has to be found in.
+
+     Silence is the right answer. The client we are trying to tell has already
+     stopped listening, and there is no one else to inform. */
+  tell(socket, payload) {
+    try { socket.send(JSON.stringify(payload)); } catch (err) { this.sockets.delete(socket); }
+  }
+
   reject(socket, code, detail) {
-    socket.send(JSON.stringify({ type: "rejected", code, detail }));
-    socket.close(1008, code);
+    this.tell(socket, { type: "rejected", code, detail });
+    try { socket.close(1008, code); } catch (err) {}
   }
 
   /* True when this socket has had its allowance for the moment.
@@ -190,7 +207,7 @@ export class DraftRoom {
        tells it to stop. Checked before the message is even parsed for meaning,
        so a flood costs one comparison rather than a storage write. */
     if (this.overRate(socket)) {
-      try { socket.send(JSON.stringify({ type: "rejected", code: "too-fast" })); } catch (err) {}
+      this.tell(socket, { type: "rejected", code: "too-fast" });
       return;
     }
 
@@ -257,7 +274,7 @@ export class DraftRoom {
       /* Sent only to the manager who tried it. A rejection is about one
          person's click, and broadcasting it would tell nine other people
          about a mistake that does not concern them. */
-      socket.send(JSON.stringify({ type: "rejected", code: result.error }));
+      this.tell(socket, { type: "rejected", code: result.error });
       return;
     }
 
