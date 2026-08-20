@@ -48,13 +48,31 @@ function boardArrow(DE, round, slot, teams) {
    overall number in the same cell already say where the pick sits. */
 const ARROW_SPIN = { right: 'rotate(0deg)', down: 'rotate(90deg)', left: 'rotate(180deg)' }
 
+/* The box has to be square, and that is the whole trick. A span wrapping the
+   glyph is glyph-advance wide (7.8px) but line-height tall (13.5px), so
+   rotating it 90 degrees about its centre produces a visual box of 13.5 x 7.8
+   that spills outside the layout box the `right-1 top-0.5` anchor is
+   positioning. Measured: the down arrow drew 2.9px further right and 2.9px
+   lower than its neighbours - which reads as a wonky arrow long before
+   anybody works out it is an alignment problem rather than a weight one.
+
+   A square box with leading-none and the glyph centred inside it rotates
+   symmetrically, so all three directions occupy the identical rectangle. */
 function Arrow({ dir, className }) {
   if (!dir) return null
   return (
     <span
       aria-hidden="true"
       className={className}
-      style={{ display: 'inline-block', transform: ARROW_SPIN[dir] }}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: '1em',
+        height: '1em',
+        lineHeight: 1,
+        transform: ARROW_SPIN[dir],
+      }}
     >
       →
     </span>
@@ -232,13 +250,25 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
                           (POS_CELL_BLOCK[pick.player.pos] || 'border border-white/10 bg-white/[0.04] text-white/90')
                         }
                       >
-                        <Arrow dir={arrow} className="absolute right-1 top-0.5 text-[9px] opacity-40" />
+                        {/* In the flow, not absolutely positioned. A filled
+                            cell already puts the team abbreviation in the
+                            top-right corner, so an `absolute right-1 top-0.5`
+                            arrow drew straight on top of it - measured at 9x7
+                            pixels of overlap on a 7.7px glyph, which is total.
+                            36 cells on a part-drafted board were rendering two
+                            characters in one place, and it reads as a smudged
+                            arrow rather than as a collision. Empty and
+                            on-the-clock cells have no team label and keep the
+                            absolute placement. */}
                         <div className="flex items-center justify-between gap-1 leading-none">
                           <span className="flex items-center gap-1 text-[10px] font-bold">
                             {pick.player.pos}
                             {code && <span className="font-normal opacity-60">{code}</span>}
                           </span>
-                          <span className="text-[10px] font-medium opacity-60">{pick.player.team}</span>
+                          <span className="flex shrink-0 items-center gap-0.5 text-[10px] font-medium opacity-60">
+                            {pick.player.team}
+                            <Arrow dir={arrow} className="text-[9px]" />
+                          </span>
                         </div>
                         <div className="flex items-center justify-between gap-1 leading-none">
                           <p className="min-w-0 truncate text-xs font-semibold">{pick.player.name}</p>
