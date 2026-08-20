@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion'
 import { X } from 'lucide-react'
 import { POS_BADGE } from './draftRoomPositions.js'
+import ShareBar from './ShareBar.jsx'
 
 const ordinal = (n) => {
   const v = n % 100
@@ -254,6 +255,22 @@ export default function DraftInsightsDashboard({ engine, league, mySlot, viewSlo
 
   const standings = analysis.slice().sort((a, b) => a.rank - b.rank)
 
+  // Everything the share card draws, assembled from the same values the
+  // summary card above renders — the card can never say something the
+  // screen does not.
+  const shareData = {
+    teamName,
+    leagueText: engine.settingsText(league),
+    dateText: new Date().toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }),
+    grade: mine.grade,
+    rankText: ordinal(mine.rank),
+    teams: league.teams,
+    total: Math.round(mine.total),
+    components: mine,
+    bestValue: bargain ? `${bargain.pick.player.name} · ${bargain.gap} picks late` : null,
+    biggestReach: reach ? `${reach.pick.player.name} · ${Math.abs(reach.gap)} picks early` : null,
+  }
+
   return (
     <div className="fixed inset-0 z-[70] overflow-y-auto bg-[#0B0E14]/97 backdrop-blur-md">
       <div className="mx-auto flex min-h-full w-full max-w-4xl flex-col gap-5 px-4 py-8 sm:px-6">
@@ -295,7 +312,10 @@ export default function DraftInsightsDashboard({ engine, league, mySlot, viewSlo
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          className={PANEL + ' flex flex-col items-center gap-4 p-6 sm:flex-row sm:justify-between sm:p-8'}
+          // sm:flex-wrap so the full-width ShareBar at the end of the card
+          // breaks onto its own line under the grade and the callouts,
+          // instead of being squeezed into the row as a third column.
+          className={PANEL + ' flex flex-col items-center gap-4 p-6 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:p-8'}
         >
           <div className="flex items-center gap-5">
             <span className="bg-gradient-to-br from-[#00E5FF] to-[#7B1FA2] bg-clip-text font-display text-7xl font-black leading-none text-transparent drop-shadow-[0_0_28px_rgba(0,229,255,0.35)] sm:text-8xl">
@@ -325,6 +345,8 @@ export default function DraftInsightsDashboard({ engine, league, mySlot, viewSlo
               </p>
             )}
           </div>
+
+          <ShareBar shareData={shareData} />
         </motion.div>
 
         {/* Sliding doors — the single biggest value upgrade that left the
