@@ -6498,6 +6498,30 @@ window.JukeEngine = {
   mySlot:       () => state.mySlot,
   teamLabel:    teamLabel,
   seatedLineup: seatedLineup,
+  // Added for the React queue sidebar (PlayerQueueSidebar.jsx). photoUrl()
+  // and initials() are the exact functions avatar() already calls, so a
+  // real headshot (or its initials fallback) is never drawn a second way.
+  // FLEX is a roster slot, not a player.pos, and SLOT_ELIGIBLE.FLEX is the
+  // one place that says which positions fill it — bridged rather than
+  // hand-copied so a future SFLEX/roster change can't drift the two apart.
+  photoUrl:      photoUrl,
+  initials:      initials,
+  flexPositions: () => SLOT_ELIGIBLE.FLEX,
+  // Added for the queue sidebar's "Juke Value Assistant" card
+  // (PlayerQueueSidebar.jsx). All three are the exact real functions
+  // already driving the legacy Suggestions tab and the tier chips on the
+  // board — suggestions('ALL') ignores state.filterSuggest on purpose
+  // (see the autoPickForMe() note in CLAUDE.md about a filter being a lens
+  // and never a decision: the card is recommending across every position,
+  // not whatever the queue's own pill happens to be set to right now).
+  // replacementGap() is the un-clamped points-above-replacement figure
+  // overallScore() divides down to a 0-100 share internally — already
+  // named "vor" in its own source. tierRemaining() is what tierChip()
+  // already prints on the legacy board ("2 left in tier 1"), not a new
+  // scarcity metric invented for this card.
+  suggestions:     suggestions,
+  replacementGap:  replacementGap,
+  tierRemaining:   tierRemaining,
   // The Draft button's real submission path. Wraps draftAndAdvance() rather
   // than reimplementing it — that one function already knows the solo vs.
   // room difference (mutate locally and kick off runCPUs(), or send

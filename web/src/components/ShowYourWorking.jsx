@@ -1,13 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { ArrowUp, ArrowDown } from 'lucide-react'
-
-const POS_STYLE = {
-  QB: 'bg-violet-500/15 text-violet-300',
-  RB: 'bg-emerald-500/15 text-emerald-300',
-  WR: 'bg-sky-500/15 text-sky-300',
-  TE: 'bg-amber-500/15 text-amber-300',
-}
+import { POS_BADGE } from './draftRoomPositions.js'
 
 // standard/half/full PPR — the same three keys rulesForFormat() already
 // knows, so "0 / 0.5 / 1" in the UI maps straight onto the real format names
@@ -166,7 +160,7 @@ export default function ShowYourWorking() {
                   className="flex items-center gap-3 rounded-xl border border-white/5 bg-white/[0.02] px-3 py-2.5"
                 >
                   <span className="w-4 shrink-0 text-right font-mono text-xs text-white/35">{row.rank}</span>
-                  <span className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-bold ${POS_STYLE[row.player.pos]}`}>
+                  <span className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-bold ${POS_BADGE[row.player.pos] || 'bg-white/10 text-white/50'}`}>
                     {row.player.pos}
                   </span>
                   <span className="flex-1 truncate text-sm font-medium text-white/90">{row.player.name}</span>

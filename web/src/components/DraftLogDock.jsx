@@ -67,7 +67,13 @@ export default function DraftLogDock() {
     .reverse()
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 flex w-[320px] flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/95 shadow-2xl backdrop-blur-md">
+    // bottom-12, not bottom-4, below lg: RosterDock is a real fixed bottom
+    // sheet there now (see its own comment), not an inline panel, so its
+    // collapsed strip and this dock's bottom-right corner would otherwise
+    // land on the exact same few pixels of a phone screen. lg:bottom-4
+    // restores the original offset where RosterDock is back in normal
+    // flow and there's nothing at the bottom edge to clear.
+    <div className="fixed bottom-12 right-4 z-50 flex w-[320px] flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/95 shadow-2xl backdrop-blur-md lg:bottom-4">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}

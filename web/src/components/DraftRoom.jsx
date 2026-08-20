@@ -5,7 +5,8 @@ import RoomPanel from './RoomPanel.jsx'
 import DraftLogDock from './DraftLogDock.jsx'
 import DraftRoomStatusBar from './DraftRoomStatusBar.jsx'
 import DraftBoardGrid from './DraftBoardGrid.jsx'
-import PlayerQueueSidebar from './PlayerQueueSidebar.jsx'
+import PlayerQueueSidebar, { SORT_DEFAULT_DIR } from './PlayerQueueSidebar.jsx'
+import PlayerProfileDrawer from './PlayerProfileDrawer.jsx'
 import RosterDock from './RosterDock.jsx'
 
 function useEngine() {
@@ -52,6 +53,29 @@ export default function DraftRoom() {
 
   const [search, setSearch] = useState('')
   const [posFilter, setPosFilter] = useState('ALL')
+  const [selectedPlayer, setSelectedPlayer] = useState(null)
+  // Below lg, the board and the queue are two exclusive full-width views
+  // ("Draft Hub" / "Full Board") switched by a segmented control, rather
+  // than the board always showing with the queue as an on-demand overlay
+  // sheet — a 10-column grid is what a phone opens onto first is exactly
+  // the pinch-zoom problem this replaces. 'hub' is the default: the thing
+  // a manager needs most (who to draft) shouldn't cost a tap to reach. At
+  // lg+ this is never read — both panels are always visible side by side.
+  const [mobileView, setMobileView] = useState('hub')
+  // 'board' is the default — the board's own ADP-rank order, same as
+  // sortBy === 'adp' asc for undrafted players, but it's its own case so
+  // clicking away from a column and never toggling anything back to it
+  // isn't required just to get the original order back.
+  const [sortBy, setSortBy] = useState('board')
+  const [sortDir, setSortDir] = useState('asc')
+  const handleSort = (column) => {
+    if (column === sortBy) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortBy(column)
+      setSortDir(SORT_DEFAULT_DIR[column])
+    }
+  }
   // Solo has no real persistent "keep drafting for me" flag to read (see
   // the bridge comment on toggleRoomAutopilot in app.js) — a room does, so
   // this is only ever the source of truth off-room.
@@ -111,8 +135,16 @@ export default function DraftRoom() {
   // check both pick it up on the next "juke:header" tick and this page
   // swaps to the live board on its own.
   if (!started) {
+    // z-[60], not z-40: #root (Homepage) never unmounts — it's a separate
+    // React root behind this one, per main.jsx — and its own fixed header
+    // is z-50. z-40 traps this whole overlay, header included, in a
+    // stacking context beneath that outer header; it never showed before
+    // because both headers had identical content (logo/ticker/
+    // login/signup) and there was nothing to tell them apart on screen.
+    // See the same comment on the started branch's wrapper, where this
+    // stopped being invisible.
     return (
-      <div className="fixed inset-0 z-40 flex flex-col overflow-y-auto bg-[#0B0E14] pt-16 text-white">
+      <div className="fixed inset-0 z-[60] flex flex-col overflow-y-auto bg-[#0B0E14] pt-16 text-white">
         <Header />
         <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col items-stretch gap-6 px-6 py-10 lg:flex-row">
           <div className="lg:basis-1/2">
@@ -166,11 +198,51 @@ export default function DraftRoom() {
   // of the best such figure on the board. Not a second value metric.
   const valueFor = (player) => engine.overallScore(player)
 
+  // The Value Assistant card's one recommendation — suggestions('ALL')[0],
+  // the exact real ranking (adp+jitter) x need x risk x model that already
+  // drives the legacy Suggestions tab, not a fresh computation. Not gated
+  // on myTurn: my team's needs don't change depending on whose turn it is
+  // right now, only whether the button can act on them does (see the card
+  // itself). Recomputed every render off the live board/roster, same as
+  // everything else here.
+  const recommended = engine.suggestions('ALL')[0] || null
+  const recommendedVorp = recommended ? engine.replacementGap(recommended) : null
+  const recommendedTierLeft = recommended ? engine.tierRemaining(recommended) : null
+  const photoFor = (player) => engine.photoUrl(player)
+  const initialsFor = (player) => engine.initials(player.name)
+
+  // FLEX is a roster slot (RB/WR/TE), not a player.pos, so it can't be a
+  // plain equality check the way every other pill is. flexPositions() is
+  // SLOT_ELIGIBLE.FLEX from app.js, bridged rather than hand-copied — see
+  // the bridge comment on photoUrl/initials/flexPositions.
+  const flexPositions = engine.flexPositions()
   const availablePlayers = board
     .filter((p) => !p.drafted)
-    .filter((p) => posFilter === 'ALL' || p.pos === posFilter)
+    .filter((p) => {
+      if (posFilter === 'ALL') return true
+      if (posFilter === 'FLEX') return flexPositions.includes(p.pos)
+      return p.pos === posFilter
+    })
     .filter((p) => !search || p.name.toLowerCase().includes(search.toLowerCase()))
-    .sort((a, b) => a.overall - b.overall)
+    .sort((a, b) => {
+      if (sortBy === 'board') return a.overall - b.overall
+      // Reuse the exact same readers the grid cells render from (pointsFor/
+      // valueFor), so a sort can never disagree with what's on screen.
+      const reader = sortBy === 'adp' ? (p) => p.adp : sortBy === 'pts' ? pointsFor : valueFor
+      const av = reader(a)
+      const bv = reader(b)
+      // "A missing number is not a small number" — Value is null for K/DST
+      // (overallScore() withholds a rank for UNRANKED_POSITIONS) and Proj
+      // Pts is null for anyone with no projection. Blanks sort last in
+      // both directions rather than reading as 0, same rule the legacy
+      // player grid's own column sorts already follow.
+      const aMissing = av == null || Number.isNaN(av)
+      const bMissing = bv == null || Number.isNaN(bv)
+      if (aMissing && bMissing) return 0
+      if (aMissing) return 1
+      if (bMissing) return -1
+      return sortDir === 'asc' ? av - bv : bv - av
+    })
 
   // Real submission: engine.draftPlayer() is draftAndAdvance() underneath
   // (see the bridge comment in app.js), so this mutates the same
@@ -211,50 +283,144 @@ export default function DraftRoom() {
   const handleToggleQueue = (name) => engine.queueToggle(name)
 
   return (
-    <div className="fixed inset-0 z-40 flex flex-col bg-[#0B0E14] text-white">
-      <Header />
-      <div className="flex flex-1 flex-col overflow-hidden pt-16">
-        <DraftRoomStatusBar
-          roundText={roundText}
-          code={code}
-          rightLabel={rightLabel}
-          rightValue={rightValue}
-          myTurn={myTurn}
-          urgent={urgent}
-          autopick={autopick}
-          onToggleAutopick={handleToggleAutopick}
-          showPause={showPause}
-          paused={paused}
-          pauseDisabled={pauseDisabled}
-          onTogglePause={handleTogglePause}
-          showUndo={showUndo}
-          onUndo={handleUndo}
-          discardLabel={hasRoomVal ? 'Leave the room' : 'Discard draft'}
-          discardDanger={!hasRoomVal}
-          onDiscard={handleDiscard}
-        />
+    // z-[60], not z-40: #root (Homepage) is a separate React root that
+    // never unmounts (see main.jsx) and its own header is a fixed z-50.
+    // z-40 traps this whole overlay beneath that header's stacking
+    // context — invisible as long as DraftRoom rendered its own identical
+    // <Header/> on top, but this view's header now has different content
+    // (round/pick/clock/autopick, no login/signup), so the trap became a
+    // real bug: Homepage's header was painting over this one entirely.
+    <div className="fixed inset-0 z-[60] flex flex-col bg-[#0B0E14] text-white">
+      {/* DraftRoomStatusBar is the fixed top bar for this view now — it
+          carries the brand/ticker Header.jsx used to own here, consolidated
+          with the round/pick/clock/autopick controls into one h-14 row
+          instead of two stacked h-16 bars. Header.jsx itself is untouched
+          and still fixed-h-16 on the homepage and the pre-draft setup
+          screen below, which is why this branch's pt- offset (h-14) no
+          longer matches that one's (h-16) — they're genuinely different
+          bars now, not the same one reused. */}
+      <DraftRoomStatusBar
+        roundText={roundText}
+        code={code}
+        rightLabel={rightLabel}
+        rightValue={rightValue}
+        myTurn={myTurn}
+        urgent={urgent}
+        autopick={autopick}
+        onToggleAutopick={handleToggleAutopick}
+        showPause={showPause}
+        paused={paused}
+        pauseDisabled={pauseDisabled}
+        onTogglePause={handleTogglePause}
+        showUndo={showUndo}
+        onUndo={handleUndo}
+        discardLabel={hasRoomVal ? 'Leave the room' : 'Discard draft'}
+        discardDanger={!hasRoomVal}
+        onDiscard={handleDiscard}
+      />
+      {/* pt-14 matches DraftRoomStatusBar's own h-14; md:pt-20 adds the
+          6-unit ticker strip (top-14, h-6) that only exists at md+ — see
+          the comment on that strip in DraftRoomStatusBar.jsx. No bottom
+          padding here for RosterDock: it's `fixed` below lg now (see its
+          own comment) rather than sitting in this flow, so clearance for
+          its collapsed strip is reserved inside each scrollable panel
+          instead (DraftBoardGrid's and PlayerQueueSidebar's own pb-28) —
+          reserving it here too would just shrink the row for no reason,
+          since a fixed element doesn't actually occupy space in it. */}
+      <div className="flex flex-1 flex-col overflow-hidden pt-14 md:pt-20">
+        {/* Draft Hub / Full Board — below lg only. A phone that opened
+            straight onto a 10-column grid is the exact "pinch-zoom
+            frustration" this whole pass exists to fix, so the two views
+            are equal, explicit tabs rather than one primary view and one
+            you have to discover. Not sticky: it's the top of the content,
+            not a persistent nav bar, so it scrolls with the rest — the
+            segmented control itself is the "you are here", and switching
+            back is one tap up regardless. */}
+        <div className="flex shrink-0 justify-center border-b border-slate-800 bg-slate-900/60 p-2 lg:hidden">
+          <div className="inline-flex rounded-full border border-slate-800 bg-slate-950/60 p-1">
+            {[
+              { key: 'hub', label: 'Draft Hub' },
+              { key: 'board', label: 'Full Board' },
+            ].map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setMobileView(tab.key)}
+                aria-pressed={mobileView === tab.key}
+                className={
+                  'rounded-full px-5 py-2 text-sm font-semibold transition-colors duration-150 ' +
+                  (mobileView === tab.key ? 'bg-teal-500 text-obsidian' : 'text-white/50')
+                }
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
 
-        <div className="flex flex-1 flex-col overflow-hidden lg:flex-row">
-          <DraftBoardGrid
-            league={league}
-            picks={picks}
-            mySlot={mySlot}
-            onClock={onClock}
-            teamLabelOf={(slot) => engine.teamLabel(slot)}
-          />
-          <PlayerQueueSidebar
-            players={availablePlayers}
-            search={search}
-            onSearch={setSearch}
-            posFilter={posFilter}
-            onPosFilter={setPosFilter}
-            pointsFor={pointsFor}
-            valueFor={valueFor}
-            onDraft={handleDraft}
-            myTurn={myTurn}
-            queuedNames={queuedNames}
-            onToggleQueue={handleToggleQueue}
-          />
+        <div className="relative flex flex-1 flex-col overflow-hidden lg:flex-row">
+          {/* board and queue are two exclusive full-width views below lg
+              (via mobileView) and the same always-visible side-by-side
+              split at lg+ (mobileView is never read there) — same "one
+              mount, repositioned by breakpoint, not duplicated" reasoning
+              as the old overlay sheet this replaced: PlayerQueueSidebar's
+              rows share layoutIds with DraftBoardGrid's cells for the
+              queue-to-board FLIP transition, and a second mounted copy
+              would collide with the first even if CSS-hidden — so this
+              hides with `hidden`, which un-mounts nothing, rather than by
+              conditionally rendering either side out of the tree. */}
+          {/* min-w-0 is load-bearing: DraftBoardGrid's own content is
+              min-w-max (every column at its real width, deliberately
+              wider than any viewport so it can scroll). A flex item's
+              "automatic minimum size" is normally content-based unless
+              *that item itself* has overflow set — DraftBoardGrid has
+              overflow-x-auto, but this wrapper around it doesn't, so
+              without min-w-0 the wrapper refused to shrink below ~1900px
+              of grid content and pushed the queue panel off the right
+              edge of the screen entirely at lg+. Measured: the queue
+              wrapper was rendering at x:1894 on a 1345px-wide viewport. */}
+          <div className={(mobileView === 'board' ? 'flex' : 'hidden') + ' min-h-0 min-w-0 flex-1 lg:flex lg:flex-[7]'}>
+            <DraftBoardGrid
+              league={league}
+              picks={picks}
+              mySlot={mySlot}
+              onClock={onClock}
+              teamLabelOf={(slot) => engine.teamLabel(slot)}
+            />
+          </div>
+
+          <div className={(mobileView === 'hub' ? 'relative flex min-h-0 flex-1' : 'hidden') + ' lg:relative lg:flex lg:flex-[3] lg:min-w-[280px]'}>
+            <PlayerQueueSidebar
+              players={availablePlayers}
+              search={search}
+              onSearch={setSearch}
+              posFilter={posFilter}
+              onPosFilter={setPosFilter}
+              pointsFor={pointsFor}
+              valueFor={valueFor}
+              photoFor={photoFor}
+              initialsFor={initialsFor}
+              onDraft={handleDraft}
+              myTurn={myTurn}
+              queuedNames={queuedNames}
+              onToggleQueue={handleToggleQueue}
+              onSelectPlayer={setSelectedPlayer}
+              sortBy={sortBy}
+              sortDir={sortDir}
+              onSort={handleSort}
+              recommended={recommended}
+              recommendedVorp={recommendedVorp}
+              recommendedTierLeft={recommendedTierLeft}
+            />
+            <PlayerProfileDrawer
+              player={selectedPlayer}
+              onClose={() => setSelectedPlayer(null)}
+              photoFor={photoFor}
+              initialsFor={initialsFor}
+              pointsFor={pointsFor}
+              valueFor={valueFor}
+            />
+          </div>
         </div>
 
         <RosterDock lineup={lineup} benchSize={league.bench} />
