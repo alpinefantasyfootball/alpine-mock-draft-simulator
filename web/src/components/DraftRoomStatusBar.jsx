@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { LogOut, Pause, Play, RotateCcw, Timer } from 'lucide-react'
+import { LogOut, Pause, Play, RotateCcw, Timer, Volume2, VolumeX } from 'lucide-react'
 
 function IconButton({ onClick, disabled, danger, title, children }) {
   return (
@@ -33,6 +33,8 @@ export default function DraftRoomStatusBar({
   rightValue,
   myTurn,
   urgent,
+  soundOn,
+  onToggleSound,
   autopick,
   onToggleAutopick,
   showPause,
@@ -90,6 +92,9 @@ export default function DraftRoomStatusBar({
       </div>
 
       <div className="ml-auto flex items-center gap-2 sm:gap-3">
+        <IconButton onClick={onToggleSound} title={soundOn ? 'Turn draft sounds off' : 'Turn draft sounds on'}>
+          {soundOn ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+        </IconButton>
         {showPause && (
           <IconButton onClick={onTogglePause} disabled={pauseDisabled} title={paused ? 'Resume clock' : 'Pause clock'}>
             {paused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}

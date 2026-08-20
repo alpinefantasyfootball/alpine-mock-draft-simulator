@@ -540,6 +540,19 @@ function route() {
 
 function go(where) { location.hash = where === "draft" ? "#/draft" : "#/"; }
 
+/* #/draft-room is the new React draft room (web/src/components/DraftRoom.jsx,
+   mounted into #draftroom-root — see the comment beside that id in
+   web/index.html). It owns its own visibility and hash-watching entirely,
+   deliberately outside #view-app/#view-home's toggle, so route() itself
+   must keep meaning what it always has ("draft" vs "home") for its other
+   four callers (app.js:1643, 1671, 4010, 4955) — this only needs to stop
+   applyRoute() from treating #/draft-room as "home" and tearing down a
+   live room/clock/sim underneath it. */
+function onDraftRoomRoute() {
+  const path = location.hash.replace(/^#\/?/, "").split("?")[0];
+  return path === "draft-room";
+}
+
 function applyRoute() {
   const onDraft = route() === "draft";
 
@@ -549,7 +562,10 @@ function applyRoute() {
   $("view-app").hidden  = !onDraft;
   tabrow.hidden = !(onDraft && state.started);
 
-  if (!onDraft) {
+  if (onDraftRoomRoute()) {
+    // #draftroom-root owns its own visibility and lifecycle entirely — see
+    // the comment at web/index.html beside that id. Nothing to do here.
+  } else if (!onDraft) {
     // Leaving is not discarding. The draft stays in memory and in the save;
     // only the clock and the CPU timer stop, so nothing advances off-screen
     // while you are reading the landing page.
@@ -6654,7 +6670,24 @@ window.JukeEngine = {
   setTheme:     setTheme,
   soundWanted:  () => soundWanted,
   toggleSound:  toggleSound,
-  togglePause:  togglePause
+  togglePause:  togglePause,
+  // Added for the React Analysis tab (web/src/components/AnalysisTab.jsx).
+  // analyseDraft() is the real grade computation — every component, scaled
+  // and weighted, exactly as renderGrades() reads it — called fresh on
+  // each render, same as the legacy panel. Its own `.lineup` field is
+  // built by bestLineup() (sorts by aboveReplacement, so it resolves the
+  // FLEX correctly between positions), which is NOT seatedLineup() —
+  // RosterDock's prop above is the other one, on purpose (it fills slots
+  // in draft order). A caller here must read analyseDraft()'s own
+  // .lineup, never mix in seatedLineup(), or it silently reproduces the
+  // exact starter-strength bug CLAUDE.md documents as already fixed once.
+  // byeSummary()/replacementText()/lineupText() are the prose helpers
+  // renderGrades()'s bye label and method note already use verbatim —
+  // bridged so that prose is never re-derived in React.
+  analyseDraft: analyseDraft,
+  byeSummary: byeSummary,
+  replacementText: replacementText,
+  lineupText: lineupText
 };
 
 /* An invite code in the address bar means someone followed a link, so the

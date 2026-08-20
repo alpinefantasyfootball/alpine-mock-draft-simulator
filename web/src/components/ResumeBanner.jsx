@@ -26,6 +26,23 @@ export default function ResumeBanner() {
   const made = save.picks.length
   const done = made >= total
 
+  // A plain href="#/draft" only changes the route — it lands on the Draft
+  // Room's setup screen with state.started still false, not on the saved
+  // draft. engine.resumeDraft(save) is the real load (state.picks, the
+  // clock, the queue) ConfigureDraftForm's own Resume button already
+  // calls; this mirrors it rather than leaving the hash to do a job it
+  // was never responsible for. resumeDraft() refuses unless the live
+  // league already matches the save's fingerprint, so teams/scoring are
+  // synced first — the same two fields, and the same reason, given in the
+  // comment on ConfigureDraftForm's own save-loading effect.
+  const handleResume = (e) => {
+    e.preventDefault()
+    if (!engine) return
+    engine.setLeague({ teams: save.league.teams, scoring: save.league.scoring })
+    engine.resumeDraft(save)
+    window.location.hash = '#/draft'
+  }
+
   return (
     <div className="mx-auto max-w-7xl px-6 pt-6">
       <div className="glass-panel flex flex-wrap items-center justify-between gap-4 rounded-2xl px-5 py-4">
@@ -39,6 +56,7 @@ export default function ResumeBanner() {
         </div>
         <a
           href="#/draft"
+          onClick={handleResume}
           className="rounded-full bg-gradient-to-r from-[#00E5FF] to-[#7B1FA2] px-5 py-2 text-sm font-semibold text-white
                      shadow-glass transition-all duration-200 hover:scale-105"
         >

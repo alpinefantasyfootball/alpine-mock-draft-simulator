@@ -7,6 +7,7 @@ import DraftRoomStatusBar from './DraftRoomStatusBar.jsx'
 import DraftBoardGrid from './DraftBoardGrid.jsx'
 import PlayerQueueSidebar from './PlayerQueueSidebar.jsx'
 import RosterDock from './RosterDock.jsx'
+import AnalysisTab from './AnalysisTab.jsx'
 
 function useEngine() {
   const [ready, setReady] = useState(false)
@@ -52,6 +53,26 @@ export default function DraftRoom() {
 
   const [search, setSearch] = useState('')
   const [posFilter, setPosFilter] = useState('ALL')
+  // Board/Analysis is the one tab split this slice adds — Suggestions and
+  // Players are already merged into PlayerQueueSidebar, and My Team/Picks
+  // already have their own always-visible docks (RosterDock/DraftLogDock),
+  // so this is the only legacy tab with no current home in this layout.
+  const [view, setView] = useState('board')
+  // Mirrors AppHeader.jsx's own soundOn state (engine.soundWanted() isn't
+  // covered by the "juke:header" tick, since toggling it doesn't touch
+  // renderHeader() — see AppHeader.jsx's identical pattern) — this page
+  // mounts the generic marketing Header, not AppHeader, so it needs its
+  // own copy of the same sync rather than reaching into that component.
+  const [soundOn, setSoundOn] = useState(false)
+  useEffect(() => {
+    if (!engine) return
+    setSoundOn(engine.soundWanted())
+  }, [engine])
+  const handleToggleSound = () => {
+    if (!engine) return
+    engine.toggleSound()
+    setSoundOn(engine.soundWanted())
+  }
   // Solo has no real persistent "keep drafting for me" flag to read (see
   // the bridge comment on toggleRoomAutopilot in app.js) — a room does, so
   // this is only ever the source of truth off-room.
@@ -221,6 +242,8 @@ export default function DraftRoom() {
           rightValue={rightValue}
           myTurn={myTurn}
           urgent={urgent}
+          soundOn={soundOn}
+          onToggleSound={handleToggleSound}
           autopick={autopick}
           onToggleAutopick={handleToggleAutopick}
           showPause={showPause}
@@ -234,28 +257,53 @@ export default function DraftRoom() {
           onDiscard={handleDiscard}
         />
 
-        <div className="flex flex-1 flex-col overflow-hidden lg:flex-row">
-          <DraftBoardGrid
-            league={league}
-            picks={picks}
-            mySlot={mySlot}
-            onClock={onClock}
-            teamLabelOf={(slot) => engine.teamLabel(slot)}
-          />
-          <PlayerQueueSidebar
-            players={availablePlayers}
-            search={search}
-            onSearch={setSearch}
-            posFilter={posFilter}
-            onPosFilter={setPosFilter}
-            pointsFor={pointsFor}
-            valueFor={valueFor}
-            onDraft={handleDraft}
-            myTurn={myTurn}
-            queuedNames={queuedNames}
-            onToggleQueue={handleToggleQueue}
-          />
+        <div className="flex shrink-0 gap-1.5 border-b border-slate-800 bg-slate-900/40 px-4 py-2">
+          {[
+            { key: 'board', label: 'Board' },
+            { key: 'analysis', label: 'Analysis' },
+          ].map((v) => (
+            <button
+              key={v.key}
+              type="button"
+              onClick={() => setView(v.key)}
+              className={
+                'rounded-full px-3 py-1 text-xs font-semibold transition-colors duration-150 ' +
+                (view === v.key ? 'bg-teal-500 text-obsidian' : 'bg-white/5 text-white/50 hover:bg-white/10 hover:text-white')
+              }
+            >
+              {v.label}
+            </button>
+          ))}
         </div>
+
+        {view === 'board' ? (
+          <div className="flex flex-1 flex-col overflow-hidden lg:flex-row">
+            <DraftBoardGrid
+              league={league}
+              picks={picks}
+              mySlot={mySlot}
+              onClock={onClock}
+              teamLabelOf={(slot) => engine.teamLabel(slot)}
+            />
+            <PlayerQueueSidebar
+              players={availablePlayers}
+              search={search}
+              onSearch={setSearch}
+              posFilter={posFilter}
+              onPosFilter={setPosFilter}
+              pointsFor={pointsFor}
+              valueFor={valueFor}
+              onDraft={handleDraft}
+              myTurn={myTurn}
+              queuedNames={queuedNames}
+              onToggleQueue={handleToggleQueue}
+            />
+          </div>
+        ) : (
+          <div className="flex flex-1 overflow-hidden">
+            <AnalysisTab engine={engine} league={league} picks={picks} mySlot={mySlot} />
+          </div>
+        )}
 
         <RosterDock lineup={lineup} benchSize={league.bench} />
       </div>
