@@ -1331,6 +1331,36 @@ and the assets it names go live together and there is no window to race. That
 is the platform's contract rather than something measured here, and it is the
 single biggest operational improvement from the move.
 
+**The inverse trap arrived with `web/`, and atomicity is what creates it.**
+Vite's bundle is content-hashed into its filename, so a deploy does not
+overwrite `assets/index-<hash>.js` — it publishes a new name and the old name
+stops existing. Measured on the 20 August 2026 merge: the previous build's
+`assets/index-b37N_smL.js` returned **404** the moment the new deployment
+promoted, while `assets/index-DYBRJTZj.js` returned 200. So a browser holding
+the *previous* `index.html` asks for a bundle that is gone. Old HTML, missing
+JavaScript — the exact mirror of the GitHub Pages trap above, and reached
+because deploys are atomic rather than despite it.
+
+**It fails as a blank Draft Room with a 404 and nothing else.** React never
+mounts, so `#draftroom-root` is empty and every legacy script beside it loads
+fine at the old `?v=` — which reads as "the page is broken" rather than "this
+tab is stale". It cost a wrong conclusion about a deploy that was in fact
+healthy: the same page loaded as `?cb=…` was correct in every respect.
+
+**It is bounded, and the bound is the header rather than the hash.** `/` serves
+`Cache-Control: public, max-age=0, must-revalidate`, so an ordinary navigation
+revalidates and gets the new HTML; only a browser reusing a cached HTML
+response *without* revalidating — an already-open tab, bfcache — can hold the
+dead reference. That is the same narrow case the throwaway-query note below
+already covers, so there is nothing to fix and one thing to know: **`?v=`
+cannot help here.** It stamps the legacy files, and the file that goes missing
+is the one Vite named itself.
+
+**Which is also why the `immutable` idea below stays shut.** It is written
+about `/app.js`, but the assets that would benefit most are the hashed ones —
+and pinning a year against a filename that is deleted on the next deploy makes
+this failure permanent for anyone who cached the HTML beside it.
+
 **Keep bumping `?v=` anyway.** It costs one number, it is what makes an asset
 address change when its content changes, and it is the only part of this that
 does not depend on who is serving the file — which is the whole reason it
