@@ -129,7 +129,7 @@ function mineRing(isMine, isCurrent) {
     : 'shadow-[inset_0_0_0_2px_#FFD166]'
 }
 
-export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLabelOf, onTeamClick, photoFor, shortNameOf }) {
+export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLabelOf, onTeamClick, photoFor, shortNameOf, onClaimSeat, seatOwners }) {
   const desktop = useDesktop()
   const byCell = new Map()
   picks.forEach((p) => byCell.set(p.round + '-' + p.slot, p))
@@ -190,7 +190,41 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
             every team has a full Insights report to open. Before that the
             header is the same inert label it always was, per the
             dead-control rule: nothing may look pressable and do nothing. */}
-        {Array.from({ length: teams }, (_, s) =>
+        {/* Before a draft, a column header is a chair rather than a label.
+            Claiming one is how you pick where you sit - the same gesture in a
+            room and on your own, because a seat is a seat. seatOwners comes
+            from the room when there is one; off-room the only owned seat is
+            yours. */}
+        {onClaimSeat ? Array.from({ length: teams }, (_, s) => {
+          const owner = seatOwners ? seatOwners[s] : null
+          const mine = s === mySlot
+          return (
+            <div
+              key={'hd-' + s}
+              className="sticky top-0 z-10 flex flex-col items-center gap-1 border-b border-r border-slate-800 bg-slate-900/95 px-1 py-1.5"
+            >
+              <button
+                type="button"
+                onClick={() => onClaimSeat(s)}
+                disabled={!!owner && !mine}
+                title={mine ? 'This is your seat' : owner ? owner + ' has this seat' : 'Take seat ' + (s + 1)}
+                className={
+                  'w-full truncate rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide transition-colors duration-150 ' +
+                  (mine
+                    ? 'bg-teal-500 text-obsidian'
+                    : owner
+                      ? 'cursor-not-allowed bg-white/5 text-white/30'
+                      : 'bg-white/10 text-white/60 hover:bg-teal-500/20 hover:text-teal-300')
+                }
+              >
+                {mine ? 'You' : owner ? 'Taken' : 'Claim'}
+              </button>
+              <span className="w-full truncate text-center text-[11px] font-semibold text-white/50">
+                {owner || teamLabelOf(s)}
+              </span>
+            </div>
+          )
+        }) : Array.from({ length: teams }, (_, s) =>
           onTeamClick ? (
             <button
               key={'hd-' + s}

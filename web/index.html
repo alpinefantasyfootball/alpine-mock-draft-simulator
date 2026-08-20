@@ -40,7 +40,7 @@
        project's own source tree, where this file does not live. Root-
        relative is also just correct at runtime regardless of the build: it
        resolves the same way whether you are at "/" or "/#/draft". -->
-  <script src="/theme.js?v=202608202259"></script>
+  <script src="/theme.js?v=202608202306"></script>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -48,7 +48,7 @@
        Archivo is the new homepage's — the rebrand is homepage-only for now,
        so both load together rather than the Draft Room losing its type. -->
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600;700&family=Archivo:wght@400..900&display=swap" rel="stylesheet">
-  <!-- ?v=202608202259 on every local file below, and it has to be bumped on any deploy
+  <!-- ?v=202608202306 on every local file below, and it has to be bumped on any deploy
        that changes one of them.
 
        Without a version in the address a returning visitor runs today's HTML
@@ -63,7 +63,7 @@
        keep this convention. The React homepage bundle is Vite's own
        content-hashed output, injected automatically, which makes this exact
        bug structurally impossible for that half of the page. -->
-  <link rel="stylesheet" href="/style.css?v=202608202259">
+  <link rel="stylesheet" href="/style.css?v=202608202306">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <link rel="manifest" href="/manifest.json">
   <link rel="apple-touch-icon" href="/juke-app-icon-180.png">
@@ -578,21 +578,21 @@
     <form method="dialog"><button class="primary">Got it</button></form>
   </dialog>
 
-  <!-- Every one of these carries the same ?v=202608202259 as the stylesheet. See the note
+  <!-- Every one of these carries the same ?v=202608202306 as the stylesheet. See the note
        beside it in <head>: bump them together or don't bump them at all.
        Root-relative for the same reason theme.js and style.css are above. -->
-  <script src="/players.js?v=202608202259"></script>
-  <script src="/stats.js?v=202608202259"></script>
+  <script src="/players.js?v=202608202306"></script>
+  <script src="/stats.js?v=202608202306"></script>
   <!-- The rules of a snake draft, with no reference to this page. It loads
        before app.js because app.js is a caller, and it is a separate file
        because a server will eventually have to run the same one. -->
-  <script src="/draft-engine.js?v=202608202259"></script>
+  <script src="/draft-engine.js?v=202608202306"></script>
   <!-- The socket to a shared room. Loaded always, connected never unless a
        manager asks for it: a solo draft touches nothing. -->
-  <script src="/live.js?v=202608202259"></script>
+  <script src="/live.js?v=202608202306"></script>
   <!-- Before app.js, which calls backToTop() on the last line of its setup. -->
-  <script src="/back-to-top.js?v=202608202259"></script>
-  <script src="/app.js?v=202608202259"></script>
+  <script src="/back-to-top.js?v=202608202306"></script>
+  <script src="/app.js?v=202608202306"></script>
 
   <!-- The React homepage. A module script, so it runs after the classic
        scripts above regardless of source order — modules always behave as

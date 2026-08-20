@@ -15,6 +15,7 @@ import TeamTab from './TeamTab.jsx'
 import AnalysisTab from './AnalysisTab.jsx'
 import DraftInsightsDashboard from './DraftInsightsDashboard.jsx'
 import DraftSettingsModal from './DraftSettingsModal.jsx'
+import DraftLobby from './DraftLobby.jsx'
 
 function useEngine() {
   const [ready, setReady] = useState(false)
@@ -104,6 +105,17 @@ export default function DraftRoom() {
   const TRAY = ['hidden', 'default', 'raised']
   const [tray, setTray] = useState('default')
   const [settingsOpen, setSettingsOpen] = useState(false)
+  // The seat, shared between the form's dropdown and the lobby board.
+  const [lobbySlot, setLobbySlot] = useState(0)
+  /* Who is sitting where, straight off the room's broadcast. viewFor() has
+     already turned member ids into names before it leaves the server — a
+     client that has never been told another member's id must not learn it
+     from this screen. Null off-room: there is nobody else to show. */
+  const roomSeatOwners = (() => {
+    const room = engine ? engine.room() : null
+    if (!room || !room.seats) return null
+    return room.seats.map((chair) => (chair && chair.name) || null)
+  })()
   /* Functional update, not a read of `tray`. Written the obvious way first,
      and two quick clicks moved the tray one step: both handlers closed over
      the same render's `tray`, computed the same next position, and the
@@ -277,9 +289,28 @@ export default function DraftRoom() {
             onClose={() => setSettingsOpen(false)}
           />
         )}
-        <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col items-stretch gap-6 px-6 py-10 lg:flex-row">
+        {/* The board comes first, because choosing where you sit is the one
+            decision on this screen that the picture answers better than a
+            control does. The three columns underneath are still what they
+            were: start a draft, draft with friends, reopen an old one. */}
+        <div className="mx-auto w-full max-w-7xl px-6 pt-8">
+          <DraftLobby
+            engine={engine}
+            league={league}
+            mySlot={roomActive ? mySlot : lobbySlot}
+            roomActive={roomActive}
+            seatOwners={roomSeatOwners}
+            onClaimSeat={(seat) => {
+              // In a room the room decides; off-room this is just my chair.
+              if (roomActive) engine.claimSeat(seat)
+              else setLobbySlot(seat)
+            }}
+          />
+        </div>
+
+        <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col items-stretch gap-6 px-6 py-8 lg:flex-row">
           <div className="lg:basis-1/3">
-            <ConfigureDraftForm />
+            <ConfigureDraftForm mySlot={lobbySlot} onSlotChange={setLobbySlot} />
             {/* The full league lives behind this, and before a draft is the
                 only time any of it can be changed. ConfigureDraftForm covers
                 the four settings people actually touch; the lineup and the

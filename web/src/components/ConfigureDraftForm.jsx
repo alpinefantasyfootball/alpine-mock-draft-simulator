@@ -63,14 +63,21 @@ function FormSelect({ value, onChange, options, disabled }) {
   )
 }
 
-export default function ConfigureDraftForm() {
+/* mySlot is optionally controlled from outside, because the lobby below this
+   form is the other way to choose a seat and the two must be one fact. Left
+   uncontrolled it keeps its own state, so DraftSettings.jsx — which renders
+   this form with no lobby beside it — is untouched. */
+export default function ConfigureDraftForm({ mySlot: slotProp, onSlotChange }) {
   const engine = useEngine()
   useJukeTick(engine)
 
   const [teams, setTeams] = useState(10)
   const [scoring, setScoring] = useState('half')
   const [clockLength, setClockLength] = useState(60)
-  const [mySlot, setMySlot] = useState(0)
+  const [ownSlot, setOwnSlot] = useState(0)
+  const controlled = slotProp !== undefined
+  const mySlot = controlled ? slotProp : ownSlot
+  const setMySlot = (v) => { if (controlled) onSlotChange(v); else setOwnSlot(v) }
   const [problem, setProblem] = useState('')
 
   useEffect(() => {
