@@ -8,7 +8,9 @@ import DraftRoomStatusBar from './DraftRoomStatusBar.jsx'
 import DraftBoardGrid from './DraftBoardGrid.jsx'
 import { SORT_DEFAULT_DIR } from './PlayerQueueSidebar.jsx'
 import PlayerHub from './PlayerHub.jsx'
-import RosterDock from './RosterDock.jsx'
+import SidePanel from './SidePanel.jsx'
+import QueueList from './QueueList.jsx'
+import TeamTab from './TeamTab.jsx'
 import DraftInsightsDashboard from './DraftInsightsDashboard.jsx'
 
 function useEngine() {
@@ -131,12 +133,23 @@ export default function DraftRoom() {
   // team instead. State lives here rather than inside the dashboard so a
   // header click can pick the team and open the overlay in one gesture.
   const [insightsSlot, setInsightsSlot] = useState(0)
+  // Which seat the desktop Roster panel is showing. Separate from
+  // insightsSlot: reading a rival's roster mid-draft and reading a
+  // finished team's report are different questions, and one resetting
+  // the other would be a surprise.
+  const [rosterSlot, setRosterSlot] = useState(0)
   useEffect(() => {
     if (draftIsOver) {
       setInsightsSlot(mySlot)
       setShowInsights(true)
     }
   }, [draftIsOver, mySlot])
+
+  // The Roster panel opens on your own seat. mySlot is 0 until a draft
+  // actually starts, so this follows it rather than being an initial
+  // value that would strand the panel on seat 0 for anyone who drafted
+  // from a different one.
+  useEffect(() => { setRosterSlot(mySlot) }, [mySlot])
 
   // Solo autopick's real submission path: the exact same engine.draftPlayer
   // the Draft button uses (draftAndAdvance() underneath), just triggered
@@ -402,30 +415,42 @@ export default function DraftRoom() {
       {/* pt-14 matches DraftRoomStatusBar's own h-14; md:pt-20 adds the
           6-unit ticker strip (top-14, h-6) that only exists at md+ — see
           the comment on that strip in DraftRoomStatusBar.jsx. No bottom
-          padding here for RosterDock: it's lg+ only now (see its own
-          comment) and PlayerHub's mobile sheet is `fixed`, so neither
-          occupies space in this flow — reserving it here too would just
-          shrink the row for no reason. */}
+          padding here: PlayerHub's mobile sheet is `fixed` and so occupies
+          no space in this flow — clearance for it is reserved inside the
+          scrollable panels themselves (the board's and the player list's
+          own pb-28), and reserving it here too would shrink the row for
+          no reason. */}
       <div className="flex flex-1 flex-col overflow-hidden pt-14 md:pt-20">
         {/* The board stays visible on every width now — see PlayerHub.jsx's
             file comment for what replaced the old Draft Hub/Full Board
             toggle below lg (a bottom sheet over the board, not a view that
             swaps it out). */}
-        <div className="relative flex flex-1 flex-col overflow-hidden lg:flex-row">
+        {/* Desktop is a horizontal split — board across the full window
+            width on top, panels in a row beneath — not the vertical split
+            this used to be. Measured against Sleeper's own desktop room,
+            which is arranged the same way and for the same reason: a
+            10-team board needs the whole width to show ten columns, and
+            sharing width with side panels is what forced ours to scroll
+            sideways at every window size. Below lg this is unchanged: one
+            column, board filling it, PlayerHub's sheet fixed over the
+            bottom (see its own file comment). */}
+        <div className="relative flex flex-1 flex-col overflow-hidden">
           {/* min-w-0 is load-bearing: DraftBoardGrid's own content is
               min-w-max (every column at its real width, deliberately
-              wider than any viewport so it can scroll). A flex item's
-              "automatic minimum size" is normally content-based unless
-              *that item itself* has overflow set — DraftBoardGrid has
-              overflow-x-auto, but this wrapper around it doesn't, so
-              without min-w-0 the wrapper refused to shrink below ~1900px
-              of grid content and pushed the queue panel off the right
-              edge of the screen entirely at lg+. Measured: the queue
-              wrapper was rendering at x:1894 on a 1345px-wide viewport. */}
+              wider than any viewport so it can scroll) and a flex item's
+              automatic minimum size is content-based unless the item
+              itself sets overflow — the grid does, this wrapper doesn't.
+              Without it the wrapper refuses to shrink to the window.
+
+              Height, not width, is what the two breakpoints now argue
+              over: flex-1 below lg (the board owns the column, the sheet
+              floats above it), a fixed share at lg+ so the panel row
+              beneath always gets its half. isolate hands the whole height
+              back to the board. */}
           <div
             className={
               'flex min-h-0 min-w-0 flex-1 ' +
-              (isolate ? 'lg:flex-1' : 'lg:flex-[6]')
+              (isolate ? 'lg:flex-1' : 'lg:flex-none lg:h-[45%]')
             }
           >
             <DraftBoardGrid
@@ -442,12 +467,22 @@ export default function DraftRoom() {
             />
           </div>
 
-          {/* isolate is lg+ only (its toggle is hidden below lg — see the
-              status bar): at lg+ it hides this column entirely; below lg
-              PlayerHub's own sheet chrome (the handle, the tab bar) stays
-              reachable regardless — isolate is a wide-monitor convenience,
-              not something a phone needs its own equivalent of yet. */}
-          <div className={isolate ? 'lg:hidden' : 'relative flex min-h-0 flex-1 lg:flex lg:flex-[3] lg:min-w-[260px]'}>
+          {/* The panel row. flex-none below lg with no in-flow children —
+              PlayerHub is `fixed` there — so it collapses to nothing and
+              the board keeps the whole column; lg:flex-1 gives it the
+              other half of the screen at desktop width. It cannot be
+              `hidden` below lg: display:none on the parent would hide
+              PlayerHub's fixed sheet too, which is the whole mobile UI. */}
+          <div
+            className={
+              'flex min-h-0 flex-none border-slate-800 ' +
+              (isolate ? 'lg:hidden' : 'lg:flex-1 lg:border-t')
+            }
+          >
+            {/* Players — the widest panel, as it is on Sleeper: it carries
+                the search, the filter chips, the sortable grid and the
+                profile drawer that slides over it. */}
+            <div className="relative flex min-h-0 flex-1 lg:flex-[4] lg:min-w-0">
             <PlayerHub
               players={availablePlayers}
               search={search}
@@ -483,18 +518,42 @@ export default function DraftRoom() {
               mySlot={mySlot}
               teamLabelOf={(slot) => engine.teamLabel(slot)}
             />
-          </div>
+            </div>
 
-          {/* DraftLogDock is lg+ only now — mobile's equivalent (My Queue,
-              plus the new Team and Chat tabs) lives inside PlayerHub's
-              sheet instead, see its own comment. isolate hides this column
-              the same way it hides PlayerHub's at lg+. */}
-          <div className={isolate ? 'lg:hidden' : 'lg:flex lg:min-h-0 lg:flex-[3] lg:min-w-[260px]'}>
-            <DraftLogDock />
+            {/* The other three panels are lg+ only — below lg these same
+                three views are tabs inside PlayerHub's sheet (Queue, Team,
+                Chat), which is why nothing here needs a mobile branch. */}
+            <div className="hidden lg:flex lg:min-h-0 lg:flex-[2] lg:min-w-0">
+              <SidePanel title="Queue" count={queuePlayers.length}>
+                <div className="p-2">
+                  <QueueList players={queuePlayers} myTurn={myTurn} engine={engine} />
+                </div>
+              </SidePanel>
+            </div>
+
+            {/* Roster, not the old bottom strip: the strip could only show
+                a surname per slot across the full width, where a real
+                column shows the whole lineup and can carry any seat — the
+                same any-team switcher the Insights dashboard has. */}
+            <div className="hidden lg:flex lg:min-h-0 lg:flex-[2] lg:min-w-0">
+              <SidePanel title="Roster">
+                <TeamTab
+                  compact
+                  engine={engine}
+                  league={league}
+                  mySlot={mySlot}
+                  viewSlot={rosterSlot}
+                  onViewSlot={setRosterSlot}
+                  teamLabelOf={(slot) => engine.teamLabel(slot)}
+                />
+              </SidePanel>
+            </div>
+
+            <div className="hidden lg:flex lg:min-h-0 lg:flex-[2] lg:min-w-0">
+              <DraftLogDock />
+            </div>
           </div>
         </div>
-
-        <RosterDock lineup={lineup} benchSize={league.bench} />
       </div>
 
       {/* Opens itself on the draft-over edge (see the effect near the top)

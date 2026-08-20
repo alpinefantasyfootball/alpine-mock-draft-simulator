@@ -1,6 +1,4 @@
 import { useEffect, useReducer, useState } from 'react'
-import { ListChecks } from 'lucide-react'
-import QueueList from './QueueList.jsx'
 import ActivityLog from './ActivityLog.jsx'
 import ChatPlaceholder from './ChatPlaceholder.jsx'
 
@@ -22,16 +20,12 @@ function useJukeTick(engine) {
 }
 
 const TABS = [
-  { key: 'queue', label: 'My Queue' },
-  { key: 'log', label: 'Draft Log' },
   { key: 'chat', label: 'Chat' },
+  { key: 'log', label: 'Draft Log' },
 ]
 
-function TabContent({ tab, queuePlayers, myTurn, engine, recentOthers, DE, league }) {
+function TabContent({ tab, engine, recentOthers, DE, league }) {
   if (tab === 'chat') return <ChatPlaceholder />
-  if (tab === 'queue') {
-    return <QueueList players={queuePlayers} myTurn={myTurn} engine={engine} />
-  }
   return <ActivityLog picks={recentOthers} engine={engine} DE={DE} league={league} />
 }
 
@@ -42,25 +36,14 @@ function TabContent({ tab, queuePlayers, myTurn, engine, recentOthers, DE, leagu
 export default function DraftLogDock() {
   const engine = useEngine()
   useJukeTick(engine)
-  const [tab, setTab] = useState('queue')
+  const [tab, setTab] = useState('chat')
 
   if (!engine) return null
 
   const DE = typeof window !== 'undefined' ? window.DraftEngine : null
   const league = engine.league()
   const picks = engine.picks() || []
-  const board = engine.board() || []
   const mySlot = engine.mySlot() ?? 0
-  const onClock = league && DE ? DE.onTheClock(league, picks.length) : null
-  const myTurn = !!onClock && onClock.slot === mySlot
-
-  // The real queue — state.queue is an array of player names, resolved
-  // back to board players the same way the legacy rail does. Not a
-  // separate "favorites" list: queueTop() is what autoPickForMe() and a
-  // clock-expiry pick already prefer over the model's own opinion, so
-  // starring someone here is the actual plan, not decoration.
-  const queueNames = engine.queue() || []
-  const queuePlayers = queueNames.map((name) => board.find((p) => p.name === name)).filter(Boolean)
 
   // "Made by the AI" — everyone else's picks, most recent first. In a
   // room some of those seats are other people, not CPUs, but "not my
@@ -71,30 +54,34 @@ export default function DraftLogDock() {
     .slice(-10)
     .reverse()
 
+  /* The fourth panel in the desktop row. Chat and the activity log share
+     it as two tabs rather than taking a column each: chat is the one that
+     needs real height (see the layout note in DraftRoom) and the log is
+     read in glances. Queue is not a tab here any more — it has its own
+     panel now — so this is Chat first, Log second.
+
+     No card chrome of its own: SidePanel around it already draws the
+     border, the ground and the title, and nesting a second rounded card
+     inside that was two borders describing one thing. */
   return (
-    <div className="hidden h-full w-full flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/60 lg:flex">
-      <div className="flex shrink-0 items-center gap-2 px-4 py-3 text-sm font-semibold text-white">
-        <ListChecks className="h-4 w-4 text-teal-400" />
-        Draft Log &amp; Queue
-      </div>
-      <div className="flex shrink-0 border-t border-slate-800">
+    <div className="flex h-full w-full min-h-0 flex-col border-r border-slate-800 bg-slate-900/40 last:border-r-0">
+      <div className="flex shrink-0 border-b border-slate-800">
         {TABS.map((t) => (
           <button
             key={t.key}
             type="button"
             onClick={() => setTab(t.key)}
             className={
-              'flex-1 border-b-2 px-3 py-2 text-xs font-semibold transition-colors duration-150 ' +
+              'flex-1 border-b-2 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide transition-colors duration-150 ' +
               (tab === t.key ? 'border-teal-400 text-teal-300' : 'border-transparent text-white/40 hover:text-white/60')
             }
           >
             {t.label}
-            {t.key === 'queue' && queuePlayers.length > 0 ? ` (${queuePlayers.length})` : ''}
           </button>
         ))}
       </div>
-      <div className="flex-1 overflow-y-auto p-2">
-        <TabContent tab={tab} queuePlayers={queuePlayers} myTurn={myTurn} engine={engine} recentOthers={recentOthers} DE={DE} league={league} />
+      <div className="min-h-0 flex-1 overflow-y-auto p-2">
+        <TabContent tab={tab} engine={engine} recentOthers={recentOthers} DE={DE} league={league} />
       </div>
     </div>
   )

@@ -106,19 +106,39 @@ export default function PlayerQueueSidebar({
     // PlayerProfileDrawer — this fills that wrapper rather than sizing
     // itself against the row a second time.
     <div className="flex h-full w-full flex-col overflow-hidden bg-slate-900/40">
-      <div className="shrink-0 space-y-3 border-b border-slate-800 p-4">
+      {/* Tighter chrome at lg+ (p-2.5, space-y-2 rather than p-4/space-y-3):
+          on the desktop panel row this header competes with the list for
+          about 470px, and every pixel it gives back is another player
+          visible. Below lg the sheet is 75vh and can afford the room. */}
+      <div className="shrink-0 space-y-3 border-b border-slate-800 p-4 lg:space-y-2 lg:p-2.5">
         {/* Replaces the old plain "Juke AI Draft Assistant" label — this
             is that framing with an actual real recommendation behind it
-            now, not just a caption over the search box. */}
-        <JukeValueAssistant
-          player={recommended}
-          vorp={recommendedVorp}
-          tierLeft={recommendedTierLeft}
-          onDraft={onDraft}
-          myTurn={myTurn}
-          photoFor={photoFor}
-          initialsFor={initialsFor}
-        />
+            now, not just a caption over the search box. Two renders, one
+            per breakpoint, because the compact variant is a different
+            shape rather than the same card scaled — see its own comment. */}
+        <div className="lg:hidden">
+          <JukeValueAssistant
+            player={recommended}
+            vorp={recommendedVorp}
+            tierLeft={recommendedTierLeft}
+            onDraft={onDraft}
+            myTurn={myTurn}
+            photoFor={photoFor}
+            initialsFor={initialsFor}
+          />
+        </div>
+        <div className="hidden lg:block">
+          <JukeValueAssistant
+            compact
+            player={recommended}
+            vorp={recommendedVorp}
+            tierLeft={recommendedTierLeft}
+            onDraft={onDraft}
+            myTurn={myTurn}
+            photoFor={photoFor}
+            initialsFor={initialsFor}
+          />
+        </div>
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/30" />
           <input
@@ -208,12 +228,13 @@ export default function PlayerQueueSidebar({
         )}
       </div>
 
-      {/* pb-28 below lg clears RosterDock's fixed collapsed strip plus
-          DraftLogDock's own collapsed corner pill (bottom-12 there now —
-          see its comment); lg:pb-64 is the original clearance for
-          DraftLogDock expanded in a corner, where RosterDock is back in
-          normal flow and never overlaps this list at all. */}
-      <div className="flex-1 overflow-y-auto p-3 pb-28 lg:pb-64">
+      {/* pb-28 below lg keeps the last row clear of the sheet's own bottom
+          edge on a phone. lg:pb-6 is a plain breathing gap: at lg+ this
+          list is a panel in the desktop row with nothing floating over it,
+          so the old lg:pb-64 (written when a dock hovered in the corner)
+          was reserving 256px against a thing that no longer exists — real
+          rows in a panel that is only ~470px tall. */}
+      <div className="flex-1 overflow-y-auto p-3 pb-28 lg:p-2 lg:pb-6">
         {/* Column headers — desktop (lg+) only, and now a child of this
             same scroll container rather than a sibling above it. It used
             to sit outside, against the panel's own edges, while every row

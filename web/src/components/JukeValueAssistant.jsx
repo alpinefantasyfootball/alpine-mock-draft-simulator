@@ -18,10 +18,68 @@ import { POS_BADGE } from './draftRoomPositions.js'
 // legacy tierChip() always prints something, but calling six players left
 // a "scarcity alert" would be crying wolf. Nothing to recommend (no
 // player, or every position full) means no card, not an empty one.
-export default function JukeValueAssistant({ player, vorp, tierLeft, onDraft, myTurn, photoFor, initialsFor }) {
+export default function JukeValueAssistant({ player, vorp, tierLeft, onDraft, myTurn, photoFor, initialsFor, compact }) {
   if (!player) return null
 
   const photo = photoFor(player)
+
+  /* Compact is the desktop panel row's variant, not a smaller taste: the
+     board now takes the top half of the window, so the Players panel has
+     roughly 470px for a recommendation, a search box, two rows of filter
+     chips, a column header and the list itself. The full card is ~200px
+     of that and left one player row visible — a recommendation card that
+     crowds out the players is not helping anyone choose. Same three facts
+     (who, what he is worth, draft him), one row instead of five. The tier
+     warning survives as an inline clause rather than its own alert box;
+     it is still spelled out in full on the player's own card. */
+  if (compact) {
+    return (
+      <div className="mb-2 flex items-center gap-2 rounded-lg border border-teal-500/40 bg-slate-900/90 px-2.5 py-2">
+        <Sparkles className="h-3 w-3 shrink-0 text-teal-300" />
+        <div className="relative flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-800 text-[8px] font-bold text-white/40">
+          {initialsFor(player)}
+          {photo && (
+            <img
+              src={photo}
+              alt=""
+              loading="lazy"
+              onError={(e) => e.currentTarget.remove()}
+              className={'absolute inset-0 h-full w-full ' + (player.pos === 'DST' ? 'object-contain p-1' : 'object-cover')}
+            />
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-xs font-semibold text-white">{player.name}</p>
+          <p className="truncate text-[10px] text-white/40">
+            {player.pos} · {player.team}
+            {tierLeft != null && tierLeft <= 3 && (
+              <span className="text-amber-300"> · {tierLeft} left in tier {player.tier}</span>
+            )}
+          </p>
+        </div>
+        {vorp != null && (
+          <span className={'shrink-0 text-xs font-bold tabular-nums ' + (vorp >= 0 ? 'text-emerald-300' : 'text-rose-300')}>
+            {vorp >= 0 ? '+' : ''}
+            {vorp.toFixed(0)}
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={() => onDraft(player)}
+          disabled={!myTurn}
+          title={myTurn ? 'Draft the recommended pick' : 'Not your turn'}
+          className={
+            'shrink-0 rounded-full px-3 py-1 text-[11px] font-bold transition-all duration-200 ' +
+            (myTurn
+              ? 'bg-gradient-to-r from-[#00E5FF] to-[#7B1FA2] text-white hover:scale-105'
+              : 'cursor-not-allowed bg-white/5 text-white/25')
+          }
+        >
+          Draft
+        </button>
+      </div>
+    )
+  }
 
   return (
     <div className="mb-3 rounded-xl border border-teal-500/40 bg-slate-900/90 p-4 shadow-[0_0_20px_rgba(0,229,255,0.1)]">

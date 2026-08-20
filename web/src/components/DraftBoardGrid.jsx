@@ -33,7 +33,18 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
   const DE = typeof window !== 'undefined' ? window.DraftEngine : null
   const teams = league.teams
   const rounds = league.rounds
+  /* Two different column rules, because the board now has two different
+     jobs. Below lg it is a scrollable grid inside a phone: every column
+     keeps a real 112px floor and the whole thing is wider than the
+     viewport on purpose. At lg+ the board owns the full window width —
+     that is the entire reason the desktop layout became a horizontal
+     split — so columns share it evenly and all ten teams fit without
+     scrolling sideways. A 0 floor is what lets them: minmax(112px, 1fr)
+     still refuses to shrink past 112 each, which is 1184px of columns
+     before the round rail, and that overflowed a 1569px content box once
+     the cells' own content pushed them wider. */
   const cols = `64px repeat(${teams}, minmax(112px, 1fr))`
+  const colsWide = `56px repeat(${teams}, minmax(0, 1fr))`
 
   return (
     // w-full h-full, not a flex-basis of its own: DraftRoom.jsx now wraps
@@ -52,12 +63,20 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
           cell's own min-h to coincidentally agree with its neighbors. See
           CLAUDE.md's board-card note: "the row owns the height, not the
           cell." */}
-      {/* pb-28 below lg: RosterDock is a fixed bottom sheet there now (see
-          its own comment), which would otherwise cover the last couple of
-          rounds when scrolled all the way down. lg:pb-0 because RosterDock
-          is back in normal flow at lg+ and there's nothing floating over
-          this to clear. */}
-      <div className="grid min-w-max auto-rows-[minmax(34px,auto)] pb-28 lg:pb-0" style={{ gridTemplateColumns: cols }}>
+      {/* pb-28 below lg: PlayerHub's sheet is fixed over the bottom edge
+          there and would otherwise cover the last couple of rounds when
+          scrolled all the way down. lg:pb-0 because at lg+ every panel is
+          in normal flow and nothing floats over this. */}
+      {/* The two column rules reach CSS as custom properties so the
+          breakpoint can pick between them — a `style` prop cannot carry a
+          media query, and this is one grid with two shapes rather than two
+          grids. min-w-max likewise drops to min-w-0 at lg+: it is what
+          forces the scroll below lg and what would prevent the fit above
+          it. */}
+      <div
+        className="grid min-w-max auto-rows-[minmax(34px,auto)] pb-28 [grid-template-columns:var(--cols)] lg:min-w-0 lg:pb-0 lg:[grid-template-columns:var(--cols-wide)]"
+        style={{ '--cols': cols, '--cols-wide': colsWide }}
+      >
         {/* header row */}
         <div className="sticky left-0 top-0 z-20 flex items-center justify-center border-b border-r border-slate-800 bg-slate-900/95 py-1 text-[10px] font-semibold uppercase tracking-wide text-white/30">
           Rd
