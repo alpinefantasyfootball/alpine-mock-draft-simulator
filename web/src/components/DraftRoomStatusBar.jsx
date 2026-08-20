@@ -1,6 +1,6 @@
 import { Fragment } from 'react'
 import { motion } from 'framer-motion'
-import { LogOut, Maximize2, Minimize2, Pause, Play, RotateCcw, Timer } from 'lucide-react'
+import { LogOut, Maximize2, Minimize2, Pause, Play, RotateCcw, Timer, Volume2, VolumeX } from 'lucide-react'
 import Ticker from './Ticker.jsx'
 import JukeLogo from './juke-logo/JukeLogo.jsx'
 
@@ -49,6 +49,8 @@ export default function DraftRoomStatusBar({
   rightValue,
   myTurn,
   urgent,
+  soundOn,
+  onToggleSound,
   autopick,
   onToggleAutopick,
   showPause,
@@ -127,9 +129,11 @@ export default function DraftRoomStatusBar({
 
       <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-3">
         {/* The mobile queue-open icon that used to live here is gone — the
-            Draft Hub / Full Board segmented control in DraftRoom.jsx is
-            the real navigation now, not an icon tucked in an already-tight
-            header. */}
+            bottom sheet's own tab bar in PlayerHub.jsx is the real
+            navigation now, not an icon tucked in an already-tight header. */}
+        <IconButton onClick={onToggleSound} title={soundOn ? 'Turn draft sounds off' : 'Turn draft sounds on'}>
+          {soundOn ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
+        </IconButton>
         {showPause && (
           <IconButton onClick={onTogglePause} disabled={pauseDisabled} title={paused ? 'Resume clock' : 'Pause clock'}>
             {paused ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}

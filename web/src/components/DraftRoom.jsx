@@ -11,6 +11,7 @@ import PlayerHub from './PlayerHub.jsx'
 import SidePanel from './SidePanel.jsx'
 import QueueList from './QueueList.jsx'
 import TeamTab from './TeamTab.jsx'
+import AnalysisTab from './AnalysisTab.jsx'
 import DraftInsightsDashboard from './DraftInsightsDashboard.jsx'
 
 function useEngine() {
@@ -82,6 +83,27 @@ export default function DraftRoom() {
       setSortDir(SORT_DEFAULT_DIR[column])
     }
   }
+  /* Board / Analysis, from the remote branch: Suggestions and Players are
+     already merged into the player list, and Queue/Roster/Log have their
+     own panels, so Analysis was the last legacy tab with no home in this
+     layout. It toggles what the board area shows, not a whole view. */
+  const [view, setView] = useState('board')
+  /* Mirrors AppHeader.jsx's own soundOn state — engine.soundWanted() is
+     not covered by the "juke:header" tick, since toggling it never
+     touches renderHeader(). This page mounts the marketing Header rather
+     than AppHeader, so it keeps its own copy of the same sync instead of
+     reaching into that component. */
+  const [soundOn, setSoundOn] = useState(false)
+  useEffect(() => {
+    if (!engine) return
+    setSoundOn(engine.soundWanted())
+  }, [engine])
+  const handleToggleSound = () => {
+    if (!engine) return
+    engine.toggleSound()
+    setSoundOn(engine.soundWanted())
+  }
+
   // Solo has no real persistent "keep drafting for me" flag to read (see
   // the bridge comment on toggleRoomAutopilot in app.js) — a room does, so
   // this is only ever the source of truth off-room.
@@ -440,6 +462,8 @@ export default function DraftRoom() {
         discardLabel={hasRoomVal ? 'Leave the room' : 'Discard draft'}
         discardDanger={!hasRoomVal}
         onDiscard={handleDiscard}
+        soundOn={soundOn}
+        onToggleSound={handleToggleSound}
         isolate={isolate}
         onToggleIsolate={() => setIsolate((v) => !v)}
       />
@@ -478,12 +502,40 @@ export default function DraftRoom() {
               floats above it), a fixed share at lg+ so the panel row
               beneath always gets its half. isolate hands the whole height
               back to the board. */}
+          {/* Board / Analysis. The grade used to be the one legacy tab
+              with no home in this layout — Suggestions and Players merged
+              into the player list, and Queue/Roster/Log/Chat each have a
+              panel. It swaps what the top half shows rather than taking
+              over the screen, so the panels underneath stay put. */}
+          <div className="flex shrink-0 gap-1.5 border-b border-slate-800 bg-slate-900/40 px-3 py-1.5">
+            {[
+              { key: 'board', label: 'Board' },
+              { key: 'analysis', label: 'Analysis' },
+            ].map((v) => (
+              <button
+                key={v.key}
+                type="button"
+                onClick={() => setView(v.key)}
+                aria-pressed={view === v.key}
+                className={
+                  'rounded-full px-3 py-1 text-xs font-semibold transition-colors duration-150 ' +
+                  (view === v.key ? 'bg-teal-500 text-obsidian' : 'bg-white/5 text-white/50 hover:bg-white/10 hover:text-white')
+                }
+              >
+                {v.label}
+              </button>
+            ))}
+          </div>
+
           <div
             className={
               'flex min-h-0 min-w-0 flex-1 ' +
               (isolate ? 'lg:flex-1' : 'lg:flex-none lg:h-[45%]')
             }
           >
+            {view === 'analysis' ? (
+              <AnalysisTab engine={engine} league={league} picks={picks} mySlot={mySlot} />
+            ) : (
             <DraftBoardGrid
               league={league}
               picks={picks}
@@ -496,6 +548,7 @@ export default function DraftRoom() {
                   : undefined
               }
             />
+            )}
           </div>
 
           {/* The panel row. flex-none below lg with no in-flow children —

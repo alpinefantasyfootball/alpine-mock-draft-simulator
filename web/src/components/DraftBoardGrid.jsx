@@ -26,6 +26,28 @@ function adpGap(pick) {
   return pick.overall - adp
 }
 
+// Snake direction, per cell — every cell carries it, not just drafted
+// ones (CLAUDE.md: "it was on drafted ones only" was itself a shipped
+// bug — the turn matters most *before* a pick lands). Built only from
+// DraftEngine.pickInRound(), the one place the snake mirror is allowed
+// to live, never re-derived here.
+function boardArrow(DE, round, slot, teams) {
+  if (!DE) return null
+  return DE.pickInRound(round, slot, teams) === teams ? '↓' : (round % 2 === 0 ? '←' : '→')
+}
+
+// Gold is identity — CLAUDE.md's "Whose it is, and where the draft is":
+// a ring on the board is always a pair (fill + keyline), always an inset
+// box-shadow (never border/outline, which eats into border-box padding),
+// and it marks the *whole* column, filled and empty alike, because "when
+// do I pick again" is the question an empty cell has to answer too.
+function mineRing(isMine, isCurrent) {
+  if (!isMine) return ''
+  return isCurrent
+    ? 'shadow-[0_0_15px_rgba(0,229,255,0.4),inset_0_0_0_2px_#FFD166,inset_0_0_0_3px_#0B1017]'
+    : 'shadow-[inset_0_0_0_2px_#FFD166,inset_0_0_0_3px_#0B1017]'
+}
+
 export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLabelOf, onTeamClick }) {
   const byCell = new Map()
   picks.forEach((p) => byCell.set(p.round + '-' + p.slot, p))
@@ -125,10 +147,20 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
               {Array.from({ length: teams }, (_, s) => {
                 const pick = byCell.get(round + '-' + s)
                 const isCurrent = !!onClock && onClock.round === round && onClock.slot === s
+                const isMine = s === mySlot
                 const gap = pick ? adpGap(pick) : null
+                const overall = DE ? DE.overallOf(round, s, teams) : null
+                // The label for a pick that has landed. Always via
+                // DraftEngine.pickCode() — the snake mirror lives there and
+                // nowhere else (CLAUDE.md: a pick number is not a seat
+                // number, and half the board agrees with the wrong answer).
                 const code = pick && DE ? DE.pickCode(pick.overall, teams) : null
+                const arrow = boardArrow(DE, round, s, teams)
                 return (
-                  <div key={round + '-' + s} className="border-b border-r border-slate-800/70 p-0.5">
+                  <div
+                    key={round + '-' + s}
+                    className={'border-b border-r border-slate-800/70 p-0.5 ' + mineRing(isMine, isCurrent)}
+                  >
                     {pick ? (
                       // layoutId matches the same player's row in
                       // PlayerQueueSidebar.jsx — while both are mounted
@@ -154,10 +186,17 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
                         animate={{ opacity: 1, scale: 1 }}
                         transition={{ type: 'spring', stiffness: 400, damping: 32 }}
                         className={
-                          'flex h-full flex-col justify-center gap-0.5 rounded-md px-1 py-1 backdrop-blur-sm ' +
+                          /* `relative` is what the snake arrow below is
+                             positioned against — without it the arrow
+                             would hunt for the nearest positioned
+                             ancestor and land somewhere else entirely. */
+                          'relative flex h-full flex-col justify-center gap-0.5 rounded-md px-1 py-1 backdrop-blur-sm ' +
                           (POS_CELL_BLOCK[pick.player.pos] || 'border border-white/10 bg-white/[0.04] text-white/90')
                         }
                       >
+                        {arrow && (
+                          <span className="absolute right-1 top-0.5 text-[9px] opacity-40">{arrow}</span>
+                        )}
                         <div className="flex items-center justify-between gap-1 leading-none">
                           <span className="flex items-center gap-1 text-[10px] font-bold">
                             {pick.player.pos}
@@ -179,12 +218,25 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
                       <motion.div
                         animate={{ opacity: [1, 0.75, 1] }}
                         transition={{ duration: 1.4, repeat: Infinity, ease: 'easeInOut' }}
-                        className="flex h-full min-h-[32px] items-center justify-center rounded-md border-2 border-teal-400 bg-teal-500/10 text-[10px] font-bold uppercase tracking-wide text-teal-300 shadow-[0_0_15px_rgba(0,229,255,0.4)]"
+                        className="relative flex h-full min-h-[46px] items-center justify-center rounded-md border-2 border-teal-400 bg-teal-500/10 text-[10px] font-bold uppercase tracking-wide text-teal-300 shadow-[0_0_15px_rgba(0,229,255,0.4)]"
                       >
+                        {overall != null && (
+                          <span className="absolute left-1 top-0.5 text-[10px] font-normal normal-case text-teal-300/60">{overall}</span>
+                        )}
                         On the clock
+                        {arrow && (
+                          <span className="absolute right-1 top-0.5 text-[9px] font-normal normal-case text-teal-300/60">{arrow}</span>
+                        )}
                       </motion.div>
                     ) : (
-                      <div className="h-full min-h-[32px] rounded-md border border-dashed border-slate-800" />
+                      <div className="relative h-full min-h-[46px] rounded-md border border-dashed border-slate-800">
+                        {overall != null && (
+                          <span className="absolute left-1 top-0.5 text-[10px] text-slate-500">{overall}</span>
+                        )}
+                        {arrow && (
+                          <span className="absolute right-1 top-0.5 text-[9px] text-white/20">{arrow}</span>
+                        )}
+                      </div>
                     )}
                   </div>
                 )
