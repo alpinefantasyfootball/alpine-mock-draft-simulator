@@ -6865,6 +6865,64 @@ window.JukeEngine = {
   depthChartFor:     depthChartFor,
   sourceId:          sourceId,
   newsItemView:      newsItemView,
+  /* Added for the player card's "Our Read" tab — the model explaining
+     itself, which is the thing this app has that a projection feed does
+     not. Every one of these is the same function the legacy sheet paints
+     from, never a second reading of the same stats.
+
+     jukeReadout() is the one addition: the legacy sheet builds this
+     explanation as HTML in three places (jukeNote(), the meters, the
+     unrated note), and React cannot use any of it. Rather than let a
+     second explanation of the Juke score grow up in JSX — the exact
+     "one number, three names" failure CLAUDE.md already records — the
+     decisions are made here, once, and handed over as data.
+
+     The zero handling is the load-bearing part. A clamped 0 is the
+     majority state of the board by arithmetic, not a fault (measured
+     against three real completed seasons: the same share scored zero
+     there as in the projection), so it must never appear as a bare
+     number. gap carries replacementGap() — the un-clamped figure that
+     is the only thing able to tell a receiver one point below
+     replacement from one sixty below — and floorNote names the floor. */
+  jukeReadout: function (player) {
+    const score = overallScore(player);
+    const sig = draftSignals(player);
+    const gap = replacementGap(player);
+    const unranked = player.projPts !== null && score === null;
+    return {
+      score: score,
+      label: score === null ? null : label(score),
+      // Un-clamped points above/below a replacement starter. Two zeros
+      // are not equal and this is what says so.
+      gap: gap === null ? null : Math.round(gap),
+      replacementRank: posLabel(player.pos) + replacementRank(player.pos),
+      reason: overallReason(player),
+      unranked: unranked,
+      // Why a position is refused, rather than a silent dash.
+      unrankedNote: unranked
+        ? 'Measured against three seasons of our own archived forecasts, the projection ranks ' +
+          (player.pos === 'DST' ? 'defenses' : 'kickers') +
+          ' no better than chance — one of those seasons came out backwards. The number is ' +
+          'withheld rather than guessed at; the projected points are still real.'
+        : null,
+      upside: sig ? Math.round(sig.upside) : null,
+      upsideLabel: sig ? label(sig.upside) : null,
+      upsideWhy: sig ? sig.reasons.upside : [],
+      bust: sig ? Math.round(sig.bust) : null,
+      bustLabel: sig ? label(sig.bust) : null,
+      bustWhy: sig ? sig.reasons.bust : [],
+      priorScore: priorScore(player) === null ? null : Math.round(priorScore(player)),
+      priorSeason: PRIOR_SEASON,
+      priorGames: player.priorGames === undefined ? null : player.priorGames,
+      boardSize: board.length,
+      // What the app itself starts, for the "most of the board scores
+      // nothing and that is arithmetic" explanation.
+      startersInPlay: league.teams * (starterCount() + flexCount()),
+      teams: league.teams
+    };
+  },
+  projectionRecord: projectionRecord,
+  marketGap:        marketGap,
   // Added for the queue sidebar's "Juke Value Assistant" card
   // (PlayerQueueSidebar.jsx). All three are the exact real functions
   // already driving the legacy Suggestions tab and the tier chips on the

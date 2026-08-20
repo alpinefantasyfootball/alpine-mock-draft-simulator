@@ -3,12 +3,18 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { Bookmark, X } from 'lucide-react'
 import { POS_BADGE } from './draftRoomPositions.js'
 import { useEngine } from '../hooks/useJukeEngine.js'
+import OurReadTab from './OurReadTab.jsx'
 import ProjectionsTab from './ProjectionsTab.jsx'
 import GameLogsTab from './GameLogsTab.jsx'
 import LatestNewsTab from './LatestNewsTab.jsx'
 import DepthChartTab from './DepthChartTab.jsx'
 
-const TABS = ['Projections', 'Game Logs', 'Latest News', 'Depth Chart']
+// Our Read leads: it is the one thing here a projection feed cannot show
+// you about its own numbers, and CLAUDE.md's own note on this is that the
+// explanation used to be reachable only as a title tooltip — "not at all
+// on a phone, and never on the sheet somebody opens because they are
+// confused." First tab, not a tooltip.
+const TABS = ['Our Read', 'Projections', 'Game Logs', 'Latest News', 'Depth Chart']
 
 // Slides in over the Player Queue only — DraftRoom.jsx wraps this and
 // PlayerQueueSidebar in one `relative` box, so `absolute inset-0` here
@@ -21,7 +27,7 @@ export default function PlayerProfileDrawer({ player, onClose, photoFor, initial
   // Reset to the first tab on every new player, so opening someone else's
   // drawer never lands on the tab the last player happened to be left on.
   useEffect(() => {
-    if (player) setTab('Projections')
+    if (player) setTab('Our Read')
   }, [player?.id || player?.name])
 
   useEffect(() => {
@@ -99,14 +105,19 @@ export default function PlayerProfileDrawer({ player, onClose, photoFor, initial
             </div>
           </div>
 
-          <div className="flex shrink-0 border-b border-slate-800">
+          {/* Scrolls sideways rather than squeezing: five tabs at flex-1
+              in a ~300px drawer would break "Depth Chart" and "Latest
+              News" mid-word. whitespace-nowrap + shrink-0 keeps each label
+              whole and lets the strip pan, the same treatment the draft
+              room's own tab row already uses at narrow widths. */}
+          <div className="flex shrink-0 overflow-x-auto border-b border-slate-800">
             {TABS.map((t) => (
               <button
                 key={t}
                 type="button"
                 onClick={() => setTab(t)}
                 className={
-                  'flex-1 border-b-2 px-2 py-2.5 text-center text-[11px] font-semibold transition-colors duration-150 ' +
+                  'shrink-0 whitespace-nowrap border-b-2 px-3 py-2.5 text-center text-[11px] font-semibold transition-colors duration-150 ' +
                   (tab === t ? 'border-teal-400 text-teal-300' : 'border-transparent text-white/40 hover:text-white/60')
                 }
               >
@@ -116,7 +127,9 @@ export default function PlayerProfileDrawer({ player, onClose, photoFor, initial
           </div>
 
           <div className="flex-1 overflow-y-auto p-4">
-            {!engine ? null : tab === 'Projections' ? (
+            {!engine ? null : tab === 'Our Read' ? (
+              <OurReadTab engine={engine} player={player} />
+            ) : tab === 'Projections' ? (
               <ProjectionsTab summary={engine.projectionSummary(player)} />
             ) : tab === 'Game Logs' ? (
               <GameLogsTab engine={engine} player={player} />
