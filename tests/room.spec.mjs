@@ -7,7 +7,7 @@
 */
 
 import { test, expect } from "@playwright/test";
-import { openApp, createRoom, roomView, sent, waitForRoom, pickGaps, median, perSeat }
+import { openApp, createRoom, roomView, sent, waitForRoom, pickGaps, median, perSeat, LEGACY_VIEW }
   from "./helpers.mjs";
 
 /* Host and guest are separate browser contexts, which is what makes them
@@ -16,16 +16,11 @@ import { openApp, createRoom, roomView, sent, waitForRoom, pickGaps, median, per
    treat them as one manager. */
 async function twoManagers(browser) {
   const hostCtx = await browser.newContext();
-  const host = await openApp(hostCtx);
+  const host = await openApp(hostCtx, LEGACY_VIEW);
   const code = await createRoom(host);
 
   const guestCtx = await browser.newContext();
-  // Deliberately the PRE-RETIREMENT invite shape. #/draft redirects to
-  // #/draft-room now, and every invite sent before that change looks like
-  // this — so this line is the regression test for the redirect carrying the
-  // room code across. Do not "modernise" it; the other join in this file
-  // already uses the new shape.
-  const guest = await openApp(guestCtx, `#/draft?room=${code}`);
+  const guest = await openApp(guestCtx, `#/draft-legacy?room=${code}`);
   await guest.waitForFunction(() => Live.room() && Live.room().yourSeat >= 0);
 
   return { hostCtx, host, guestCtx, guest, code };
@@ -148,6 +143,8 @@ test("leaving the draft leaves the room, and the link brings you back", async ({
   await host.evaluate(() => goHome());
 
   expect(await host.evaluate(() => Live.status()), "the room was actually left").toBe("off");
+  // Leaving a room lands you in the real Draft Room, not back on the
+  // retired view the suite happens to be driving.
   expect(await host.evaluate(() => location.hash), "and the code is out of the address").toBe("#/draft-room");
 
   // The bug was being dragged back by the next broadcast a moment later.
@@ -156,7 +153,7 @@ test("leaving the draft leaves the room, and the link brings you back", async ({
 
   // The way back in is the link, and it arrives as a hash change on a tab
   // that is already on the site — which is the case that used to do nothing.
-  await host.evaluate((c) => { location.hash = `#/draft-room?room=${c}`; }, code);
+  await host.evaluate((c) => { location.hash = `#/draft-legacy?room=${c}`; }, code);
   await host.waitForFunction(() => Live.status() === "open", null, { timeout: 30000 });
 
   const back = await roomView(host);
@@ -179,13 +176,13 @@ test("leaving the draft leaves the room, and the link brings you back", async ({
    disagreed about any of it. */
 test("a room belongs to its host, and says so to everybody in it", async ({ browser }) => {
   const hostCtx = await browser.newContext();
-  const host = await openApp(hostCtx);
+  const host = await openApp(hostCtx, LEGACY_VIEW);
   // A room is named after its host, so the host has to be called something.
   await host.evaluate(() => Live.setName("Blake"));
   const code = await createRoom(host);
 
   const guestCtx = await browser.newContext();
-  const guest = await openApp(guestCtx, `#/draft?room=${code}`);
+  const guest = await openApp(guestCtx, `#/draft-legacy?room=${code}`);
   await guest.waitForFunction(() => Live.room() && Live.room().yourSeat >= 0);
 
   /* ---- the room is named, on both screens ----
