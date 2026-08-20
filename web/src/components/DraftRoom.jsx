@@ -377,6 +377,20 @@ export default function DraftRoom() {
   const queuePlayers = (engine.queue() || []).map((name) => board.find((p) => p.name === name)).filter(Boolean)
   const handleToggleQueue = (name) => engine.queueToggle(name)
 
+  /* Everybody else's picks, most recent first — the Draft Log's data.
+     Computed once here and handed to both surfaces that draw it (the
+     desktop panel and the mobile sheet's Log tab) rather than each
+     deriving its own: two copies of "what has happened" is exactly the
+     kind of thing that drifts.
+
+     "Not my seat" is the honest filter. In a room some of those seats are
+     other people rather than CPUs, and there is no per-pick flag saying
+     which was which at the moment it picked. */
+  const recentOthers = picks
+    .filter((p) => p.slot !== mySlot)
+    .slice(-10)
+    .reverse()
+
   return (
     // z-[60], not z-40: #root (Homepage) is a separate React root that
     // never unmounts (see main.jsx) and its own header is a fixed z-50.
@@ -516,6 +530,7 @@ export default function DraftRoom() {
               recommendedVorp={recommendedVorp}
               recommendedTierLeft={recommendedTierLeft}
               queuePlayers={queuePlayers}
+              recentOthers={recentOthers}
               engine={engine}
               league={league}
               mySlot={mySlot}
@@ -568,7 +583,7 @@ export default function DraftRoom() {
             </div>
 
             <div className="hidden lg:flex lg:min-h-0 lg:flex-[2] lg:min-w-0">
-              <DraftLogDock />
+              <DraftLogDock recentOthers={recentOthers} />
             </div>
           </div>
         </div>

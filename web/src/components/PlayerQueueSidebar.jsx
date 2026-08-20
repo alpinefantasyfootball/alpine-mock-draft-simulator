@@ -221,6 +221,37 @@ export default function PlayerQueueSidebar({
           </button>
         </div>
 
+        {/* Sorting, below lg only. The sortable column headers are part of
+            the desktop grid (GRID_COLS carries `lg:grid`), so until now a
+            phone had no way to reorder the list at all — the one thing
+            desktop could do that mobile could not. Chips rather than a
+            select: the same tap re-sorts and flips direction, which is
+            what the headers do at lg+, and "Board" is here because the
+            board's own ADP order is the default and needs a way back. */}
+        <div className="flex flex-wrap items-center gap-1.5 lg:hidden">
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-white/30">Sort</span>
+          {[{ key: 'board', label: 'Board' }, ...SORT_COLUMNS].map((col) => {
+            const active = sortBy === col.key
+            return (
+              <button
+                key={col.key}
+                type="button"
+                onClick={() => onSort(col.key)}
+                aria-pressed={active}
+                className={
+                  'flex items-center gap-0.5 rounded-full px-3 py-1 text-xs font-semibold transition-colors duration-150 ' +
+                  (active ? 'bg-teal-500 text-obsidian' : 'bg-white/5 text-white/50')
+                }
+              >
+                {col.label}
+                {active && col.key !== 'board' ? (
+                  sortDir === 'asc' ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />
+                ) : null}
+              </button>
+            )
+          })}
+        </div>
+
         {!myTurn && (
           <p className="text-[10px] leading-relaxed text-white/30">
             Draft is disabled until it's your turn.
@@ -286,7 +317,21 @@ export default function PlayerQueueSidebar({
                 layoutId={'player-' + (player.id || player.name)}
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, x: 32, scale: 0.94, transition: { duration: 0.28 } }}
+                /* No exit animation, deliberately. This row shares its
+                   layoutId with the board cell the player lands in, and a
+                   row cannot both fly away on its own and morph into that
+                   cell — they are contradictory instructions about the
+                   same element. Framer resolved the conflict by handing
+                   the layoutId to the board cell and never unmounting the
+                   row, so a drafted player stayed in the available list
+                   for the rest of the draft. Measured: draft anyone, wait
+                   2.5s, still listed and still `drafted: true` in the
+                   engine.
+
+                   Without an exit there is nothing for AnimatePresence to
+                   wait on, so the row goes immediately and the shared
+                   layoutId still animates the card into its cell — which
+                   was the point of the FLIP in the first place. */
                 transition={{ type: 'spring', stiffness: 380, damping: 32 }}
                 onClick={() => onSelectPlayer(player)}
                 // gap-2 is the mobile flex-col spacing between the two

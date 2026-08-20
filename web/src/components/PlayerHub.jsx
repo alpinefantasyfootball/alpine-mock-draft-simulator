@@ -6,12 +6,18 @@ import PlayerProfileDrawer from './PlayerProfileDrawer.jsx'
 import QueueList from './QueueList.jsx'
 import TeamTab from './TeamTab.jsx'
 import ChatPlaceholder from './ChatPlaceholder.jsx'
+import ActivityLog from './ActivityLog.jsx'
 
+/* Five tabs, not four: the desktop row carries a Draft Log beside Chat
+   and the sheet did not, which meant a phone was the one place you could
+   not see what the room had just done. Everything desktop shows, mobile
+   shows — that is the rule these tabs are keeping. */
 const TABS = [
   { key: 'players', label: 'Players' },
   { key: 'queue', label: 'Queue' },
   { key: 'team', label: 'Team' },
   { key: 'chat', label: 'Chat' },
+  { key: 'log', label: 'Log' },
 ]
 
 // Replaces three separate mobile mechanisms — the Draft Hub/Full Board
@@ -67,6 +73,7 @@ export default function PlayerHub({
   recommendedTierLeft,
   // Queue tab
   queuePlayers,
+  recentOthers,
   engine,
   // Team tab
   league,
@@ -76,6 +83,9 @@ export default function PlayerHub({
   const [open, setOpen] = useState(true)
   const [tab, setTab] = useState('players')
   const [viewSlot, setViewSlot] = useState(mySlot)
+  // window.DraftEngine, same global source DraftLogDock reads it from —
+  // ActivityLog needs it for pickCode().
+  const DE = typeof window !== 'undefined' ? window.DraftEngine : null
 
   return (
     <div
@@ -177,6 +187,12 @@ export default function PlayerHub({
       {open && tab === 'chat' && (
         <div className="flex min-h-0 flex-1 lg:hidden">
           <ChatPlaceholder />
+        </div>
+      )}
+
+      {open && tab === 'log' && (
+        <div className="min-h-0 flex-1 overflow-y-auto p-2 lg:hidden">
+          <ActivityLog picks={recentOthers} engine={engine} DE={DE} league={league} />
         </div>
       )}
     </div>

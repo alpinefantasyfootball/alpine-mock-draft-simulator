@@ -33,7 +33,7 @@ function TabContent({ tab, engine, recentOthers, DE, league }) {
 // lives in PlayerHub.jsx's bottom sheet instead (see its own comment on
 // why this and RosterDock each shrank to lg+-only as part of that pass).
 // A real column beside the board and the queue, not a float over them.
-export default function DraftLogDock() {
+export default function DraftLogDock({ recentOthers }) {
   const engine = useEngine()
   useJukeTick(engine)
   const [tab, setTab] = useState('chat')
@@ -42,17 +42,6 @@ export default function DraftLogDock() {
 
   const DE = typeof window !== 'undefined' ? window.DraftEngine : null
   const league = engine.league()
-  const picks = engine.picks() || []
-  const mySlot = engine.mySlot() ?? 0
-
-  // "Made by the AI" — everyone else's picks, most recent first. In a
-  // room some of those seats are other people, not CPUs, but "not my
-  // seat" is still the honest, real filter: there's no per-pick flag
-  // saying whether a seat was auto-played at the moment it picked.
-  const recentOthers = picks
-    .filter((p) => p.slot !== mySlot)
-    .slice(-10)
-    .reverse()
 
   /* The fourth panel in the desktop row. Chat and the activity log share
      it as two tabs rather than taking a column each: chat is the one that
