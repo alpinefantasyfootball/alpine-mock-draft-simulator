@@ -132,6 +132,57 @@ function VorpRow({ seat, gap, maxAbs }) {
   )
 }
 
+/* Below 10 points of replacement value, a "miss" is inside the forecast's
+   own error — the 2026 projection runs at MAE 6.8 against actuals (see
+   CLAUDE.md's Juke score section) — so accusing a pick over a single-digit
+   delta would be reading precision into a number that doesn't carry it.
+   Above it, the miss is worth saying out loud. */
+const MISS_FLOOR = 10
+
+// One centered-baseline bar, shared shape with the VORP rows: teal grows
+// right for a pick that fell to you, red grows left for a reach — the same
+// signed gap (pick number minus board rank) the grade's value component
+// counts, in the same convention its callouts already print.
+function TimelineRow({ pick, gap, maxAbs, shortName }) {
+  const width = maxAbs > 0 ? (Math.abs(gap) / maxAbs) * 100 : 0
+  return (
+    <div className="flex items-center gap-2">
+      <span className="w-7 shrink-0 text-[10px] font-bold text-white/30">R{pick.round}</span>
+      <span
+        className={
+          'w-9 shrink-0 rounded px-1 py-0.5 text-center text-[9px] font-bold ' +
+          (POS_BADGE[pick.player.pos] || 'bg-white/10 text-white/50')
+        }
+      >
+        {pick.player.pos}
+      </span>
+      <span className="w-24 shrink-0 truncate text-xs font-medium text-white/85 sm:w-28">{shortName}</span>
+      <div className="relative h-4 min-w-0 flex-1">
+        <span className="absolute inset-y-0 left-1/2 w-px bg-white/20" />
+        <motion.span
+          initial={{ width: 0 }}
+          animate={{ width: `${width / 2}%` }}
+          transition={{ type: 'spring', stiffness: 120, damping: 20 }}
+          className={
+            'absolute top-1/2 h-2.5 -translate-y-1/2 rounded-sm ' +
+            (gap >= 0
+              ? 'left-1/2 bg-gradient-to-r from-teal-500/80 to-teal-300 shadow-[0_0_8px_rgba(0,229,255,0.35)]'
+              : 'right-1/2 bg-gradient-to-l from-rose-600/80 to-rose-400 shadow-[0_0_8px_rgba(244,63,94,0.35)]')
+          }
+        />
+      </div>
+      <span
+        className={
+          'w-10 shrink-0 text-right text-xs font-semibold tabular-nums ' +
+          (gap >= 0 ? 'text-teal-300' : 'text-rose-400')
+        }
+      >
+        {(gap >= 0 ? '+' : '') + gap}
+      </span>
+    </div>
+  )
+}
+
 // Shown the moment a draft concludes (DraftRoom.jsx flips it on off the
 // draftOver() edge) and reopenable from the pill it leaves behind. All of
 // it is real: the grade is engine.draftAnalysis() — the identical
@@ -149,6 +200,47 @@ export default function DraftInsightsDashboard({ engine, league, mySlot, onClose
 
   const bargain = mine.bargain && mine.bargain.gap > 0 ? mine.bargain : null
   const reach = mine.reach || null
+
+  const picks = engine.picks() || []
+  // FORCED_LATE is a lookup object ({ K: true, DST: true }), not a list —
+  // the same shape freelyChosen() in app.js tests it with.
+  const forced = engine.forcedLate() || {}
+  const myPicks = picks.filter((p) => p.slot === mySlot).slice().sort((a, b) => a.overall - b.overall)
+
+  /* The value timeline judges only the picks you were free to time — the
+     same FORCED_LATE exclusion the grade's value component applies, and
+     for the same documented reason: the app itself schedules kickers and
+     defenses into the closing rounds, and their long-draft ADP makes every
+     one of them read as a reach. Naming a kicker your worst pick was a
+     real bug once; it does not come back through a new panel. */
+  const timeline = myPicks
+    .filter((p) => !forced[p.player.pos])
+    .map((p) => ({ pick: p, gap: p.overall - p.player.overall }))
+  const tlMax = Math.max(1, ...timeline.map((t) => Math.abs(t.gap)))
+
+  /* The one that got away: at each of your turns, every player somebody
+     else took before your next turn was a player you could have had and
+     then couldn't — the biggest replacementGap() upgrade among them is the
+     sliding-doors pick. Your last pick has no next turn, so it has no
+     window. K/DST and no-projection players fall out naturally: their gap
+     is null on either side of the comparison. */
+  let missed = null
+  myPicks.forEach((minePick, i) => {
+    const next = myPicks[i + 1]
+    if (!next) return
+    const myGap = engine.replacementGap(minePick.player)
+    if (myGap === null) return
+    picks.forEach((p) => {
+      if (p.slot === mySlot || p.overall <= minePick.overall || p.overall >= next.overall) return
+      const theirGap = engine.replacementGap(p.player)
+      if (theirGap === null) return
+      const delta = theirGap - myGap
+      if (delta > (missed ? missed.delta : 0)) missed = { theirs: p, mine: minePick, delta }
+    })
+  })
+  const realMiss = missed && missed.delta >= MISS_FLOOR ? missed : null
+
+  const standings = analysis.slice().sort((a, b) => a.rank - b.rank)
 
   return (
     <div className="fixed inset-0 z-[70] overflow-y-auto bg-[#0B0E14]/97 backdrop-blur-md">
@@ -209,6 +301,40 @@ export default function DraftInsightsDashboard({ engine, league, mySlot, onClose
           </div>
         </motion.div>
 
+        {/* Sliding doors — the single biggest value upgrade that left the
+            board between two of your turns. When nothing clears MISS_FLOOR
+            the panel says so in the positive, because that is a checkable
+            claim about this draft, not an empty box. */}
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.04 }}
+          className={PANEL + ' p-5'}
+        >
+          <h2 className="font-display text-sm font-bold uppercase tracking-wide text-white/80">
+            The One That Got Away
+          </h2>
+          {realMiss ? (
+            <p className="mt-2 text-sm leading-relaxed text-white/60">
+              <span className="font-semibold text-[#B784E0]">{realMiss.theirs.player.name}</span>{' '}
+              was still on the board when you took {realMiss.mine.player.name} in round{' '}
+              {realMiss.mine.round} — {engine.teamLabel(realMiss.theirs.slot)} got him{' '}
+              {realMiss.theirs.overall - realMiss.mine.overall === 1
+                ? 'with the very next pick'
+                : `${realMiss.theirs.overall - realMiss.mine.overall} picks later`}
+              , and he projects{' '}
+              <span className="font-semibold text-teal-300">+{Math.round(realMiss.delta)} more points</span>{' '}
+              over a replacement starter than your pick does.
+            </p>
+          ) : (
+            <p className="mt-2 text-sm leading-relaxed text-white/60">
+              Nothing got away. At every turn, nobody taken before your next pick out-valued your
+              choice by more than the projection can honestly measure — that is the mark of a draft
+              with no real regrets in it.
+            </p>
+          )}
+        </motion.div>
+
         <div className="grid gap-5 lg:grid-cols-2">
           <motion.section
             initial={{ opacity: 0, y: 12 }}
@@ -240,6 +366,72 @@ export default function DraftInsightsDashboard({ engine, league, mySlot, onClose
               Kickers and defenses show a dash: measured against three seasons of archived forecasts the
               projection ranks them no better than chance, so no bar is drawn from it.
             </p>
+          </motion.section>
+
+          <motion.section
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.24 }}
+            className={PANEL + ' p-5'}
+          >
+            <h2 className="font-display text-sm font-bold uppercase tracking-wide text-white/80">Draft Value Timeline</h2>
+            <p className="mb-3 mt-0.5 text-xs text-white/35">
+              Where each pick landed against the board's rank — right means he fell to you
+            </p>
+            <div className="flex flex-col gap-1.5">
+              {timeline.map((t) => (
+                <TimelineRow
+                  key={t.pick.overall}
+                  pick={t.pick}
+                  gap={t.gap}
+                  maxAbs={tlMax}
+                  shortName={engine.shortName(t.pick.player)}
+                />
+              ))}
+            </div>
+            <p className="mt-3 text-[10px] leading-relaxed text-white/25">
+              Kickers and defenses sit this out too — the app schedules those picks itself, so their
+              timing says nothing about your drafting.
+            </p>
+          </motion.section>
+
+          <motion.section
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.32 }}
+            className={PANEL + ' p-5'}
+          >
+            <h2 className="font-display text-sm font-bold uppercase tracking-wide text-white/80">Room Standings</h2>
+            {/* The number IS the weighted total the table is ordered by —
+                CLAUDE.md's standings rule: a column between the rank and
+                the letter showing anything else makes the table look
+                broken, and once did. */}
+            <p className="mb-3 mt-0.5 text-xs text-white/35">Every team's weighted score, best to worst</p>
+            <div className="flex flex-col gap-1">
+              {standings.map((t) => (
+                <div
+                  key={t.slot}
+                  className={
+                    'flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs ' +
+                    (t.slot === mySlot
+                      ? 'border border-teal-400/40 bg-teal-500/10 font-semibold text-white'
+                      : 'text-white/60')
+                  }
+                >
+                  <span className="w-5 shrink-0 text-right tabular-nums text-white/35">{t.rank}</span>
+                  <span className="min-w-0 flex-1 truncate">{engine.teamLabel(t.slot)}</span>
+                  <span className="w-8 shrink-0 text-right font-semibold tabular-nums">{Math.round(t.total)}</span>
+                  <span
+                    className={
+                      'w-8 shrink-0 rounded px-1 py-0.5 text-center text-[10px] font-bold ' +
+                      (t.slot === mySlot ? 'bg-teal-400/20 text-teal-300' : 'bg-white/5 text-white/50')
+                    }
+                  >
+                    {t.grade}
+                  </span>
+                </div>
+              ))}
+            </div>
           </motion.section>
         </div>
 

@@ -183,16 +183,22 @@ export default function DraftRoom() {
           <div className="lg:basis-1/3">
             <RoomPanel />
           </div>
-          <div className="lg:basis-1/3">
-            {/* Only this column gets an explicit height — same reason
-                DraftSettings.jsx's own copy of this pairing does it the
-                same way: ConfigureDraftForm and RoomPanel both stretch to
-                match via their own h-full, off this column's real height,
-                rather than three independently-guessed heights that could
-                each disagree. Without it, a Locker with a full page of
-                completed drafts sets the row's height instead of scrolling
-                inside it, and drags the shorter columns down with it. */}
-            <div className="lg:h-[calc(100vh-176px)] lg:min-h-[420px]">
+          <div className="relative lg:basis-1/3 lg:min-h-[420px]">
+            {/* Absolute inside a relative column, not an explicit height.
+                The Locker needs a bounded height so a long history scrolls
+                inside it instead of setting the row's height — but the old
+                bound was a viewport guess (calc(100vh-176px)), and whenever
+                the guess ran shorter than the row's real height (set by the
+                tallest sibling, the Configure form) the Locker's bottom
+                visibly sat above the other two columns'. An absolutely
+                positioned fill contributes nothing to the row's height and
+                tracks the stretched column height exactly, so all three
+                bottoms align by construction rather than by arithmetic
+                that has to be re-derived every time the padding moves. The
+                min-h lives on the column so a near-empty row still gives
+                the Locker something worth filling; below lg none of this
+                applies and the Locker takes its natural stacked height. */}
+            <div className="lg:absolute lg:inset-0">
               <DraftLocker />
             </div>
           </div>

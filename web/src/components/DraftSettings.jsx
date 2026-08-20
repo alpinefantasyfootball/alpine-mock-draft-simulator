@@ -17,8 +17,12 @@ export default function DraftSettings() {
         <div className="lg:basis-2/5">
           <ConfigureDraftForm />
         </div>
-        <div className="lg:basis-3/5">
-          <div className="lg:h-[calc(100vh-220px)] lg:min-h-[420px]">
+        <div className="relative lg:basis-3/5 lg:min-h-[420px]">
+          {/* Absolute fill, not a viewport-calc height — same fix as the
+              three-column screen in DraftRoom.jsx (see its comment): the
+              calc was a guess at the row's height, and a wrong guess left
+              the Locker's bottom edge misaligned with the form's. */}
+          <div className="lg:absolute lg:inset-0">
             <DraftLocker />
           </div>
         </div>
