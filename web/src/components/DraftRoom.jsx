@@ -111,10 +111,9 @@ export default function DraftRoom() {
      already turned member ids into names before it leaves the server — a
      client that has never been told another member's id must not learn it
      from this screen. Null off-room: there is nobody else to show. */
-  const roomSeatOwners = (() => {
+  const roomSeats = (() => {
     const room = engine ? engine.room() : null
-    if (!room || !room.seats) return null
-    return room.seats.map((chair) => (chair && chair.name) || null)
+    return room && room.seats ? room.seats : null
   })()
   /* Functional update, not a read of `tray`. Written the obvious way first,
      and two quick clicks moved the tray one step: both handlers closed over
@@ -299,7 +298,7 @@ export default function DraftRoom() {
             league={league}
             mySlot={roomActive ? mySlot : lobbySlot}
             roomActive={roomActive}
-            seatOwners={roomSeatOwners}
+            seats={roomSeats}
             onClaimSeat={(seat) => {
               // In a room the room decides; off-room this is just my chair.
               if (roomActive) engine.claimSeat(seat)

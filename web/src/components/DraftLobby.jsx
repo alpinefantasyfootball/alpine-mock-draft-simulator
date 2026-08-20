@@ -18,7 +18,7 @@ import DraftBoardGrid from './DraftBoardGrid.jsx'
    In a room the seats carry the managers who have taken them, and claiming
    one is Live.claimSeat(). Off-room the only owned seat is yours, and the
    rest fill with CPUs at kickoff. One screen, because a seat is a seat. */
-export default function DraftLobby({ engine, league, mySlot, onClaimSeat, seatOwners, roomActive }) {
+export default function DraftLobby({ engine, league, mySlot, onClaimSeat, seats, roomActive }) {
   return (
     <section className="rounded-2xl border border-slate-800 bg-slate-900/40">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 px-4 py-3">
@@ -49,7 +49,7 @@ export default function DraftLobby({ engine, league, mySlot, onClaimSeat, seatOw
           onClock={null}
           teamLabelOf={(s) => engine.teamLabel(s)}
           onClaimSeat={onClaimSeat}
-          seatOwners={seatOwners}
+          seats={seats}
         />
       </div>
     </section>

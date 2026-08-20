@@ -129,7 +129,7 @@ function mineRing(isMine, isCurrent) {
     : 'shadow-[inset_0_0_0_2px_#FFD166]'
 }
 
-export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLabelOf, onTeamClick, photoFor, shortNameOf, onClaimSeat, seatOwners }) {
+export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLabelOf, onTeamClick, photoFor, shortNameOf, onClaimSeat, seats }) {
   const desktop = useDesktop()
   const byCell = new Map()
   picks.forEach((p) => byCell.set(p.round + '-' + p.slot, p))
@@ -196,8 +196,19 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
             from the room when there is one; off-room the only owned seat is
             yours. */}
         {onClaimSeat ? Array.from({ length: teams }, (_, s) => {
-          const owner = seatOwners ? seatOwners[s] : null
-          const mine = s === mySlot
+          /* Occupancy is `taken`, never the name. A manager who has not typed
+             one still occupies the chair, and reading the name instead drew
+             their seat as free - so the lobby invited a guest to click a chair
+             somebody was already sitting in, and the room refused with nothing
+             on screen to explain it. The room already sends both facts
+             separately; this was throwing one of them away.
+
+             `you` comes from the room too rather than being derived from
+             mySlot, because the room is the thing that decides where you sit. */
+          const chair = seats ? seats[s] : null
+          const mine = chair ? !!chair.you : s === mySlot
+          const taken = chair ? !!chair.taken && !chair.you : false
+          const who = chair && chair.name ? chair.name : null
           return (
             <div
               key={'hd-' + s}
@@ -206,21 +217,21 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
               <button
                 type="button"
                 onClick={() => onClaimSeat(s)}
-                disabled={!!owner && !mine}
-                title={mine ? 'This is your seat' : owner ? owner + ' has this seat' : 'Take seat ' + (s + 1)}
+                disabled={taken}
+                title={mine ? 'This is your seat' : taken ? (who || 'Another manager') + ' has this seat' : 'Take seat ' + (s + 1)}
                 className={
                   'w-full truncate rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide transition-colors duration-150 ' +
                   (mine
                     ? 'bg-teal-500 text-obsidian'
-                    : owner
+                    : taken
                       ? 'cursor-not-allowed bg-white/5 text-white/30'
                       : 'bg-white/10 text-white/60 hover:bg-teal-500/20 hover:text-teal-300')
                 }
               >
-                {mine ? 'You' : owner ? 'Taken' : 'Claim'}
+                {mine ? 'You' : taken ? 'Taken' : 'Claim'}
               </button>
               <span className="w-full truncate text-center text-[11px] font-semibold text-white/50">
-                {owner || teamLabelOf(s)}
+                {who || teamLabelOf(s)}
               </span>
             </div>
           )
