@@ -17,9 +17,8 @@ const PANEL =
   'hover:border-teal-400/40 hover:shadow-[0_0_18px_rgba(0,229,255,0.12)]'
 
 // The four grade components, in the order and under the names the Analysis
-// tab's own bars use — these ARE the radar's axes, so when a charting
-// canvas drops into the middle later it inherits real, already-labelled
-// dimensions rather than inventing its own.
+// tab's own bars use — these are the radar's axes, so the chart can never
+// invent a dimension the grade does not actually measure.
 const AXES = [
   { key: 'startersScaled', label: 'Starters' },
   { key: 'valueScaled', label: 'Value' },
@@ -27,27 +26,39 @@ const AXES = [
   { key: 'byePenaltyScaled', label: 'Byes' },
 ]
 
-/* Scaffold only, on purpose: the styled frame, the rings and the four real
-   axes — the data polygon arrives with the charting library. The axis
-   labels already carry each component's real 0-100 scaled score so the
-   panel says something true in the meantime instead of standing empty. */
-function RadarScaffold({ mine }) {
+/* The real radar, no charting library after all — four axes is a polygon,
+   not a dependency. Rings and axes frame it; the data shape is each
+   component's 0-100 room-scaled score pushed out along its own axis,
+   filled with the brand gradient and dotted at the vertices so a
+   collapsed axis (a genuine 0 — last in the room on that component) still
+   reads as a point at the center rather than vanishing. */
+function RadarChart({ mine }) {
   const cx = 110
   const cy = 100
   const r = 68
   // Four axes: up, right, down, left.
   const points = AXES.map((axis, i) => {
     const angle = (Math.PI / 2) * i - Math.PI / 2
+    const score = Math.round(mine[axis.key])
     return {
       ...axis,
       x: cx + Math.cos(angle) * r,
       y: cy + Math.sin(angle) * r,
-      score: Math.round(mine[axis.key]),
+      dx: cx + Math.cos(angle) * r * (score / 100),
+      dy: cy + Math.sin(angle) * r * (score / 100),
+      score,
     }
   })
+  const dataPoints = points.map((p) => `${p.dx},${p.dy}`).join(' ')
 
   return (
     <svg viewBox="0 0 220 200" className="mx-auto w-full max-w-[300px]" aria-hidden="true">
+      <defs>
+        <linearGradient id="radar-fill" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#00E5FF" />
+          <stop offset="100%" stopColor="#7B1FA2" />
+        </linearGradient>
+      </defs>
       {[0.25, 0.5, 0.75, 1].map((ring) => (
         <polygon
           key={ring}
@@ -60,6 +71,21 @@ function RadarScaffold({ mine }) {
       {points.map((p) => (
         <line key={p.key} x1={cx} y1={cy} x2={p.x} y2={p.y} stroke="rgba(0,229,255,0.25)" strokeWidth="1" />
       ))}
+
+      {/* the data shape — scale-in from the center, matching the VORP
+          bars' own entrance */}
+      <motion.g
+        initial={{ scale: 0, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={{ type: 'spring', stiffness: 120, damping: 18 }}
+        style={{ transformOrigin: `${cx}px ${cy}px` }}
+      >
+        <polygon points={dataPoints} fill="url(#radar-fill)" fillOpacity="0.3" stroke="#00E5FF" strokeWidth="1.5" strokeLinejoin="round" />
+        {points.map((p) => (
+          <circle key={p.key + '-dot'} cx={p.dx} cy={p.dy} r="3" fill="#00E5FF" />
+        ))}
+      </motion.g>
+
       {points.map((p, i) => (
         <text
           key={p.key + '-label'}
@@ -392,7 +418,7 @@ export default function DraftInsightsDashboard({ engine, league, mySlot, viewSlo
           >
             <h2 className="font-display text-sm font-bold uppercase tracking-wide text-white/80">Team Analysis</h2>
             <p className="mb-3 mt-0.5 text-xs text-white/35">The four grade components, scaled against the room</p>
-            <RadarScaffold mine={mine} />
+            <RadarChart mine={mine} />
           </motion.section>
 
           <motion.section
