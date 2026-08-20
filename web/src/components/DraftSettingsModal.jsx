@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 import RoomPanel from './RoomPanel.jsx'
 import { POS_BADGE } from './draftRoomPositions.js'
@@ -18,7 +18,7 @@ import { POS_BADGE } from './draftRoomPositions.js'
    "nothing about the league shape may be written down twice" is about, and
    the superflex grading bug is what it looks like when it happens. */
 
-const TABS = ['General', 'Roster', 'Scoring', 'Invite']
+const TABS = ['General', 'Roster', 'Scoring', 'Order', 'Invite']
 
 /* The lineup as an ordered list of slots, the way a roster actually reads,
    built from the counts league.starters already holds. Sleeper shows a list;
@@ -88,6 +88,19 @@ function Stepper({ value, onAdd, onRemove, disabled, min = 0, max = 9 }) {
 
 export default function DraftSettingsModal({ engine, onClose, started }) {
   const [tab, setTab] = useState('General')
+  /* Pick a seat up, then put it down on another - the same two taps the
+     legacy order list used, and the reason is touch: a drag needs a pointer
+     that can hover and a target that does not scroll under it, and this list
+     scrolls. Tapping the held seat again puts it back down, which is the only
+     way out of a tap you did not mean. */
+  const [held, setHeld] = useState(null)
+  /* The ref is what the click reads; the state is only what draws the
+     highlight. An onClick closes over the `held` of its own render, so two
+     clicks inside one frame both see null and the second picks a seat up
+     instead of swapping - which is the tray chevron's bug again, in a
+     different control. A ref is current at click time whatever the speed. */
+  const heldRef = useRef(null)
+  const hold = (i) => { heldRef.current = i; setHeld(i) }
   const [, bump] = useState(0)
 
   useEffect(() => {
@@ -321,6 +334,116 @@ export default function DraftSettingsModal({ engine, onClose, started }) {
                 ))}
               </div>
             )}
+
+            {tab === 'Order' && (() => {
+              const room = engine.room()
+              const seats = room && room.seats ? room.seats : null
+              const isHost = !!engine.isHost()
+              /* Three different read-only reasons, and they are not the same
+                 sentence. A guest is not allowed; a solo drafter has nobody to
+                 order; a started draft is fixed. Saying "you cannot do this"
+                 without saying which would be the dead-control problem with a
+                 label on it. */
+              const canOrder = !!seats && isHost && !locked
+
+              if (!seats) {
+                return (
+                  <div>
+                    <p className="mb-3 text-[11px] leading-relaxed text-white/45">
+                      Draft order is something a room decides. On your own the other
+                      chairs are computer teams and the order between them changes
+                      nothing — the only seat that matters is yours, and you claim
+                      that on the board.
+                    </p>
+                    <ol className="overflow-hidden rounded-lg border border-slate-800">
+                      {Array.from({ length: league.teams }, (_, i) => (
+                        <li key={i} className="flex items-center gap-3 border-b border-slate-800/60 px-3 py-2 last:border-b-0">
+                          <span className="w-5 shrink-0 text-right text-xs tabular-nums text-white/30">{i + 1}</span>
+                          <span className={'text-sm ' + (i === engine.mySlot() ? 'font-semibold text-teal-300' : 'text-white/60')}>
+                            {i === engine.mySlot() ? 'You' : engine.teamLabel(i)}
+                          </span>
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                )
+              }
+
+              return (
+                <div>
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-[11px] leading-relaxed text-white/45">
+                      {locked
+                        ? 'The draft has started, so the order is fixed.'
+                        : isHost
+                          ? held === null
+                            ? 'Tap a seat to pick it up, then tap another to swap them.'
+                            : 'Now tap the seat to swap it with — or tap it again to put it back.'
+                          : 'Only the host can set the draft order.'}
+                    </p>
+                    {canOrder && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          /* Fisher-Yates, sent as the swaps it is made of,
+                             because swapSeats is the only thing the room
+                             exposes and the room is the thing that decides.
+                             At most teams-1 messages - thirteen at the largest
+                             league - well inside the forty-per-ten-seconds a
+                             socket is allowed. */
+                          const n = league.teams
+                          for (let i = n - 1; i > 0; i--) {
+                            const j = Math.floor(Math.random() * (i + 1))
+                            if (i !== j) engine.swapSeats(i, j)
+                          }
+                          hold(null)
+                        }}
+                        className="shrink-0 rounded-full border border-slate-700 px-3 py-1 text-xs font-semibold text-white/70 transition-colors duration-150 hover:border-teal-400/50 hover:text-teal-300"
+                      >
+                        Randomize order
+                      </button>
+                    )}
+                  </div>
+
+                  <ol className="overflow-hidden rounded-lg border border-slate-800">
+                    {seats.map((chair, i) => {
+                      const isHeld = held === i
+                      return (
+                        <li key={i}>
+                          <button
+                            type="button"
+                            disabled={!canOrder}
+                            onClick={() => {
+                              const current = heldRef.current
+                              if (current === null) { hold(i); return }
+                              if (current !== i) engine.swapSeats(current, i)
+                              hold(null)
+                            }}
+                            className={
+                              'flex w-full items-center gap-3 border-b border-slate-800/60 px-3 py-2 text-left transition-colors duration-150 last:border-b-0 ' +
+                              (isHeld
+                                ? 'bg-teal-500/15 ring-1 ring-inset ring-teal-400/50'
+                                : canOrder ? 'hover:bg-white/5' : 'cursor-default')
+                            }
+                          >
+                            <span className="w-5 shrink-0 text-right text-xs tabular-nums text-white/30">{i + 1}</span>
+                            <span className={'min-w-0 flex-1 truncate text-sm ' + (chair.you ? 'font-semibold text-teal-300' : 'text-white/70')}>
+                              {chair.you ? 'You' : chair.name || (chair.taken ? 'A manager' : 'Open')}
+                            </span>
+                            {/* An empty chair is a real state in a room that
+                                has not filled up, and it is not the same as a
+                                manager who has not named themselves. */}
+                            {!chair.taken && (
+                              <span className="shrink-0 text-[10px] uppercase tracking-wide text-white/25">Open</span>
+                            )}
+                          </button>
+                        </li>
+                      )
+                    })}
+                  </ol>
+                </div>
+              )
+            })()}
 
             {tab === 'Invite' && <RoomPanel />}
           </div>

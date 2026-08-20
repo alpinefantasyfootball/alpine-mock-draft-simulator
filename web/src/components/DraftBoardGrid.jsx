@@ -192,7 +192,7 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
             dead-control rule: nothing may look pressable and do nothing. */}
         {/* Before a draft, a column header is a chair rather than a label.
             Claiming one is how you pick where you sit - the same gesture in a
-            room and on your own, because a seat is a seat. seatOwners comes
+            room and on your own, because a seat is a seat. `seats` comes
             from the room when there is one; off-room the only owned seat is
             yours. */}
         {onClaimSeat ? Array.from({ length: teams }, (_, s) => {

@@ -71,6 +71,17 @@ test("two managers, one board: a claimed chair shows as taken to everybody",
     // Somebody else's chair is not takeable, and the lobby says so before
     // the room has to refuse anything.
     const hostSeat = await host.evaluate(() => Live.room().yourSeat);
+
+    /* Wait for the guest's board to reflect the room rather than reading it
+       once. A join is two things arriving - the socket, then the first state
+       - and asserting between them tests the gap, not the feature. */
+    await expect
+      .poll(() => guest.evaluate(() => {
+        const r = window.Live && Live.room();
+        return !!(r && r.seats && r.seats.some((c) => c.taken));
+      }), { timeout: 30000 })
+      .toBe(true);
+
     const hostChairLocked = await guest.evaluate((seat) => {
       const root = document.getElementById("draftroom-root");
       const chips = [...root.querySelectorAll("button")]
@@ -109,3 +120,87 @@ test("two managers, one board: a claimed chair shows as taken to everybody",
     await hostCtx.close();
     await guestCtx.close();
   });
+
+/* Draft order, which only means anything with more than one person in the
+   room — so it cannot be checked solo, and the two things worth checking are
+   that the host can and the guest cannot. The room already refuses a guest
+   (test_engine.py proves Room.swapSeats does), but a refusal the UI never
+   mentions is a control that looks live and does nothing. */
+async function openOrderTab(page) {
+  await page.evaluate(() => {
+    const root = document.getElementById("draftroom-root");
+    [...root.querySelectorAll("button")]
+      .find((b) => /scoring settings/i.test(b.textContent || ""))
+      .click();
+  });
+  await page.waitForFunction(() =>
+    [...document.querySelectorAll("div")].some((d) =>
+      (d.className || "").toString().includes("z-[70]")), null, { timeout: 15000 });
+  await page.evaluate(() => {
+    const m = [...document.querySelectorAll("div")]
+      .find((d) => (d.className || "").toString().includes("z-[70]"));
+    [...m.querySelectorAll("button")].find((b) => b.textContent.trim() === "Order").click();
+  });
+}
+
+function orderPanelText(page) {
+  return page.evaluate(() => {
+    const m = [...document.querySelectorAll("div")]
+      .find((d) => (d.className || "").toString().includes("z-[70]"));
+    return m ? m.innerText : "";
+  });
+}
+
+test("the host sets the draft order and a guest cannot", async ({ browser }) => {
+  const hostCtx = await browser.newContext();
+  const host = await openApp(hostCtx, "#/draft-room");
+
+  const code = await host.evaluate(async () => {
+    window.JukeEngine.createRoom();
+    for (let i = 0; i < 80 && !window.JukeEngine.codeInUrl(); i++) {
+      await new Promise((r) => setTimeout(r, 250));
+    }
+    return window.JukeEngine.codeInUrl();
+  });
+  expect(code).toBeTruthy();
+
+  const guestCtx = await browser.newContext();
+  const guest = await openApp(guestCtx, `#/draft-room?room=${code}`);
+  await guest.waitForFunction(() => window.Live && Live.room() && Live.room().yourSeat >= 0,
+    null, { timeout: 60000 });
+
+  const guestSeatBefore = await guest.evaluate(() => Live.room().yourSeat);
+  const hostSeat = await host.evaluate(() => Live.room().yourSeat);
+
+  // The guest is told, on screen, that this is not theirs to change.
+  await openOrderTab(guest);
+  await expect
+    .poll(() => orderPanelText(guest), { timeout: 15000 })
+    .toMatch(/Only the host can set the draft order/);
+  const guestSeesRandomize = await orderPanelText(guest);
+  expect(guestSeesRandomize, "and is not offered the shuffle").not.toMatch(/Randomize order/);
+
+  // The host swaps the two occupied chairs, through the real list.
+  await openOrderTab(host);
+  await expect.poll(() => orderPanelText(host), { timeout: 15000 })
+    .toMatch(/Tap a seat to pick it up/);
+
+  await host.evaluate(([a, b]) => {
+    const m = [...document.querySelectorAll("div")]
+      .find((d) => (d.className || "").toString().includes("z-[70]"));
+    const rows = [...m.querySelectorAll("ol li button")];
+    rows[a].click();
+    rows[b].click();
+  }, [hostSeat, guestSeatBefore]);
+
+  // The guest is moved by the room, not by their own browser.
+  await expect
+    .poll(() => guest.evaluate(() => Live.room().yourSeat), { timeout: 30000 })
+    .toBe(hostSeat);
+  await expect
+    .poll(() => host.evaluate(() => Live.room().yourSeat), { timeout: 30000 })
+    .toBe(guestSeatBefore);
+
+  await hostCtx.close();
+  await guestCtx.close();
+});

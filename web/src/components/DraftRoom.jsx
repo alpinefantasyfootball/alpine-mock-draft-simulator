@@ -296,7 +296,13 @@ export default function DraftRoom() {
           <DraftLobby
             engine={engine}
             league={league}
-            mySlot={roomActive ? mySlot : lobbySlot}
+            /* -1 while we are in a room whose seats have not arrived yet.
+               mySlot is a leftover from before the room existed, so falling
+               back to it draws "You" on seat 0 for a guest who is actually
+               sitting somewhere else - briefly, but it is a chair with the
+               wrong person's name on it, and the room is about to say so. No
+               seat is better than the wrong seat. */
+            mySlot={roomActive ? (roomSeats ? mySlot : -1) : lobbySlot}
             roomActive={roomActive}
             seats={roomSeats}
             onClaimSeat={(seat) => {
