@@ -10,6 +10,19 @@ import { test, expect } from "@playwright/test";
 import { openApp, createRoom, roomView, sent, waitForRoom, pickGaps, median, perSeat, LEGACY_VIEW }
   from "./helpers.mjs";
 
+/* The legacy setup screen is `display:none !important` in web/index.html -
+   DraftSettings.jsx replaced it visually and the markup stayed for app.js's
+   unguarded listeners. So a Playwright click, which waits for visibility,
+   can never resolve on a control inside it: this suite sat red from the day
+   that landed, and nobody saw it because the room specs need the worker and
+   local wrangler crash-loops on the owner's machine.
+
+   evaluate() does not check visibility, which is the same split every other
+   spec here already relies on (see helpers.mjs's startDraft). */
+async function clickHidden(page, id) {
+  await page.evaluate((i) => document.getElementById(i).click(), id);
+}
+
 /* Host and guest are separate browser contexts, which is what makes them
    separate people: contexts have their own localStorage, so their own
    `juke.member`. Two tabs would share one id and the room would be right to
@@ -36,12 +49,12 @@ test("a full room draft finishes, and nobody drafts for anybody else", async ({ 
   // The guest is a person who picks for themselves; the host asks for its own
   // chair to be played. Between them that is two seats, and the CPU has eight.
   await guest.evaluate(() => window.__playAsHuman());
-  await host.click("#startBtn");
+  await clickHidden(host, "startBtn");
   await host.waitForFunction(() => Live.room().status === "drafting");
 
   await expect(host.locator("#autoBtn"), "the label promises only your own picks")
     .toHaveText("Auto-draft my picks");
-  await host.click("#autoBtn");
+  await clickHidden(host, "autoBtn");
   await expect(host.locator("#autoBtn")).toHaveText("Stop auto-drafting");
 
   const final = await waitForRoom(request, code, (r) => r.status === "done");
@@ -88,7 +101,7 @@ test("a full room draft finishes, and nobody drafts for anybody else", async ({ 
 test("a dropped socket comes back on its own, and the chair comes with it", async ({ browser }) => {
   const { hostCtx, host, guestCtx, guest } = await twoManagers(browser);
 
-  await host.click("#startBtn");
+  await clickHidden(host, "startBtn");
   await host.waitForFunction(() => Live.room().status === "drafting");
 
   // What a phone does when the browser stops being the front app.
@@ -136,7 +149,7 @@ test("leaving the draft leaves the room, and the link brings you back", async ({
   const { hostCtx, host, guestCtx, guest, code } = await twoManagers(browser);
 
   await guest.evaluate(() => window.__playAsHuman());
-  await host.click("#startBtn");
+  await clickHidden(host, "startBtn");
   await host.waitForFunction(() => Live.room().status === "drafting");
   await host.waitForFunction(() => Live.room().picks.length > 0);
 
@@ -231,7 +244,7 @@ test("a room belongs to its host, and says so to everybody in it", async ({ brow
     "and the other client agrees about where it now sits").toBe(0);
 
   // ---- start, and check what a draft looks like from the guest's chair ----
-  await host.click("#startBtn");
+  await clickHidden(host, "startBtn");
   await guest.waitForFunction(() => Live.room().status === "drafting");
   await guest.waitForFunction(() => state.started === true);
 
