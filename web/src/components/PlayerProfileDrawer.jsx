@@ -71,7 +71,7 @@ export default function PlayerProfileDrawer({ player, onClose, photoFor, initial
         >
           <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-800 p-4">
             <div className="flex min-w-0 items-center gap-3">
-              <div className="relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-800 text-[10px] font-bold text-white/40">
+              <div className="relative flex h-11 w-11 lg:h-16 lg:w-16 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-800 text-[10px] lg:text-sm font-bold text-white/40">
                 {initialsFor(player)}
                 {photoFor(player) && (
                   <img

@@ -36,7 +36,7 @@ export default function JukeValueAssistant({ player, vorp, tierLeft, onDraft, my
     return (
       <div className="mb-2 flex items-center gap-2 rounded-lg border border-teal-500/40 bg-slate-900/90 px-2.5 py-2">
         <Sparkles className="h-3 w-3 shrink-0 text-teal-300" />
-        <div className="relative flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-800 text-[8px] font-bold text-white/40">
+        <div className="relative flex h-7 w-7 lg:h-10 lg:w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-800 text-[8px] lg:text-[10px] font-bold text-white/40">
           {initialsFor(player)}
           {photo && (
             <img
@@ -90,7 +90,7 @@ export default function JukeValueAssistant({ player, vorp, tierLeft, onDraft, my
 
       <p className="mt-3 text-[9px] font-semibold uppercase tracking-wide text-white/40">Recommended Pick</p>
       <div className="mt-1.5 flex items-center gap-2.5">
-        <div className="relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-800 text-[9px] font-bold text-white/40">
+        <div className="relative flex h-9 w-9 lg:h-12 lg:w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-800 text-[9px] lg:text-xs font-bold text-white/40">
           {initialsFor(player)}
           {photo && (
             <img

@@ -14,7 +14,14 @@ const COL_BY_KEY = Object.fromEntries(STAT_COLUMNS.map((c) => [c.key, c]))
    ("Bone-Thugs-N-Montgomery" is a team, but "Jaxon Smith-Njigba" is a
    player) — and leaves a 375px phone about 200px of scrollable stats,
    which is four columns before a swipe. */
-const NAME_W = 168
+/* Two widths, not one. A bigger headshot on desktop has to come out of
+   somewhere, and taking it out of the player's name would trade one
+   legibility problem for another - so the whole identity column grows with
+   it at lg+. It reaches CSS as a custom property because a `style` prop
+   cannot hold a media query, and every consumer (the header spacer, the
+   column header, the row) reads the same property, which is what keeps the
+   sticky column aligned against the cells scrolling underneath it. */
+const NAME_W_VAR = 'var(--name-w)'
 const ACTION_W = 68
 const STICKY_CELL = 'sticky left-0 z-20 flex shrink-0 items-center px-2'
 
@@ -246,13 +253,13 @@ export default function PlayerQueueSidebar({
           pb-28 below lg keeps the last row clear of the sheet's own bottom
           edge on a phone; lg:pb-6 is a plain breathing gap in the desktop
           panel, which has nothing floating over it. */}
-      <div className="flex-1 overflow-auto pb-28 lg:pb-6">
+      <div className="flex-1 overflow-auto pb-28 lg:pb-6 [--name-w:168px] lg:[--name-w:208px]">
         <div className="min-w-max">
           {/* Group header — the spanning row saying which family of stats
               the columns beneath belong to, so "YDS" three times over is
               never ambiguous. */}
           <div className="sticky top-0 z-30 flex border-b border-slate-800 bg-slate-900">
-            <div className={STICKY_CELL + ' bg-slate-900'} style={{ width: NAME_W }} />
+            <div className={STICKY_CELL + ' bg-slate-900'} style={{ width: NAME_W_VAR }} />
             {STAT_GROUPS.map((g) => {
               const w = g.keys.reduce((sum, k) => sum + COL_BY_KEY[k].width, 0)
               return (
@@ -273,7 +280,7 @@ export default function PlayerQueueSidebar({
           <div className="sticky top-[18px] z-30 flex border-b border-slate-800 bg-slate-900">
             <div
               className={STICKY_CELL + ' bg-slate-900 text-[10px] font-semibold uppercase tracking-wide text-white/30'}
-              style={{ width: NAME_W }}
+              style={{ width: NAME_W_VAR }}
             >
               Player
             </div>
@@ -342,7 +349,7 @@ export default function PlayerQueueSidebar({
                       while the numbers scroll. Opaque on purpose: a
                       transparent sticky cell lets the scrolling cells
                       slide visibly beneath it. */}
-                  <div className={STICKY_CELL + ' gap-2 bg-slate-950'} style={{ width: NAME_W }}>
+                  <div className={STICKY_CELL + ' gap-2 bg-slate-950'} style={{ width: NAME_W_VAR }}>
                     {player.drafted ? (
                       <Star className="h-4 w-4 shrink-0 text-white/10" />
                     ) : (
@@ -357,7 +364,14 @@ export default function PlayerQueueSidebar({
                     )}
 
                     <div className="relative shrink-0">
-                      <div className="relative flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-slate-800 text-[8px] font-bold text-white/40">
+                      {/* 28px on a phone, 40px at lg+. Measured before it was
+                          changed: the source is 250 to 350px wide and sharp,
+                          so nothing here was ever upscaled - at 28px the face
+                          is simply too small to identify, which reads as
+                          "grainy" without being a resolution problem at all.
+                          40px at dpr 2 asks for 80 device pixels, still a
+                          third of the smallest source. */}
+                      <div className="relative flex h-7 w-7 lg:h-10 lg:w-10 items-center justify-center overflow-hidden rounded-full bg-slate-800 text-[8px] lg:text-[10px] font-bold text-white/40">
                         {initialsFor(player)}
                         {photo && (
                           <img
