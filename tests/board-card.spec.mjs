@@ -240,12 +240,13 @@ test.describe("the draft board card", () => {
     expect(r.missing, "and each is the code its own overall implies").toEqual([]);
   });
 
-  test("a face is drawn per card, and a failed one leaves no hole", async ({ context }) => {
+  test("a face is drawn per card, and a failed one leaves no hole", async ({ browser }) => {
     /* Desktop only, and stated rather than assumed: a phone column is 112px
        and every pixel of it is spoken for, so the board renders no images at
        all below lg. Asserting faces at a phone width would be asserting a
        feature that is deliberately absent. */
-    const good = await openApp(context, "#/draft-room");
+    const goodCtx = await browser.newContext();
+    const good = await openApp(goodCtx, "#/draft-room");
     await good.setViewportSize({ width: 1440, height: 900 });
     await stubFaces(good);
     await draftInto(good, 30);
@@ -266,15 +267,33 @@ test.describe("the draft board card", () => {
     expect(drawn.cards, "there were cards").toBeGreaterThan(20);
     expect(drawn.faces, "a face on every card").toBe(drawn.cards);
     expect(drawn.rightmost, "and pinned to the right edge").toBe(true);
+    // Closed before the broken half opens. Two live pages both running a CPU
+    // timer and re-rendering is a slower machine for the one under test, and
+    // this half has nothing left to say.
+    await goodCtx.close();
 
     /* Now the same board with every image failing. onError removes the element
        rather than leaving a broken-image box, and the card closes up because
        the face was a flex sibling rather than an absolute overlay. */
-    const bad = await openApp(context, "#/draft-room");
+    /* Its own context, which is the whole reason this half is reliable. Both
+       pages shared one at first, so the successful images from the good page
+       were already in the HTTP cache — the bad page served them straight out
+       of it, never hit the abort route, and one face survived about one run
+       in six. That reads as the component failing to drop a broken image
+       when it is actually the image not being broken. */
+    const badCtx = await browser.newContext();
+    const bad = await openApp(badCtx, "#/draft-room");
     await bad.setViewportSize({ width: 1440, height: 900 });
     await stubFaces(bad, { fail: true });
     await draftInto(bad, 30);
-    await bad.waitForTimeout(1500);
+    /* Poll rather than sleep. Every abort fires on its own schedule, so a
+       fixed wait is a bet on the slowest of thirty requests — and it lost
+       about one run in four, reporting a single surviving face as a bug in
+       the component rather than a bug in the waiting. */
+    await expect
+      .poll(() => bad.evaluate((src) => eval(src).filter((c) => c.querySelector("img")).length, FILLED),
+            { timeout: 20000 })
+      .toBe(0);
 
     const gone = await bad.evaluate((src) => {
       const cells = eval(src);
@@ -288,6 +307,8 @@ test.describe("the draft board card", () => {
     expect(gone.cards, "the cards are all still there").toBeGreaterThan(20);
     expect(gone.faces, "and every broken face removed itself").toBe(0);
     expect(gone.firstPick).toMatch(/^\d+\.\d\d$/);
+
+    await badCtx.close();
   });
 
   test("a filled row is the same height as an empty one", async ({ context }) => {
