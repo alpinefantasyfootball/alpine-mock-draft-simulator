@@ -4858,10 +4858,30 @@ function newsItemView(n) {
   return {
     title: n.title,
     summary: n.summary ? String(n.summary).slice(0, NEWS_SUMMARY_MAX) : "",
-    source: n.source || "",
+    /* Never empty. An unattributed headline is the version of this we may
+       not show at all - we link rather than republish, and the attribution
+       is most of what makes that true - so the source falls back rather than
+       blanking.
+
+       It falls back to the link's *hostname*, not to the provider. Measured
+       against the real feed rather than guessed: Tank01 returns a title, a
+       link and an image and no source field at all, so naming them would be
+       wrong twice - they are the aggregator rather than the author, and
+       "TANK01" tells a reader nothing about whether to trust the line. The
+       link is the honest answer. Parsed with URL rather than a regex, and
+       the www. is dropped because it is noise rather than identity. */
+    source: n.source || sourceFromUrl(url),
     when: String(n.at || "").slice(0, 24),
     url: url
   };
+}
+
+function sourceFromUrl(url) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch (err) {
+    return "";
+  }
 }
 
 /* A link from a feed is a claim, not a fact — the same rule the GIF host gets,

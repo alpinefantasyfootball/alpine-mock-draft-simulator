@@ -226,6 +226,15 @@ test.describe("latest news", () => {
     // Attribution is the part that may not be dropped: a headline with no
     // source is the version of this we are not allowed to show.
     expect(r.text[0]).toContain("Wire Service");
+
+    /* And when the provider names nobody, it falls back to the link's
+       hostname rather than blanking - not to the provider, who is the
+       aggregator rather than the author. */
+    const unnamed = await page.evaluate(() => window.JukeEngine.newsItemView({
+      title: "No source given", summary: "", source: "", at: "",
+      url: "https://www.espn.com/nfl/story/x"
+    }));
+    expect(unnamed.source, "an unattributed headline is still attributed").toBe("espn.com");
     expect(r.rels, "outbound links are safe to open").toEqual(["noopener noreferrer"]);
     expect(r.targets).toEqual(["_blank"]);
   });
