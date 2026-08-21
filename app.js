@@ -7279,6 +7279,18 @@ window.JukeEngine = {
   // rather than the Pause control here always being clickable when the
   // legacy one sometimes isn't.
   clockLength: () => state.clockLength,
+  /* The pick clock is state, not league - it is per-drafter rather than part
+     of the board's shape, which is why a room broadcasts it separately. The
+     settings modal wrote league.clock for two commits and read it back as
+     undefined every time: a control that looked live, moved, and changed
+     nothing. Setting it before a draft is what startDraft() then carries. */
+  setClockLength: function (seconds) {
+    const n = Number(seconds);
+    if (!isFinite(n) || n < 0) return false;
+    state.clockLength = n;
+    render();
+    return true;
+  },
   hasRoom: hasRoom,
   isHost: () => hasRoom() && !!Live.room().isHost,
   draftOver: draftOver,

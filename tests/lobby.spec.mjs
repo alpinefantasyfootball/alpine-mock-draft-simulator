@@ -68,26 +68,31 @@ test("two managers, one board: a claimed chair shows as taken to everybody",
     const startingSeat = await guest.evaluate(() => Live.room().yourSeat);
     const target = startingSeat === 4 ? 5 : 4;
 
-    // Somebody else's chair is not takeable, and the lobby says so before
-    // the room has to refuse anything.
-    const hostSeat = await host.evaluate(() => Live.room().yourSeat);
+    /* Asked entirely of the guest's own screen.
 
-    /* Wait for the guest's board to reflect the room rather than reading it
-       once. A join is two things arriving - the socket, then the first state
-       - and asserting between them tests the gap, not the feature. */
+       Written first as "read the host's seat from the host page, then check
+       that index on the guest page", and it timed out every time while a
+       hand-run dump of the same moment showed the chip reading Taken. Two
+       pages are two clocks, and an index carried across them is a fact from
+       one moment being used in another. The guest's board already says which
+       chair is somebody else's - that is the thing under test - so the seat
+       index comes from there. */
     await expect
       .poll(() => guest.evaluate(() => {
-        const r = window.Live && Live.room();
-        return !!(r && r.seats && r.seats.some((c) => c.taken));
+        const root = document.getElementById("draftroom-root");
+        return [...root.querySelectorAll("button")]
+          .map((b) => b.textContent.trim())
+          .filter((t) => t === "Taken").length;
       }), { timeout: 30000 })
-      .toBe(true);
+      .toBe(1);
 
-    const hostChairLocked = await guest.evaluate((seat) => {
+    const hostChairLocked = await guest.evaluate(() => {
       const root = document.getElementById("draftroom-root");
       const chips = [...root.querySelectorAll("button")]
         .filter((b) => /^(Claim|You|Taken)$/.test(b.textContent.trim()));
-      return { label: chips[seat].textContent.trim(), disabled: chips[seat].disabled };
-    }, hostSeat);
+      const seat = chips.findIndex((b) => b.textContent.trim() === "Taken");
+      return { seat, label: chips[seat].textContent.trim(), disabled: chips[seat].disabled };
+    });
     expect(hostChairLocked.label, "the host's chair reads as taken").toBe("Taken");
     expect(hostChairLocked.disabled, "and cannot be clicked").toBe(true);
 
@@ -129,8 +134,10 @@ test("two managers, one board: a claimed chair shows as taken to everybody",
 async function openOrderTab(page) {
   await page.evaluate(() => {
     const root = document.getElementById("draftroom-root");
+    // The lobby bar's gear. The "Roster & scoring settings" button lived in
+    // the Configure column, which the full-bleed lobby removed.
     [...root.querySelectorAll("button")]
-      .find((b) => /scoring settings/i.test(b.textContent || ""))
+      .find((b) => /draft settings/i.test(b.getAttribute("aria-label") || ""))
       .click();
   });
   await page.waitForFunction(() =>

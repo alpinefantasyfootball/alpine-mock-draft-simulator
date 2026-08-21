@@ -217,10 +217,16 @@ export default function DraftSettingsModal({ engine, onClose, started }) {
                     ))}
                   </Select>
                 </Row>
+                {/* state.clockLength, not league.clock. There is no
+                    league.clock and there never was - this read undefined and
+                    wrote a field nothing consumes, so the control moved and
+                    did nothing for two commits. The pick clock is per-drafter
+                    rather than part of the board's shape, which is also why a
+                    room broadcasts it separately from the league. */}
                 <Row label="Seconds per pick">
                   <Select
-                    value={league.clock ?? 90} disabled={locked}
-                    onChange={(e) => { engine.setLeague({ clock: Number(e.target.value) }); redraw() }}
+                    value={engine.clockLength()} disabled={locked}
+                    onChange={(e) => { engine.setClockLength(e.target.value); redraw() }}
                   >
                     {[30, 60, 90, 120, 180].map((n) => <option key={n} value={n}>{n}</option>)}
                   </Select>

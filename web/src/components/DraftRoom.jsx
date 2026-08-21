@@ -16,6 +16,7 @@ import AnalysisTab from './AnalysisTab.jsx'
 import DraftInsightsDashboard from './DraftInsightsDashboard.jsx'
 import DraftSettingsModal from './DraftSettingsModal.jsx'
 import DraftLobby from './DraftLobby.jsx'
+import LobbyBar from './LobbyBar.jsx'
 
 function useEngine() {
   const [ready, setReady] = useState(false)
@@ -35,6 +36,14 @@ function useJukeTick(engine) {
   useEffect(() => {
     if (!engine) return
     window.addEventListener('juke:header', force)
+    /* And read once on attach, because the event can land before this
+       listener exists. useEngine() resolves in an effect, so the listener
+       goes on two renders after mount - and in a lobby the room's first
+       state is often the only broadcast there will be, so missing it means
+       showing an empty board until something else happens to fire. The live
+       board never showed this: picks keep coming, and the next one repaired
+       it. A quiet screen has no next one. */
+    force()
     return () => window.removeEventListener('juke:header', force)
   }, [engine])
 }
@@ -107,6 +116,9 @@ export default function DraftRoom() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   // The seat, shared between the form's dropdown and the lobby board.
   const [lobbySlot, setLobbySlot] = useState(0)
+  // The one thing that can refuse the Start button, said beside it rather
+  // than folded away — the rule the legacy setup screen already followed.
+  const problem = engine ? engine.setupProblem() : ''
   /* Who is sitting where, straight off the room's broadcast. viewFor() has
      already turned member ids into names before it leaves the server — a
      client that has never been told another member's id must not learn it
@@ -262,25 +274,50 @@ export default function DraftRoom() {
   // check both pick it up on the next "juke:header" tick and this page
   // swaps to the live board on its own.
   if (!started) {
-    // z-[60], not z-40: #root (Homepage) never unmounts — it's a separate
-    // React root behind this one, per main.jsx — and its own fixed header
-    // is z-50. z-40 traps this whole overlay, header included, in a
-    // stacking context beneath that outer header; it never showed before
-    // because both headers had identical content (logo/ticker/
-    // login/signup) and there was nothing to tell them apart on screen.
-    // See the same comment on the started branch's wrapper, where this
-    // stopped being invisible.
+    /* The lobby, full bleed.
+
+       This was three equal columns — Configure Draft, Draft with friends, and
+       the Locker — under a board. Two of those three are gone, and not to
+       tidy up: every setting in Configure Draft now lives on the settings
+       modal's General tab, and Draft with friends is its Invite tab, so the
+       columns were a second copy of a screen that already exists. Keeping
+       both would have been the same duplication as two randomise buttons, at
+       the scale of a whole panel.
+
+       What is left is what a lobby actually is: what this draft is, where you
+       are sitting, and the one button that begins it. The Locker stays below
+       the fold — reopening an old draft is a real reason to be here, it is
+       just not what this screen is for.
+
+       Resume and Discard were checked before the Configure column went:
+       DraftInProgressCard inside the Locker owns both, so a saved draft is
+       still resumable. ConfigureDraftForm only ever read the save to pre-fill
+       its own fields.
+
+       z-[60], not z-40: #root (Homepage) never unmounts — a separate React
+       root behind this one, per main.jsx — and its own fixed header is z-50.
+       z-40 would trap this whole overlay beneath it. */
+    const startLabel = roomActive
+      ? (engine.isHost() ? 'Start for everyone' : 'Waiting for the host')
+      : 'Start draft'
+
     return (
-      <div className="fixed inset-0 z-[60] flex flex-col overflow-y-auto bg-[#0B0E14] pt-16 text-white">
-        <Header />
-        {/* max-w-7xl, not the two-column screen's old max-w-4xl — three
-            panels at that width would leave each one under 280px, too
-            narrow for the Locker's cards (a league label, a rank pill, an
-            Analyze button) or the room panel's invite link. basis-1/3 each,
-            not a wider Locker: the three are equally-weighted things a
-            manager might be here for — start a new draft, draft with
-            friends, reopen an old one — not one primary action and two
-            secondary ones. */}
+      <div className="fixed inset-0 z-[60] flex flex-col bg-[#0B0E14] text-white">
+        <LobbyBar
+          summary={engine.settingsText(league)}
+          problem={problem}
+          startLabel={startLabel}
+          startDisabled={!!problem || (roomActive && !engine.isHost())}
+          onOpenSettings={() => setSettingsOpen(true)}
+          onStart={() => {
+            /* The clock comes from state, which is where it lives — the
+               settings modal writes it through setClockLength(). Reading it
+               here rather than holding a second copy is what stopped the
+               modal's control being decorative. */
+            engine.startDraft({ mySlot: lobbySlot, clockLength: engine.clockLength() })
+          }}
+        />
+
         {settingsOpen && (
           <DraftSettingsModal
             engine={engine}
@@ -288,75 +325,38 @@ export default function DraftRoom() {
             onClose={() => setSettingsOpen(false)}
           />
         )}
-        {/* The board comes first, because choosing where you sit is the one
-            decision on this screen that the picture answers better than a
-            control does. The three columns underneath are still what they
-            were: start a draft, draft with friends, reopen an old one. */}
-        <div className="mx-auto w-full max-w-7xl px-6 pt-8">
-          <DraftLobby
-            engine={engine}
-            league={league}
-            /* -1 while we are in a room whose seats have not arrived yet.
-               mySlot is a leftover from before the room existed, so falling
-               back to it draws "You" on seat 0 for a guest who is actually
-               sitting somewhere else - briefly, but it is a chair with the
-               wrong person's name on it, and the room is about to say so. No
-               seat is better than the wrong seat. */
-            mySlot={roomActive ? (roomSeats ? mySlot : -1) : lobbySlot}
-            roomActive={roomActive}
-            seats={roomSeats}
-            onClaimSeat={(seat) => {
-              // In a room the room decides; off-room this is just my chair.
-              if (roomActive) engine.claimSeat(seat)
-              else setLobbySlot(seat)
-            }}
-          />
-        </div>
 
-        <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col items-stretch gap-6 px-6 py-8 lg:flex-row">
-          <div className="lg:basis-1/3">
-            <ConfigureDraftForm mySlot={lobbySlot} onSlotChange={setLobbySlot} />
-            {/* The full league lives behind this, and before a draft is the
-                only time any of it can be changed. ConfigureDraftForm covers
-                the four settings people actually touch; the lineup and the
-                44 scoring rules are here, where they have not been reachable
-                since this screen replaced the legacy one. */}
-            <button
-              type="button"
-              onClick={() => setSettingsOpen(true)}
-              className="mt-3 w-full rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-2.5 text-sm font-semibold text-white/70 transition-colors duration-150 hover:border-teal-400/40 hover:text-teal-300"
-            >
-              Roster &amp; scoring settings
-            </button>
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+          {/* The board gets the screen. min-h rather than flex-1 alone so it
+              keeps a real height once the Locker below has content to add. */}
+          <div className="flex min-h-[420px] flex-1 flex-col px-3 pb-3 pt-3 lg:px-4">
+            <DraftLobby
+              engine={engine}
+              league={league}
+              /* -1 while we are in a room whose seats have not arrived yet.
+                 mySlot is a leftover from before the room existed, so falling
+                 back to it draws "You" on seat 0 for a guest who is actually
+                 sitting somewhere else — briefly, but it is a chair with the
+                 wrong person's name on it, and the room is about to say so.
+                 No seat is better than the wrong seat. */
+              mySlot={roomActive ? (roomSeats ? mySlot : -1) : lobbySlot}
+              roomActive={roomActive}
+              seats={roomSeats}
+              fill
+              onClaimSeat={(seat) => {
+                // In a room the room decides; off-room this is just my chair.
+                if (roomActive) engine.claimSeat(seat)
+                else setLobbySlot(seat)
+              }}
+            />
           </div>
-          <div className="lg:basis-1/3">
-            <RoomPanel />
-          </div>
-          <div className="relative lg:basis-1/3 lg:min-h-[420px]">
-            {/* Absolute inside a relative column, not an explicit height.
-                The Locker needs a bounded height so a long history scrolls
-                inside it instead of setting the row's height — but the old
-                bound was a viewport guess (calc(100vh-176px)), and whenever
-                the guess ran shorter than the row's real height (set by the
-                tallest sibling, the Configure form) the Locker's bottom
-                visibly sat above the other two columns'. An absolutely
-                positioned fill contributes nothing to the row's height and
-                tracks the stretched column height exactly, so all three
-                bottoms align by construction rather than by arithmetic
-                that has to be re-derived every time the padding moves. The
-                min-h lives on the column so a near-empty row still gives
-                the Locker something worth filling; below lg none of this
-                applies and the Locker takes its natural stacked height. */}
-            <div className="lg:absolute lg:inset-0">
+
+          <div className="shrink-0 border-t border-slate-800 px-3 py-5 lg:px-4">
+            <div className="mx-auto w-full max-w-[1600px]">
               <DraftLocker />
             </div>
           </div>
         </div>
-        {/* No DraftLogDock here on purpose — "My Queue" and "Draft Log" are
-            both meaningless before a draft exists (nothing queued, nothing
-            picked yet), and it would float over the same corner the Locker
-            now occupies. It still belongs on the live board below, where
-            both tabs have something real to show. */}
       </div>
     )
   }
