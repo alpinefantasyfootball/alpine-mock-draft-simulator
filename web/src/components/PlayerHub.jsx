@@ -47,6 +47,7 @@ export default function PlayerHub({
   search,
   onSearch,
   posFilter,
+  counts,
   onPosFilter,
   expBand,
   onExpBand,
@@ -137,6 +138,7 @@ export default function PlayerHub({
           active tab and the sheet is open below it. */}
       <div className={'relative min-h-0 flex-1 ' + (open && tab === 'players' ? 'flex' : 'hidden') + ' lg:flex'}>
         <PlayerQueueSidebar
+          counts={counts}
           players={players}
           search={search}
           onSearch={onSearch}

@@ -6983,6 +6983,15 @@ window.JukeEngine = {
     // both directions, not just this one.
     if (patch.teams !== undefined)   $("teamCount").value = String(patch.teams);
     if (patch.scoring !== undefined) $("scoring").value = patch.scoring;
+
+    /* And draw the result. setClockLength() has always done this and this one
+       never did, so the settings modal's own redraw() re-rendered the modal
+       while everything behind it kept the old league: changing the team count
+       left the lobby board drawing ten columns against an engine that said
+       twelve. A setter that changes what is on screen has to say so - the
+       modal's local bump cannot reach the rest of the page, and nothing else
+       fires "juke:header" on a screen where nobody is picking. */
+    render();
   },
   setupProblem: setupProblem,
   resumeDraft:  resumeDraft,
@@ -7226,6 +7235,46 @@ window.JukeEngine = {
 
      An empty count is returned as 0 rather than omitted: a gap where a chip
      should be is the fact somebody is reading this strip for. */
+  /* The position filter doubles as the roster-need display: the control you
+     already reach for to narrow the list is also the one that tells you what
+     you are still missing, which saves a trip to My Team on every pick.
+
+     The whole decision is made here rather than in the component, because it
+     is three rules and one of them has already been got wrong. A fraction is
+     a promise about its denominator: `have/need` while a starting slot is
+     still owed, a bare count once it is met, and a fraction again for "All",
+     where rosterSize() is a real ceiling you can actually run out of. It
+     printed have/starters in every state once, so one tight end painted a
+     green "1/1" - a success colour on a number that reads as a cap - and it
+     was reported as the app refusing a second tight end. It had refused
+     nothing.
+
+     `full` is atPositionCap(), which asks needMultiplier() rather than
+     answering again: the cap is maxAt() for a skill position, the starting
+     requirement for a K or DST, and starters.QB plus the superflex for a
+     quarterback. Writing that down a second time is how the superflex bug
+     happened. */
+  filterCounts: function () {
+    if (!state.started) return null;
+    const filled = rosterOf(state.mySlot).length;
+    const out = { ALL: null };
+
+    const build = function (have, need, full) {
+      const short = have < need;
+      return {
+        have: have, need: need, short: short, full: full,
+        text: short ? have + "/" + need : String(have)
+      };
+    };
+
+    out.ALL = build(filled, rosterSize(), filled >= rosterSize());
+    out.ALL.text = out.ALL.have + "/" + out.ALL.need;   // a real ceiling, always shown
+    POSITIONS.forEach(function (pos) {
+      out[pos] = build(countAt(state.mySlot, pos), league.starters[pos] || 0, atPositionCap(pos));
+    });
+    return out;
+  },
+
   rosterStrip: function (slot) {
     return COUNTED_POSITIONS.map(function (pos) {
       return { pos: pos, count: countAt(slot, pos) };

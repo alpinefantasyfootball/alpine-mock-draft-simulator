@@ -29,6 +29,20 @@ const STICKY_CELL = 'sticky left-0 z-20 flex shrink-0 items-center px-2'
 // SLOT_ORDER in app.js — the same ordering a roster fills them in.
 const FILTERS = ['ALL', ...POS_LIST, 'FLEX', 'K', 'DST']
 
+/* What the count means, said in words for a pointer. "All" counts roster
+   spots rather than starting slots, so it needs its own wording — the shared
+   sentence read "13 more ALL to fill your starting lineup", which is wrong
+   about the number and about the noun. */
+function countTitle(pos, c) {
+  const left = c.need - c.have
+  if (pos === 'ALL') {
+    return c.short ? `${left} roster ${left === 1 ? 'spot' : 'spots'} still to fill` : 'Your roster is full'
+  }
+  if (c.short) return `${left} more ${pos} to fill your starting lineup`
+  if (c.full) return `You are holding as many ${pos} as this draft will suggest`
+  return undefined
+}
+
 /* The sort keys, the column widths and the cell readers all live in
    playerColumns.js now — one definition serving the table header, the
    mobile chips and DraftRoom's sort. The old GRID_COLS template is gone
@@ -48,6 +62,7 @@ export default function PlayerQueueSidebar({
   search,
   onSearch,
   posFilter,
+  counts,
   onPosFilter,
   expBand,
   onExpBand,
@@ -143,6 +158,28 @@ export default function PlayerQueueSidebar({
               }
             >
               {pos === 'ALL' ? 'All' : pos}
+              {/* The roster-need count, from engine.filterCounts(). The whole
+                  decision — fraction while a slot is owed, bare count once it
+                  is met, fraction always for All where the denominator is a
+                  real ceiling — is made engine-side, because a fraction is a
+                  promise about its denominator and this one has been got
+                  wrong before: have/starters in every state painted a green
+                  "TE 1/1" that read as a cap, and was reported as the app
+                  refusing a second tight end. It had refused nothing. */}
+              {counts && counts[pos] && (
+                <span
+                  title={countTitle(pos, counts[pos])}
+                  className={
+                    'ml-1.5 tabular-nums ' +
+                    (posFilter === pos
+                      ? 'text-obsidian/60'
+                      : counts[pos].short ? 'text-amber-300/80'
+                        : counts[pos].full ? 'text-white/30' : 'text-white/40')
+                  }
+                >
+                  {counts[pos].text}
+                </span>
+              )}
             </button>
           ))}
         </div>

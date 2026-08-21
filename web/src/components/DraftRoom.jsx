@@ -119,6 +119,9 @@ export default function DraftRoom() {
   // The one thing that can refuse the Start button, said beside it rather
   // than folded away — the rule the legacy setup screen already followed.
   const problem = engine ? engine.setupProblem() : ''
+  // Recomputed each render rather than memoized: these change on every pick,
+  // and state.picks is mutated in place so nothing here may be keyed on it.
+  const filterCounts = engine ? engine.filterCounts() : null
   /* Who is sitting where, straight off the room's broadcast. viewFor() has
      already turned member ids into names before it leaves the server — a
      client that has never been told another member's id must not learn it
@@ -704,6 +707,7 @@ export default function DraftRoom() {
                 profile drawer that slides over it. */}
             <div className="relative flex min-h-0 flex-1 lg:flex-[5] lg:min-w-0">
             <PlayerHub
+          counts={filterCounts}
               players={availablePlayers}
               search={search}
               onSearch={setSearch}
