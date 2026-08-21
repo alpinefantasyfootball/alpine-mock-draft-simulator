@@ -103,7 +103,12 @@ test("homepage to a finished draft, pressing only what a person can press",
     await page.locator("#draftroom-root button").filter({ hasText: /^Draft$/ }).first().click();
     await expect.poll(() => page.evaluate(() => state.picks.length),
       { timeout: 15000 }).toBeGreaterThan(before);
-    expect(await page.evaluate(() => state.picks[state.picks.length - 1].slot),
+    // Index `before`, not the tail: the instant my pick lands the app's own
+    // CPU cascade can append the next seat's pick before this next line
+    // runs, so the tail is only mine at the moment the poll above resolved.
+    // The pick this click made is always the one at `before` — nothing else
+    // can land there ahead of it, however many follow.
+    expect(await page.evaluate((i) => state.picks[i].slot, before),
       "and it was my own chair").toBe(6);
 
     // Then the rest, through the control that exists for it.

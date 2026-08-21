@@ -36,11 +36,26 @@ import { openApp } from "./helpers.mjs";
 async function draftInto(page, picks) {
   await page.evaluate((n) => {
     window.JukeEngine.startDraft({ mySlot: 3, clockLength: 90 });
+    // startDraft() calls runCPUs(), which arms a single cpuStep() timer to
+    // auto-play whoever it left on the clock. The loop below drives every
+    // pick itself instead, and nothing about that loop touches the timer —
+    // left alone it fires mid-test, ~350ms later, and keeps rescheduling
+    // itself: an extra, untracked pick landing while later assertions read
+    // the board. Same failure app.js documents next to scheduleCpuStep()
+    // under a different name (an orphaned chain); here the orphan is ours.
+    stopSim();
     for (let i = 0; i < n; i++) { const c = onTheClock(); if (c) makePick(cpuChoice(c.slot, c.round)); }
     render();
     location.hash = "#/draft-room";
   }, picks);
   expect(await page.evaluate(() => state.started), "draft started").toBe(true);
+
+  // No "Enter Draft Room" click needed here, unlike journey.spec.mjs's real
+  // navigation: DraftRoom.jsx's enteredRoom sync effect fires the moment it
+  // sees state.started already true, which it already is by the time this
+  // component ever mounts — draftAndAdvance() never went through the door,
+  // startDraft() ran straight off the engine above. Landing on the Settings
+  // & Locker screen only happens for a genuinely fresh, unstarted visit.
   await page.waitForFunction(() => {
     const root = document.getElementById("draftroom-root");
     return root && [...root.querySelectorAll("div")].some(
