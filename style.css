@@ -204,18 +204,26 @@
      and the darkest in light. --fill-hi is lighter again but never carries
      this tone: every rule that hovers to --fill-hi either sets --ink or
      starts from --ink-mid, which clears it at 5.30. */
-  --ink:         #ECEBEB;
-  --ink-mid:     #B0AEAC;   /* 6.20 on --fill */
-  --ink-light:   #9C9996;   /* 4.84 on --fill, the worst surface it meets */
+  /* Elevated slate, 21 August 2026. The dark set below was a warm near-black —
+     hue 30°, 5% saturation — while --hairline, --board-hd and --track had
+     already drifted to a cool blue-gray around hue 213° without the rest of
+     the ladder following. This finishes that move on purpose rather than
+     leaving it half-done: one hue (217°) across every neutral, lifted 3-5
+     points of lightness so the base reads as "elevated slate" rather than
+     "near black." Light theme is untouched — it already carries its own
+     independent values below, so this has no effect there. */
+  --ink:         #EEEFF1;
+  --ink-mid:     #B4BAC2;   /* 6.22 on --fill, same margin as before */
+  --ink-light:   #9BA1AA;   /* 4.67 on --fill, the worst surface it meets */
 
-  --page:        #151413;
-  --card:        #22201F;
-  --line:        #353330;
+  --page:        #181D25;
+  --card:        #222935;
+  --line:        #323C4E;
   --hairline:    #222C38;   /* the rules between rows inside a card */
-  --sunken:      #1C1B1A;   /* a panel set into a card: stat boxes, table heads */
-  --well:        #292725;   /* slot chips, round numbers */
-  --fill:        #2F2D2B;   /* empty board cells, small buttons */
-  --fill-hi:     #3A3835;   /* those buttons, hovered */
+  --sunken:      #1D232D;   /* a panel set into a card: stat boxes, table heads */
+  --well:        #28303E;   /* slot chips, round numbers */
+  --fill:        #2D3646;   /* empty board cells, small buttons */
+  --fill-hi:     #384457;   /* those buttons, hovered */
   --track:       #242F3D;   /* the unfilled part of a bar or meter */
   --board-hd:    #212B38;
 
@@ -1402,7 +1410,11 @@ tr.drafted .ovr { color: var(--ink-light); }
 .board {
   display: grid;
   grid-template-columns: 30px repeat(10, minmax(74px, 1fr));
-  gap: 3px; min-width: 780px;
+  /* 1px rather than 3, now that the cells themselves carry the position
+     colour as a muted fill instead of a saturated one — a wide gap was
+     doing some of the work of separating cells that a quieter fill no
+     longer needs help with. */
+  gap: 1px; min-width: 780px;
 
   /* Every round row is exactly one card tall, stated once here rather than as
      a min-height on the cells.
@@ -1418,7 +1430,13 @@ tr.drafted .ovr { color: var(--ink-light); }
      `grid-template-rows: auto` is the header, which sizes to itself; every
      round row after it is implicit and takes `grid-auto-rows`. */
   grid-template-rows: auto;
-  grid-auto-rows: 58px;
+  /* 60, not 58: cell padding grew from 5px 6px to 6px 7px below, which moves
+     a card's own natural height from 58 to 60 (padding + the two text lines
+     + the foot row's 20px face are the same arithmetic that produced 58 in
+     the first place). Measured in a live render before this changed, not
+     assumed from the delta — the exact mismatch this comment already warns
+     about, caught rather than repeated. */
+  grid-auto-rows: 60px;
 }
 
 .board .hd {
@@ -1478,7 +1496,7 @@ tr.drafted .ovr { color: var(--ink-light); }
    cell is means one of them is wrong the first time the card changes. */
 .board .cell {
   background: var(--fill); border-radius: var(--r-xs);
-  padding: 5px 6px;
+  padding: 6px 7px;   /* was 5px 6px; see grid-auto-rows above for the row-height half of this */
   font-size: var(--fs-2xs); line-height: 1.25; color: #fff;
 }
 
@@ -1530,12 +1548,23 @@ tr.drafted .ovr { color: var(--ink-light); }
    The keyline is the second half of the pair. See --mine: no single colour
    clears 3:1 on both a position solid and an empty cell in both themes, so
    the ring is gold-then-keyline and one of the two always has the surface. */
+/* The outer, non-inset shadow on each of these three is new: a soft blur in
+   the same colour, sitting outside the crisp pair rather than instead of it.
+   It's decoration riding on a mark that already carries the meaning on its
+   own — the inset pair above is untouched, because that's the part measured
+   to survive six position solids and an empty cell in both themes. A single
+   soft glow color can't do that job (see --mine), so this doesn't try to
+   replace it. */
 .board .cell.now {
   background: var(--card); color: var(--link); font-weight: 700;
-  box-shadow: inset 0 0 0 2px var(--live-ring), inset 0 0 0 3px var(--ring-edge);
+  box-shadow:
+    inset 0 0 0 2px var(--live-ring), inset 0 0 0 3px var(--ring-edge),
+    0 0 16px 3px rgba(255, 255, 255, .28);
 }
 .board .cell.mine {
-  box-shadow: inset 0 0 0 2px var(--mine), inset 0 0 0 3px var(--ring-edge);
+  box-shadow:
+    inset 0 0 0 2px var(--mine), inset 0 0 0 3px var(--ring-edge),
+    0 0 14px 2px rgba(255, 209, 102, .38);
 }
 /* Your own turn is both facts at once, so it draws both: white on the inside,
    where the draft is, and your gold immediately outside it. Letting one win
@@ -1546,7 +1575,8 @@ tr.drafted .ovr { color: var(--ink-light); }
     inset 0 0 0 2px var(--live-ring),
     inset 0 0 0 3px var(--ring-edge),
     inset 0 0 0 5px var(--mine),
-    inset 0 0 0 6px var(--ring-edge);
+    inset 0 0 0 6px var(--ring-edge),
+    0 0 18px 3px rgba(255, 255, 255, .3);
 }
 
 .board .cell.QB  { background: var(--qb); }

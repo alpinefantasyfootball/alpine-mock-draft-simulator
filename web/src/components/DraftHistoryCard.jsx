@@ -1,13 +1,20 @@
 import { ChevronRight } from 'lucide-react'
 
 // The whole card is the click target, not just the button — but it renders
-// a real <button> inside it for "Analyze Draft", so that button stops its
-// own click from bubbling and firing onAnalyze twice (same pattern RoomCard
-// uses for its "Enter" link inside an equally clickable card).
-export default function DraftHistoryCard({ draft, onAnalyze }) {
+// real <button>s inside it for "Analyze Draft" and "Delete", so each one
+// stops its own click from bubbling and firing onAnalyze twice (same
+// pattern RoomCard uses for its "Enter" link inside an equally clickable
+// card). Delete sits where DraftInProgressCard's own "Discard" already
+// sits, on the same card shell — the two lockers didn't disagree on layout,
+// only one of them had ever been given the button.
+export default function DraftHistoryCard({ draft, onAnalyze, onDelete }) {
   const analyze = (e) => {
     e.stopPropagation()
     onAnalyze()
+  }
+  const del = (e) => {
+    e.stopPropagation()
+    onDelete()
   }
 
   return (
@@ -45,8 +52,16 @@ export default function DraftHistoryCard({ draft, onAnalyze }) {
 
         <button
           type="button"
+          onClick={del}
+          className="ml-auto rounded-full px-3 py-1.5 text-xs font-medium text-white/50 transition-colors duration-200 hover:text-white"
+        >
+          Delete
+        </button>
+
+        <button
+          type="button"
           onClick={analyze}
-          className="ml-auto flex items-center gap-1 rounded-full border border-teal-400/40 bg-teal-400/5
+          className="flex items-center gap-1 rounded-full border border-teal-400/40 bg-teal-400/5
                      px-3 py-1.5 text-xs font-semibold text-teal-300 transition-colors duration-200
                      hover:border-teal-400 hover:bg-teal-400/15 hover:text-teal-200"
         >

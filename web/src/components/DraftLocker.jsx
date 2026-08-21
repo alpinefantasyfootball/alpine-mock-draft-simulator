@@ -70,6 +70,14 @@ export default function DraftLocker() {
     engine.clearSave()
     forceLocal()
   }
+  // Same reasoning as discard() above: deleteHistoryDraft() is a plain
+  // localStorage rewrite with no juke:header event behind it, so this card
+  // needs its own forced re-render to actually disappear.
+  const deleteCompleted = (id) => {
+    if (!engine) return
+    engine.deleteHistoryDraft(id)
+    forceLocal()
+  }
 
   return (
     <div className="relative flex h-full flex-col overflow-hidden rounded-2xl border border-white/10 bg-charcoal/60">
@@ -122,7 +130,12 @@ export default function DraftLocker() {
         <div className="relative flex-1 overflow-y-auto px-6 py-5">
           <div className="flex flex-col gap-3">
             {completed.map((draft) => (
-              <DraftHistoryCard key={draft.id} draft={draft} onAnalyze={() => analyze(draft.id)} />
+              <DraftHistoryCard
+                key={draft.id}
+                draft={draft}
+                onAnalyze={() => analyze(draft.id)}
+                onDelete={() => deleteCompleted(draft.id)}
+              />
             ))}
           </div>
         </div>

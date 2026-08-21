@@ -1,24 +1,6 @@
-import { useEffect, useReducer, useState } from 'react'
+import { useState } from 'react'
 import { Check, Copy, Crown, LogOut, Users } from 'lucide-react'
-
-function useEngine() {
-  const [ready, setReady] = useState(false)
-  useEffect(() => {
-    if (typeof window !== 'undefined' && window.JukeEngine) setReady(true)
-  }, [])
-  return ready ? window.JukeEngine : null
-}
-
-// Same signal as ConfigureDraftForm's copy — onRoomChange() already ends
-// in render(), which already fires this. No second Live.onChange().
-function useJukeTick(engine) {
-  const [, force] = useReducer((x) => x + 1, 0)
-  useEffect(() => {
-    if (!engine) return
-    window.addEventListener('juke:header', force)
-    return () => window.removeEventListener('juke:header', force)
-  }, [engine])
-}
+import { useEngine, useJukeTick } from '../hooks/useJukeEngine.js'
 
 const STATUS_TEXT = {
   connecting: 'Connecting…',
@@ -39,20 +21,40 @@ export default function RoomPanel() {
   const reason = engine.liveReason()
 
   if (!hasRoomVal) {
+    /* Creating or joining a room here doesn't add a room to what you're
+       doing — it replaces it. adoptRoom() (app.js) sets state.started to
+       the *room's* status (a fresh room is "lobby", so started snaps back
+       to false) and, since a real solo pick count essentially never
+       matches a brand-new room's empty one, wipes state.picks and
+       un-drafts the whole board to match it — no confirmation, because
+       there was never a path meant to reach this mid-draft at all: a room
+       is a shape decided before a draft starts, not something an existing
+       one can be converted into. Gating here is the only fix that doesn't
+       need a confirmation dialog defending against a scenario nothing else
+       in the room model supports. */
+    const started = !!engine.headerInfo().started
     const handleJoin = () => {
+      if (started) return
       const code = joinCode.trim().toUpperCase()
       if (code) engine.joinRoomByCode(code)
     }
     return (
       <div className="flex h-full flex-col rounded-2xl border border-white/10 bg-charcoal p-6 sm:p-8">
         <h2 className="font-display text-xl font-bold text-white">Draft with friends</h2>
-        <p className="mt-1 text-sm text-white/50">Same board, same picks, everyone watching the same clock.</p>
+        <p className="mt-1 text-sm text-white/50">
+          {started
+            ? "Can't create or join a room mid-draft — a room replaces the board it's on rather than adopting it, which would discard every pick made so far. Finish or discard this draft first."
+            : 'Same board, same picks, everyone watching the same clock.'}
+        </p>
 
         <button
           type="button"
-          onClick={() => engine.createRoom()}
+          onClick={() => { if (!started) engine.createRoom() }}
+          disabled={started}
+          title={started ? "Can't create a room mid-draft" : undefined}
           className="mt-6 w-full rounded-full bg-gradient-to-r from-[#00E5FF] to-[#7B1FA2] py-3 text-sm font-semibold text-white
-                     shadow-glass transition-all duration-200 hover:scale-[1.02] hover:animate-pulse-glow"
+                     shadow-glass transition-all duration-200 hover:scale-[1.02] hover:animate-pulse-glow
+                     disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:scale-100 disabled:hover:animate-none"
         >
           Create a room
         </button>
@@ -71,14 +73,15 @@ export default function RoomPanel() {
             onKeyDown={(e) => e.key === 'Enter' && handleJoin()}
             placeholder="Enter a room code"
             maxLength={8}
+            disabled={started}
             className="w-full rounded-lg border border-white/10 bg-obsidian/60 px-3 py-2.5 text-sm uppercase tracking-widest
                        text-white placeholder:normal-case placeholder:tracking-normal placeholder:text-white/30
-                       focus:border-teal-400/60 focus:outline-none"
+                       focus:border-teal-400/60 focus:outline-none disabled:cursor-not-allowed disabled:opacity-40"
           />
           <button
             type="button"
             onClick={handleJoin}
-            disabled={!joinCode.trim()}
+            disabled={started || !joinCode.trim()}
             className="shrink-0 rounded-lg border border-white/15 px-4 text-sm font-medium text-white/70
                        transition-colors duration-200 hover:border-teal-400/60 hover:text-teal-300
                        disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-white/15 disabled:hover:text-white/70"

@@ -22,6 +22,15 @@ export function useJukeTick(engine) {
   useEffect(() => {
     if (!engine) return
     window.addEventListener('juke:header', force)
+    /* And read once on attach, because the event can land before this
+       listener exists. useEngine() resolves in an effect, so the listener
+       goes on two renders after mount — and in a lobby the room's first
+       state is often the only broadcast there will be, so missing it means
+       showing an empty board until something else happens to fire. This
+       was DraftRoom.jsx's own fix, on its own local copy of this hook,
+       before this file existed to de-duplicate it — the copy here was
+       missing exactly the line the comment on the original explains. */
+    force()
     return () => window.removeEventListener('juke:header', force)
   }, [engine])
 }

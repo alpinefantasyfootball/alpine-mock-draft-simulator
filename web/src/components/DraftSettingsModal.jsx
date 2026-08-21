@@ -86,7 +86,7 @@ function Stepper({ value, onAdd, onRemove, disabled, min = 0, max = 9 }) {
   )
 }
 
-export default function DraftSettingsModal({ engine, onClose, started, inRoom }) {
+export default function DraftSettingsModal({ engine, onClose, started, inRoom, mySlot }) {
   const [tab, setTab] = useState('General')
   /* Pick a seat up, then put it down on another - the same two taps the
      legacy order list used, and the reason is touch: a drag needs a pointer
@@ -400,6 +400,26 @@ export default function DraftSettingsModal({ engine, onClose, started, inRoom })
               const canOrder = !!seats && isHost && !started
 
               if (!seats) {
+                /* mySlot, not engine.mySlot(): the latter is the *committed*
+                   draft engine seat, which is only real once startDraft()
+                   sets it. This tab is reachable from the "choose your
+                   seat" screen too, where the seat is still a live,
+                   unstarted local selection — the same divergence
+                   DraftLobby.jsx and DraftBoardGrid.jsx already work around
+                   for the board itself, just not previously threaded
+                   through to here. Before a draft exists, mySlot is
+                   whatever the caller's own live selection is.
+
+                   And engine.cpuName(i), not engine.teamLabel(i), for the
+                   same reason DraftLobby.jsx passes cpuName instead of
+                   teamLabel to the board: teamLabel() answers "is this
+                   mine" by comparing against the same stale state.mySlot,
+                   so asking it for a seat that *isn't* locally mine would
+                   still print "Your Team" if that seat happened to equal
+                   the stale value — the exact half-fixed bug this file
+                   already hit once on the board itself. mine is already
+                   known here from the live prop; cpuName just names a
+                   seat, with no comparison left to get stale. */
                 return (
                   <div>
                     <p className="mb-3 text-[11px] leading-relaxed text-white/45">
@@ -412,8 +432,8 @@ export default function DraftSettingsModal({ engine, onClose, started, inRoom })
                       {Array.from({ length: league.teams }, (_, i) => (
                         <li key={i} className="flex items-center gap-3 border-b border-slate-800/60 px-3 py-2 last:border-b-0">
                           <span className="w-5 shrink-0 text-right text-xs tabular-nums text-white/30">{i + 1}</span>
-                          <span className={'text-sm ' + (i === engine.mySlot() ? 'font-semibold text-teal-300' : 'text-white/60')}>
-                            {i === engine.mySlot() ? 'You' : engine.teamLabel(i)}
+                          <span className={'text-sm ' + (i === mySlot ? 'font-semibold text-teal-300' : 'text-white/60')}>
+                            {i === mySlot ? 'You' : engine.cpuName(i)}
                           </span>
                         </li>
                       ))}

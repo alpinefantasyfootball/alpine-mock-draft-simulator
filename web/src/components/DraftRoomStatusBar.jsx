@@ -1,6 +1,6 @@
 import { Fragment } from 'react'
 import { motion } from 'framer-motion'
-import { FastForward, LogOut, Pause, Play, RotateCcw, Settings, Timer, Volume2, VolumeX } from 'lucide-react'
+import { ChevronLeft, FastForward, LogOut, RotateCcw, Settings, Timer, Volume2, VolumeX } from 'lucide-react'
 import Ticker from './Ticker.jsx'
 import JukeLogo from './juke-logo/JukeLogo.jsx'
 
@@ -43,6 +43,10 @@ function IconButton({ onClick, disabled, danger, title, children }) {
 // config already defines for this exact colour (teal, 0.4 alpha) rather
 // than a second hand-rolled animation — see tailwind.config.js.
 export default function DraftRoomStatusBar({
+  preDraft,
+  startLabel,
+  startDisabled,
+  onStartDraft,
   roundText,
   code,
   rightLabel,
@@ -53,10 +57,6 @@ export default function DraftRoomStatusBar({
   onToggleSound,
   autopick,
   onToggleAutopick,
-  showPause,
-  paused,
-  pauseDisabled,
-  onTogglePause,
   showUndo,
   onUndo,
   discardLabel,
@@ -77,11 +77,27 @@ export default function DraftRoomStatusBar({
           looked like a flaky test. Three at 4px is 12, and it fits with
           room to spare. */
       className="fixed inset-x-0 top-0 z-50 flex h-14 shrink-0 items-center gap-1 border-b border-white/5 bg-obsidian/80 px-3 backdrop-blur-md sm:gap-4 sm:px-6">
-      {/* Leaving via the logo (real navigation, home route) is not the same
-          action as Discard/"Leave the room" below — see CLAUDE.md: leaving
-          the draft screen stops the clock without clearing the save, only
-          Discard does that. Both controls coexist on purpose. */}
-      <a href="#/" aria-label="Juke home" className="shrink-0">
+      {/* Leaving via either of these (real navigation, home route) is not
+          the same action as Discard/"Leave the room" further right — see
+          CLAUDE.md: leaving the draft screen stops the clock without
+          clearing the save, only Discard does that. All three controls
+          coexist on purpose.
+
+          The chevron is the explicit "go back" affordance the lobby's own
+          bar used to carry — moved here because this is the screen a
+          manager is actually two steps deep on and might want out of, not
+          the lobby they just arrived at. It goes to the same #/ route the
+          logo already did; it's a second, more legible way to trigger the
+          identical non-destructive leave, not a second action. */}
+      <a
+        href="#/"
+        aria-label="Back to your draft locker"
+        title="Back to your draft locker"
+        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-slate-800 bg-slate-950/60 text-white/50 transition-colors duration-150 hover:border-slate-700 hover:text-white sm:h-8 sm:w-8"
+      >
+        <ChevronLeft className="h-4 w-4" />
+      </a>
+      <a href="#/" aria-label="Juke home" className="hidden shrink-0 sm:block">
         <JukeLogo size={18} />
       </a>
 
@@ -96,22 +112,27 @@ export default function DraftRoomStatusBar({
           supported width; Undo below sm is what actually pays for it. */}
       <div className="flex min-w-[52px] flex-1 flex-col justify-center leading-tight sm:flex-none sm:shrink-0">
         <span className="truncate font-display text-xs font-bold text-white sm:text-sm">
-          {roundText}
-          {code && <span className="ml-1 text-white/40">({code})</span>}
+          {preDraft ? 'Choose your seat' : roundText}
+          {!preDraft && code && <span className="ml-1 text-white/40">({code})</span>}
         </span>
-        <span
-          className={
-            'truncate text-[9px] font-semibold uppercase tracking-wide ' +
-            (myTurn ? (urgent ? 'text-red-400' : 'text-teal-400') : 'text-white/40')
-          }
-        >
-          {myTurn ? "You're on the clock" : 'Waiting on the room'}
-        </span>
+        {!preDraft && (
+          <span
+            className={
+              'truncate text-[9px] font-semibold uppercase tracking-wide ' +
+              (myTurn ? (urgent ? 'text-red-400' : 'text-teal-400') : 'text-white/40')
+            }
+          >
+            {myTurn ? "You're on the clock" : 'Waiting on the room'}
+          </span>
+        )}
       </div>
 
       {/* Right next to the round/pick text on purpose — this is the one
           number a manager is watching while it's their turn, not a status
-          detail to push off to the far edge of the bar. */}
+          detail to push off to the far edge of the bar. Nothing to watch
+          before a draft exists, so this whole block stands down rather
+          than showing a clock counting toward nothing. */}
+      {!preDraft && (
       <div
         className={
           'flex shrink-0 items-center gap-1 rounded-lg border px-1.5 py-1 transition-colors duration-300 sm:gap-1.5 sm:px-2 ' +
@@ -135,8 +156,37 @@ export default function DraftRoomStatusBar({
           </span>
         </div>
       </div>
+      )}
 
       <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-3">
+        {/* Pre-draft, none of the mid-draft controls below apply — no
+            clock to pause (already gone), nothing to undo, nobody to
+            auto-draft for yet. Settings stays, because league shape is
+            still changeable up until the real startDraft() call; the one
+            new thing is the actual start action, replacing Discard (there
+            is nothing to discard until a draft exists). */}
+        {preDraft ? (
+          <>
+            <IconButton onClick={onOpenSettings} title="Draft settings">
+              <Settings className="h-3.5 w-3.5" />
+            </IconButton>
+            <button
+              type="button"
+              onClick={onStartDraft}
+              disabled={startDisabled}
+              className={
+                'shrink-0 rounded-full px-4 py-1.5 text-xs font-semibold sm:px-5 sm:py-2 sm:text-sm ' +
+                (startDisabled
+                  ? 'cursor-not-allowed bg-white/5 text-white/25'
+                  : 'bg-gradient-to-r from-[#00E5FF] to-[#7B1FA2] text-white shadow-glass ' +
+                    'transition-all duration-200 hover:scale-105 hover:shadow-[0_0_15px_rgba(0,229,255,0.4)]')
+              }
+            >
+              {startLabel}
+            </button>
+          </>
+        ) : (
+        <>
         {/* The mobile queue-open icon that used to live here is gone — the
             bottom sheet's own tab bar in PlayerHub.jsx is the real
             navigation now, not an icon tucked in an already-tight header. */}
@@ -167,11 +217,6 @@ export default function DraftRoomStatusBar({
               <FastForward className="h-3.5 w-3.5" />
             </IconButton>
           </span>
-        )}
-        {showPause && (
-          <IconButton onClick={onTogglePause} disabled={pauseDisabled} title={paused ? 'Resume clock' : 'Pause clock'}>
-            {paused ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
-          </IconButton>
         )}
         {showUndo && (
           // The wrapper carries the responsive hide, not the button itself
@@ -224,6 +269,8 @@ export default function DraftRoomStatusBar({
             />
           </span>
         </button>
+        </>
+        )}
       </div>
     </header>
 

@@ -1,7 +1,16 @@
-import { ChevronLeft, Settings } from 'lucide-react'
+import { Settings } from 'lucide-react'
+import JukeLogo from './juke-logo/JukeLogo.jsx'
 
-/* The lobby's own top bar: what this draft is on the left, the one action on
-   the right, and the way out at the far left.
+/* The lobby's own top bar: the brand on the left, the one action on the
+   right.
+
+   It carries no "what this draft is" text and no way back — there is
+   nowhere to go back *from* here, this is where a mock starts. That
+   information and that chevron belong on the live draft bar instead, where
+   a manager two screens deep actually needs a way back and a reminder of
+   what round they're in (see DraftRoomStatusBar.jsx). Putting the brand
+   mark here instead does the job every other screen's header already does:
+   say what app this is.
 
    START DRAFT lives here rather than inside a settings column because it is
    the single thing this screen is asking for, and a primary action buried in
@@ -31,27 +40,15 @@ import { ChevronLeft, Settings } from 'lucide-react'
    league is lives in there, so the lobby does not need a settings column of
    its own: General, Roster, Scoring, Order and Invite are all one click away
    and none of them is duplicated out here. */
-export default function LobbyBar({ summary, onStart, onOpenSettings, startLabel, startDisabled, problem }) {
+export default function LobbyBar({ onStart, onOpenSettings, startLabel, startDisabled, problem }) {
   return (
     <header className="sticky top-0 z-30 border-b border-slate-800 bg-[#0B0E14]/95 backdrop-blur-md">
       <div className="mx-auto flex max-w-[1600px] items-center gap-3 px-4 py-3">
-        <a
-          href="#/"
-          aria-label="Leave the lobby"
-          title="Leave the lobby"
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-800 text-white/50 transition-colors duration-150 hover:border-slate-700 hover:text-white"
-        >
-          <ChevronLeft className="h-4 w-4" />
+        <a href="#/" aria-label="Juke home" className="shrink-0">
+          <JukeLogo size={20} />
         </a>
 
-        <div className="min-w-0 flex-1">
-          <h1 className="truncate font-display text-sm font-bold text-white sm:text-base">
-            Mock draft
-          </h1>
-          {/* The same string the settings modal and the shut setup box show,
-              from leagueSummary() — never a second copy of the same lookup. */}
-          <p className="truncate text-[11px] text-white/45">{summary}</p>
-        </div>
+        <div className="min-w-0 flex-1" />
 
         <button
           type="button"

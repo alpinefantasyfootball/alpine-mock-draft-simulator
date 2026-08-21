@@ -1,8 +1,5 @@
 import { useEffect, useReducer, useRef, useState } from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
-import Header from './Header.jsx'
-import ConfigureDraftForm from './ConfigureDraftForm.jsx'
-import RoomPanel from './RoomPanel.jsx'
 import DraftLocker from './DraftLocker.jsx'
 import DraftLogDock from './DraftLogDock.jsx'
 import DraftRoomStatusBar from './DraftRoomStatusBar.jsx'
@@ -116,6 +113,15 @@ export default function DraftRoom() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   // The seat, shared between the form's dropdown and the lobby board.
   const [lobbySlot, setLobbySlot] = useState(0)
+  // Three screens, not two: Settings & Locker (league config, nothing
+  // drafted yet, no board) -> choose a seat (the live page's own shell,
+  // board in claimable mode) -> the live draft itself, gated by `started`
+  // below. entered/! started is the middle one. Local and UI-only on
+  // purpose — it says nothing about the actual draft, which is exactly why
+  // it can't just be `!started` reused: a page refresh mid-"choosing a
+  // seat" has nothing saved to resume into anyway, so there is no save to
+  // desync from by starting back at the Locker.
+  const [enteredRoom, setEnteredRoom] = useState(false)
   // The one thing that can refuse the Start button, said beside it rather
   // than folded away — the rule the legacy setup screen already followed.
   const problem = engine ? engine.setupProblem() : ''
@@ -164,9 +170,10 @@ export default function DraftRoom() {
   const [view, setView] = useState('board')
   /* Mirrors AppHeader.jsx's own soundOn state — engine.soundWanted() is
      not covered by the "juke:header" tick, since toggling it never
-     touches renderHeader(). This page mounts the marketing Header rather
-     than AppHeader, so it keeps its own copy of the same sync instead of
-     reaching into that component. */
+     touches renderHeader(). This page renders its own header
+     (DraftRoomStatusBar, or LobbyBar pre-entry) rather than AppHeader, so
+     it keeps its own copy of the same sync instead of reaching into that
+     component. */
   const [soundOn, setSoundOn] = useState(false)
   useEffect(() => {
     if (!engine) return
@@ -271,26 +278,19 @@ export default function DraftRoom() {
   // Before a draft exists, this is the exact same real form the setup
   // page uses — league size, scoring, pick clock, draft position, and its
   // own Resume/Discard for a save in progress — rather than this page
-  // guessing at a seat and a clock length nobody chose. It calls the same
-  // startDraft()/resumeDraft() the live board below reacts to, so the
-  // instant one of them sets state.started, the effect above and this
-  // check both pick it up on the next "juke:header" tick and this page
-  // swaps to the live board on its own.
-  if (!started) {
-    /* The lobby, full bleed.
+  // guessing at a seat and a clock length nobody chose.
+  if (!enteredRoom) {
+    /* Settings & Locker, full bleed, board-free.
 
        This was three equal columns — Configure Draft, Draft with friends, and
-       the Locker — under a board. Two of those three are gone, and not to
-       tidy up: every setting in Configure Draft now lives on the settings
-       modal's General tab, and Draft with friends is its Invite tab, so the
-       columns were a second copy of a screen that already exists. Keeping
-       both would have been the same duplication as two randomise buttons, at
-       the scale of a whole panel.
-
-       What is left is what a lobby actually is: what this draft is, where you
-       are sitting, and the one button that begins it. The Locker stays below
-       the fold — reopening an old draft is a real reason to be here, it is
-       just not what this screen is for.
+       the Locker — under a claimable board. The columns went first (every
+       setting in Configure Draft now lives on the settings modal's General
+       tab, and Draft with friends is its Invite tab — keeping both would have
+       been the same duplication as two randomise buttons, at the scale of a
+       whole panel), and the board went second: picking a seat is a live-page
+       question now (see the next block), so this screen answers only "what
+       is this draft" and "what have I already drafted" — settings and the
+       locker, exactly what it says on the tin.
 
        Resume and Discard were checked before the Configure column went:
        DraftInProgressCard inside the Locker owns both, so a saved draft is
@@ -300,25 +300,19 @@ export default function DraftRoom() {
        z-[60], not z-40: #root (Homepage) never unmounts — a separate React
        root behind this one, per main.jsx — and its own fixed header is z-50.
        z-40 would trap this whole overlay beneath it. */
-    const startLabel = roomActive
-      ? (engine.isHost() ? 'Start for everyone' : 'Waiting for the host')
-      : 'Start draft'
-
     return (
       <div className="fixed inset-0 z-[60] flex flex-col bg-[#0B0E14] text-white">
         <LobbyBar
-          summary={engine.settingsText(league)}
           problem={problem}
-          startLabel={startLabel}
-          startDisabled={!!problem || (roomActive && !engine.isHost())}
+          startLabel="Enter Draft Room"
+          /* Host-only gating belongs on the real Start Draft action one
+             screen further in, not here — anyone should be able to walk in
+             and look at seats regardless of who the room says can actually
+             begin it. Only a genuinely broken league config (problem) stops
+             you leaving this screen at all. */
+          startDisabled={!!problem}
           onOpenSettings={() => setSettingsOpen(true)}
-          onStart={() => {
-            /* The clock comes from state, which is where it lives — the
-               settings modal writes it through setClockLength(). Reading it
-               here rather than holding a second copy is what stopped the
-               modal's control being decorative. */
-            engine.startDraft({ mySlot: lobbySlot, clockLength: engine.clockLength() })
-          }}
+          onStart={() => setEnteredRoom(true)}
         />
 
         {settingsOpen && (
@@ -326,40 +320,82 @@ export default function DraftRoom() {
             engine={engine}
             started={false}
             inRoom={roomActive}
+            mySlot={lobbySlot}
             onClose={() => setSettingsOpen(false)}
           />
         )}
 
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-          {/* The board gets the screen. min-h rather than flex-1 alone so it
-              keeps a real height once the Locker below has content to add. */}
-          <div className="flex min-h-[420px] flex-1 flex-col px-3 pb-3 pt-3 lg:px-4">
-            <DraftLobby
-              engine={engine}
-              league={league}
-              /* -1 while we are in a room whose seats have not arrived yet.
-                 mySlot is a leftover from before the room existed, so falling
-                 back to it draws "You" on seat 0 for a guest who is actually
-                 sitting somewhere else — briefly, but it is a chair with the
-                 wrong person's name on it, and the room is about to say so.
-                 No seat is better than the wrong seat. */
-              mySlot={roomActive ? (roomSeats ? mySlot : -1) : lobbySlot}
-              roomActive={roomActive}
-              seats={roomSeats}
-              fill
-              onClaimSeat={(seat) => {
-                // In a room the room decides; off-room this is just my chair.
-                if (roomActive) engine.claimSeat(seat)
-                else setLobbySlot(seat)
-              }}
-            />
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-3 py-5 lg:px-4">
+          <div className="mx-auto w-full max-w-[1600px]">
+            <DraftLocker />
           </div>
+        </div>
+      </div>
+    )
+  }
 
-          <div className="shrink-0 border-t border-slate-800 px-3 py-5 lg:px-4">
-            <div className="mx-auto w-full max-w-[1600px]">
-              <DraftLocker />
-            </div>
-          </div>
+  // Entered, but nobody's picked yet — the live page's own shell (see the
+  // final return below, which this deliberately mirrors: same fixed
+  // inset-0 overlay, same DraftRoomStatusBar) with the claimable board
+  // standing in for the real one. It's the *same* DraftBoardGrid the draft
+  // itself uses, in claimable mode, for the reason DraftLobby.jsx's own
+  // comment already gives: a second board drawn just for this moment would
+  // be a picture of the real one that's wrong the first time it changes.
+  if (!started) {
+    const startLabel = roomActive
+      ? (engine.isHost() ? 'Start for everyone' : 'Waiting for the host')
+      : 'Start draft'
+
+    return (
+      <div className="fixed inset-0 z-[60] flex flex-col bg-[#0B0E14] text-white">
+        <DraftRoomStatusBar
+          preDraft
+          startLabel={startLabel}
+          startDisabled={!!problem || (roomActive && !engine.isHost())}
+          onStartDraft={() => {
+            /* The clock comes from state, which is where it lives — the
+               settings modal writes it through setClockLength(). Reading it
+               here rather than holding a second copy is what stopped the
+               modal's control being decorative. */
+            engine.startDraft({ mySlot: lobbySlot, clockLength: engine.clockLength() })
+          }}
+          onOpenSettings={() => setSettingsOpen(true)}
+        />
+
+        {settingsOpen && (
+          <DraftSettingsModal
+            engine={engine}
+            started={false}
+            inRoom={roomActive}
+            mySlot={lobbySlot}
+            onClose={() => setSettingsOpen(false)}
+          />
+        )}
+
+        {/* pt-14/md:pt-20 matches the live board's own offset below — this
+            is the same DraftRoomStatusBar with the same fixed height and
+            the same ticker strip at md+, so the clearance it needs is
+            identical. */}
+        <div className="flex flex-1 flex-col overflow-hidden px-3 pb-3 pt-14 md:pt-20 lg:px-4">
+          <DraftLobby
+            engine={engine}
+            league={league}
+            /* -1 while we are in a room whose seats have not arrived yet.
+               mySlot is a leftover from before the room existed, so falling
+               back to it draws "You" on seat 0 for a guest who is actually
+               sitting somewhere else — briefly, but it is a chair with the
+               wrong person's name on it, and the room is about to say so.
+               No seat is better than the wrong seat. */
+            mySlot={roomActive ? (roomSeats ? mySlot : -1) : lobbySlot}
+            roomActive={roomActive}
+            seats={roomSeats}
+            fill
+            onClaimSeat={(seat) => {
+              // In a room the room decides; off-room this is just my chair.
+              if (roomActive) engine.claimSeat(seat)
+              else setLobbySlot(seat)
+            }}
+          />
         </div>
       </div>
     )
@@ -386,11 +422,7 @@ export default function DraftRoom() {
   // change. draftIsOver itself is computed above the early returns, where
   // the insights effect needs it.
   const hasRoomVal = engine.hasRoom()
-  const isHost = engine.isHost()
-  const showPause = !draftIsOver && (!hasRoomVal || isHost)
   const showUndo = !draftIsOver && !hasRoomVal
-  const paused = engine.paused()
-  const pauseDisabled = engine.clockLength() === 0
 
   const lineup = engine.seatedLineup()
   const rules = engine.rulesForFormat(league.scoring)
@@ -507,7 +539,6 @@ export default function DraftRoom() {
   // clearSave()+goHome(), the exact "Discard draft"/"Leave the room"
   // action. None of them are reimplemented here.
   const handleUndo = () => engine.undo()
-  const handleTogglePause = () => engine.togglePause()
   const handleDiscard = () => engine.restart()
 
   // The real queue (state.queue, an array of player names) — queueToggle()
@@ -547,10 +578,11 @@ export default function DraftRoom() {
           carries the brand/ticker Header.jsx used to own here, consolidated
           with the round/pick/clock/autopick controls into one h-14 row
           instead of two stacked h-16 bars. Header.jsx itself is untouched
-          and still fixed-h-16 on the homepage and the pre-draft setup
-          screen below, which is why this branch's pt- offset (h-14) no
-          longer matches that one's (h-16) — they're genuinely different
-          bars now, not the same one reused. */}
+          and still fixed-h-16 on the homepage — neither pre-draft screen in
+          this file renders it either (LobbyBar and this same
+          DraftRoomStatusBar in its preDraft mode are their own bars, not
+          Header reused), which is why this branch's pt- offset (h-14) has
+          never matched Header's own (h-16). */}
       <DraftRoomStatusBar
         onOpenSettings={() => setSettingsOpen(true)}
         /* Off-room only. In a room this same engine function toggles the
@@ -567,10 +599,6 @@ export default function DraftRoom() {
         urgent={urgent}
         autopick={autopick}
         onToggleAutopick={handleToggleAutopick}
-        showPause={showPause}
-        paused={paused}
-        pauseDisabled={pauseDisabled}
-        onTogglePause={handleTogglePause}
         showUndo={showUndo}
         onUndo={handleUndo}
         discardLabel={hasRoomVal ? 'Leave the room' : 'Discard draft'}
@@ -816,6 +844,7 @@ export default function DraftRoom() {
           engine={engine}
           started={started}
           inRoom={roomActive}
+          mySlot={mySlot}
           onClose={() => setSettingsOpen(false)}
         />
       )}

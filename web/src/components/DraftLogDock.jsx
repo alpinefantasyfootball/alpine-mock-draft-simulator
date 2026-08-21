@@ -1,23 +1,7 @@
-import { useEffect, useReducer, useState } from 'react'
+import { useState } from 'react'
+import { useEngine, useJukeTick } from '../hooks/useJukeEngine.js'
 import ActivityLog from './ActivityLog.jsx'
 import ChatPlaceholder from './ChatPlaceholder.jsx'
-
-function useEngine() {
-  const [ready, setReady] = useState(false)
-  useEffect(() => {
-    if (typeof window !== 'undefined' && window.JukeEngine) setReady(true)
-  }, [])
-  return ready ? window.JukeEngine : null
-}
-
-function useJukeTick(engine) {
-  const [, force] = useReducer((x) => x + 1, 0)
-  useEffect(() => {
-    if (!engine) return
-    window.addEventListener('juke:header', force)
-    return () => window.removeEventListener('juke:header', force)
-  }, [engine])
-}
 
 const TABS = [
   { key: 'chat', label: 'Chat' },
@@ -94,7 +78,13 @@ function TabContent({ tab, engine, recentOthers, pickItems, DE, league, mySlot }
 export default function DraftLogDock({ recentOthers }) {
   const engine = useEngine()
   useJukeTick(engine)
-  const [tab, setTab] = useState('chat')
+  // 'log', not 'chat' — chat is ChatPlaceholder (a deliberate stub; the
+  // real messages land in a follow-up pass), so opening here by default
+  // put an empty "coming soon" panel in front of the two tabs that show
+  // real, working data. PlayerHub.jsx's mobile tab strip defaults to
+  // 'players' for the same reason: don't default onto the one tab with
+  // nothing in it yet.
+  const [tab, setTab] = useState('log')
 
   if (!engine) return null
 

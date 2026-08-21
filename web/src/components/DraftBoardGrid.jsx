@@ -280,8 +280,16 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
               >
                 {mine ? 'You' : taken ? 'Taken' : 'Claim'}
               </button>
+              {/* `mine`, not another call to teamLabelOf(s) — that asks
+                  engine.teamLabel(), which compares against the *committed*
+                  state.mySlot and only updates once startDraft() actually
+                  runs. Before that, mySlot here is the lobby's own live
+                  selection (lobbySlot in DraftRoom.jsx), so the button above
+                  already reads the right seat — the label was the one still
+                  asking the stale source, which is why it stuck to whichever
+                  seat was mine before you clicked a different chair. */}
               <span className="w-full truncate text-center text-[11px] font-semibold text-white/50">
-                {who || teamLabelOf(s)}
+                {who || (mine ? 'Your Team' : teamLabelOf(s))}
               </span>
             </div>
           )

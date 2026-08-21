@@ -7019,6 +7019,10 @@ window.JukeEngine = {
   // objects, not raw history entries — a card needs a label and a date, not
   // a league object and a picks array to derive one from itself.
   historyList:  () => readHistory().map(historySummary),
+  // The Locker's completed drafts had a way to open one and no way to
+  // remove one — this is the plain filter-and-rewrite clearSave() already
+  // does for the single in-progress save, extended to one entry among many.
+  deleteHistoryDraft: (id) => writeHistory(readHistory().filter((e) => e.id !== id)),
   openHistoryDraft: openHistoryDraft,
   inProgressSummary: inProgressSummary,
   resumeSavedDraft:  resumeSavedDraft,
@@ -7074,6 +7078,15 @@ window.JukeEngine = {
   picks:        () => state.picks,
   mySlot:       () => state.mySlot,
   teamLabel:    teamLabel,
+  // teamLabel() above answers "Your Team" by comparing against the
+  // *committed* state.mySlot, which is exactly wrong for the lobby's
+  // claimable seat board: mySlot there is a live, not-yet-started
+  // selection (DraftRoom.jsx's lobbySlot), so asking teamLabel() for any
+  // *other* seat still returns "Your Team" for whichever slot used to be
+  // mine. cpuName() has no such comparison built in — it just names a
+  // slot — which is what a caller that already knows "mine" from its own
+  // live state (DraftBoardGrid's seat-claim header) actually needs.
+  cpuName:      cpuName,
   seatedLineup: seatedLineup,
   // Added for the React queue sidebar (PlayerQueueSidebar.jsx). photoUrl()
   // and initials() are the exact functions avatar() already calls, so a
@@ -7444,7 +7457,7 @@ window.JukeEngine = {
   setMyName: (name) => Live.setName(name),
   // The real createRoomBtn sequence, minus readSetup(): that call exists
   // there to pull league settings out of legacy DOM inputs this page
-  // never renders, and this page's ConfigureDraftForm already keeps the
+  // never renders, and this page's DraftSettingsModal already keeps the
   // one real `league` object current via setLeague() on every change — a
   // second read off empty/default DOM elements would overwrite an
   // already-correct league with defaults, not update it.

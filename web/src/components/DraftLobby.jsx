@@ -49,7 +49,14 @@ export default function DraftLobby({ engine, league, mySlot, onClaimSeat, seats,
           picks={[]}
           mySlot={mySlot}
           onClock={null}
-          teamLabelOf={(s) => engine.teamLabel(s)}
+          /* Not engine.teamLabel(s): that answers "is this seat mine" by
+             comparing against state.mySlot, which is only correct once
+             startDraft() has actually committed it. Here mySlot is still a
+             live, unstarted selection, so the "mine" branch below already
+             handles that question from the real prop — this only ever
+             needs to name a seat that *isn't* mine, which is what
+             cpuName() does with no comparison to get stale. */
+          teamLabelOf={(s) => engine.cpuName(s)}
           onClaimSeat={onClaimSeat}
           seats={seats}
         />

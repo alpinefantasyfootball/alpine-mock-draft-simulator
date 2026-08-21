@@ -232,12 +232,34 @@ export default function DraftInsightsDashboard({ engine, league, mySlot, viewSlo
   const subject = isMe ? 'you' : teamName
   const poss = isMe ? 'your' : 'their'
 
-  const lineup = engine.seatedLineup(viewSlot)
-  const seats = lineup?.seats || []
+  /* mine.lineup, not engine.seatedLineup(viewSlot) — the two disagree on
+     purpose and this panel needs the one seatedLineup() isn't.
+     seatedLineup() fills FLEX with the first eligible player in *draft
+     order*; mine.lineup is bestLineup()'s own output, already sitting on
+     the analysis object, which fills it by aboveReplacement — the exact
+     fix CLAUDE.md documents for the historical FLEX bug ("sorts by
+     posRank, never aboveReplacement... a within-position measure cannot
+     answer a between-position question"). analyseTeam()'s starter-strength
+     score is computed from this same bestLineup() result, so reading
+     seatedLineup() here instead means this panel's VORP matrix can credit
+     a different player as the FLEX starter than the score two inches above
+     it just counted — the same mismatch AnalysisTab.jsx's own file comment
+     already warns against. No bench here either way; this panel only ever
+     showed starters. */
+  const seats = mine.lineup || []
   const gaps = seats.map((seat) => (seat.player ? engine.replacementGap(seat.player) : null))
   const maxAbs = Math.max(1, ...gaps.filter((g) => g !== null).map((g) => Math.abs(g)))
 
-  const bargain = mine.bargain && mine.bargain.gap > 0 ? mine.bargain : null
+  /* mine.bargain itself, not gated on gap > 0 here — analyseTeam() (app.js)
+     already picks whichever judged pick has the *highest* gap, positive or
+     not, and never nulls it the way reach is (reach is nulled at gap >= 0,
+     bargain never is). AnalysisTab.jsx and the legacy panel it matches both
+     show "Best value" unconditionally on the same rule; gating it here too
+     meant a team whose best pick still landed at-or-before its own board
+     rank showed the card on one screen and not the other, for identical
+     data. The gap sign still has to be checked before the label calls it
+     "picks late", though — that part of AnalysisTab's rule is real. */
+  const bargain = mine.bargain || null
   const reach = mine.reach || null
 
   const picks = engine.picks() || []
@@ -293,7 +315,9 @@ export default function DraftInsightsDashboard({ engine, league, mySlot, viewSlo
     teams: league.teams,
     total: Math.round(mine.total),
     components: mine,
-    bestValue: bargain ? `${bargain.pick.player.name} · ${bargain.gap} picks late` : null,
+    bestValue: bargain
+      ? `${bargain.pick.player.name}${bargain.gap > 0 ? ` · ${bargain.gap} picks late` : ''}`
+      : null,
     biggestReach: reach ? `${reach.pick.player.name} · ${Math.abs(reach.gap)} picks early` : null,
   }
 
@@ -361,7 +385,8 @@ export default function DraftInsightsDashboard({ engine, league, mySlot, viewSlo
             {bargain && (
               <p className="text-white/60">
                 <span className="font-semibold uppercase tracking-wide text-teal-400">Best value</span>{' '}
-                {bargain.pick.player.name} <span className="text-white/35">· {bargain.gap} picks late</span>
+                {bargain.pick.player.name}
+                {bargain.gap > 0 && <span className="text-white/35"> · {bargain.gap} picks late</span>}
               </p>
             )}
             {reach && (

@@ -67,20 +67,26 @@ export const POS_CELL_BLOCK = {
 
 /* The board header's roster chips, and these are the *solids* rather than the
    tints above. Each count carries its own ground on purpose: white on a
-   position solid is the contract those colours were darkened to meet (4.61 to
-   4.62 measured), so the header behind a chip is never part of the sum.
+   position solid is the contract those colours were darkened to meet, so the
+   header behind a chip is never part of the sum.
 
-   Colouring the text instead was measured first and does not survive — the
-   light-theme --*-fg tones run 4.85 to 5.69 on the header but 2.15 to 2.52 on
-   the navy of your own column, so the one team a manager looks at most would
-   be the one that failed.
-
-   Hexes taken from style.css's --qb/--rb/--wr/--te rather than re-picked, so
-   the two boards cannot drift apart on a colour that has already been
-   contrast-checked. */
+   These used to be style.css's legacy --qb/--rb/--wr/--te hexes — red, blue,
+   green, orange — reused so the two boards wouldn't drift on an already
+   contrast-checked colour. They drifted anyway, the other way: once the cells
+   above moved to this file's own six hues, a QB read orange in its cell and
+   red in that same team's roster-strip chip one row up, on one screen. All
+   six now come from this file's own POS_BADGE/POS_CELL_BLOCK hues, at
+   Tailwind's -700 step, the shade each needs to clear white text — the
+   700 step is uniform across all six for the same reason the legacy solids
+   were each darkened to the same ~4.6 rather than left at whatever their
+   individual hue happened to allow: yellow is the hard case (yellow-600 is
+   only 2.94:1; -700 clears 4.92) and the other five would have looked
+   arbitrarily inconsistent stopping earlier just because they could. */
 export const POS_SOLID = {
-  QB: '#D43E39',
-  RB: '#2A7BB1',
-  WR: '#208553',
-  TE: '#AA6419',
+  QB: '#C2410C',   // orange-700, white 5.18
+  RB: '#047857',   // emerald-700, white 5.48
+  WR: '#1D4ED8',   // blue-700, white 6.70
+  TE: '#A21CAF',   // fuchsia-700, white 6.32
+  K: '#A16207',    // yellow-700, white 4.92
+  DST: '#4338CA',  // indigo-700, white 7.90
 }

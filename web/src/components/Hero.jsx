@@ -1,15 +1,16 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { ChevronRight } from 'lucide-react'
+import { POS_BADGE } from './draftRoomPositions.js'
 
-const POS_STYLE = {
-  QB: 'bg-violet-500/15 text-violet-300',
-  RB: 'bg-emerald-500/15 text-emerald-300',
-  WR: 'bg-sky-500/15 text-sky-300',
-  TE: 'bg-amber-500/15 text-amber-300',
-  K: 'bg-rose-500/15 text-rose-300',
-  DST: 'bg-slate-500/15 text-slate-300',
-}
+// This used to carry its own POS_STYLE map — the palette draftRoomPositions.js's
+// own header comment already documents as retired for being "too similar"
+// (violet/sky/amber/rose/slate), replaced by POS_BADGE's orange/emerald/blue/
+// fuchsia/yellow/indigo everywhere *except* here. Homepage.jsx renders this
+// component and ShowYourWorking.jsx (which already imports POS_BADGE
+// correctly) on the same scroll, so a visitor saw QB badged violet at the
+// top of the page and orange further down — the same position reading as two
+// different colors on one screen, the exact drift POS_BADGE exists to end.
 
 const SHOT_TEAMS = 10 // must match app.js's SHOT_TEAMS — shotPicks() is drafted at this team count
 
@@ -117,7 +118,7 @@ export default function Hero() {
                 className="flex items-center gap-3 rounded-xl border border-white/5 bg-white/[0.02] px-3 py-2.5"
               >
                 <span className="w-9 shrink-0 font-mono text-[11px] text-white/35">{row.pick}</span>
-                <span className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-bold ${POS_STYLE[row.pos]}`}>
+                <span className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-bold ${POS_BADGE[row.pos]}`}>
                   {row.pos}
                 </span>
                 <span className="flex-1 truncate text-sm font-medium text-white/90">{row.name}</span>
