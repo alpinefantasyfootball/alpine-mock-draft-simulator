@@ -325,6 +325,7 @@ export default function DraftRoom() {
           <DraftSettingsModal
             engine={engine}
             started={false}
+            inRoom={roomActive}
             onClose={() => setSettingsOpen(false)}
           />
         )}
@@ -808,6 +809,7 @@ export default function DraftRoom() {
         <DraftSettingsModal
           engine={engine}
           started={started}
+          inRoom={roomActive}
           onClose={() => setSettingsOpen(false)}
         />
       )}

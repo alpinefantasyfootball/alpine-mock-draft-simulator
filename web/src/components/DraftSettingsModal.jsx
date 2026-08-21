@@ -86,7 +86,7 @@ function Stepper({ value, onAdd, onRemove, disabled, min = 0, max = 9 }) {
   )
 }
 
-export default function DraftSettingsModal({ engine, onClose, started }) {
+export default function DraftSettingsModal({ engine, onClose, started, inRoom }) {
   const [tab, setTab] = useState('General')
   /* Pick a seat up, then put it down on another - the same two taps the
      legacy order list used, and the reason is touch: a drag needs a pointer
@@ -120,7 +120,20 @@ export default function DraftSettingsModal({ engine, onClose, started }) {
      draft. This is the panel refusing rather than the fields being disabled
      one by one: that list was incomplete once already, and 38 scoring inputs
      stayed editable to guests because they are drawn rather than named. */
-  const locked = !!started
+  /* Locked once a draft exists *or* a room does, and for the host too.
+
+     Started was the only condition at first, which left every setting open
+     to everybody sitting in a room lobby - and a guest who changes the
+     scoring rebuilds their own board out from under the draft they are in.
+     Nothing on screen would say so: their replacement levels, suggestions
+     and grade would simply stop describing everybody else's draft, and
+     adoptRoom() cannot put it back, because a room only ever broadcasts the
+     league it was created with.
+
+     The room's shape is fixed the moment the room exists. The CPU wobble
+     reads a player's board position and every client has to agree on it, so
+     changing any of this means a new room rather than a new setting. */
+  const locked = !!started || !!inRoom
 
   /* Rounds follow the roster, rather than being a second number that has to
      be kept equal to it by hand. setupProblem() refuses a draft whose roster
@@ -170,8 +183,9 @@ export default function DraftSettingsModal({ engine, onClose, started }) {
 
         {locked && (
           <p className="shrink-0 border-b border-amber-500/25 bg-amber-500/10 px-4 py-2 text-[11px] leading-relaxed text-amber-200/90">
-            This draft has started, so its settings are fixed — every seat has to
-            agree on the same board. Start a new draft to change them.
+            {started
+              ? 'This draft has started, so its settings are fixed — every seat has to agree on the same board.'
+              : 'This room is set — every seat has to agree on the same board, so its shape is fixed from the moment the room exists. Make a new room to change it.'}
           </p>
         )}
 
@@ -373,7 +387,17 @@ export default function DraftSettingsModal({ engine, onClose, started }) {
                  order; a started draft is fixed. Saying "you cannot do this"
                  without saying which would be the dead-control problem with a
                  label on it. */
-              const canOrder = !!seats && isHost && !locked
+              /* Not `locked`. That one is about the league's *shape* - the
+                 lineup, the scoring, the team count - which is fixed the
+                 moment a room exists because every client has to agree on the
+                 board the wobble reads. Draft order is not the board: the
+                 room allows a host to swap seats for as long as its status is
+                 "lobby", and Room.swapSeats says so itself.
+
+                 Collapsing the two locked the host out of the one thing this
+                 tab is for. Two rules that happen to overlap are still two
+                 rules. */
+              const canOrder = !!seats && isHost && !started
 
               if (!seats) {
                 return (
@@ -402,7 +426,7 @@ export default function DraftSettingsModal({ engine, onClose, started }) {
                 <div>
                   <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                     <p className="text-[11px] leading-relaxed text-white/45">
-                      {locked
+                      {started
                         ? 'The draft has started, so the order is fixed.'
                         : isHost
                           ? held === null

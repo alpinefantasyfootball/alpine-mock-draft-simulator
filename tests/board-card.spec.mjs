@@ -255,7 +255,19 @@ test.describe("the draft board card", () => {
       const cells = eval(src);
       return {
         cards: cells.length,
-        faces: cells.filter((c) => c.querySelector("img")).length,
+        // Same population as the broken half below: the cards a reader can
+        // actually see. A lazy image off the fold has not loaded and is not
+        // what either half is about.
+        faces: cells.filter((c) => {
+          const i = c.querySelector("img");
+          if (!i) return false;
+          const r = i.getBoundingClientRect();
+          return r.width > 0 && r.bottom > 0 && r.top < innerHeight;
+        }).length,
+        cardsInView: cells.filter((c) => {
+          const r = c.getBoundingClientRect();
+          return r.bottom > 0 && r.top < innerHeight;
+        }).length,
         // the face is pushed to the right edge of the card rather than spaced
         rightmost: cells.every((c) => {
           const f = c.querySelector("img");
@@ -265,7 +277,7 @@ test.describe("the draft board card", () => {
       };
     }, FILLED);
     expect(drawn.cards, "there were cards").toBeGreaterThan(20);
-    expect(drawn.faces, "a face on every card").toBe(drawn.cards);
+    expect(drawn.faces, "a face on every card in view").toBe(drawn.cardsInView);
     expect(drawn.rightmost, "and pinned to the right edge").toBe(true);
     // Closed before the broken half opens. Two live pages both running a CPU
     // timer and re-rendering is a slower machine for the one under test, and
@@ -286,26 +298,45 @@ test.describe("the draft board card", () => {
     await bad.setViewportSize({ width: 1440, height: 900 });
     await stubFaces(bad, { fail: true });
     await draftInto(bad, 30);
-    /* Poll rather than sleep. Every abort fires on its own schedule, so a
-       fixed wait is a bet on the slowest of thirty requests — and it lost
-       about one run in four, reporting a single surviving face as a bug in
-       the component rather than a bug in the waiting. */
-    await expect
-      .poll(() => bad.evaluate((src) => eval(src).filter((c) => c.querySelector("img")).length, FILLED),
-            { timeout: 20000 })
-      .toBe(0);
+    /* In view, not in the document.
+
+       The faces carry loading="lazy", so an image below the fold is never
+       requested — and one that is never requested never errors, so there is
+       nothing to drop and its element stays. Asserting that *no* img survives
+       is asserting that lazy loading does not work: it passed only when the
+       board happened to be short enough that every card was on screen, and
+       failed about one run in five otherwise. Two earlier explanations (the
+       wait, then the HTTP cache) were wrong for the same reason — they were
+       about timing, and this is about which requests were ever made.
+
+       What the test is actually for is that a broken image leaves no hole
+       where somebody can see it. So: nothing visible. */
+    const visibleImgs = (page) => page.evaluate((src) =>
+      eval(src)
+        .map((c) => c.querySelector("img"))
+        .filter(Boolean)
+        .filter((i) => {
+          const r = i.getBoundingClientRect();
+          return r.width > 0 && r.bottom > 0 && r.top < innerHeight;
+        }).length, FILLED);
+
+    await expect.poll(() => visibleImgs(bad), { timeout: 20000 }).toBe(0);
 
     const gone = await bad.evaluate((src) => {
       const cells = eval(src);
+      const onScreen = (i) => {
+        const r = i.getBoundingClientRect();
+        return r.width > 0 && r.bottom > 0 && r.top < innerHeight;
+      };
       return {
         cards: cells.length,
-        faces: cells.filter((c) => c.querySelector("img")).length,
+        faces: cells.map((c) => c.querySelector("img")).filter(Boolean).filter(onScreen).length,
         // the card still says everything it is required to say
         firstPick: cells[0].querySelector("span.font-normal.opacity-60").textContent.trim()
       };
     }, FILLED);
     expect(gone.cards, "the cards are all still there").toBeGreaterThan(20);
-    expect(gone.faces, "and every broken face removed itself").toBe(0);
+    expect(gone.faces, "and every broken face a reader can see removed itself").toBe(0);
     expect(gone.firstPick).toMatch(/^\d+\.\d\d$/);
 
     await badCtx.close();

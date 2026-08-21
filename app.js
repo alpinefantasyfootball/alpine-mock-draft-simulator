@@ -545,21 +545,20 @@ function toggleRooms() {
 /* The hash can now carry an invite code — #/draft?room=ABC — so the path
    is read up to the query rather than compared whole. #/draft on its own
    still means what it always did. */
-/* "draft-legacy" is not a route anybody is meant to find. #/draft is retired
-   and redirects (see applyRoute), but the vanilla board it used to show is
-   still live code - app.js renders into it on every tick - and it still has
-   about twenty tests written against it that encode real, hard-won lessons:
-   the row-height rule, the face that removes itself, the gold ring pair.
-   Retiring the route without a door would have quietly deleted all of them,
-   which is a much bigger decision than the one being made here.
+/* #/draft is retired and redirects (see applyRoute). Nothing else routes to
+   the old view any more.
 
-   So the old view keeps an address that only the suite uses. Nothing in the
-   product links to it and nothing should. It goes away when those specs are
-   rewritten against the React board, which is real work and is not this
-   change. */
+   There was a second address here for a while - "draft-legacy" - opened only
+   by the test suite, because retiring #/draft would otherwise have silently
+   deleted about twenty specs written against the vanilla board. Those specs
+   have all been rewritten against the React room, so the door has no users
+   and is gone. The markup itself (#view-app) stays exactly where it is:
+   app.js is a classic script and renderHeader(), renderInvite() and a dozen
+   listeners still write into those ids on every render, so deleting it throws
+   and takes drafting down with it. Unreachable, not absent. */
 function route() {
   const path = location.hash.replace(/^#\/?/, "").split("?")[0];
-  return (path === "draft" || path === "draft-legacy") ? "draft" : "home";
+  return path === "draft" ? "draft" : "home";
 }
 
 // No callers today. Kept pointing at the live route so it cannot

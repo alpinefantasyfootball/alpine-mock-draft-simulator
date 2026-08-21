@@ -141,12 +141,6 @@ export function clickHidden(page, id) {
   return page.evaluate((id) => document.getElementById(id).click(), id);
 }
 
-/* Two doors on purpose. The default is the real product; LEGACY_VIEW is the
-   retired vanilla board, which is unreachable in the UI but still rendered by
-   app.js and still covered by the board-card and board-marks specs. Those
-   specs pass it explicitly. Anything testing the product must NOT. */
-export const LEGACY_VIEW = "#/draft-legacy";
-
 export async function openApp(context, path = "#/draft-room") {
   const page = await context.newPage();
   await page.addInitScript(instrumentation);
@@ -162,11 +156,23 @@ export async function openApp(context, path = "#/draft-room") {
   return page;
 }
 
+/* Through the bridge rather than through #createRoomBtn.
+
+   That button is in the legacy invite panel, which the full-bleed lobby no
+   longer renders inline - "Draft with friends" is the settings modal's Invite
+   tab now. Clicking it would mean opening a modal and switching a tab to set
+   up a fixture, which is three interactions of ceremony before the thing
+   under test. engine.createRoom() is what that button calls.
+
+   Polled rather than slept on: a room is created when the worker answers, and
+   how long that takes is the network's business. */
 export function createRoom(page) {
   return page.evaluate(async () => {
-    document.getElementById("createRoomBtn").click();
-    await new Promise((r) => setTimeout(r, 1500));
-    return Live.state().code;
+    window.JukeEngine.createRoom();
+    for (let i = 0; i < 120 && !window.JukeEngine.codeInUrl(); i++) {
+      await new Promise((r) => setTimeout(r, 250));
+    }
+    return window.JukeEngine.codeInUrl();
   });
 }
 
