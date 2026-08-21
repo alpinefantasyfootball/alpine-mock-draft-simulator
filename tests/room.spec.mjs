@@ -11,7 +11,7 @@ import { openApp, createRoom, roomView, sent, waitForRoom, pickGaps, median, per
   from "./helpers.mjs";
 
 /* The legacy setup screen is `display:none !important` in web/index.html -
-   DraftSettings.jsx replaced it visually and the markup stayed for app.js's
+   The React lobby replaced it visually and the markup stayed for app.js's
    unguarded listeners. So a Playwright click, which waits for visibility,
    can never resolve on a control inside it: this suite sat red from the day
    that landed, and nobody saw it because the room specs need the worker and

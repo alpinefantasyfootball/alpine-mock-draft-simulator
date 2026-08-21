@@ -115,7 +115,7 @@ function instrumentation() {
 
 /* The legacy setup screen — readSetup(), setupProblem(), #startBtn's own
    click handler — is unchanged and still what most of these tests exercise;
-   it is only hidden now, in favour of web/src/components/DraftSettings.jsx
+   it is only hidden now, in favour of the React lobby and settings modal
    (see CLAUDE.md's "setup screen" section). Playwright's real click() and
    selectOption() wait on visibility, which a deliberately display:none
    element never satisfies — a test that needs this exact mechanism (rounds,

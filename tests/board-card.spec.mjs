@@ -322,21 +322,24 @@ test.describe("the draft board card", () => {
 
     await expect.poll(() => visibleImgs(bad), { timeout: 20000 }).toBe(0);
 
+    /* Everything else read in one go, and the face count *not* re-read here.
+
+       Polling until no visible face survives and then reading the same fact
+       again in a second evaluate is two reads of a moving board: the grid
+       re-renders and scrolls to the live pick, so a lazy image can come into
+       view between the two and be counted before it has had a chance to
+       fail. That is the poll's answer being overwritten by a worse one, and
+       it cost about one run in seventy-five. The poll above is the
+       assertion; this only collects what does not move. */
     const gone = await bad.evaluate((src) => {
       const cells = eval(src);
-      const onScreen = (i) => {
-        const r = i.getBoundingClientRect();
-        return r.width > 0 && r.bottom > 0 && r.top < innerHeight;
-      };
       return {
         cards: cells.length,
-        faces: cells.map((c) => c.querySelector("img")).filter(Boolean).filter(onScreen).length,
         // the card still says everything it is required to say
         firstPick: cells[0].querySelector("span.font-normal.opacity-60").textContent.trim()
       };
     }, FILLED);
     expect(gone.cards, "the cards are all still there").toBeGreaterThan(20);
-    expect(gone.faces, "and every broken face a reader can see removed itself").toBe(0);
     expect(gone.firstPick).toMatch(/^\d+\.\d\d$/);
 
     await badCtx.close();

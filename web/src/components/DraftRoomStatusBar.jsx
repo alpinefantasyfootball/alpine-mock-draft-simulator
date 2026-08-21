@@ -68,7 +68,15 @@ export default function DraftRoomStatusBar({
 }) {
   return (
     <Fragment>
-    <header className="fixed inset-x-0 top-0 z-50 flex h-14 shrink-0 items-center gap-2 border-b border-white/5 bg-obsidian/80 px-3 backdrop-blur-md sm:gap-4 sm:px-6">
+    <header /* gap-1 below sm, and the arithmetic is why rather than taste. At
+          375px the four blocks are 81 (logo) + 52 (the round text at its
+          floor) + 57 (the clock) + 144 (the controls) = 334, and 24px of
+          padding leaves 17 for the gaps. Three gaps at 8px is 24, so the
+          bar was 7 to 12px over depending on how wide the clock happened
+          to render - which is why it fit on some reads and not others and
+          looked like a flaky test. Three at 4px is 12, and it fits with
+          room to spare. */
+      className="fixed inset-x-0 top-0 z-50 flex h-14 shrink-0 items-center gap-1 border-b border-white/5 bg-obsidian/80 px-3 backdrop-blur-md sm:gap-4 sm:px-6">
       {/* Leaving via the logo (real navigation, home route) is not the same
           action as Discard/"Leave the room" below — see CLAUDE.md: leaving
           the draft screen stops the clock without clearing the save, only

@@ -1,7 +1,7 @@
 import { useEffect, useReducer, useState } from 'react'
 
-// Shared by every React island that reads window.JukeEngine (DraftSettings'
-// own tree, the header). Was two copies — one per component that needed it
+// Shared by every React island that reads window.JukeEngine — the draft
+// room, the header, the player sheet. Was two copies — one per component that needed it
 // — which is the same class of drift CLAUDE.md already has a rule about for
 // league shape: one implementation, handed out rather than duplicated.
 export function useEngine() {

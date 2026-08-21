@@ -41,7 +41,26 @@ export default defineConfig({
     // Nothing here is a visual test, and a trace on a two-minute draft is
     // large. Kept for failures only, where it is the whole point.
     trace: "retain-on-failure",
-    video: "off"
+    video: "off",
+
+    /* No HTTP cache, and this is not belt and braces.
+
+       app.js sits at a fixed address between deploys - that is the whole
+       point of the ?v= stamp - so a browser is entitled to serve the body it
+       already has. Pointed at production, that means a run can test the
+       previous deploy and report the new one's fix as missing: it happened,
+       on the news attribution fix, which was live in production's app.js
+       while the suite insisted it was not. It is worse for a bug-back run,
+       where five mutations in a row once came back failing tests they could
+       not possibly reach, because each was measuring some mixture of the
+       patched file and the cached one.
+
+       CLAUDE.md has said to launch this way for a while; the config never
+       did. */
+    launchOptions: {
+      args: ["--disable-application-cache", "--disk-cache-size=1"]
+    },
+    extraHTTPHeaders: { "Cache-Control": "no-cache" }
   },
 
   /* Both are waited on by `port` rather than by `url`, which matters for the

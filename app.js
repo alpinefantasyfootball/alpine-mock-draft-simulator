@@ -6982,7 +6982,7 @@ window.JukeEngine = {
   statKeys:     () => (typeof STAT_KEYS === "undefined" ? null : STAT_KEYS),
   forcedLate:   () => FORCED_LATE,
   playersMeta:  () => (typeof PLAYERS_META === "undefined" ? null : PLAYERS_META),
-  // Added for the React settings page (web/src/components/DraftSettings.jsx).
+  // Added for the React settings screen (the lobby and DraftSettingsModal).
   // setLeague patches the one real league object rather than a second copy of
   // it — the same object readSetup() has always written to.
   teamCounts:   () => TEAM_COUNTS,
@@ -7050,7 +7050,7 @@ window.JukeEngine = {
     return true;
   },
   // Added for the React header (web/src/components/AppHeader.jsx), which
-  // replaces .appbar the same way DraftSettings.jsx replaced .setup — hidden
+  // replaces .appbar the same way the React lobby replaced .setup — hidden
   // rather than deleted, for the same unguarded-listener reason. headerInfo()
   // is the exact branching renderHeader() itself now runs (see the comment
   // above that function); nothing here recomputes it a second way. The
@@ -7191,7 +7191,7 @@ window.JukeEngine = {
      renderScoringFields() draws thirty-eight fields straight into
      #scoringFields, which is inside the legacy setup screen and therefore
      display:none - so the one thing here a competitor does not have has been
-     unreachable by mouse since DraftSettings.jsx replaced that screen. This
+     unreachable by mouse since the React lobby replaced that screen. This
      hands React what it needs to draw the same editor: the groups, the
      labels, which rules are per-yard, and which ones Sleeper does not
      forecast so the board's ranking cannot move when you change them.

@@ -389,9 +389,20 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
                             on-the-clock cells have no team label and keep the
                             absolute placement. */}
                         <div className="flex items-center justify-between gap-1 leading-none">
-                          <span className="flex items-center gap-1 text-[10px] font-bold">
+                          {/* min-w-0 so this side is the one that gives if the
+                              row ever runs out of room: the club and the arrow
+                              are three characters and a glyph and should not
+                              be the thing that truncates.
+
+                              Added while chasing an overflow that turned out
+                              not to exist - the phone sweep was reporting 2px
+                              on a device at dpr 3, which is clientWidth
+                              rounding against scrollWidth ceiling rather than
+                              content escaping a box. Kept because it is right
+                              on its own terms, not because it fixed that. */}
+                          <span className="flex min-w-0 items-center gap-1 truncate text-[10px] font-bold">
                             {pick.player.pos}
-                            {code && <span className="font-normal opacity-60">{code}</span>}
+                            {code && <span className="truncate font-normal opacity-60">{code}</span>}
                           </span>
                           <span className="flex shrink-0 items-center gap-0.5 text-[10px] font-medium opacity-60">
                             {pick.player.team}

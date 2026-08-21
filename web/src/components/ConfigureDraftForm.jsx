@@ -63,21 +63,22 @@ function FormSelect({ value, onChange, options, disabled }) {
   )
 }
 
-/* mySlot is optionally controlled from outside, because the lobby below this
-   form is the other way to choose a seat and the two must be one fact. Left
-   uncontrolled it keeps its own state, so DraftSettings.jsx — which renders
-   this form with no lobby beside it — is untouched. */
-export default function ConfigureDraftForm({ mySlot: slotProp, onSlotChange }) {
+/* mySlot is controlled from outside, because the lobby board above this form
+   is the other way to choose a seat and the two must be one fact — claiming
+   a chair moves the dropdown and the dropdown moves the chair.
+
+   It was *optionally* controlled while a second screen rendered this form
+   with no lobby beside it. That screen is gone, so the uncontrolled branch
+   had no caller left and is gone with it: a fallback nothing exercises is a
+   second behaviour nobody is checking. */
+export default function ConfigureDraftForm({ mySlot, onSlotChange }) {
   const engine = useEngine()
   useJukeTick(engine)
 
   const [teams, setTeams] = useState(10)
   const [scoring, setScoring] = useState('half')
   const [clockLength, setClockLength] = useState(60)
-  const [ownSlot, setOwnSlot] = useState(0)
-  const controlled = slotProp !== undefined
-  const mySlot = controlled ? slotProp : ownSlot
-  const setMySlot = (v) => { if (controlled) onSlotChange(v); else setOwnSlot(v) }
+  const setMySlot = onSlotChange
   const [problem, setProblem] = useState('')
 
   useEffect(() => {

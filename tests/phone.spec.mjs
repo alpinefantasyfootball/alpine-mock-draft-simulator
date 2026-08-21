@@ -126,10 +126,26 @@ test("nothing overflows sideways that cannot scroll or ellipsise", async ({ brow
      either scroll or ellipsise. Anything that can do neither is the leak. */
   const leaks = await page.evaluate(() => {
     const out = [];
+
+    /* The tolerance is tied to the device pixel ratio, and that is not a
+       fudge factor - it is the measurement's own resolution.
+
+       clientWidth rounds and scrollWidth ceils, so a box whose real width is
+       fractional reports the two integers disagreeing by a pixel or two with
+       nothing wrong at all. On a device at dpr 3 - which is what an iPhone 13
+       is - every nested flex row in a 112px board cell lands on thirds, and
+       the whole board reported `over=2` on three elements per card.
+
+       That cost a wrong fix before it was measured: eleven "leaks" were
+       chased into the board card and none of them existed. The same page at
+       dpr 1 reports zero. So the check keeps its edge where it can see one
+       and stops inventing them where it cannot. */
+    const slack = devicePixelRatio > 1 ? 2 : 1;
+
     document.querySelectorAll("#draftroom-root *").forEach((el) => {
       const b = el.getBoundingClientRect();
       if (!b.width || !b.height) return;
-      if (el.scrollWidth <= el.clientWidth + 1) return;
+      if (el.scrollWidth <= el.clientWidth + slack) return;
       if (el.tagName === "INPUT") return;            // an input scrolls its own value
       const c = getComputedStyle(el);
       const scrolls = /auto|scroll/.test(c.overflowX);
@@ -155,7 +171,7 @@ test("nothing overflows sideways that cannot scroll or ellipsise", async ({ brow
         overflowingKids.every((k) => getComputedStyle(k).position === "absolute");
       if (allDecoration) return;
 
-      out.push(el.tagName + "." + String(el.className).slice(0, 30));
+      out.push(el.tagName + "." + String(el.className).slice(0, 30) + " over=" + (el.scrollWidth - el.clientWidth));
     });
     return out;
   });
