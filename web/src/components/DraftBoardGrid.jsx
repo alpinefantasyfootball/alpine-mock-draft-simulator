@@ -163,6 +163,24 @@ function mineRing(isMine, isCurrent) {
 
 export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLabelOf, onTeamClick, photoFor, shortNameOf, onClaimSeat, seats, rosterOf }) {
   const desktop = useDesktop()
+  /* Which headshots have already failed.
+
+     onError used to call e.currentTarget.remove(), which is the legacy
+     board's trick and does not survive here: React owns that element, so the
+     next render puts it straight back. The board re-renders on every pick, so
+     a dead image returned within half a second and the "no broken frames"
+     guarantee was only ever true until something else happened.
+
+     Kept as state rather than a ref so adding one re-renders the cell that
+     needs to stop drawing it, and keyed by URL rather than by player because
+     that is what actually 404s. */
+  const [failedFaces, setFailedFaces] = useState(() => new Set())
+  const faceFailed = (src) => setFailedFaces((prev) => {
+    if (prev.has(src)) return prev
+    const next = new Set(prev)
+    next.add(src)
+    return next
+  })
   const byCell = new Map()
   picks.forEach((p) => byCell.set(p.round + '-' + p.slot, p))
 
@@ -319,7 +337,8 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
                    documented to carry and the React rebuild dropped it - but a
                    phone column is 112px wide and every pixel is already spoken
                    for, so below lg the cell stays text. */
-                const face = desktop && pick && photoFor ? photoFor(pick.player) : ''
+                const raw = desktop && pick && photoFor ? photoFor(pick.player) : ''
+                const face = raw && !failedFaces.has(raw) ? raw : ''
                 return (
                   <div
                     key={round + '-' + s}
@@ -412,7 +431,7 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
                             src={face}
                             alt=""
                             loading="lazy"
-                            onError={(e) => e.currentTarget.remove()}
+                            onError={() => faceFailed(face)}
                             className={
                               'h-7 w-7 shrink-0 rounded-full ' +
                               (pick.player.pos === 'DST' ? 'object-contain' : 'object-cover')
