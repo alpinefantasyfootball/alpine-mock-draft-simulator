@@ -553,6 +553,12 @@ export default function DraftRoom() {
           bars now, not the same one reused. */}
       <DraftRoomStatusBar
         onOpenSettings={() => setSettingsOpen(true)}
+        /* Off-room only. In a room this same engine function toggles the
+           autopilot on your own chair, which the Autopick switch beside it
+           already is — two controls for one thing is the duplication this
+           file keeps having to undo. */
+        showFinish={!roomActive && !draftIsOver}
+        onFinish={() => engine.autoDraftRest()}
         roundText={roundText}
         code={code}
         rightLabel={rightLabel}

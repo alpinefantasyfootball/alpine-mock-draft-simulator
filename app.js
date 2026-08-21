@@ -7340,6 +7340,21 @@ window.JukeEngine = {
     return state.autoMe;
   },
   autoPickForMe: autoPickForMe,
+  /* "Auto-draft the rest", which the React room had no door for.
+
+     Solo it runs the board out: my seats follow my queue before the model's
+     opinion, every other seat is the CPU's own choice, and both fall back to
+     the best player left rather than to nothing - so the button either
+     finishes the draft or the board is empty, with no third outcome where it
+     stops halfway without saying why.
+
+     In a room the same function is an autopilot on your own chair instead,
+     because drafting nine other managers' teams locally is the bug this
+     already has a comment about. The React room reaches that through the
+     Autopick toggle, so the control this exposes is offered off-room only -
+     but it is the same function either way rather than a second loop that
+     would have to be kept in step. */
+  autoDraftRest: autoDraftRest,
   // Undo, Pause and Discard for the React draft room page — reusing the
   // exact functions the legacy action bar calls, including the visibility
   // rules renderActionBar() already encodes (see CLAUDE.md's "Everything

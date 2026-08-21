@@ -1,6 +1,6 @@
 import { Fragment } from 'react'
 import { motion } from 'framer-motion'
-import { LogOut, Pause, Play, RotateCcw, Settings, Timer, Volume2, VolumeX } from 'lucide-react'
+import { FastForward, LogOut, Pause, Play, RotateCcw, Settings, Timer, Volume2, VolumeX } from 'lucide-react'
 import Ticker from './Ticker.jsx'
 import JukeLogo from './juke-logo/JukeLogo.jsx'
 
@@ -63,6 +63,8 @@ export default function DraftRoomStatusBar({
   discardDanger,
   onDiscard,
   onOpenSettings,
+  showFinish,
+  onFinish,
 }) {
   return (
     <Fragment>
@@ -141,6 +143,23 @@ export default function DraftRoomStatusBar({
             {soundOn ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
           </IconButton>
         </span>
+        {/* "Auto-draft the rest" - solo only, and that is the honest label
+            rather than a shortening. In a room the same engine function is an
+            autopilot on your own chair, which the Autopick toggle to the
+            right already is; offering "the rest" there would be promising to
+            draft nine other managers' teams, which is a bug this codebase has
+            already had once.
+
+            Hidden below sm for the same reason Undo is: five controls plus
+            the clock and the round text overflow a 375px bar, and of them
+            this is the one that can wait for a wider screen. */}
+        {showFinish && (
+          <span className="hidden sm:inline-flex">
+            <IconButton onClick={onFinish} title="Auto-draft the rest">
+              <FastForward className="h-3.5 w-3.5" />
+            </IconButton>
+          </span>
+        )}
         {showPause && (
           <IconButton onClick={onTogglePause} disabled={pauseDisabled} title={paused ? 'Resume clock' : 'Pause clock'}>
             {paused ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}

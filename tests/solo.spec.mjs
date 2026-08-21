@@ -10,13 +10,13 @@
    Migrated off #/draft-legacy. Two things about that move are worth stating
    rather than discovering later:
 
-   One test is gone and it is a gap, not a tidy-up. "Auto-draft the rest" was
-   a button on the legacy bar wired to autoDraftRest(); the React room has the
-   per-turn Autopick toggle and nothing that jumps to the end. The function is
-   still in app.js and is not bridged, so there is no control to assert a
-   label on. What replaces it here is a test of the semantics that label was
-   claiming — solo autopick drafts my seat and nobody else's — because that
-   part is real and still worth guarding.
+   "Auto-draft the rest" is back. It was a button on the legacy bar wired to
+   autoDraftRest(), and for a while the React room had only the per-turn
+   Autopick toggle and nothing that jumps to the end — the migration is what
+   found that. It is the same engine function rather than a second loop: solo
+   it runs the board out, and in a room it is an autopilot on your own chair,
+   which is why the control is offered off-room only. Both halves have a test
+   below.
 
    And the roster-need chip is back. The React filter chips were plain labels,
    so the have/need count and the bug it guards had no equivalent; the counts
@@ -349,3 +349,57 @@ test("a filled starting slot is not a cap, and does not claim to be", async ({ b
 
   await context.close();
 });
+
+/* The control the migration found missing, and what it must not promise.
+
+   Solo it finishes the board, and the label is the truth: every remaining
+   pick, mine from my queue first and everybody else's from the CPU's own
+   choice. In a room the same engine function is an autopilot on one chair,
+   because drafting nine other managers' teams locally is a bug this codebase
+   has already had — so the button is not offered there at all, and the
+   Autopick switch beside it is what a room gets instead. */
+test("auto-draft the rest finishes the board, and is not offered in a room",
+  async ({ browser }) => {
+    const context = await browser.newContext();
+    const page = await openApp(context, "#/draft-room");
+    await startViaButton(page);
+
+    // Part way in by hand, which is when a person reaches for it.
+    await page.evaluate(() => {
+      let guard = 0;
+      while (state.picks.length < 20 && guard++ < 60) {
+        const c = onTheClock();
+        if (!c) break;
+        makePick(c.slot === state.mySlot ? autoPickForMe() : cpuChoice(c.slot, c.round));
+      }
+      render();
+    });
+
+    const finish = page.locator('#draftroom-root button[aria-label="Auto-draft the rest"]');
+    await expect(finish, "offered while there is a board left to draft").toBeVisible();
+    await finish.click();
+
+    await expect.poll(() => page.evaluate(() => draftOver()), { timeout: 30000 }).toBe(true);
+
+    const out = await page.evaluate(() => {
+      const perSeat = {};
+      state.picks.forEach((p) => { perSeat[p.slot] = (perSeat[p.slot] || 0) + 1; });
+      return {
+        picks: state.picks.length,
+        distinct: new Set(state.picks.map((p) => p.player.name)).size,
+        sizes: [...new Set(Object.values(perSeat))],
+        kickerRounds: state.picks.filter((p) => p.player.pos === "K").map((p) => p.round),
+      };
+    });
+
+    expect(out.picks, "the button finishes the draft or the board is empty").toBe(140);
+    expect(out.distinct, "and no player twice").toBe(140);
+    expect(out.sizes, "fourteen a team").toEqual([14]);
+    // The fallback must not reach for a kicker to keep the loop moving.
+    expect(out.kickerRounds.length ? Math.min(...out.kickerRounds) : 99).toBeGreaterThanOrEqual(13);
+
+    // Nothing left to draft, so nothing to offer.
+    await expect(finish, "and it goes away when the board is full").toHaveCount(0);
+
+    await context.close();
+  });
