@@ -77,6 +77,20 @@ export default function ScoresStrip() {
       <div className="mx-auto max-w-7xl">
         <div className="mb-3 flex items-baseline justify-between">
           <span className="font-plex text-[11px] tracking-[0.11em] text-white/40">AROUND THE LEAGUE</span>
+          {/* Out, not built: nothing in this app has ever tracked a full
+              season's schedule — fetchScores() only ever asks ESPN for
+              "now," with no date range — and the same "we link, we don't
+              republish" rule the news headlines already follow applies
+              here too. Same target/rel pattern LatestNewsTab.jsx uses for
+              every outbound link. */}
+          <a
+            href="https://www.espn.com/nfl/schedule"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-plex text-[11px] text-white/40 transition-colors hover:text-white/70"
+          >
+            full schedule &rarr;
+          </a>
         </div>
 
         <div className="scores-scroll flex gap-[10px] overflow-x-auto pb-1">
