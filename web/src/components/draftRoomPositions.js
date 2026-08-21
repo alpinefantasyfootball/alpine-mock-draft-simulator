@@ -64,3 +64,23 @@ export const POS_CELL_BLOCK = {
   K: 'bg-yellow-950/60 border border-yellow-500/40 text-yellow-200',
   DST: 'bg-indigo-950/60 border border-indigo-500/40 text-indigo-200',
 }
+
+/* The board header's roster chips, and these are the *solids* rather than the
+   tints above. Each count carries its own ground on purpose: white on a
+   position solid is the contract those colours were darkened to meet (4.61 to
+   4.62 measured), so the header behind a chip is never part of the sum.
+
+   Colouring the text instead was measured first and does not survive — the
+   light-theme --*-fg tones run 4.85 to 5.69 on the header but 2.15 to 2.52 on
+   the navy of your own column, so the one team a manager looks at most would
+   be the one that failed.
+
+   Hexes taken from style.css's --qb/--rb/--wr/--te rather than re-picked, so
+   the two boards cannot drift apart on a colour that has already been
+   contrast-checked. */
+export const POS_SOLID = {
+  QB: '#D43E39',
+  RB: '#2A7BB1',
+  WR: '#208553',
+  TE: '#AA6419',
+}

@@ -7216,6 +7216,22 @@ window.JukeEngine = {
 
   /* The starting lineup, as the league actually holds it. Every consumer
      reads this rather than keeping its own idea of what a roster is. */
+  /* What each team holds, for the board header.
+
+     Which positions get counted is derived, never listed: FORCED_LATE
+     already names the two the app schedules itself, so COUNTED_POSITIONS is
+     POSITIONS minus those. Listing QB, RB, WR, TE here would be the league
+     shape written down a second time — and counting a kicker would be eight
+     columns of "0" until the closing rounds and eight of "1" after them.
+
+     An empty count is returned as 0 rather than omitted: a gap where a chip
+     should be is the fact somebody is reading this strip for. */
+  rosterStrip: function (slot) {
+    return COUNTED_POSITIONS.map(function (pos) {
+      return { pos: pos, count: countAt(slot, pos) };
+    });
+  },
+
   lineup: function () {
     return {
       starters: Object.assign({}, league.starters),

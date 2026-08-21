@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { POS_CELL_BLOCK } from './draftRoomPositions.js'
+import { POS_CELL_BLOCK, POS_SOLID } from './draftRoomPositions.js'
 
 // Real data only: `picks` is window.JukeEngine.picks() (state.picks itself,
 // {overall, round, slot, player}), the same array the legacy board reads
@@ -122,6 +122,38 @@ function useDesktop() {
   return wide
 }
 
+/* What each team holds, under its name.
+
+   Which positions appear is derived engine-side (COUNTED_POSITIONS is
+   POSITIONS minus the two the app schedules itself), so this draws whatever
+   it is handed rather than listing QB/RB/WR/TE and making the league shape a
+   second time. A kicker would be eight columns of "0" until the closing
+   rounds and eight of "1" after them.
+
+   Zero is drawn, never dropped: a gap where a chip should be is the fact
+   somebody is reading the strip for. It gets the muted fill and the tertiary
+   tone — a position colour at zero would say "has one". */
+function RosterStrip({ counts }) {
+  if (!counts || !counts.length) return null
+  return (
+    <div className="mt-0.5 flex gap-px">
+      {counts.map(({ pos, count }) => (
+        <span
+          key={pos}
+          title={count + ' ' + pos}
+          className={
+            'min-w-0 flex-1 rounded-sm text-center text-[9px] font-bold leading-[1.3] ' +
+            (count ? 'text-white' : 'bg-white/[0.06] text-white/35')
+          }
+          style={count ? { background: POS_SOLID[pos] } : undefined}
+        >
+          {count}
+        </span>
+      ))}
+    </div>
+  )
+}
+
 function mineRing(isMine, isCurrent) {
   if (!isMine) return ''
   return isCurrent
@@ -129,7 +161,7 @@ function mineRing(isMine, isCurrent) {
     : 'shadow-[inset_0_0_0_2px_#FFD166]'
 }
 
-export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLabelOf, onTeamClick, photoFor, shortNameOf, onClaimSeat, seats }) {
+export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLabelOf, onTeamClick, photoFor, shortNameOf, onClaimSeat, seats, rosterOf }) {
   const desktop = useDesktop()
   const byCell = new Map()
   picks.forEach((p) => byCell.set(p.round + '-' + p.slot, p))
@@ -253,13 +285,13 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
           ) : (
             <div
               key={'hd-' + s}
-              className={
-                'sticky top-0 z-10 truncate border-b border-r border-slate-800 bg-slate-900/95 px-2 py-1 text-center text-xs font-semibold ' +
-                (s === mySlot ? 'text-teal-400' : 'text-white/60')
-              }
+              className="sticky top-0 z-10 border-b border-r border-slate-800 bg-slate-900/95 px-1.5 py-1"
               title={teamLabelOf(s)}
             >
-              {s === mySlot ? 'YOU' : teamLabelOf(s)}
+              <p className={'truncate text-center text-xs font-semibold ' + (s === mySlot ? 'text-teal-400' : 'text-white/60')}>
+                {s === mySlot ? 'YOU' : teamLabelOf(s)}
+              </p>
+              <RosterStrip counts={rosterOf ? rosterOf(s) : null} />
             </div>
           )
         )}
