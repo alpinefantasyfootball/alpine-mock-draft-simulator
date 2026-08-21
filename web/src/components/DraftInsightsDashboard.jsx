@@ -416,7 +416,7 @@ export default function DraftInsightsDashboard({ engine, league, mySlot, viewSlo
             transition={{ delay: 0.08 }}
             className={PANEL + ' p-5'}
           >
-            <h2 className="font-display text-sm font-bold uppercase tracking-wide text-white/80">Team Analysis</h2>
+            <h2 className="font-display text-sm font-bold uppercase tracking-wide text-white/80">Team analysis</h2>
             <p className="mb-3 mt-0.5 text-xs text-white/35">The four grade components, scaled against the room</p>
             <RadarChart mine={mine} />
           </motion.section>
@@ -427,7 +427,7 @@ export default function DraftInsightsDashboard({ engine, league, mySlot, viewSlo
             transition={{ delay: 0.16 }}
             className={PANEL + ' p-5'}
           >
-            <h2 className="font-display text-sm font-bold uppercase tracking-wide text-white/80">VORP Matrix</h2>
+            <h2 className="font-display text-sm font-bold uppercase tracking-wide text-white/80">VORP matrix</h2>
             <p className="mb-3 mt-0.5 text-xs text-white/35">
               Each starter against a replacement-level player at his position
             </p>
@@ -448,7 +448,7 @@ export default function DraftInsightsDashboard({ engine, league, mySlot, viewSlo
             transition={{ delay: 0.24 }}
             className={PANEL + ' p-5'}
           >
-            <h2 className="font-display text-sm font-bold uppercase tracking-wide text-white/80">Draft Value Timeline</h2>
+            <h2 className="font-display text-sm font-bold uppercase tracking-wide text-white/80">Draft value timeline</h2>
             <p className="mb-3 mt-0.5 text-xs text-white/35">
               Where each pick landed against the board's rank — right means he fell to {isMe ? 'you' : 'them'}
             </p>
@@ -475,7 +475,7 @@ export default function DraftInsightsDashboard({ engine, league, mySlot, viewSlo
             transition={{ delay: 0.32 }}
             className={PANEL + ' p-5'}
           >
-            <h2 className="font-display text-sm font-bold uppercase tracking-wide text-white/80">Room Standings</h2>
+            <h2 className="font-display text-sm font-bold uppercase tracking-wide text-white/80">Room standings</h2>
             {/* The number IS the weighted total the table is ordered by —
                 CLAUDE.md's standings rule: a column between the rank and
                 the letter showing anything else makes the table look

@@ -88,7 +88,7 @@ export default function JukeValueAssistant({ player, vorp, tierLeft, onDraft, my
         Juke Value Assistant
       </p>
 
-      <p className="mt-3 text-[9px] font-semibold uppercase tracking-wide text-white/40">Recommended Pick</p>
+      <p className="mt-3 text-[9px] font-semibold uppercase tracking-wide text-white/40">Recommended pick</p>
       <div className="mt-1.5 flex items-center gap-2.5">
         <div className="relative flex h-9 w-9 lg:h-12 lg:w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-800 text-[9px] lg:text-xs font-bold text-white/40">
           {initialsFor(player)}

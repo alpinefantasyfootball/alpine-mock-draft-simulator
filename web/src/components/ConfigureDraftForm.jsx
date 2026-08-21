@@ -147,7 +147,7 @@ export default function ConfigureDraftForm({ mySlot: slotProp, onSlotChange }) {
 
   return (
     <div id="configure-draft" className="flex h-full flex-col rounded-2xl border border-white/10 bg-charcoal p-6 sm:p-8">
-      <h2 className="font-display text-xl font-bold text-white">Configure Draft</h2>
+      <h2 className="font-display text-xl font-bold text-white">Configure draft</h2>
       <p className="mt-1 text-sm text-white/50">Set the shape of the league, then jump in.</p>
 
       {hasRoomVal && (

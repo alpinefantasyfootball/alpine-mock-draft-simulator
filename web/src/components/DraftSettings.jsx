@@ -5,11 +5,23 @@ import DraftLocker from './DraftLocker.jsx'
 // already shows/hides correctly (home vs. draft route, setup vs. live
 // board) without this component ever reading location.hash itself. Same
 // contract the homepage's #root keeps: mount once, let app.js own routing.
+/* Unreachable as of the route retirement, and left in place rather than
+   deleted.
+
+   This mounts into #setup-root, which lives inside the legacy #view-app -
+   and #/draft now redirects while #/draft-legacy (the test-only door) is
+   gone, so no address reaches it. Everything it offered is on the lobby and
+   the settings modal now.
+
+   Kept because deleting it is a separate decision from retiring the route,
+   and because its mount in main.jsx is guarded: it costs a component that
+   never renders. Worth removing when somebody is sure - two settings screens
+   in one codebase is a trap if #view-app is ever made reachable again. */
 export default function DraftSettings() {
   return (
     <div className="flex min-h-full flex-col bg-obsidian px-6 py-8 text-white lg:px-10 lg:py-10">
       <div className="mb-6 shrink-0">
-        <h1 className="font-display text-2xl font-bold text-white sm:text-3xl">Draft Settings &amp; Locker</h1>
+        <h1 className="font-display text-2xl font-bold text-white sm:text-3xl">Draft settings &amp; locker</h1>
         <p className="mt-1 text-sm text-white/50">Set up a mock, or pick up where a past one left off.</p>
       </div>
 

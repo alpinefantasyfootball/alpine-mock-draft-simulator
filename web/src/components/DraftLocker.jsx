@@ -79,7 +79,7 @@ export default function DraftLocker() {
       />
 
       <div className="relative shrink-0 border-b border-white/5 px-6 py-5">
-        <h2 className="font-display text-xl font-bold text-white">Your Draft Locker</h2>
+        <h2 className="font-display text-xl font-bold text-white">Your draft locker</h2>
         <p className="mt-1 text-sm text-white/50">Every mock you've run — in progress or done.</p>
       </div>
 
