@@ -7,7 +7,7 @@ the app, not the brand: the header says "The Draft Room", Juke sits above it
 in the page title and the manifest.
 
 A fantasy football mock draft simulator, built for one specific ten-team
-league and now configurable from the setup screen: 8 to 14 teams, 8 to 20
+league and now configurable from the setup screen: 4 to 24 teams, 8 to 20
 rounds, any starting lineup, and standard, half or full PPR. That original
 league is still what every control defaults to.
 

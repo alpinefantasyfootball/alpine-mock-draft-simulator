@@ -88,6 +88,14 @@ export default function DraftRoom() {
   const engine = useEngine()
   useJukeTick(engine)
   const active = useHashActive('#/draft-room')
+  // A direct, bookmarkable link to the locker — previously there was none:
+  // the locker only ever showed as #/draft-room's own not-yet-entered
+  // state, so a finished draft's grade had no way back to it once you'd
+  // navigated anywhere else. Deliberately not folded into `active` itself
+  // — the live-draft-only effects below (autopick, etc.) all gate on
+  // `active` meaning specifically "on the live draft route", and widening
+  // it would let them fire while looking at the locker instead.
+  const draftsActive = useHashActive('#/drafts')
 
   const [search, setSearch] = useState('')
   const [posFilter, setPosFilter] = useState('ALL')
@@ -214,8 +222,34 @@ export default function DraftRoom() {
   // UI too, so this has to read it live rather than mirror a local copy).
   // Off-room it's just the local switch above.
   const autopick = roomActive ? !!(engine && engine.autoMe()) : soloAutopick
+  // hasRoom() ("in a room") rather than inRoom() ("the socket is up right
+  // now") — the same distinction CLAUDE.md's own dropped-socket section
+  // draws, and the one that matters here: a guest whose socket blips
+  // mid-draft is still in the room and must not be bounced back to the
+  // locker just because roomActive flickered false for a reconnect.
+  const hasRoomVal = engine ? engine.hasRoom() : false
 
   const started = engine ? !!engine.headerInfo().started : false
+  // enteredRoom only ever gets set true by the "Enter Draft Room" button
+  // (and the locker's own start-a-new-mock action) — there was no path
+  // that set it when a draft became started any other way, which is
+  // every path that matters more: resuming a saved draft, or a room
+  // broadcast landing on a guest who joined the URL directly. Without
+  // this, resuming from the locker flipped state.started but the screen
+  // just kept showing the locker forever, since enteredRoom || !started
+  // never followed. If a draft is genuinely running, "entered" is true
+  // by definition — there's no state where started should be true and
+  // this should still be showing Settings & Locker.
+  useEffect(() => { if (started) setEnteredRoom(true) }, [started])
+  // A real invite link (#/draft-room?room=CODE) joins the room over the
+  // socket the moment app.js boots — see joinRoom() in app.js — entirely
+  // independently of this component's own local enteredRoom state. Without
+  // this, a guest who clicked a friend's invite landed on "Your draft
+  // locker / Nothing in progress / Start your first mock" instead of the
+  // seats they were just invited to, and had to notice and press "Enter
+  // Draft Room" themselves to see them. Joining a room is never a fresh
+  // start, so it should never show the locker a fresh start shows.
+  useEffect(() => { if (hasRoomVal) setEnteredRoom(true) }, [hasRoomVal])
   // Computed up here, with the other pre-early-return fallbacks, so the
   // insights effect below can watch it — the later render code reuses this
   // same value rather than asking engine.draftOver() a second time.
@@ -273,13 +307,27 @@ export default function DraftRoom() {
     if (choice) engine.draftPlayer(choice)
   }, [active, engine, started, roomActive, soloAutopick, myTurn, overall])
 
-  if (!active || !engine) return null
+  if (!(active || draftsActive) || !engine) return null
+
+  // Enter takes you to #/draft-room whether you arrived here via that
+  // route already or via the direct #/drafts link — location.hash is a
+  // harmless no-op when it's already what it's being set to.
+  const enterDraftRoom = () => {
+    location.hash = '#/draft-room'
+    setEnteredRoom(true)
+  }
 
   // Before a draft exists, this is the exact same real form the setup
   // page uses — league size, scoring, pick clock, draft position, and its
   // own Resume/Discard for a save in progress — rather than this page
   // guessing at a seat and a clock length nobody chose.
-  if (!enteredRoom) {
+  //
+  // draftsActive forces this screen regardless of enteredRoom — it's the
+  // direct link back to the locker, and has to win even mid-draft (the
+  // chevron on the live status bar points here now); the enteredRoom sync
+  // effect above is what makes leaving it via Resume land back on the
+  // live board rather than stranding you here.
+  if (draftsActive || !enteredRoom) {
     /* Settings & Locker, full bleed, board-free.
 
        This was three equal columns — Configure Draft, Draft with friends, and
@@ -295,7 +343,10 @@ export default function DraftRoom() {
        Resume and Discard were checked before the Configure column went:
        DraftInProgressCard inside the Locker owns both, so a saved draft is
        still resumable. ConfigureDraftForm only ever read the save to pre-fill
-       its own fields.
+       its own fields — it's gone now (nothing imported it anywhere in the
+       app), which is also why DraftLocker's own empty-state CTA needed
+       rewiring rather than continuing to scroll to a form that no longer
+       exists.
 
        z-[60], not z-40: #root (Homepage) never unmounts — a separate React
        root behind this one, per main.jsx — and its own fixed header is z-50.
@@ -312,7 +363,7 @@ export default function DraftRoom() {
              you leaving this screen at all. */
           startDisabled={!!problem}
           onOpenSettings={() => setSettingsOpen(true)}
-          onStart={() => setEnteredRoom(true)}
+          onStart={enterDraftRoom}
         />
 
         {settingsOpen && (
@@ -327,7 +378,7 @@ export default function DraftRoom() {
 
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-3 py-5 lg:px-4">
           <div className="mx-auto w-full max-w-[1600px]">
-            <DraftLocker />
+            <DraftLocker onStartNew={enterDraftRoom} />
           </div>
         </div>
       </div>
@@ -350,6 +401,7 @@ export default function DraftRoom() {
       <div className="fixed inset-0 z-[60] flex flex-col bg-[#0B0E14] text-white">
         <DraftRoomStatusBar
           preDraft
+          problem={problem}
           startLabel={startLabel}
           startDisabled={!!problem || (roomActive && !engine.isHost())}
           onStartDraft={() => {
@@ -420,8 +472,8 @@ export default function DraftRoom() {
   // a room, and both disappear once the draft is over. Discard/"Leave the
   // room" stays offered either way; only its label and danger styling
   // change. draftIsOver itself is computed above the early returns, where
-  // the insights effect needs it.
-  const hasRoomVal = engine.hasRoom()
+  // the insights effect needs it. hasRoomVal itself is computed further up,
+  // above the early returns — the enteredRoom sync effect needs it there.
   const showUndo = !draftIsOver && !hasRoomVal
 
   const lineup = engine.seatedLineup()

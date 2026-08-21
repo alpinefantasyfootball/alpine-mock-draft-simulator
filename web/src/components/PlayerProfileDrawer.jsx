@@ -80,7 +80,14 @@ export default function PlayerProfileDrawer({ player, onClose, photoFor, initial
              that looks fine until it silently is not there. An opaque
              surface cannot fail that way, and this project already has the
              rule: translucency over a busy ground is a false economy. */
-          className="absolute inset-0 z-20 flex flex-col border-l border-slate-800 bg-[#0B0E14]"
+          /* z-40, not z-20: PlayerQueueSidebar's own sticky column header
+             two rows down is z-30 (its "PLAYER · ADP · BYE..." row), and
+             this drawer shares its relative ancestor with that sidebar —
+             so a z-20 overlay sat *underneath* the list it was supposed to
+             cover, and the header band painted straight across every tab
+             of the open sheet. This has to clear every z-30 in this panel,
+             not just that one, since it's meant to be a full overlay. */
+          className="absolute inset-0 z-40 flex flex-col border-l border-slate-800 bg-[#0B0E14]"
         >
           <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-800 p-4">
             <div className="flex min-w-0 items-center gap-3">

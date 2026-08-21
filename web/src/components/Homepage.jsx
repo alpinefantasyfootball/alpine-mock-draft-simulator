@@ -47,7 +47,31 @@ export default function Homepage() {
       </main>
 
       <footer className="relative border-t border-white/5 py-8 text-center text-xs text-white/30">
-        Juke runs entirely in your browser. Nothing you draft is sent anywhere.
+        {/* The old line — "runs entirely in your browser, nothing you draft
+            is sent anywhere" — was unqualified, and it's wrong the moment a
+            room exists: the room worker holds the seats, the picks and the
+            chat while it's open, and docs/draft-room-how-it-works.html
+            already scopes the claim correctly (section 01, section 08). This
+            says the same true thing the docs say, not a second, looser one. */}
+        <p>
+          A solo mock draft runs entirely in your browser — nothing you draft is sent anywhere.
+          Drafting with your league uses a server, just for that room.
+        </p>
+        <p className="mt-2 flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
+          {[
+            { href: '/docs/draft-room-how-it-works.html', label: 'How it works' },
+            { href: '/docs/privacy.html', label: 'Privacy' },
+            { href: '/docs/terms.html', label: 'Terms' },
+          ].map((link) => (
+            <a
+              key={link.href}
+              href={link.href}
+              className="text-white/40 underline decoration-white/20 underline-offset-2 transition-colors hover:text-white/60"
+            >
+              {link.label}
+            </a>
+          ))}
+        </p>
       </footer>
     </div>
   )

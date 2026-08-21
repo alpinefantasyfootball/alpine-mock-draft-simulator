@@ -92,8 +92,13 @@ test("nothing is sitting on top of the Start button", async ({ browser }) => {
 
   const r = await page.evaluate(() => {
     const root = document.getElementById("draftroom-root");
+    // "Enter Draft Room" now, not "Start Draft" — Settings & Locker is the
+    // first screen since the seat-picker moved to its own step, but the
+    // property this test is actually checking (the one CTA this screen
+    // exists to get you to press has to be pressable) is unchanged; only
+    // the label is.
     const btn = [...root.querySelectorAll("button")]
-      .find((b) => /start draft|start for everyone/i.test(b.textContent || ""));
+      .find((b) => /start draft|start for everyone|enter draft room/i.test(b.textContent || ""));
     if (!btn) return { found: false };
     const b = btn.getBoundingClientRect();
     // Whatever the browser says is actually under the pointer at the button's

@@ -33,6 +33,15 @@ import { openApp, createRoom, roomView, sent, waitForRoom, pickGaps, median, per
    chairs got filled by the right two clients, and that question is answered
    by what each socket sent, not by what either page happened to draw. */
 async function startRoomDraft(page) {
+  // createRoom() (helpers.mjs) creates the room through the engine bridge
+  // directly, which has no way to reach React's own local enteredRoom
+  // state — so the host is still sitting on Settings & Locker, one click
+  // short of the screen "Start for everyone" is actually on. Optional,
+  // not asserted: a page already past it (mid-test, or an older build)
+  // just won't have the button.
+  const enter = page.locator('#draftroom-root button:text-is("Enter Draft Room")');
+  if (await enter.count()) await enter.click();
+
   await page.click("#draftroom-root >> text=/Start for everyone|Start draft/");
   await page.waitForFunction(() => Live.room() && Live.room().status === "drafting",
     null, { timeout: 20000 });

@@ -8,11 +8,12 @@ const TABS = [
   { key: 'completed', label: 'Completed' },
 ]
 
-function EmptyState({ title, body }) {
-  const scrollToForm = () => {
-    document.getElementById('configure-draft')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }
-
+// onStart, not a scroll to a form on this same page — that form
+// (ConfigureDraftForm.jsx) is gone; every league setting it held now
+// lives on the settings modal, which only exists once you're past this
+// screen. This is a brand-new visitor's very first action in the app, so
+// it goes to the same place "Enter Draft Room" does.
+function EmptyState({ title, body, onStart }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-5 px-6 py-16 text-center">
       <svg width="88" height="88" viewBox="0 0 88 88" fill="none" aria-hidden="true">
@@ -36,7 +37,7 @@ function EmptyState({ title, body }) {
 
       <button
         type="button"
-        onClick={scrollToForm}
+        onClick={onStart}
         className="rounded-full bg-gradient-to-r from-[#00E5FF] to-[#7B1FA2] px-5 py-2.5 text-sm font-semibold text-white
                    shadow-glass transition-all duration-200 hover:scale-105 hover:shadow-[0_0_15px_rgba(0,229,255,0.4)]"
       >
@@ -46,7 +47,7 @@ function EmptyState({ title, body }) {
   )
 }
 
-export default function DraftLocker() {
+export default function DraftLocker({ onStartNew }) {
   const engine = useEngine()
   useJukeTick(engine)
   const [view, setView] = useState('progress')
@@ -60,11 +61,18 @@ export default function DraftLocker() {
   const inProgress = engine ? engine.inProgressSummary() : null
   const completed = engine ? engine.historyList() : []
 
-  // openHistoryDraft() and resumeSavedDraft() both switch the whole screen
-  // over to the Draft Room's own view (Analysis for a finished draft, the
-  // board for one still running) — app.js's own DOM takes it from here.
-  const analyze = (id) => { if (engine) engine.openHistoryDraft(id) }
-  const resume = () => { if (engine) engine.resumeSavedDraft() }
+  // openHistoryDraft() and resumeSavedDraft() both flip state.started —
+  // engine.js's own data layer, not the screen. DraftRoom.jsx is what
+  // actually decides what's on screen (enteredRoom/started), and this
+  // locker can be reached two ways now: as #/draft-room's own
+  // not-yet-entered state, or directly via #/drafts. The hash push here
+  // covers the second case — a no-op if we're already on #/draft-room,
+  // and what actually leaves the locker screen if we're not. Without it,
+  // resuming from a direct /#drafts link flipped state.started but the
+  // locker just kept showing, since draftsActive alone was enough to keep
+  // rendering it.
+  const analyze = (id) => { if (engine) { engine.openHistoryDraft(id); location.hash = '#/draft-room' } }
+  const resume = () => { if (engine) { engine.resumeSavedDraft(); location.hash = '#/draft-room' } }
   const discard = () => {
     if (!engine) return
     engine.clearSave()
@@ -119,12 +127,14 @@ export default function DraftLocker() {
           <EmptyState
             title="Nothing in progress"
             body="Start a mock and it'll sit here while you draft, so you can pick up right where you left off."
+            onStart={onStartNew}
           />
         )
       ) : completed.length === 0 ? (
         <EmptyState
           title="Your locker is empty"
           body="Finish a mock draft and it lands here — league type, your slot, and how the board graded it."
+          onStart={onStartNew}
         />
       ) : (
         <div className="relative flex-1 overflow-y-auto px-6 py-5">

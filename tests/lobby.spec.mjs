@@ -40,6 +40,11 @@ test("two managers, one board: a claimed chair shows as taken to everybody",
     const hostCtx = await browser.newContext();
     const host = await openApp(hostCtx, "#/draft-room");
 
+    // A fresh visit lands on Settings & Locker first now — seat-picking is
+    // its own screen one step further in. "Enter Draft Room" is the one
+    // thing that screen asks for.
+    await host.locator("#draftroom-root button").filter({ hasText: /^Enter Draft Room$/ }).click();
+
     // The lobby is the pre-draft screen, so no draft is started anywhere here.
     await expect.poll(() => claimChips(host).then((c) => c.length)).toBeGreaterThan(0);
 

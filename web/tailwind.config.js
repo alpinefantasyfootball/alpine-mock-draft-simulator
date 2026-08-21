@@ -7,6 +7,15 @@ export default {
         obsidian: '#0B0E14',
         charcoal: '#151923',
         teal: {
+          // Continues the same +10%-lightness-per-step pattern 400/500/600
+          // already use (hue 186, 100% saturation throughout — 40/50/60%
+          // lightness) — not picked separately. Added because text-teal-300
+          // was in real use (AnalysisTab.jsx, DraftBoardGrid.jsx) with no
+          // 300 defined here, so it silently fell back to Tailwind's own
+          // stock teal-300 (a different, more green hue) instead of brand
+          // teal — the same "one color, two answers" drift this project
+          // has already found and fixed for the position palette.
+          300: '#66F0FF',
           DEFAULT: '#00E5FF',
           400: '#33EAFF',
           500: '#00E5FF',
@@ -29,7 +38,15 @@ export default {
         glass: '16px',
       },
       fontFamily: {
-        display: ['"Poppins"', 'system-ui', 'sans-serif'],
+        // Poppins was never actually requested from Google Fonts (only
+        // Barlow Condensed/Inter/Archivo are, per index.html) — a stale
+        // leftover from before the 18 Aug rebrand, which swapped display
+        // faces on the legacy style.css side specifically because Poppins
+        // matched Sleeper, but never touched this file. Every font-display
+        // heading and the grade glyph itself fell back to system-ui the
+        // entire time. Barlow Condensed is already loaded; this costs no
+        // extra network request, it just points at the font that's there.
+        display: ['"Barlow Condensed"', '"Arial Narrow"', 'system-ui', 'sans-serif'],
         body: ['"Inter"', 'system-ui', 'sans-serif'],
       },
       keyframes: {

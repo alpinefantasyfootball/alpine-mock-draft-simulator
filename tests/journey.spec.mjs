@@ -45,6 +45,14 @@ test("homepage to a finished draft, pressing only what a person can press",
     expect(await doors.count(), "the homepage offers a way in").toBeGreaterThan(0);
     await doors.first().click();
 
+    // The door lands on Settings & Locker first, not the seat-picker
+    // directly — seat-picking moved to its own screen one step further in.
+    // "Enter Draft Room" is the one thing that screen asks for, exactly
+    // the same button the phone/solo/room specs already learned to press.
+    const enter = page.locator("#draftroom-root button").filter({ hasText: /^Enter Draft Room$/ });
+    await expect(enter, "Settings & Locker asks for one thing").toBeVisible({ timeout: 30000 });
+    await enter.click();
+
     await page.waitForFunction(() => {
       const root = document.getElementById("draftroom-root");
       return root && /Your seat/.test(root.innerText || "");
@@ -146,22 +154,31 @@ test("homepage to a finished draft, pressing only what a person can press",
       return /Draft Grade|THE ONE THAT GOT AWAY|One That Got Away/i.test(root.innerText || "");
     }), { timeout: 30000 }).toBe(true);
 
-    const shown = await page.evaluate(() => {
+    const result = await page.evaluate(() => {
       const root = document.getElementById("draftroom-root");
       const all = analyseDraft();
       const rows = [...root.querySelectorAll("button")]
         .map((b) => (b.textContent || "").trim())
         .filter((t) => /^\d+/.test(t) && all.some((x) => t.includes(JukeEngine.teamLabel(x.slot))));
-      return rows.map((t) => {
+      const shown = rows.map((t) => {
         const rank = parseInt(t, 10);
         const m = t.match(/(\d+)([A-F][+-]?)$/);
         return { rank, total: m ? +m[1] : null, grade: m ? m[2] : null };
       });
+      // Sorted the same way the standings table itself sorts (AnalysisTab.jsx:
+      // `all.slice().sort((a,b) => a.rank - b.rank)`), so row order lines up.
+      const expectedRanks = all.slice().sort((a, b) => a.rank - b.rank).map((t) => t.rank);
+      return { shown, expectedRanks };
     });
 
-    expect(shown.length, "the standings list the room").toBe(out.teams);
-    expect(shown.map((r) => r.rank), "in finishing order")
-      .toEqual([...Array(out.teams).keys()].map((i) => i + 1));
+    expect(result.shown.length, "the standings list the room").toBe(out.teams);
+    // Not asserted as the bijection [1, 2, ..., teams]: two teams tied on
+    // their rounded total now legitimately share a rank (see analyseDraft()),
+    // so the real check is the one this step exists for — that the number on
+    // screen is the number the engine computed, ties and all — not an assumed
+    // shape that happens to hold only when nobody ties.
+    expect(result.shown.map((r) => r.rank), "matches what the engine computed, in finishing order")
+      .toEqual(result.expectedRanks);
 
     await context.close();
   });

@@ -44,6 +44,7 @@ function IconButton({ onClick, disabled, danger, title, children }) {
 // than a second hand-rolled animation — see tailwind.config.js.
 export default function DraftRoomStatusBar({
   preDraft,
+  problem,
   startLabel,
   startDisabled,
   onStartDraft,
@@ -77,20 +78,21 @@ export default function DraftRoomStatusBar({
           looked like a flaky test. Three at 4px is 12, and it fits with
           room to spare. */
       className="fixed inset-x-0 top-0 z-50 flex h-14 shrink-0 items-center gap-1 border-b border-white/5 bg-obsidian/80 px-3 backdrop-blur-md sm:gap-4 sm:px-6">
-      {/* Leaving via either of these (real navigation, home route) is not
-          the same action as Discard/"Leave the room" further right — see
-          CLAUDE.md: leaving the draft screen stops the clock without
-          clearing the save, only Discard does that. All three controls
-          coexist on purpose.
+      {/* Leaving via either of these (real navigation) is not the same
+          action as Discard/"Leave the room" further right — see CLAUDE.md:
+          leaving the draft screen stops the clock without clearing the
+          save, only Discard does that. All three controls coexist on
+          purpose.
 
-          The chevron is the explicit "go back" affordance the lobby's own
-          bar used to carry — moved here because this is the screen a
-          manager is actually two steps deep on and might want out of, not
-          the lobby they just arrived at. It goes to the same #/ route the
-          logo already did; it's a second, more legible way to trigger the
-          identical non-destructive leave, not a second action. */}
+          The chevron goes to #/drafts, not #/ — its own aria-label always
+          said "back to your draft locker", but for one session it actually
+          went to the marketing homepage instead, which made the label a
+          promise the control didn't keep. #/drafts is now a real,
+          bookmarkable route to the locker (DraftRoom.jsx), so this is the
+          direct, correct destination rather than a second way to reach
+          home. */}
       <a
-        href="#/"
+        href="#/drafts"
         aria-label="Back to your draft locker"
         title="Back to your draft locker"
         className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-slate-800 bg-slate-950/60 text-white/50 transition-colors duration-150 hover:border-slate-700 hover:text-white sm:h-8 sm:w-8"
@@ -111,8 +113,19 @@ export default function DraftRoomStatusBar({
           64px is enough for a truncated "Round 6" even at the narrowest
           supported width; Undo below sm is what actually pays for it. */}
       <div className="flex min-w-[52px] flex-1 flex-col justify-center leading-tight sm:flex-none sm:shrink-0">
-        <span className="truncate font-display text-xs font-bold text-white sm:text-sm">
-          {preDraft ? 'Choose your seat' : roundText}
+        {/* Same message LobbyBar.jsx shows in its own banner for the same
+           `problem` string — this screen has no room for a second banner
+           row under a fixed h-14 bar, so it takes over the one label slot
+           instead. Truncated like everything else here, but never silent:
+           the full text is still in the title, and the button below
+           carries it too. Before this, an invalid league (say 24 teams
+           over 14 rounds) disabled Start Draft with nothing on the page
+           explaining why — the explanation existed, just one screen back. */}
+        <span
+          className="truncate font-display text-xs font-bold text-white sm:text-sm"
+          title={preDraft && problem ? problem : undefined}
+        >
+          {preDraft ? (problem || 'Choose your seat') : roundText}
           {!preDraft && code && <span className="ml-1 text-white/40">({code})</span>}
         </span>
         {!preDraft && (
@@ -174,6 +187,7 @@ export default function DraftRoomStatusBar({
               type="button"
               onClick={onStartDraft}
               disabled={startDisabled}
+              title={problem || undefined}
               className={
                 'shrink-0 rounded-full px-4 py-1.5 text-xs font-semibold sm:px-5 sm:py-2 sm:text-sm ' +
                 (startDisabled

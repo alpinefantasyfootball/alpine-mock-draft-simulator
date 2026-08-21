@@ -37,8 +37,15 @@ async function configure(page, patch) {
   }
 }
 
-/* The real button, in the real lobby. The whole point of this file. */
+/* The real buttons, in the real lobby — now two clicks, not one.
+   "Enter Draft Room" only exists since the Settings & Locker / choose-your-
+   seat split; a run against an older build (or a page that landed on
+   #/draft-room mid-draft, already past it) won't have that button at all,
+   which is why it's optional here rather than asserted. */
 async function startViaButton(page) {
+  const enter = page.locator('#draftroom-root button:text-is("Enter Draft Room")');
+  if (await enter.count()) await enter.click();
+
   const refused = await page.evaluate(() => {
     const root = document.getElementById("draftroom-root");
     const btn = [...root.querySelectorAll("button")]
@@ -148,6 +155,9 @@ for (const pos of ["ALL", "QB", "RB", "WR", "TE", "K", "DST"]) {
     const page = await openApp(context, "#/draft-room");
 
     await configure(page, { teams: 12 });
+    // The claimable seat board is the choose-your-seat screen now, one
+    // click past Settings & Locker — not visible until this fires.
+    await page.locator('#draftroom-root button:text-is("Enter Draft Room")').click();
     await page.evaluate(() => {
       // The eleventh seat, which is where the real report came from.
       const root = document.getElementById("draftroom-root");
@@ -400,6 +410,49 @@ test("auto-draft the rest finishes the board, and is not offered in a room",
 
     // Nothing left to draft, so nothing to offer.
     await expect(finish, "and it goes away when the board is full").toHaveCount(0);
+
+    await context.close();
+  });
+
+/* MODEL_CAP alone was a percentage of ADP, and a percentage of a growing
+   number grows with it: 25% off pick 10 is 2.5 picks, invisible; 25% off
+   pick 150 is 37.5, a real reach — which draft value (the grade's own
+   value component) then penalised as exactly that. A real mock found the
+   suggestion engine discount a pick to -23 and autopick another to -37,
+   with Draft Insights naming the second the biggest reach of the draft —
+   the recommendation and the grade disagreeing about the same pick.
+
+   Tested at the source (modelMultipliers()) rather than by running a full
+   draft and inspecting the resulting reach: the realised gap on a picked
+   player is also shaped by needMultiplier and risk, so asserting an end-
+   to-end "reach" number would be testing three mechanisms at once and
+   could pass or fail for the wrong reason. This is the one property that
+   actually changed — the model's own discount, converted to picks, never
+   exceeds MODEL_CAP_PICKS — the same "test the property, not the
+   arithmetic" rule this file already follows for pick codes. */
+test("the suggestion model's discount is capped in absolute picks, not just percentage",
+  async ({ browser }) => {
+    const context = await browser.newContext();
+    const page = await openApp(context, "#/draft-room");
+    await startViaButton(page);
+
+    const out = await page.evaluate(() => {
+      const pool = board.filter((p) => !p.drafted);
+      const multiplier = modelMultipliers(pool);
+      const violations = [];
+      pool.forEach((p) => {
+        if (!p.adp || p.adp <= 0) return;
+        const cutPicks = p.adp * (1 - multiplier(p));
+        if (cutPicks > MODEL_CAP_PICKS + 1e-6) {
+          violations.push(`${p.name} at ADP ${p.adp}: model cut ${cutPicks.toFixed(1)} picks`);
+        }
+      });
+      return { violations, checked: pool.length, cap: MODEL_CAP_PICKS };
+    });
+
+    expect(out.checked, "a real board was actually checked").toBeGreaterThan(100);
+    expect(out.cap).toBe(20);
+    expect(out.violations).toEqual([]);
 
     await context.close();
   });

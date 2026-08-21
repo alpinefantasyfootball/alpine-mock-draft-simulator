@@ -2276,6 +2276,27 @@ function clockText() {
    actually be gone, and advice that forgets that is not advice. */
 const MODEL_CAP = 0.25;   // the market still decides the shape of the list
 
+/* A percentage cap alone is not a cap on the reach it produces, because
+   the thing it is a percentage *of* grows with ADP: a quarter off pick 10
+   is 2.5 picks, invisible; a quarter off pick 150 is 37.5, which is a
+   real reach — and draft value (the grade's own value component) then
+   penalises exactly that pick for exactly the discount the suggestion
+   engine just gave it. Confirmed on a real mock: the app's own suggestion
+   discounted a pick to -23, autopicked another to -37, and Draft Insights
+   named the second one the biggest reach of the draft — the recommendation
+   engine and the grade engine disagreeing about the same pick in public,
+   which is the one thing a product whose whole pitch is "show your
+   working" cannot do.
+
+   MODEL_CAP stays exactly as it was — it is still what makes the early
+   rounds work, and 2.5 picks of headroom there was never the problem.
+   This bounds what it is allowed to produce in absolute picks once ADP
+   itself gets large enough to make the percentage misbehave. 20 is chosen
+   so the cap only ever engages past roughly pick 80 (20 / 0.25 = 80),
+   which is exactly where the percentage was already doing real work
+   without yet being a reach — the early rounds are untouched. */
+const MODEL_CAP_PICKS = 20;
+
 /* Measured against the best player still available, not the best the board
    ever held. overallScore() is a share of BEST_VOR, which is fixed for the
    whole draft, so by the fifth round everyone left scores single figures and
@@ -2296,7 +2317,13 @@ function modelMultipliers(pool) {
     if (!best) return 1;                       // nobody has a projection
     const ovr = overallScore(player);
     if (ovr === null) return 1;                // no opinion, leave him at market
-    return 1 - Math.min(1, ovr / best) * MODEL_CAP;
+    if (!player.adp || player.adp <= 0) return 1 - Math.min(1, ovr / best) * MODEL_CAP;
+    // The percentage, converted to picks and clamped, then converted back
+    // to the ratio suggestions() already multiplies the score by — the
+    // contract this function returns doesn't change, only what it's
+    // allowed to produce once ADP is large.
+    const rawCut = player.adp * Math.min(1, ovr / best) * MODEL_CAP;
+    return 1 - Math.min(rawCut, MODEL_CAP_PICKS) / player.adp;
   };
 }
 
@@ -3050,8 +3077,16 @@ const WEIGHTS = { starters: 0.50, value: 0.25, build: 0.15, byes: 0.10 };
 
 // Long enough for a 14-team room. The first ten are unchanged, so a
 // ten-team draft grades exactly as it did before.
-const GRADE_SCALE = ["A+", "A", "A-", "B+", "B", "B-", "C+", "C", "C-",
-                     "D+", "D", "D-", "F+", "F"];
+//
+// A real minus sign (−), not an ASCII hyphen: the grade glyph is
+// drawn at 72px under bg-clip-text (DraftInsightsDashboard.jsx), where a
+// hyphen — meant for joining words, not standing alone as an operator —
+// sits noticeably high and short next to a letter that size. This was
+// most visible while font-display was silently falling back to
+// system-ui (see tailwind.config.js), but a proper minus reads correctly
+// under any face, which a hyphen standing in for one does not.
+const GRADE_SCALE = ["A+", "A", "A−", "B+", "B", "B−", "C+", "C", "C−",
+                     "D+", "D", "D−", "F+", "F"];
 
 // How much better than a replacement-level starter this player is,
 // measured in places up the positional board.
@@ -3303,15 +3338,32 @@ function analyseDraft() {
             + t.byePenaltyScaled * WEIGHTS.byes;
   });
 
-  all.slice().sort((a, b) => b.total - a.total).forEach(function (t, i) {
-    t.rank = i + 1;
+  const sorted = all.slice().sort((a, b) => b.total - a.total);
+  sorted.forEach(function (t, i) {
+    /* A tie shares a rank and a letter, rather than breaking on whichever
+       way .sort() happened to leave them ordered. Compared as the rounded
+       number the standings table and the share card actually show
+       (Math.round(t.total)) — the same figure a reader would use to
+       notice the tie in the first place, so grading has to agree with
+       what a rounded tie looks like on screen. Two teams could share a
+       rank and disagree past it only by an unrounded fraction nothing on
+       screen ever reveals, which is not a real distinction to grade on.
+
+       rank does not just increment past a tie (1, 2, 2, 4 — never
+       1, 2, 2, 3): the team one place behind two tied ones really is
+       fourth, the same convention any league table already uses, and
+       it is what keeps GRADE_SCALE's own index meaningful — the letter
+       at index 3 has to mean "fourth", tie or not. */
+    t.rank = (i > 0 && Math.round(t.total) === Math.round(sorted[i - 1].total))
+      ? sorted[i - 1].rank
+      : i + 1;
     /* Clamped, because the scale is fourteen long and TEAM_COUNTS goes to
        twenty-four. A sixteen-team room put the word "undefined" in the
        standings against fifteenth and sixteenth, on screen, for anyone who
        set one up. Everything at fourteen teams or fewer is unchanged; past
        that the bottom of the room shares an F, which is honest — they are
        all last in a room bigger than the scale was drawn for. */
-    t.grade = GRADE_SCALE[Math.min(i, GRADE_SCALE.length - 1)];
+    t.grade = GRADE_SCALE[Math.min(t.rank - 1, GRADE_SCALE.length - 1)];
   });
 
   return all;

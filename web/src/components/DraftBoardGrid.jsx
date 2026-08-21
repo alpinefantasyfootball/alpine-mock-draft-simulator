@@ -187,18 +187,20 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
   const DE = typeof window !== 'undefined' ? window.DraftEngine : null
   const teams = league.teams
   const rounds = league.rounds
-  /* Two different column rules, because the board now has two different
-     jobs. Below lg it is a scrollable grid inside a phone: every column
-     keeps a real 112px floor and the whole thing is wider than the
-     viewport on purpose. At lg+ the board owns the full window width —
-     that is the entire reason the desktop layout became a horizontal
-     split — so columns share it evenly and all ten teams fit without
-     scrolling sideways. A 0 floor is what lets them: minmax(112px, 1fr)
-     still refuses to shrink past 112 each, which is 1184px of columns
-     before the round rail, and that overflowed a 1569px content box once
-     the cells' own content pushed them wider. */
+  /* Two column rules, but both now carry a real floor — the difference
+     between them is only the floor's size and the header rail's width.
+     colsWide used to be minmax(0, 1fr): no floor at all, specifically so
+     ten teams could share the window with no horizontal scroll. Measured
+     at a real 1103px desktop width, that traded away the thing it was
+     supposed to protect — a player name needs roughly 110-170px to read,
+     and 0-floor columns render every card as a position badge and a
+     clipped initial. An unreadable board is worse than a scrollable one,
+     and Sleeper's own board — the thing this split layout was already
+     benchmarked against — scrolls rather than compresses. 120px is under
+     what a long name wants at the widest league sizes, which is exactly
+     why the horizontal scroll stays: this is a floor, not a fit. */
   const cols = `64px repeat(${teams}, minmax(112px, 1fr))`
-  const colsWide = `56px repeat(${teams}, minmax(0, 1fr))`
+  const colsWide = `56px repeat(${teams}, minmax(120px, 1fr))`
 
   return (
     // w-full h-full, not a flex-basis of its own: DraftRoom.jsx now wraps
@@ -224,11 +226,14 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
       {/* The two column rules reach CSS as custom properties so the
           breakpoint can pick between them — a `style` prop cannot carry a
           media query, and this is one grid with two shapes rather than two
-          grids. min-w-max likewise drops to min-w-0 at lg+: it is what
-          forces the scroll below lg and what would prevent the fit above
-          it. */}
+          grids. min-w-max stays true at lg+ now too: it's what makes the
+          grid actually claim its natural (floor-respecting) width instead
+          of shrinking to fit the container, which is what forces this
+          wrapper's own overflow-x-auto to engage instead of the columns
+          quietly going back to 0. Dropping to lg:min-w-0 was the earlier,
+          rejected shape — see the comment on colsWide above. */}
       <div
-        className="grid min-w-max auto-rows-[minmax(34px,auto)] pb-28 [grid-template-columns:var(--cols)] lg:min-w-0 lg:pb-0 lg:[grid-template-columns:var(--cols-wide)]"
+        className="grid min-w-max auto-rows-[minmax(34px,auto)] pb-28 lg:pb-0 [grid-template-columns:var(--cols)] lg:[grid-template-columns:var(--cols-wide)]"
         style={{ '--cols': cols, '--cols-wide': colsWide }}
       >
         {/* header row */}
@@ -288,7 +293,10 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
                   already reads the right seat — the label was the one still
                   asking the stale source, which is why it stuck to whichever
                   seat was mine before you clicked a different chair. */}
-              <span className="w-full truncate text-center text-[11px] font-semibold text-white/50">
+              <span
+                className="w-full truncate text-center text-[11px] font-semibold text-white/50"
+                title={who || (mine ? 'Your Team' : teamLabelOf(s))}
+              >
                 {who || (mine ? 'Your Team' : teamLabelOf(s))}
               </span>
             </div>
@@ -427,7 +435,7 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
                               the same reason: an initial plus a surname reads
                               as a person where a surname alone reads as a row
                               in a table. Never re-derived here. */}
-                          <p className="min-w-0 truncate text-xs font-semibold">
+                          <p className="min-w-0 truncate text-xs font-semibold" title={pick.player.name}>
                             {shortNameOf ? shortNameOf(pick.player) : pick.player.name}
                           </p>
                           {gap != null && (

@@ -86,6 +86,44 @@ function Stepper({ value, onAdd, onRemove, disabled, min = 0, max = 9 }) {
   )
 }
 
+/* Committing per keystroke was the real bug, not just a missing max.
+   pointsFromDivisor(0) (app.js) returns 0 rather than being rejected —
+   `!n` is true for a literal zero in JS, and that function treats it the
+   same as "field left blank" — so typing "0" into "1 point every N yards"
+   silently scored that stat at zero, live, on every keystroke while
+   typing, not just on whatever got left at blur. Local text state while
+   typing; one real commit on blur (or Enter), and only if it parses to a
+   sane divisor — otherwise the field reverts to the last value that
+   actually made it into league.rules, which is the field's own feedback
+   that the edit didn't take. */
+function DivisorInput({ rule, disabled, onCommit }) {
+  const [text, setText] = useState(String(rule.divisor))
+  // Follows rule.divisor when it changes for a reason other than this
+  // input's own edits — Reset, or another manager's settings arriving in
+  // a room — not just on mount.
+  useEffect(() => { setText(String(rule.divisor)) }, [rule.divisor])
+
+  const commit = () => {
+    const n = Number(text)
+    if (text.trim() === '' || !isFinite(n) || n < 1 || n > 999) {
+      setText(String(rule.divisor))
+      return
+    }
+    onCommit(n)
+  }
+
+  return (
+    <input
+      type="number" min="1" max="999" step="1" value={text} disabled={disabled}
+      title="1 to 999 yards"
+      onChange={(e) => setText(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
+      className="w-16 rounded-lg border border-slate-700 bg-slate-950 px-2 py-1 text-base tabular-nums text-white disabled:text-white/30 lg:text-sm"
+    />
+  )
+}
+
 export default function DraftSettingsModal({ engine, onClose, started, inRoom, mySlot }) {
   const [tab, setTab] = useState('General')
   /* Pick a seat up, then put it down on another - the same two taps the
@@ -356,16 +394,16 @@ export default function DraftSettingsModal({ engine, onClose, started, inRoom, m
                           {rule.perYard ? (
                             <span className="flex items-center gap-1.5">
                               <span className="text-[11px] text-white/40">1 pt every</span>
-                              <input
-                                type="number" min="1" step="1" value={rule.divisor} disabled={locked}
-                                onChange={(e) => { engine.setScoringRule(rule.key, e.target.value, true); redraw() }}
-                                className="w-16 rounded-lg border border-slate-700 bg-slate-950 px-2 py-1 text-base tabular-nums text-white disabled:text-white/30 lg:text-sm"
+                              <DivisorInput
+                                rule={rule}
+                                disabled={locked}
+                                onCommit={(n) => { engine.setScoringRule(rule.key, n, true); redraw() }}
                               />
                               <span className="text-[11px] text-white/40">yds</span>
                             </span>
                           ) : (
                             <input
-                              type="number" step="0.5" value={rule.value} disabled={locked}
+                              type="number" step="0.5" min="-99" max="99" value={rule.value} disabled={locked}
                               onChange={(e) => { engine.setScoringRule(rule.key, e.target.value); redraw() }}
                               className="w-20 rounded-lg border border-slate-700 bg-slate-950 px-2 py-1 text-base tabular-nums text-white disabled:text-white/30 lg:text-sm"
                             />
