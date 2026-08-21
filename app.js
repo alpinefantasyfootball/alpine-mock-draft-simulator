@@ -7094,7 +7094,22 @@ window.JukeEngine = {
     const gap = replacementGap(player);
     const unranked = player.projPts !== null && score === null;
     return {
-      score: score,
+      /* Rounded here, not at the render.
+
+         overallScore() is a share of the best figure on the board, so it
+         comes out with a full float's worth of decimals - and this readout is
+         the display boundary. Every other number in this object already goes
+         through Math.round; this one did not, and the sheet printed a Juke
+         score of 65.39900249376561 where the same value renders as 65 in the
+         player table (which formats with Math.round of its own) and 65 in the
+         legacy strip. One number with two presentations, and the raw one was
+         only on the screen somebody opens *because* they want the number
+         explained.
+
+         The rounding stops here and does not reach overallScore() itself:
+         modelMultipliers() divides by it, so rounding the source would move
+         the suggestions rather than tidy a label. */
+      score: score === null ? null : Math.round(score),
       label: score === null ? null : label(score),
       // Un-clamped points above/below a replacement starter. Two zeros
       // are not equal and this is what says so.

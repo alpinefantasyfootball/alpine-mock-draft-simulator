@@ -67,7 +67,20 @@ export default function PlayerProfileDrawer({ player, onClose, photoFor, initial
           animate={{ x: 0 }}
           exit={{ x: '100%' }}
           transition={{ type: 'spring', stiffness: 340, damping: 34 }}
-          className="absolute inset-0 z-20 flex flex-col border-l border-slate-800 bg-[#0B0E14]/95 backdrop-blur-xl"
+          /* Opaque, not frosted. This was bg-[#0B0E14]/95 with a
+             backdrop-blur, and what sits behind it is the stat table - a
+             dense grid of small, high-contrast type. Five per cent of that
+             is legible, and it landed across the Juke score: "PROJECTED",
+             "PASSING", "RUSHING" and a row of column heads reading straight
+             through the one number this panel exists to explain.
+
+             The blur was not saving it either. Computed style said
+             blur(24px) and the bleed rendered sharp, so the backdrop-filter
+             was not compositing - which makes it exactly the kind of effect
+             that looks fine until it silently is not there. An opaque
+             surface cannot fail that way, and this project already has the
+             rule: translucency over a busy ground is a false economy. */
+          className="absolute inset-0 z-20 flex flex-col border-l border-slate-800 bg-[#0B0E14]"
         >
           <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-800 p-4">
             <div className="flex min-w-0 items-center gap-3">
