@@ -130,9 +130,17 @@ export default function DraftRoomStatusBar({
         {/* The mobile queue-open icon that used to live here is gone — the
             bottom sheet's own tab bar in PlayerHub.jsx is the real
             navigation now, not an icon tucked in an already-tight header. */}
-        <IconButton onClick={onToggleSound} title={soundOn ? 'Turn draft sounds off' : 'Turn draft sounds on'}>
-          {soundOn ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
-        </IconButton>
+        {/* Hidden below sm, and reachable from the settings modal there
+            instead. Five controls plus the clock and the round text overflow
+            a 375px bar by 27px, which puts the autopick toggle half off the
+            screen — and of the five, sound is the one set once rather than
+            reached for mid-pick. Same reasoning that already hides Undo:
+            what gives is the thing that can wait for a wider screen. */}
+        <span className="hidden sm:inline-flex">
+          <IconButton onClick={onToggleSound} title={soundOn ? 'Turn draft sounds off' : 'Turn draft sounds on'}>
+            {soundOn ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
+          </IconButton>
+        </span>
         {showPause && (
           <IconButton onClick={onTogglePause} disabled={pauseDisabled} title={paused ? 'Resume clock' : 'Pause clock'}>
             {paused ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}

@@ -231,6 +231,29 @@ export default function DraftSettingsModal({ engine, onClose, started }) {
                     {[30, 60, 90, 120, 180].map((n) => <option key={n} value={n}>{n}</option>)}
                   </Select>
                 </Row>
+                {/* A preference rather than a setting the room agrees on, so
+                    it is not locked with the rest — and it is here because the
+                    status bar ran out of room for it on a phone. Four icon
+                    buttons plus the autopick pill overflowed a 375px bar by
+                    27px once the settings gear joined them, and sound is the
+                    one of the five that is set once rather than reached for
+                    mid-pick. */}
+                <Row label="Draft sounds" hint="A cue when your turn starts, and when the clock runs down.">
+                  <button
+                    type="button"
+                    onClick={() => { engine.toggleSound(); redraw() }}
+                    aria-pressed={engine.soundWanted()}
+                    className={
+                      'rounded-full px-3 py-1 text-xs font-semibold transition-colors duration-150 ' +
+                      (engine.soundWanted()
+                        ? 'bg-teal-500/20 text-teal-300'
+                        : 'bg-white/5 text-white/50 hover:bg-white/10')
+                    }
+                  >
+                    {engine.soundWanted() ? 'On' : 'Off'}
+                  </button>
+                </Row>
+
                 <Row label="Rounds" hint="Follows the roster — add or remove a slot on the Roster tab.">
                   <span className="text-sm font-semibold tabular-nums text-white/70">{league.rounds}</span>
                 </Row>
