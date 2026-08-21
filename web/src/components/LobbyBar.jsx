@@ -5,8 +5,27 @@ import { ChevronLeft, Settings } from 'lucide-react'
 
    START DRAFT lives here rather than inside a settings column because it is
    the single thing this screen is asking for, and a primary action buried in
-   one of three equal columns does not read as one. Orange, per the one-primary-
-   action rule — this is the only control on the screen that acts.
+   one of three equal columns does not read as one. Teal, per the
+   one-primary-action rule — this is the only control on the screen that
+   acts.
+
+   The teal→purple gradient (`from-[#00E5FF] to-[#7B1FA2]`, `shadow-glass`,
+   `hover:scale-105` + glow) is copied verbatim from Hero.jsx's "Start a Mock
+   Draft" rather than built fresh — that button's own comment calls it "the
+   product's actual 'start' button", which is exactly this control's job
+   from a different screen. The same class string is Header.jsx's "Sign Up",
+   RoomPanel.jsx's "Create a room" and DraftLocker.jsx's "Start your first
+   mock": eleven components independently converged on it for a primary
+   action, which is a much stronger signal than one component's colour.
+
+   It went through two wrong colours before this one. First a flat, darkened
+   teal built to carry white text the way the old orange CTA did — that
+   matched nothing on screen. Then flat full-strength `teal-500` under dark
+   `obsidian` text, copied from DraftLocker's "In Progress" pill — closer,
+   but that pill is a tab/status indicator, not a call to action, and this
+   button is the same action as "Start your first mock" a few pixels below
+   it in the Locker, not the same kind of control as a toggle beside it.
+   Match the thing doing the same job, not the nearest thing wearing teal.
 
    The gear beside it is the same modal the draft room uses. Everything a
    league is lives in there, so the lobby does not need a settings column of
@@ -53,10 +72,11 @@ export default function LobbyBar({ summary, onStart, onOpenSettings, startLabel,
           disabled={startDisabled}
           title={problem || undefined}
           className={
-            'shrink-0 rounded-full px-5 py-2 text-sm font-bold transition-colors duration-150 ' +
+            'shrink-0 rounded-full px-5 py-2 text-sm font-semibold ' +
             (startDisabled
-              ? 'cursor-not-allowed bg-white/5 text-white/25'
-              : 'bg-[#C2410C] text-white hover:bg-[#9A3412]')
+              ? 'cursor-not-allowed bg-white/5 text-white/25 transition-colors duration-150'
+              : 'bg-gradient-to-r from-[#00E5FF] to-[#7B1FA2] text-white shadow-glass ' +
+                'transition-all duration-200 hover:scale-105 hover:shadow-[0_0_15px_rgba(0,229,255,0.4)]')
           }
         >
           {startLabel}

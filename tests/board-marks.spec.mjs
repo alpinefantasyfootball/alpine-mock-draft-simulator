@@ -1,7 +1,7 @@
 /* What the draft board says beyond the picks themselves: whose column it is,
    where the draft is, what every team holds, and how far away a pick is.
 
-   Gold is identity, and it is the third meaning after orange and blue. Both
+   Gold is identity, and it is the third meaning after teal and blue. Both
    marks were blue before — the same blue as the focus ring, the selected tab,
    --link, .draft-btn and the header when the clock is yours. A colour doing
    five jobs is not a signal, which is the design half.

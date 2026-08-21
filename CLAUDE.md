@@ -805,10 +805,18 @@ way, not reasoned about.
   navy, a position solid, or white on top of one of those. Anything else
   has to become a token in both blocks, or it will be invisible in one of
   them. Blue is two tokens for this reason: `--blue` always sits under
-  white text, `--link` is blue *as* text on a surface. Orange is two for the
-  same reason: `--orange` (#ED6011) is the brand, and it is only 3.34:1
-  against white, so anything putting white text on it uses `--orange-cta`
-  (#C2410C, 5.18:1) instead.
+  white text, `--link` is blue *as* text on a surface.
+
+  Teal cannot take the same fix, which is worth knowing before reaching for
+  it again. `--teal` (#00E5FF) is only 1.54:1 against white — even further
+  off than orange, the colour it replaced on 20 August 2026, ever was — and
+  darkening it the way `--orange-cta` darkened orange has no good stop:
+  white needs L≈28% (measured #00808F, 4.68:1) on a hue that starts at
+  L=50%, which reads as a different, muddier colour rather than the same
+  one under white text. `--teal-cta` is `--teal` itself, unchanged, and the
+  text on it is dark (`--teal-cta-ink`, #0B0E14) instead — the fix
+  `web/src/components/DraftLocker.jsx` and a dozen other React components
+  already use for the identical value under Tailwind's `teal-500`.
 - **A border-bottom is inside the box, so symmetric padding is not symmetric
   space.** `.sheet-tabs` had an even `9px 12px` and the selected pill measured
   9px of clearance above it and 10 below, because the 1px border sits within
@@ -844,23 +852,28 @@ way, not reasoned about.
   button with no `font-size` at all counts — Chrome gives it 13.333px, so
   `.theme-toggle`, `.to-top` and `.home` each carry one that changes
   nothing on screen and keeps that audit honest.
-- **One primary action colour, and it is `--orange-cta`.** Orange means
-  act; blue means state — focus rings, the selected tab, the header when
-  the clock is yours. **This is why orange may not also be a surface** — an
-  orange hero band was built and it swallowed the CTA whole. See "Tried and
-  rejected: orange as a surface"; the 4px rule across the top of both headers
-  is the whole of what orange gets outside a control.
+- **One primary action colour, and it is `--teal-cta`.** It was
+  `--orange-cta` from the rebrand until 20 August 2026, when the owner
+  retired orange from the palette entirely; see "The rebrand" for the case
+  that was made for orange at the time, and the postscript on it below.
+  Teal means act; blue means state — focus rings, the selected tab, the
+  header when the clock is yours. **This is why the accent may not also be
+  a surface** — an orange hero band was built and it swallowed the CTA
+  whole, back when orange held this job, and the lesson transferred intact:
+  see "Tried and rejected: orange as a surface"; the 4px rule across the
+  top of both headers is the whole of what the accent gets outside a
+  control.
 
-  The act/state split itself was hard won. `.cta` was orange and `.primary`
-  blue for a long time, which meant the same control was two colours depending
-  on the screen: "Resume" on a saved draft was orange on the landing page
-  and blue three lines into the draft view, from the same two words in the
-  same codebase.
+  The act/state split itself was hard won, under the original colour. `.cta`
+  was orange and `.primary` blue for a long time, which meant the same
+  control was two colours depending on the screen: "Resume" on a saved draft
+  was orange on the landing page and blue three lines into the draft view,
+  from the same two words in the same codebase.
 
   **`.draft-btn` is blue on purpose and is not an oversight.** The rule is
   about *the primary action* — the one thing a screen is asking for — and
   that is a row control repeated on every player in a 200-row table. Two
-  hundred orange buttons is wallpaper, and it would outshout the actual
+  hundred teal buttons is wallpaper, and it would outshout the actual
   primary on the same screen, which is the point of having one. The split
   is by rank, not by whether a control does something.
 - **The setup screen leads with the two settings people change and folds
@@ -1187,8 +1200,9 @@ way, not reasoned about.
 
 - **The logo is navy-on-light, and the header is navy.** The mark is inlined
   rather than an `<img>` so the navy half can be reversed to white on the
-  header (`.mark-body`) while the swoosh keeps its orange (`.mark-accent`).
-  It is 662 × 774, not square — sizing it as a square squashes it.
+  header (`.mark-body`) while the swoosh keeps its accent colour
+  (`.mark-accent`, teal since 20 August 2026, orange before it). It is
+  662 × 774, not square — sizing it as a square squashes it.
 
 ## Hard-won rules — do not undo these
 
@@ -1576,7 +1590,7 @@ not match — `.appbar .mark-body` silently matches nothing. Custom properties
 
 **The logo is navy-on-light, so it needs `--mark-ink`, not a fixed fill.**
 Hardcoding white made it invisible on every light surface, with only the
-orange swoosh showing. The token is brand navy in light, white in dark, and
+swoosh showing. The token is brand navy in light, white in dark, and
 forced white on the navy draft bar.
 
 **Weekly logs are keyed by season; season totals are not.** `stat.w` is
@@ -1823,6 +1837,100 @@ Prototype in the browser before writing to the file. Every rejection above cost
 one injected stylesheet and one screenshot, and none of them touched the
 repository.
 
+### Orange retired, two days later
+
+Everything above is the record of 18 August, and it argued for *keeping*
+orange — "the one unclaimed position in the category." It was still right,
+on its own terms, on the day it was written. The owner reversed it anyway on
+20 August: the palette runs on teal now, `--orange` / `--orange-cta` became
+`--teal` / `--teal-cta`, and every rule and comment in this file that named
+orange as the *current* accent has been rewritten in place to name teal —
+rather than left standing to describe a colour nobody ships any more.
+
+Nothing above is corrected a second time. The survey's findings are still
+true — the category still has no orange in it, and Juke's own mark still
+did — they simply stopped being the deciding argument once a different
+preference outranked them. The lesson the rejected experiments taught
+outlived the colour they were taught on: an accent still cannot be the
+ground and the call to action at once, which is exactly why teal is not a
+hero-band surface either, and the scarcity that "made the accent work"
+applies to whichever hue is holding the job this month.
+
+**Teal was not invented for this.** `#00E5FF` was already load-bearing in
+two places before this change touched the legacy stylesheet at all: it is
+the lightest stop of the draft room header's own my-turn gradient
+(`web/src/components/AppHeader.jsx`, from the header redesign) and it is
+the accent in the newer J-monogram app icons (`web/public/juke-favicon.svg`,
+`juke-app-icon-*.png`, `juke-app-icon-gradient.svg` — paired there with a
+purple `#7B1FA2` this rule does not otherwise use). Retargeting `--orange`
+to that same value connects a colour three parts of the app already agreed
+on, rather than choosing a fourth nobody had measured.
+
+**One thing this pass could not reach.** `favicon.ico`, `favicon-16.png`
+and `favicon-32.png` at the repo root are rendered PNG/ICO, not CSS-driven
+elements, so they still show the shield's swoosh in the original orange
+until somebody re-exports them by hand — no tool here rasterises an icon.
+`404.html` links to those three directly. `og-image.png` is the fourth
+raw export and *was* regenerated, because `scripts/build_og.html` draws it
+from the same inline SVG symbol a browser can rasterise, which
+`node scripts/build_og.html`-via-Playwright can do headlessly; the three
+favicons have no equivalent script. The newer J-monogram set
+(`web/public/juke-favicon.svg`, `juke-app-icon-*.png`) was never orange to
+begin with, so `web/index.html`'s own favicon and PWA icons were already
+correct before any of this — only the legacy shield mark's three
+un-regenerable exports carry the gap.
+
+**The first attempt at `--teal-cta` repeated the exact mistake this section
+just finished describing, aimed at a new colour.** It measured `--teal`
+against white (1.54:1, hopeless), reached for the nearest already-verified
+darker stop — the header's own `#0F7C8E`, 4.89:1 — and shipped it without
+checking the one thing that mattered: whether it still read as *the same
+teal* next to the rest of the app. It didn't. Sat beside
+`web/src/components/DraftLocker.jsx`'s "In Progress" pill or
+`DraftBoardGrid.jsx`'s "YOU" marker — both full-strength `teal-500` under
+dark text — a button in `#0F7C8E` reads as a different, muted colour
+entirely, which is exactly what a person looking at the actual screen
+said. **A number clearing a bar is not the same claim as a colour matching
+its neighbours**, and only one of those was checked.
+
+There is no darkened stop of this hue that clears both: white needs
+L≈28% (`#00808F`, 4.68:1) against a swoosh sitting at L=50%, which is a
+visibly different, muddier colour, not a legal darkening of the same one.
+`--teal-cta` is `--teal` itself now — no darkening at all — and
+`--teal-cta-ink` (`#0B0E14`, 12.56:1 on it) carries the text instead,
+which is the fix `DraftLocker.jsx` and a dozen other React components
+already shipped, under Tailwind's `obsidian` and this same hex, before the
+legacy stylesheet caught up to its own product. Check the actual screen
+next to the actual other elements on it, not only the arithmetic — the
+lesson the rebrand survey exists to teach, learned a second time on a
+smaller colour.
+
+**The second attempt matched the wrong neighbour, not just the wrong
+value.** Flat `teal-500` under `obsidian` text is real and it is
+consistent — but it is DraftLocker.jsx's "In Progress" pill and
+DraftBoardGrid.jsx's "YOU" marker, both *tabs and status indicators*, and
+`web/src/components/LobbyBar.jsx`'s Start Draft button is neither: it is a
+call to action, the same one as Hero.jsx's "Start a Mock Draft" — whose
+own comment already called it "the product's actual 'start' button" — and
+as Header.jsx's "Sign Up", RoomPanel.jsx's "Create a room" and
+DraftLocker.jsx's own "Start your first mock" a few pixels below the pill
+that was copied instead. All eleven of those are one identical class
+string: `bg-gradient-to-r from-[#00E5FF] to-[#7B1FA2]`, white text,
+`shadow-glass`, `hover:scale-105` with a glow. That is the CTA idiom; flat
+teal-on-dark is the tab idiom; and a button can sit one pixel from a tab
+wearing the same base hue without being the same kind of control. Two
+correct facts about a colour — it clears contrast, it matches *something*
+on screen — are not the same as matching the thing doing its own job.
+
+This one stays React-only. The legacy stylesheet has no gradient-button
+convention anywhere — every `.cta` and `.primary` on it has always been a
+single flat hue, orange then teal, and `--teal-cta` staying flat (this
+section, above) is that system being internally consistent with itself,
+not an unfixed case of the same miss. Introducing a gradient there would
+be grafting a Tailwind-side idiom onto a codebase that has never used one
+for a button, which is a bigger and different change than "match the
+button that does the same job" asks for.
+
 ## The draft room header
 
 **`web/src/components/AppHeader.jsx` replaced `.appbar` visually, and every
@@ -2019,8 +2127,8 @@ zone and throw on load.
 
 Two marks on the board, and they were one colour between them.
 
-**Gold is identity, and it is the third meaning after orange and blue.**
-Orange acts, blue states — and *whose* is neither. It had been blue in four of
+**Gold is identity, and it is the third meaning after teal and blue.**
+Teal acts, blue states — and *whose* is neither. It had been blue in four of
 the six places a seat is marked, navy in a fifth and translucent white in the
 sixth, while blue was simultaneously carrying focus rings, the selected tab,
 `--link`, `.draft-btn` and the header when the clock is yours. A colour doing
@@ -2381,7 +2489,7 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   like an artifact. It looks like a bug, with a plausible cause.
 
   It manufactured two in one session. `.room` has `transition: border-color`,
-  so removing the `live` class left the border reading orange forever and
+  so removing the `live` class left the border reading teal forever and
   looked like a specificity problem. `.appbar` has `transition: color`, so
   the my-turn header reported `--ink` rather than `#fff` and a rule was
   nearly added to "fix" a headline that was already white.

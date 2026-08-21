@@ -23,12 +23,13 @@ function useEngine() {
 }
 
 // #appbar itself — the real element, still shown/hidden by applyRoute() —
-// carries the legacy stylesheet's 4px orange top border and warm-gray
-// bottom border. renderHeader() resets its className on every call but
-// never touches .style, so an inline override set once here survives every
-// future render — the same reason the double border bug earlier had to be
-// fixed by removing a class, not adding one. No page in the new palette
-// uses orange as a surface accent; this keeps that true here too.
+// carries the legacy stylesheet's 4px teal top border (orange until 20
+// August 2026) and warm-gray bottom border. renderHeader() resets its
+// className on every call but never touches .style, so an inline override
+// set once here survives every future render — the same reason the double
+// border bug earlier had to be fixed by removing a class, not adding one.
+// No page in this palette uses the accent as a surface; this keeps that
+// true here too.
 function useOwnParentBorders() {
   useEffect(() => {
     const el = document.getElementById('appbar')

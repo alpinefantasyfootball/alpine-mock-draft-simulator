@@ -2,8 +2,9 @@ import { forwardRef, useImperativeHandle, useRef, useState } from 'react'
 
 // Replaces the legacy #soonDlg (app.js's notYet()) for anything triggered
 // from web/src — that dialog is styled .dlg/.primary, which is the legacy
-// orange CTA system, not this palette. #soonDlg itself is untouched and
-// still serves whatever legacy DOM still calls notYet() directly.
+// stylesheet's own teal CTA system (--teal-cta, orange until 20 August
+// 2026), not this palette. #soonDlg itself is untouched and still serves
+// whatever legacy DOM still calls notYet() directly.
 const ComingSoonModal = forwardRef(function ComingSoonModal(_props, ref) {
   const dialogRef = useRef(null)
   const [content, setContent] = useState({ title: '', body: '' })

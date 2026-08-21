@@ -90,9 +90,13 @@
 :root {
   /* ---- dark: the default ---- */
 
-  /* Juke navy and Juke orange, both sampled from the logo artwork itself
-     rather than typed from memory. The header is dark under both themes,
-     so these do not move when the theme does. */
+  /* Juke navy, sampled from the logo artwork itself rather than typed from
+     memory. The header is dark under both themes, so these do not move
+     when the theme does. Orange was sampled the same way and lived here
+     until 20 August 2026 — see the note on --teal below. The shield mark's
+     raw artwork (favicon.ico, favicon-16.png, favicon-32.png, og-image.png)
+     is still drawn in that original orange; only the parts of the page
+     that read the CSS token recolour. */
   --navy-deep:   #0C1A2E;   /* header gradient, dark end */
   --navy:        #152A49;   /* the logo's own navy        */
   --navy-soft:   #24405F;
@@ -100,34 +104,57 @@
   --navy-lift:   #13497A;   /* the blue end of a gradient */
   --navy-glow:   #0E5A93;
 
-  /* The one warm colour in the brand. It is the swoosh, and it is strong
-     enough to carry dark text but not white — see the note on --orange-cta,
-     which is the same hue pushed dark enough to sit under white. */
-  --orange:      #ED6011;
+  /* The brand accent, retired from orange to teal on 20 August 2026 — see
+     "The rebrand" for the orange era this replaces. It is the swoosh, and
+     it is the exact value web/tailwind.config.js already names `teal` /
+     `teal-500` for the React side — not a second colour chosen to be
+     close, the same one, so a mark that crosses the legacy/React seam
+     (the header, a shared favicon) is never a near-miss. */
+  --teal:        #00E5FF;
   /* The navy half of the logo, on a normal surface. White here because the
      default theme is dark; the light theme puts the real brand navy back. */
   --mark-ink:    #FFFFFF;
-  /* The primary action colour, everywhere and only. White on it is 5.18:1,
-     and it does not move between themes, which is why a rule may name it.
+  /* The primary action colour, everywhere and only, and byte-identical to
+     --teal above rather than a darkened twin of it — see --teal-cta-ink
+     for why. It does not move between themes, which is why a rule may
+     name it.
 
-     It used to share the job with --blue: .cta was orange and .primary was
-     blue, so the same control — "Resume" on a saved draft — was orange on
-     the landing page and blue three lines into the draft view, from the
-     same two words in the same codebase. A first-time visitor pressed a
-     big orange button and then had to find a blue one to actually start.
+     It used to share the job with --blue, under orange rather than teal:
+     .cta was orange and .primary was blue, so the same control — "Resume"
+     on a saved draft — was orange on the landing page and blue three lines
+     into the draft view, from the same two words in the same codebase. A
+     first-time visitor pressed a big orange button and then had to find a
+     blue one to actually start.
 
      Blue keeps everything it was already better at: focus rings, the
-     selected tab, the header when the clock is yours. Orange means act,
+     selected tab, the header when the clock is yours. Teal means act,
      blue means state. See the note on .draft-btn for the one place a
      button does something and is deliberately still blue. */
-  --orange-cta:  #C2410C;
-  --orange-cta-hover: #A8380A;   /* was typed as a literal in .cta:hover */
-  /* Orange *as text on a surface*, which is a different problem again — the
-     same split as --blue and --link. The brand orange reads 5.49:1 on this
-     dark page and only 3.11:1 on the light one, so the light block swaps it
-     for the darker value, which is 4.83:1 there and 3.54:1 here. Neither
-     works in both, so neither may be named directly by a rule. */
-  --orange-ink:  #ED6011;
+  --teal-cta:  #00E5FF;
+  /* web/tailwind.config.js's own `teal-600` — reused rather than picked by
+     eye, the same reason --teal above matches its `teal-500`. */
+  --teal-cta-hover: #00B8CC;
+  /* The first version of this token darkened --teal until white cleared
+     4.5:1 on it, the way --orange-cta darkened orange — and there is no
+     stop on this hue that both clears 4.5 and still reads as the same
+     colour as the swoosh two lines up: white needs L≈28% (measured
+     #00808F, 4.68:1) against a swoosh sitting at L=50%, muddy enough
+     that a button and a mark built from "the same accent" visibly
+     weren't one. web/src/components/DraftLocker.jsx and a dozen other
+     React components had already solved this the other way — dark text
+     on the full-strength fill — so --teal-cta-ink follows suit rather
+     than re-solving a problem this codebase already has an answer to.
+     See --teal-cta's consumers below for where it is used. */
+  --teal-cta-ink: #0B0E14;   /* web/tailwind.config.js's `obsidian` */
+  /* Teal *as text on a surface*, which is a different problem again — the
+     same split as --blue and --link, and not the same problem as
+     --teal-cta-ink above: this is teal-coloured text sitting directly on
+     the page, not dark text sitting on a teal fill. --teal itself reads
+     11.96:1 on this dark page, so the dark theme keeps it directly; the
+     light one swaps to a darker value, #0E6B78, which is 5.77:1 there
+     against 1.43:1 for the brand value. Neither works in both, so neither
+     may be named directly by a rule. */
+  --teal-ink:    #00E5FF;
 
   /* The header changes colour with the state of the draft, not with the
      theme, so it keeps its own blues and reds. The ones below named
@@ -199,7 +226,7 @@
   /* ---- yours ----
 
      Identity, and it is a third meaning after the two this file already
-     names: orange acts, blue states, and gold is *whose*. It had been blue
+     names: teal acts, blue states, and gold is *whose*. It had been blue
      in four of the six places a seat is marked, navy in a fifth and
      translucent white in the sixth — and blue was already carrying focus
      rings, the selected tab, --link, .draft-btn and the header when the
@@ -343,9 +370,9 @@
   --blue-line:   #C9DCF9;
   --cyan:        #12A3DC;
   --link:        #0E6BB0;
-  /* The darker orange as text here: 4.83:1 on this page, where the brand
-     value would be 3.11:1 and fail at any size the slogan is set in. */
-  --orange-ink:  #C2410C;
+  /* The darker teal as text here: 5.77:1 on this page, where the brand
+     value would be 1.43:1 and fail outright. */
+  --teal-ink:    #0E6B78;
 
   /* The same three tones, and the one place the two themes could not simply
      mirror each other.
@@ -449,7 +476,7 @@ body {
      transition below: my-turn and urgent repaint the bar and clear its bottom
      border, and the top one survives both. A brand mark that disappears when
      the clock turns blue is a state signal wearing a brand's clothes. */
-  border-top: 4px solid var(--orange);
+  border-top: 4px solid var(--teal);
   border-bottom: 1px solid var(--line);
   color: var(--ink);
 
@@ -569,7 +596,7 @@ body {
    back or it is white-on-white and only the swoosh survives; on the draft
    header, which is navy under both themes, it stays reversed. */
 .mark-body   { fill: var(--mark-ink); }
-.mark-accent { fill: var(--orange); }
+.mark-accent { fill: var(--teal); }
 
 /* The mark is drawn once in a <symbol> and cloned by <use>, and CSS cannot
    select into the shadow tree that creates — ".appbar .mark-body" would match
@@ -824,8 +851,8 @@ body {
 
 /* The way on to the next mock. Reads as an invitation, next to a Discard
    that reads as a warning, so the two are not mistaken for each other. */
-.mini.go { background: var(--orange-cta); color: #fff; }
-.mini.go:hover { background: var(--orange-cta-hover); }
+.mini.go { background: var(--teal-cta); color: var(--teal-cta-ink); }
+.mini.go:hover { background: var(--teal-cta-hover); }
 .mini:disabled { opacity: .45; cursor: default; }
 .mini.active { background: var(--navy); color: #fff; }
 .mini.active:hover { background: var(--navy-soft); }
@@ -903,7 +930,7 @@ body {
   border-radius: var(--r-md); padding: 24px 22px 22px;
 }
 
-.setup { border-top: 3px solid var(--orange); }
+.setup { border-top: 3px solid var(--teal); }
 
 .setup h2 {
   margin: 0 0 20px; font-family: var(--font-display);
@@ -1076,12 +1103,12 @@ select {
 }
 
 .primary {
-  font-family: var(--font-body); font-weight: 600; color: #fff;
-  background: var(--orange-cta); border: 0; border-radius: var(--r-sm);
+  font-family: var(--font-body); font-weight: 600; color: var(--teal-cta-ink);
+  background: var(--teal-cta); border: 0; border-radius: var(--r-sm);
   padding: 9px 18px; font-size: var(--fs-sm); cursor: pointer;
 }
 
-.primary:hover { background: var(--orange-cta-hover); }
+.primary:hover { background: var(--teal-cta-hover); }
 
 /* Not white on --ink-light. That pairing was 3.88:1 and became 2.83:1 when
    --ink-light was lightened to clear its own contrast bar — a disabled
@@ -1323,16 +1350,16 @@ th.num { text-align: right; }
 .badge.K   { background: var(--k-bg);   color: var(--k-fg); }
 .badge.DST { background: var(--dst-bg); color: var(--dst-fg); }
 
-/* Blue, and staying blue, while every other action in the app went orange.
+/* Blue, and staying blue, while every other action in the app went teal.
 
    "One primary action colour" is a rule about the primary action — the one
    thing a screen is asking you to do. This is a row control, repeated on
-   every player in a table that is 200 rows long, and 200 orange buttons is
+   every player in a table that is 200 rows long, and 200 teal buttons is
    not emphasis, it is wallpaper. It would also outshout the actual primary
    on the same screen, which is the point of having one.
 
    So the division is by rank, not by whether the control does something:
-   orange for the page-level action, blue for a repeated inline one. */
+   teal for the page-level action, blue for a repeated inline one. */
 .draft-btn {
   font-family: var(--font-body); font-size: var(--fs-sm); font-weight: 600;
   color: #fff; background: var(--blue); border: 0;
@@ -2153,23 +2180,24 @@ tr.drafted .ovr { color: var(--ink-light); }
    The site shell — everything outside a running draft
    ========================================================== */
 
-/* The brand rule. Four pixels of --orange across the top of every header, and
-   it is the one place orange appears that is not a control.
+/* The brand rule. Four pixels of --teal across the top of every header, and
+   it is the one place the brand accent appears that is not a control.
 
-   That distinction is the whole design of it. Orange means act, and the rule
-   only holds while orange is the loudest thing on a screen — an orange hero
-   band was built and thrown away for exactly this reason: it swallowed the
-   CTA whole, and the eyebrow with it. A colour cannot be the ground and the
-   call to action at once. So the brand gets orange where nothing is clickable
-   and the area is tiny, which buys presence at the top of every page for none
-   of the accent's power.
+   That distinction is the whole design of it. Teal means act, and the rule
+   only holds while teal is the loudest thing on a screen — an orange hero
+   band was built and thrown away for exactly this reason, back when orange
+   still held this job: it swallowed the CTA whole, and the eyebrow with it.
+   A colour cannot be the ground and the call to action at once. So the
+   brand gets teal where nothing is clickable and the area is tiny, which
+   buys presence at the top of every page for none of the accent's power.
 
-   --orange rather than --orange-cta: nothing sits on top of it, so it takes
-   the brand value rather than the darkened one that exists to carry white
-   text. It is byte-identical in both themes, so it needs no light override. */
+   --teal rather than --teal-cta: this is the brand mark, not a control,
+   even though the two tokens share a value today — a rule should name the
+   one that matches what it's drawing, not the one that happens to match.
+   It is byte-identical in both themes, so it needs no light override. */
 .shellbar {
   background: var(--card);
-  border-top: 4px solid var(--orange);
+  border-top: 4px solid var(--teal);
   border-bottom: 1px solid var(--line);
 }
 
@@ -2211,14 +2239,15 @@ tr.drafted .ovr { color: var(--ink-light); }
 .navlink { background: none; color: var(--ink-mid); }
 .navlink:hover { color: var(--ink); }
 
-/* Brand orange is only 3.34:1 against white, so a filled button that carries
-   white text uses the darker --orange-cta. */
+/* Brand teal is only 1.54:1 against white, and no darkening of it both
+   clears 4.5 and still reads as the same colour — see the note on
+   --teal-cta-ink. Dark text on the full-strength fill instead. */
 .cta {
   font-family: var(--font-body); font-size: var(--fs-sm); font-weight: 700;
-  color: #fff; background: var(--orange-cta); border: 0; border-radius: var(--r-sm);
+  color: var(--teal-cta-ink); background: var(--teal-cta); border: 0; border-radius: var(--r-sm);
   padding: 9px 16px; cursor: pointer; text-decoration: none; white-space: nowrap;
 }
-.cta:hover { background: var(--orange-cta-hover); }
+.cta:hover { background: var(--teal-cta-hover); }
 .cta.lg { font-size: var(--fs-base); padding: 13px 26px; }
 .navlink.lg { font-size: var(--fs-sm); padding: 13px 10px; }
 
@@ -2619,7 +2648,7 @@ tr.drafted .ovr { color: var(--ink-light); }
   font-size: var(--fs-2xs); font-weight: 700;
   letter-spacing: .12em; text-transform: uppercase; color: #8DA2BB;
 }
-/* Deliberately not orange. One primary action per screen and the hero above
+/* Deliberately not teal. One primary action per screen and the hero above
    already has it; this is the same destination reached from further down the
    page, so it states rather than shouts. */
 .room-enter {
@@ -2666,8 +2695,8 @@ tr.drafted .ovr { color: var(--ink-light); }
   font-size: var(--fs-2xs); font-weight: 700;
   letter-spacing: .1em; text-transform: uppercase; color: var(--ink-light);
 }
-/* The open room keeps the orange edge it had as a card. */
-.rl.live { border-left: 3px solid var(--orange); padding-left: 10px; }
+/* The open room keeps the accent edge it had as a card. */
+.rl.live { border-left: 3px solid var(--teal); padding-left: 10px; }
 .rl.live .rl-meta { color: var(--t-orange-fg); }
 
 @media (max-width: 760px) {
@@ -2754,38 +2783,38 @@ a.room:hover { border-color: var(--blue-line); }
    which makes it information rather than paint, and the grid needs no
    second pass the day the Waiver Room ships — it just moves.
 
-   Brand orange, not the blue the phase rules use, because the one thing
+   Brand teal, not the blue the phase rules use, because the one thing
    on this page already wearing it is the button that does the same job.
-   --orange is the same value under both themes, so it can be named here
+   --teal is the same value under both themes, so it can be named here
    directly. */
 
 .room.live {
   /* 3px border plus 13px padding is the 16px the other cards get from
      15px plus their 1px border, so every card's text starts on the same
      line down the column. */
-  border-left: 3px solid var(--orange);
+  border-left: 3px solid var(--teal);
   padding-left: 13px;
   background: var(--card);
 }
 
 /* Longhands, and border-left-color restated rather than left to cascade.
    a.room:hover sets all four to --blue-line at (0,2,1), which outranks the
-   (0,2,0) of .room.live — so without this line the orange bar turns blue
+   (0,2,0) of .room.live — so without this line the teal bar turns blue
    under the pointer, on the one card the colour is there to mark. */
 a.room.live:hover {
   border-top-color: var(--line);
   border-right-color: var(--line);
   border-bottom-color: var(--line);
-  border-left-color: var(--orange);
+  border-left-color: var(--teal);
   background: var(--fill);
 }
 
 /* Solid rather than the tint the other pills carry, because this is the
-   only badge on the page that means "you can press this". White on
-   --orange-cta is 5.18:1; on the brand --orange it would be 3.34:1,
-   which is the whole reason the darker token exists. */
+   only badge on the page that means "you can press this". Dark text
+   (--teal-cta-ink) rather than white — see the note on that token for why
+   nothing on --teal-cta may carry white. */
 .room.live .pill {
-  background: var(--orange-cta); color: #fff;
+  background: var(--teal-cta); color: var(--teal-cta-ink);
 }
 
 /* ---------- landing ---------- */
@@ -2800,17 +2829,17 @@ a.room.live:hover {
 
 .hero { max-width: 720px; margin: 0 auto; text-align: center; padding: 66px 0 42px; }
 
-/* The slogan. Orange because it is the brand's one warm colour and this is
-   the brand's one line. Through --orange-ink rather than --orange: at 11px
+/* The slogan. Teal because it is the brand's accent and this is the
+   brand's one line. Through --teal-ink rather than --teal: at 11px
    bold this is small text, needs 4.5:1, and the brand value only manages
-   3.11:1 on the light page. Small and widely spaced, so it introduces the
+   1.43:1 on the light page. Small and widely spaced, so it introduces the
    headline rather than competing with it. */
 .hero-slogan {
   margin: 0 0 10px;
   font-family: var(--font-body);
   font-size: var(--fs-xs); font-weight: 700;
   letter-spacing: .18em; text-transform: uppercase;
-  color: var(--orange-ink);
+  color: var(--teal-ink);
 }
 
 .hero h1 {
@@ -2881,7 +2910,7 @@ a.room.live:hover {
 .pf:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 .pf.on {
   background: var(--fill); border-color: var(--line);
-  border-left-color: var(--orange); color: var(--ink);
+  border-left-color: var(--teal); color: var(--ink);
 }
 .pf b { display: block; font-size: var(--fs-sm); font-weight: 700; color: var(--ink); margin-bottom: 3px; }
 .pf span { display: block; font-size: var(--fs-xs); line-height: 1.55; }
@@ -2918,7 +2947,7 @@ a.room.live:hover {
   background: var(--fill); color: var(--ink-light);
   transition: background .3s ease, color .3s ease;
 }
-.pd.on { background: var(--orange-cta); color: #fff; }
+.pd.on { background: var(--teal-cta); color: var(--teal-cta-ink); }
 
 .pstage-note { margin: 0 0 10px; font-size: var(--fs-xs); color: var(--ink-mid); }
 .pstage-foot { margin: 11px 0 0; font-size: var(--fs-2xs); line-height: 1.5; color: var(--ink-light); }
@@ -2939,7 +2968,7 @@ a.room.live:hover {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .prow-num { flex: none; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--ink); }
-.prow-score { color: var(--orange-ink); }
+.prow-score { color: var(--teal-ink); }
 
 /* The subtraction, printed rather than asserted. Tabular figures so the three
    numbers line up down the column as the players change. */
@@ -3062,10 +3091,11 @@ a.room.live:hover {
 
 .hero-band .hero h1     { color: var(--band-ink); }
 .hero-band .hero-sub    { color: var(--band-ink-mid); }
-/* --orange rather than --orange-ink: the light theme swaps --orange-ink for a
+/* --teal rather than --teal-ink: the light theme swaps --teal-ink for a
    darker value that only works on a light page, and this page is navy under
-   both themes. The brand value is 5.17:1 here, so small text still passes. */
-.hero-band .hero-slogan { color: var(--orange); }
+   both themes. The brand value is 11.35:1 here, so small text clears with
+   plenty to spare. */
+.hero-band .hero-slogan { color: var(--teal); }
 
 .hero-band .navlink     { color: var(--band-ink-mid); }
 .hero-band .navlink:hover { color: var(--band-ink); }
@@ -3085,7 +3115,7 @@ a.room.live:hover {
 .hero-band .game-row      { color: var(--band-ink-mid); }
 .hero-band .game-row.lead { color: var(--band-ink); }
 .hero-band .game-st       { color: var(--band-ink-dim); }
-.hero-band .game-st.live  { color: var(--orange); }
+.hero-band .game-st.live  { color: var(--teal); }
 
 .hero-band .scores-arrow {
   background: rgba(255,255,255,.10);
@@ -3294,7 +3324,7 @@ a.room.live:hover {
 .game-row.lead .tm, .game-row.lead .sc { font-weight: 700; }
 
 .game-st { margin-top: 5px; font-size: var(--fs-2xs); color: var(--ink-light); white-space: nowrap; }
-.game-st.live { color: var(--orange); font-weight: 700; }
+.game-st.live { color: var(--teal); font-weight: 700; }
 
 /* ---------- the header on a narrow screen ----------
    The three columns are 1fr auto 1fr, so each side gets the same width and
@@ -3421,9 +3451,12 @@ a.room.live:hover {
 }
 
 /* The one at the front is what the clock takes if it runs out while you are
-   away, so it is worth marking as different from the rest of the list. */
-.qrow.next { border-color: var(--orange); }
-.qrow.next .qn { color: var(--orange-cta); }
+   away, so it is worth marking as different from the rest of the list.
+   --teal-ink on .qn, not --teal-cta: this is teal text on the page, not
+   dark text on a teal fill, so it wants the token built for that — see
+   the note beside --teal-ink's definition. */
+.qrow.next { border-color: var(--teal); }
+.qrow.next .qn { color: var(--teal-ink); }
 
 .qn {
   font-family: var(--font-body); font-size: var(--fs-xs); font-weight: 700;
@@ -3447,8 +3480,8 @@ a.room.live:hover {
 .qmove:disabled { opacity: .35; cursor: default; }
 
 /* The star that puts a player in the queue. Off is an outline in muted ink,
-   on is the brand orange filled — both legible on either theme, since
-   --orange is a brand colour rather than a themed one. */
+   on is the brand teal filled — both legible on either theme, since
+   --teal is a brand colour rather than a themed one. */
 /* This is a <td>, so it does not get to be a flex container.
 
    `display: flex` takes a cell out of table layout: it stops stretching to
@@ -3468,8 +3501,8 @@ a.room.live:hover {
   color: var(--ink-light); background: none;
   border: 1px solid var(--line); border-radius: var(--r-sm);
 }
-.star:hover { color: var(--orange); border-color: var(--orange); }
-.star.on { color: #fff; background: var(--orange-cta); border-color: var(--orange-cta); }
+.star:hover { color: var(--teal); border-color: var(--teal); }
+.star.on { color: var(--teal-cta-ink); background: var(--teal-cta); border-color: var(--teal-cta); }
 
 #playerTable.compact .star { width: 22px; height: 22px; font-size: var(--fs-xs); }
 
@@ -4066,8 +4099,8 @@ button.rtm:focus-visible {
 .chatbadge {
   display: inline-flex; align-items: center; justify-content: center;
   min-width: 17px; height: 17px; padding: 0 4px;
-  font-size: var(--fs-2xs); font-weight: 700; color: #fff;
-  background: var(--orange-cta); border-radius: var(--r-sm);
+  font-size: var(--fs-2xs); font-weight: 700; color: var(--teal-cta-ink);
+  background: var(--teal-cta); border-radius: var(--r-sm);
 }
 
 /* ---------- chat on a narrow screen ----------
