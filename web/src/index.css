@@ -8,6 +8,17 @@ body,
   height: 100%;
 }
 
+/* Header.jsx's two rows (h-16 nav + h-9 ticker + 1px border = 101px) are
+   `fixed`, so an anchor landing at its natural scroll position would have
+   its top slice of content — a heading, a card's first row — sitting behind
+   them. scroll-padding-top reserves that height on every scroll-into-view,
+   anchor click included; a few px of slack beyond the exact 101 so a
+   section's own heading isn't flush against the header's bottom edge. */
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 108px;
+}
+
 body {
   background-color: theme('colors.obsidian');
   color: #E7ECF3;
@@ -18,4 +29,24 @@ body {
 .coming-soon-dialog::backdrop {
   background: rgba(11, 14, 20, 0.7);
   backdrop-filter: blur(4px);
+}
+
+/* ScoresStrip.jsx's chip row — a thin, low-contrast scrollbar rather than
+   the browser default, since this row is meant to read as "more to see" at
+   a glance, not draw attention to itself. Scoped to one class rather than
+   overriding scrollbars globally. Firefox and WebKit need separate
+   properties; there is no third syntax to cover both in one rule. */
+.scores-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+}
+.scores-scroll::-webkit-scrollbar {
+  height: 6px;
+}
+.scores-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+}
+.scores-scroll::-webkit-scrollbar-track {
+  background: transparent;
 }

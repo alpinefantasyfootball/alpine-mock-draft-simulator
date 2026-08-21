@@ -1,77 +1,122 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Header from './Header.jsx'
-import LiveScoresTicker from './LiveScoresTicker.jsx'
 import Hero from './Hero.jsx'
-import RoomNavigation from './RoomNavigation.jsx'
+import ScoresStrip from './ScoresStrip.jsx'
 import ShowYourWorking from './ShowYourWorking.jsx'
+import RoomsGrid from './RoomsGrid.jsx'
+import ClosingCta from './ClosingCta.jsx'
+import JukeLogo from './juke-logo/JukeLogo.jsx'
+
+// METHOD footer links deep-link into the existing how-it-works doc rather
+// than to new pages that don't exist — s02 is "Where the numbers come
+// from" (data sources), s03 is "The league, and everything that follows
+// from it" (scoring), s07 is "The three signals on a player" (the Juke
+// score section — VORP). One doc, three real entry points, instead of
+// three pages with nothing behind them.
+const METHOD_LINKS = [
+  { label: 'How scoring works', href: '/docs/draft-room-how-it-works.html#s03' },
+  { label: 'VORP explained', href: '/docs/draft-room-how-it-works.html#s07' },
+  { label: 'Data sources', href: '/docs/draft-room-how-it-works.html#s02' },
+]
+
+function useRoomLinks() {
+  const [rooms, setRooms] = useState([])
+  useEffect(() => {
+    const engine = typeof window !== 'undefined' ? window.JukeEngine : null
+    if (!engine) return
+    setRooms(engine.rooms())
+  }, [])
+  return rooms
+}
 
 export default function Homepage() {
-  // The ticker is fixed and out of flow, so it reserves no space of its own —
-  // <main>'s top padding has to know whether it's there (h-16 header alone vs
-  // h-16 + h-12 header+ticker), or an offseason visitor (no games, ticker
-  // renders nothing) gets a permanent gap sized for a bar that isn't shown.
-  const [hasScores, setHasScores] = useState(false)
+  const roomLinks = useRoomLinks()
 
   return (
-    <div className="min-h-screen overflow-x-hidden bg-obsidian text-white">
-      <div
-        className="pointer-events-none fixed inset-0 opacity-40"
-        style={{
-          background:
-            'radial-gradient(600px circle at 15% 10%, rgba(0,229,255,0.10), transparent 60%),' +
-            'radial-gradient(700px circle at 85% 25%, rgba(123,31,162,0.14), transparent 60%)',
-        }}
-      />
-
+    <div className="min-h-screen overflow-x-hidden bg-void text-white">
       <Header />
-      <LiveScoresTicker onGamesChange={setHasScores} />
 
-      <main className={'relative ' + (hasScores ? 'pt-28' : 'pt-16')}>
+      {/* pt-[108px] matches the fixed header's real height (h-16 nav + h-9
+          ticker + 1px border = 101px) plus the same few px of breathing
+          room index.css's scroll-padding-top uses — one number instead of
+          two, so a page load and an anchor click land at the same offset.
+          No more hasScores toggle: the old fixed scores bar that forced
+          Homepage.jsx to pick between two top-paddings is gone — ScoresStrip
+          is a normal in-flow section now, so nothing above the fold needs
+          to know whether it rendered. */}
+      <main className="pt-[108px]">
         <Hero />
+        <ScoresStrip />
+        <ShowYourWorking />
+        <RoomsGrid />
+        <ClosingCta />
+      </main>
 
-        <section id="rooms" className="mx-auto max-w-7xl px-6 py-24">
-          <div className="mx-auto max-w-2xl text-center">
-            <h2 className="font-display text-3xl font-bold italic tracking-tight sm:text-4xl">The Rooms</h2>
-            <p className="mt-4 text-base leading-relaxed text-white/55 sm:text-lg">
-              One home for every decision in a fantasy season — mock drafts today, waivers
-              and trades as the year goes on.
+      <footer className="border-t border-white/[0.07] bg-[#060909]">
+        <div className="mx-auto grid max-w-7xl grid-cols-2 gap-12 px-6 pb-6 pt-14 sm:grid-cols-4">
+          <div className="col-span-2 sm:col-span-1">
+            <JukeLogo size={18} />
+            <p className="mt-[14px] max-w-[300px] text-sm leading-[1.55] text-[#7d888f]">
+              Agility through analytics. Projections you can follow, rebuilt every morning.
             </p>
           </div>
 
-          <div className="mt-16">
-            <RoomNavigation />
+          <div className="flex flex-col gap-[11px]">
+            <span className="font-plex text-[11px] tracking-[0.11em] text-[#4f5b62]">ROOMS</span>
+            {roomLinks.map((room) => (
+              <a
+                key={room.name}
+                href={room.live && room.href ? room.href : '#rooms'}
+                className="text-sm text-white/60 transition-colors hover:text-white"
+              >
+                {room.name}
+              </a>
+            ))}
           </div>
-        </section>
 
-        <ShowYourWorking />
-      </main>
+          <div className="flex flex-col gap-[11px]">
+            <span className="font-plex text-[11px] tracking-[0.11em] text-[#4f5b62]">METHOD</span>
+            {METHOD_LINKS.map((link) => (
+              <a
+                key={link.label}
+                href={link.href}
+                className="text-sm text-white/60 transition-colors hover:text-white"
+              >
+                {link.label}
+              </a>
+            ))}
+          </div>
 
-      <footer className="relative border-t border-white/5 py-8 text-center text-xs text-white/30">
-        {/* The old line — "runs entirely in your browser, nothing you draft
-            is sent anywhere" — was unqualified, and it's wrong the moment a
-            room exists: the room worker holds the seats, the picks and the
-            chat while it's open, and docs/draft-room-how-it-works.html
-            already scopes the claim correctly (section 01, section 08). This
-            says the same true thing the docs say, not a second, looser one. */}
-        <p>
-          A solo mock draft runs entirely in your browser — nothing you draft is sent anywhere.
-          Drafting with your league uses a server, just for that room.
-        </p>
-        <p className="mt-2 flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
-          {[
-            { href: '/docs/draft-room-how-it-works.html', label: 'How it works' },
-            { href: '/docs/privacy.html', label: 'Privacy' },
-            { href: '/docs/terms.html', label: 'Terms' },
-          ].map((link) => (
-            <a
-              key={link.href}
-              href={link.href}
-              className="text-white/40 underline decoration-white/20 underline-offset-2 transition-colors hover:text-white/60"
-            >
-              {link.label}
+          <div className="flex flex-col gap-[11px]">
+            <span className="font-plex text-[11px] tracking-[0.11em] text-[#4f5b62]">COMPANY</span>
+            {/* Real links only. Privacy and Terms already exist; About,
+                Changelog and Contact don't have anywhere real to point yet,
+                so they're left out rather than pointing at nothing. */}
+            <a href="/docs/draft-room-how-it-works.html" className="text-sm text-white/60 transition-colors hover:text-white">
+              How it works
             </a>
-          ))}
-        </p>
+            <a href="/docs/privacy.html" className="text-sm text-white/60 transition-colors hover:text-white">
+              Privacy
+            </a>
+            <a href="/docs/terms.html" className="text-sm text-white/60 transition-colors hover:text-white">
+              Terms
+            </a>
+          </div>
+        </div>
+
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-6 border-t border-white/5 px-6 py-5">
+          {/* The old, unqualified "nothing you draft is sent anywhere" was
+              wrong the moment a room exists — the room worker holds the
+              seats, the picks and the chat while it's open, and
+              draft-room-how-it-works.html already scopes the claim
+              correctly (section 01, section 08). This says the same true
+              thing the docs say, not a second, looser one. */}
+          <p className="text-[13px] text-[#656f76]">
+            A solo mock draft runs entirely in your browser — nothing you draft is sent anywhere.
+            Drafting with your league uses a server, just for that room.
+          </p>
+          <span className="font-plex text-xs text-[#4f5b62]">© 2026 Juke</span>
+        </div>
       </footer>
     </div>
   )

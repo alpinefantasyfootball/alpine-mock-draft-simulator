@@ -38,21 +38,30 @@ Cloudflare Pages deploy produces.
 
 ## Structure
 
-- `src/components/Homepage.jsx` — composes the page: `Header`,
-  `LiveScoresTicker`, `ResumeBanner`, `Hero`, `RoomNavigation`,
-  `ShowYourWorking`.
-- `src/components/Header.jsx` / `Ticker.jsx` — the fixed nav bar and its
-  small marquee of facts, read live off the board via the bridge.
-- `src/components/LiveScoresTicker.jsx` — real ESPN scores via
-  `JukeEngine.fetchScores()`. Renders nothing when there are none, matching
-  the legacy score strip's own contract.
+- `src/components/Homepage.jsx` — composes the page: `Header`, `Hero`,
+  `ScoresStrip`, `ShowYourWorking`, `RoomsGrid`, `ClosingCta`, plus its own
+  footer.
+- `src/components/Header.jsx` / `Ticker.jsx` — the sticky two-row header
+  (nav + logo, then a small marquee of facts read live off the board via
+  the bridge).
 - `src/components/Hero.jsx` — the "Live board" preview, drafted live via
   `JukeEngine.shotPicks()`.
-- `src/components/RoomNavigation.jsx` / `RoomCard.jsx` — the 3D carousel,
-  reading the real six-room list from `JukeEngine.rooms()`.
+- `src/components/ScoresStrip.jsx` — real ESPN scores via
+  `JukeEngine.fetchScores()`, in a horizontally-scrollable in-flow section.
+  Renders nothing when there are none, matching the legacy score strip's
+  own contract.
 - `src/components/ShowYourWorking.jsx` — the live PPR re-ranking demo,
   scored through `JukeEngine.pointsUnder()` under the real scoring rules.
-- `src/components/ResumeBanner.jsx` — the "you have a draft in progress"
-  banner, backed by `JukeEngine.readSave()`.
-- `tailwind.config.js` — the obsidian/charcoal/teal/purple palette and the
-  glow shadows used on hover.
+- `src/components/RoomsGrid.jsx` / `RoomCard.jsx` — the six-room grid,
+  reading the real room list from `JukeEngine.rooms()`. Non-live cards open
+  `ComingSoonModal.jsx`.
+- `src/components/ClosingCta.jsx` — the page's last call to action, before
+  the footer.
+- `tailwind.config.js` — the obsidian/charcoal/teal/purple palette shared
+  with the rest of the app, plus the homepage-only mint/skyblue/void
+  accents and the `font-plex` (IBM Plex Mono) token from the Claude Design
+  v2 homepage handoff.
+
+`src/components/ResumeBanner.jsx` doesn't exist any more — resuming a saved
+draft is the Draft Room's own Locker screen's job now (see `CLAUDE.md`),
+not a second surface on the homepage.

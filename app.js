@@ -417,24 +417,41 @@ const ROOMS = [
   // applyRoute() still toggles (#view-app, hidden-not-deleted DOM — see
   // CLAUDE.md), but every real Draft Room feature built since the React
   // rewrite only exists on #/draft-room (DraftRoom.jsx, outside
-  // applyRoute() entirely — see main.jsx). This one string is read by both
-  // the header's rooms panel and the homepage's room-door section (see
-  // RoomNavigation.jsx), so it was the single place sending every "start a
-  // draft" entry point in the product back to the old page.
-  { name: "The Draft Room", href: "#/draft-room", live: true, season: "Pre-season",
-    blurb: "Mock drafts against a board that knows ADP, tiers and replacement level." },
+  // applyRoute() entirely — see main.jsx). This is the single place that
+  // string is written down — read through the rooms() bridge below by the
+  // homepage's room grid (web/src/components/RoomsGrid.jsx) — so it's the
+  // one place to fix if a "start a draft" entry point ever points at the
+  // old page again.
+  //
+  // Ordered chronologically across a fantasy season now (scouting, then the
+  // draft itself, then everything in-season, then the wrap-up) rather than
+  // live-room-first — confirmed nothing indexes this array positionally
+  // (grep for "ROOMS[0]" turns up one comment, no code), so the order is
+  // free to carry meaning instead of just reflecting launch sequence.
+  //
+  // `lead` is the short imperative line a card leads with ("Scout the
+  // future.") — added for the homepage grid's card layout. `blurb` is the
+  // longer description underneath it.
   { name: "The Prospect Room", live: false, season: "Pre-season",
-    blurb: "College production turned into an NFL projection, before the rookie drafts." },
+    lead: "Scout the future.",
+    blurb: "Analyze the college production and NFL translation of incoming rookies before they even hit your draft board." },
+  { name: "The Draft Room", href: "#/draft-room", live: true, season: "Pre-season",
+    lead: "Mock smarter.",
+    blurb: "Run unlimited draft simulations against a board that automatically adjusts for ADP, tiers, and your custom scoring rules." },
 
   { name: "The Waiver Room", live: false, season: "In-season",
-    blurb: "Set your roster and price a claim — FAAB, priority, and who is worth the bid." },
+    lead: "Win the wire.",
+    blurb: "Connect your live league to simulate waiver claims and evaluate which free agents will actually impact your bottom line." },
   { name: "The Trade Room", live: false, season: "In-season",
-    blurb: "Value both sides of a deal, then play out what it does to your season." },
+    lead: "Deal with confidence.",
+    blurb: "Model complex trade proposals to evaluate their fairness and long-term impact on your remaining schedule." },
   { name: "The Strategy Room", live: false, season: "In-season",
-    blurb: "A plan for the draft, the roster and the weekly lineup." },
+    lead: "Optimize every week.",
+    blurb: "Set your lineup using predictive analytics, probabilistic matchup outcomes, and deep opponent analysis." },
 
   { name: "The League Room", live: false, season: "Post-season",
-    blurb: "Analytics across the whole league, from playoff odds to the final wrap-up." }
+    lead: "See the big picture.",
+    blurb: "Track season-long trends, monitor league-wide analytics, and calculate your exact playoff odds as the season unfolds." }
 ];
 
 /* ---------- the product shot ----------
@@ -6823,6 +6840,22 @@ window.addEventListener("hashchange", function () {
   const code = typeof Live === "undefined" ? null : Live.codeInUrl();
   const now = typeof Live === "undefined" ? null : Live.state().code;
   if (code && code !== now) joinRoom(code, false);
+
+  /* Not called at all for a bare in-page anchor (#rooms, #proof, #scores —
+     anything not starting with "#/"; an empty hash still runs it). Every
+     real route in this app is "#/something"; applyRoute() ends in an
+     unconditional window.scrollTo(0, 0), which is correct for a real route
+     change (leaving the Draft Room, arriving at "#/") and wrong for
+     everything else — it fights the browser's own native scroll-to-anchor,
+     so the hash updates and the page snaps straight back to the top
+     instead of landing on the section a click just asked for. This was
+     already true of Hero.jsx's "Explore The Rooms" link before the
+     homepage redesign added a full anchor nav that depends on it working —
+     same bug, just newly load-bearing. The one caller that must still see
+     a bare fragment (a fresh page load landing directly on #rooms from a
+     bookmark or shared link) is the boot-time applyRoute() call below,
+     which isn't behind this hashchange guard at all. */
+  if (location.hash && location.hash.charAt(1) !== "/") return;
   applyRoute();
 });
 

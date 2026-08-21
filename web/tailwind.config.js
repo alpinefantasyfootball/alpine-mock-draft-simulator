@@ -26,6 +26,25 @@ export default {
           400: '#9A3FC0',
           600: '#5E1780',
         },
+        // Homepage-only secondary accents, from the Claude Design v2 handoff
+        // (design_handoff_homepage_v2). Deliberately not a CTA/state colour —
+        // every button, "Live" pill and the logo still read teal/purple
+        // above, exactly as the Draft Room does. mint/skyblue are decorative
+        // only: the hero overline, background glow, the odd label. They must
+        // never touch a position chip — POS_BADGE (draftRoomPositions.js) is
+        // documented as "the one hue reference for the whole site now, not
+        // just the draft room," already shared by this same homepage's
+        // ShowYourWorking.jsx, and introducing a second RB/WR colour here
+        // would be exactly the "a position reads a different colour
+        // depending which page you're looking at" bug that file was
+        // rewritten once already to end.
+        mint: '#5eead4',
+        skyblue: '#38bdf8',
+        // This page's background. Close to but deliberately not `obsidian`
+        // (#0B0E14, used everywhere else) — the handoff's own value, and
+        // this project's rule once a hex is explicitly chosen is to keep it
+        // rather than round it off to the nearest existing token.
+        void: '#070a0d',
       },
       boxShadow: {
         // resting glass panel: barely-there edge, no glow
@@ -48,6 +67,17 @@ export default {
         // extra network request, it just points at the font that's there.
         display: ['"Barlow Condensed"', '"Arial Narrow"', 'system-ui', 'sans-serif'],
         body: ['"Inter"', 'system-ui', 'sans-serif'],
+        // A new, separate token — not `mono` itself. `font-mono` is already
+        // in real use throughout the Draft Room (pick codes, tabular-nums
+        // scoring inputs, AnalysisTab), all on Tailwind's bare system-mono
+        // fallback today; overriding the shared token would have silently
+        // reskinned every one of those the moment this file changed, which
+        // is exactly the kind of untouched-page side effect the "homepage
+        // rebrand is homepage-only for now" note above is already guarding
+        // against for Archivo. `font-plex` is used explicitly, only by the
+        // new homepage components, loaded from Google Fonts in index.html
+        // next to Archivo — same pattern, no new infrastructure.
+        plex: ['"IBM Plex Mono"', 'ui-monospace', 'SFMono-Regular', 'monospace'],
       },
       keyframes: {
         'pulse-glow': {

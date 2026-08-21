@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { motion } from 'framer-motion'
 
 // Every line here is read off the live board via the bridge. It used to be
 // six invented stats — a mock-draft count and a bye-week clash rate with
@@ -32,13 +31,22 @@ function useTickerItems() {
   return items
 }
 
+// The refresh stamp (first item) reads dimmer than the headlines — the
+// design's own distinction between "when this was last true" and the facts
+// themselves — everything else keeps the mint accent.
 function TickerRow({ items, ariaHidden = false }) {
   return (
-    <div className="flex shrink-0 items-center gap-3 pr-3" aria-hidden={ariaHidden}>
+    <div className="flex shrink-0 items-center" aria-hidden={ariaHidden}>
       {items.map((item, i) => (
-        <span key={i} className="flex shrink-0 items-center gap-3 whitespace-nowrap text-xs text-teal-300/90">
+        <span
+          key={i}
+          className={
+            'flex shrink-0 items-center gap-[34px] whitespace-nowrap pl-[34px] font-plex text-xs ' +
+            (i === 0 ? 'text-white/40' : 'text-mint')
+          }
+        >
           {item}
-          <span className="h-1 w-1 rounded-full bg-teal-500/50" />
+          <span className="h-[3px] w-[3px] rounded-full bg-white/15" />
         </span>
       ))}
     </div>
@@ -50,18 +58,24 @@ export default function Ticker() {
   if (items.length === 0) return null
 
   return (
-    <div
-      className="hidden flex-1 overflow-hidden md:block"
-      style={{ maskImage: 'linear-gradient(90deg, transparent, black 8%, black 92%, transparent)' }}
-    >
-      <motion.div
-        className="flex w-max"
-        animate={{ x: ['0%', '-50%'] }}
-        transition={{ duration: 32, repeat: Infinity, ease: 'linear' }}
+    <div className="hidden h-9 border-t border-white/5 bg-[#0a0e12] md:block">
+      <div
+        className="relative h-full overflow-hidden"
+        style={{ maskImage: 'linear-gradient(90deg, transparent, black 32px, black calc(100% - 32px), transparent)' }}
       >
-        <TickerRow items={items} />
-        <TickerRow items={items} ariaHidden />
-      </motion.div>
+        {/* Same CSS-marquee shape LiveScoresTicker.jsx's own comment
+            explains: a native compositor-thread loop has no restart seam
+            for React/Framer to hitch on at the wraparound, and
+            animation-play-state gives a real, position-preserving pause on
+            hover for free — a JS-driven animate() has neither. 64s to match
+            the design's own reading speed for five short items; motion-
+            reduce turns the loop off outright rather than merely slowing it,
+            since a slow crawl is still motion someone asked not to see. */}
+        <div className="flex h-full w-max items-center [animation-play-state:running] motion-reduce:!animate-none animate-[marquee_64s_linear_infinite] hover:[animation-play-state:paused]">
+          <TickerRow items={items} />
+          <TickerRow items={items} ariaHidden />
+        </div>
+      </div>
     </div>
   )
 }

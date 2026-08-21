@@ -95,12 +95,12 @@ export default function ShowYourWorking() {
   }, [ppr, pool])
 
   return (
-    <section id="show-your-working" className="relative isolate mx-auto mt-24 max-w-7xl px-6 py-24">
+    <section id="proof" className="relative isolate mx-auto max-w-7xl px-6 py-24">
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 -z-10"
+        className="pointer-events-none absolute inset-x-0 top-0 -z-10 mx-auto h-[400px] w-[900px]"
         style={{
-          background: 'radial-gradient(700px circle at 50% 35%, rgba(0,229,255,0.10), transparent 70%)',
+          background: 'radial-gradient(ellipse 900px 400px at 50% 0%, rgba(34,211,238,0.05), transparent 70%)',
         }}
       />
       <motion.div
@@ -108,38 +108,47 @@ export default function ShowYourWorking() {
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true, margin: '-80px' }}
         transition={{ duration: 0.6 }}
-        className="mx-auto max-w-2xl text-center"
+        className="mx-auto max-w-[720px] text-center"
       >
-        <h2 className="font-display text-3xl font-bold italic tracking-tight sm:text-4xl">
-          Show Your Working <span className="text-white/30">—</span> No Black Box
+        {/* Same reasoning as Hero.jsx's h1: the brief's 46px is a desktop-
+            only value, and at that size on a phone "Show Your Working — No
+            Black Box" wraps to three uneven lines with the em dash stranded
+            alone on one of them. */}
+        <h2 className="text-balance font-display text-[30px] font-extrabold italic leading-[1.15] tracking-[-0.015em] sm:text-[38px] sm:leading-[1.1] lg:text-[46px] lg:leading-[1.08] lg:tracking-[-0.025em]">
+          <span className="text-white">Show Your Working </span>
+          <span className="not-italic text-white/25">—</span>
+          <span className="text-white"> No Black Box</span>
         </h2>
-        <p className="mt-4 text-base leading-relaxed text-white/55">
+        <p className="mt-4 text-[17px] leading-[1.55] text-white/55">
           Every number Juke prints is one you can follow. Re-calculated live off real market data.
         </p>
       </motion.div>
 
-      <div className="mt-14 grid gap-8 lg:grid-cols-2 lg:items-start lg:gap-12">
-        <div className="flex flex-col gap-4">
+      <div className="mt-[52px] grid gap-7 lg:grid-cols-[0.85fr_1fr] lg:items-start">
+        <div className="flex flex-col gap-[14px]">
           {FEATURES.map((f) => (
             <div
               key={f.title}
-              className="rounded-2xl border border-white/10 bg-charcoal/60 p-5 transition-colors duration-200 hover:border-teal-400/70"
+              className="rounded-[14px] border border-white/[0.07] bg-[#0d1216] px-[26px] py-6 transition-colors duration-200 hover:border-teal-400/70"
             >
-              <h3 className="font-display text-base font-semibold text-white">{f.title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-white/50">{f.body}</p>
+              <h3 className="font-display text-[17px] font-bold text-white">{f.title}</h3>
+              <p className="mt-[9px] text-[15px] leading-[1.55] text-[#8e9aa1]">{f.body}</p>
             </div>
           ))}
         </div>
 
-        <div className="glass-panel rounded-2xl p-5 sm:p-6">
+        <div
+          className="rounded-2xl border border-white/[0.09] px-[26px] pb-[26px] pt-6"
+          style={{ background: 'linear-gradient(170deg, #111a1f, #0b1013)' }}
+        >
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <span className="text-sm font-medium text-white/60">Points per reception</span>
-            <div className="inline-flex rounded-full bg-white/5 p-1">
+            <span className="text-base font-bold text-white">Points per reception</span>
+            <div className="inline-flex gap-1 rounded-full bg-white/5 p-1">
               {PPR_OPTIONS.map((opt) => (
                 <button
                   key={opt.value}
                   onClick={() => setPpr(opt.value)}
-                  className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all duration-200 ${
+                  className={`rounded-full px-[15px] py-[7px] text-[13px] font-semibold transition-all duration-200 ${
                     ppr === opt.value ? 'bg-teal-500 text-obsidian shadow-[0_0_12px_rgba(0,229,255,0.5)]' : 'text-white/50 hover:text-white'
                   }`}
                 >
@@ -149,7 +158,7 @@ export default function ShowYourWorking() {
             </div>
           </div>
 
-          <div className="mt-5 flex flex-col gap-2">
+          <div className="mt-5 flex flex-col gap-[7px]">
             {ranked.map((row) => {
               const delta = deltas[row.player.name] || 0
               return (
@@ -157,28 +166,32 @@ export default function ShowYourWorking() {
                   key={row.player.name}
                   layout
                   transition={{ type: 'spring', stiffness: 350, damping: 32 }}
-                  className="flex items-center gap-3 rounded-xl border border-white/5 bg-white/[0.02] px-3 py-2.5"
+                  className="grid grid-cols-[22px_34px_1fr_auto] items-center gap-[14px] rounded-[11px] border border-white/[0.06] bg-[#0c1114] px-4 py-[14px]"
                 >
-                  <span className="w-4 shrink-0 text-right font-mono text-xs text-white/35">{row.rank}</span>
-                  <span className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-bold ${POS_BADGE[row.player.pos] || 'bg-white/10 text-white/50'}`}>
+                  <span className="text-right font-plex text-xs text-white/40">{row.rank}</span>
+                  <span className={`shrink-0 rounded-md px-1.5 py-0.5 text-center text-[10px] font-bold ${POS_BADGE[row.player.pos] || 'bg-white/10 text-white/50'}`}>
                     {row.player.pos}
                   </span>
-                  <span className="flex-1 truncate text-sm font-medium text-white/90">{row.player.name}</span>
-
-                  <span className="w-5 shrink-0">
+                  <span className="flex min-w-0 items-center gap-2 truncate text-[15.5px] font-semibold text-white/90">
+                    {row.player.name}
                     {delta > 0 && (
-                      <ArrowUp className="h-3.5 w-3.5 text-teal-400 drop-shadow-[0_0_6px_rgba(0,229,255,0.8)]" />
+                      <ArrowUp className="h-3.5 w-3.5 shrink-0 text-teal-400 drop-shadow-[0_0_6px_rgba(0,229,255,0.8)]" />
                     )}
-                    {delta < 0 && <ArrowDown className="h-3.5 w-3.5 text-white/30" />}
+                    {delta < 0 && <ArrowDown className="h-3.5 w-3.5 shrink-0 text-white/30" />}
                   </span>
 
-                  <span className="w-14 shrink-0 text-right font-mono text-sm text-white/70">
+                  <span className="shrink-0 text-right font-plex text-sm text-[#cbd5da]">
                     {row.points.toFixed(1)}
                   </span>
                 </motion.div>
               )
             })}
           </div>
+
+          <p className="mt-[18px] font-plex text-[11.5px] text-white/40">
+            Projected season points · {ppr === 1 ? '1.0' : ppr === 0.5 ? '0.5' : 'no reception bonus'}
+            {ppr !== 0 && ' per reception'}
+          </p>
         </div>
       </div>
     </section>

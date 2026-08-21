@@ -116,7 +116,7 @@ the Stack section above, not a one-time migration hiccup.
 | `worker/store.js` | The D1 cache: Sleeper's pool and Tank01 headlines. A cache and never a source of truth, and a missing binding is a normal condition rather than a fault. |
 | `worker/migrations/` | D1 schema, applied with `wrangler d1 migrations apply`. The database is not to be shaped by hand — see the note on three variants of one schema. |
 | `web/index.html` | The real homepage entry Vite builds from. Loads the legacy files above as root-relative classic scripts, alongside Vite's own hashed module bundle for React. The Draft Room markup lives here too, hidden — see the Stack section. |
-| `web/src/` | The React homepage: `Homepage.jsx` composes `Header`, `LiveScoresTicker`, `ResumeBanner`, `Hero`, `RoomNavigation`, `ShowYourWorking`. Every one of them reads real data through `window.JukeEngine` (or `window.DraftEngine` directly, for `pickCode()`) rather than inventing sample content — the header ticker used to be six fabricated stats and is now five real ones read off the live board. |
+| `web/src/` | The React homepage: `Homepage.jsx` composes `Header`, `Hero`, `ScoresStrip`, `ShowYourWorking`, `RoomsGrid`, `ClosingCta`. Every one of them reads real data through `window.JukeEngine` (or `window.DraftEngine` directly, for `pickCode()`) rather than inventing sample content — the header ticker used to be six fabricated stats and is now five real ones read off the live board. |
 | `web/vite.config.js` | The Vite build config, plus a dev-server middleware that serves the same `LEGACY_FILES`/`LEGACY_DIRS` list `copy-legacy-assets.mjs` uses, from the true repo root, so `window.JukeEngine` carries real data under `vite dev` too — not just after a full build. |
 | `web/scripts/copy-legacy-assets.mjs` | Copies the legacy files into `web/dist/` after `vite build`, chained as this package's `build` script. Fails loudly (`process.exit(1)`) and lists exactly what's missing rather than shipping a partial site quietly. |
 | `web/package.json` | A real build, with real dependencies (React, Vite, Tailwind, Framer Motion) — unlike the repo-root `package.json`, which stays Playwright-only. This is the one place in the project a `npm install` is required before anything runs. |
@@ -2122,6 +2122,67 @@ every seven seconds and walks everything below it up and down the page.
 would be the copy nobody remembers — and it sits near the top of the file
 where a `const` reading either of those would be inside their temporal dead
 zone and throw on load.
+
+## The homepage redesign
+
+A full layout and messaging pass on the marketing homepage, from an external
+design handoff — a single sticky header instead of a stacked logo/marquee/
+scores bar, a readable 3×2 room grid instead of a one-card-visible coverflow
+carousel, and copy repositioned from draft-prep tool to season-long platform.
+Two things from it are worth keeping past the redesign itself.
+
+**Every hex the handoff specified was close to but not identical to the
+existing brand colours, and matching it literally would have put a second
+teal next to the real one.** `#22d3ee`/`#7c5cff` versus the existing
+`--teal`/`--purple` (`#00E5FF`/`#7B1FA2`) — near enough to read as the same
+colour family, different enough that a CTA on the homepage and the identical
+CTA one click later in the Draft Room would visibly disagree. Resolved as a
+hybrid: every CTA, the "Live" state, and the logo stayed on the existing
+teal/purple exactly as the Draft Room and `JukeLogo.jsx` already use them —
+the handoff's own Assets section already said to swap in the real production
+mark rather than its own placeholder, which is the same argument extended to
+every other CTA-adjacent colour on the page. The handoff's mint (`#5eead4`)
+and a new sky blue (`#38bdf8`) landed as genuinely new, homepage-only
+*secondary* accents instead — the overline, background glow, chip labels —
+the same way `POS_BADGE` already carries six distinct hues without any of
+them competing with the one CTA colour. Position chips themselves were left
+alone on purpose: `POS_BADGE` is documented as "the one hue reference for
+the whole site now, not just the draft room," already shared by this same
+homepage's `ShowYourWorking.jsx`, and re-theming RB/WR to the handoff's own
+chip colours would have been exactly the "a position reads a different
+colour depending which page you're looking at" bug that file exists to
+prevent — reopened from a design brief that had no way to know it was there.
+
+**A same-page anchor nav did not work, and the reason had nothing to do with
+the nav.** Every link — `#rooms`, `#proof`, `#scores` — updated
+`location.hash` correctly and then the page snapped straight back to the
+top instead of landing on the section. `applyRoute()` ends in an
+unconditional `window.scrollTo(0, 0)`, right for a real route change
+(leaving the Draft Room, arriving at `#/`) and wrong for anything else — it
+fights the browser's own native scroll-to-anchor on every `hashchange`,
+including one that just landed nowhere near a route. This was already true
+of Hero.jsx's pre-existing "Explore The Rooms" link — `#rooms` existed as a
+target before this redesign — it just had one caller instead of a whole nav
+depending on it, so nobody had gone looking. Fixed by not calling
+`applyRoute()` at all from the `hashchange` listener when the new hash
+doesn't start with `#/`: every real route in this app is `#/something`, so
+that's a clean, complete test for "is this actually a route" rather than a
+guess. The boot-time `applyRoute()` call is a separate, unguarded call site
+on purpose — a fresh page load landing directly on `#rooms` from a bookmark
+still needs the view-visibility toggle to run once, just not on every
+anchor click after that.
+
+`RoomNavigation.jsx`'s 3D coverflow carousel — the touch/keyboard/resize
+handling included — is gone, replaced by `RoomsGrid.jsx`, a plain CSS grid.
+Nothing about the "door" CSS this file documented at length was touched by
+this: that prose is about the legacy plain-HTML homepage's own `.doorway`/
+`.door` markup, a different system already retired when Cloudflare Pages
+started building from `web/` — this carousel was a separate, React-only
+implementation with no relation to it. `ROOMS` in `app.js` gained a `lead`
+field (the short imperative line each card leads with) and reordered to run
+chronologically across a season — Prospect, Draft, Waiver, Trade, Strategy,
+League — rather than live-room-first; confirmed safe first, the same way
+any reorder here should be: nothing indexes `ROOMS` positionally.
 
 ## Whose it is, and where the draft is
 

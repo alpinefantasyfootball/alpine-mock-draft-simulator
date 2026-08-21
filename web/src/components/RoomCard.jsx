@@ -1,43 +1,75 @@
 import { motion } from 'framer-motion'
 
-export default function RoomCard({ room }) {
-  return (
-    <motion.div
-      whileHover={{ y: -10, scale: 1.05 }}
-      transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-      className="group relative flex h-full w-full flex-col justify-between rounded-2xl glass-panel p-6 text-left
-                 shadow-glass transition-colors duration-300 ease-out
-                 hover:border-teal/70 hover:shadow-card-hover"
-    >
-      <div>
-        <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-white/5 text-teal">
-          {room.icon}
-        </div>
-        <h3 className="font-display text-lg font-semibold text-white">{room.name}</h3>
-        <p className="mt-2 text-sm leading-relaxed text-white/55">{room.blurb}</p>
-      </div>
+// Live keeps the existing brand teal (border, icon, pill) rather than the
+// design brief's own slightly different #22d3ee — the hybrid palette
+// decision: every "Live"/CTA-adjacent signal on this page reads the same
+// teal the Draft Room and the logo already use, so a room going from
+// "Coming soon" to live one day doesn't introduce a second teal next to it.
+export default function RoomCard({ room, onComingSoon }) {
+  const live = room.live
 
-      <div className="mt-6 flex items-center justify-between">
-        <span
+  const content = (
+    <motion.div
+      whileHover={{ y: -4 }}
+      transition={{ duration: 0.16, ease: 'easeOut' }}
+      className={
+        'group flex h-full min-h-[216px] flex-col gap-[13px] rounded-[14px] border p-[26px] text-left transition-colors duration-150 ' +
+        (live
+          ? 'border-teal-400/40 hover:border-teal-400/70'
+          : 'border-white/[0.07] bg-[#0c1013] hover:border-teal-400/45')
+      }
+      style={
+        live
+          ? { background: 'linear-gradient(170deg, rgba(0,229,255,0.09), #0d1216 62%)' }
+          : undefined
+      }
+    >
+      <div className="flex items-center gap-[13px]">
+        <div
           className={
-            'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium tracking-wide ' +
-            (room.live ? 'bg-teal/15 text-teal' : 'bg-white/5 text-white/40')
+            'flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[9px] ' +
+            (live ? 'bg-white/5 text-teal-300' : 'bg-white/5 text-white/45')
           }
         >
-          <span className={'h-1.5 w-1.5 rounded-full ' + (room.live ? 'bg-teal' : 'bg-white/30')} />
-          {room.live ? 'Live' : 'Coming soon'}
-        </span>
-
-        {room.live && room.href && (
-          <a
-            href={room.href}
-            onClick={(e) => e.stopPropagation()}
-            className="text-xs font-medium text-white/40 opacity-0 transition-opacity duration-300 hover:text-teal group-hover:opacity-100"
-          >
-            Enter &rarr;
-          </a>
-        )}
+          {room.icon}
+        </div>
+        <h3 className="font-display text-[17.5px] font-bold text-white">{room.name}</h3>
       </div>
+
+      {room.lead && <p className="text-[15px] font-bold text-[#cbd5da]">{room.lead}</p>}
+
+      <p className="flex-1 text-[14.5px] leading-[1.55] text-[#8b979e]">{room.blurb}</p>
+
+      <span
+        className={
+          'inline-flex w-fit items-center gap-[6px] self-start rounded-full px-3 py-[5px] font-plex text-[10.5px] font-semibold ' +
+          (live ? 'bg-teal-500/[0.14] text-teal-300' : 'bg-white/5 text-white/45')
+        }
+      >
+        <span className={'h-[5px] w-[5px] rounded-full ' + (live ? 'bg-teal-400' : 'bg-white/35')} />
+        {live ? 'Live' : 'Coming soon'}
+      </span>
     </motion.div>
+  )
+
+  if (live && room.href) {
+    return (
+      <a href={room.href} className="block h-full">
+        {content}
+      </a>
+    )
+  }
+
+  // Not live: the whole card is a button rather than a dead surface — opens
+  // the same ComingSoonModal Header.jsx already uses for Log in/Sign Up,
+  // with copy specific to this room, instead of doing nothing. The design
+  // brief left this an open question ("decide whether these are inert or
+  // open a waitlist affordance"); there's no waitlist to sign up for, so
+  // the honest answer already built into this codebase is the same one
+  // used everywhere else something isn't live yet.
+  return (
+    <button type="button" onClick={() => onComingSoon?.(room)} className="block h-full w-full">
+      {content}
+    </button>
   )
 }
