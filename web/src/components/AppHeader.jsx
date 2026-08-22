@@ -109,12 +109,21 @@ export default function AppHeader() {
           className={`flex shrink-0 items-center gap-1.5 border-r px-3.5 transition-opacity duration-150 hover:opacity-75 ${seg}`}
         >
           <ChevronLeft className={`h-4 w-4 ${lit ? 'text-white' : 'text-white/70'}`} />
-          {/* Two-tone (teal shape, purple stem) at rest — the same colours
-              Header.jsx's JukeLogo uses on the homepage, on the same flat
-              dark background. mono only kicks in once the bar is lit: a
-              two-tone mark doesn't read against a saturated gradient, same
-              reason the legacy header reverses --mark-ink there. */}
-          <JukeMark width={20} mono={lit} className={lit ? 'text-white' : undefined} />
+          {/* Two-value (teal linework, obsidian negatives) at rest — the same
+              colours Header.jsx's JukeLogo uses on the homepage, on the same
+              flat dark background. mono only kicks in once the bar is lit: a
+              two-value mark doesn't read against a saturated gradient, same
+              reason the legacy header reverses --mark-ink there.
+
+              28 rather than 20, and the number is load-bearing rather than
+              taste. JukeLogo drops to the currentColor silhouette below 28px
+              — the shark face does not survive smaller — and a silhouette
+              here would take whatever colour it inherited, which is to say
+              the resting state would quietly stop being teal and the comment
+              above would stop being true. 28 is the smallest width that keeps
+              the two-value mark, and the shark is wide, so this is 17px tall
+              against the goalpost's 21. */}
+          <JukeMark width={28} mono={lit} className={lit ? 'text-white' : undefined} />
         </button>
 
         <div className={`flex min-w-0 flex-col justify-center gap-0.5 border-r px-4 py-1.5 ${seg}`}>

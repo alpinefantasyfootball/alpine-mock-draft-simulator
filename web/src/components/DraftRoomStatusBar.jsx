@@ -70,13 +70,24 @@ export default function DraftRoomStatusBar({
   return (
     <Fragment>
     <header /* gap-1 below sm, and the arithmetic is why rather than taste. At
-          375px the four blocks are 81 (logo) + 52 (the round text at its
-          floor) + 57 (the clock) + 144 (the controls) = 334, and 24px of
-          padding leaves 17 for the gaps. Three gaps at 8px is 24, so the
-          bar was 7 to 12px over depending on how wide the clock happened
-          to render - which is why it fit on some reads and not others and
-          looked like a flaky test. Three at 4px is 12, and it fits with
-          room to spare. */
+          375px the blocks are 52 (the round text at its floor) + 57 (the
+          clock) + 144 (the controls) = 253, and 24px of padding leaves the
+          gaps a long way clear. At 8px each they were not: the logo used to
+          be counted in this sum at 81px, which put the bar 7 to 12px over
+          depending on how wide the clock happened to render - fitting on
+          some reads and not others, and looking like a flaky test. 4px
+          gaps fixed it and the number stays at 4.
+
+          The logo is no longer in that sum, and this comment claimed it was
+          for longer than it was true: the anchor below carries
+          `hidden shrink-0 sm:block`, so nothing renders it under 640px. Any
+          check on the logo's width belongs at sm and up, which is also where
+          the shark mark's wider 564:352 aspect (+10px on the lockup at every
+          size) actually lands - and where this bar has ~250px of slack.
+
+          Note also that nothing imports this component any more:
+          DraftCockpitHeader.jsx took over both of its call sites. The
+          arithmetic above is kept correct rather than acted on. */
       className="fixed inset-x-0 top-0 z-50 flex h-14 shrink-0 items-center gap-1 border-b border-white/5 bg-obsidian/80 px-3 backdrop-blur-md sm:gap-4 sm:px-6">
       {/* Leaving via either of these (real navigation) is not the same
           action as Discard/"Leave the room" further right — see CLAUDE.md:
