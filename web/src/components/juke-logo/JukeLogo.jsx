@@ -13,8 +13,9 @@
 //
 //   1. The mark's aspect ratio went from 54:56 (0.96:1) to 564:352 (1.602:1).
 //      The shark is wide. markWidth is now size * 1.7 rather than size * 1.15,
-//      which makes the lockup roughly 12px wider at size=21. See the note in
-//      DraftRoomStatusBar below.
+//      which makes the lockup roughly 10px wider at every size — measured 105px
+//      at size=21 and 90px at size=18. See "The one layout note" in README.md
+//      for where that actually lands and where it does not.
 //
 //   2. Below 28px the mark automatically drops to the silhouette. The
 //      three-value face does not survive smaller than that, and silently

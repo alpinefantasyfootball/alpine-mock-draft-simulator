@@ -100,31 +100,46 @@ The goalpost was 0.96:1. The shark is 1.602:1. Measured lockup widths, old → n
 
 | `size` | Used by | Before | After |
 |---|---|---|---|
-| 18 | DraftRoomStatusBar, Homepage | 81px | 91px |
-| 19 | LobbyBar, DraftCockpitHeader | 86px | 96px |
+| 18 | Homepage footer | 81px | 90px |
+| 19 | LobbyBar, DraftCockpitHeader | 86px | 95px |
 | 21 | Header | 95px | 105px |
 | 32 | marketing | 145px | 160px |
+
+`AppHeader` is the fifth, and it asks for a `width` rather than a `size`: 28,
+which is the floor for the two-value face. Anything under it renders the
+`currentColor` silhouette instead, whether or not `mono` was asked for.
 
 About +10px, consistently. `markWidth` went from `size * 1.15` to `size * 1.7`;
 the lockup gap was tightened from `size * 0.48` to `size * 0.42` to offset part
 of it.
 
-**This is not a narrow-viewport risk.** `DraftRoomStatusBar.jsx` carries a
-comment budgeting a 375px row as `"81 (logo) + 52 (the round text at its floor)
-+ 57 (the clock) + 144 (the controls) = 334"`, but the logo anchor in that same
-file is `className="hidden shrink-0 sm:block"` — the logo is not rendered below
-640px. That comment is stale against its own markup, and the arithmetic it
-describes has not applied since the anchor was hidden.
+**It lands only at `sm` and up.** Every bar that carries the logo in the draft
+room hides it below 640px (`hidden shrink-0 sm:block`), so the wider lockup
+cannot reach a phone layout at all.
 
-So the +10px lands only at `sm` and up, where that bar has roughly 250px of
-slack. Verify it, but expect it to pass. If it ever does get tight, the fix in
-preference order:
+**Where it does land, `DraftCockpitHeader.jsx` has no slack, and the mark is not
+why.** Measured at 640px with a draft running and the clock mine, the controls
+block ends at these positions against a 640px bar:
 
-1. `<JukeLogo variant="mark" size={18} />` — the shark is a distinct silhouette,
-   so mark-only is now permitted. The goalpost's "never alone in the header" rule
-   existed because it read as a plain U without its wordmark.
-2. `size={17}` in that bar only.
-3. Let the round text truncate; it already has the shrink rules for it.
+| | right edge |
+|---|---|
+| no logo at all | 616 — fits |
+| goalpost lockup (mark 22px) | 675 — 35px over |
+| shark lockup (mark 32px) | 685 — 45px over |
+| shark, `variant="mark"` | 622 — fits |
 
-Worth fixing while you are in there: correct that stale comment, or unhide the
-logo below `sm` if it was meant to be visible.
+So that bar was already clipping its own controls before this mark existed, and
+the shark adds 10px to 35. At 768px the `md:flex` tab nav joins in and the bar
+needs **941px** before it stops clipping — 95px of that 173px deficit is the
+lockup, and no logo change closes the rest.
+
+`variant="mark"` below `md` is the fix for `sm` and it is now permitted: the
+shark is a distinct silhouette, where the goalpost read as a plain U without its
+wordmark and so was never allowed to stand alone. `md` needs a real answer about
+what that bar drops, which is a layout decision rather than a logo one.
+
+**Do not measure this on `DraftRoomStatusBar.jsx`.** It was the file the handoff
+named, and nothing had imported it since `DraftCockpitHeader.jsx` took over both
+of its call sites — its own 375px comment budgeted `81 (logo)` against markup
+that had been hiding the logo since well before. It has been deleted. Check what
+actually renders before measuring it.
