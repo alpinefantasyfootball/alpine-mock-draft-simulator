@@ -28,6 +28,12 @@ export default function DraftLocker({ onStartNew, problem, lobbySlot, onOpenSett
   const inProgress = engine.inProgressSummary()
   const completed = engine.historyList()
   const stats = engine.historyStats()
+  // historyStats() returns {} outright with no history at all, so
+  // stats.total is undefined rather than 0 in that case — totalMocks folds
+  // both into one real number, "0" included, rather than the sentence
+  // reading "undefined mocks run."
+  const totalMocks = stats.total || 0
+  const mocksRunSentence = `${totalMocks} mock${totalMocks === 1 ? '' : 's'} run. Unlimited, always free.`
 
   const resume = () => { engine.resumeSavedDraft(); location.hash = '#/draft-room' }
   const discard = () => { engine.clearSave(); forceLocal() }
@@ -43,16 +49,29 @@ export default function DraftLocker({ onStartNew, problem, lobbySlot, onOpenSett
     // few times — is still free to grow taller than the viewport and let
     // the real ancestor scroller (DraftRoom.jsx's own overflow-y-auto) take
     // over, rather than being capped at 100% and clipping.
-    <div className="mx-auto flex min-h-full max-w-[1600px] flex-col px-8 py-7">
+    <div className="mx-auto flex min-h-full max-w-[1600px] flex-col px-4 py-5 lg:px-8 lg:py-7">
       <div className="mb-6 flex items-end justify-between">
         <div>
-          <h1 className="font-display text-[32px] font-bold text-white">Draft Room</h1>
-          <p className="mt-1 text-sm text-white/50">
+          {/* "Draft Lobby", not "Draft Room" — the bottom tab bar
+              (MobileAppTabBar.jsx) already names this screen "Lobby" and
+              reserves "Draft" for the live Cockpit one tab over; this
+              heading disagreeing with the nav that gets you here was never
+              right, just never looked at before there was a nav to compare
+              it to. */}
+          <h1 className="font-display text-[32px] font-bold text-white">Draft Lobby</h1>
+          {/* Mobile: one honest sentence with the real count in it, instead
+              of the desktop stat block to the right — that block doesn't
+              fit this row below lg, and "N mocks run" is the one fact it
+              carries that a single line can say without a second column. */}
+          <p className="mt-1 text-sm text-white/50 lg:hidden">
+            {mocksRunSentence}
+          </p>
+          <p className="mt-1 hidden text-sm text-white/50 lg:block">
             Set up a mock, pick up where you left off, or see what's already in the locker.
           </p>
         </div>
         {stats.total > 0 && (
-          <div className="flex items-center gap-6">
+          <div className="hidden items-center gap-6 lg:flex">
             <div className="text-right">
               <p className="font-display text-[23px] font-bold tabular-nums text-white">{stats.total}</p>
               <p className="text-[10px] uppercase tracking-[0.07em] text-white/50">Mocks run</p>
@@ -84,15 +103,17 @@ export default function DraftLocker({ onStartNew, problem, lobbySlot, onOpenSett
           sitting a few lines tall beside it. Below the five-mock gate that
           panel is a short honest-line message; stretched to the panel's
           full height, it reads as a considered empty state instead of the
-          ~500px gap this replaced. */}
-      <div className="mb-7 flex items-stretch gap-5">
+          ~500px gap this replaced. flex-col below lg: the 396px-wide launcher
+          and the tendencies panel beside it were never going to fit a phone
+          side by side — see NewMockPanel.jsx's own hard-blocker comment —
+          so they stack, launcher first, same reading order the mockup uses. */}
+      <div className="mb-7 flex flex-col items-stretch gap-5 lg:flex-row">
         <NewMockPanel
           engine={engine}
           league={league}
           problem={problem}
           lobbySlot={lobbySlot}
           onStartNew={onStartNew}
-          presets={stats.presets}
           onOpenSettings={onOpenSettings}
         />
         <div className="min-w-0 flex-1">

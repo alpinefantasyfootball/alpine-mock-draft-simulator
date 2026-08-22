@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
-import { Search, ChevronDown, MoreHorizontal } from 'lucide-react'
+import { Search, ChevronDown, ChevronRight, MoreHorizontal } from 'lucide-react'
 
 const FORMAT_FILTERS = [
   { key: 'all', label: 'All formats' },
@@ -41,95 +41,173 @@ function gradeColor(grade) {
   return '#FB7185'
 }
 
+// Mobile grade tile — teal for a bargeable grade (C and above), red below
+// it. A different split from gradeColor() above on purpose: gradeColor()
+// answers "is this an A/B" (for the desktop table's plain-text grade,
+// where C reads neutral white), the tile answers "is this a result I'd
+// want to see again" (where C joins the good half). gradeRank() below is
+// the one ordered list of every grade string this file already keeps —
+// reused for the cutoff rather than a second hand-picked one.
+function tileTone(grade) {
+  if (!grade) {
+    return { bg: 'rgba(255,255,255,0.04)', border: 'rgba(255,255,255,0.14)', text: 'rgba(255,255,255,0.5)' }
+  }
+  const passing = gradeRank(grade) <= gradeRank('C−')
+  return passing
+    ? { bg: 'rgba(0,229,255,0.08)', border: 'rgba(0,229,255,0.35)', text: '#66F0FF' }
+    : { bg: 'rgba(248,113,113,0.08)', border: 'rgba(248,113,113,0.35)', text: '#FB7185' }
+}
+
+// "2 days ago" for the mobile card's meta line. app.js's historySummary()
+// now carries entry.completedAt (a raw epoch) alongside its own pre-
+// formatted entry.dateCompleted string, for the same reason the seat/
+// pickPosition fields sit side by side there: turning an already-localized
+// date string back into a Date to do arithmetic on it has no clean way to
+// undo the other's formatting. Same three-step scale (min/hr/day) as
+// Ticker.jsx's own timeAgo(), reimplemented rather than shared because that
+// one parses a pipeline-log timestamp string, not a bare epoch number — a
+// different input shape, not a second opinion on how to phrase "ago".
+function relativeAgo(ms) {
+  if (typeof ms !== 'number') return null
+  const mins = Math.max(0, Math.round((Date.now() - ms) / 60000))
+  if (mins < 1) return 'just now'
+  if (mins < 60) return `${mins} min ago`
+  const hrs = Math.round(mins / 60)
+  if (hrs < 24) return `${hrs} hr${hrs === 1 ? '' : 's'} ago`
+  const days = Math.round(hrs / 24)
+  return `${days} day${days === 1 ? '' : 's'} ago`
+}
+
 function Row({ entry, onAnalyze, onDeleteRequest, menuOpen, onToggleMenu }) {
   const teams = entry.teams
   const fillPct = entry.rank && teams ? Math.max(0, Math.min(100, (1 - (entry.rank - 1) / teams) * 100)) : 0
   const accent = finishColor(entry.rank, teams)
+  const tone = tileTone(entry.grade)
+  const ago = relativeAgo(entry.completedAt)
 
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={() => onAnalyze(entry.id)}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onAnalyze(entry.id) } }}
-      className="grid cursor-pointer grid-cols-[minmax(0,2.1fr)_64px_62px_104px_minmax(0,1.5fr)_92px_96px_40px] items-center gap-[14px] border-b border-white/[0.04] px-5 py-[13px] transition-colors duration-150 hover:bg-teal-400/[0.045]"
-    >
-      <div className="flex min-w-0 items-center gap-2.5">
-        <span className="h-[26px] w-[3px] shrink-0 rounded-full" style={{ background: accent }} />
-        <span className="truncate text-sm font-semibold text-white">{entry.leagueType}</span>
-      </div>
+    <>
+      {/* Desktop: the eight-column data grid, unchanged — hidden lg:grid
+          rather than a bare `grid` now that a second, mobile-only layout
+          exists below it for the same entry. */}
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => onAnalyze(entry.id)}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onAnalyze(entry.id) } }}
+        className="hidden cursor-pointer grid-cols-[minmax(0,2.1fr)_64px_62px_104px_minmax(0,1.5fr)_92px_96px_40px] items-center gap-[14px] border-b border-white/[0.04] px-5 py-[13px] transition-colors duration-150 hover:bg-teal-400/[0.045] lg:grid"
+      >
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span className="h-[26px] w-[3px] shrink-0 rounded-full" style={{ background: accent }} />
+          <span className="truncate text-sm font-semibold text-white">{entry.leagueType}</span>
+        </div>
 
-      <span className="text-sm tabular-nums text-white/60">{entry.seat}</span>
+        <span className="text-sm tabular-nums text-white/60">{entry.seat}</span>
 
-      <span className="font-display text-[19px] font-bold" style={{ color: gradeColor(entry.grade) }}>
-        {entry.grade || '—'}
-      </span>
-
-      <div className="flex items-center gap-2">
-        <span className="w-[30px] shrink-0 text-sm font-semibold tabular-nums text-white/90">
-          {entry.projectedRank}
+        <span className="font-display text-[19px] font-bold" style={{ color: gradeColor(entry.grade) }}>
+          {entry.grade || '—'}
         </span>
-        <div className="h-[3px] flex-1 overflow-hidden rounded-full bg-white/[0.06]">
-          <div className="h-full rounded-full" style={{ width: `${fillPct}%`, background: accent }} />
+
+        <div className="flex items-center gap-2">
+          <span className="w-[30px] shrink-0 text-sm font-semibold tabular-nums text-white/90">
+            {entry.projectedRank}
+          </span>
+          <div className="h-[3px] flex-1 overflow-hidden rounded-full bg-white/[0.06]">
+            <div className="h-full rounded-full" style={{ width: `${fillPct}%`, background: accent }} />
+          </div>
+        </div>
+
+        <div className="flex min-w-0 items-center gap-2">
+          {entry.round1Pick ? (
+            <>
+              {entry.round1PickPos && (
+                <span className="shrink-0 rounded bg-white/[0.06] px-1.5 py-0.5 text-[10px] font-bold text-white/50">
+                  {entry.round1PickPos}
+                </span>
+              )}
+              <span className="truncate text-sm text-white/75">{entry.round1Pick}</span>
+            </>
+          ) : (
+            <span className="text-sm text-white/30">—</span>
+          )}
+        </div>
+
+        <span className="text-right text-sm font-medium tabular-nums text-white/70">
+          {typeof entry.rosterVorp === 'number'
+            ? `${entry.rosterVorp >= 0 ? '+' : ''}${entry.rosterVorp.toFixed(1)}`
+            : '—'}
+        </span>
+
+        <span className="text-right text-xs tabular-nums text-white/50">{entry.dateCompleted}</span>
+
+        <div className="relative justify-self-end">
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onToggleMenu(entry.id) }}
+            className="flex h-6 w-6 items-center justify-center rounded text-white/50 transition-colors hover:text-white"
+            aria-label="More actions"
+          >
+            <MoreHorizontal className="h-4 w-4" />
+          </button>
+          {menuOpen && (
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="absolute right-0 top-7 z-10 w-40 overflow-hidden rounded-lg border border-white/10 bg-charcoal shadow-lg"
+            >
+              <button
+                type="button"
+                onClick={() => { onAnalyze(entry.id); onToggleMenu(null) }}
+                className="block w-full px-3 py-2 text-left text-sm text-white/80 hover:bg-white/5"
+              >
+                Analyze draft
+              </button>
+              <div className="border-t border-white/10" />
+              <button
+                type="button"
+                onClick={() => { onDeleteRequest(entry.id); onToggleMenu(null) }}
+                className="block w-full px-3 py-2 text-left text-sm text-rose-300 hover:bg-white/5"
+              >
+                Delete
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
-      <div className="flex min-w-0 items-center gap-2">
-        {entry.round1Pick ? (
-          <>
-            {entry.round1PickPos && (
-              <span className="shrink-0 rounded bg-white/[0.06] px-1.5 py-0.5 text-[10px] font-bold text-white/50">
-                {entry.round1PickPos}
-              </span>
-            )}
-            <span className="truncate text-sm text-white/75">{entry.round1Pick}</span>
-          </>
-        ) : (
-          <span className="text-sm text-white/30">—</span>
-        )}
-      </div>
-
-      <span className="text-right text-sm font-medium tabular-nums text-white/70">
-        {typeof entry.rosterVorp === 'number'
-          ? `${entry.rosterVorp >= 0 ? '+' : ''}${entry.rosterVorp.toFixed(1)}`
-          : '—'}
-      </span>
-
-      <span className="text-right text-xs tabular-nums text-white/50">{entry.dateCompleted}</span>
-
-      <div className="relative justify-self-end">
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onToggleMenu(entry.id) }}
-          className="flex h-6 w-6 items-center justify-center rounded text-white/50 transition-colors hover:text-white"
-          aria-label="More actions"
+      {/* Mobile: a 52px grade tile, the format as title, seat/order/recency
+          beneath, chevron. No kebab menu here — the mockup's row has no
+          delete affordance, so a tap goes straight to Analyze rather than
+          growing a second interaction the design doesn't show; deleting a
+          mock from a phone still works from the desktop table. */}
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => onAnalyze(entry.id)}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onAnalyze(entry.id) } }}
+        className="flex cursor-pointer items-center gap-3.5 border-b border-white/[0.04] px-4 py-3.5 transition-colors duration-150 hover:bg-teal-400/[0.045] lg:hidden"
+      >
+        <div
+          className="flex h-[52px] w-[52px] shrink-0 flex-col items-center justify-center rounded-xl border"
+          style={{ background: tone.bg, borderColor: tone.border }}
         >
-          <MoreHorizontal className="h-4 w-4" />
-        </button>
-        {menuOpen && (
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="absolute right-0 top-7 z-10 w-40 overflow-hidden rounded-lg border border-white/10 bg-charcoal shadow-lg"
-          >
-            <button
-              type="button"
-              onClick={() => { onAnalyze(entry.id); onToggleMenu(null) }}
-              className="block w-full px-3 py-2 text-left text-sm text-white/80 hover:bg-white/5"
-            >
-              Analyze draft
-            </button>
-            <div className="border-t border-white/10" />
-            <button
-              type="button"
-              onClick={() => { onDeleteRequest(entry.id); onToggleMenu(null) }}
-              className="block w-full px-3 py-2 text-left text-sm text-rose-300 hover:bg-white/5"
-            >
-              Delete
-            </button>
-          </div>
-        )}
+          <span className="font-display text-[19px] font-black leading-none" style={{ color: tone.text }}>
+            {entry.grade || '—'}
+          </span>
+          <span className="mt-1 font-plex text-[11px] tabular-nums text-white/55">
+            {entry.rank && teams ? `${entry.rank}/${teams}` : '—'}
+          </span>
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[15px] font-semibold text-white">{entry.leagueType}</p>
+          <p className="mt-0.5 truncate font-plex text-[11.5px] text-white/50">
+            Seat {entry.seat} · snake{ago ? ` · ${ago}` : ''}
+          </p>
+        </div>
+
+        <ChevronRight className="h-4 w-4 shrink-0 text-white/30" />
       </div>
-    </div>
+    </>
   )
 }
 
@@ -276,7 +354,9 @@ export default function LockerTable({ entries, onAnalyze, onDeleteConfirmed }) {
       ) : (
         <>
           <div className="flex-1">
-            <div className="grid grid-cols-[minmax(0,2.1fr)_64px_62px_104px_minmax(0,1.5fr)_92px_96px_40px] gap-[14px] border-b border-white/[0.06] bg-obsidian/40 px-5 py-[9px]">
+            {/* hidden lg:grid: the eight-column header has nothing to head
+                below lg, where Row() renders cards instead of grid cells. */}
+            <div className="hidden grid-cols-[minmax(0,2.1fr)_64px_62px_104px_minmax(0,1.5fr)_92px_96px_40px] gap-[14px] border-b border-white/[0.06] bg-obsidian/40 px-5 py-[9px] lg:grid">
               {['Format', 'Seat', 'Grade', 'Proj. finish', 'First pick'].map((h) => (
                 <span key={h} className="text-[10px] font-semibold uppercase tracking-[0.08em] text-white/50">{h}</span>
               ))}
@@ -315,7 +395,14 @@ export default function LockerTable({ entries, onAnalyze, onDeleteConfirmed }) {
       )}
 
       {pending && (
-        <div className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-4 rounded-full border border-white/10 bg-charcoal px-5 py-3 shadow-lg">
+        // bottom offset clears MobileAppTabBar's own fixed 58px + safe-area
+        // footprint below lg — the same reserved amount DraftRoom.jsx's
+        // scroll container already pads for, read here instead of guessed,
+        // so the toast doesn't surface behind the tab bar it would otherwise
+        // sit under.
+        <div
+          className="fixed bottom-[calc(58px+env(safe-area-inset-bottom)+16px)] left-1/2 z-50 flex -translate-x-1/2 items-center gap-4 rounded-full border border-white/10 bg-charcoal px-5 py-3 shadow-lg lg:bottom-6"
+        >
           <span className="text-sm text-white/80">Draft removed</span>
           <button type="button" onClick={undo} className="text-sm font-semibold text-teal-300 hover:text-teal-200">
             Undo

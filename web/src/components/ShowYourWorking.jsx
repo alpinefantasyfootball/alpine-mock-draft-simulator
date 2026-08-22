@@ -1,17 +1,33 @@
 import { motion } from 'framer-motion'
 
+// Replaced the previous three (change-a-rule / score-shows-its-working /
+// rebuilt-every-morning) with design_handoff_mobile's numbered trio, which
+// names the three actual mechanisms rather than restating "it reruns live" a
+// second time — ScoringDemoCard.jsx directly above already proves that. The
+// fourth grade component is "bye week safety" in the mock's own copy
+// ("bench depth") — corrected here to match what analyseDraft() actually
+// weights (CLAUDE.md's draft-grade section: 50/25/15/10, starter strength /
+// draft value / roster construction / bye week safety). Bench depth isn't
+// one of the four; printing the mock's word would be describing a grade
+// this app doesn't compute.
 const FEATURES = [
   {
-    title: 'Change a rule. Every number moves.',
-    body: 'Every projection on the board reruns through the scoring table the instant you edit it — nothing is cached.',
+    no: '01',
+    tag: 'VORP',
+    title: 'Value over replacement',
+    body: 'Every player is scored against the last startable player at their position, not against each other.',
   },
   {
-    title: 'The score shows its working.',
-    body: 'Points above replacement, not a black-box rating — you can always see what a number is measuring against.',
+    no: '02',
+    tag: 'SURVIVAL',
+    title: 'The odds they last',
+    body: 'Before you pick, Juke gives the chance each player is still on the board at your next turn.',
   },
   {
-    title: 'Rebuilt every morning.',
-    body: "ADP and injury data refresh nightly, so the board reflects this week's market, not last month's.",
+    no: '03',
+    tag: 'THE GRADE',
+    title: 'Four parts, each shown',
+    body: 'Starter strength, draft value, roster construction, bye week safety — with the weight each one carries.',
   },
 ]
 
@@ -68,7 +84,10 @@ export default function ShowYourWorking() {
             key={f.title}
             className="flex h-full flex-col rounded-[14px] border border-white/[0.07] bg-[#0d1216] px-[26px] py-6 transition-colors duration-200 hover:border-teal-400/70"
           >
-            <h3 className="font-display text-[17px] font-bold text-white">{f.title}</h3>
+            <p className="font-plex text-[11px] font-semibold tracking-[0.12em] text-teal-400">
+              {f.no} &middot; {f.tag}
+            </p>
+            <h3 className="mt-[9px] font-display text-[17px] font-bold text-white">{f.title}</h3>
             <p className="mt-[9px] text-[15px] leading-[1.55] text-[#8e9aa1]">{f.body}</p>
           </div>
         ))}

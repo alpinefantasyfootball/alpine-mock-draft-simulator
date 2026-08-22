@@ -32,8 +32,13 @@ export default function InProgressBand({ draft, onResume, onDiscard }) {
   const started = elapsed(draft.startedAt)
 
   return (
+    // grid-cols-1: a fixed 1fr/260px split was never going to fit a phone —
+    // the 260px action column alone is most of a 375px viewport before the
+    // gap and the left column's own min-content width are even counted.
+    // Stacks to a single column below lg, buttons full-width beneath the
+    // summary rather than beside it.
     <div
-      className="mb-5 grid grid-cols-[1fr_260px] items-center gap-7 rounded-xl border p-[18px]"
+      className="mb-5 grid grid-cols-1 items-center gap-4 rounded-xl border p-[18px] lg:grid-cols-[1fr_260px] lg:gap-7"
       style={{
         borderColor: 'rgba(0,229,255,0.32)',
         borderLeftColor: '#00E5FF',
@@ -42,7 +47,7 @@ export default function InProgressBand({ draft, onResume, onDiscard }) {
       }}
     >
       <div>
-        <div className="mb-[10px] flex items-center gap-3">
+        <div className="mb-[10px] flex flex-wrap items-center gap-x-3 gap-y-1.5">
           <span className="inline-flex items-center gap-[7px] rounded-full bg-teal-400/[0.16] px-[9px] py-[3px] text-[10px] font-bold tracking-[0.07em] text-teal-300">
             <span className="h-[5px] w-[5px] rounded-full bg-teal-400" />
             IN PROGRESS
@@ -54,8 +59,8 @@ export default function InProgressBand({ draft, onResume, onDiscard }) {
           {started && <span className="text-xs text-white/50">{started}</span>}
         </div>
 
-        <div className="mb-[11px] flex items-center gap-[14px]">
-          <div className="h-[5px] flex-1 overflow-hidden rounded-full bg-white/[0.07]">
+        <div className="mb-[11px] flex flex-wrap items-center gap-x-[14px] gap-y-1.5">
+          <div className="h-[5px] w-full min-w-[80px] flex-1 overflow-hidden rounded-full bg-white/[0.07] sm:w-auto">
             <div
               className="h-full rounded-full"
               style={{
@@ -75,7 +80,7 @@ export default function InProgressBand({ draft, onResume, onDiscard }) {
         </div>
 
         {recent.length > 0 && (
-          <div className="flex items-center gap-[7px]">
+          <div className="flex flex-wrap items-center gap-[7px]">
             <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-white/50">
               Your roster
             </span>
@@ -100,7 +105,7 @@ export default function InProgressBand({ draft, onResume, onDiscard }) {
         <button
           type="button"
           onClick={onResume}
-          className="rounded-full border border-teal-400/45 bg-teal-400/10 px-5 py-[11px] text-sm font-semibold text-teal-300 transition-colors duration-150 hover:border-teal-400 hover:bg-teal-400/[0.18] hover:text-teal-200"
+          className="w-full rounded-full border border-teal-400/45 bg-teal-400/10 px-5 py-[11px] text-center text-sm font-semibold text-teal-300 transition-colors duration-150 hover:border-teal-400 hover:bg-teal-400/[0.18] hover:text-teal-200 lg:w-auto"
         >
           Resume draft
         </button>
@@ -108,7 +113,7 @@ export default function InProgressBand({ draft, onResume, onDiscard }) {
           type="button"
           onClick={handleDiscardClick}
           className={
-            'text-xs font-medium transition-colors ' +
+            'text-center text-xs font-medium transition-colors lg:text-left ' +
             (confirming ? 'font-semibold text-rose-300' : 'text-white/50 hover:text-white')
           }
         >

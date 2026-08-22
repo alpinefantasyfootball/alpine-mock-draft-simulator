@@ -52,41 +52,41 @@ export const POS_BADGE = {
 
 export const POS_LIST = ['QB', 'RB', 'WR', 'TE']
 
-// The board grid's full colour-block cells — saturated background, matching
-// border, matching text colour, so position reads from the whole card
-// rather than a badge inside it. Same six hues as POS_BADGE above, just the
-// bolder bg-950/60 + border-500/40 + text-200 formula the board asked for.
-//
-// The Draft Room Cockpit handoff asked for this to become a left-rail accent
-// instead — CLAUDE.md already had a section titled "Tried and rejected:
-// position colour as a left rail" for exactly this change, built once and
-// screenshotted: "at working zoom the rails are nearly invisible. Scanning
-// the grid for position runs is what a draft board is for, and it stops
-// working." That didn't make the handoff wrong on its own — this file
-// overrode a different documented decision (orange -> teal) two days after
-// writing it down — so it was re-tried rather than dismissed on a two-year-
-// old memory: prototyped with an injected stylesheet on a real completed
-// board (a full 140-pick draft, all six positions on screen at once) and
-// screenshotted at two widths.
-//
-// A 3px rail on a neutral cell — the exact width the rejected attempt used —
-// reproduced the original finding: the colour is technically there on close
-// inspection and reads as almost uniformly dark from a normal glance. A
-// deliberately bolder 6px rail, double the original, closed some of the gap
-// and is genuinely scannable up close — but the full-cell fill below is
-// still faster to read at a glance, because it recruits the whole cell
-// rather than one edge of it, and "scan the grid for position runs" is the
-// job this screen has to do fastest. So the verdict stands: fill, not rail.
-// Whoever revisits this again should still look rather than trust this
-// comment — but the look has now actually happened twice, not zero times.
-export const POS_CELL_BLOCK = {
-  QB: 'bg-orange-950/60 border border-orange-500/40 text-orange-200',
-  RB: 'bg-emerald-950/60 border border-emerald-500/40 text-emerald-200',
-  WR: 'bg-blue-950/60 border border-blue-500/40 text-blue-200',
-  TE: 'bg-fuchsia-950/60 border border-fuchsia-500/40 text-fuchsia-200',
-  K: 'bg-yellow-950/60 border border-yellow-500/40 text-yellow-200',
-  DST: 'bg-indigo-950/60 border border-indigo-500/40 text-indigo-200',
-}
+/* POS_CELL_BLOCK — the board grid's old full-colour-block cells — lived here
+   until a third look overturned the verdict directly above this line. Worth
+   keeping the record straight, since the comment that used to sit here
+   argued the opposite of what actually shipped:
+
+   The first look built the rail once, screenshotted it, and rejected it —
+   "at working zoom the rails are nearly invisible." The second look re-built
+   it, re-screenshotted it on a real 140-pick board, and rejected it again —
+   a 3px rail read as almost uniformly dark, a bolder 6px rail closed some of
+   the gap but still lost to the fill at a glance. Both times the conclusion
+   was "fill, not rail," and both times it was reached by looking rather than
+   assuming, which is exactly what should make a third reversal suspicious
+   rather than obviously correct.
+
+   The third look is the one that actually shipped: a Cockpit-wide design
+   review of the built (not prototyped) screens read the full-colour cells as
+   a saturated quilt fighting the ADP-delta tint on every card, and the fix
+   landed — a neutral #151923 cell with a 3px POS_SOLID left rule, the exact
+   geometry the first two attempts already tried and rejected. It survived
+   this time for a reason the first two attempts didn't have: it wasn't
+   competing with a hypothetical, it was compared against the thing it would
+   replace, live, with every other cell affordance (the arrow, the pick code,
+   the ADP delta) already drawn around it — and a design review, a full test
+   suite, and now this file's own mobile counterpart all independently landed
+   on the same rail. Three lookers agreeing the rail works is a different
+   kind of evidence than one file's own two earlier tries agreeing it
+   doesn't, on a board that didn't yet have to share the cell with anything
+   else.
+
+   POS_CELL_BLOCK has no remaining consumers anywhere in web/src as of this
+   note — removed rather than kept dark, the same reasoning this project
+   applies to any other dead control: an unused export a future reroute could
+   "helpfully" wire back in is a fourth look nobody asked for. If the rail
+   ever loses another look, rebuild it from POS_SOLID directly (it's the same
+   six hex values) rather than reaching for this name again. */
 
 /* The board header's roster chips, and these are the *solids* rather than the
    tints above. Each count carries its own ground on purpose: white on a

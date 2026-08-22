@@ -42,6 +42,17 @@ const TABS = [
 // doesn't fight a thumb panning sideways through a horizontally-scrolling
 // row underneath it (the Team tab's seat picker, here).
 export default function PlayerHub({
+  // Sheet open state and the active internal tab, lifted into DraftRoom.jsx
+  // rather than owned here — the same treatment every other PlayerHub prop
+  // already gets. The mobile bottom tab bar's Roster/Players buttons need to
+  // reach into this sheet from outside it (open it, pick a tab) the same way
+  // DraftRoom.jsx's Draft button already reaches into PlayerQueueSidebar's
+  // queue toggle — a control cannot open a specific tab of a component that
+  // owns its own tab as unreachable local state.
+  open,
+  onOpenChange,
+  tab,
+  onTabChange,
   // PlayerQueueSidebar / PlayerProfileDrawer passthrough
   players,
   search,
@@ -83,8 +94,8 @@ export default function PlayerHub({
   mySlot,
   teamLabelOf,
 }) {
-  const [open, setOpen] = useState(true)
-  const [tab, setTab] = useState('players')
+  const setOpen = onOpenChange
+  const setTab = onTabChange
   const [viewSlot, setViewSlot] = useState(mySlot)
   // mySlot is 0 until a real draft actually assigns a seat (solo start,
   // or a room's seat claim/swap landing later), and this captured
@@ -99,7 +110,13 @@ export default function PlayerHub({
 
   return (
     <div
-      className="fixed inset-x-0 bottom-0 z-40 flex max-h-[75vh] flex-col overflow-hidden rounded-t-xl border-t border-slate-800 bg-slate-900/95 shadow-2xl backdrop-blur-md lg:static lg:z-auto lg:h-full lg:max-h-none lg:flex-1 lg:rounded-none lg:border-t-0 lg:bg-transparent lg:shadow-none"
+      // bottom-[58px+safe-area], not bottom-0: MobileDraftTabBar.jsx sits at
+      // the true bottom-0 now, persistent underneath this sheet at every
+      // height (collapsed strip or dragged open), the same relationship the
+      // mockup's screenshots show — the four-tab bar never disappears, this
+      // sheet rises above it. lg:static drops the whole fixed/bottom
+      // question at desktop width, where this offset never applies.
+      className="fixed inset-x-0 bottom-[calc(58px+env(safe-area-inset-bottom))] z-40 flex max-h-[75vh] flex-col overflow-hidden rounded-t-xl border-t border-slate-800 bg-slate-900/95 shadow-2xl backdrop-blur-md lg:static lg:bottom-auto lg:z-auto lg:h-full lg:max-h-none lg:flex-1 lg:rounded-none lg:border-t-0 lg:bg-transparent lg:shadow-none"
     >
       <motion.div
         drag="y"

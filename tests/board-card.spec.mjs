@@ -46,7 +46,15 @@ async function draftInto(page, picks, teams = 10) {
   // Board, not the default tab any more — Decide is, since the Cockpit
   // rebuild — so every card test in this file needs the click before the
   // grid it waits for next will ever exist to wait for.
-  await page.locator('#draftroom-root button').filter({ hasText: /^Board$/ }).click();
+  //
+  // :visible, not just the text filter: MobileDraftTabBar.jsx mounts its
+  // own always-in-DOM "Board" button (lg:hidden, not unmounted) beside
+  // DraftCockpitHeader's desktop tab nav (hidden md:flex) — same label,
+  // two controls for two widths. Playwright's default viewport is well
+  // above both breakpoints, so exactly one is actually visible; without
+  // this the locator resolves two elements and .click() throws in strict
+  // mode before a single one of this file's own assertions ever runs.
+  await page.locator('#draftroom-root button:visible').filter({ hasText: /^Board$/ }).click();
   // The grid is React's, so wait for it rather than for the engine.
   await page.waitForFunction(() => {
     const root = document.getElementById("draftroom-root");

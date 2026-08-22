@@ -17,6 +17,9 @@ import DraftSettingsModal from './DraftSettingsModal.jsx'
 import DraftEntryScreen from './DraftEntryScreen.jsx'
 import DraftLobby from './DraftLobby.jsx'
 import LobbyBar from './LobbyBar.jsx'
+import MobileAppTabBar from './MobileAppTabBar.jsx'
+import MobileDraftTabBar from './MobileDraftTabBar.jsx'
+import PickClockBand from './PickClockBand.jsx'
 
 function useEngine() {
   const [ready, setReady] = useState(false)
@@ -288,6 +291,38 @@ export default function DraftRoom() {
   // Which of the combined Queue/Roster panel's two tabs is showing. Queue
   // first: it is the one that changes as the draft runs.
   const [sideTab, setSideTab] = useState('queue')
+  // PlayerHub's own sheet state, lifted here — see that file's own comment
+  // on why. hubTab still defaults to 'players', the same reason PlayerHub's
+  // local version used to: it's the tab that answers "what's available right
+  // now" without picking a specific one of the five first. hubOpen does NOT
+  // keep PlayerHub's old true default, though — that default only ever ran
+  // on desktop, where lg:static means "open" is meaningless (the column is
+  // just always there); mobile had no other view to default to instead, so
+  // "open" cost nothing to leave true. Now Decide is that other view, and
+  // defaulting the sheet open over top of it on every fresh entry would
+  // bury the one tab the mobile handoff calls "the only tab needed to
+  // actually draft" under the one that answers a different question.
+  const [hubOpen, setHubOpen] = useState(false)
+  const [hubTab, setHubTab] = useState('players')
+  // The mobile draft-room tab bar's Roster/Players buttons open the sheet
+  // pre-selected to a specific internal tab — 'team'/'players' map onto
+  // PlayerHub's own TABS keys, not new vocabulary.
+  //
+  // Also steps view off 'decide', which is not a mobile-only add-on to what
+  // desktop already does — it is what desktop already does. Decide owns the
+  // whole content area on every width ("nothing renders underneath it," a
+  // few lines below), so PlayerHub is only ever mounted inside the
+  // view !== 'decide' branch there too; a wide window just makes that branch
+  // easy to reach by clicking Board once. Below lg there was no way back
+  // into that branch at all until this tab bar existed, which is exactly
+  // why opening the sheet has to carry the same view change a Board click
+  // already implies, not a new mobile-only rule.
+  const openHub = (t) => { setHubTab(t); setHubOpen(true); setView((v) => (v === 'decide' ? 'board' : v)) }
+  // Decide/Board also close the sheet, or tapping one while the other is
+  // open leaves both true — the tab bar shows the new view as active while
+  // the sheet is still visually sitting over the top of it, which reads as
+  // the tap having done nothing.
+  const selectMobileView = (v) => { setHubOpen(false); setView(v) }
   useEffect(() => {
     if (draftIsOver) {
       setInsightsSlot(mySlot)
@@ -384,7 +419,13 @@ export default function DraftRoom() {
           />
         )}
 
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        {/* pb-[calc(58px+env(safe-area-inset-bottom))]: MobileAppTabBar's own
+            fixed footprint, reserved on the scroll container the same way
+            PlayerHub's mobile sheet already reserves its own clearance
+            elsewhere in this file — never a fixed offset guessed
+            independently of what's actually covering the content. lg: reverts
+            to nothing, since the bar itself is lg:hidden. */}
+        <div className="min-h-0 flex-1 overflow-y-auto pb-[calc(58px+env(safe-area-inset-bottom))] lg:pb-0">
           {/* Host-only gating belongs on the real Start Draft action one
               screen further in, not here — anyone should be able to walk in
               and look at seats regardless of who the room says can actually
@@ -398,6 +439,7 @@ export default function DraftRoom() {
             onOpenSettings={() => setSettingsOpen(true)}
           />
         </div>
+        <MobileAppTabBar />
       </div>
     )
   }
@@ -488,6 +530,23 @@ export default function DraftRoom() {
   }
 
   const code = onClock && DE ? DE.pickCode(overall, league.teams) : null
+
+  // "If you wait" means past *this* pick — when it's genuinely my turn,
+  // nextPicksFor(mySlot, 1) returns the pick I'm on right now (trivial: of
+  // course he's still there before anyone's picked yet), not the one after
+  // it. Skip my own current pick in that case; when it's someone else's
+  // turn, my own next pick is already the right question to ask. Lifted
+  // here from DraftDecideScreen.jsx, which used to compute this itself —
+  // PickClockBand needs the identical value above the tab strip on every
+  // tab, not just Decide, and a second copy of an off-by-one that already
+  // cost one design-review round to fix is exactly the risk "nothing about
+  // the league shape may be written down twice" exists to prevent.
+  const upcoming = engine.nextPicksFor(mySlot, 2)
+  const nextOverall = myTurn ? (upcoming[1] ?? null) : (upcoming[0] ?? null)
+  // Same skip, same reason — a design review caught this exact rail
+  // printing the pick already on the clock as though it were still ahead of
+  // you ("1.11 · 2.02 · 3.11" while 1.11 was the live pick).
+  const nextPicks = myTurn ? engine.nextPicksFor(mySlot, 5).slice(1) : engine.nextPicksFor(mySlot, 4)
 
   // DraftCockpitHeader composes its own "Round N · Pick N · your turn"
   // caption straight from onClock/overall/myTurn (below) rather than
@@ -702,6 +761,18 @@ export default function DraftRoom() {
           own pb-28), and reserving it here too would shrink the row for
           no reason. */}
       <div className="flex flex-1 flex-col overflow-hidden pt-[62px]">
+        <PickClockBand
+          code={code}
+          myTurn={myTurn}
+          urgent={urgent}
+          timeLeft={engine.timeLeft()}
+          clockLength={engine.clockLength()}
+          nextOverall={nextOverall}
+          nextPicks={nextPicks}
+          overall={overall}
+          teams={league.teams}
+          onClock={onClock}
+        />
         {view === 'decide' ? (
           /* Decide owns the whole content area, not half of it — its own
              roster rail and room-live rail already cover what the panels
@@ -718,6 +789,8 @@ export default function DraftRoom() {
             onQueueToggle={handleToggleQueue}
             onOpenProfile={setSelectedPlayer}
             queuedNames={queuedNames}
+            nextOverall={nextOverall}
+            nextPicks={nextPicks}
           />
         ) : (
         <>
@@ -779,6 +852,12 @@ export default function DraftRoom() {
                   ? (slot) => { setInsightsSlot(slot); setShowInsights(true) }
                   : undefined
               }
+              // Mobile only (DraftBoardGrid gates the button itself with
+              // lg:hidden) — opens the same PlayerHub sheet the bottom tab
+              // bar's Roster/Players buttons already reach into, just
+              // pre-selected to its Log tab instead of building a second,
+              // one-off sheet for the same content.
+              onOpenLog={() => openHub('log')}
             />
             )}
 
@@ -827,6 +906,10 @@ export default function DraftRoom() {
                 profile drawer that slides over it. */}
             <div className="relative flex min-h-0 flex-1 lg:flex-[5] lg:min-w-0">
             <PlayerHub
+              open={hubOpen}
+              onOpenChange={setHubOpen}
+              tab={hubTab}
+              onTabChange={setHubTab}
           counts={filterCounts}
               players={availablePlayers}
               search={search}
@@ -919,6 +1002,14 @@ export default function DraftRoom() {
         </>
         )}
       </div>
+
+      <MobileDraftTabBar
+        view={view}
+        onSelectView={selectMobileView}
+        hubOpen={hubOpen}
+        hubTab={hubTab}
+        onOpenHub={openHub}
+      />
 
       {/* Opens itself on the draft-over edge (see the effect near the top)
           and closes to the board, leaving a pill to reopen — the analysis

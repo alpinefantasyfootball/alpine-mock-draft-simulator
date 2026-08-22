@@ -54,24 +54,51 @@ export default function TendenciesStrip({ stats }) {
   // honest "not yet" box instead of the empty flex-1 slot that used to sit
   // beside New Mock panel until a draft had ever been completed.
   if (total < MIN_MOCKS_FOR_TENDENCIES) {
+    const remaining = MIN_MOCKS_FOR_TENDENCIES - total
+    const pct = Math.max(0, Math.min(100, Math.round((total / MIN_MOCKS_FOR_TENDENCIES) * 100)))
     return (
       <div className="flex h-full flex-col">
-        <StripHeader>
-          <h2 className="font-display text-[23px] font-bold text-white">Your tendencies</h2>
-          <span className="text-xs tabular-nums text-white/50">
-            {total} of {MIN_MOCKS_FOR_TENDENCIES} mocks
-          </span>
-        </StripHeader>
-        <div className="flex flex-1 flex-col items-center justify-center rounded-xl border border-white/[0.07] bg-charcoal/60 p-8 text-center">
-          <p className="max-w-[320px] text-sm text-white/60">
-            Run a few more mocks and Juke will start showing your tendencies.
+        {/* Desktop: heading above a centred honest-line box, unchanged. */}
+        <div className="hidden h-full flex-col lg:flex">
+          <StripHeader>
+            <h2 className="font-display text-[23px] font-bold text-white">Your tendencies</h2>
+            <span className="text-xs tabular-nums text-white/50">
+              {total} of {MIN_MOCKS_FOR_TENDENCIES} mocks
+            </span>
+          </StripHeader>
+          <div className="flex flex-1 flex-col items-center justify-center rounded-xl border border-white/[0.07] bg-charcoal/60 p-8 text-center">
+            <p className="max-w-[320px] text-sm text-white/60">
+              Run a few more mocks and Juke will start showing your tendencies.
+            </p>
+            {/* The one real, non-misleading number worth stating below the
+                threshold — how many mocks it's actually counted, not a
+                placeholder pretending to be an insight. */}
+            <p className="mt-3 text-xs tabular-nums text-white/40">
+              {total} mock{total === 1 ? '' : 's'} logged so far
+            </p>
+          </div>
+        </div>
+
+        {/* Mobile: one self-contained dashed panel, no separate heading
+            above it — a 23px "Your tendencies" title plus a corner count
+            plus a whole second box is three chrome elements standing over
+            one sentence and a bar. A dashed border is this app's other tell
+            for "not real data yet" (the same shape empty states elsewhere
+            use), which a plain solid card doesn't say on its own. */}
+        <div className="rounded-xl border border-dashed border-white/[0.16] p-5 lg:hidden">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-white/50">Your tendencies</p>
+          <p className="mt-3 text-[13.5px] leading-relaxed text-white/70">
+            {remaining} more mock{remaining === 1 ? '' : 's'} and Juke will start showing your patterns — which
+            positions you reach for, and where you leave value on the board.
           </p>
-          {/* The one real, non-misleading number worth stating below the
-              threshold — how many mocks it's actually counted, not a
-              placeholder pretending to be an insight. */}
-          <p className="mt-3 text-xs tabular-nums text-white/40">
-            {total} mock{total === 1 ? '' : 's'} logged so far
-          </p>
+          <div className="mt-4 flex items-center gap-3">
+            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/[0.08]">
+              <div className="h-full rounded-full bg-teal-400" style={{ width: `${pct}%` }} />
+            </div>
+            <span className="shrink-0 font-plex text-xs tabular-nums text-white/50">
+              {total} of {MIN_MOCKS_FOR_TENDENCIES}
+            </span>
+          </div>
         </div>
       </div>
     )
@@ -178,8 +205,11 @@ export default function TendenciesStrip({ stats }) {
           fifth card (now removed) made it three-on-top, two-below. Fewer
           than four real cards still lays out cleanly: a lone third card
           sits alone on the left of its row instead of leaving a
-          conspicuous gap on the right of a wider row. */}
-      <div className="grid grid-cols-2 gap-[10px]">{cards}</div>
+          conspicuous gap on the right of a wider row. Single column below
+          lg — two columns of a ~145px card is the same "wraps into an
+          8px column of digits" squeeze the settings rows hit at panel
+          width, just one component over. */}
+      <div className="grid grid-cols-1 gap-[10px] sm:grid-cols-2">{cards}</div>
     </div>
   )
 }

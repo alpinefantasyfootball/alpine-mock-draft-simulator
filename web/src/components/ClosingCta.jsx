@@ -23,7 +23,18 @@ export default function ClosingCta() {
           background: 'radial-gradient(ellipse 900px 170px at 50% 50%, rgba(123,31,162,0.12), transparent 70%)',
         }}
       />
-      <div className="relative mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-12 px-6 py-[84px]">
+      {/* flex-col below lg, same as the row it becomes at lg: one <a>,
+          rendered once — a size-only responsive change, unlike Hero.jsx's
+          two full alternate trees, because nothing about this band's copy
+          or destination differs by width. That's deliberate: this file's
+          own top comment already documents "Copy is 'Start a Free Mock
+          Draft' in both places — keep them identical" as the reason this
+          band repeats the hero's own CTA rather than writing a second one,
+          and a mobile-only reword (design_handoff_mobile's mock shows a
+          plain white pill reading "Start a mock draft") would break that
+          on the one width it was never tested against. Full width and 54px
+          tall below lg to clear the handoff's own primary-CTA floor. */}
+      <div className="relative mx-auto flex max-w-7xl flex-col gap-8 px-6 py-[84px] lg:flex-row lg:flex-wrap lg:items-center lg:justify-between lg:gap-12">
         <div>
           {/* Italic to match RoomsGrid.jsx's and ShowYourWorking.jsx's own
               section headers — a design review found this one upright
@@ -37,8 +48,8 @@ export default function ClosingCta() {
 
         <a
           href="#/draft-room"
-          className="shrink-0 rounded-full bg-gradient-to-r from-[#00E5FF] to-[#7B1FA2] px-[34px] py-[17px] text-base font-bold text-white
-                     shadow-glass transition-all duration-200 hover:scale-105 hover:shadow-[0_0_15px_rgba(0,229,255,0.4)]"
+          className="flex h-[54px] w-full shrink-0 items-center justify-center rounded-full bg-gradient-to-r from-[#00E5FF] to-[#7B1FA2] text-base font-bold text-white
+                     shadow-glass transition-all duration-200 active:scale-[0.98] lg:h-auto lg:w-auto lg:px-[34px] lg:py-[17px] lg:hover:scale-105 lg:hover:shadow-[0_0_15px_rgba(0,229,255,0.4)]"
         >
           Start a Free Mock Draft
         </a>

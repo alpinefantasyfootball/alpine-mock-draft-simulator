@@ -58,8 +58,14 @@ async function start(page) {
      player row carrying a name in text a naive click can find. The player
      list openSheet() below needs, search input included, lives on Board.
      Every test in this file opens a sheet by name straight after start(), so
-     landing there once here is simpler than repeating the click in each one. */
-  await page.locator("#draftroom-root button").filter({ hasText: /^Board$/ }).click();
+     landing there once here is simpler than repeating the click in each one.
+
+     :visible, not just the text filter: MobileDraftTabBar.jsx (mobile shell)
+     carries its own "Board" button, lg:hidden rather than absent, so at this
+     suite's desktop viewport there are two real "Board" buttons in the DOM
+     at once and an unqualified filter is a strict-mode violation - Playwright
+     refusing to guess which one a bare click meant. */
+  await page.locator("#draftroom-root button:visible").filter({ hasText: /^Board$/ }).click();
   await page.waitForFunction(() => {
     const root = document.getElementById("draftroom-root");
     return root && root.querySelector("input");

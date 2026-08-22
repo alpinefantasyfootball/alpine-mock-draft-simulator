@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion'
+import { ChevronRight } from 'lucide-react'
 import { POS_BADGE, POS_SOLID } from './draftRoomPositions.js'
 
 // A team has no photo, so its header avatar is initials in a solid
@@ -36,6 +37,33 @@ function adpGap(pick) {
   if (typeof adp !== 'number' || !Number.isFinite(adp)) return null
   return pick.overall - adp
 }
+
+// The cell's own reading of the same gap adpGap() already returned — one
+// call per pick, reused for the background wash *and* the delta text
+// beside it, never recomputed. Beat-or-tied (gap >= 0, a bargain) reads
+// brand teal; reached (gap < 0) reads the app's one red. No-data (gap ==
+// null — this player carries no adp at all) stays the plain neutral
+// card: a continuous number essentially never lands on precisely zero,
+// so the mobile handoff's "no tint at ADP" is this null case, not a
+// third colour to compute.
+//
+// The text pair replaces the emerald/rose this line used to read.
+// Emerald doubles as the RB rail colour a few lines below — one hue
+// carrying two unrelated meanings on the same card — where teal is
+// never a position colour anywhere in this file (draftRoomPositions.js's
+// own header comment says why: it's reserved). Matching the wash to the
+// text turns "beat ADP" into one signal instead of two slightly
+// different ones sharing a cell.
+function adpTint(gap) {
+  if (gap == null) return { bg: 'bg-charcoal', text: '' }
+  if (gap >= 0) return { bg: 'bg-[rgba(0,229,255,0.05)]', text: 'text-teal-500' }
+  return { bg: 'bg-[rgba(248,113,113,0.06)]', text: 'text-red-400' }
+}
+
+// The legend's position row and the cell's own rail read the same six
+// hues off the same map — Object.keys() rather than a second, hand-typed
+// QB/RB/WR/TE/K/DST list that could drift from this one.
+const LEGEND_POSITIONS = Object.keys(POS_SOLID)
 
 // Snake direction, per cell — every cell carries it, not just drafted
 // ones (CLAUDE.md: "it was on drafted ones only" was itself a shipped
@@ -143,7 +171,7 @@ function mineEdge(isMine, isFirstRound, isLastRound) {
 // "your column" and "the live pick" stay two readable facts instead of one
 // cell trying to carry both.
 
-export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLabelOf, onTeamClick, shortNameOf, onClaimSeat, seats }) {
+export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLabelOf, onTeamClick, shortNameOf, onClaimSeat, seats, onOpenLog }) {
   const byCell = new Map()
   picks.forEach((p) => byCell.set(p.round + '-' + p.slot, p))
 
@@ -164,6 +192,15 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
      why the horizontal scroll stays: this is a floor, not a fit. */
   const cols = `64px repeat(${teams}, minmax(112px, 1fr))`
   const colsWide = `56px repeat(${teams}, minmax(120px, 1fr))`
+  /* Explicit rows, not another auto-rows floor: the header keeps its own
+     natural (avatar + name) height, and every round after it is exactly
+     50px — a fixed size, never a minimum. The old
+     auto-rows-[minmax(34px,auto)] let a round's height come from its
+     tallest cell's own content, which is exactly the thing a fixed-height
+     design needs to stop being possible; naming every track here removes
+     the question rather than narrowing it. */
+  const rowsTemplate = `auto repeat(${rounds}, 50px)`
+  const totalPicks = teams * rounds
 
   return (
     // w-full h-full, not a flex-basis of its own: DraftRoom.jsx now wraps
@@ -175,17 +212,89 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
     // column at its real width, never squashed), so on a phone it's always
     // wider than the viewport — this box is what scrolls, both directions,
     // with touch.
-    <div className="min-h-[240px] h-full w-full flex-1 overflow-x-auto overflow-y-auto border-b border-slate-800 bg-[#0B0E14] lg:border-b-0 lg:border-r">
-      {/* auto-rows is a floor (minmax), not a fixed size — every row in
-          this grid is implicit (no grid-template-rows), so this is the one
-          place that states a row's minimum height rather than leaving each
-          cell's own min-h to coincidentally agree with its neighbors. See
-          CLAUDE.md's board-card note: "the row owns the height, not the
-          cell." */}
-      {/* pb-28 below lg: PlayerHub's sheet is fixed over the bottom edge
-          there and would otherwise cover the last couple of rounds when
-          scrolled all the way down. lg:pb-0 because at lg+ every panel is
-          in normal flow and nothing floats over this. */}
+    <div className="flex h-full min-h-[240px] w-full flex-1 flex-col overflow-hidden border-b border-slate-800 bg-[#0B0E14] lg:border-b-0 lg:border-r">
+      {/* Title, the real picks-made count, and the Log link — mobile only.
+          Desktop draws none of this row: it already has DraftLogDock as a
+          permanent side panel, and that panel's own "Log" tab content
+          inside PlayerHub is itself lg:hidden — wiring this same button in
+          at lg+ would open a sheet with nothing visible inside it, the
+          dead-control failure CLAUDE.md names outright. The count is real,
+          not a placeholder: picks.length and totalPicks are the same
+          numbers the rest of the room already reads off picks/league. */}
+      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-800 px-3 py-2 lg:hidden">
+        <h2 className="text-lg font-bold text-white">The board</h2>
+        <div className="flex items-center gap-3">
+          <span className="font-plex text-xs text-white/60">
+            {picks.length} of {totalPicks}
+          </span>
+          {onOpenLog && (
+            <button
+              type="button"
+              onClick={onOpenLog}
+              className="flex items-center gap-0.5 text-xs font-semibold text-teal-300 transition-colors duration-150 hover:text-teal-200"
+            >
+              Log
+              <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* The legend, above the grid rather than below it — a reader meets
+          it before the first cell, not after scrolling past however many
+          rounds are already on the board. Two facts it decodes, both real
+          things this exact grid draws: the wash a cell picks up from
+          adpTint() above, and the gold outline mineEdge() runs down one
+          column. "you" is drawn in that same #FFD166 rather than a teal
+          swatch, because the ring really is gold (CLAUDE.md: "Gold is
+          identity... a colour doing five jobs is not a signal") — drawing
+          it teal here would make the legend describe a ring the board
+          doesn't have, and teal already means "beat ADP" two swatches to
+          its left on this exact row. The six position hues read off
+          LEGEND_POSITIONS/POS_SOLID directly, the same map the cell rail
+          itself uses, so this can never list a colour the board doesn't
+          actually draw. */}
+      <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-slate-800 px-3 py-2 lg:hidden">
+        <span className="font-plex text-[10px] uppercase tracking-wide text-white/60">
+          Tint = value vs ADP
+        </span>
+        <span className="flex items-center gap-1 text-[10px] text-white/60">
+          <span className="h-2.5 w-2.5 shrink-0 rounded-sm border border-teal-500/60 bg-[rgba(0,229,255,0.12)]" aria-hidden="true" />
+          beat it
+        </span>
+        <span className="flex items-center gap-1 text-[10px] text-white/60">
+          <span className="h-2.5 w-2.5 shrink-0 rounded-sm border border-red-400/60 bg-[rgba(248,113,113,0.14)]" aria-hidden="true" />
+          reached
+        </span>
+        <span className="flex items-center gap-1 text-[10px] text-white/60">
+          <span className="h-2.5 w-2.5 shrink-0 rounded-sm border-2 border-[#FFD166]" aria-hidden="true" />
+          you
+        </span>
+        <span className="flex flex-wrap items-center gap-2 border-l border-slate-800 pl-2">
+          {LEGEND_POSITIONS.map((pos) => (
+            <span key={pos} className="flex items-center gap-1 text-[10px] text-white/60">
+              <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ backgroundColor: POS_SOLID[pos] }} aria-hidden="true" />
+              {pos}
+            </span>
+          ))}
+        </span>
+      </div>
+
+      {/* The one scroll container, both axes — everything above this point
+          is shrink-0 chrome that never scrolls with it, so there is exactly
+          one scrollbar on this screen rather than a nested one fighting an
+          outer page scroll. flex-1 min-h-0 is what makes it claim exactly
+          the remaining height rather than growing to its content. */}
+      <div className="min-h-0 w-full flex-1 overflow-x-auto overflow-y-auto">
+      {/* pb-[7rem+tab bar] below lg: PlayerHub's sheet is fixed over the
+          bottom edge there and would otherwise cover the last couple of
+          rounds when scrolled all the way down. The 7rem (112px, pb-28's own
+          value) is the sheet's own collapsed height; the +58px+safe-area on
+          top of it is new with this pass, matching PlayerHub.jsx's own shift
+          off true bottom-0 to make room for MobileDraftTabBar.jsx sitting
+          underneath it — both track the same offset, so if one moves the
+          other has to. lg:pb-0 because at lg+ every panel is in normal flow
+          and nothing floats over this. */}
       {/* The two column rules reach CSS as custom properties so the
           breakpoint can pick between them — a `style` prop cannot carry a
           media query, and this is one grid with two shapes rather than two
@@ -194,10 +303,15 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
           of shrinking to fit the container, which is what forces this
           wrapper's own overflow-x-auto to engage instead of the columns
           quietly going back to 0. Dropping to lg:min-w-0 was the earlier,
-          rejected shape — see the comment on colsWide above. */}
+          rejected shape — see the comment on colsWide above.
+
+          grid-template-rows replaces the old auto-rows floor (see
+          rowsTemplate above): the header row sizes to its own content and
+          every round is exactly 50px, never a minimum a tall cell could
+          push past. */}
       <div
-        className="grid min-w-max auto-rows-[minmax(34px,auto)] pb-28 lg:pb-0 [grid-template-columns:var(--cols)] lg:[grid-template-columns:var(--cols-wide)]"
-        style={{ '--cols': cols, '--cols-wide': colsWide }}
+        className="grid min-w-max pb-[calc(7rem+58px+env(safe-area-inset-bottom))] lg:pb-0 [grid-template-columns:var(--cols)] lg:[grid-template-columns:var(--cols-wide)] [grid-template-rows:var(--rows)]"
+        style={{ '--cols': cols, '--cols-wide': colsWide, '--rows': rowsTemplate }}
       >
         {/* header row */}
         <div className="sticky left-0 top-0 z-20 flex items-center justify-center border-b border-r border-slate-800 bg-slate-900/95 py-1 text-[10px] font-semibold uppercase tracking-wide text-white/30">
@@ -322,6 +436,9 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
                 const isCurrent = !!onClock && onClock.round === round && onClock.slot === s
                 const isMine = s === mySlot
                 const gap = pick ? adpGap(pick) : null
+                // One call, reused for the card's background and its own
+                // delta text a few lines down — never a second calculation.
+                const tint = adpTint(gap)
                 const overall = DE ? DE.overallOf(round, s, teams) : null
                 // The label for a pick that has landed. Always via
                 // DraftEngine.pickCode() — the snake mirror lives there and
@@ -332,7 +449,7 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
                 return (
                   <div
                     key={round + '-' + s}
-                    className={'border-b border-r border-slate-800/70 p-0.5 ' + mineEdge(isMine, round === 1, round === rounds)}
+                    className={'h-[50px] box-border border-b border-r border-slate-800/70 p-0.5 ' + mineEdge(isMine, round === 1, round === rounds)}
                   >
                     {pick ? (
                       // layoutId matches the same player's row in
@@ -359,14 +476,19 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
                         animate={{ opacity: 1, scale: 1 }}
                         transition={{ type: 'spring', stiffness: 400, damping: 32 }}
                         style={{ borderLeft: '3px solid ' + (POS_SOLID[pick.player.pos] || 'rgba(255,255,255,0.25)') }}
-                        // min-h matches the on-the-clock and empty variants
-                        // below, on purpose: h-full alone stretches to fill
-                        // a row that's already tall, but a round where every
-                        // seat has already picked has nothing 46px in it to
-                        // set that floor, and auto-rows shrinks the whole
-                        // row to this card's own two-line content instead —
-                        // the legacy board's "two row heights" bug, recurred.
-                        className="relative flex h-full min-h-[46px] flex-col justify-center gap-0.5 rounded-md bg-[#151923] px-1.5 py-1 text-white/90"
+                        // h-full alone is enough now: the row itself is a
+                        // fixed 50px (rowsTemplate above) rather than a
+                        // minmax floor, so every card fills the identical
+                        // track regardless of its own content — there is no
+                        // longer a shorter round for the grid to shrink
+                        // toward (the legacy board's "two row heights" bug).
+                        // tint.bg replaces the flat charcoal fill with a
+                        // wash on a pick that moved against its ADP.
+                        // box-border restates border-box explicitly (Tailwind
+                        // Preflight already sets it globally) because an
+                        // explicit height and this card's own padding are
+                        // exactly where content-box and border-box disagree.
+                        className={'relative flex h-full box-border flex-col justify-center gap-0.5 rounded-md px-1.5 py-1 text-white/90 ' + tint.bg}
                       >
                         {/* Line 1 — name, then the pick code. The code used
                             to share line 1 with the position letters; the
@@ -400,7 +522,7 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
                             <Arrow dir={arrow} className="shrink-0 text-[9px] text-white/50" />
                           </span>
                           {gap != null && (
-                            <span className={'shrink-0 text-[10px] font-semibold ' + (gap >= 0 ? 'text-emerald-400' : 'text-rose-400')}>
+                            <span className={'shrink-0 text-[10px] font-semibold ' + tint.text}>
                               {gap >= 0 ? '+' : ''}
                               {gap.toFixed(1)}
                             </span>
@@ -411,7 +533,7 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
                       <motion.div
                         animate={{ opacity: [1, 0.75, 1] }}
                         transition={{ duration: 1.4, repeat: Infinity, ease: 'easeInOut' }}
-                        className="relative flex h-full min-h-[46px] items-center justify-center rounded-md border-2 border-teal-400 bg-teal-500/10 text-[10px] font-bold uppercase tracking-wide text-teal-300 shadow-[0_0_15px_rgba(0,229,255,0.4)]"
+                        className="relative flex h-full box-border items-center justify-center rounded-md border-2 border-teal-400 bg-teal-500/10 text-[10px] font-bold uppercase tracking-wide text-teal-300 shadow-[0_0_15px_rgba(0,229,255,0.4)]"
                       >
                         {overall != null && (
                           <span className="absolute left-1 top-0.5 text-[10px] font-normal normal-case text-teal-300/60">{overall}</span>
@@ -420,7 +542,7 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
                         <Arrow dir={arrow} className="absolute right-1 top-0.5 text-[9px] font-normal normal-case text-teal-300/60" />
                       </motion.div>
                     ) : (
-                      <div className="relative h-full min-h-[46px] rounded-md border border-dashed border-slate-800">
+                      <div className="relative h-full box-border rounded-md border border-dashed border-slate-800">
                         {overall != null && (
                           <span className={'absolute left-1 top-0.5 text-[10px] ' + (isMine ? 'font-bold text-[#FFD166]' : 'text-slate-500')}>
                             {overall}
@@ -435,6 +557,7 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
             </div>
           )
         })}
+      </div>
       </div>
     </div>
   )

@@ -28,8 +28,58 @@ function useRoomLinks() {
   return rooms
 }
 
+// The footer's closing line (design_handoff_mobile Prompt 2): "N players
+// tracked · updated <relative time>". Neither half is invented. The count
+// is board.length itself — CLAUDE.md is explicit that a player count has to
+// be derived, never a literal like "225" quoted once and left to drift as
+// the nightly pipeline changes the board. The "updated" half reads the real
+// ?v= stamp off the page's own <script src="/app.js?v=YYYYMMDDHHMM">: that
+// stamp is the UTC minute update-players.yml last actually changed the
+// data (it only bumps it on a day the feeds moved), already the mechanism
+// this whole app leans on for cache-busting — not a second, invented
+// timestamp. Formatted relative to the reader's own clock, never printed as
+// a raw UTC string, per the review item this line cites.
+function useDataFreshness() {
+  const [freshness, setFreshness] = useState(null)
+
+  useEffect(() => {
+    const engine = typeof window !== 'undefined' ? window.JukeEngine : null
+    if (!engine) return
+    const board = engine.board()
+    if (!board) return
+
+    const src = document.querySelector('script[src*="/app.js"]')?.getAttribute('src') || ''
+    const stamp = src.match(/\?v=(\d{12})/)?.[1]
+    let relative = null
+    if (stamp) {
+      const y = +stamp.slice(0, 4)
+      const mo = +stamp.slice(4, 6)
+      const d = +stamp.slice(6, 8)
+      const h = +stamp.slice(8, 10)
+      const mi = +stamp.slice(10, 12)
+      const updatedMs = Date.UTC(y, mo - 1, d, h, mi)
+      const diffMin = Math.max(0, Math.round((Date.now() - updatedMs) / 60000))
+      if (diffMin < 1) relative = 'just now'
+      else if (diffMin < 60) relative = `${diffMin} minute${diffMin === 1 ? '' : 's'} ago`
+      else if (diffMin < 60 * 24) {
+        const hours = Math.round(diffMin / 60)
+        relative = `${hours} hour${hours === 1 ? '' : 's'} ago`
+      } else {
+        const days = Math.round(diffMin / (60 * 24))
+        relative = `${days} day${days === 1 ? '' : 's'} ago`
+      }
+    }
+
+    setFreshness({ count: board.length, relative })
+  }, [])
+
+  return freshness
+}
+
 export default function Homepage() {
   const roomLinks = useRoomLinks()
+  const freshness = useDataFreshness()
+  const liveRoomLinks = roomLinks.filter((room) => room.live && room.href)
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-void text-white">
@@ -47,7 +97,37 @@ export default function Homepage() {
       </main>
 
       <footer className="border-t border-white/[0.07] bg-[#060909]">
-        <div className="mx-auto grid max-w-7xl grid-cols-2 gap-12 px-6 pb-6 pt-14 sm:grid-cols-4">
+        {/* ---------- Mobile: design_handoff_mobile Prompt 2 ----------
+            One flat, wrapped row instead of the three-column ROOMS/METHOD/
+            COMPANY grid below — the mock shows "Draft Room · How it works ·
+            Method · Privacy · Terms" as a single line, not three headed
+            lists. Still "live destinations only" (review item 34): the
+            room entries are the same live-only filter the desktop grid
+            already applies, and METHOD collapses to its first, real link
+            rather than a fabricated fourth destination standing in for all
+            three — a single "Method" label pointing at nothing worth
+            reading would be worse than the three-link column it replaces. */}
+        <div className="px-6 pb-6 pt-12 lg:hidden">
+          <JukeLogo size={18} />
+          <nav className="mt-4 flex flex-wrap items-center gap-x-1 gap-y-2 text-sm text-white/60">
+            {[
+              ...liveRoomLinks.map((room) => ({ label: room.name.replace(/^The\s+/, ''), href: room.href })),
+              { label: 'How it works', href: '/docs/draft-room-how-it-works.html' },
+              { label: 'Method', href: METHOD_LINKS[0].href },
+              { label: 'Privacy', href: '/docs/privacy.html' },
+              { label: 'Terms', href: '/docs/terms.html' },
+            ].map((link, i) => (
+              <span key={link.label} className="flex items-center gap-x-1">
+                {i > 0 && <span className="text-white/20" aria-hidden="true">&middot;</span>}
+                <a href={link.href} className="px-1 py-1 transition-colors hover:text-white">
+                  {link.label}
+                </a>
+              </span>
+            ))}
+          </nav>
+        </div>
+
+        <div className="hidden max-w-7xl grid-cols-2 gap-12 px-6 pb-6 pt-14 sm:grid-cols-4 lg:mx-auto lg:grid">
           <div className="col-span-2 sm:col-span-1">
             <JukeLogo size={18} />
             <p className="mt-[14px] max-w-[300px] text-sm leading-[1.55] text-[#7d888f]">
@@ -64,7 +144,7 @@ export default function Homepage() {
                 grid below #rooms is still the honest place to see what's
                 on the way; the footer now only promises destinations that
                 actually exist. */}
-            {roomLinks.filter((room) => room.live && room.href).map((room) => (
+            {liveRoomLinks.map((room) => (
               <a
                 key={room.name}
                 href={room.href}
@@ -105,7 +185,7 @@ export default function Homepage() {
           </div>
         </div>
 
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-6 border-t border-white/5 px-6 py-5">
+        <div className="mx-auto flex max-w-7xl flex-col gap-4 border-t border-white/5 px-6 py-5 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between lg:gap-6">
           {/* The old, unqualified "nothing you draft is sent anywhere" was
               wrong the moment a room exists — the room worker holds the
               seats, the picks and the chat while it's open, and
@@ -118,6 +198,27 @@ export default function Homepage() {
           </p>
           <span className="font-plex text-xs text-[#4f5b62]">© 2026 Juke</span>
         </div>
+
+        {/* The footer's one static closing line — see useDataFreshness()
+            above for where both numbers actually come from. Renders
+            nothing until window.JukeEngine has answered (same
+            fails-by-disappearing contract as the score strip), rather than
+            a placeholder that would flash a wrong count for one frame. */}
+        {freshness && (
+          // pr-[76px] below lg, not the uniform px-6 every other footer row
+          // uses: style.css's own .to-top button floats at right:18px,
+          // width 44px — a ~62px circle this is the one line on the page
+          // long enough to actually reach. Every other footer row here is
+          // short enough it never got there; this is the last line on the
+          // page and reads as "long enough to challenge the corner" the
+          // moment a phone's width is narrow enough to bring the two close.
+          <div className="mx-auto max-w-7xl px-6 pb-6 pr-[76px] lg:pr-6">
+            <p className="font-plex text-xs text-[#4f5b62]">
+              {freshness.count} players tracked
+              {freshness.relative && <> &middot; updated {freshness.relative}</>}
+            </p>
+          </div>
+        )}
       </footer>
     </div>
   )

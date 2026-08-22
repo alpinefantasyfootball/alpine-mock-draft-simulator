@@ -3425,6 +3425,23 @@ a.room.live:hover {
 .to-top.on { opacity: 1; pointer-events: auto; transform: none; }
 .to-top:hover { background: var(--navy-lift); }
 
+/* The homepage grew a sticky 50px bottom CTA bar on mobile (web/src's
+   Header.jsx), and this button is appended to <body> — outside React's own
+   tree entirely — so nothing about that bar's own layout pushes this one
+   out of the way the way flex/grid siblings do for each other. 1024px
+   matches the bar's own lg:hidden breakpoint; below it, shift up by the
+   bar's height so the two don't stack. Global rather than scoped to the
+   homepage specifically, since nothing here can see which page is live —
+   the how-it-works doc and the other legacy pages have no such bar and
+   simply get a button sitting a little higher than it strictly needs to,
+   which costs nothing. The Draft Room's own bottom tab bars never reach
+   this rule at all: #draftroom-root is a fixed z-[60] overlay over the
+   whole page, well above this button's z-index of 35, so this button is
+   already covered there regardless of its own offset. */
+@media (max-width: 1023px) {
+  .to-top { bottom: calc(18px + 50px + env(safe-area-inset-bottom)); }
+}
+
 /* Focus has to be visible on a round button floating over arbitrary content,
    so it gets a ring with a gap rather than relying on the border. */
 .to-top:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }

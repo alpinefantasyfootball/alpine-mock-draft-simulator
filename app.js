@@ -5860,6 +5860,11 @@ function historySummary(entry) {
     seat: entry.mySlot + 1,
     dateCompleted: new Date(entry.completedAt)
       .toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" }),
+    // The raw epoch too, same reasoning as seat/pickPosition above: the
+    // mobile Locker card wants "2 days ago", which is arithmetic on a
+    // timestamp, and there is no clean way to undo dateCompleted's own
+    // toLocaleDateString() formatting to get one back.
+    completedAt: entry.completedAt,
     projectedRank: entry.projectedRank ? ordinal(entry.projectedRank) : "—",
     // The raw number too — the finish bar's fill (1 - (finish-1)/teams)
     // needs to do arithmetic on it, and parsing "3rd" back into 3 is not a
@@ -8099,7 +8104,12 @@ window.JukeEngine = {
   analyseDraft: analyseDraft,
   byeSummary: byeSummary,
   replacementText: replacementText,
-  lineupText: lineupText
+  lineupText: lineupText,
+  // The real component weights (50/25/15/10), for the mobile Analysis
+  // screen's "NN% weight" / "contributes N.N" rows — bridged rather than
+  // hand-copied so a React screen showing "the composite must be
+  // auditable" can never quote a stale percentage after WEIGHTS moves.
+  weights: () => WEIGHTS
 };
 
 /* An invite code in the address bar means someone followed a link, so the

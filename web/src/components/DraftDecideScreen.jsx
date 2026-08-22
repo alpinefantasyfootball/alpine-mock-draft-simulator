@@ -178,7 +178,7 @@ function SurvivorCard({ candidate, engine, onQueueToggle, onDraft, myTurn, queue
   )
 }
 
-export default function DraftDecideScreen({ engine, league, mySlot, myTurn, picks, onDraft, onQueueToggle, onOpenProfile, queuedNames }) {
+export default function DraftDecideScreen({ engine, league, mySlot, myTurn, picks, onDraft, onQueueToggle, onOpenProfile, queuedNames, nextOverall, nextPicks }) {
   // A finished draft has no decision left to make — suggestions('ALL')
   // returns nothing, survivalProbability() has no next pick to check
   // against, and the not-your-turn cards would otherwise show three
@@ -200,23 +200,16 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, pick
     )
   }
 
-  // "If you wait" means past *this* pick — when it's genuinely my turn,
-  // nextPicksFor(mySlot, 1) returns the pick I'm on right now (trivial:
-  // of course he's still there before anyone's picked yet), not the one
-  // after it. Skip my own current pick in that case; when it's someone
-  // else's turn, my own next pick is already the right question to ask.
-  const upcoming = engine.nextPicksFor(mySlot, 2)
-  const nextOverall = myTurn ? (upcoming[1] ?? null) : (upcoming[0] ?? null)
+  // nextOverall/nextPicks come from DraftRoom.jsx now, not computed here —
+  // PickClockBand.jsx needs the identical values above the tab strip on
+  // every tab, not just Decide, and this off-by-one (skip my own current
+  // pick when it's genuinely my turn) already cost one design-review round
+  // to get right. Lifting it to one call site is what stops a second copy
+  // drifting from this one; see DraftRoom.jsx's own comment on both values.
   const lineup = engine.seatedLineup(mySlot)
   const counts = engine.filterCounts()
   const needRows = ['QB', 'RB', 'WR', 'TE']
     .map((pos) => ({ pos, ...(counts ? counts[pos] : { have: 0, need: 0 }) }))
-  // Same skip as nextOverall above, and for the same reason — a design
-  // review caught this exact rail printing the pick already on the
-  // clock as though it were still ahead of you ("1.11 · 2.02 · 3.11"
-  // while 1.11 was the live pick). nextPicksFor's first hit on your own
-  // turn is that live pick, so ask for one extra and drop it.
-  const nextPicks = myTurn ? engine.nextPicksFor(mySlot, 5).slice(1) : engine.nextPicksFor(mySlot, 4)
 
   const raw = engine.suggestions('ALL').slice(0, 3)
   const candidates = raw.map((player) => ({
@@ -281,9 +274,26 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, pick
   const survivalOfName = (p) => engine.survivalProbability(p, nextOverall)
 
   return (
-    <div className="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto lg:grid-cols-[300px_minmax(0,1fr)_330px] lg:overflow-hidden">
+    /* flex-col below lg, grid at lg+ — not grid-cols-1 at every width down
+       to a lg:grid-cols override. A single-column grid still lays its
+       children out as auto-placed rows, and an auto-sized grid row inside a
+       container with a definite height (this one: min-h-0 flex-1, a fixed
+       share of the viewport) stretches to fill leftover space by default —
+       align-content: stretch, dividing the height evenly across all three
+       rows whether or not their content actually fills it. That is
+       invisible on the desktop 3-COLUMN grid, where three equal-height
+       columns is the point, and only appears once grid-cols-1 turns those
+       columns into rows: three panels each hard-capped to roughly a third
+       of the screen with their own internal scrollbar, rather than one page
+       that scrolls through Your team, then the cards, then The room live in
+       reading order. flex-col's main axis does not stretch children to fill
+       leftover space by default, which is the actual fix — every child
+       below also drops its own overflow-y-auto down to lg:, since a
+       naturally-sized flex child needs no scroll container of its own; the
+       one on this wrapper is what scrolls the whole stack on a phone. */
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-[calc(58px+env(safe-area-inset-bottom))] lg:grid lg:grid-cols-[300px_minmax(0,1fr)_330px] lg:overflow-hidden lg:pb-0">
       {/* Roster rail */}
-      <div className="overflow-y-auto border-white/[0.06] px-[18px] py-5 lg:border-r">
+      <div className="border-white/[0.06] px-[18px] py-5 lg:overflow-y-auto lg:border-r">
         <div className="mb-3.5 text-[10px] font-bold uppercase tracking-[0.12em] text-white/50">Your team</div>
         <div className="mb-5 flex flex-col gap-1">
           {lineup.seats.map((s, i) => (
@@ -339,7 +349,7 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, pick
       </div>
 
       {/* Centre */}
-      <div className="min-w-0 overflow-y-auto px-[22px] py-5">
+      <div className="min-w-0 px-[22px] py-5 lg:overflow-y-auto">
         {myTurn ? (
           <>
             <div className="mb-1 flex items-center gap-2.5">
@@ -426,7 +436,7 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, pick
       </div>
 
       {/* Room-live rail */}
-      <div className="overflow-y-auto border-white/[0.06] px-[18px] py-5 lg:border-l">
+      <div className="border-white/[0.06] px-[18px] py-5 lg:overflow-y-auto lg:border-l">
         <div className="mb-3 text-[10px] font-bold uppercase tracking-[0.12em] text-white/50">The room, live</div>
 
         {runPos && runCount >= 3 && (
