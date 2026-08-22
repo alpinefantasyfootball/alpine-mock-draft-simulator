@@ -98,14 +98,19 @@ export default function DraftCockpitHeader({
 
         <div className="hidden h-6 w-px shrink-0 bg-white/10 lg:block" />
 
-        {/* The tabs do not stand down at any width, and that is deliberate:
-            onSelectTab is the only caller of DraftRoom's setView anywhere in
-            the app, and `decide` swaps the whole content area, so a width with
-            no tabs is a width with no way off whichever view you are on. (That
-            is already true below md, where this nav is hidden and the view
-            opens on `decide` - a dead end this change does not create and does
-            not fix. It wants a home in the kebab menu.) Only the gap gives:
-            20px to 12px below lg, which is 16px back. */}
+        {/* The tabs do not stand down between md and lg, and that is
+            deliberate: `decide` swaps the whole content area, so a width that
+            can reach this nav and nothing else is a width with no way off
+            whichever view you are on. Only the gap gives, 20px to 12px below
+            lg, which is 16px back.
+
+            Below md this nav is hidden and MobileDraftTabBar.jsx is what
+            answers for it - a bottom bar, lg:hidden, carrying Decide and Board
+            beside the two PlayerHub tabs. Until that arrived, hiding this nav
+            below md left the view opening on `decide` with no way out of it,
+            and an earlier version of this comment said so and proposed the
+            kebab menu. That is now fixed and fixed somewhere better, so the
+            note is corrected rather than left standing. */}
         {!preDraft && (
           <nav className="hidden shrink-0 items-center gap-3 md:flex lg:gap-5">
             {/* Decide has nothing left to decide once the draft is over —
