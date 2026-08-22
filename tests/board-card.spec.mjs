@@ -1,15 +1,17 @@
 /* The draft board card, as the React board draws it.
 
-   A cell used to be a surname and a position. It is five things — who, what
-   and where, which way the order is travelling, which pick it was, and a face
-   — which is four more chances to be wrong on a grid that draws 140 of them
-   at once.
+   A cell used to be a surname and a position. It is four things now — who,
+   what and where, which way the order is travelling, and which pick it was.
+   It was five for one design pass: a face joined the list, then a design
+   review read fifty small, low-resolution headshots on one screen as noise
+   rather than information and asked for them gone (finding #17) — so the
+   card lost the one thing on this list that was ever a picture rather than
+   text, and everything below that used to test it went with it.
 
    This file used to drive the vanilla board through #/draft-legacy. It drives
-   the real one now. Two assertions changed shape with the move and neither is
-   a weakening: the arrow is one glyph rotated rather than three characters, so
-   direction is read off the transform; and a face is desktop-only, so the
-   viewport is stated rather than assumed.
+   the real one now. One assertion changed shape with that move and it is not
+   a weakening: the arrow is one glyph rotated rather than three characters,
+   so direction is read off the transform.
 
    The load-bearing test is still the contrast one, and it is worth saying why
    it exists rather than being obvious. On the legacy board the sub-line
@@ -27,20 +29,6 @@
 import { test, expect } from "@playwright/test";
 import { openApp } from "./helpers.mjs";
 
-/* The headshots come from sleepercdn, so every test here stubs it. Not to
-   avoid the network: to make the answer the same on a machine that can reach
-   it and a machine that cannot, and to let the failure case be driven on
-   purpose rather than waited for. */
-async function stubFaces(page, { fail = false } = {}) {
-  await page.route("https://sleepercdn.com/**", (route) =>
-    fail ? route.abort() : route.fulfill({
-      status: 200,
-      contentType: "image/gif",
-      // 1x1 transparent gif
-      body: Buffer.from("R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7", "base64")
-    }));
-}
-
 /* Through the bridge rather than through the setup screen's DOM. The legacy
    version had to open three <details>, write a <select> and click #startBtn;
    startDraft() is the same sequence with the DOM read removed, which is what
@@ -55,6 +43,10 @@ async function draftInto(page, picks, teams = 10) {
   }, { n: picks, t: teams });
 
   expect(await page.evaluate(() => state.started), "draft started").toBe(true);
+  // Board, not the default tab any more — Decide is, since the Cockpit
+  // rebuild — so every card test in this file needs the click before the
+  // grid it waits for next will ever exist to wait for.
+  await page.locator('#draftroom-root button').filter({ hasText: /^Board$/ }).click();
   // The grid is React's, so wait for it rather than for the engine.
   await page.waitForFunction(() => {
     const root = document.getElementById("draftroom-root");
@@ -83,7 +75,6 @@ test.describe("the draft board card", () => {
   test("every line clears 4.5:1 on its own cell, opacity composited",
     async ({ context }) => {
       const page = await openApp(context, "#/draft-room");
-      await stubFaces(page);
       await draftInto(page, 60);
 
       const r = await page.evaluate((filledSrc) => {
@@ -144,7 +135,6 @@ test.describe("the draft board card", () => {
   test("the name is an initial and a surname, and a defense keeps its club",
     async ({ context }) => {
       const page = await openApp(context, "#/draft-room");
-      await stubFaces(page);
       await draftInto(page, 20);
 
       const r = await page.evaluate(() => {
@@ -179,7 +169,6 @@ test.describe("the draft board card", () => {
 
   test("the arrow turns down on the last pick of every round", async ({ context }) => {
     const page = await openApp(context, "#/draft-room");
-    await stubFaces(page);
     await draftInto(page, 40);
 
     /* The turn is the one thing the pick numbers do not tell you on sight, and
@@ -190,10 +179,22 @@ test.describe("the draft board card", () => {
        glyph rotated three ways, because a down arrow and a right arrow are
        different characters and a face draws the vertical one far heavier —
        measured at 2.5x the ink. So "which way does this point" is a matrix,
-       not a string. */
+       not a string.
+
+       Scoped to cells, not the whole root: the Cockpit header row draws a
+       30px avatar carrying the team's own initial, also aria-hidden (the
+       visible team name beside it already says the same thing, so the
+       initial is decorative) and — for a club like "Bone-Thugs-N-Montgomery"
+       — also exactly one character. An unscoped query counts that as a
+       141st arrow pointing nowhere. border-slate-800/70 is a real board
+       cell's own border colour, one shade lighter than the header's plain
+       border-slate-800, so it reaches only the fourteen rounds and never the
+       row above them. */
     const r = await page.evaluate(() => {
       const root = document.getElementById("draftroom-root");
-      const arrows = [...root.querySelectorAll('span[aria-hidden="true"]')]
+      const grid = [...root.querySelectorAll("div")].find(
+        (d) => getComputedStyle(d).display === "grid" && d.style.getPropertyValue("--cols"));
+      const arrows = [...grid.querySelectorAll('[class*="border-slate-800/70"] span[aria-hidden="true"]')]
         .filter((s) => s.textContent.trim().length === 1);
       const dirOf = (a) => {
         const t = getComputedStyle(a).transform;
@@ -216,7 +217,6 @@ test.describe("the draft board card", () => {
 
   test("the pick on the card is the pick the app computed", async ({ context }) => {
     const page = await openApp(context, "#/draft-room");
-    await stubFaces(page);
     await draftInto(page, 40);
 
     /* The property, not the arithmetic. A pick code has to be derivable from
@@ -229,7 +229,10 @@ test.describe("the draft board card", () => {
       const root = document.getElementById("draftroom-root");
       const grid = [...root.querySelectorAll("div")].find(
         (d) => getComputedStyle(d).display === "grid" && d.style.getPropertyValue("--cols"));
-      const drawn = [...grid.querySelectorAll("span.font-normal.opacity-60")]
+      // font-plex is the pick code's own class, not a styling accident: the
+      // Cockpit board is the one place this codebase sets IBM Plex Mono for
+      // tabular figures, and it names nothing else on a card.
+      const drawn = [...grid.querySelectorAll("span.font-plex")]
         .map((s) => s.textContent.trim());
       const expected = JukeEngine.picks().map(
         (p) => DraftEngine.pickCode(p.overall, league.teams));
@@ -240,126 +243,43 @@ test.describe("the draft board card", () => {
     expect(r.missing, "and each is the code its own overall implies").toEqual([]);
   });
 
-  test("a face is drawn per card, and a failed one leaves no hole", async ({ browser }) => {
-    /* Desktop only, and stated rather than assumed: a phone column is 112px
-       and every pixel of it is spoken for, so the board renders no images at
-       all below lg. Asserting faces at a phone width would be asserting a
-       feature that is deliberately absent. */
-    const goodCtx = await browser.newContext();
-    const good = await openApp(goodCtx, "#/draft-room");
-    await good.setViewportSize({ width: 1440, height: 900 });
-    await stubFaces(good);
-    await draftInto(good, 30);
-
-    const drawn = await good.evaluate((src) => {
-      const cells = eval(src);
-      return {
-        cards: cells.length,
-        // Same population as the broken half below: the cards a reader can
-        // actually see. A lazy image off the fold has not loaded and is not
-        // what either half is about.
-        faces: cells.filter((c) => {
-          const i = c.querySelector("img");
-          if (!i) return false;
-          const r = i.getBoundingClientRect();
-          return r.width > 0 && r.bottom > 0 && r.top < innerHeight;
-        }).length,
-        cardsInView: cells.filter((c) => {
-          const r = c.getBoundingClientRect();
-          return r.bottom > 0 && r.top < innerHeight;
-        }).length,
-        // the face is pushed to the right edge of the card rather than spaced
-        rightmost: cells.every((c) => {
-          const f = c.querySelector("img");
-          if (!f) return true;
-          return c.getBoundingClientRect().right - f.getBoundingClientRect().right < 8;
-        })
-      };
-    }, FILLED);
-    expect(drawn.cards, "there were cards").toBeGreaterThan(20);
-    expect(drawn.faces, "a face on every card in view").toBe(drawn.cardsInView);
-    expect(drawn.rightmost, "and pinned to the right edge").toBe(true);
-    // Closed before the broken half opens. Two live pages both running a CPU
-    // timer and re-rendering is a slower machine for the one under test, and
-    // this half has nothing left to say.
-    await goodCtx.close();
-
-    /* Now the same board with every image failing. onError removes the element
-       rather than leaving a broken-image box, and the card closes up because
-       the face was a flex sibling rather than an absolute overlay. */
-    /* Its own context, which is the whole reason this half is reliable. Both
-       pages shared one at first, so the successful images from the good page
-       were already in the HTTP cache — the bad page served them straight out
-       of it, never hit the abort route, and one face survived about one run
-       in six. That reads as the component failing to drop a broken image
-       when it is actually the image not being broken. */
-    const badCtx = await browser.newContext();
-    const bad = await openApp(badCtx, "#/draft-room");
-    await bad.setViewportSize({ width: 1440, height: 900 });
-    await stubFaces(bad, { fail: true });
-    await draftInto(bad, 30);
-    /* In view, not in the document.
-
-       The faces carry loading="lazy", so an image below the fold is never
-       requested — and one that is never requested never errors, so there is
-       nothing to drop and its element stays. Asserting that *no* img survives
-       is asserting that lazy loading does not work: it passed only when the
-       board happened to be short enough that every card was on screen, and
-       failed about one run in five otherwise. Two earlier explanations (the
-       wait, then the HTTP cache) were wrong for the same reason — they were
-       about timing, and this is about which requests were ever made.
-
-       What the test is actually for is that a broken image leaves no hole
-       where somebody can see it. So: nothing visible. */
-    const visibleImgs = (page) => page.evaluate((src) =>
-      eval(src)
-        .map((c) => c.querySelector("img"))
-        .filter(Boolean)
-        .filter((i) => {
-          const r = i.getBoundingClientRect();
-          return r.width > 0 && r.bottom > 0 && r.top < innerHeight;
-        }).length, FILLED);
-
-    await expect.poll(() => visibleImgs(bad), { timeout: 20000 }).toBe(0);
-
-    /* Everything else read in one go, and the face count *not* re-read here.
-
-       Polling until no visible face survives and then reading the same fact
-       again in a second evaluate is two reads of a moving board: the grid
-       re-renders and scrolls to the live pick, so a lazy image can come into
-       view between the two and be counted before it has had a chance to
-       fail. That is the poll's answer being overwritten by a worse one, and
-       it cost about one run in seventy-five. The poll above is the
-       assertion; this only collects what does not move. */
-    const gone = await bad.evaluate((src) => {
-      const cells = eval(src);
-      return {
-        cards: cells.length,
-        // the card still says everything it is required to say
-        firstPick: cells[0].querySelector("span.font-normal.opacity-60").textContent.trim()
-      };
-    }, FILLED);
-    expect(gone.cards, "the cards are all still there").toBeGreaterThan(20);
-    expect(gone.firstPick).toMatch(/^\d+\.\d\d$/);
-
-    await badCtx.close();
-  });
+  /* "A face is drawn per card, and a failed one leaves no hole" used to live
+     here: two full browser contexts, one with headshots stubbed to a real
+     1x1 gif and one with every request aborted, checking that a card without
+     a photo still closes up cleanly rather than leaving a hole. There is no
+     photo on a card any more to close up around — the design review that
+     asked for this pass read fifty small, low-resolution faces on one board
+     as noise rather than signal (finding #17), and DraftBoardGrid.jsx has no
+     <img> left in it to fail. A test asserting `drawn.faces === cardsInView`
+     against a board that draws zero faces everywhere would either read as a
+     permanently red light on a feature nobody is trying to ship, or — worse,
+     since 0 === 0 — pass by accident while checking nothing at all. Deleted
+     rather than left behind, the same call made for the two roster-strip
+     tests in board-marks.spec.mjs the same day, for the same reason. */
 
   test("a filled row is the same height as an empty one", async ({ context }) => {
     const page = await openApp(context, "#/draft-room");
-    await stubFaces(page);
     await draftInto(page, 15);
 
     /* Setting the card's height only on filled cells leaves the board with two
        row heights, and a row that grows the moment its first pick lands —
        which shoves everything below it down, once per round, on a pane that is
        simultaneously trying to keep the live pick centred. The row owns the
-       height, not the cell: grid-auto-rows states it once. */
+       height, not the cell: grid-auto-rows states it once.
+
+       grid.children are grandparents to a cell, not parents: each round is a
+       display:contents wrapper, so the grid's own children are the header
+       row plus fourteen wrappers, none of them a cell — the corner box is
+       the one child that does carry "border-b" in its own class, so the
+       naive query used to measure exactly one thing, and the wrong one.
+       border-slate-800/70 is the real cells' own border colour and reaches
+       them directly, the same selector board-marks.spec.mjs already uses to
+       find the same grandchildren. */
     const r = await page.evaluate(() => {
       const root = document.getElementById("draftroom-root");
       const grid = [...root.querySelectorAll("div")].find(
         (d) => getComputedStyle(d).display === "grid" && d.style.getPropertyValue("--cols"));
-      const cells = [...grid.children].filter((c) => c.className.includes("border-b"));
+      const cells = [...grid.querySelectorAll('[class*="border-slate-800/70"]')];
       const h = (el) => Math.round(el.getBoundingClientRect().height);
       const filled = cells.filter((c) => c.querySelector("p.truncate")).map(h);
       const empty = cells.filter((c) => !c.querySelector("p.truncate") && h(c) > 10).map(h);

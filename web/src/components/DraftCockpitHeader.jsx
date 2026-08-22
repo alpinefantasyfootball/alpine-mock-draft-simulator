@@ -1,7 +1,6 @@
 import { Fragment } from 'react'
 import { motion } from 'framer-motion'
 import { ChevronLeft, MoreHorizontal, Settings } from 'lucide-react'
-import Ticker from './Ticker.jsx'
 import JukeLogo from './juke-logo/JukeLogo.jsx'
 
 const TABS = [
@@ -57,7 +56,26 @@ export default function DraftCockpitHeader({
 
   return (
     <Fragment>
-      <header className="fixed inset-x-0 top-0 z-50 flex h-[62px] shrink-0 items-center gap-[14px] border-b border-white/[0.06] bg-obsidian/90 px-4 backdrop-blur-md sm:gap-[22px] sm:px-6">
+      {/* Five blocks want this bar and it is 62px tall, not wide: measured at
+          their natural widths, chevron 28 + logo 95 + divider 1 + tabs 210 +
+          the pick pill 313 at its widest + controls 158 is 805px of content,
+          and seven 22px gaps and 48px of padding put the minimum at 1007. That
+          is an lg bar. It had been overflowing every width below it - 916
+          against 768, 685 against 640 - with the surplus running off the right
+          edge, where `ml-auto` puts the controls: no scroll, no ellipsis, just
+          the Autopick toggle and the kebab off-screen. So four things stand
+          down below lg, in the order of what can wait, and every one of them
+          is measured rather than guessed.
+
+          The gaps are the first: 22px between eight blocks is 154px, more than
+          the logo and the tabs together. 14px until lg rather than until sm,
+          and the 24px side padding holds at 16 with them - together that is
+          70px, which is the difference between fitting the last round of a
+          14-round draft at 768 and running 8px past it. The worst case is not
+          the one on screen while you check: "Round 14 · Pick 140" and a 14.10
+          clock is 38px wider than the round-one pill, and it is the one that
+          has to fit. */}
+      <header className="fixed inset-x-0 top-0 z-50 flex h-[62px] shrink-0 items-center gap-[14px] border-b border-white/[0.06] bg-obsidian/90 px-4 backdrop-blur-md lg:gap-[22px] lg:px-6">
         <a
           href="#/drafts"
           aria-label="Back to your draft locker"
@@ -66,15 +84,35 @@ export default function DraftCockpitHeader({
         >
           <ChevronLeft className="h-4 w-4" />
         </a>
-        <a href="#/" aria-label="Juke home" className="hidden shrink-0 sm:block">
+        {/* lg rather than sm, which is where the room's own layout switches
+            anyway. The logo is the second thing to stand down and the easiest:
+            the chevron immediately to its left already goes back, so below lg
+            this is the second way out of a bar that has room for one - the same
+            call the legacy header made when it merged its mark and its chevron
+            into a single control. 95px of lockup plus a 22px gap plus the
+            divider and its gap is 140px, the largest single saving available
+            here, and mark-only would have returned just 63 of it. */}
+        <a href="#/" aria-label="Juke home" className="hidden shrink-0 lg:block">
           <JukeLogo size={19} />
         </a>
 
-        <div className="hidden h-6 w-px shrink-0 bg-white/10 sm:block" />
+        <div className="hidden h-6 w-px shrink-0 bg-white/10 lg:block" />
 
+        {/* The tabs do not stand down at any width, and that is deliberate:
+            onSelectTab is the only caller of DraftRoom's setView anywhere in
+            the app, and `decide` swaps the whole content area, so a width with
+            no tabs is a width with no way off whichever view you are on. (That
+            is already true below md, where this nav is hidden and the view
+            opens on `decide` - a dead end this change does not create and does
+            not fix. It wants a home in the kebab menu.) Only the gap gives:
+            20px to 12px below lg, which is 16px back. */}
         {!preDraft && (
-          <nav className="hidden shrink-0 items-center gap-5 md:flex">
-            {TABS.map((t) => (
+          <nav className="hidden shrink-0 items-center gap-3 md:flex lg:gap-5">
+            {/* Decide has nothing left to decide once the draft is over —
+                DraftRoom.jsx already redirects off it on that edge, and a
+                design review asked for the tab itself to disappear too
+                rather than stay selectable onto a dead end. */}
+            {TABS.filter((t) => !(over && t.key === 'decide')).map((t) => (
               <button
                 key={t.key}
                 type="button"
@@ -119,7 +157,17 @@ export default function DraftCockpitHeader({
                   (myTurn ? (urgent ? 'text-rose-400' : 'text-teal-300') : 'text-white/55')
                 }
               >
-                Round {round} · Pick {overall}{myTurn ? ' · your turn' : ''}
+                {/* xl, because "your turn" is the fourth thing on this pill
+                    already saying so: it turns teal (rose when urgent), it
+                    pulses, it grows a progress bar that exists on no other
+                    turn, and this label goes teal with it. CLAUDE.md's own
+                    note on the legacy header made this argument the other way
+                    round - "by the time that sentence is readable the whole
+                    header has turned blue" - so it is the redundant half, and
+                    it is 70px of the pill's 313. The pick number underneath it
+                    never gives; that one is the fact. */}
+                Round {round} · Pick {overall}
+                {myTurn && <span className="hidden xl:inline"> · your turn</span>}
               </span>
               {myTurn && (
                 <div className="h-[3px] w-[150px] overflow-hidden rounded-full bg-white/[0.12]">
@@ -132,7 +180,9 @@ export default function DraftCockpitHeader({
             </div>
             <span
               className={
-                'font-display text-[32px] font-bold leading-none tabular-nums ' +
+                /* 26px below lg. Last and smallest of the four, 13px, and the
+                   one to undo first if this bar ever gets room back. */
+                'font-display text-[26px] font-bold leading-none tabular-nums lg:text-[32px] ' +
                 (myTurn ? (urgent ? 'text-rose-300' : 'text-teal-300') : 'text-white/70 text-base')
               }
             >
@@ -206,14 +256,6 @@ export default function DraftCockpitHeader({
           )}
         </div>
       </header>
-
-      {/* top-[62px] to match the new header height — see its own comment.
-          Same reasoning DraftRoomStatusBar's ticker strip already had:
-          real ADP/scores content, moved below the bar a manager is
-          watching their pick clock on rather than removed. */}
-      <div className="fixed inset-x-0 top-[62px] z-40 hidden h-6 items-center border-b border-white/5 bg-obsidian/60 px-3 backdrop-blur-md md:flex sm:px-6">
-        <Ticker />
-      </div>
     </Fragment>
   )
 }

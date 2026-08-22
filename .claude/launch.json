@@ -4,16 +4,25 @@
     {
       "name": "draft-room",
       "runtimeExecutable": "py",
-      "runtimeArgs": ["-m", "http.server", "8765"],
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8765"
+      ],
       "port": 8765
     },
     {
       "name": "room",
       "runtimeExecutable": "npx",
       "runtimeArgs": [
-        "--yes", "wrangler@4", "dev",
-        "-c", "worker/wrangler.toml",
-        "--port", "8787", "--local"
+        "--yes",
+        "wrangler@4",
+        "dev",
+        "-c",
+        "worker/wrangler.toml",
+        "--port",
+        "8787",
+        "--local"
       ],
       "port": 8787
     },
@@ -21,11 +30,38 @@
       "name": "web",
       "runtimeExecutable": "npm",
       "runtimeArgs": [
-        "--prefix", "web",
-        "run", "dev", "--",
-        "--port", "5173", "--strictPort"
+        "--prefix",
+        "web",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5173",
+        "--strictPort"
       ],
       "port": 5173
+    },
+    {
+      "name": "web-dist",
+      "runtimeExecutable": "py",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8766",
+        "--directory",
+        "web/dist"
+      ],
+      "port": 8766
+    },
+    {
+      "name": "repo-root",
+      "runtimeExecutable": "py",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8767"
+      ],
+      "port": 8767
     }
   ]
 }

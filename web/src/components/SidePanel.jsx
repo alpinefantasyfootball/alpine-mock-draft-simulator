@@ -10,12 +10,20 @@
 
    Desktop only by composition rather than by a class of its own: every
    caller sits inside DraftRoom's panel row, so this never needs to know
-   about breakpoints. */
+   about breakpoints.
+
+   border-slate-700, not -800: this panel's own tab row (Queue/Roster) sits
+   directly beside DraftLogDock's tab row (Chat/Log/Picks), same height,
+   same underline style, and a design review read the two as one four-item
+   strip with two selections lit at once rather than as two adjacent
+   two-item bars. They already are two separate bars with two separate
+   active states — the fix is making the seam between them read as one at
+   a glance, not restructuring what's already correct underneath it. */
 export default function SidePanel({ title, count, tabs, active, onTab, action, children }) {
   return (
-    <div className="flex h-full min-h-0 w-full flex-col border-r border-slate-800 bg-slate-900/40 last:border-r-0">
+    <div className="flex h-full min-h-0 w-full flex-col border-r border-slate-700 bg-slate-900/40 last:border-r-0">
       {tabs ? (
-        <div className="flex shrink-0 border-b border-slate-800">
+        <div className="flex shrink-0 border-b border-slate-700">
           {tabs.map((t) => (
             <button
               key={t.key}
@@ -34,7 +42,7 @@ export default function SidePanel({ title, count, tabs, active, onTab, action, c
           ))}
         </div>
       ) : (
-        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-800 px-3 py-2">
+        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-700 px-3 py-2">
           <span className="text-[10px] font-semibold uppercase tracking-wide text-white/40">
             {title}
             {count > 0 ? <span className="ml-1 text-teal-400">{count}</span> : null}

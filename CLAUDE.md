@@ -128,7 +128,9 @@ the Stack section above, not a one-time migration hiccup.
 | `stats.js` | **GENERATED.** Stats, projections, depth charts by Sleeper ID. `pp` holds what we projected for seasons already played, so a forecast can be graded against what happened. |
 | `scripts/build_players.py` | The pipeline that writes the two generated files. |
 | `.github/workflows/update-players.yml` | Runs the pipeline daily at 11:00 UTC, and bumps `?v=` in `web/index.html` (not the root `index.html`) alongside `404.html` and the how-it-works doc. |
-| `og-image.png` | **GENERATED.** 1200x630 link-preview card, from `scripts/build_og.html`. Clicking download works in a real browser and not in a headless one; the reliable route is below. |
+| `og-image.png` | 1200x630 link-preview card. **A designed asset now, not a generated one** — it arrived with the shark handoff. `scripts/build_og.html` still draws a plainer fallback from the same mark; running it replaces the designed card with a generated one. The copy that is actually served is `web/public/og-image.png`; see the note on the repo root below. |
+| `favicon.ico`, `favicon-16.png`, `favicon-32.png` | The root favicons, named by `404.html` and all three `docs/` pages. The PNGs are rendered exports; the `.ico` is assembled from them by `scripts/build_favicon_ico.py`. Duplicated into `web/public/`, which is the copy a browser reaches. |
+| `scripts/build_favicon_ico.py` | Wraps `favicon-{16,32,48}.png` in an `.ico` container, payloads unmodified. Stdlib only, no encoder, and it re-traces nothing — if the mark changes, re-render the PNGs and run it again. |
 | `unmatched.txt` | **GENERATED.** Feed rows that failed to join, plus unscored stat keys. |
 
 ## Data
@@ -1333,13 +1335,48 @@ querying the database and finding zero rows after a miss that should have
 written some. **Ask the database, not the response**: a worker change that is
 merged but not deployed looks exactly like one that is working.
 
-**Nothing in the tree is unpublished.** Pages serves the output directory as it
-finds it and has no ignore list, so anything committed to the repository root
-is live on the domain whether or not a page links to it. A 1.4MB piece of logo
-artwork sat at `jukeff.com/image_71380e33.png` for six days, referenced by
-nothing, returning 200 to anybody who asked. A `brand/` directory would have
-been just as public and harder to notice. Assets that are not the site belong
-somewhere that is not the site.
+**Nothing in the *output directory* is unpublished.** Pages serves that
+directory as it finds it and has no ignore list, so anything in it is live on
+the domain whether or not a page links to it. A 1.4MB piece of logo artwork sat
+at `jukeff.com/image_71380e33.png` for six days, referenced by nothing,
+returning 200 to anybody who asked. A `brand/` directory would have been just
+as public and harder to notice. Assets that are not the site belong somewhere
+that is not the site.
+
+**The repository root stopped being that directory, and the reverse of this
+rule bit before anybody noticed the rule had changed.** Once the dashboard
+moved to **Root directory: `web`, Output: `dist`**, the only things served are
+what Vite emits, what `web/public/` holds, and what
+`copy-legacy-assets.mjs` copies. `og-image.png` and the three root favicons are
+in none of those lists, so `og:image` — the absolute
+`https://jukeff.com/og-image.png` baked into every link preview — has been a
+404 at the origin ever since, along with every favicon `404.html` and the three
+`docs/` pages name.
+
+**And it did not look like a 404, which is the part worth keeping.** Asking for
+`https://jukeff.com/og-image.png` returned **200** — from a Cloudflare edge
+entry left over from the GitHub Pages era, still being served long after the
+origin behind it stopped existing. The giveaway was a byte count: 53,637 served
+against 53,569 in `HEAD`, so the thing answering was not even this
+repository's copy. `favicon.ico` did the same; `favicon-16.png` and
+`favicon-32.png` had simply been evicted and 404'd honestly, which is why the
+set looked half-broken rather than uniformly wrong.
+
+**So the check is `?cb=`, and it is the same throwaway query the deploy note
+above already prescribes** — `/og-image.png?cb=1` misses the cache entry,
+reaches the origin, and returns the plain 404 the bare URL was hiding. This is
+the third distinct shape of the caching trap in this file: stale HTML against
+fresh assets under GitHub Pages, fresh HTML against a deleted content-hashed
+bundle under Cloudflare, and now an edge entry outliving its origin entirely.
+All three are the same instruction. **Ask with a query string before believing
+a file is deployed.**
+
+**Anything a page names with a leading `/` therefore has to be under
+`web/public/` or in `LEGACY_FILES`.** There is no third place. The root copies
+of `og-image.png` and the favicons are kept because that is where git has
+always held them and where `scripts/build_og.html` and
+`scripts/build_favicon_ico.py` write — but they reach nobody on their own, and
+a change made only there is a change nobody sees.
 
 **A redirect rule can be named for the opposite of what it does.** `jukeff.com`
 spent a day in an infinite loop — every path, 301 to itself — behind a rule
@@ -1866,19 +1903,18 @@ purple `#7B1FA2` this rule does not otherwise use). Retargeting `--orange`
 to that same value connects a colour three parts of the app already agreed
 on, rather than choosing a fourth nobody had measured.
 
-**One thing this pass could not reach.** `favicon.ico`, `favicon-16.png`
-and `favicon-32.png` at the repo root are rendered PNG/ICO, not CSS-driven
-elements, so they still show the shield's swoosh in the original orange
-until somebody re-exports them by hand — no tool here rasterises an icon.
-`404.html` links to those three directly. `og-image.png` is the fourth
-raw export and *was* regenerated, because `scripts/build_og.html` draws it
-from the same inline SVG symbol a browser can rasterise, which
-`node scripts/build_og.html`-via-Playwright can do headlessly; the three
-favicons have no equivalent script. The newer J-monogram set
-(`web/public/juke-favicon.svg`, `juke-app-icon-*.png`) was never orange to
-begin with, so `web/index.html`'s own favicon and PWA icons were already
-correct before any of this — only the legacy shield mark's three
-un-regenerable exports carry the gap.
+**One thing this pass could not reach, and it stayed unreached for two more
+brand generations.** `favicon.ico`, `favicon-16.png` and `favicon-32.png` at
+the repo root are rendered PNG/ICO, not CSS-driven elements, so they went on
+showing the shield's swoosh in the original orange while the app showed first
+a goalpost and then a shark. `404.html` and all three `docs/` pages link them
+directly. That is the general lesson rather than a footnote about orange: **a
+raster export is invisible to every pass this project knows how to run**, so
+it does not drift a little, it stays exactly where it was until somebody goes
+and looks. The shark swap is what finally replaced them, and the sentence
+"no tool here rasterises an icon" was true and beside the point — the `.ico`
+never needed rasterising, only a container, which `scripts/build_favicon_ico.py`
+now writes in forty lines of stdlib around the PNGs' own bytes.
 
 **The first attempt at `--teal-cta` repeated the exact mistake this section
 just finished describing, aimed at a new colour.** It measured `--teal`
@@ -1930,6 +1966,75 @@ not an unfixed case of the same miss. Introducing a gradient there would
 be grafting a Tailwind-side idiom onto a codebase that has never used one
 for a button, which is a bigger and different change than "match the
 button that does the same job" asks for.
+
+## The shark
+
+The goalpost monogram is gone. The mark is a shark, and **no colour token
+moved to make room for it** — that was the deciding argument between the three
+options, not a happy accident. The product teal `#00E5FF` and the shark
+artwork's own aqua `#84E4E4` are the same hue, 186 against 180, differing only
+in saturation, so the mark rendered in `#00E5FF` is not a compromise reading of
+somebody else's palette. `tailwind.config.js`, `index.css` and
+`draftRoomPositions.js` came out of the swap with empty diffs, and that is a
+check to re-run rather than a claim to trust.
+
+**The mark is 564:352 and height is always derived from width.** 1.602:1, where
+the goalpost was 0.96:1 — so the lockup is about 10px wider at every size:
+measured 105px at `size={21}` and 90px at `size={18}`. `markWidth` went from
+`size * 1.15` to `size * 1.7` and the lockup gap tightened from `0.48` to
+`0.42` to give some of it back.
+
+**The path data stays out of the bundle, and that is what the `<img>` and the
+CSS mask are for.** The artwork is ~24KB. Colour variants load as `<img src>`;
+`mono` is a `mask-image` over `background-color: currentColor`, because an
+`<img>` cannot inherit a colour and inlining the geometry to get that back
+would put the 24KB in the JavaScript. Verified after the swap: the built chunk
+names the four SVG URLs and carries none of their geometry.
+
+**Below 28px the component swaps itself to the silhouette, and below 12px it
+draws nothing.** The three-value face does not survive smaller, and rendering
+mush was the previous artwork's failure mode. **This threshold is a trap for
+call sites that pass a width rather than a `size`.** `AppHeader.jsx` asked for
+`width={20}` — which is below it, so the mark would have rendered as a
+`currentColor` silhouette whether or not `mono` was set, quietly dropping the
+resting state's teal and falsifying the comment directly above it promising a
+two-value mark. It is 28 now, which is the smallest width that keeps the face.
+A handoff saying "no call site needs editing" is a claim about the *signature*,
+not about the values already being passed through it.
+
+**A variant per ground, not one file you recolour.** In the supplied artwork
+the eyes, teeth and jaw were filled with the canvas colour, so the mark only
+worked on one background. Every file declares its negative value explicitly,
+which is why `juke-mark-light.svg` and `juke-mark-fg.svg` exist as files rather
+than as a `fill` override. **That is what makes an `<img>` mark theme-blind**:
+the inline SVG it replaced on `404.html` took `var(--mark-ink)` and
+`var(--teal)` and reversed itself, and an `<img>` cannot. That page carries two
+of them and swaps on `:root[data-theme="light"]`; the `docs/` headers carry one,
+because `.appbar` is navy under both themes.
+
+**The mark may now stand alone, and that is the one rule that changed.** The
+goalpost read as a plain U without its wordmark, so mark-only was restricted to
+favicons and tiles. The shark is a distinct silhouette, so `variant="mark"` is
+legitimate in avatars, badges and a bar that has run out of room — which is the
+first fix to reach for when one has.
+
+**`DraftCockpitHeader.jsx` has run out of room, and the mark is not why.**
+Measured at 640px with a draft in progress and the clock mine: the controls
+block ends at 685px against a 640px bar. Take the logo out altogether and it
+ends at 616 — so it fits without a logo and overflowed by 35px with the
+goalpost, before the shark added its 10. At 768px the `md:flex` tab nav joins
+in and the bar needs **941px** before it stops clipping. Mark-only brings 640px
+back to 622 and fixes it; nothing about the logo fixes 768. **The bar wants a
+real answer at `md`, and the logo is 95px of a 173px problem there.**
+
+**The handoff named the wrong component for that check, which is worth knowing
+before trusting the next one.** It said to verify `DraftRoomStatusBar.jsx` at
+`sm`, and nothing has imported that file since `DraftCockpitHeader.jsx` took
+over both of its call sites. Its own 375px comment budgeted `81 (logo)` against
+markup carrying `hidden shrink-0 sm:block` a few lines below — the arithmetic
+had been wrong since that class went on. A handoff's paths are read off the
+repository at some moment and go stale like anything else; check what actually
+renders before measuring it.
 
 ## The draft room header
 

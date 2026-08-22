@@ -31,6 +31,30 @@ function whatItDoes(engine, player, vorp) {
   return `Bench depth at ${player.pos}.${vorpText}`
 }
 
+// A design review flagged this directly: the recommended card's own Juke
+// score can print lower than a sibling's ("Juke's pick" at 57 next to a
+// 59), and a reader's first conclusion is that the app recommended the
+// worse player. It didn't — suggestions() ranks by ADP, need and risk
+// alongside the model's opinion (see CLAUDE.md's "The suggestions"
+// section), on purpose, so it can rank a lower-scoring player above a
+// higher-scoring one when the higher scorer doesn't fill a real need or
+// is riskier. Re-sorting the cards by the number shown would undo that —
+// the fix is to say the actual reason a card won its slot instead of
+// leaving a bare number to imply one that may not be true.
+function reasonFor(rankLabel, candidate, engine) {
+  if (rankLabel === 'Scarcest') {
+    return candidate.tierLeft != null
+      ? `Only ${candidate.tierLeft} left in his tier — the run won't wait.`
+      : "Thin at his position — the run won't wait."
+  }
+  if (rankLabel === 'Safest wait') return 'Deepest tier of the three — the least urgent pick here.'
+  // 'Also available' — a candidate too far below replacement for
+  // "scarce"/"safe" to mean anything (see BAD_VORP below).
+  if (rankLabel === 'Also available') return "Nobody's rushing for him — pure bench depth at this point."
+  const fit = engine.draftFit(candidate.player)
+  return fit && fit.startsNow ? 'Best value for a slot you still need to fill.' : 'Best value still on the board.'
+}
+
 function Card({ candidate, rankLabel, primary, onDraft, myTurn, engine }) {
   const { player, vorp, juke, survival, nextOverall } = candidate
   const proj = typeof player.projPts === 'number' ? Math.round(player.projPts) : null
@@ -51,31 +75,29 @@ function Card({ candidate, rankLabel, primary, onDraft, myTurn, engine }) {
       </div>
 
       <div className="font-display text-[32px] font-bold leading-none text-white">{player.name}</div>
-      <div className="mb-4 text-xs text-white/60">
+      <div className="mb-3 text-xs text-white/60">
         {player.team} · bye {player.bye || '—'}
         {player.tier ? ` · tier ${player.tier}` : ''}
       </div>
 
-      <div className="mb-4 flex items-end gap-4">
+      {/* The reason this card won its slot, not just a number a reader has
+          to compare against the other two cards themselves. */}
+      <div className="mb-3 text-sm font-semibold leading-[1.4] text-teal-200">{reasonFor(rankLabel, candidate, engine)}</div>
+
+      <div className="mb-4 grid grid-cols-3 gap-2 rounded-lg bg-white/[0.03] px-3 py-2.5">
         <div>
-          <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-white/50">Juke score</div>
-          <div className="font-display text-[42px] font-bold leading-[0.95] tabular-nums text-teal-300">{juke ?? '—'}</div>
+          <div className="text-[9px] font-semibold uppercase tracking-[0.08em] text-white/45">VORP</div>
+          <div className="font-plex text-lg font-bold tabular-nums text-emerald-300">
+            {vorp != null ? `${vorp >= 0 ? '+' : ''}${Math.round(vorp)}` : '—'}
+          </div>
         </div>
-        <div className="min-w-0 flex-1 pb-1.5">
-          <div className="mb-[7px] h-1.5 overflow-hidden rounded-full bg-white/[0.08]">
-            <div
-              className="h-full rounded-full bg-gradient-to-r from-teal-400 to-purple-400"
-              style={{ width: `${Math.max(0, Math.min(100, juke ?? 0))}%` }}
-            />
-          </div>
-          <div className="flex justify-between gap-2 text-[10px] text-white/50">
-            <span>
-              VORP <span className="font-semibold text-emerald-300">{vorp != null ? `${vorp >= 0 ? '+' : ''}${Math.round(vorp)}` : '—'}</span>
-            </span>
-            <span>
-              Proj <span className="font-semibold text-white">{proj ?? '—'}</span>
-            </span>
-          </div>
+        <div>
+          <div className="text-[9px] font-semibold uppercase tracking-[0.08em] text-white/45">Juke score</div>
+          <div className="font-plex text-lg font-bold tabular-nums text-teal-300">{juke ?? '—'}</div>
+        </div>
+        <div>
+          <div className="text-[9px] font-semibold uppercase tracking-[0.08em] text-white/45">Proj</div>
+          <div className="font-plex text-lg font-bold tabular-nums text-white">{proj ?? '—'}</div>
         </div>
       </div>
 
@@ -189,7 +211,12 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, pick
   const counts = engine.filterCounts()
   const needRows = ['QB', 'RB', 'WR', 'TE']
     .map((pos) => ({ pos, ...(counts ? counts[pos] : { have: 0, need: 0 }) }))
-  const nextPicks = engine.nextPicksFor(mySlot, 4)
+  // Same skip as nextOverall above, and for the same reason — a design
+  // review caught this exact rail printing the pick already on the
+  // clock as though it were still ahead of you ("1.11 · 2.02 · 3.11"
+  // while 1.11 was the live pick). nextPicksFor's first hit on your own
+  // turn is that live pick, so ask for one extra and drop it.
+  const nextPicks = myTurn ? engine.nextPicksFor(mySlot, 5).slice(1) : engine.nextPicksFor(mySlot, 4)
 
   const raw = engine.suggestions('ALL').slice(0, 3)
   const candidates = raw.map((player) => ({
@@ -213,6 +240,20 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, pick
   if (candidates.length === 3 && candidates[2].tierLeft < candidates[1].tierLeft) {
     rankLabels = ['Juke’s pick', 'Safest wait', 'Scarcest']
   }
+  // "Scarcest" means "grab him before the tier runs out" — a claim that
+  // only makes sense if the tier is worth being in. Late rounds routinely
+  // hand suggestions() three below-replacement players with nothing else
+  // left to rank them by, and stamping the deepest-negative one
+  // "Scarcest" reads as advice to rush a player who isn't worth having.
+  // Caught by a design review against a real −100 VORP card.
+  const BAD_VORP = -30
+  rankLabels = rankLabels.map((label, i) => {
+    const c = candidates[i]
+    if ((label === 'Scarcest' || label === 'Safest wait') && c && c.vorp != null && c.vorp < BAD_VORP) {
+      return 'Also available'
+    }
+    return label
+  })
 
   const others = engine.suggestions('ALL').slice(3, 7).map((player) => ({
     player,
@@ -316,6 +357,15 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, pick
             {others.length > 0 && (
               <>
                 <div className="mb-2.5 text-[10px] font-bold uppercase tracking-[0.12em] text-white/50">Everyone else</div>
+                {/* Column heads — a design review caught "+64 · 38 · Draft"
+                    with nothing saying which number was which. */}
+                <div className="grid h-5 grid-cols-[30px_minmax(0,1fr)_60px_64px_70px] items-center gap-3.5 px-3 text-[9px] font-semibold uppercase tracking-wide text-white/30">
+                  <span />
+                  <span />
+                  <span className="text-right">VORP</span>
+                  <span className="text-right">Juke</span>
+                  <span />
+                </div>
                 <div className="flex flex-col gap-1">
                   {others.map((o) => (
                     <div

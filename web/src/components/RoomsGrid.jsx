@@ -34,38 +34,49 @@ function useRooms() {
 // touch/keyboard/resize logic just to look at the other five. A plain grid
 // shows all six at once, which is the actual goal of a "here's everything
 // Juke does" section on a marketing page.
+//
+// Live rooms first, a display-only sort rather than a change to ROOMS
+// itself: app.js's own comment on that array explains it was deliberately
+// reordered to run chronologically across a season (Prospect, Draft,
+// Waiver, ...) rather than live-first, and the footer reads the same array
+// — reordering the source would have silently reordered the footer too.
+// This is the one place on the page a design review specifically asked to
+// lead with what a visitor can actually click; Array.prototype.sort is
+// stable in every current engine, so the five "coming soon" rooms keep
+// their existing relative order behind whichever ones are live.
+function liveFirst(rooms) {
+  return [...rooms].sort((a, b) => (a.live === b.live ? 0 : a.live ? -1 : 1))
+}
+
 export default function RoomsGrid() {
   const rooms = useRooms()
   const modalRef = useRef(null)
 
   if (rooms.length === 0) return null
 
-  const liveCount = rooms.filter((r) => r.live).length
-  const soonCount = rooms.length - liveCount
+  const ordered = liveFirst(rooms)
 
   return (
     <section id="rooms" className="border-t border-white/[0.06] bg-[#080b0e] px-6 py-24">
       <div className="mx-auto max-w-7xl">
-        <div className="mb-11 flex flex-wrap items-end justify-between gap-12">
-          <div className="max-w-[620px]">
-            <h2 className="font-display text-[30px] font-extrabold italic leading-[1.15] tracking-[-0.015em] text-white sm:text-[38px] sm:leading-[1.1] lg:text-[46px] lg:leading-[1.08] lg:tracking-[-0.025em]">
-              The Rooms
-            </h2>
-            <p className="mt-[14px] text-[17px] leading-[1.55] text-white/55">
-              Your comprehensive toolkit for every phase of the fantasy calendar.
-            </p>
-          </div>
-
-          {/* Derived from the real data on every render, never hardcoded —
-              a room going live moves this number for free. */}
-          <div className="flex shrink-0 items-center gap-2 pb-1.5 font-plex text-[11.5px] text-white/40">
-            <span className="h-[7px] w-[7px] rounded-full bg-teal-400" />
-            {liveCount} live · {soonCount} coming soon
-          </div>
+        <div className="mb-11 max-w-[620px]">
+          <h2 className="font-display text-[30px] font-extrabold italic leading-[1.15] tracking-[-0.015em] text-white sm:text-[38px] sm:leading-[1.1] lg:text-[46px] lg:leading-[1.08] lg:tracking-[-0.025em]">
+            The Rooms
+          </h2>
+          {/* The forward-looking claim the hero used to open with, moved
+              here rather than deleted — a design review caught it making a
+              five-room promise in the headline while this same section
+              immediately undercut it with a literal "1 live · 5 coming
+              soon" count. One honest, clearly future-tense line, below the
+              fold, beside the grid that actually shows what's live today. */}
+          <p className="mt-[14px] text-[17px] leading-[1.55] text-white/55">
+            The Draft Room is live today. Five more rooms — covering the rest of the fantasy
+            calendar — are on the way.
+          </p>
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {rooms.map((room) => {
+          {ordered.map((room) => {
             const Icon = ICON_BY_NAME[room.name] ?? DraftIcon
             return (
               <RoomCard

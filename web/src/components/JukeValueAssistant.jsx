@@ -57,11 +57,17 @@ export default function JukeValueAssistant({ player, vorp, tierLeft, onDraft, my
             )}
           </p>
         </div>
+        {/* Labelled, matching the full card's own VORP tag below — a
+            design review caught this compact variant printing a bare
+            signed number with nothing saying what it was measuring. */}
         {vorp != null && (
-          <span className={'shrink-0 text-xs font-bold tabular-nums ' + (vorp >= 0 ? 'text-emerald-300' : 'text-rose-300')}>
-            {vorp >= 0 ? '+' : ''}
-            {vorp.toFixed(0)}
-          </span>
+          <div className="shrink-0 text-right leading-none">
+            <span className={'block text-xs font-bold tabular-nums ' + (vorp >= 0 ? 'text-emerald-300' : 'text-rose-300')}>
+              {vorp >= 0 ? '+' : ''}
+              {vorp.toFixed(0)}
+            </span>
+            <span className="text-[7px] font-semibold uppercase tracking-wide text-white/30">VORP</span>
+          </div>
         )}
         <button
           type="button"

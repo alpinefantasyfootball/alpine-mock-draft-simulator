@@ -61,6 +61,7 @@ export default function PlayerHub({
   initialsFor,
   onDraft,
   myTurn,
+  draftOver,
   queuedNames,
   onToggleQueue,
   draftedByFor,
@@ -163,6 +164,7 @@ export default function PlayerHub({
           initialsFor={initialsFor}
           onDraft={onDraft}
           myTurn={myTurn}
+          draftOver={draftOver}
           queuedNames={queuedNames}
           onToggleQueue={onToggleQueue}
           draftedByFor={draftedByFor}

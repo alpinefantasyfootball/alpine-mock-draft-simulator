@@ -627,18 +627,79 @@ function applyRoute() {
     return;
   }
 
-  const onDraft = route() === "draft";
+  /* Three views, not two, and this used to toggle a single boolean built
+     for the two-view world before #/draft-room existed. route() only
+     ever answers "draft" for the literal, retired #/draft hash — which
+     cannot reach this line any more, since the redirect above already
+     returned for it — so onDraft was permanently false here and the
+     five lines below reduced to "show view-home/shellbar, hide
+     view-app/appbar/tabrow" no matter which of the *three* real routes
+     (home, the legacy draft-app, or #/draft-room) was active.
 
-  shellbar.hidden = onDraft;
-  appbar.hidden   = !onDraft;
-  $("view-home").hidden = onDraft;
-  $("view-app").hidden  = !onDraft;
-  tabrow.hidden = !(onDraft && state.started);
+     view-app/appbar/tabrow's only real "show" condition died with that
+     redirect, so they are unconditionally hidden now: onLegacyDraft is
+     always false, kept as a named constant rather than deleted so the
+     five lines below still read as five independent decisions instead
+     of three hidden and two inverted by hand.
 
+     view-home/shellbar have a second real "hide" condition #/draft-room
+     itself, which is what onDraftRoomRoute() (already defined below,
+     already used for the teardown branch two lines down) answers. Confusing
+     the two — reusing one flag for both — was the actual bug: it doesn't
+     just fail to hide view-home on #/draft-room, flipping that one flag to
+     "fix" it would un-hide view-app right along with it, showing the
+     legacy draft-room markup behind the real one. Missing this is exactly
+     why `#view-home` kept `hidden = false` on the live Draft Room: the
+     whole marketing page went on rendering, in full, in normal document
+     flow, doing nothing visible (the fixed-position Cockpit UI covers it)
+     except adding its own real height to the page — a design review found
+     the result three different ways without anyone connecting them: dead
+     space the board didn't fill, a page-level scrollbar that shouldn't
+     have existed alongside the board's own, and a scrollbar that read as
+     attached to the wrong thing.
+
+     hideHome checks one more path than onDraftRoomRoute() answers, on
+     purpose rather than by broadening that function: #/drafts (the
+     Locker, #draftroom-root's other real route — see DraftRoom.jsx's own
+     draftsActive) has the identical view-home problem, confirmed the same
+     way. But onDraftRoomRoute() is also what the teardown branch below
+     reads to decide whether a live room/clock/sim survives the
+     navigation, and landing on the Locker is meant to stop those (same
+     comment in DraftRoom.jsx, "widening it would let them fire while
+     looking at the locker instead") — so widening the shared function
+     would silently undo that on every trip to the Locker. Two questions,
+     two answers, even though today they overlap partway. */
+  const onLegacyDraft = false;
+  const legacyPath = location.hash.replace(/^#\/?/, "").split("?")[0];
+  const hideHome = onDraftRoomRoute() || legacyPath === "drafts";
+
+  shellbar.hidden = hideHome;
+  appbar.hidden   = !onLegacyDraft;
+  $("view-home").hidden = hideHome;
+  $("view-app").hidden  = !onLegacyDraft;
+  tabrow.hidden = !(onLegacyDraft && state.started);
+
+  /* !onDraftRoomRoute() here, not the old `onDraft` (route() === "draft",
+     which — see the comment above — can never be true at this line, the
+     redirect at the top of this function already caught it). That was
+     already what `!onDraft` meant by the time it got here: always true
+     whenever the first branch doesn't fire, since it's the redirect's own
+     leftover complement rather than a real second condition. Replicated
+     faithfully rather than "fixed": this three-way if/else-if has read as
+     three cases for a while, but the second branch's condition already
+     covered everything the third one checks for, which means the third —
+     "coming back: hand you the clock, or let the room carry on" — has been
+     unreachable since before this pass touched the file. That's a real,
+     separate, pre-existing bug, not one this fix introduced or was asked
+     to chase: DraftRoom.jsx appears to already drive the equivalent resume
+     behaviour itself (driveRoomCPUs()/driveMyAutopilot(), its own clock
+     effects), so touching this blind risks double-driving the CPU/clock
+     rather than fixing a real gap. Left inert on purpose; worth its own
+     look another time. */
   if (onDraftRoomRoute()) {
     // #draftroom-root owns its own visibility and lifecycle entirely — see
     // the comment at web/index.html beside that id. Nothing to do here.
-  } else if (!onDraft) {
+  } else if (!onDraftRoomRoute()) {
     // Leaving is not discarding. The draft stays in memory and in the save;
     // only the clock and the CPU timer stop, so nothing advances off-screen
     // while you are reading the landing page.
@@ -8061,7 +8122,19 @@ window.JukeEngine = {
 // .sheet rather than on the scrolling body, so it stays put instead of
 // riding the content up. Both survive a render() because neither lives
 // inside a panel that render() rebuilds.
-backToTop();
+backToTop({
+  // The flat 400px default (still right for the sheet, below) is measured
+  // for a page with thousands of pixels of travel. The React homepage this
+  // now shares a body with is a handful of sections — a design review
+  // caught the button appearing after a single small scroll and then just
+  // sitting there, overlapping content, for most of a page that was never
+  // much taller than the screen it's read on. Two viewport-heights instead
+  // of a fixed pixel count, so it scales with whatever's actually on
+  // screen rather than assuming a specific page height; read at call time
+  // rather than tracked on resize, the same one-off-read treatment this
+  // file gives every other viewport dimension.
+  showAfter: window.innerHeight * 2
+});
 backToTop({
   target: $("sheetBody"), mount: $("sheet"), className: "in-sheet",
   // The sheet has a few hundred pixels of travel at most, never the page's

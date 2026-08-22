@@ -17,6 +17,15 @@ const SORTS = [
 
 const PAGE_SIZE = 20
 
+// Below this many rows, every one of them is already on screen at once —
+// the default visibleCount below is this same number — so a search box,
+// four format-filter pills and a sort dropdown have nothing to do yet.
+// Six columns of headers plus that whole control row was a lot of chrome
+// standing over one or two entries. Chosen to match visibleCount rather
+// than some other number: the exact point this component already treats
+// as "everything fits without scrolling or paging."
+const NEEDS_CONTROLS_ABOVE = 8
+
 // Shared by the format rule and the finish bar, per the handoff — two
 // different formulas on the same two numbers, not two names for one.
 function finishColor(rank, teams) {
@@ -193,54 +202,72 @@ export default function LockerTable({ entries, onAnalyze, onDeleteConfirmed }) {
 
   const visible = filtered.slice(0, visibleCount)
 
+  // Below NEEDS_CONTROLS_ABOVE, search/filter/sort would only ever act on
+  // rows already fully visible below — real controls with nothing to
+  // control. The state and the filtering logic above still run either way,
+  // so a search typed before this threshold (there's no way to, with the
+  // box hidden, but a stale query lingering under it) never leaves the list
+  // showing something the header doesn't explain.
+  const showControls = entries.length > NEEDS_CONTROLS_ABOVE
+
   return (
-    <div className="overflow-hidden rounded-xl border border-white/[0.08]" style={{ background: 'rgba(21,25,35,0.5)' }}>
+    // h-full + flex-col so this card can be handed a real height by
+    // DraftLocker's own flex-1 wrapper and stretch to fill it — see the
+    // comment there. The rows block below is the flex-1 child that absorbs
+    // the extra space; the summary/"Load more" footer stays a normal
+    // sibling after it, so it settles at the bottom of a tall card instead
+    // of hugging the last row with a gap of bare background beneath it.
+    <div className="flex h-full flex-col overflow-hidden rounded-xl border border-white/[0.08]" style={{ background: 'rgba(21,25,35,0.5)' }}>
       <div className="flex flex-wrap items-center gap-4 border-b border-white/[0.06] px-5 py-4">
         <h2 className="font-display text-[23px] font-bold text-white">The Locker</h2>
 
-        <div className="flex w-[226px] items-center gap-2 rounded-lg border border-white/[0.08] bg-obsidian/60 px-3 py-[7px]">
-          <Search className="h-3.5 w-3.5 shrink-0 text-white/50" />
-          <input
-            value={query}
-            onChange={(e) => { setQuery(e.target.value); setVisibleCount(8) }}
-            placeholder="Search by player or format"
-            className="w-full bg-transparent text-sm text-white placeholder:text-white/50 focus:outline-none"
-          />
-        </div>
+        {showControls && (
+          <>
+            <div className="flex w-[226px] items-center gap-2 rounded-lg border border-white/[0.08] bg-obsidian/60 px-3 py-[7px]">
+              <Search className="h-3.5 w-3.5 shrink-0 text-white/50" />
+              <input
+                value={query}
+                onChange={(e) => { setQuery(e.target.value); setVisibleCount(8) }}
+                placeholder="Search by player or format"
+                className="w-full bg-transparent text-sm text-white placeholder:text-white/50 focus:outline-none"
+              />
+            </div>
 
-        <div className="flex gap-[3px] rounded-full bg-white/5 p-[3px]">
-          {FORMAT_FILTERS.map((f) => (
-            <button
-              key={f.key}
-              type="button"
-              onClick={() => { setFilter(f.key); setVisibleCount(8) }}
-              className={
-                'rounded-full px-[13px] py-1.5 text-xs font-semibold transition-colors ' +
-                (filter === f.key ? 'bg-teal-400/[0.16] text-teal-300' : 'text-white/55 hover:text-white')
-              }
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
+            <div className="flex gap-[3px] rounded-full bg-white/5 p-[3px]">
+              {FORMAT_FILTERS.map((f) => (
+                <button
+                  key={f.key}
+                  type="button"
+                  onClick={() => { setFilter(f.key); setVisibleCount(8) }}
+                  className={
+                    'rounded-full px-[13px] py-1.5 text-xs font-semibold transition-colors ' +
+                    (filter === f.key ? 'bg-teal-400/[0.16] text-teal-300' : 'text-white/55 hover:text-white')
+                  }
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
 
-        <div className="ml-auto flex items-center gap-2">
-          <span className="text-xs text-white/50">Sort</span>
-          <div className="relative">
-            <select
-              value={sort}
-              onChange={(e) => setSort(e.target.value)}
-              className="appearance-none rounded-lg border border-white/[0.08] bg-obsidian/60 py-[7px] pl-3 pr-8 text-sm font-medium text-white/80 focus:outline-none"
-            >
-              {SORTS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
-            </select>
-            <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/50" />
-          </div>
-        </div>
+            <div className="ml-auto flex items-center gap-2">
+              <span className="text-xs text-white/50">Sort</span>
+              <div className="relative">
+                <select
+                  value={sort}
+                  onChange={(e) => setSort(e.target.value)}
+                  className="appearance-none rounded-lg border border-white/[0.08] bg-obsidian/60 py-[7px] pl-3 pr-8 text-sm font-medium text-white/80 focus:outline-none"
+                >
+                  {SORTS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/50" />
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {entries.length === 0 ? (
-        <div className="px-5 py-[46px] text-center">
+        <div className="flex flex-1 flex-col items-center justify-center px-5 py-[46px] text-center">
           <p className="font-display text-[19px] font-bold text-white/80">No mocks yet</p>
           <p className="mt-1.5 text-sm text-white/50">
             Finish one and it lands here with its grade, your seat and every pick.
@@ -248,25 +275,27 @@ export default function LockerTable({ entries, onAnalyze, onDeleteConfirmed }) {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-[minmax(0,2.1fr)_64px_62px_104px_minmax(0,1.5fr)_92px_96px_40px] gap-[14px] border-b border-white/[0.06] bg-obsidian/40 px-5 py-[9px]">
-            {['Format', 'Seat', 'Grade', 'Proj. finish', 'First pick'].map((h) => (
-              <span key={h} className="text-[10px] font-semibold uppercase tracking-[0.08em] text-white/50">{h}</span>
-            ))}
-            <span className="text-right text-[10px] font-semibold uppercase tracking-[0.08em] text-white/50">Roster VORP</span>
-            <span className="text-right text-[10px] font-semibold uppercase tracking-[0.08em] text-white/50">Completed</span>
-            <span />
-          </div>
+          <div className="flex-1">
+            <div className="grid grid-cols-[minmax(0,2.1fr)_64px_62px_104px_minmax(0,1.5fr)_92px_96px_40px] gap-[14px] border-b border-white/[0.06] bg-obsidian/40 px-5 py-[9px]">
+              {['Format', 'Seat', 'Grade', 'Proj. finish', 'First pick'].map((h) => (
+                <span key={h} className="text-[10px] font-semibold uppercase tracking-[0.08em] text-white/50">{h}</span>
+              ))}
+              <span className="text-right text-[10px] font-semibold uppercase tracking-[0.08em] text-white/50">Roster VORP</span>
+              <span className="text-right text-[10px] font-semibold uppercase tracking-[0.08em] text-white/50">Completed</span>
+              <span />
+            </div>
 
-          {visible.map((entry) => (
-            <Row
-              key={entry.id}
-              entry={entry}
-              onAnalyze={onAnalyze}
-              onDeleteRequest={requestDelete}
-              menuOpen={menuOpenId === entry.id}
-              onToggleMenu={(id) => setMenuOpenId((cur) => (cur === id ? null : id))}
-            />
-          ))}
+            {visible.map((entry) => (
+              <Row
+                key={entry.id}
+                entry={entry}
+                onAnalyze={onAnalyze}
+                onDeleteRequest={requestDelete}
+                menuOpen={menuOpenId === entry.id}
+                onToggleMenu={(id) => setMenuOpenId((cur) => (cur === id ? null : id))}
+              />
+            ))}
+          </div>
 
           <div className="flex items-center justify-between px-5 py-[14px]">
             <span className="text-xs tabular-nums text-white/50">

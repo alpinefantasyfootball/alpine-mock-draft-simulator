@@ -30,23 +30,3 @@ body {
   background: rgba(11, 14, 20, 0.7);
   backdrop-filter: blur(4px);
 }
-
-/* ScoresStrip.jsx's chip row — a thin, low-contrast scrollbar rather than
-   the browser default, since this row is meant to read as "more to see" at
-   a glance, not draw attention to itself. Scoped to one class rather than
-   overriding scrollbars globally. Firefox and WebKit need separate
-   properties; there is no third syntax to cover both in one rule. */
-.scores-scroll {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
-}
-.scores-scroll::-webkit-scrollbar {
-  height: 6px;
-}
-.scores-scroll::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.14);
-  border-radius: 999px;
-}
-.scores-scroll::-webkit-scrollbar-track {
-  background: transparent;
-}

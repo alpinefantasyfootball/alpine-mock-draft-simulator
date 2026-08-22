@@ -45,17 +45,22 @@ test("homepage to a finished draft, pressing only what a person can press",
     expect(await doors.count(), "the homepage offers a way in").toBeGreaterThan(0);
     await doors.first().click();
 
-    // The door lands on Settings & Locker first, not the seat-picker
-    // directly — seat-picking moved to its own screen one step further in.
-    // "Enter Draft Room" is the one thing that screen asks for, exactly
-    // the same button the phone/solo/room specs already learned to press.
-    const enter = page.locator("#draftroom-root button").filter({ hasText: /^Enter Draft Room$/ });
-    await expect(enter, "Settings & Locker asks for one thing").toBeVisible({ timeout: 30000 });
+    // The door lands on the Locker first, not the seat-picker directly —
+    // seat-picking moved to its own screen one step further in. "Start
+    // mock draft" (NewMockPanel.jsx) is the one thing that screen asks
+    // for now — it replaced the older "Enter Draft Room" button as part
+    // of today's own fix for a two-primaries bug, and helpers.mjs's
+    // startSoloDraft() is the one place that history is written down for
+    // every other spec; this file presses real controls throughout on
+    // purpose (see the file's own header comment), so it repeats the
+    // click here rather than delegating to that helper.
+    const enter = page.locator("#draftroom-root button").filter({ hasText: /^Start mock draft$/ });
+    await expect(enter, "the Locker asks for one thing").toBeVisible({ timeout: 30000 });
     await enter.click();
 
     await page.waitForFunction(() => {
       const root = document.getElementById("draftroom-root");
-      return root && /Your seat/.test(root.innerText || "");
+      return root && /YOUR ROSTER, EMPTY/i.test(root.innerText || "");
     }, null, { timeout: 30000 });
 
     /* ---- 3. sit down --------------------------------------------------- */
@@ -111,8 +116,11 @@ test("homepage to a finished draft, pressing only what a person can press",
     expect(await page.evaluate((i) => state.picks[i].slot, before),
       "and it was my own chair").toBe(6);
 
-    // Then the rest, through the control that exists for it.
-    await page.locator('#draftroom-root button[aria-label="Auto-draft the rest"]').click();
+    // Then the rest, through the control that exists for it - behind the
+    // kebab now (DraftMenuOverlay.jsx), not a direct header button, and its
+    // own visible text rather than an aria-label nothing sets any more.
+    await page.click('#draftroom-root button[aria-label="Draft options"]');
+    await page.locator('#draftroom-root button').filter({ hasText: /^Auto-draft the rest/ }).click();
     await expect.poll(() => page.evaluate(() => draftOver()), { timeout: 60000 }).toBe(true);
 
     /* ---- 7. read the result -------------------------------------------- */

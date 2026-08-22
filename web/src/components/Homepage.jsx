@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import Header from './Header.jsx'
 import Hero from './Hero.jsx'
-import ScoresStrip from './ScoresStrip.jsx'
 import ShowYourWorking from './ShowYourWorking.jsx'
 import RoomsGrid from './RoomsGrid.jsx'
 import ClosingCta from './ClosingCta.jsx'
@@ -39,14 +38,9 @@ export default function Homepage() {
       {/* pt-[108px] matches the fixed header's real height (h-16 nav + h-9
           ticker + 1px border = 101px) plus the same few px of breathing
           room index.css's scroll-padding-top uses — one number instead of
-          two, so a page load and an anchor click land at the same offset.
-          No more hasScores toggle: the old fixed scores bar that forced
-          Homepage.jsx to pick between two top-paddings is gone — ScoresStrip
-          is a normal in-flow section now, so nothing above the fold needs
-          to know whether it rendered. */}
+          two, so a page load and an anchor click land at the same offset. */}
       <main className="pt-[108px]">
         <Hero />
-        <ScoresStrip />
         <ShowYourWorking />
         <RoomsGrid />
         <ClosingCta />
@@ -63,10 +57,17 @@ export default function Homepage() {
 
           <div className="flex flex-col gap-[11px]">
             <span className="font-plex text-[11px] tracking-[0.11em] text-[#4f5b62]">ROOMS</span>
-            {roomLinks.map((room) => (
+            {/* Live rooms only — a design review pointed out that five of
+                these six links went nowhere of their own: every "coming
+                soon" room fell back to the same #rooms anchor, so five
+                differently-named links all did the identical thing. The
+                grid below #rooms is still the honest place to see what's
+                on the way; the footer now only promises destinations that
+                actually exist. */}
+            {roomLinks.filter((room) => room.live && room.href).map((room) => (
               <a
                 key={room.name}
-                href={room.live && room.href ? room.href : '#rooms'}
+                href={room.href}
                 className="text-sm text-white/60 transition-colors hover:text-white"
               >
                 {room.name}

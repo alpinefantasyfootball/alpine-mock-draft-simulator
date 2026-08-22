@@ -1,48 +1,8 @@
-import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { ChevronRight } from 'lucide-react'
-import { POS_BADGE } from './draftRoomPositions.js'
-
-// This used to carry its own POS_STYLE map — the palette draftRoomPositions.js's
-// own header comment already documents as retired for being "too similar"
-// (violet/sky/amber/rose/slate), replaced by POS_BADGE's orange/emerald/blue/
-// fuchsia/yellow/indigo everywhere *except* here. Homepage.jsx renders this
-// component and ShowYourWorking.jsx (which already imports POS_BADGE
-// correctly) on the same scroll, so a visitor saw QB badged violet at the
-// top of the page and orange further down — the same position reading as two
-// different colors on one screen, the exact drift POS_BADGE exists to end.
-
-const SHOT_TEAMS = 10 // must match app.js's SHOT_TEAMS — shotPicks() is drafted at this team count
-
-// Real picks from the live board — window.JukeEngine.shotPicks() runs the
-// same simulated 50-pick snake draft the old renderHeroShot() did, off the
-// same board, the same valuation. Nothing here is invented; it just re-reads
-// on every mount rather than caching, since board is live and mutating.
-function useBoardPreview(count) {
-  const [rows, setRows] = useState([])
-
-  useEffect(() => {
-    const engine = typeof window !== 'undefined' ? window.JukeEngine : null
-    const drafter = typeof window !== 'undefined' ? window.DraftEngine : null
-    if (!engine || !drafter) return
-
-    const picks = engine.shotPicks()
-    setRows(
-      picks.slice(0, count).map((p, i) => ({
-        pick: drafter.pickCode(i + 1, SHOT_TEAMS),
-        pos: p.pos,
-        name: engine.shortName(p),
-        team: p.team,
-      }))
-    )
-  }, [count])
-
-  return rows
-}
+import ScoringDemoCard from './ScoringDemoCard.jsx'
 
 export default function Hero() {
-  const boardPreview = useBoardPreview(5)
-
   return (
     <section className="relative overflow-hidden">
       {/* Background glow, per the brief — an ellipse behind the text
@@ -77,10 +37,17 @@ export default function Hero() {
             <span className="text-mint">Dominate the season.</span>
           </h1>
 
+          {/* Rewritten off a design review: the previous copy ("power your
+              entire fantasy football lifecycle with advanced VORP metrics,
+              predictive modeling, and real-time simulations") promised five
+              rooms that don't exist yet, one paragraph above a grid that
+              itself says so. This names only what a visitor can actually
+              click right now — the scoring toggle immediately to the right
+              is the proof, not just a claim next to one. */}
           <p className="mt-6 max-w-[530px] text-pretty text-[17.5px] leading-[1.6] text-white/55">
-            Free, unlimited mock drafts are just the beginning. Power your entire fantasy
-            football lifecycle with advanced VORP metrics, predictive modeling, and
-            real-time simulations that give you an edge every single week.
+            Free, unlimited mock drafts against a board that reruns live on your own scoring
+            rules — standard, half or full PPR, recalculated the instant you change it — against
+            CPU opponents that understand ADP, tiers and replacement value.
           </p>
 
           <div className="mt-9 flex flex-wrap items-center gap-[26px]">
@@ -107,42 +74,23 @@ export default function Hero() {
         {/* Not rotated, not floating — squared and aligned as a real second
             grid column, unlike the tilted card this replaced. The brief is
             explicit about this being deliberate: a denser, more structured
-            page reads calmer without a tilted panel drawing the eye first. */}
+            page reads calmer without a tilted panel drawing the eye first.
+
+            This used to be a static, non-interactive "Live board" list —
+            five rows of names nobody could touch. A design review pointed
+            out that the one genuinely interactive proof on the page (the
+            PPR toggle below) was buried a full scroll down while the hero
+            showed a picture of a board instead of the real thing. Swapped
+            for the same live demo rather than removed outright: max-w-md
+            (was max-w-sm) because six ranked rows want a little more room
+            than five static ones did. */}
         <motion.div
-          className="relative mx-auto w-full max-w-sm"
+          className="relative mx-auto w-full max-w-md"
           initial={{ opacity: 0, scale: 0.96 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.7, delay: 0.2 }}
         >
-          <div
-            className="rounded-[18px] border border-white/[0.08] p-[22px] shadow-[0_40px_90px_-40px_rgba(0,0,0,0.9)]"
-            style={{ background: 'linear-gradient(165deg, #10171c, #0b1014)' }}
-          >
-            <div className="mb-4 flex items-center justify-between">
-              <span className="font-display text-[15px] font-bold text-white">Live board</span>
-              {boardPreview.length > 0 && (
-                <span className="rounded-full bg-mint/[0.12] px-3 py-[5px] font-plex text-[11px] font-semibold text-mint">
-                  Round {boardPreview[boardPreview.length - 1].pick.split('.')[0]}
-                </span>
-              )}
-            </div>
-
-            <div className="flex flex-col gap-2">
-              {boardPreview.map((row) => (
-                <div
-                  key={row.pick}
-                  className="grid grid-cols-[46px_34px_1fr_auto] items-center gap-3 rounded-[11px] border border-white/[0.06] bg-[#0d1317] px-[15px] py-[13px]"
-                >
-                  <span className="shrink-0 font-plex text-[12.5px] text-white/40">{row.pick}</span>
-                  <span className={`shrink-0 rounded-[5px] py-[3px] text-center font-plex text-[10.5px] font-semibold ${POS_BADGE[row.pos]}`}>
-                    {row.pos}
-                  </span>
-                  <span className="min-w-0 truncate text-[15px] font-semibold text-white/90">{row.name}</span>
-                  <span className="shrink-0 font-plex text-[11px] text-white/35">{row.team}</span>
-                </div>
-              ))}
-            </div>
-          </div>
+          <ScoringDemoCard />
         </motion.div>
       </div>
     </section>

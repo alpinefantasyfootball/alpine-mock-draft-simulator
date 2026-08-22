@@ -41,9 +41,10 @@ test("two managers, one board: a claimed chair shows as taken to everybody",
     const host = await openApp(hostCtx, "#/draft-room");
 
     // A fresh visit lands on Settings & Locker first now — seat-picking is
-    // its own screen one step further in. "Enter Draft Room" is the one
-    // thing that screen asks for.
-    await host.locator("#draftroom-root button").filter({ hasText: /^Enter Draft Room$/ }).click();
+    // its own screen one step further in. "Start mock draft" (NewMockPanel.jsx)
+    // is the one thing that screen asks for now — it replaced the older
+    // "Enter Draft Room" button as part of a fix for a two-primaries bug.
+    await host.locator("#draftroom-root button").filter({ hasText: /^Start mock draft$/ }).click();
 
     // The lobby is the pre-draft screen, so no draft is started anywhere here.
     await expect.poll(() => claimChips(host).then((c) => c.length)).toBeGreaterThan(0);

@@ -1,6 +1,16 @@
-import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { POS_CELL_BLOCK, POS_SOLID } from './draftRoomPositions.js'
+import { POS_BADGE, POS_SOLID } from './draftRoomPositions.js'
+
+// A team has no photo, so its header avatar is initials in a solid
+// circle — the same idea chat's seatInitials()/avatar circle already
+// uses for a manager with no photo, applied to a team name instead of a
+// person's. Two words give two letters, one gives one — "Bijan Mustard"
+// reads "BM", a bare "CPU 4" reads "C".
+function initialsOf(name) {
+  if (!name) return '?'
+  const parts = String(name).trim().split(/\s+/).slice(0, 2)
+  return parts.map((w) => w[0].toUpperCase()).join('')
+}
 
 // Real data only: `picks` is window.JukeEngine.picks() (state.picks itself,
 // {overall, round, slot, player}), the same array the legacy board reads
@@ -80,107 +90,60 @@ function Arrow({ dir, className }) {
   )
 }
 
-// Gold is identity — CLAUDE.md's "Whose it is, and where the draft is":
-// a ring on the board is always a pair (fill + keyline), always an inset
-// box-shadow (never border/outline, which eats into border-box padding),
-// and it marks the *whole* column, filled and empty alike, because "when
-// do I pick again" is the question an empty cell has to answer too.
-/* Two pixels of gold and no keyline, which departs from the legacy board's
-   documented pair - and the reason is that this board's surfaces are not that
-   board's surfaces. Measured against every ground a ring actually lands on
-   here (the five translucent position blocks composited over #0B0E14, plus an
-   empty cell), gold runs 11.25:1 at worst against a 3:1 bar, while the
-   #0B1017 keyline measures 1.01 to 1.12. It is invisible, and it was a third
-   of the ring's thickness spent on nothing.
+// Gold is identity — CLAUDE.md's "Whose it is, and where the draft is": it
+// marks the *whole* column, filled and empty alike, because "when do I pick
+// again" is the question an empty cell has to answer too.
+//
+// A per-cell ring was tried first and a design review caught exactly the
+// failure CLAUDE.md's own board-card section predicts for a ring built the
+// wrong way: fourteen cells each drawing their own complete rectangle reads
+// as a dashed stack of separate boxes, not one column, and the header above
+// it was cyan for the same idea gold owns everywhere else on the board. The
+// fix isn't a bigger ring, it's fewer edges: every cell in the column gets
+// the same wash and the same gold left/right border — which is invisible as
+// a *seam* between adjacent cells that already touch with no gap between
+// them, and reads as one continuous outline — and only the very first and
+// very last cell in the column close it off with a top or bottom edge.
+// mineEdge() below returns exactly those four pieces per cell rather than a
+// single ring class, and the header's own "YOU" label matches in gold too.
 
-   The keyline earns its place on the legacy board because that one is
-   theme-aware, and a light-theme empty cell is near-white where gold falls to
-   1.26. This board is hardcoded dark - bg-[#0B0E14], no theme variants - so
-   that case does not arise. Give this board a light theme and the pair has to
-   come back: measure before assuming it still does not. */
-/* Faces are a desktop-only feature, and `hidden lg:block` is not enough to
-   express that. A display:none lazy image mostly does not fetch - measured,
-   134 of 140 never loaded - but "mostly" is doing real work in that sentence,
-   and either way the 280 DOM nodes still ship to a phone that will never draw
-   them. This gates the elements themselves, so a phone builds a board with no
-   images in it at all.
-
-   1024px is Tailwind's own `lg`, which is the breakpoint every other
-   desktop/mobile split in this room already keys on - written here as a number
-   because a media query string is the one place it cannot be read from the
-   theme. If that breakpoint ever moves, it moves here too. */
-function useDesktop() {
-  const [wide, setWide] = useState(
-    () => typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches
-  )
-  useEffect(() => {
-    const mq = window.matchMedia('(min-width: 1024px)')
-    const onChange = (e) => setWide(e.matches)
-    mq.addEventListener('change', onChange)
-    return () => mq.removeEventListener('change', onChange)
-  }, [])
-  return wide
+// Four complete literal strings, not one built from concatenated
+// fragments — draftRoomPositions.js's own comment already names this
+// exact trap ("Tailwind's JIT scanner finds classes by grepping source
+// files for the literal string... it would compile to nothing, silently")
+// and this function fell into it anyway on its first pass: the shadow
+// value was assembled from `'shadow-[...' + (cond ? ',...' : '') + '...]'`
+// pieces, so the complete bracket content this class needs never once
+// appeared as a whole token anywhere in the source Tailwind scans. Every
+// cell still rendered the class name — React doesn't care that it means
+// nothing — so nothing looked wrong until a test actually read
+// getComputedStyle(cell).boxShadow and got back "none".
+const MINE_WASH = 'bg-[rgba(255,209,102,0.07)]'
+const MINE_EDGE = {
+  mid: MINE_WASH + ' shadow-[inset_2px_0_0_rgba(255,209,102,0.45),inset_-2px_0_0_rgba(255,209,102,0.45)]',
+  first: MINE_WASH + ' shadow-[inset_2px_0_0_rgba(255,209,102,0.45),inset_-2px_0_0_rgba(255,209,102,0.45),inset_0_2px_0_rgba(255,209,102,0.45)]',
+  last: MINE_WASH + ' shadow-[inset_2px_0_0_rgba(255,209,102,0.45),inset_-2px_0_0_rgba(255,209,102,0.45),inset_0_-2px_0_rgba(255,209,102,0.45)]',
+  // Both edges at once only happens in a one-round league — an edge case,
+  // but a real one (this app supports 1-round drafts), so it gets its own
+  // real literal rather than falling through to "mid" and drawing a
+  // column with no top or bottom.
+  both: MINE_WASH + ' shadow-[inset_2px_0_0_rgba(255,209,102,0.45),inset_-2px_0_0_rgba(255,209,102,0.45),inset_0_2px_0_rgba(255,209,102,0.45),inset_0_-2px_0_rgba(255,209,102,0.45)]',
 }
 
-/* What each team holds, under its name.
-
-   Which positions appear is derived engine-side (COUNTED_POSITIONS is
-   POSITIONS minus the two the app schedules itself), so this draws whatever
-   it is handed rather than listing QB/RB/WR/TE and making the league shape a
-   second time. A kicker would be eight columns of "0" until the closing
-   rounds and eight of "1" after them.
-
-   Zero is drawn, never dropped: a gap where a chip should be is the fact
-   somebody is reading the strip for. It gets the muted fill and the tertiary
-   tone — a position colour at zero would say "has one". */
-function RosterStrip({ counts }) {
-  if (!counts || !counts.length) return null
-  return (
-    <div className="mt-0.5 flex gap-px">
-      {counts.map(({ pos, count }) => (
-        <span
-          key={pos}
-          title={count + ' ' + pos}
-          className={
-            'min-w-0 flex-1 rounded-sm text-center text-[9px] font-bold leading-[1.3] ' +
-            (count ? 'text-white' : 'bg-white/[0.06] text-white/35')
-          }
-          style={count ? { background: POS_SOLID[pos] } : undefined}
-        >
-          {count}
-        </span>
-      ))}
-    </div>
-  )
-}
-
-function mineRing(isMine, isCurrent) {
+function mineEdge(isMine, isFirstRound, isLastRound) {
   if (!isMine) return ''
-  return isCurrent
-    ? 'shadow-[0_0_15px_rgba(0,229,255,0.4),inset_0_0_0_2px_#FFD166]'
-    : 'shadow-[inset_0_0_0_2px_#FFD166]'
+  if (isFirstRound && isLastRound) return MINE_EDGE.both
+  if (isFirstRound) return MINE_EDGE.first
+  if (isLastRound) return MINE_EDGE.last
+  return MINE_EDGE.mid
 }
 
-export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLabelOf, onTeamClick, photoFor, shortNameOf, onClaimSeat, seats, rosterOf }) {
-  const desktop = useDesktop()
-  /* Which headshots have already failed.
+// The current pick keeps its own distinct box (the teal pulsing one below,
+// with its own inline glow) rather than composing into mineEdge() above —
+// "your column" and "the live pick" stay two readable facts instead of one
+// cell trying to carry both.
 
-     onError used to call e.currentTarget.remove(), which is the legacy
-     board's trick and does not survive here: React owns that element, so the
-     next render puts it straight back. The board re-renders on every pick, so
-     a dead image returned within half a second and the "no broken frames"
-     guarantee was only ever true until something else happened.
-
-     Kept as state rather than a ref so adding one re-renders the cell that
-     needs to stop drawing it, and keyed by URL rather than by player because
-     that is what actually 404s. */
-  const [failedFaces, setFailedFaces] = useState(() => new Set())
-  const faceFailed = (src) => setFailedFaces((prev) => {
-    if (prev.has(src)) return prev
-    const next = new Set(prev)
-    next.add(src)
-    return next
-  })
+export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLabelOf, onTeamClick, shortNameOf, onClaimSeat, seats }) {
   const byCell = new Map()
   picks.forEach((p) => byCell.set(p.round + '-' + p.slot, p))
 
@@ -301,34 +264,51 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
               </span>
             </div>
           )
-        }) : Array.from({ length: teams }, (_, s) =>
-          onTeamClick ? (
+        }) : Array.from({ length: teams }, (_, s) => {
+          // A 30px avatar (initials, no photo — a team has none) plus a
+          // centred name, replacing the roster-count strip: a design
+          // review read that strip as an unlabelled row of coloured
+          // digits, and the handoff this room was built from says the
+          // header should carry a name, "not a name crushed over four
+          // count chips" in the first place — so the fix is to not print
+          // the chips here at all, not to caption them.
+          const label = s === mySlot ? 'YOU' : teamLabelOf(s)
+          const content = (
+            <>
+              <span
+                className={
+                  'flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full text-[11px] font-bold ' +
+                  (s === mySlot ? 'bg-[#FFD166] text-obsidian' : 'bg-white/10 text-white/60')
+                }
+                aria-hidden="true"
+              >
+                {initialsOf(teamLabelOf(s))}
+              </span>
+              <span className={'truncate text-xs font-semibold ' + (s === mySlot ? 'text-[#FFD166]' : 'text-white/60')}>
+                {label}
+              </span>
+            </>
+          )
+          return onTeamClick ? (
             <button
               key={'hd-' + s}
               type="button"
               onClick={() => onTeamClick(s)}
-              className={
-                'sticky top-0 z-10 truncate border-b border-r border-slate-800 bg-slate-900/95 px-2 py-1 text-center text-xs font-semibold ' +
-                'transition-colors duration-150 hover:bg-teal-500/10 hover:text-teal-300 ' +
-                (s === mySlot ? 'text-teal-400' : 'text-white/60')
-              }
+              className="sticky top-0 z-10 flex flex-col items-center justify-center gap-1 truncate border-b border-r border-slate-800 bg-slate-900/95 px-1.5 py-1.5 transition-colors duration-150 hover:bg-teal-500/10"
               title={'View ' + teamLabelOf(s) + "'s draft insights"}
             >
-              {s === mySlot ? 'YOU' : teamLabelOf(s)}
+              {content}
             </button>
           ) : (
             <div
               key={'hd-' + s}
-              className="sticky top-0 z-10 border-b border-r border-slate-800 bg-slate-900/95 px-1.5 py-1"
+              className="sticky top-0 z-10 flex flex-col items-center justify-center gap-1 border-b border-r border-slate-800 bg-slate-900/95 px-1.5 py-1.5"
               title={teamLabelOf(s)}
             >
-              <p className={'truncate text-center text-xs font-semibold ' + (s === mySlot ? 'text-teal-400' : 'text-white/60')}>
-                {s === mySlot ? 'YOU' : teamLabelOf(s)}
-              </p>
-              <RosterStrip counts={rosterOf ? rosterOf(s) : null} />
+              {content}
             </div>
           )
-        )}
+        })}
 
         {Array.from({ length: rounds }, (_, ri) => {
           const round = ri + 1
@@ -349,16 +329,10 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
                 // number, and half the board agrees with the wrong answer).
                 const code = pick && DE ? DE.pickCode(pick.overall, teams) : null
                 const arrow = boardArrow(DE, round, s, teams)
-                /* Desktop only. A face is the fifth thing this card is
-                   documented to carry and the React rebuild dropped it - but a
-                   phone column is 112px wide and every pixel is already spoken
-                   for, so below lg the cell stays text. */
-                const raw = desktop && pick && photoFor ? photoFor(pick.player) : ''
-                const face = raw && !failedFaces.has(raw) ? raw : ''
                 return (
                   <div
                     key={round + '-' + s}
-                    className={'border-b border-r border-slate-800/70 p-0.5 ' + mineRing(isMine, isCurrent)}
+                    className={'border-b border-r border-slate-800/70 p-0.5 ' + mineEdge(isMine, round === 1, round === rounds)}
                   >
                     {pick ? (
                       // layoutId matches the same player's row in
@@ -369,75 +343,62 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
                       // on its own, so the card visibly moves from the
                       // queue into its cell rather than just popping in.
                       //
-                      // Two lines, not four, still — that hasn't changed.
-                      // What's gone is the small pill-shaped position badge:
-                      // the cell itself is now a full colour block per
-                      // POS_CELL_BLOCK (a saturated bg/border/text triple,
-                      // not the old translucent tint), so position reads
-                      // from the whole card rather than a chip inside it.
-                      // The position letters stay as plain text — dropping
-                      // the badge doesn't mean dropping the ability to read
-                      // WR vs RB at a glance for anyone not distinguishing
-                      // by colour alone.
+                      // A neutral ground plus a 3px POS_SOLID left rule,
+                      // not the old saturated full-cell fill — a design
+                      // review, and a look at the actual handoff spec
+                      // rather than this file's own two-year-old paraphrase
+                      // of it, both landed on the same place: painting six
+                      // hues across 140 full cells means nothing is
+                      // emphasised because everything already is. The rule
+                      // is a plain style prop (POS_SOLID is a hex map, not
+                      // Tailwind classes) since a computed colour can't be
+                      // a static utility class.
                       <motion.div
                         layoutId={'player-' + (pick.player.id || pick.player.name)}
                         initial={{ opacity: 0, scale: 0.85 }}
                         animate={{ opacity: 1, scale: 1 }}
                         transition={{ type: 'spring', stiffness: 400, damping: 32 }}
-                        className={
-                          /* `relative` is what the snake arrow below is
-                             positioned against — without it the arrow
-                             would hunt for the nearest positioned
-                             ancestor and land somewhere else entirely. */
-                          'relative flex h-full items-center gap-1 rounded-md px-1 py-1 backdrop-blur-sm ' +
-                          (POS_CELL_BLOCK[pick.player.pos] || 'border border-white/10 bg-white/[0.04] text-white/90')
-                        }
+                        style={{ borderLeft: '3px solid ' + (POS_SOLID[pick.player.pos] || 'rgba(255,255,255,0.25)') }}
+                        // min-h matches the on-the-clock and empty variants
+                        // below, on purpose: h-full alone stretches to fill
+                        // a row that's already tall, but a round where every
+                        // seat has already picked has nothing 46px in it to
+                        // set that floor, and auto-rows shrinks the whole
+                        // row to this card's own two-line content instead —
+                        // the legacy board's "two row heights" bug, recurred.
+                        className="relative flex h-full min-h-[46px] flex-col justify-center gap-0.5 rounded-md bg-[#151923] px-1.5 py-1 text-white/90"
                       >
-                        <div className="flex min-w-0 flex-1 flex-col justify-center gap-0.5">
-                        {/* In the flow, not absolutely positioned. A filled
-                            cell already puts the team abbreviation in the
-                            top-right corner, so an `absolute right-1 top-0.5`
-                            arrow drew straight on top of it - measured at 9x7
-                            pixels of overlap on a 7.7px glyph, which is total.
-                            36 cells on a part-drafted board were rendering two
-                            characters in one place, and it reads as a smudged
-                            arrow rather than as a collision. Empty and
-                            on-the-clock cells have no team label and keep the
-                            absolute placement. */}
+                        {/* Line 1 — name, then the pick code. The code used
+                            to share line 1 with the position letters; the
+                            position moved to line 2 as its own small badge
+                            once the cell stopped being a full colour block
+                            and needed another way to say WR vs RB besides
+                            the (now much subtler) rail. */}
                         <div className="flex items-center justify-between gap-1 leading-none">
-                          {/* min-w-0 so this side is the one that gives if the
-                              row ever runs out of room: the club and the arrow
-                              are three characters and a glyph and should not
-                              be the thing that truncates.
-
-                              Added while chasing an overflow that turned out
-                              not to exist - the phone sweep was reporting 2px
-                              on a device at dpr 3, which is clientWidth
-                              rounding against scrollWidth ceiling rather than
-                              content escaping a box. Kept because it is right
-                              on its own terms, not because it fixed that. */}
-                          <span className="flex min-w-0 items-center gap-1 truncate text-[10px] font-bold">
-                            {pick.player.pos}
-                            {code && <span className="truncate font-normal opacity-60">{code}</span>}
-                          </span>
-                          <span className="flex shrink-0 items-center gap-0.5 text-[10px] font-medium opacity-60">
-                            {pick.player.team}
-                            <Arrow dir={arrow} className="text-[9px]" />
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between gap-1 leading-none">
-                          {/* "J. Gibbs", not "Jahmyr Gibbs". The face has to come out of the
-                              cell's width, and a full name in a ~132px column
-                              truncated 133 of 140 times once it did - which is
-                              a worse legibility problem than the one the face
-                              was added to fix. shortName() is the engine's own
-                              function, the same one the hero shot uses and for
-                              the same reason: an initial plus a surname reads
-                              as a person where a surname alone reads as a row
-                              in a table. Never re-derived here. */}
-                          <p className="min-w-0 truncate text-xs font-semibold" title={pick.player.name}>
+                          {/* "J. Gibbs", not "Jahmyr Gibbs". A full name in
+                              a ~132px column truncated 133 of 140 times.
+                              shortName() is the engine's own function, the
+                              same one the hero shot uses and for the same
+                              reason: an initial plus a surname reads as a
+                              person where a surname alone reads as a row in
+                              a table. Never re-derived here. */}
+                          <p className="min-w-0 truncate text-[13px] font-semibold" title={pick.player.name}>
                             {shortNameOf ? shortNameOf(pick.player) : pick.player.name}
                           </p>
+                          {code && <span className="shrink-0 font-plex text-[10px] text-white/50">{code}</span>}
+                        </div>
+                        {/* Line 2 — position badge, club, the snake arrow,
+                            then the ADP gap on its own side so it never
+                            competes with the name above it for the reader's
+                            first look. */}
+                        <div className="flex items-center justify-between gap-1 leading-none">
+                          <span className="flex min-w-0 items-center gap-1">
+                            <span className={'shrink-0 rounded px-1 py-px text-[9px] font-bold ' + (POS_BADGE[pick.player.pos] || 'bg-white/10 text-white/60')}>
+                              {pick.player.pos}
+                            </span>
+                            <span className="truncate text-[10px] font-medium text-white/50">{pick.player.team}</span>
+                            <Arrow dir={arrow} className="shrink-0 text-[9px] text-white/50" />
+                          </span>
                           {gap != null && (
                             <span className={'shrink-0 text-[10px] font-semibold ' + (gap >= 0 ? 'text-emerald-400' : 'text-rose-400')}>
                               {gap >= 0 ? '+' : ''}
@@ -445,26 +406,6 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
                             </span>
                           )}
                         </div>
-                        </div>
-                        {/* No initials underneath and no grey disc when a
-                            photo is missing - the card simply has no face.
-                            140 grey circles is a worse board than 140 cards a
-                            few of which have no picture, which is the same
-                            reason avatar() was never reused here. onError
-                            removes the element rather than leaving a broken
-                            image frame. */}
-                        {face && (
-                          <img
-                            src={face}
-                            alt=""
-                            loading="lazy"
-                            onError={() => faceFailed(face)}
-                            className={
-                              'h-7 w-7 shrink-0 rounded-full ' +
-                              (pick.player.pos === 'DST' ? 'object-contain' : 'object-cover')
-                            }
-                          />
-                        )}
                       </motion.div>
                     ) : isCurrent ? (
                       <motion.div
@@ -481,7 +422,9 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
                     ) : (
                       <div className="relative h-full min-h-[46px] rounded-md border border-dashed border-slate-800">
                         {overall != null && (
-                          <span className="absolute left-1 top-0.5 text-[10px] text-slate-500">{overall}</span>
+                          <span className={'absolute left-1 top-0.5 text-[10px] ' + (isMine ? 'font-bold text-[#FFD166]' : 'text-slate-500')}>
+                            {overall}
+                          </span>
                         )}
                         <Arrow dir={arrow} className="absolute right-1 top-0.5 text-[9px] text-white/20" />
                       </div>

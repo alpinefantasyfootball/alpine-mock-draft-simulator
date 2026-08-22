@@ -176,6 +176,48 @@ export function createRoom(page) {
   });
 }
 
+/* The real path from a cold Locker to a running solo draft, through every
+   screen a person actually passes through — this used to be a handful of
+   near-identical copies, one per spec file, and today's own Locker
+   consolidation (NewMockPanel.jsx replacing LobbyBar's old "Enter Draft
+   Room" button with a single "Start mock draft" launcher, to fix a
+   two-primaries bug) broke every one of them at once: each copy still
+   only looked for "Enter Draft Room" — now dead text nothing renders —
+   before jumping straight to "start draft"/"start for everyone", with no
+   step in between for the button that actually launches a mock now.
+   That's the same "second copy that drifted" failure this project's own
+   code has a rule against; the fix is one helper, not seven patches.
+
+   Playwright locators rather than a one-shot page.evaluate() query, on
+   purpose: `.click()` on a text locator auto-waits for the button to
+   exist and be actionable, where the old evaluate()-based check ran once,
+   synchronously, and reported "no button" the instant it was a render
+   frame early rather than actually wrong.
+
+   Every step is optional except the last, checked by count() rather than
+   assumed present — a page that starts already past the Locker (a room,
+   or a test driving a second client) simply won't have "Start mock
+   draft" to click, the same way it might not have "Enter Draft Room". */
+export async function startSoloDraft(page) {
+  const enter = page.locator('#draftroom-root button:text-is("Enter Draft Room")');
+  if (await enter.count()) await enter.click();
+
+  const startMock = page.locator('#draftroom-root button:text-is("Start mock draft")');
+  if (await startMock.count()) await startMock.click();
+
+  // Checked before clicking, not inferred from the click failing to start
+  // a draft afterward — a disabled button and a missing one are different
+  // facts, and only one of them is "this league configuration is invalid".
+  // A thrown Error rather than an expect(): this file's own opening
+  // comment is what the tests need from a page, not what they assert, and
+  // waitForRoom() below already sets the precedent for surfacing "the
+  // condition was never satisfied" this way instead.
+  const startBtn = page.locator('#draftroom-root >> text=/Start for everyone|Start draft/');
+  if (!(await startBtn.isEnabled())) throw new Error("the Start button refused this league");
+  await startBtn.click();
+  await page.waitForFunction(() => state.started, null, { timeout: 15000 });
+}
+
 export function roomView(page) {
   return page.evaluate(() => {
     const room = Live.room();

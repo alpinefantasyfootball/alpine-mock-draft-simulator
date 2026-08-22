@@ -38,10 +38,34 @@ export default function DraftEntryScreen({
   }))
 
   const DE = window.DraftEngine
-  const firstPick = DE ? DE.pickCode(mySlot + 1, league.teams) : null
+  // Round 1 is always left-to-right, so this seat's own first overall
+  // pick is just its 1-indexed position — no snake mirror to ask for yet,
+  // there's nothing on the board to mirror against.
+  const firstOverall = mySlot + 1
+  const firstPick = DE ? DE.pickCode(firstOverall, league.teams) : null
   // The first four picks this seat holds — first is shown on its own
   // above, so the strip below wants the four *after* it.
   const nextPicks = engine.nextPicksFor(mySlot, 5).slice(1)
+  // The gap sentence used to hardcode "five picks between each turn after
+  // round one" — the handoff's own example copy, and wrong for a snake
+  // draft in general: the gap alternates rather than staying constant,
+  // and a design review caught it printing "16, 33, 40, 57" — gaps of 17
+  // and 7, never 5 — right next to that claim. Computed from the same
+  // numbers the sentence is describing rather than asserted, and it says
+  // only what those numbers actually show: one gap if they're all equal
+  // (true for some seats), two alternating gaps if not, and nothing more
+  // specific than the raw list if the pattern doesn't reduce that cleanly
+  // — an edge seat's turns bunch up near a round boundary rather than
+  // spacing evenly, and no short sentence describes that honestly.
+  const gapSeq = [firstOverall, ...nextPicks]
+  const gaps = gapSeq.slice(1).map((n, i) => n - gapSeq[i])
+  const distinctGaps = [...new Set(gaps)]
+  const gapClause =
+    distinctGaps.length === 1
+      ? `${distinctGaps[0]} picks between each turn after round one`
+      : distinctGaps.length === 2
+        ? `${Math.min(...distinctGaps)} or ${Math.max(...distinctGaps)} picks between each turn, depending which side of the turn you're on`
+        : null
 
   return (
     <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[300px_minmax(0,1fr)_330px]">
@@ -75,10 +99,22 @@ export default function DraftEntryScreen({
       </div>
 
       <div className="flex min-h-0 flex-col px-[22px] py-5">
-        <h1 className="mb-1 font-display text-[32px] font-bold leading-none text-white">Claim your chair</h1>
+        {/* "Claim your chair" only describes a room, where a seat is
+            genuinely still up for grabs — a design review caught this
+            headline showing up over a board that already had a seat
+            (yours) labelled and outlined, because a solo seat was decided
+            back on the settings screen and there is nobody else who could
+            take a different one. Room and solo ask two different
+            questions here, so they get two different headlines. */}
+        <h1 className="mb-1 font-display text-[32px] font-bold leading-none text-white">
+          {roomActive ? 'Claim your chair' : `Seat ${mySlot + 1} is yours`}
+        </h1>
         <p className="mb-[18px] text-sm text-white/60">
-          Every column is a seat, and the empty cells already show which overall picks come with it.{' '}
-          {roomActive ? 'Everyone in the room sees the same board.' : 'The other nine are drafted by Juke.'}
+          {roomActive ? (
+            <>Every column is a seat, and the empty cells already show which overall picks come with it. Everyone in the room sees the same board.</>
+          ) : (
+            <>The other {Math.max(0, league.teams - 1)} {league.teams - 1 === 1 ? 'team is' : 'teams are'} drafted by Juke. Change your seat from Edit setup on the left if you'd rather draft from a different spot.</>
+          )}
         </p>
 
         <DraftLobby engine={engine} league={league} mySlot={mySlot} onClaimSeat={onClaimSeat} seats={seats} roomActive={roomActive} fill />
@@ -93,7 +129,7 @@ export default function DraftEntryScreen({
             </div>
             <div className="text-xs text-white/60">
               {nextPicks.length > 0
-                ? `Then ${nextPicks.join(', ')} — five picks between each turn after round one.`
+                ? `Then ${nextPicks.join(', ')}${gapClause ? ` — ${gapClause}.` : '.'}`
                 : 'Pick order is set once every seat is filled.'}
             </div>
           </div>

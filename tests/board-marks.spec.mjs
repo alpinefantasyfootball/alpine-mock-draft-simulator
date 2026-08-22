@@ -54,8 +54,16 @@ async function draftInto(page, picks) {
   // navigation: DraftRoom.jsx's enteredRoom sync effect fires the moment it
   // sees state.started already true, which it already is by the time this
   // component ever mounts — draftAndAdvance() never went through the door,
-  // startDraft() ran straight off the engine above. Landing on the Settings
-  // & Locker screen only happens for a genuinely fresh, unstarted visit.
+  // startDraft() ran straight off the engine above. Landing on the Locker
+  // only happens for a genuinely fresh, unstarted visit.
+  //
+  // The board itself is a click away from here now, not the default —
+  // Decide is, since the Cockpit rebuild, because most of a draft is spent
+  // waiting or choosing rather than reading the board. Every test in this
+  // file is about the board specifically, so it presses "Board" itself
+  // rather than each of the six tests below waiting on a grid that will
+  // never mount on the tab they land on.
+  await page.locator('#draftroom-root button').filter({ hasText: /^Board$/ }).click();
   await page.waitForFunction(() => {
     const root = document.getElementById("draftroom-root");
     return root && [...root.querySelectorAll("div")].some(
@@ -205,73 +213,20 @@ test.describe("what the board marks", () => {
       expect(dark, "the board's ground is dark whatever the theme says").toBeLessThan(0.05);
     });
 
-  test("the roster strip counts what each team holds, and skips the two the app schedules itself",
-    async ({ context }) => {
-      const page = await openApp(context, "#/draft-room");
-      await draftInto(page, 60);
-
-      /* Which positions are counted is derived — POSITIONS minus FORCED_LATE
-         — rather than listed. Counting a kicker would be eight columns of
-         "0" until the closing rounds and eight of "1" after them, which is
-         not a fact about how anybody drafted. */
-      const r = await page.evaluate((c) => {
-        eval(c);
-        const chips = [...grid().querySelectorAll("span[title]")]
-          .filter((s) => /^\d+ [A-Z]{1,3}$/.test(s.getAttribute("title")));
-        const positions = [...new Set(chips.map((s) => s.getAttribute("title").split(" ")[1]))];
-        const teams = league.teams;
-        const perTeam = JukeEngine.rosterStrip(0).length;
-
-        let mismatches = 0;
-        for (let t = 0; t < teams; t++) {
-          const want = JukeEngine.rosterStrip(t);
-          const got = chips.slice(t * perTeam, (t + 1) * perTeam).map((s) => +s.textContent.trim());
-          want.forEach((w, i) => { if (w.count !== got[i]) mismatches++; });
-        }
-        return { chips: chips.length, expected: teams * perTeam, positions, mismatches,
-                 zeroDrawn: chips.some((s) => s.textContent.trim() === "0") };
-      }, CONTRAST);
-
-      expect(r.chips, "a chip per counted position per team").toBe(r.expected);
-      expect(r.mismatches, "and every count is the engine's own").toBe(0);
-      expect(r.positions.sort(), "the two the app schedules itself are not counted")
-        .toEqual(["QB", "RB", "TE", "WR"]);
-      // A gap where a chip should be is the fact somebody is reading this for.
-      expect(r.zeroDrawn, "an empty position is drawn as empty, not dropped").toBe(true);
-    });
-
-  test("a count is white on its own solid, so the header behind it never matters",
-    async ({ context }) => {
-      const page = await openApp(context, "#/draft-room");
-      await draftInto(page, 60);
-
-      /* The whole reason these are chips rather than coloured text. White on
-         a position solid is the contract those colours were darkened to meet,
-         so whatever the header is doing behind them is not part of the sum —
-         including on your own column, which is the one a manager looks at
-         most and the one coloured text failed on. */
-      const r = await page.evaluate((c) => {
-        eval(c);
-        const chips = [...grid().querySelectorAll("span[title]")]
-          .filter((s) => /^\d+ [A-Z]{1,3}$/.test(s.getAttribute("title")))
-          .filter((s) => s.textContent.trim() !== "0");
-        const out = [];
-        chips.forEach((s) => {
-          const cs = getComputedStyle(s);
-          out.push({ pos: s.getAttribute("title").split(" ")[1],
-                     cr: Math.round(ratio(parse(cs.color), parse(cs.backgroundColor)) * 100) / 100 });
-        });
-        const worst = out.reduce((w, o) => (o.cr < w.cr ? o : w), { cr: 99 });
-        return { checked: out.length, worst, opaque: chips.every((s) =>
-          !/rgba\([^)]*,\s*0?\.\d+\)/.test(getComputedStyle(s).backgroundColor)) };
-      }, CONTRAST);
-
-      expect(r.checked, "there were filled chips").toBeGreaterThan(10);
-      expect(r.worst.cr, `worst was ${r.worst.pos}`).toBeGreaterThanOrEqual(4.5);
-      // Translucent would put the header back into the sum, which is the
-      // thing the chip exists to prevent.
-      expect(r.opaque, "and the chip's ground is opaque").toBe(true);
-    });
+  /* Two tests used to live here: "the roster strip counts what each team
+     holds" and "a count is white on its own solid". Both asserted on the
+     header's own per-team position-count chips (span[title] matching
+     "N POS"), and that row is gone — not broken, removed on purpose. A
+     design review read it as an unlabelled row of coloured digits, and
+     the Cockpit handoff this room was rebuilt from says the header should
+     carry a name, "not a name crushed over four count chips," in the
+     first place. DraftBoardGrid.jsx's header is a 30px avatar and a name
+     now; what a team holds moved to the Roster panel, a different screen
+     with a different shape, which is not what either of these two tests
+     checked. Testing a screen that no longer exists is not a safety net,
+     it is a permanently red light — deleted rather than left to fail
+     forever, the same reasoning CLAUDE.md gives for deleting dead code
+     instead of stubbing it out. */
 
   test("the number in the corner is the pick that cell really is", async ({ context }) => {
     const page = await openApp(context, "#/draft-room");
