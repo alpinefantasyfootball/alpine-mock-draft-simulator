@@ -11,7 +11,7 @@
        /a/b/c gets this page rendered *at that address* — a relative "style.css"
        would then resolve to /a/b/style.css and 404 as well, leaving an unstyled
        page as the answer to a missing one. -->
-  <script src="/theme.js?v=202608220135"></script>
+  <script src="/theme.js?v=202608220310"></script>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -19,8 +19,12 @@
 
   <!-- Same ?v= as index.html, and bumped with it by the nightly workflow,
        which now lists this file alongside the other two. -->
-  <link rel="stylesheet" href="/style.css?v=202608220135">
+  <link rel="stylesheet" href="/style.css?v=202608220310">
 
+  <!-- The SVG first, because that is what a modern tab actually draws; the
+       PNGs and the .ico behind it for the ones that cannot. All absolute, per
+       the rule at the top of this file. -->
+  <link rel="icon" href="/juke-favicon.svg" type="image/svg+xml">
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
   <link rel="icon" href="/favicon.ico" sizes="any">
@@ -63,18 +67,34 @@
     .nf-alt { color: var(--link); border: 1px solid var(--line); }
     .nf-alt:hover { background: var(--fill); }
     .nf-acts a:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+    /* 564 by 352 in the artwork, so height is derived from width and never
+       chosen: 86 / 1.602 = 54, which is the height the mark this replaces
+       had. The old inline shape took its two colours from --mark-ink and
+       --teal, so it reversed with the theme on its own; an <img> cannot, and
+       the mark has a file per ground rather than one file you recolour. Hence
+       two of them and a swap, rather than one that is invisible under one
+       theme. Dark is the default because :root is. */
+    .nf-mark { width: 86px; height: 54px; }
+    .nf-mark-light { display: none; }
+    :root[data-theme="light"] .nf-mark-dark  { display: none; }
+    :root[data-theme="light"] .nf-mark-light { display: inline-block; }
   </style>
 </head>
 <body>
 
   <main class="nf">
-    <!-- The mark, inlined rather than referenced, because this page must render
-         correctly when every other request from it has already missed. It is
-         662 x 774 and sizing it square squashes it. -->
-    <svg width="46" height="54" viewBox="0 0 662 774" aria-hidden="true" focusable="false">
-      <path d="M120 90h150v420c0 70-40 110-110 110H90V500h50c20 0 30-10 30-35V90z" fill="var(--mark-ink)"/>
-      <path d="M300 560c90 90 240 80 300-30l60 40c-80 150-300 150-400 30z" fill="var(--teal)"/>
-    </svg>
+    <!-- Referenced rather than inlined, which reverses the note that used to
+         sit here. That note argued the mark had to be inline because this page
+         renders after something else has already 404'd — but it was drawn with
+         var(--mark-ink) and var(--teal), so it depended on style.css anyway and
+         the independence was never real. What it did buy was a private copy of
+         the logo, which is how this page ended up two brand generations behind
+         the app without anything reporting it.
+
+         Absolute paths, per the rule at the top: this page is served at
+         whatever address missed. -->
+    <img class="nf-mark nf-mark-dark"  src="/juke-mark.svg"       width="86" height="54" alt="" aria-hidden="true">
+    <img class="nf-mark nf-mark-light" src="/juke-mark-light.svg" width="86" height="54" alt="" aria-hidden="true">
 
     <span class="nf-code">404</span>
     <h1>There is nothing at this address</h1>
