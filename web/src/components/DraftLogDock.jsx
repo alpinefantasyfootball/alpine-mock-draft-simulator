@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useEngine, useJukeTick } from '../hooks/useJukeEngine.js'
 import ActivityLog from './ActivityLog.jsx'
-import ChatPlaceholder from './ChatPlaceholder.jsx'
+import ChatPanel from './ChatPanel.jsx'
 
 const TABS = [
   { key: 'chat', label: 'Chat' },
@@ -63,12 +63,26 @@ function PicksList({ items, engine, DE, league, mySlot }) {
   )
 }
 
+// Chat owns its own scroll region (the log scrolls, the composer stays
+// pinned) and needs a flex column to size that against, so it gets a bare
+// wrapper rather than the padded, single-axis-scrolling one Log/Picks share.
 function TabContent({ tab, engine, recentOthers, pickItems, DE, league, mySlot }) {
-  if (tab === 'chat') return <ChatPlaceholder />
-  if (tab === 'picks') {
-    return <PicksList items={pickItems} engine={engine} DE={DE} league={league} mySlot={mySlot} />
+  if (tab === 'chat') {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col">
+        <ChatPanel engine={engine} />
+      </div>
+    )
   }
-  return <ActivityLog picks={recentOthers} engine={engine} DE={DE} league={league} />
+  return (
+    <div className="min-h-0 flex-1 overflow-y-auto p-2">
+      {tab === 'picks' ? (
+        <PicksList items={pickItems} engine={engine} DE={DE} league={league} mySlot={mySlot} />
+      ) : (
+        <ActivityLog picks={recentOthers} engine={engine} DE={DE} league={league} />
+      )}
+    </div>
+  )
 }
 
 // Desktop (lg+) only — the mobile equivalents of these tabs live in
@@ -78,12 +92,10 @@ function TabContent({ tab, engine, recentOthers, pickItems, DE, league, mySlot }
 export default function DraftLogDock({ recentOthers }) {
   const engine = useEngine()
   useJukeTick(engine)
-  // 'log', not 'chat' — chat is ChatPlaceholder (a deliberate stub; the
-  // real messages land in a follow-up pass), so opening here by default
-  // put an empty "coming soon" panel in front of the two tabs that show
-  // real, working data. PlayerHub.jsx's mobile tab strip defaults to
-  // 'players' for the same reason: don't default onto the one tab with
-  // nothing in it yet.
+  // 'log', not 'chat'. A brand new room's chat starts empty ("Nobody has
+  // said anything yet"), where Log/Picks always have something real to
+  // show the moment a draft exists — same reasoning PlayerHub.jsx's mobile
+  // strip defaults to 'players' rather than its own Chat tab.
   const [tab, setTab] = useState('log')
 
   if (!engine) return null
@@ -111,7 +123,7 @@ export default function DraftLogDock({ recentOthers }) {
           </button>
         ))}
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto p-2">
+      <div className="flex min-h-0 flex-1 flex-col">
         <TabContent
           tab={tab}
           engine={engine}

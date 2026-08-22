@@ -511,6 +511,16 @@ def join_rows(adp_rows, sleeper, indexes):
             "id": player_id, "name": name, "pos": position, "team": team,
             "bye": int(row.get("bye") or 0),
             "adp": round(float(row.get("adp") or 999), 1),
+            # FFC's real dispersion across recorded drafts — sd is the ADP
+            # standard deviation, td the sample size it's measured over.
+            # Fetched and thrown away until the Draft Room Cockpit needed a
+            # survival probability honest enough to satisfy the project's
+            # own standing rule against dressing a ranking up as a
+            # measurement: 1 - Φ((pick - adp) / sd) is a real statistic
+            # over real boards, not an invented one. td travels with it so
+            # a thin sample can be withheld rather than trusted.
+            "sd": round(float(row.get("stdev") or 0), 2),
+            "td": int(row.get("times_drafted") or 0),
             "inj": injury_code(entry), "_entry": entry,
         })
 
@@ -521,10 +531,11 @@ def join_rows(adp_rows, sleeper, indexes):
 def player_line(player):
     """One line of the PLAYERS array, as it appears in players.js."""
     return ('  {{ id: "{id}", name: "{name}", pos: "{pos}", team: "{team}", '
-            'bye: {bye}, adp: {adp}, inj: "{inj}" }}'.format(
+            'bye: {bye}, adp: {adp}, sd: {sd}, td: {td}, inj: "{inj}" }}'.format(
                 id=player["id"], name=player["name"].replace('"', "'"),
                 pos=player["pos"], team=player["team"], bye=player["bye"],
-                adp=player["adp"], inj=player["inj"]))
+                adp=player["adp"], sd=player["sd"], td=player["td"],
+                inj=player["inj"]))
 
 
 # ---------------------------------------------------------------- main

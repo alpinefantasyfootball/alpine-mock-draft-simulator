@@ -1,3 +1,5 @@
+import { POS_SOLID } from './draftRoomPositions.js'
+
 // Round 1 position's bar fills use each position's own established hue
 // (POS_BADGE's solid form) rather than the handoff's literal teal-for-RB/
 // purple-for-WR — POS_BADGE is documented as the one position-colour
@@ -7,12 +9,12 @@
 // different colour depending which screen you're on" bug that file exists
 // to prevent. Grade colour (teal for a strong grade) is a different axis —
 // quality, not identity — so that one does follow the handoff directly.
-const POS_SOLID = {
-  QB: '#EA580C', // orange-600
-  RB: '#059669', // emerald-600
-  WR: '#2563EB', // blue-600
-  TE: '#C026D3', // fuchsia-600
-}
+//
+// Imported from draftRoomPositions.js rather than redeclared: this used to
+// be its own local -600-step copy, which was the exact drift the comment
+// above warns about, just one file removed — a second RB/WR/TE/QB colour
+// table that happened to still agree with the real one today and had no
+// way to keep agreeing tomorrow.
 
 function Card({ label, children }) {
   return (

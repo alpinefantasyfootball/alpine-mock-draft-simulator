@@ -56,6 +56,29 @@ export const POS_LIST = ['QB', 'RB', 'WR', 'TE']
 // border, matching text colour, so position reads from the whole card
 // rather than a badge inside it. Same six hues as POS_BADGE above, just the
 // bolder bg-950/60 + border-500/40 + text-200 formula the board asked for.
+//
+// The Draft Room Cockpit handoff asked for this to become a left-rail accent
+// instead — CLAUDE.md already had a section titled "Tried and rejected:
+// position colour as a left rail" for exactly this change, built once and
+// screenshotted: "at working zoom the rails are nearly invisible. Scanning
+// the grid for position runs is what a draft board is for, and it stops
+// working." That didn't make the handoff wrong on its own — this file
+// overrode a different documented decision (orange -> teal) two days after
+// writing it down — so it was re-tried rather than dismissed on a two-year-
+// old memory: prototyped with an injected stylesheet on a real completed
+// board (a full 140-pick draft, all six positions on screen at once) and
+// screenshotted at two widths.
+//
+// A 3px rail on a neutral cell — the exact width the rejected attempt used —
+// reproduced the original finding: the colour is technically there on close
+// inspection and reads as almost uniformly dark from a normal glance. A
+// deliberately bolder 6px rail, double the original, closed some of the gap
+// and is genuinely scannable up close — but the full-cell fill below is
+// still faster to read at a glance, because it recruits the whole cell
+// rather than one edge of it, and "scan the grid for position runs" is the
+// job this screen has to do fastest. So the verdict stands: fill, not rail.
+// Whoever revisits this again should still look rather than trust this
+// comment — but the look has now actually happened twice, not zero times.
 export const POS_CELL_BLOCK = {
   QB: 'bg-orange-950/60 border border-orange-500/40 text-orange-200',
   RB: 'bg-emerald-950/60 border border-emerald-500/40 text-emerald-200',

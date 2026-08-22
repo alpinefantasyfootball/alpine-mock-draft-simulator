@@ -5,7 +5,13 @@ import { POS_BADGE } from './draftRoomPositions.js'
 // can each wrap it in their own chrome without the queue-row markup living
 // in two places — see DraftLogDock.jsx's own comment on why there are two
 // wrappers around one set of tab content.
-export default function QueueList({ players, myTurn, engine }) {
+//
+// survivalOf is optional — the Cockpit's not-your-turn state wants an odds
+// column on this exact list ("your queue, while you wait"), and passing a
+// function here draws it rather than forking a second queue-row component
+// for one extra column. Omitted (both original callers, DraftRoom.jsx and
+// PlayerHub.jsx), the row renders exactly as it always did.
+export default function QueueList({ players, myTurn, engine, survivalOf }) {
   if (players.length === 0) {
     return (
       <p className="px-2 py-6 text-center text-xs leading-relaxed text-white/30">
@@ -30,6 +36,14 @@ export default function QueueList({ players, myTurn, engine }) {
         {p.pos}
       </span>
       <span className="min-w-0 flex-1 truncate text-xs font-medium text-white/90">{p.name}</span>
+      {survivalOf && (
+        <span className="shrink-0 font-plex text-[10px] tabular-nums text-white/50">
+          {(() => {
+            const s = survivalOf(p)
+            return s == null ? '—' : Math.round(s * 100) + '%'
+          })()}
+        </span>
+      )}
       <button
         type="button"
         onClick={() => engine.queueMove(p.name, -1)}

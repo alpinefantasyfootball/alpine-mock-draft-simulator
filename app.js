@@ -2505,6 +2505,83 @@ function draftFit(player) {
   };
 }
 
+// Below this sample size FFC's own stdev is too noisy to answer a real
+// question with — the deep bench runs from single digits to a few dozen
+// recorded drafts, against a few hundred to a few thousand for anyone
+// drafted in the first several rounds.
+const MIN_ADP_SAMPLE = 20;
+
+// Abramowitz & Stegun 7.1.26 — |error| < 1.5e-7, plenty for a pick
+// probability nobody is reading past two significant figures.
+function erf(x) {
+  const sign = x < 0 ? -1 : 1;
+  const ax = Math.abs(x);
+  const a1 = 0.254829592, a2 = -0.284496736, a3 = 1.421413741,
+        a4 = -1.453152027, a5 = 1.061405429, p = 0.3275911;
+  const t = 1 / (1 + p * ax);
+  const y = 1 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-ax * ax);
+  return sign * y;
+}
+
+function normalCdf(z) {
+  return 0.5 * (1 + erf(z / Math.SQRT2));
+}
+
+/* P(player still on the board at a given overall pick) — the Cockpit's
+   "gone before pick 43 in 87% of boards" copy, and the reason it can say
+   that honestly. draftFit()'s own adp field above is deliberately not a
+   probability, with the comment "not a probability, which the data does
+   not support" — true reading ADP alone. It stopped being true the
+   moment FFC's own stdev and sample size (sd/td on every player,
+   scripts/build_players.py) were captured instead of discarded: that is
+   real dispersion across real recorded drafts, so a normal approximation
+   around it is a measurement, not a ranking wearing a percentage.
+
+   Deliberately not a simulation. jitter()/cpuChoice() are fully
+   deterministic from state.seed, so in a solo draft the true answer is
+   knowable exactly and a seed-varying Monte Carlo would print a number
+   that is *wrong by construction* for the one room that exists. jitter()
+   itself is a ±3 decorative wobble, not a measurement of real draft
+   variance, so sampling over it would just reprint that constant dressed
+   as a statistic. And in a shared room, any trial that calls the real
+   applyJitter()/makePick() mutates shared state in place and risks
+   desyncing every client — draft-engine.js's whole reason to exist is
+   that the server and every client must reach the same pick from the
+   same seed. None of that risk buys anything a closed form doesn't
+   already answer for less.
+
+   Withheld exactly like draftFit()'s own market field: incomplete data
+   returns null rather than a number the sample can't support. */
+function survivalProbability(player, atOverall) {
+  if (!player || typeof player.adp !== "number") return null;
+  if (typeof player.sd !== "number" || player.sd <= 0) return null;
+  if (typeof player.td !== "number" || player.td < MIN_ADP_SAMPLE) return null;
+  const overall = atOverall === undefined ? nextPickFor(state.mySlot) : atOverall;
+  if (overall === null || overall === undefined) return null;
+  return 1 - normalCdf((overall - player.adp) / player.sd);
+}
+
+/* Starters-worth of talent left at a position — undrafted players whose
+   projection still clears replacement level. Not draftFit()'s own
+   posLeft (a raw headcount, no replacement line drawn through it) and
+   not a re-ranking of who's left, which would have to be re-derived on
+   every single pick rather than read straight off the board.
+
+   Null for K and DST, same as draftFit()'s own market field a few lines
+   up — a depth count for the two positions this file already refuses to
+   rank is a ranking wearing a different costume. Null too before
+   buildProjections() has run: REPLACEMENT_PTS starts as {}, and reading
+   a threshold of undefined would count every undrafted player at the
+   position as "above replacement." */
+function positionDepthRemaining(pos) {
+  if (UNRANKED_POSITIONS.indexOf(pos) >= 0) return null;
+  const threshold = REPLACEMENT_PTS[pos];
+  if (!threshold) return null;
+  return board.filter((p) =>
+    p.pos === pos && !p.drafted && p.projPts != null && p.projPts > threshold
+  ).length;
+}
+
 /* The first round in which a position is not gated out on timing alone.
    Asked with an empty roster at that position, so a 999 can only be the
    timing rule rather than a roster cap. Returns null when nothing gates it,
@@ -2533,6 +2610,21 @@ function nextPickFor(slot) {
     if (DraftEngine.onTheClock(league, overall - 1).slot === slot) return overall;
   }
   return null;
+}
+
+// The same walk, continued past the first hit — up to `count` upcoming
+// overall picks for a seat, for "your next picks" strips (Entry, the
+// Cockpit's Decide rail). Added so a caller with more than one of those
+// strips on screen isn't re-deriving the snake walk itself a second time;
+// nextPickFor() above stays as the single-answer case everything else
+// already depends on.
+function nextPicksFor(slot, count) {
+  const total = league.teams * league.rounds;
+  const out = [];
+  for (let overall = state.picks.length + 1; overall <= total && out.length < count; overall++) {
+    if (DraftEngine.onTheClock(league, overall - 1).slot === slot) out.push(overall);
+  }
+  return out;
 }
 
 
@@ -7593,6 +7685,11 @@ window.JukeEngine = {
   suggestions:     suggestions,
   replacementGap:  replacementGap,
   tierRemaining:   tierRemaining,
+  // Added for the Draft Room Cockpit's Decide screen — see each
+  // function's own comment for why these are closed-form measurements
+  // rather than a simulation or a raw headcount.
+  survivalProbability:   survivalProbability,
+  positionDepthRemaining: positionDepthRemaining,
 
   /* The scoring editor, as data rather than as markup.
 
@@ -7723,6 +7820,7 @@ window.JukeEngine = {
   // the lineup and the snake stay written down once. Null before a draft
   // starts, which the tab renders as its own state rather than as zeros.
   draftFit:        draftFit,
+  nextPicksFor:    nextPicksFor,
   // The Draft button's real submission path. Wraps draftAndAdvance() rather
   // than reimplementing it — that one function already knows the solo vs.
   // room difference (mutate locally and kick off runCPUs(), or send
@@ -7801,6 +7899,12 @@ window.JukeEngine = {
   // rather than the Pause control here always being clickable when the
   // legacy one sometimes isn't.
   clockLength: () => state.clockLength,
+  // Raw seconds remaining, for the Cockpit header's draining bar
+  // (timeLeft / clockLength). headerInfo().rightValue is already the
+  // formatted "0:15" string the big countdown digit reads — this is the
+  // one thing that wasn't on the bridge yet because nothing needed the
+  // unformatted number before there was a bar to fill.
+  timeLeft: () => state.timeLeft,
   /* The pick clock is state, not league - it is per-drafter rather than part
      of the board's shape, which is why a room broadcasts it separately. The
      settings modal wrote league.clock for two commits and read it back as
@@ -7814,6 +7918,11 @@ window.JukeEngine = {
     return true;
   },
   hasRoom: hasRoom,
+  // "In a room" (hasRoom) and "the socket is up right now" (inRoom) are
+  // different questions — see CLAUDE.md's note on the two — and the chat
+  // composer needs the second one: hasRoom() stays true through a drop, so
+  // gating Send on it alone would swallow a message with no sign why.
+  inRoom: inRoom,
   isHost: () => hasRoom() && !!Live.room().isHost,
   draftOver: draftOver,
   // restart() is clearSave() + goHome() — the exact real "Discard draft" /

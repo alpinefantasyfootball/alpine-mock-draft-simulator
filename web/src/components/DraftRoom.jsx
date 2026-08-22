@@ -2,7 +2,8 @@ import { useEffect, useReducer, useRef, useState } from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import DraftLocker from './DraftLocker.jsx'
 import DraftLogDock from './DraftLogDock.jsx'
-import DraftRoomStatusBar from './DraftRoomStatusBar.jsx'
+import DraftCockpitHeader from './DraftCockpitHeader.jsx'
+import DraftMenuOverlay from './DraftMenuOverlay.jsx'
 import DraftBoardGrid from './DraftBoardGrid.jsx'
 import { SORT_DEFAULT_DIR } from './PlayerQueueSidebar.jsx'
 import PlayerHub from './PlayerHub.jsx'
@@ -10,8 +11,10 @@ import SidePanel from './SidePanel.jsx'
 import QueueList from './QueueList.jsx'
 import TeamTab from './TeamTab.jsx'
 import AnalysisTab from './AnalysisTab.jsx'
+import DraftDecideScreen from './DraftDecideScreen.jsx'
 import DraftInsightsDashboard from './DraftInsightsDashboard.jsx'
 import DraftSettingsModal from './DraftSettingsModal.jsx'
+import DraftEntryScreen from './DraftEntryScreen.jsx'
 import DraftLobby from './DraftLobby.jsx'
 import LobbyBar from './LobbyBar.jsx'
 
@@ -171,11 +174,18 @@ export default function DraftRoom() {
       setSortDir(SORT_DEFAULT_DIR[column])
     }
   }
-  /* Board / Analysis, from the remote branch: Suggestions and Players are
-     already merged into the player list, and Queue/Roster/Log have their
-     own panels, so Analysis was the last legacy tab with no home in this
-     layout. It toggles what the board area shows, not a whole view. */
-  const [view, setView] = useState('board')
+  /* Decide / Board / Analysis — the Cockpit's own three tabs, driven by
+     DraftCockpitHeader's tab nav now rather than a second strip inside
+     the body (there was one, redundant with the header the moment the
+     header grew tab buttons of its own). Decide is the default: for
+     almost all of a draft you're either waiting or choosing, and the
+     board is reference — see DraftDecideScreen.jsx and the handoff's own
+     thesis. Board and Analysis keep the existing panels-below-the-fold
+     layout (Queue/Roster/Chat/Log) unchanged; Decide owns its own full
+     3-column layout instead, with nothing below it — its own roster rail
+     and room-live rail already cover what those panels show. */
+  const [view, setView] = useState('decide')
+  const [menuOpen, setMenuOpen] = useState(false)
   /* Mirrors AppHeader.jsx's own soundOn state — engine.soundWanted() is
      not covered by the "juke:header" tick, since toggling it never
      touches renderHeader(). This page renders its own header
@@ -390,6 +400,18 @@ export default function DraftRoom() {
   // itself uses, in claimable mode, for the reason DraftLobby.jsx's own
   // comment already gives: a second board drawn just for this moment would
   // be a picture of the real one that's wrong the first time it changes.
+
+  // Declared before the !started early return below — DraftCockpitHeader
+  // shows a working Autopick toggle pre-draft too (Entry's own summary
+  // row reads the same soloAutopick state), so this has to exist before
+  // that branch can reach it. Room vs. solo really do mean different
+  // things here — see the bridge comment on toggleRoomAutopilot in app.js
+  // for why neither branch is a stand-in for the other.
+  const handleToggleAutopick = () => {
+    if (roomActive) engine.toggleRoomAutopilot()
+    else setSoloAutopick((a) => !a)
+  }
+
   if (!started) {
     const startLabel = roomActive
       ? (engine.isHost() ? 'Start for everyone' : 'Waiting for the host')
@@ -397,7 +419,7 @@ export default function DraftRoom() {
 
     return (
       <div className="fixed inset-0 z-[60] flex flex-col bg-[#0B0E14] text-white">
-        <DraftRoomStatusBar
+        <DraftCockpitHeader
           preDraft
           problem={problem}
           startLabel={startLabel}
@@ -409,7 +431,9 @@ export default function DraftRoom() {
                modal's control being decorative. */
             engine.startDraft({ mySlot: lobbySlot, clockLength: engine.clockLength() })
           }}
-          onOpenSettings={() => setSettingsOpen(true)}
+          autopick={soloAutopick}
+          onToggleAutopick={handleToggleAutopick}
+          onOpenMenu={() => setSettingsOpen(true)}
         />
 
         {settingsOpen && (
@@ -422,12 +446,11 @@ export default function DraftRoom() {
           />
         )}
 
-        {/* pt-14/md:pt-20 matches the live board's own offset below — this
-            is the same DraftRoomStatusBar with the same fixed height and
-            the same ticker strip at md+, so the clearance it needs is
-            identical. */}
-        <div className="flex flex-1 flex-col overflow-hidden px-3 pb-3 pt-14 md:pt-20 lg:px-4">
-          <DraftLobby
+        {/* pt-[62px]/md:pt-[86px] matches DraftCockpitHeader's own height —
+            see its own comment on why 62px isn't a Tailwind step and has
+            to be matched exactly rather than rounded. */}
+        <div className="flex flex-1 flex-col overflow-hidden pt-[62px] md:pt-[86px]">
+          <DraftEntryScreen
             engine={engine}
             league={league}
             /* -1 while we are in a room whose seats have not arrived yet.
@@ -439,7 +462,8 @@ export default function DraftRoom() {
             mySlot={roomActive ? (roomSeats ? mySlot : -1) : lobbySlot}
             roomActive={roomActive}
             seats={roomSeats}
-            fill
+            soloAutopick={soloAutopick}
+            onOpenSettings={() => setSettingsOpen(true)}
             onClaimSeat={(seat) => {
               // In a room the room decides; off-room this is just my chair.
               if (roomActive) engine.claimSeat(seat)
@@ -452,17 +476,14 @@ export default function DraftRoom() {
   }
 
   const code = onClock && DE ? DE.pickCode(overall, league.teams) : null
-  const pickInRound = onClock && DE ? DE.pickInRound(onClock.round, onClock.slot, league.teams) : null
-  const roundText = onClock
-    ? `Round ${onClock.round}, Pick ${pickInRound}`
-    : picks.length > 0
-      ? 'Draft complete'
-      : 'Board ready'
 
-  const info = engine.headerInfo()
-  const rightLabel = info.started ? info.rightLabel : 'Status'
-  const rightValue = info.started ? info.rightValue : 'Idle'
-  const urgent = !!info.urgent
+  // DraftCockpitHeader composes its own "Round N · Pick N · your turn"
+  // caption straight from onClock/overall/myTurn (below) rather than
+  // reading headerInfo()'s pre-formatted statusLine/rightLabel/rightValue
+  // strings — those were shaped for the old two-line bar's different
+  // slots. urgent is the one field still worth reading off headerInfo()
+  // itself: isMyTurn()'s own clock-under-10s check, not re-derived here.
+  const urgent = !!engine.headerInfo().urgent
 
   // Same gating renderActionBar() already uses in app.js: Undo is
   // solo-only (a room's copy just gets overwritten by the next
@@ -575,14 +596,6 @@ export default function DraftRoom() {
     engine.draftPlayer(player)
   }
 
-  // Room vs. solo really do mean different things here — see the bridge
-  // comment on toggleRoomAutopilot in app.js for why neither branch is a
-  // stand-in for the other.
-  const handleToggleAutopick = () => {
-    if (roomActive) engine.toggleRoomAutopilot()
-    else setSoloAutopick((a) => !a)
-  }
-
   // Undo/Pause/Discard are all real, direct calls into app.js — undo()
   // pops picks off state.picks until it's my turn again, togglePause()
   // stops the clock (or sends Live.pause() in a room), and restart() is
@@ -624,48 +637,77 @@ export default function DraftRoom() {
     // (round/pick/clock/autopick, no login/signup), so the trap became a
     // real bug: Homepage's header was painting over this one entirely.
     <div className="fixed inset-0 z-[60] flex flex-col bg-[#0B0E14] text-white">
-      {/* DraftRoomStatusBar is the fixed top bar for this view now — it
+      {/* DraftCockpitHeader is the fixed top bar for this view now — it
           carries the brand/ticker Header.jsx used to own here, consolidated
-          with the round/pick/clock/autopick controls into one h-14 row
-          instead of two stacked h-16 bars. Header.jsx itself is untouched
-          and still fixed-h-16 on the homepage — neither pre-draft screen in
-          this file renders it either (LobbyBar and this same
-          DraftRoomStatusBar in its preDraft mode are their own bars, not
-          Header reused), which is why this branch's pt- offset (h-14) has
-          never matched Header's own (h-16). */}
-      <DraftRoomStatusBar
-        onOpenSettings={() => setSettingsOpen(true)}
-        /* Off-room only. In a room this same engine function toggles the
-           autopilot on your own chair, which the Autopick switch beside it
-           already is — two controls for one thing is the duplication this
-           file keeps having to undo. */
-        showFinish={!roomActive && !draftIsOver}
-        onFinish={() => engine.autoDraftRest()}
-        roundText={roundText}
+          with the round/pick/clock/autopick/tab-nav controls into one
+          62px row. Header.jsx itself is untouched and still fixed-h-16 on
+          the homepage — neither pre-draft screen in this file renders it
+          either (LobbyBar and this same header in its preDraft mode are
+          their own bars, not Header reused). */}
+      <DraftCockpitHeader
+        cockpitTab={view}
+        onSelectTab={setView}
+        round={onClock ? onClock.round : null}
+        overall={overall}
         code={code}
-        rightLabel={rightLabel}
-        rightValue={rightValue}
         myTurn={myTurn}
         urgent={urgent}
+        over={draftIsOver}
+        clockLength={engine.clockLength()}
+        timeLeft={engine.timeLeft()}
         autopick={autopick}
         onToggleAutopick={handleToggleAutopick}
-        showUndo={showUndo}
-        onUndo={handleUndo}
-        discardLabel={hasRoomVal ? 'Leave the room' : 'Discard draft'}
-        discardDanger={!hasRoomVal}
-        onDiscard={handleDiscard}
-        soundOn={soundOn}
-        onToggleSound={handleToggleSound}
+        onOpenMenu={() => setMenuOpen(true)}
       />
-      {/* pt-14 matches DraftRoomStatusBar's own h-14; md:pt-20 adds the
-          6-unit ticker strip (top-14, h-6) that only exists at md+ — see
-          the comment on that strip in DraftRoomStatusBar.jsx. No bottom
+      {menuOpen && (
+        <DraftMenuOverlay
+          engine={engine}
+          onClose={() => setMenuOpen(false)}
+          onOpenSettings={() => setSettingsOpen(true)}
+          inRoom={roomActive}
+          isHost={roomActive && engine.isHost()}
+          clockLength={engine.clockLength()}
+          paused={engine.paused()}
+          onTogglePause={() => engine.togglePause()}
+          showFinish={!roomActive && !draftIsOver}
+          onFinish={() => engine.autoDraftRest()}
+          showUndo={showUndo}
+          onUndo={handleUndo}
+          soundOn={soundOn}
+          onToggleSound={handleToggleSound}
+          discardLabel={hasRoomVal ? 'Leave the room' : 'Discard draft'}
+          discardDanger={!hasRoomVal}
+          onDiscard={handleDiscard}
+        />
+      )}
+      {/* pt-[62px] matches DraftCockpitHeader's own height; md:pt-[86px] adds the
+          6-unit ticker strip (top-[62px], h-6) that only exists at md+ — see
+          the comment on that strip in DraftCockpitHeader.jsx. No bottom
           padding here: PlayerHub's mobile sheet is `fixed` and so occupies
           no space in this flow — clearance for it is reserved inside the
           scrollable panels themselves (the board's and the player list's
           own pb-28), and reserving it here too would shrink the row for
           no reason. */}
-      <div className="flex flex-1 flex-col overflow-hidden pt-14 md:pt-20">
+      <div className="flex flex-1 flex-col overflow-hidden pt-[62px] md:pt-[86px]">
+        {view === 'decide' ? (
+          /* Decide owns the whole content area, not half of it — its own
+             roster rail and room-live rail already cover what the panels
+             below the board show for Board/Analysis, so nothing renders
+             underneath it. Board and Analysis keep the existing
+             board-plus-panels layout exactly as it already worked. */
+          <DraftDecideScreen
+            engine={engine}
+            league={league}
+            mySlot={mySlot}
+            myTurn={myTurn}
+            picks={picks}
+            onDraft={handleDraft}
+            onQueueToggle={handleToggleQueue}
+            onOpenProfile={setSelectedPlayer}
+            queuedNames={queuedNames}
+          />
+        ) : (
+        <>
         {/* The board stays visible on every width now — see PlayerHub.jsx's
             file comment for what replaced the old Draft Hub/Full Board
             toggle below lg (a bottom sheet over the board, not a view that
@@ -692,31 +734,9 @@ export default function DraftRoom() {
               floats above it), a fixed share at lg+ so the panel row
               beneath always gets its half. isolate hands the whole height
               back to the board. */}
-          {/* Board / Analysis. The grade used to be the one legacy tab
-              with no home in this layout — Suggestions and Players merged
-              into the player list, and Queue/Roster/Log/Chat each have a
-              panel. It swaps what the top half shows rather than taking
-              over the screen, so the panels underneath stay put. */}
-          <div className="flex shrink-0 gap-1.5 border-b border-slate-800 bg-slate-900/40 px-3 py-1.5">
-            {[
-              { key: 'board', label: 'Board' },
-              { key: 'analysis', label: 'Analysis' },
-            ].map((v) => (
-              <button
-                key={v.key}
-                type="button"
-                onClick={() => setView(v.key)}
-                aria-pressed={view === v.key}
-                className={
-                  'rounded-full px-3 py-1 text-xs font-semibold transition-colors duration-150 ' +
-                  (view === v.key ? 'bg-teal-500 text-obsidian' : 'bg-white/5 text-white/50 hover:bg-white/10 hover:text-white')
-                }
-              >
-                {v.label}
-              </button>
-            ))}
-          </div>
-
+          {/* Board / Analysis tab switching moved to DraftCockpitHeader's
+              own tab nav — this used to be a second, redundant strip right
+              here, doing the same job the header now does above it. */}
           <div
             className={
               'relative flex min-h-0 min-w-0 flex-1 ' +
@@ -880,6 +900,8 @@ export default function DraftRoom() {
             </div>
           </div>
         </div>
+        </>
+        )}
       </div>
 
       {/* Opens itself on the draft-over edge (see the effect near the top)

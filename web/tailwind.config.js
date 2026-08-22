@@ -52,6 +52,17 @@ export default {
         // hover state: teal ring + glow outside, soft purple wash inside
         'card-hover':
           '0 0 0 1.5px rgb(0 229 255 / 0.9), 0 0 32px rgb(0 229 255 / 0.4), inset 0 0 40px rgb(123 31 162 / 0.5)',
+        // "Your seat" identity — the Draft Room Cockpit's gold ring, named
+        // by role rather than added as a `gold` colour token. #FFD166 is
+        // 1.4:1 as text (CLAUDE.md), so the colour-ownership rule is
+        // "never as type" — a colour token can't express that restriction
+        // (Tailwind would happily generate `text-gold`), a shadow token
+        // can't be applied to text at all. Same values DraftBoardGrid.jsx's
+        // mineRing() already inlines; named here so new Cockpit surfaces
+        // (the Entry seat grid, Picks rows) share the identical ring
+        // instead of re-typing the hex.
+        seat: 'inset 0 0 0 2px #FFD166',
+        'seat-live': '0 0 15px rgba(0,229,255,0.4), inset 0 0 0 2px #FFD166',
       },
       backdropBlur: {
         glass: '16px',
@@ -67,16 +78,19 @@ export default {
         // extra network request, it just points at the font that's there.
         display: ['"Barlow Condensed"', '"Arial Narrow"', 'system-ui', 'sans-serif'],
         body: ['"Inter"', 'system-ui', 'sans-serif'],
-        // A new, separate token — not `mono` itself. `font-mono` is already
-        // in real use throughout the Draft Room (pick codes, tabular-nums
-        // scoring inputs, AnalysisTab), all on Tailwind's bare system-mono
-        // fallback today; overriding the shared token would have silently
-        // reskinned every one of those the moment this file changed, which
-        // is exactly the kind of untouched-page side effect the "homepage
-        // rebrand is homepage-only for now" note above is already guarding
-        // against for Archivo. `font-plex` is used explicitly, only by the
-        // new homepage components, loaded from Google Fonts in index.html
-        // next to Archivo — same pattern, no new infrastructure.
+        // A new, separate token — not `mono` itself, so a page still using
+        // bare `font-mono` (Tailwind's own system-mono fallback) never gets
+        // silently reskinned just because this file changed. That was the
+        // homepage-only reasoning when this token was added; checked again
+        // for the Draft Room Cockpit and it turned out to already be moot
+        // there — grepped `web/src` for the literal class `font-mono` and
+        // got zero matches. Nothing in the Draft Room was using it at all,
+        // despite an older version of this comment claiming pick codes and
+        // AnalysisTab did. `font-plex` is now used explicitly by both the
+        // homepage components and the Cockpit's pick codes/team
+        // abbreviations/tabular figures, loaded from Google Fonts in
+        // index.html next to Archivo — same font, no new infrastructure,
+        // just no longer homepage-only.
         plex: ['"IBM Plex Mono"', 'ui-monospace', 'SFMono-Regular', 'monospace'],
       },
       keyframes: {
@@ -108,6 +122,14 @@ export default {
           backdropFilter: `blur(${theme('backdropBlur.glass')})`,
           WebkitBackdropFilter: `blur(${theme('backdropBlur.glass')})`,
           border: '1px solid rgb(255 255 255 / 0.08)',
+        },
+        // The background half of "your seat," beside the shadow.seat ring
+        // above — a background-color utility, so `text-seat-wash` isn't a
+        // class Tailwind can even generate. Same #FFD166 the ring uses, at
+        // the wash strength the Cockpit's board column and Picks rows both
+        // call for.
+        '.seat-wash': {
+          backgroundColor: 'rgba(255,209,102,0.07)',
         },
       })
     },

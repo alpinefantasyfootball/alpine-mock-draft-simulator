@@ -1,11 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import PlayerQueueSidebar from './PlayerQueueSidebar.jsx'
 import PlayerProfileDrawer from './PlayerProfileDrawer.jsx'
 import QueueList from './QueueList.jsx'
 import TeamTab from './TeamTab.jsx'
-import ChatPlaceholder from './ChatPlaceholder.jsx'
+import ChatPanel from './ChatPanel.jsx'
 import ActivityLog from './ActivityLog.jsx'
 
 /* Five tabs, not four: the desktop row carries a Draft Log beside Chat
@@ -85,6 +85,13 @@ export default function PlayerHub({
   const [open, setOpen] = useState(true)
   const [tab, setTab] = useState('players')
   const [viewSlot, setViewSlot] = useState(mySlot)
+  // mySlot is 0 until a real draft actually assigns a seat (solo start,
+  // or a room's seat claim/swap landing later), and this captured
+  // whatever it was at mount forever after — the same seat-select-that-
+  // lies failure DraftRoom.jsx's own rosterSlot/insightsSlot state
+  // already had, and already fixed, the same way. Mobile's Team tab was
+  // the one place that fix was never copied to.
+  useEffect(() => { setViewSlot(mySlot) }, [mySlot])
   // window.DraftEngine, same global source DraftLogDock reads it from —
   // ActivityLog needs it for pickCode().
   const DE = typeof window !== 'undefined' ? window.DraftEngine : null
@@ -189,8 +196,8 @@ export default function PlayerHub({
       )}
 
       {open && tab === 'chat' && (
-        <div className="flex min-h-0 flex-1 lg:hidden">
-          <ChatPlaceholder />
+        <div className="flex min-h-0 flex-1 flex-col lg:hidden">
+          <ChatPanel engine={engine} />
         </div>
       )}
 

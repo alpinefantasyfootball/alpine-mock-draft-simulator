@@ -1,0 +1,129 @@
+import { Sparkles } from 'lucide-react'
+import DraftLobby from './DraftLobby.jsx'
+import { POS_BADGE } from './draftRoomPositions.js'
+
+// The Cockpit's landing screen from the lobby — three columns, 300px |
+// 1fr | 330px. Centre is the existing DraftLobby (the seat-claiming
+// board, now bare — see its own comment) with this screen's headline and
+// start banner wrapped around it; left and right are genuinely new,
+// there was nowhere to see league shape or a scored preview before the
+// first pick landed.
+export default function DraftEntryScreen({
+  engine,
+  league,
+  mySlot,
+  roomActive,
+  seats,
+  onClaimSeat,
+  soloAutopick,
+  onOpenSettings,
+}) {
+  const scoringNames = engine.scoringNames()
+  const lineup = engine.seatedLineup(mySlot)
+  const clock = engine.clockLength()
+
+  const rows = [
+    { label: 'Teams', value: league.teams },
+    { label: 'Scoring', value: scoringNames[league.scoring] || league.scoring },
+    { label: 'Order', value: 'Snake' },
+    { label: 'Rounds', value: league.rounds },
+    { label: 'Per pick', value: clock ? `${clock}s` : 'No clock' },
+    { label: 'Autopick', value: soloAutopick ? 'On' : 'Off' },
+  ]
+
+  const board = engine.board()
+  const opening = board.slice(0, 8).map((p) => ({
+    ...p,
+    juke: engine.overallScore(p),
+  }))
+
+  const DE = window.DraftEngine
+  const firstPick = DE ? DE.pickCode(mySlot + 1, league.teams) : null
+  // The first four picks this seat holds — first is shown on its own
+  // above, so the strip below wants the four *after* it.
+  const nextPicks = engine.nextPicksFor(mySlot, 5).slice(1)
+
+  return (
+    <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[300px_minmax(0,1fr)_330px]">
+      <div className="border-white/[0.06] px-[18px] py-5 lg:border-r">
+        <div className="mb-3.5 flex items-baseline justify-between">
+          <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-white/50">This draft</span>
+          <button type="button" onClick={onOpenSettings} className="text-xs font-semibold text-teal-300 hover:text-teal-200">
+            Edit
+          </button>
+        </div>
+        <div className="flex flex-col gap-[3px]">
+          {rows.map((r) => (
+            <div key={r.label} className="flex h-9 items-center justify-between gap-3.5 rounded-[7px] bg-white/[0.03] px-3">
+              <span className="text-xs text-white/60">{r.label}</span>
+              <span className="font-body text-sm font-semibold tabular-nums text-white">{r.value}</span>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-5 border-t border-white/[0.07] pt-[18px]">
+          <div className="mb-3 text-[10px] font-bold uppercase tracking-[0.12em] text-white/50">Your roster, empty</div>
+          <div className="flex flex-col gap-[3px]">
+            {lineup.seats.map((s, i) => (
+              <div key={i} className="grid h-[30px] grid-cols-[38px_minmax(0,1fr)] items-center gap-2.5 rounded-md border border-dashed border-white/[0.09] px-2.5">
+                <span className="rounded bg-white/5 py-0.5 text-center text-[10px] font-bold text-white/50">{s.slot}</span>
+                <span className="text-xs text-white/50">Empty</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="flex min-h-0 flex-col px-[22px] py-5">
+        <h1 className="mb-1 font-display text-[32px] font-bold leading-none text-white">Claim your chair</h1>
+        <p className="mb-[18px] text-sm text-white/60">
+          Every column is a seat, and the empty cells already show which overall picks come with it.{' '}
+          {roomActive ? 'Everyone in the room sees the same board.' : 'The other nine are drafted by Juke.'}
+        </p>
+
+        <DraftLobby engine={engine} league={league} mySlot={mySlot} onClaimSeat={onClaimSeat} seats={seats} roomActive={roomActive} fill />
+
+        <div
+          className="mt-4 flex items-center gap-4 rounded-xl border border-teal-400/30 p-4"
+          style={{ background: 'linear-gradient(120deg, rgba(0,229,255,0.09), rgba(123,31,162,0.08) 70%, #12171f)' }}
+        >
+          <div className="min-w-0 flex-1">
+            <div className="font-display text-[23px] font-bold leading-tight text-white">
+              Seat {mySlot + 1} · your first pick is {firstPick || '—'}
+            </div>
+            <div className="text-xs text-white/60">
+              {nextPicks.length > 0
+                ? `Then ${nextPicks.join(', ')} — five picks between each turn after round one.`
+                : 'Pick order is set once every seat is filled.'}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="border-white/[0.06] px-[18px] py-5 lg:border-l">
+        <div className="mb-1 flex items-center gap-2 text-teal-300">
+          <Sparkles className="h-3.5 w-3.5" />
+          <span className="text-[10px] font-bold uppercase tracking-[0.12em]">The board at {firstPick || '—'}</span>
+        </div>
+        <p className="mb-3.5 text-xs leading-relaxed text-white/60">
+          Scored against your rules before a single pick is made. This is what you'd be choosing from.
+        </p>
+        <div className="flex flex-col gap-[3px]">
+          {opening.map((p, i) => (
+            <div key={p.name} className="grid h-9 grid-cols-[20px_34px_minmax(0,1fr)_40px] items-center gap-2.5 rounded-[7px] px-2.5">
+              <span className="font-plex text-[10px] text-white/50">{i + 1}</span>
+              <span className={'rounded py-0.5 text-center text-[10px] font-bold ' + (POS_BADGE[p.pos] || 'bg-white/10 text-white/60')}>
+                {p.pos}
+              </span>
+              <span className="truncate text-xs font-medium text-white">{p.name}</span>
+              <span className="text-right font-plex text-xs font-semibold text-teal-300">{p.juke != null ? Math.round(p.juke) : '—'}</span>
+            </div>
+          ))}
+        </div>
+        <p className="mt-3 text-xs leading-relaxed text-white/60">
+          Change a scoring rule and every one of these moves. The Edit link on the left reruns the whole board.
+        </p>
+      </div>
+    </div>
+  )
+}
