@@ -68,14 +68,14 @@ export default function DraftCockpitHeader({
           is measured rather than guessed.
 
           The gaps are the first: 22px between eight blocks is 154px, more than
-          the logo and the tabs together. 14px until lg rather than until sm,
-          and the 24px side padding holds at 16 with them - together that is
-          70px, which is the difference between fitting the last round of a
-          14-round draft at 768 and running 8px past it. The worst case is not
-          the one on screen while you check: "Round 14 · Pick 140" and a 14.10
-          clock is 38px wider than the round-one pill, and it is the one that
-          has to fit. */}
-      <header className="fixed inset-x-0 top-0 z-50 flex h-[62px] shrink-0 items-center gap-[14px] border-b border-white/[0.06] bg-obsidian/90 px-4 backdrop-blur-md lg:gap-[22px] lg:px-6">
+          the logo and the tabs together. 12px until lg rather than 22 until
+          sm, and the 24px side padding holds at 16 with them. The worst case is
+          not the one on screen while you check: "Pick 140" and a 14.10 clock is
+          13px wider than the round-one pill at 375 and 38px wider at 768, and
+          it is the one that has to fit. At 14px this cleared 768 and missed 375
+          by a single pixel, which is the kind of margin that is not a margin -
+          12 takes the phone to 368 against 375 and 768 to 746. */}
+      <header className="fixed inset-x-0 top-0 z-50 flex h-[62px] shrink-0 items-center gap-3 border-b border-white/[0.06] bg-obsidian/90 px-4 backdrop-blur-md lg:gap-[22px] lg:px-6">
         <a
           href="#/drafts"
           aria-label="Back to your draft locker"
@@ -171,11 +171,24 @@ export default function DraftCockpitHeader({
                     header has turned blue" - so it is the redundant half, and
                     it is 70px of the pill's 313. The pick number underneath it
                     never gives; that one is the fact. */}
-                Round {round} · Pick {overall}
+                {/* "Round N · " goes below sm and `Pick {overall}` stays, and
+                    the split is between a fact that is duplicated here and one
+                    that is not. The big number beside this is `code` -
+                    pickCode(overall, teams), "3.05" - so it already carries the
+                    round, and printing "Round 3" next to "3.05" spends 50px
+                    saying it twice. `overall` is 25 in that same example and
+                    appears nowhere else on the bar, so it is the half that
+                    stays. */}
+                <span className="hidden sm:inline">Round {round} · </span>Pick {overall}
                 {myTurn && <span className="hidden xl:inline"> · your turn</span>}
               </span>
+              {/* This bar is the whole clock - the big number beside it is the
+                  pick code, not a countdown - so it cannot go, but its width is
+                  a proportion and carries nothing, and at 150px it was the
+                  widest thing in this column and therefore the real floor under
+                  the pill. 64px below sm. */}
               {myTurn && (
-                <div className="h-[3px] w-[150px] overflow-hidden rounded-full bg-white/[0.12]">
+                <div className="h-[3px] w-16 overflow-hidden rounded-full bg-white/[0.12] sm:w-[150px]">
                   <div
                     className={'h-full rounded-full ' + (urgent ? 'bg-rose-400' : 'bg-teal-400')}
                     style={{ width: pct + '%' }}
