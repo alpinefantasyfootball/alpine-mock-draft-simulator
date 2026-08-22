@@ -5459,7 +5459,11 @@ function saveDraft() {
       picks: state.picks.map((p) => p.player.name),
       queue: state.queue.slice(),
       watchlist: state.watchlist.slice(),
-      savedAt: Date.now()
+      savedAt: Date.now(),
+      // When the draft actually began, not when it was last saved (savedAt,
+      // above) — the Locker's in-progress band wants "Started 14 min ago",
+      // which has to survive every autosave between now and a resume.
+      startedAt: state.startedAt
     }));
   } catch (err) {
     // Private browsing and full quotas both land here. Losing the save is
@@ -5517,6 +5521,10 @@ function resumeDraft(data) {
   state.paused = !!data.paused;
   state.seed = data.seed;
   state.started = true;
+  // A save written before startedAt existed has no such key — falls back to
+  // now rather than a wrong "started 47 years ago", and self-heals the
+  // moment this draft finishes or is next saved.
+  state.startedAt = data.startedAt || Date.now();
 
   applyJitter();
   board.forEach((p) => { p.drafted = false; });
@@ -5565,7 +5573,13 @@ function resumeDraft(data) {
    is no account and no server copy of either. */
 
 const HISTORY_KEY = "juke.draft-history.v1";
-const HISTORY_LIMIT = 25;
+// Was 25. The Locker redesign is built for a manager who's run "hundreds of
+// mocks" — its own reference mock shows 142 — which a 25-entry cap makes
+// impossible; anything past it was being silently dropped. 200 gives real
+// headroom past that reference number. Entries are small (player names plus
+// a compact league-config object), so even a generous per-entry estimate
+// keeps this well inside what a browser actually allows per origin.
+const HISTORY_LIMIT = 200;
 
 function readHistory() {
   try {
@@ -5588,8 +5602,48 @@ function writeHistory(list) {
 // played on: recomputing it later would mean rebuilding a whole historical
 // board — a different ADP set, a different snake shape — just to draw one
 // card in a list.
+// The single worst-off starting slot, by points below replacement.
+// Deliberately replacementGap() here, not aboveReplacement() —
+// aboveReplacement() (analyseTeam()'s own starter-strength component) is
+// Math.max(0, places-above-replacement): clamped at zero, by design, for
+// summing into a score that shouldn't reward one great starter for another
+// slot's failure. That clamp makes it useless for *this* question, since
+// nothing it returns is ever negative — a first version of this function
+// used it and always returned null, on every roster, including ones
+// clearly poor enough that couldn't be right. replacementGap() is the
+// unclamped points version rosterVorp already sums, so a real deficit
+// reads as a real negative number here too. Only a genuinely below-
+// replacement slot counts (gap < 0); a lineup with nothing below
+// replacement returns null rather than naming its merely-least-great
+// starter as a "weak spot". Position comes from the player filling the
+// slot, not the slot's own label — a weak FLEX should read as whichever
+// position actually sat there, the same way a manager would describe it.
+function weakestStartingSpot(lineup) {
+  let worstGap = null, pos = null;
+  lineup.forEach(function (s) {
+    if (!s.player) return;
+    const gap = replacementGap(s.player);
+    if (gap === null) return;
+    if (worstGap === null || gap < worstGap) { worstGap = gap; pos = s.player.pos; }
+  });
+  return worstGap !== null && worstGap < 0 ? pos : null;
+}
+
+function rosterVorpOf(team) {
+  return team.lineup.reduce((sum, s) => sum + (s.player ? replacementGap(s.player) || 0 : 0), 0);
+}
+
 function recordHistory() {
-  const mine = analyseDraft()[state.mySlot];
+  // The whole room, not just mine — the tendencies strip's "room average"
+  // roster-VORP baseline needs every team's number, and this is the one
+  // moment they're all sitting in memory together against the board this
+  // draft was actually played on. Computing it later would mean rebuilding
+  // a whole historical room just to average one number.
+  const all = analyseDraft();
+  const mine = all[state.mySlot];
+  const roomAvgRosterVorp = all.length
+    ? all.reduce((sum, t) => sum + rosterVorpOf(t), 0) / all.length
+    : null;
   const round1 = state.picks.find((p) => p.slot === state.mySlot && p.round === 1);
   const list = readHistory();
   list.unshift({
@@ -5604,7 +5658,27 @@ function recordHistory() {
     // reference would go stale while a name can be re-resolved.
     picks: state.picks.map((p) => p.player.name),
     projectedRank: mine ? mine.rank : null,
-    round1Pick: round1 ? round1.player.name : null
+    round1Pick: round1 ? round1.player.name : null,
+    // The fields the Locker redesign needs that analyseDraft() already
+    // computes above — this is the one moment board/league/state are still
+    // the ones the draft was actually played on, so it's cheaper to keep
+    // what's already been worked out than to recompute it later against a
+    // rebuilt historical board.
+    grade: mine ? mine.grade : null,
+    // The weighted 0-100ish score grade was derived from — the Locker row
+    // only needs the letter, but the tendencies strip's "grade, last 12"
+    // bars need a number to bucket by, and re-deriving one from the other
+    // isn't possible once only the letter is stored.
+    gradeScore: mine ? Math.round(mine.total) : null,
+    teams: league.teams,
+    // Summed over the *starting* lineup (bestLineup(), value-sorted), not
+    // the full roster — roster and lineup are not interchangeable, per the
+    // FLEX bug this file's own history already found the hard way, and
+    // "roster VORP" should measure what the grade itself measures (starter
+    // strength) rather than sit beside it disagreeing.
+    rosterVorp: mine ? rosterVorpOf(mine) : null,
+    roomAvgRosterVorp: roomAvgRosterVorp,
+    weakestSpot: mine ? weakestStartingSpot(mine.lineup) : null
   });
   writeHistory(list.slice(0, HISTORY_LIMIT));
 }
@@ -5621,15 +5695,214 @@ function leagueTypeLabel(cfg) {
 }
 
 function historySummary(entry) {
+  const round1Player = entry.round1Pick && board.find((p) => p.name === entry.round1Pick);
   return {
     id: entry.id,
     leagueType: leagueTypeLabel(entry.league),
     pickPosition: ordinal(entry.mySlot + 1),
+    // The raw seat number, alongside the ordinal string above — the Locker
+    // table's own Seat column prints a plain "3", not "3rd" (that's the
+    // in-progress band's own convention instead), and a component that
+    // wants one has no clean way to undo the other's formatting.
+    seat: entry.mySlot + 1,
     dateCompleted: new Date(entry.completedAt)
       .toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" }),
     projectedRank: entry.projectedRank ? ordinal(entry.projectedRank) : "—",
-    round1Pick: entry.round1Pick || null
+    // The raw number too — the finish bar's fill (1 - (finish-1)/teams)
+    // needs to do arithmetic on it, and parsing "3rd" back into 3 is not a
+    // real option.
+    rank: entry.projectedRank || null,
+    round1Pick: entry.round1Pick || null,
+    // Resolved against today's board, same as everywhere else a stored
+    // name needs a position — absent if the player's since dropped out of
+    // the pool entirely, same as a resolution failure is handled elsewhere.
+    round1PickPos: round1Player ? round1Player.pos : null,
+    // Absent on any entry recorded before recordHistory() started saving
+    // them — undefined rather than a guessed value, same rule as
+    // projectedRank's own "—" a few lines up, left to the caller to decide
+    // how to render rather than papered over here.
+    grade: entry.grade || null,
+    teams: entry.teams || entry.league.teams,
+    rosterVorp: typeof entry.rosterVorp === "number" ? entry.rosterVorp : null
   };
+}
+
+/* The tendencies strip's data — six aggregates over the whole history array,
+   nothing this file summarised before. Every one of them is real numbers off
+   real entries; per the design brief's own instruction, a stat that can't be
+   computed cleanly (an empty history, or every entry pre-dating the field it
+   needs) is simply absent from the returned object rather than filled with a
+   zero or a dash standing in for missing data — the caller drops the card. */
+function historyStats() {
+  const list = readHistory();
+  if (!list.length) return {};
+
+  // One name -> player lookup, built once rather than per pick per entry —
+  // history can run to HISTORY_LIMIT entries, each with a full roster of
+  // picks, and board.find() inside that nesting would be quadratic for no
+  // reason.
+  const byName = new Map();
+  board.forEach((p) => byName.set(p.name, p));
+
+  const stats = { total: list.length };
+
+  // Most drafted — tallied across every pick in every entry, not just the
+  // ones that resolve; only the winning name needs to resolve, and if it
+  // doesn't (the board moved on entirely) the card is dropped rather than
+  // naming a runner-up the function never actually checked.
+  const pickCounts = new Map();
+  list.forEach((entry) => {
+    (entry.picks || []).forEach((name) => {
+      pickCounts.set(name, (pickCounts.get(name) || 0) + 1);
+    });
+  });
+  let topName = null, topCount = 0;
+  pickCounts.forEach((count, name) => { if (count > topCount) { topCount = count; topName = name; } });
+  if (topName && byName.has(topName)) {
+    stats.mostDrafted = { name: topName, count: topCount, total: list.length };
+  }
+
+  // Round 1 position — only entries with a resolvable first pick count.
+  // Top four positions by share, matching what real round-1 frequency
+  // actually produces (RB/WR dominate; a fixed position list would print
+  // zeroes for whichever two show up least, which the design doesn't ask
+  // for and a real board wouldn't usually need).
+  const posCounts = new Map();
+  let round1Resolved = 0;
+  list.forEach((entry) => {
+    const name = entry.round1Pick;
+    const player = name && byName.get(name);
+    if (!player) return;
+    round1Resolved++;
+    posCounts.set(player.pos, (posCounts.get(player.pos) || 0) + 1);
+  });
+  if (round1Resolved > 0) {
+    stats.round1Position = [...posCounts.entries()]
+      .map(([pos, count]) => ({ pos, pct: Math.round((count / round1Resolved) * 100) }))
+      .sort((a, b) => b.pct - a.pct)
+      .slice(0, 4);
+  }
+
+  // Grade, last 12 — most recent 12 with a stored score, oldest first so the
+  // bars read left-to-right as a timeline. Skips entries with no gradeScore
+  // (recorded before this field existed) rather than gapping the chart with
+  // a zero-height bar that would read as a real bad draft.
+  const graded = list.filter((e) => typeof e.gradeScore === "number").slice(0, 12).reverse();
+  if (graded.length >= 2) {
+    const early = graded.slice(0, Math.ceil(graded.length / 2));
+    const late = graded.slice(Math.ceil(graded.length / 2));
+    const avg = (arr) => arr.reduce((sum, e) => sum + e.gradeScore, 0) / arr.length;
+    const delta = avg(late) - avg(early);
+    const trend = delta > 3 ? "Trending up" : delta < -3 ? "Trending down" : "Holding steady";
+    stats.gradeLast12 = {
+      entries: graded.map((e) => ({ id: e.id, score: e.gradeScore, grade: e.grade })),
+      // The two real, actual grades at either end of the window — not an
+      // invented "average letter", which the score->letter mapping (rank
+      // within that one room) has no clean way to produce across different
+      // rooms.
+      caption: `${trend} — ${graded[0].grade} to ${graded[graded.length - 1].grade}`
+    };
+  }
+
+  // Best mock — highest recorded gradeScore. rank/teams are already stored
+  // per entry, so "1st of 12" needs no recomputation.
+  const withScore = list.filter((e) => typeof e.gradeScore === "number");
+  if (withScore.length) {
+    const best = withScore.reduce((a, b) => (b.gradeScore > a.gradeScore ? b : a));
+    stats.bestMock = {
+      id: best.id,
+      grade: best.grade,
+      rank: best.projectedRank,
+      teams: best.teams || best.league.teams,
+      leagueType: leagueTypeLabel(best.league),
+      dateCompleted: new Date(best.completedAt)
+        .toLocaleDateString([], { month: "short", day: "numeric" })
+    };
+  }
+
+  // Weakest spot — the position that shows up most often as a genuinely
+  // below-replacement starter, and what share of (weakestSpot-bearing)
+  // entries it accounts for. Entries with no weakestSpot at all (nothing in
+  // the lineup was below replacement, or recorded before this field
+  // existed) don't count toward the denominator either way.
+  const weakCounts = new Map();
+  let weakTotal = 0;
+  list.forEach((entry) => {
+    if (!entry.weakestSpot) return;
+    weakTotal++;
+    weakCounts.set(entry.weakestSpot, (weakCounts.get(entry.weakestSpot) || 0) + 1);
+  });
+  if (weakTotal > 0) {
+    let pos = null, count = 0;
+    weakCounts.forEach((c, p) => { if (c > count) { count = c; pos = p; } });
+    stats.weakestSpot = { pos, pct: Math.round((count / weakTotal) * 100) };
+  }
+
+  // Avg roster VORP, and the room average to put it beside — both means
+  // over only the entries that actually carry the field, not treated as
+  // zero for anything recorded before it existed.
+  const withVorp = list.filter((e) => typeof e.rosterVorp === "number");
+  const withRoomVorp = list.filter((e) => typeof e.roomAvgRosterVorp === "number");
+  if (withVorp.length) {
+    stats.avgRosterVorp = {
+      mine: withVorp.reduce((sum, e) => sum + e.rosterVorp, 0) / withVorp.length,
+      room: withRoomVorp.length
+        ? withRoomVorp.reduce((sum, e) => sum + e.roomAvgRosterVorp, 0) / withRoomVorp.length
+        : null
+    };
+  }
+
+  // The launcher's quick-start presets — each one names a real past entry
+  // rather than a synthesised config, so starting it is just replaying that
+  // entry's own league and seat (startFromHistoryLeague(), by id) instead of
+  // reconstructing a league object here that a start path would have to
+  // trust blindly.
+  stats.presets = {
+    repeatLast: { id: list[0].id, teams: list[0].teams || list[0].league.teams,
+                  scoring: list[0].league.scoring },
+    mostRun: (function () {
+      const counts = new Map();
+      list.forEach((e) => {
+        const key = (e.teams || e.league.teams) + "-" + e.league.scoring;
+        const row = counts.get(key) || { count: 0, entry: e };
+        row.count++;
+        counts.set(key, row);
+      });
+      let best = null;
+      counts.forEach((row) => { if (!best || row.count > best.count) best = row; });
+      return best
+        ? { id: best.entry.id, teams: best.entry.teams || best.entry.league.teams,
+            scoring: best.entry.league.scoring }
+        : null;
+    })(),
+    deepestBoard: (function () {
+      const best = list.reduce((a, b) => {
+        const ta = (a.teams || a.league.teams) * a.league.rounds;
+        const tb = (b.teams || b.league.teams) * b.league.rounds;
+        return tb > ta ? b : a;
+      });
+      return { id: best.id, teams: best.teams || best.league.teams, scoring: best.league.scoring };
+    })()
+  };
+
+  return stats;
+}
+
+// Replays one history entry's exact league and seat in a single action —
+// the launcher's presets ("Repeat last setup" and the two derived ones)
+// name an entry by id via historyStats() rather than carrying a whole league
+// object out to React, so applying one is "look this up and start it", the
+// same lookup openHistoryDraft() already does, just starting a fresh draft
+// instead of reopening a finished one's analysis. Delegates the actual start
+// to the bridge's own startDraft() rather than repeating its sequence
+// (setupProblem() check, buildBoard(), seed, startedAt, runCPUs()) a second
+// time — this only owns getting `league` into the right shape first.
+function startFromHistoryLeague(id) {
+  const entry = readHistory().find((e) => e.id === id);
+  if (!entry) return false;
+  Object.assign(league, JSON.parse(JSON.stringify(entry.league)));
+  if (league.superflex === undefined) league.superflex = 0;
+  return window.JukeEngine.startDraft({ mySlot: entry.mySlot, clockLength: entry.clockLength });
 }
 
 // The Locker's "In progress" card. Null once there's nothing to resume, or
@@ -5642,11 +5915,40 @@ function inProgressSummary() {
   if (!data || !data.picks || !data.picks.length) return null;
   const total = data.league.teams * data.league.rounds;
   if (data.picks.length >= total) return null;
+
+  // onTheClock() reads the live league/state.picks; this asks the identical
+  // question of a saved draft that may not be the one currently loaded, so
+  // it calls DraftEngine directly against the save's own data instead.
+  const clock = DraftEngine.onTheClock(data.league, data.picks.length);
+
+  // Whose pick each index in the flat name list was, without storing it —
+  // the same snake arithmetic onTheClock() itself just used, run backwards
+  // over what's already been picked rather than a second, stored copy of
+  // whose turn it was. A name that no longer resolves (the board is rebuilt
+  // nightly) is dropped rather than shown broken, same posture
+  // resumeDraft() already takes when a whole save fails to resolve.
+  const myPicks = [];
+  data.picks.forEach(function (name, i) {
+    if (DraftEngine.pickInfo(i + 1, data.league.teams).slot !== data.mySlot) return;
+    const player = board.find((p) => p.name === name);
+    if (player) myPicks.push({ name: player.name, pos: player.pos });
+  });
+
   return {
     leagueType: leagueTypeLabel(data.league),
     pickPosition: ordinal(data.mySlot + 1),
     made: data.picks.length,
-    total: total
+    total: total,
+    teams: data.league.teams,
+    rounds: data.league.rounds,
+    scoring: scoringLabel(data.league.scoring),
+    startedAt: data.startedAt || null,
+    round: clock ? clock.round : null,
+    onClockSlot: clock ? clock.slot : null,
+    myTurn: !!clock && clock.slot === data.mySlot,
+    // Most recent last, so the band can show the last 4-6 without an extra
+    // reverse at render time.
+    recentPicks: myPicks.slice(-6)
   };
 }
 
@@ -6700,6 +7002,7 @@ $("startBtn").addEventListener("click", function () {
   state.mySlot      = Number(slotSelect.value);
   state.clockLength = Number($("pickClock").value);
   state.started     = true;
+  state.startedAt   = Date.now();
 
   // Built here as well as on every setup change, because this is the point
   // the league stops moving and the ranks and tiers become the ones the
@@ -7104,6 +7407,12 @@ window.JukeEngine = {
   // objects, not raw history entries — a card needs a label and a date, not
   // a league object and a picks array to derive one from itself.
   historyList:  () => readHistory().map(historySummary),
+  // The tendencies strip's data — see historyStats()'s own comment for what
+  // each field means and why a stat that can't be computed cleanly is just
+  // absent rather than zeroed.
+  historyStats: historyStats,
+  // The launcher's presets — see startFromHistoryLeague()'s own comment.
+  startFromHistoryLeague: startFromHistoryLeague,
   // The Locker's completed drafts had a way to open one and no way to
   // remove one — this is the plain filter-and-rewrite clearSave() already
   // does for the single in-progress save, extended to one entry among many.
@@ -7130,6 +7439,7 @@ window.JukeEngine = {
     state.mySlot      = opts.mySlot;
     state.clockLength = opts.clockLength;
     state.started     = true;
+    state.startedAt   = Date.now();
     buildBoard();
     state.seed = Math.floor(Math.random() * 1000000);
     applyJitter();

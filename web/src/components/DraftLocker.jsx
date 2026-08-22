@@ -1,155 +1,82 @@
-import { useReducer, useState } from 'react'
+import { useReducer } from 'react'
 import { useEngine, useJukeTick } from '../hooks/useJukeEngine.js'
-import DraftHistoryCard from './DraftHistoryCard.jsx'
-import DraftInProgressCard from './DraftInProgressCard.jsx'
+import NewMockPanel from './NewMockPanel.jsx'
+import TendenciesStrip from './TendenciesStrip.jsx'
+import InProgressBand from './InProgressBand.jsx'
+import LockerTable from './LockerTable.jsx'
 
-const TABS = [
-  { key: 'progress', label: 'In Progress' },
-  { key: 'completed', label: 'Completed' },
-]
-
-// onStart, not a scroll to a form on this same page — that form
-// (ConfigureDraftForm.jsx) is gone; every league setting it held now
-// lives on the settings modal, which only exists once you're past this
-// screen. This is a brand-new visitor's very first action in the app, so
-// it goes to the same place "Enter Draft Room" does.
-function EmptyState({ title, body, onStart }) {
-  return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-5 px-6 py-16 text-center">
-      <svg width="88" height="88" viewBox="0 0 88 88" fill="none" aria-hidden="true">
-        <circle cx="44" cy="44" r="43" stroke="url(#locker-empty-ring)" strokeWidth="1.5" strokeDasharray="4 6" />
-        <rect x="26" y="30" width="36" height="30" rx="4" stroke="#00E5FF" strokeOpacity="0.5" strokeWidth="1.5" />
-        <path d="M26 38h36" stroke="#00E5FF" strokeOpacity="0.5" strokeWidth="1.5" />
-        <circle cx="44" cy="34" r="1.6" fill="#00E5FF" fillOpacity="0.7" />
-        <path d="M38 47l4 4 8-8" stroke="#7B1FA2" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-        <defs>
-          <linearGradient id="locker-empty-ring" x1="0" y1="0" x2="88" y2="88" gradientUnits="userSpaceOnUse">
-            <stop stopColor="#00E5FF" stopOpacity="0.5" />
-            <stop offset="1" stopColor="#7B1FA2" stopOpacity="0.5" />
-          </linearGradient>
-        </defs>
-      </svg>
-
-      <div>
-        <p className="font-display text-base font-semibold text-white">{title}</p>
-        <p className="mx-auto mt-2 max-w-xs text-sm leading-relaxed text-white/50">{body}</p>
-      </div>
-
-      <button
-        type="button"
-        onClick={onStart}
-        className="rounded-full bg-gradient-to-r from-[#00E5FF] to-[#7B1FA2] px-5 py-2.5 text-sm font-semibold text-white
-                   shadow-glass transition-all duration-200 hover:scale-105 hover:shadow-[0_0_15px_rgba(0,229,255,0.4)]"
-      >
-        Start your first mock
-      </button>
-    </div>
-  )
-}
-
-export default function DraftLocker({ onStartNew }) {
+// Replaces the old tabbed card list (DraftHistoryCard.jsx,
+// DraftInProgressCard.jsx, both deleted) with the handoff's launcher-and-
+// record layout: a title row, an in-progress band when one exists, the
+// launcher beside "Your tendencies," then the full history table. Every
+// child here is presentational — this component owns the one thing that
+// has to live above all of them, which is knowing whether an in-progress
+// draft or history entry changed and needs a re-render.
+export default function DraftLocker({ onStartNew, problem, lobbySlot, onOpenSettings }) {
   const engine = useEngine()
   useJukeTick(engine)
-  const [view, setView] = useState('progress')
-  // clearSave() is a plain localStorage write with no juke:header event
-  // behind it (nothing else in app.js needs to hear about it), so the one
-  // save slot this reads doesn't get an automatic re-render — this forces
-  // one immediately after Discard rather than leaving a stale card up until
-  // some unrelated engine event happens to sweep through.
+  // clearSave()/deleteHistoryDraft() are plain localStorage writes with no
+  // juke:header event behind them (nothing else in app.js needs to hear
+  // about either), so this screen doesn't get an automatic re-render from
+  // the engine tick alone — forced locally instead, same as the previous
+  // implementation did.
   const [, forceLocal] = useReducer((x) => x + 1, 0)
 
-  const inProgress = engine ? engine.inProgressSummary() : null
-  const completed = engine ? engine.historyList() : []
+  if (!engine) return null
 
-  // openHistoryDraft() and resumeSavedDraft() both flip state.started —
-  // engine.js's own data layer, not the screen. DraftRoom.jsx is what
-  // actually decides what's on screen (enteredRoom/started), and this
-  // locker can be reached two ways now: as #/draft-room's own
-  // not-yet-entered state, or directly via #/drafts. The hash push here
-  // covers the second case — a no-op if we're already on #/draft-room,
-  // and what actually leaves the locker screen if we're not. Without it,
-  // resuming from a direct /#drafts link flipped state.started but the
-  // locker just kept showing, since draftsActive alone was enough to keep
-  // rendering it.
-  const analyze = (id) => { if (engine) { engine.openHistoryDraft(id); location.hash = '#/draft-room' } }
-  const resume = () => { if (engine) { engine.resumeSavedDraft(); location.hash = '#/draft-room' } }
-  const discard = () => {
-    if (!engine) return
-    engine.clearSave()
-    forceLocal()
-  }
-  // Same reasoning as discard() above: deleteHistoryDraft() is a plain
-  // localStorage rewrite with no juke:header event behind it, so this card
-  // needs its own forced re-render to actually disappear.
-  const deleteCompleted = (id) => {
-    if (!engine) return
-    engine.deleteHistoryDraft(id)
-    forceLocal()
-  }
+  const league = engine.league()
+  const inProgress = engine.inProgressSummary()
+  const completed = engine.historyList()
+  const stats = engine.historyStats()
+
+  const resume = () => { engine.resumeSavedDraft(); location.hash = '#/draft-room' }
+  const discard = () => { engine.clearSave(); forceLocal() }
+  const analyze = (id) => { engine.openHistoryDraft(id); location.hash = '#/draft-room' }
+  const deleteEntry = (id) => { engine.deleteHistoryDraft(id); forceLocal() }
 
   return (
-    <div className="relative flex h-full flex-col overflow-hidden rounded-2xl border border-white/10 bg-charcoal/60">
-      <div
-        className="pointer-events-none absolute -top-16 right-0 h-56 w-56 rounded-full bg-[#7B1FA2]/25 blur-3xl"
-        aria-hidden="true"
-      />
-
-      <div className="relative shrink-0 border-b border-white/5 px-6 py-5">
-        <h2 className="font-display text-xl font-bold text-white">Your draft locker</h2>
-        <p className="mt-1 text-sm text-white/50">Every mock you've run — in progress or done.</p>
-      </div>
-
-      <div className="relative flex shrink-0 justify-center border-b border-white/5 px-6 py-4">
-        <div className="inline-flex rounded-full border border-slate-800 bg-slate-950/60 p-1">
-          {TABS.map((tab) => (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => setView(tab.key)}
-              aria-pressed={view === tab.key}
-              className={
-                'rounded-full px-5 py-2 text-sm font-semibold transition-colors duration-150 ' +
-                (view === tab.key ? 'bg-teal-500 text-obsidian' : 'text-white/50')
-              }
-            >
-              {tab.label}
-            </button>
-          ))}
+    <div className="mx-auto max-w-[1600px] px-8 py-7">
+      <div className="mb-6 flex items-end justify-between">
+        <div>
+          <h1 className="font-display text-[32px] font-bold text-white">Draft Room</h1>
+          <p className="mt-1 text-sm text-white/50">
+            Set up a mock, pick up where you left off, or see what's already in the locker.
+          </p>
         </div>
+        {stats.total > 0 && (
+          <div className="flex items-center gap-6">
+            <div className="text-right">
+              <p className="font-display text-[23px] font-bold tabular-nums text-white">{stats.total}</p>
+              <p className="text-[10px] uppercase tracking-[0.07em] text-white/50">Mocks run</p>
+            </div>
+            {stats.bestMock && (
+              <div className="text-right">
+                <p className="font-display text-[23px] font-bold tabular-nums text-teal-300">{stats.bestMock.grade}</p>
+                <p className="text-[10px] uppercase tracking-[0.07em] text-white/50">Best grade</p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      {view === 'progress' ? (
-        inProgress ? (
-          <div className="relative flex-1 overflow-y-auto px-6 py-5">
-            <DraftInProgressCard draft={inProgress} onResume={resume} onDiscard={discard} />
-          </div>
-        ) : (
-          <EmptyState
-            title="Nothing in progress"
-            body="Start a mock and it'll sit here while you draft, so you can pick up right where you left off."
-            onStart={onStartNew}
-          />
-        )
-      ) : completed.length === 0 ? (
-        <EmptyState
-          title="Your locker is empty"
-          body="Finish a mock draft and it lands here — league type, your slot, and how the board graded it."
-          onStart={onStartNew}
+      {inProgress && <InProgressBand draft={inProgress} onResume={resume} onDiscard={discard} />}
+
+      <div className="mb-7 flex items-start gap-5">
+        <NewMockPanel
+          engine={engine}
+          league={league}
+          problem={problem}
+          lobbySlot={lobbySlot}
+          onStartNew={onStartNew}
+          presets={stats.presets}
+          onOpenSettings={onOpenSettings}
         />
-      ) : (
-        <div className="relative flex-1 overflow-y-auto px-6 py-5">
-          <div className="flex flex-col gap-3">
-            {completed.map((draft) => (
-              <DraftHistoryCard
-                key={draft.id}
-                draft={draft}
-                onAnalyze={() => analyze(draft.id)}
-                onDelete={() => deleteCompleted(draft.id)}
-              />
-            ))}
-          </div>
+        <div className="min-w-0 flex-1">
+          <TendenciesStrip stats={stats} onAnalyze={analyze} />
         </div>
-      )}
+      </div>
+
+      <LockerTable entries={completed} onAnalyze={analyze} onDeleteConfirmed={deleteEntry} />
     </div>
   )
 }

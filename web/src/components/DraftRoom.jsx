@@ -341,7 +341,7 @@ export default function DraftRoom() {
        locker, exactly what it says on the tin.
 
        Resume and Discard were checked before the Configure column went:
-       DraftInProgressCard inside the Locker owns both, so a saved draft is
+       InProgressBand inside the Locker owns both, so a saved draft is
        still resumable. ConfigureDraftForm only ever read the save to pre-fill
        its own fields — it's gone now (nothing imported it anywhere in the
        app), which is also why DraftLocker's own empty-state CTA needed
@@ -353,18 +353,7 @@ export default function DraftRoom() {
        z-40 would trap this whole overlay beneath it. */
     return (
       <div className="fixed inset-0 z-[60] flex flex-col bg-[#0B0E14] text-white">
-        <LobbyBar
-          problem={problem}
-          startLabel="Enter Draft Room"
-          /* Host-only gating belongs on the real Start Draft action one
-             screen further in, not here — anyone should be able to walk in
-             and look at seats regardless of who the room says can actually
-             begin it. Only a genuinely broken league config (problem) stops
-             you leaving this screen at all. */
-          startDisabled={!!problem}
-          onOpenSettings={() => setSettingsOpen(true)}
-          onStart={enterDraftRoom}
-        />
+        <LobbyBar onOpenSettings={() => setSettingsOpen(true)} />
 
         {settingsOpen && (
           <DraftSettingsModal
@@ -376,10 +365,19 @@ export default function DraftRoom() {
           />
         )}
 
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-3 py-5 lg:px-4">
-          <div className="mx-auto w-full max-w-[1600px]">
-            <DraftLocker onStartNew={enterDraftRoom} />
-          </div>
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          {/* Host-only gating belongs on the real Start Draft action one
+              screen further in, not here — anyone should be able to walk in
+              and look at seats regardless of who the room says can actually
+              begin it. Only a genuinely broken league config (problem) stops
+              the launcher's own CTA from working, same rule LobbyBar used to
+              enforce before this screen owned the action itself. */}
+          <DraftLocker
+            onStartNew={enterDraftRoom}
+            problem={problem}
+            lobbySlot={lobbySlot}
+            onOpenSettings={() => setSettingsOpen(true)}
+          />
         </div>
       </div>
     )
