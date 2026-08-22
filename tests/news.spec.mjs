@@ -52,6 +52,14 @@ async function start(page) {
     location.hash = "#/draft-room";
   });
   expect(await page.evaluate(() => state.started), "draft started").toBe(true);
+
+  /* Decide, not Board, is the tab a draft lands on since the Cockpit rebuild
+     - three recommendation cards and a roster rail, no search field and no
+     player row carrying a name in text a naive click can find. The player
+     list openSheet() below needs, search input included, lives on Board.
+     Every test in this file opens a sheet by name straight after start(), so
+     landing there once here is simpler than repeating the click in each one. */
+  await page.locator("#draftroom-root button").filter({ hasText: /^Board$/ }).click();
   await page.waitForFunction(() => {
     const root = document.getElementById("draftroom-root");
     return root && root.querySelector("input");

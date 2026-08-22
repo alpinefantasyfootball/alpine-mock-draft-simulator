@@ -18,17 +18,25 @@
    counting stats are all sortable through the same raw-key path; ADP,
    points and VORP keep their existing readers. */
 
+// `positions`, where present, is which posFilter values keep this group —
+// undefined means "every position", for the two groups every player has an
+// opinion on. A design review caught the gap this exists to close: with a
+// WR filter active the Passing group was still three columns of em-dashes,
+// which reads as a broken table rather than an irrelevant one. Filtered by
+// PlayerQueueSidebar.jsx, never here — this file stays the one union list
+// Sleeper-style boards already promise, per its own header comment; "ALL"
+// still renders every group exactly as before.
 export const STAT_GROUPS = [
   { label: '', keys: ['adp', 'bye'] },
   { label: 'Projected', keys: ['pts', 'vorp'] },
-  { label: 'Passing', keys: ['py', 'pt', 'pi'] },
-  { label: 'Rushing', keys: ['ra', 'ry', 'rt'] },
+  { label: 'Passing', keys: ['py', 'pt', 'pi'], positions: ['QB'] },
+  { label: 'Rushing', keys: ['ra', 'ry', 'rt'], positions: ['QB', 'RB'] },
   /* No TGT column. Sleeper shows one and their own projections do not
      fill it — measured here too: 0 of 220 players carry a projected
      target, against 157 with projected receptions. CLAUDE.md's rule about
      it is exactly this case — copy the layout, not the gap in it — so the
      column that would be a dash for everybody is simply not drawn. */
-  { label: 'Receiving', keys: ['rc', 'cy', 'ct'] },
+  { label: 'Receiving', keys: ['rc', 'cy', 'ct'], positions: ['RB', 'WR', 'TE'] },
 ]
 
 /* `dir` is which way reads as "best first" on the very first click of a

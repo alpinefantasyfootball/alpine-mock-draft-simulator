@@ -25,7 +25,7 @@
 */
 
 import { test, expect } from "@playwright/test";
-import { openApp } from "./helpers.mjs";
+import { openApp, startSoloDraft } from "./helpers.mjs";
 
 /* Set the league through the bridge, which is what the React settings screen
    does — the legacy version wrote a dozen <select> values and dispatched
@@ -35,32 +35,6 @@ async function configure(page, patch) {
     await page.evaluate((p) => window.JukeEngine.setLeague(p), patch);
     await page.waitForTimeout(300);
   }
-}
-
-/* The real buttons, in the real lobby — now two clicks, not one.
-   "Enter Draft Room" only exists since the Settings & Locker / choose-your-
-   seat split; a run against an older build (or a page that landed on
-   #/draft-room mid-draft, already past it) won't have that button at all,
-   which is why it's optional here rather than asserted. */
-async function startViaButton(page) {
-  const enter = page.locator('#draftroom-root button:text-is("Enter Draft Room")');
-  if (await enter.count()) await enter.click();
-
-  const refused = await page.evaluate(() => {
-    const root = document.getElementById("draftroom-root");
-    const btn = [...root.querySelectorAll("button")]
-      .find((b) => /start draft|start for everyone/i.test(b.textContent || ""));
-    return btn ? btn.disabled : "no button";
-  });
-  expect(refused, "the Start button refused this league").toBe(false);
-
-  await page.evaluate(() => {
-    const root = document.getElementById("draftroom-root");
-    [...root.querySelectorAll("button")]
-      .find((b) => /start draft|start for everyone/i.test(b.textContent || "")).click();
-  });
-  await page.waitForFunction(() => state.started, null, { timeout: 15000 });
-  expect(await page.evaluate(() => state.started), "the draft actually started").toBe(true);
 }
 
 /* Run it out. autoDraftRest() is unreachable from this UI (see the header),
@@ -102,7 +76,7 @@ test("the default league drafts to the end", async ({ browser }) => {
   const page = await openApp(context, "#/draft-room");
 
   await configure(page, {});
-  await startViaButton(page);
+  await startSoloDraft(page);
   const out = await finishDraft(page);
 
   expect(out.picks, "140 picks").toBe(140);
@@ -126,7 +100,7 @@ test("twelve teams, fifteen rounds, full PPR, bench six", async ({ browser }) =>
      it, correctly, and for several sessions the routine quietly described a
      league the app will not run. */
   await configure(page, { teams: 12, rounds: 15, scoring: "ppr", bench: 6 });
-  await startViaButton(page);
+  await startSoloDraft(page);
   const out = await finishDraft(page);
 
   expect(out.picks, "180 picks").toBe(180);
@@ -156,8 +130,10 @@ for (const pos of ["ALL", "QB", "RB", "WR", "TE", "K", "DST"]) {
 
     await configure(page, { teams: 12 });
     // The claimable seat board is the choose-your-seat screen now, one
-    // click past Settings & Locker — not visible until this fires.
-    await page.locator('#draftroom-root button:text-is("Enter Draft Room")').click();
+    // click past the Locker — not visible until this fires. "Start mock
+    // draft" (NewMockPanel.jsx), not the retired "Enter Draft Room" —
+    // see startSoloDraft()'s own comment in helpers.mjs.
+    await page.locator('#draftroom-root button:text-is("Start mock draft")').click();
     await page.evaluate(() => {
       // The eleventh seat, which is where the real report came from.
       const root = document.getElementById("draftroom-root");
@@ -165,7 +141,7 @@ for (const pos of ["ALL", "QB", "RB", "WR", "TE", "K", "DST"]) {
         .filter((b) => /^(Claim|You|Taken)$/.test(b.textContent.trim()));
       chips[10].click();
     });
-    await startViaButton(page);
+    await startSoloDraft(page);
 
     // Set the panel's filter through the chip a person would press.
     await page.evaluate((p) => {
@@ -220,7 +196,7 @@ test("every lineup fields the best eligible player", async ({ browser }) => {
   const page = await openApp(context, "#/draft-room");
 
   await configure(page, { teams: 12 });
-  await startViaButton(page);
+  await startSoloDraft(page);
   await finishDraft(page);
 
   const out = await page.evaluate(() => {
@@ -269,7 +245,7 @@ test("every lineup fields the best eligible player", async ({ browser }) => {
 test("solo autopick drafts my seat and nobody else's", async ({ browser }) => {
   const context = await browser.newContext();
   const page = await openApp(context, "#/draft-room");
-  await startViaButton(page);
+  await startSoloDraft(page);
 
   const out = await page.evaluate(() => {
     const mine = state.mySlot;
@@ -308,7 +284,7 @@ test("solo autopick drafts my seat and nobody else's", async ({ browser }) => {
 test("a filled starting slot is not a cap, and does not claim to be", async ({ browser }) => {
   const context = await browser.newContext();
   const page = await openApp(context, "#/draft-room");
-  await startViaButton(page);
+  await startSoloDraft(page);
 
   const out = await page.evaluate(() => {
     // Reach my turn, take a tight end, then reach my turn again so the row
@@ -372,7 +348,7 @@ test("auto-draft the rest finishes the board, and is not offered in a room",
   async ({ browser }) => {
     const context = await browser.newContext();
     const page = await openApp(context, "#/draft-room");
-    await startViaButton(page);
+    await startSoloDraft(page);
 
     // Part way in by hand, which is when a person reaches for it.
     await page.evaluate(() => {
@@ -385,7 +361,12 @@ test("auto-draft the rest finishes the board, and is not offered in a room",
       render();
     });
 
-    const finish = page.locator('#draftroom-root button[aria-label="Auto-draft the rest"]');
+    // Behind the kebab now (DraftMenuOverlay.jsx), not a direct header
+    // button, and its own visible text rather than an aria-label nothing
+    // sets any more.
+    const menuBtn = page.locator('#draftroom-root button[aria-label="Draft options"]');
+    const finish = page.locator('#draftroom-root button').filter({ hasText: /^Auto-draft the rest/ });
+    await menuBtn.click();
     await expect(finish, "offered while there is a board left to draft").toBeVisible();
     await finish.click();
 
@@ -408,7 +389,16 @@ test("auto-draft the rest finishes the board, and is not offered in a room",
     // The fallback must not reach for a kicker to keep the loop moving.
     expect(out.kickerRounds.length ? Math.min(...out.kickerRounds) : 99).toBeGreaterThanOrEqual(13);
 
-    // Nothing left to draft, so nothing to offer.
+    /* Nothing left to draft, so nothing to offer - and by the time the board
+       is full there is no menu left to reopen and check it in anyway.
+       draftOver() opens the same full-screen report grade.spec.mjs's
+       readAnalysisScreen() had to learn to step around, over the whole
+       header including this kebab - covering it rather than hiding it, so
+       toBeVisible() alone can't see that, and a click meant to reopen the
+       menu would hang against that overlay forever rather than ever finding
+       an empty one. The menu already closed on its own last use above, and
+       finish re-queries the live DOM on every check rather than trusting a
+       stale handle, so simply asking again is both correct and enough. */
     await expect(finish, "and it goes away when the board is full").toHaveCount(0);
 
     await context.close();
@@ -434,7 +424,7 @@ test("the suggestion model's discount is capped in absolute picks, not just perc
   async ({ browser }) => {
     const context = await browser.newContext();
     const page = await openApp(context, "#/draft-room");
-    await startViaButton(page);
+    await startSoloDraft(page);
 
     const out = await page.evaluate(() => {
       const pool = board.filter((p) => !p.drafted);

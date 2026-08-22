@@ -35,7 +35,15 @@ export default function DraftLocker({ onStartNew, problem, lobbySlot, onOpenSett
   const deleteEntry = (id) => { engine.deleteHistoryDraft(id); forceLocal() }
 
   return (
-    <div className="mx-auto max-w-[1600px] px-8 py-7">
+    // min-h-full + flex-col, with the Locker table wrapper below taking
+    // flex-1: the table's own card stretches down to the bottom of the
+    // scroll container instead of stopping wherever its (often short) row
+    // list ends and leaving bare background beneath it. min-h-full rather
+    // than h-full so a long history — many rows, "Load 20 more" pressed a
+    // few times — is still free to grow taller than the viewport and let
+    // the real ancestor scroller (DraftRoom.jsx's own overflow-y-auto) take
+    // over, rather than being capped at 100% and clipping.
+    <div className="mx-auto flex min-h-full max-w-[1600px] flex-col px-8 py-7">
       <div className="mb-6 flex items-end justify-between">
         <div>
           <h1 className="font-display text-[32px] font-bold text-white">Draft Room</h1>
@@ -49,10 +57,20 @@ export default function DraftLocker({ onStartNew, problem, lobbySlot, onOpenSett
               <p className="font-display text-[23px] font-bold tabular-nums text-white">{stats.total}</p>
               <p className="text-[10px] uppercase tracking-[0.07em] text-white/50">Mocks run</p>
             </div>
-            {stats.bestMock && (
+            {/* Was "Best grade" — a single grade at hero size reads as a
+                badge of honor, and it's exactly as likely to be a D- as an
+                A+ (the grading itself is a separate, known issue). Roster
+                VORP has no such failure mode: it's a real per-user number
+                the engine already tracks, and there's no reading of it
+                that lands as "you did badly," so it's safe to headline at
+                any sample size. */}
+            {stats.avgRosterVorp && (
               <div className="text-right">
-                <p className="font-display text-[23px] font-bold tabular-nums text-teal-300">{stats.bestMock.grade}</p>
-                <p className="text-[10px] uppercase tracking-[0.07em] text-white/50">Best grade</p>
+                <p className="font-display text-[23px] font-bold tabular-nums text-teal-300">
+                  {stats.avgRosterVorp.mine >= 0 ? '+' : ''}
+                  {stats.avgRosterVorp.mine.toFixed(1)}
+                </p>
+                <p className="text-[10px] uppercase tracking-[0.07em] text-white/50">Avg roster VORP</p>
               </div>
             )}
           </div>
@@ -61,7 +79,13 @@ export default function DraftLocker({ onStartNew, problem, lobbySlot, onOpenSett
 
       {inProgress && <InProgressBand draft={inProgress} onResume={resume} onDiscard={discard} />}
 
-      <div className="mb-7 flex items-start gap-5">
+      {/* items-stretch (the default — items-start used to override it) so
+          Your Tendencies always matches New Mock panel's height instead of
+          sitting a few lines tall beside it. Below the five-mock gate that
+          panel is a short honest-line message; stretched to the panel's
+          full height, it reads as a considered empty state instead of the
+          ~500px gap this replaced. */}
+      <div className="mb-7 flex items-stretch gap-5">
         <NewMockPanel
           engine={engine}
           league={league}
@@ -72,11 +96,13 @@ export default function DraftLocker({ onStartNew, problem, lobbySlot, onOpenSett
           onOpenSettings={onOpenSettings}
         />
         <div className="min-w-0 flex-1">
-          <TendenciesStrip stats={stats} onAnalyze={analyze} />
+          <TendenciesStrip stats={stats} />
         </div>
       </div>
 
-      <LockerTable entries={completed} onAnalyze={analyze} onDeleteConfirmed={deleteEntry} />
+      <div className="min-h-0 flex-1">
+        <LockerTable entries={completed} onAnalyze={analyze} onDeleteConfirmed={deleteEntry} />
+      </div>
     </div>
   )
 }

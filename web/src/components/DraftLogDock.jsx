@@ -97,6 +97,9 @@ export default function DraftLogDock({ recentOthers }) {
   // show the moment a draft exists — same reasoning PlayerHub.jsx's mobile
   // strip defaults to 'players' rather than its own Chat tab.
   const [tab, setTab] = useState('log')
+  // border-slate-700, not -800 — see SidePanel.jsx's own comment. This
+  // panel's tab row (Chat/Log/Picks) is the other half of the seam a
+  // design review flagged: the two adjacent tab strips read as one bar.
 
   if (!engine) return null
 
@@ -107,8 +110,8 @@ export default function DraftLogDock({ recentOthers }) {
   const pickItems = buildPickItems(picks)
 
   return (
-    <div className="flex h-full w-full min-h-0 flex-col border-r border-slate-800 bg-slate-900/40 last:border-r-0">
-      <div className="flex shrink-0 border-b border-slate-800">
+    <div className="flex h-full w-full min-h-0 flex-col border-r border-slate-700 bg-slate-900/40 last:border-r-0">
+      <div className="flex shrink-0 border-b border-slate-700">
         {TABS.map((t) => (
           <button
             key={t.key}

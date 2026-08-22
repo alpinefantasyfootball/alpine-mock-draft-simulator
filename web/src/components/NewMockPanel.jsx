@@ -24,6 +24,37 @@ export default function NewMockPanel({ engine, league, problem, lobbySlot, onSta
     onStartNew()
   }
 
+  // "Repeat last setup" names the same {teams, scoring} the rows above it
+  // already print — true every time this screen loads right after a mock
+  // finishes, since nothing resets `league` on completion. Offering it then
+  // is offering to duplicate a choice nobody has to make: the settings
+  // above are already exactly that setup. It only earns its place back if
+  // the live league has since diverged from the last draft actually run —
+  // Edit setup pressed and changed, or a different preset started and
+  // abandoned before drafting — at which point it's a real, different
+  // choice again ("go back to what I last ran") rather than an echo.
+  const repeatsPanelAbove =
+    presets && presets.repeatLast &&
+    presets.repeatLast.teams === league.teams &&
+    presets.repeatLast.scoring === league.scoring
+
+  // The launcher's three candidate presets, minus a redundant "repeat last"
+  // and de-duped by id — two of the three can legitimately name the same
+  // history entry (the last mock run was also the most-run format), shown
+  // once rather than twice under two different labels for the identical
+  // click. Computed here rather than inline in the JSX below so the section
+  // heading can ask the same question the list answers: nothing left after
+  // filtering means no "Or start from" section at all, not an empty one.
+  const presetButtons = presets
+    ? [
+        presets.repeatLast && !repeatsPanelAbove && { ...presets.repeatLast, meta: 'Repeat last setup' },
+        presets.mostRun && { ...presets.mostRun, meta: 'Most run' },
+        presets.deepestBoard && { ...presets.deepestBoard, meta: 'Deepest board' },
+      ]
+        .filter(Boolean)
+        .filter((p, i, arr) => arr.findIndex((x) => x.id === p.id) === i)
+    : []
+
   return (
     <div
       className="w-[396px] shrink-0 rounded-xl border border-white/[0.09] p-[22px]"
@@ -71,41 +102,31 @@ export default function NewMockPanel({ engine, league, problem, lobbySlot, onSta
       </button>
       {problem && <p className="mt-2 text-[11px] leading-relaxed text-rose-300/90">{problem}</p>}
 
-      {presets && (
+      {presetButtons.length > 0 && (
         <div className="mt-[18px] border-t border-white/[0.06] pt-4">
           <p className="mb-[10px] text-[10px] font-semibold uppercase tracking-[0.09em] text-white/50">
             Or start from
           </p>
           <div className="flex flex-col gap-[7px]">
-            {[
-              presets.repeatLast && { ...presets.repeatLast, meta: 'Repeat last setup' },
-              presets.mostRun && { ...presets.mostRun, meta: 'Most run' },
-              presets.deepestBoard && { ...presets.deepestBoard, meta: 'Deepest board' },
-            ]
-              // Two presets can legitimately name the same entry (the last
-              // mock run was also the most-run format) — shown once, not
-              // twice under two different labels for the identical click.
-              .filter(Boolean)
-              .filter((p, i, arr) => arr.findIndex((x) => x.id === p.id) === i)
-              .map((preset) => (
-                <button
-                  key={preset.meta}
-                  type="button"
-                  onClick={() => startPreset(preset.id)}
-                  className="flex items-center justify-between rounded-lg border border-white/[0.07] bg-white/[0.02] px-[13px] py-[10px] text-left transition-colors duration-150 hover:border-teal-400/40 hover:bg-teal-400/5"
-                >
-                  <span className="font-body text-sm font-medium text-white/85">
-                    {preset.meta === 'Repeat last setup'
-                      ? 'Repeat last setup'
-                      : `${preset.teams}-team ${scoringNames[preset.scoring] || preset.scoring}`}
-                  </span>
-                  <span className="text-xs tabular-nums text-white/50">
-                    {preset.meta === 'Repeat last setup'
-                      ? `${preset.teams}-team · ${scoringNames[preset.scoring] || preset.scoring}`
-                      : preset.meta}
-                  </span>
-                </button>
-              ))}
+            {presetButtons.map((preset) => (
+              <button
+                key={preset.meta}
+                type="button"
+                onClick={() => startPreset(preset.id)}
+                className="flex items-center justify-between rounded-lg border border-white/[0.07] bg-white/[0.02] px-[13px] py-[10px] text-left transition-colors duration-150 hover:border-teal-400/40 hover:bg-teal-400/5"
+              >
+                <span className="font-body text-sm font-medium text-white/85">
+                  {preset.meta === 'Repeat last setup'
+                    ? 'Repeat last setup'
+                    : `${preset.teams}-team ${scoringNames[preset.scoring] || preset.scoring}`}
+                </span>
+                <span className="text-xs tabular-nums text-white/50">
+                  {preset.meta === 'Repeat last setup'
+                    ? `${preset.teams}-team · ${scoringNames[preset.scoring] || preset.scoring}`
+                    : preset.meta}
+                </span>
+              </button>
+            ))}
           </div>
         </div>
       )}

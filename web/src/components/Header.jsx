@@ -6,14 +6,19 @@ import ComingSoonModal from './ComingSoonModal.jsx'
 // Same-page anchors — this site has no router (App.jsx just renders
 // <Homepage/>), so "navigation" below the logo is real content one scroll
 // away, not a route. #proof and #rooms are ShowYourWorking.jsx's and
-// RoomsGrid.jsx's own section ids; #scores is the new scores strip's.
-// scroll-padding-top on <html> (see index.html) is what keeps the sticky
-// header from slicing into whichever section one of these lands on.
+// RoomsGrid.jsx's own section ids. scroll-padding-top on <html> (see
+// index.html) is what keeps the sticky header from slicing into whichever
+// section one of these lands on.
+//
+// No "Scores" entry — the live-score strip it pointed at was pure NFL
+// schedule/score content on a page selling draft prep, off-message in
+// August and actively wrong once real games start counting, and it's been
+// removed from the homepage entirely (a design review's call). Nothing
+// left for this link to point at.
 const NAV_LINKS = [
   { label: 'How It Works', href: '#proof' },
   { label: 'The Rooms', href: '#rooms' },
   { label: 'Draft Room', href: '#/draft-room' },
-  { label: 'Scores', href: '#scores' },
 ]
 
 export default function Header() {

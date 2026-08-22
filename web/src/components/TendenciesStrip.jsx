@@ -16,6 +16,15 @@ import { POS_SOLID } from './draftRoomPositions.js'
 // table that happened to still agree with the real one today and had no
 // way to keep agreeing tomorrow.
 
+// Below this many completed mocks, every one of the six aggregates below
+// reads as a coincidence rather than a tendency: "most drafted, 2 of 2" and
+// "round 1 position: RB 100%" are both trivially true of a single draft,
+// and a two-point "grade, last 12" trend is two grades, not a trend. Five
+// is the point where "most drafted" stops being "the only player you've
+// ever taken" and a trend has more than one gap to average over — still a
+// small sample, but no longer a coin flip dressed as an insight.
+const MIN_MOCKS_FOR_TENDENCIES = 5
+
 function Card({ label, children }) {
   return (
     <div className="rounded-xl border border-white/[0.07] bg-charcoal p-4">
@@ -25,8 +34,48 @@ function Card({ label, children }) {
   )
 }
 
-export default function TendenciesStrip({ stats, onAnalyze }) {
-  if (!stats || !stats.total) return null
+// The header row is shared between the gated placeholder and the real grid
+// below — same title, same right-aligned progress/context line — so the
+// panel doesn't visually reset into a different-looking widget the moment
+// the fifth mock lands.
+function StripHeader({ children }) {
+  return <div className="mb-3 flex items-baseline justify-between">{children}</div>
+}
+
+export default function TendenciesStrip({ stats }) {
+  const total = (stats && stats.total) || 0
+
+  // h-full pairs with DraftLocker's row switching to items-stretch: this
+  // box fills exactly as much height as New Mock panel takes, rather than
+  // sitting a few lines tall in a sea of blank space beside a much taller
+  // panel — which is what "500px of dead space to the right of New Mock"
+  // actually was, measured on this exact screen with fewer than five mocks.
+  // Covers zero mocks too (0 < 5): a first-time visitor gets the same
+  // honest "not yet" box instead of the empty flex-1 slot that used to sit
+  // beside New Mock panel until a draft had ever been completed.
+  if (total < MIN_MOCKS_FOR_TENDENCIES) {
+    return (
+      <div className="flex h-full flex-col">
+        <StripHeader>
+          <h2 className="font-display text-[23px] font-bold text-white">Your tendencies</h2>
+          <span className="text-xs tabular-nums text-white/50">
+            {total} of {MIN_MOCKS_FOR_TENDENCIES} mocks
+          </span>
+        </StripHeader>
+        <div className="flex flex-1 flex-col items-center justify-center rounded-xl border border-white/[0.07] bg-charcoal/60 p-8 text-center">
+          <p className="max-w-[320px] text-sm text-white/60">
+            Run a few more mocks and Juke will start showing your tendencies.
+          </p>
+          {/* The one real, non-misleading number worth stating below the
+              threshold — how many mocks it's actually counted, not a
+              placeholder pretending to be an insight. */}
+          <p className="mt-3 text-xs tabular-nums text-white/40">
+            {total} mock{total === 1 ? '' : 's'} logged so far
+          </p>
+        </div>
+      </div>
+    )
+  }
 
   const cards = []
 
@@ -88,23 +137,16 @@ export default function TendenciesStrip({ stats, onAnalyze }) {
     )
   }
 
-  if (stats.bestMock) {
-    cards.push(
-      <button key="bestMock" type="button" onClick={() => onAnalyze(stats.bestMock.id)} className="block text-left">
-        <Card label="Best mock">
-          <div className="flex items-baseline gap-2">
-            <span className="font-display text-[32px] font-bold text-teal-300">{stats.bestMock.grade}</span>
-            <span className="text-xs text-white/60">
-              {stats.bestMock.rank ? `${stats.bestMock.rank} of ${stats.bestMock.teams}` : `of ${stats.bestMock.teams}`}
-            </span>
-          </div>
-          <p className="mt-1 text-xs text-white/50">
-            {stats.bestMock.leagueType} · {stats.bestMock.dateCompleted}
-          </p>
-        </Card>
-      </button>
-    )
-  }
+  // bestMock and avgRosterVorp deliberately don't have cards here any more.
+  // avgRosterVorp moved to DraftLocker's own hero-stat row (see the comment
+  // there) — showing it twice on one screen is the same "which number do I
+  // believe" problem CLAUDE.md's "one number may not have three names" rule
+  // already covers. bestMock never moved anywhere: a single grade in a
+  // 32px display font is the exact "failing grade as a badge of honor"
+  // shape the hero-stat fix exists to remove, and it's the one card here
+  // that stayed statistically thin even past the five-mock gate — it names
+  // your best of N, which is a real fact at any N, but "best of 1" reads
+  // no differently on screen than "best of 20."
 
   if (stats.weakestSpot) {
     cards.push(
@@ -120,35 +162,24 @@ export default function TendenciesStrip({ stats, onAnalyze }) {
     )
   }
 
-  if (stats.avgRosterVorp) {
-    cards.push(
-      <Card key="avgRosterVorp" label="Avg roster VORP">
-        <p className="font-display text-[32px] font-bold tabular-nums text-white">
-          {stats.avgRosterVorp.mine >= 0 ? '+' : ''}
-          {stats.avgRosterVorp.mine.toFixed(1)}
-        </p>
-        {stats.avgRosterVorp.room !== null && (
-          <p className="mt-1 text-xs text-white/50">
-            Room average {stats.avgRosterVorp.room >= 0 ? '+' : ''}
-            {stats.avgRosterVorp.room.toFixed(1)}
-          </p>
-        )}
-      </Card>
-    )
-  }
-
   // Per the handoff: a stat that can't be computed cleanly doesn't render a
   // placeholder — the whole strip is simply shorter. An empty result (every
   // entry pre-dates every new field) means no strip at all.
   if (cards.length === 0) return null
 
   return (
-    <div>
-      <div className="mb-3 flex items-baseline justify-between">
+    <div className="flex h-full flex-col">
+      <StripHeader>
         <h2 className="font-display text-[23px] font-bold text-white">Your tendencies</h2>
         <span className="text-xs text-white/50">Across all {stats.total} mocks</span>
-      </div>
-      <div className="grid grid-cols-3 gap-[10px]">{cards}</div>
+      </StripHeader>
+      {/* Four candidate cards, two columns — a clean 2x2 rather than the
+          three-wide grid that left an empty bottom-right cell whenever a
+          fifth card (now removed) made it three-on-top, two-below. Fewer
+          than four real cards still lays out cleanly: a lone third card
+          sits alone on the left of its row instead of leaving a
+          conspicuous gap on the right of a wider row. */}
+      <div className="grid grid-cols-2 gap-[10px]">{cards}</div>
     </div>
   )
 }

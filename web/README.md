@@ -39,19 +39,20 @@ Cloudflare Pages deploy produces.
 ## Structure
 
 - `src/components/Homepage.jsx` — composes the page: `Header`, `Hero`,
-  `ScoresStrip`, `ShowYourWorking`, `RoomsGrid`, `ClosingCta`, plus its own
-  footer.
+  `ShowYourWorking`, `RoomsGrid`, `ClosingCta`, plus its own footer.
 - `src/components/Header.jsx` / `Ticker.jsx` — the sticky two-row header
   (nav + logo, then a small marquee of facts read live off the board via
   the bridge).
-- `src/components/Hero.jsx` — the "Live board" preview, drafted live via
-  `JukeEngine.shotPicks()`.
-- `src/components/ScoresStrip.jsx` — real ESPN scores via
-  `JukeEngine.fetchScores()`, in a horizontally-scrollable in-flow section.
-  Renders nothing when there are none, matching the legacy score strip's
-  own contract.
-- `src/components/ShowYourWorking.jsx` — the live PPR re-ranking demo,
-  scored through `JukeEngine.pointsUnder()` under the real scoring rules.
+- `src/components/Hero.jsx` / `ScoringDemoCard.jsx` — the headline, and the
+  live PPR re-ranking demo beside it (standard/half/full PPR, scored
+  through `JukeEngine.pointsUnder()` under the real scoring rules). Used to
+  be a static, non-interactive board preview here with the real demo
+  further down the page; a design review flagged the one genuinely
+  interactive proof on the page as buried below a full scroll, so it moved
+  up and `ShowYourWorking.jsx` no longer carries a second copy of it.
+- `src/components/ShowYourWorking.jsx` — the three "why" cards underneath
+  the demo's own claim: live rescoring, points above replacement, nightly
+  refresh.
 - `src/components/RoomsGrid.jsx` / `RoomCard.jsx` — the six-room grid,
   reading the real room list from `JukeEngine.rooms()`. Non-live cards open
   `ComingSoonModal.jsx`.

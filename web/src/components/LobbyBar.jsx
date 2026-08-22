@@ -1,7 +1,10 @@
+import { useRef } from 'react'
 import { Settings } from 'lucide-react'
 import JukeLogo from './juke-logo/JukeLogo.jsx'
+import ComingSoonModal from './ComingSoonModal.jsx'
+import { NAV_LINKS, AccountButtons } from './SiteNav.jsx'
 
-/* The lobby's own top bar — now a plain nav bar, carrying no action.
+/* The lobby's own top bar — a plain nav bar, carrying no draft action.
 
    It used to carry the screen's one primary CTA ("Enter Draft Room" /
    "Start mock draft") — see the Claude Design v2 handoff. That was always
@@ -9,16 +12,31 @@ import JukeLogo from './juke-logo/JukeLogo.jsx'
    the same gradient: the exact two-primaries problem the one-primary-action
    rule exists to catch, just invisible until there was history to look at.
    The fix moves the action into NewMockPanel.jsx's launcher instead — one
-   screen, one gradient button — and this bar goes back to doing only what
-   every other header in the app does: say what this is and offer a way
-   through the settings modal.
+   screen, one gradient button — and this bar does only what every other
+   header in the app does: the same nav Header.jsx (the homepage) uses, the
+   same Log in / Sign Up controls, plus one thing genuinely specific to this
+   screen — the settings gear.
 
    `onStart`/`startLabel`/`startDisabled`/`problem` are gone from this
    component's props entirely, not just unused — NewMockPanel.jsx owns that
    wiring now, verbatim (same gradient, same disabled/problem handling this
    file used to carry), so nothing about that behavior was rebuilt, only
-   relocated. */
+   relocated.
+
+   NAV_LINKS/AccountButtons come from SiteNav.jsx rather than being declared
+   here a second time — this file used to carry its own three-link nav
+   ("Draft Room · The Rooms · Method") with no account controls at all,
+   which is exactly the "two different implementations that have drifted"
+   bug a design review caught: a manager bouncing between the homepage and
+   a mock draft saw a different header each time, one of them missing
+   Log in/Sign Up entirely. "Draft Room" is a real link here now (not the
+   inert label it used to be) for the same reason: it's the identical link
+   Header.jsx renders, and clicking it while already on this screen either
+   no-ops or, if a draft has actually been entered, takes you back into it
+   — never a dead click. */
 export default function LobbyBar({ onOpenSettings }) {
+  const modalRef = useRef(null)
+
   return (
     <header className="sticky top-0 z-30 border-b border-white/[0.06] bg-obsidian/95 backdrop-blur-md">
       <div className="mx-auto flex h-14 max-w-[1600px] items-center gap-4 px-8">
@@ -29,36 +47,35 @@ export default function LobbyBar({ onOpenSettings }) {
         <div className="h-5 w-px shrink-0 bg-white/10" />
 
         <nav className="flex min-w-0 flex-1 items-center gap-[22px]">
-          <span className="text-sm font-semibold text-white">Draft Room</span>
-          {/* Both land on the homepage rather than a specific section —
-              this app's hash routing is one string, not nested routes, and
-              a same-page anchor like #rooms only means something *on* the
-              homepage; jumping straight to a section from a different view
-              isn't something the current router shape supports without
-              real work this pass isn't scoped for. Method goes straight to
-              the real docs page instead, which is arguably the more useful
-              destination from here anyway. */}
-          <a href="#/" className="text-sm font-medium text-white/50 transition-colors hover:text-white">
-            The Rooms
-          </a>
-          <a
-            href="/docs/draft-room-how-it-works.html"
-            className="text-sm font-medium text-white/50 transition-colors hover:text-white"
-          >
-            Method
-          </a>
+          {NAV_LINKS.map((link) => (
+            <a
+              key={link.label}
+              href={link.href}
+              className="text-sm font-medium text-white/50 transition-colors hover:text-white"
+            >
+              {link.label}
+            </a>
+          ))}
         </nav>
 
-        <button
-          type="button"
-          onClick={onOpenSettings}
-          aria-label="Draft settings"
-          title="Draft settings"
-          className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full border border-slate-800 bg-obsidian/60 text-white/55 transition-colors duration-150 hover:border-teal-400/50 hover:text-teal-300"
-        >
-          <Settings className="h-4 w-4" />
-        </button>
+        <div className="flex shrink-0 items-center gap-3">
+          <button
+            type="button"
+            onClick={onOpenSettings}
+            aria-label="Draft settings"
+            title="Draft settings"
+            className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full border border-slate-800 bg-obsidian/60 text-white/55 transition-colors duration-150 hover:border-teal-400/50 hover:text-teal-300"
+          >
+            <Settings className="h-4 w-4" />
+          </button>
+
+          <div className="h-5 w-px shrink-0 bg-white/10" />
+
+          <AccountButtons modalRef={modalRef} />
+        </div>
       </div>
+
+      <ComingSoonModal ref={modalRef} />
     </header>
   )
 }

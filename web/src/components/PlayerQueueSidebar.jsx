@@ -76,6 +76,7 @@ export default function PlayerQueueSidebar({
   initialsFor,
   onDraft,
   myTurn,
+  draftOver,
   queuedNames,
   onToggleQueue,
   draftedByFor,
@@ -93,6 +94,15 @@ export default function PlayerQueueSidebar({
      the recommendation card or the sort about a player's points or VORP,
      and the raw counting stats come off the projection block. */
   const statCtx = { pointsFor, valueFor, projOf }
+
+  // A single position filter narrows the stat groups to the ones that
+  // position actually has — "ALL" keeps every group, the union-across-
+  // positions shape playerColumns.js's own header comment documents.
+  // Filtering here, not there: STAT_GROUPS/STAT_COLUMNS stay the one list
+  // every consumer of this file shares.
+  const visibleGroups = STAT_GROUPS.filter((g) => !g.positions || posFilter === 'ALL' || g.positions.includes(posFilter))
+  const visibleKeys = new Set(visibleGroups.flatMap((g) => g.keys))
+  const visibleColumns = STAT_COLUMNS.filter((c) => visibleKeys.has(c.key))
 
   return (
     // Sizing against the board+queue row (flex-1, lg:flex-[3], lg:min-w) now
@@ -144,6 +154,14 @@ export default function PlayerQueueSidebar({
           />
         </div>
 
+        {/* A design review read this row as ambiguous — is "RB 4" a filter
+            you can click, or a report of what you've drafted? It's both by
+            design (see countTitle()'s own tooltip and the fraction-vs-count
+            comment below), which is exactly what a bare row of chips can't
+            say on its own. One label, not a rebuild: moving the counts out
+            to the roster pane would drop the "which position still needs
+            help" read this row exists to give at a glance while filtering. */}
+        <p className="text-[9px] font-semibold uppercase tracking-wide text-white/25">Filter by position · your roster need alongside</p>
         <div className="flex flex-wrap gap-1.5">
           {FILTERS.map((pos) => (
             <button
@@ -266,9 +284,13 @@ export default function PlayerQueueSidebar({
           })}
         </div>
 
+        {/* "Not your turn" and "the draft is over" are different facts —
+            !myTurn is true for both, and a design review caught this
+            exact line still reading "disabled until it's your turn" on a
+            finished draft, where there is no turn left to wait for. */}
         {!myTurn && (
           <p className="text-[10px] leading-relaxed text-white/30">
-            Draft is disabled until it's your turn.
+            {draftOver ? 'Draft complete.' : "Draft is disabled until it's your turn."}
           </p>
         )}
       </div>
@@ -297,7 +319,7 @@ export default function PlayerQueueSidebar({
               never ambiguous. */}
           <div className="sticky top-0 z-30 flex border-b border-slate-800 bg-slate-900">
             <div className={STICKY_CELL + ' bg-slate-900'} style={{ width: NAME_W_VAR }} />
-            {STAT_GROUPS.map((g) => {
+            {visibleGroups.map((g) => {
               const w = g.keys.reduce((sum, k) => sum + COL_BY_KEY[k].width, 0)
               return (
                 <div
@@ -321,7 +343,7 @@ export default function PlayerQueueSidebar({
             >
               Player
             </div>
-            {STAT_COLUMNS.map((col) => {
+            {visibleColumns.map((col) => {
               const active = sortBy === col.key
               const content = (
                 <>
@@ -436,7 +458,7 @@ export default function PlayerQueueSidebar({
                     </div>
                   </div>
 
-                  {STAT_COLUMNS.map((col) => {
+                  {visibleColumns.map((col) => {
                     const v = statValue(col, player, statCtx)
                     return (
                       <div

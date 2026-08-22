@@ -92,13 +92,14 @@ test("nothing is sitting on top of the Start button", async ({ browser }) => {
 
   const r = await page.evaluate(() => {
     const root = document.getElementById("draftroom-root");
-    // "Enter Draft Room" now, not "Start Draft" — Settings & Locker is the
-    // first screen since the seat-picker moved to its own step, but the
-    // property this test is actually checking (the one CTA this screen
-    // exists to get you to press has to be pressable) is unchanged; only
-    // the label is.
+    // "Start mock draft" now (NewMockPanel.jsx), not "Enter Draft Room" —
+    // Settings & Locker is the first screen since the seat-picker moved to
+    // its own step, and the button on it was renamed a second time since,
+    // fixing a two-primaries bug. The property this test is actually
+    // checking (the one CTA this screen exists to get you to press has to
+    // be pressable) is unchanged; only the label keeps moving under it.
     const btn = [...root.querySelectorAll("button")]
-      .find((b) => /start draft|start for everyone|enter draft room/i.test(b.textContent || ""));
+      .find((b) => /start draft|start for everyone|start mock draft|enter draft room/i.test(b.textContent || ""));
     if (!btn) return { found: false };
     const b = btn.getBoundingClientRect();
     // Whatever the browser says is actually under the pointer at the button's

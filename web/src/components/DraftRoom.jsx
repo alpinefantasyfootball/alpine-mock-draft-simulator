@@ -292,6 +292,15 @@ export default function DraftRoom() {
     if (draftIsOver) {
       setInsightsSlot(mySlot)
       setShowInsights(true)
+      // A design review caught the fallback underneath this overlay: the
+      // Decide tab has nothing left to decide once the draft is over, and
+      // was left selected showing a one-line dead end ("see the Board or
+      // Analysis tab"). Whoever closes the overlay — or, in a room, a
+      // guest who never got the auto-open because they were mid-navigation
+      // when it fired — lands on Analysis instead, which has something to
+      // show. The tab itself is hidden below once draftIsOver is true, so
+      // this only matters as the one-time redirect off of Decide.
+      setView((v) => (v === 'decide' ? 'analysis' : v))
     }
   }, [draftIsOver, mySlot])
 
@@ -446,10 +455,13 @@ export default function DraftRoom() {
           />
         )}
 
-        {/* pt-[62px]/md:pt-[86px] matches DraftCockpitHeader's own height —
-            see its own comment on why 62px isn't a Tailwind step and has
-            to be matched exactly rather than rounded. */}
-        <div className="flex flex-1 flex-col overflow-hidden pt-[62px] md:pt-[86px]">
+        {/* pt-[62px] matches DraftCockpitHeader's own height — see its own
+            comment on why 62px isn't a Tailwind step and has to be
+            matched exactly rather than rounded. No md: step-up any more:
+            that used to add the ticker strip's own 6-unit band, which a
+            design review had removed from the Draft Room entirely (it
+            fought the pick clock directly beneath it). */}
+        <div className="flex flex-1 flex-col overflow-hidden pt-[62px]">
           <DraftEntryScreen
             engine={engine}
             league={league}
@@ -680,15 +692,16 @@ export default function DraftRoom() {
           onDiscard={handleDiscard}
         />
       )}
-      {/* pt-[62px] matches DraftCockpitHeader's own height; md:pt-[86px] adds the
-          6-unit ticker strip (top-[62px], h-6) that only exists at md+ — see
-          the comment on that strip in DraftCockpitHeader.jsx. No bottom
+      {/* pt-[62px] matches DraftCockpitHeader's own height — the ticker strip
+          that used to add an md: step-up here is gone, removed from the
+          Draft Room entirely per a design review (it fought the pick
+          clock directly beneath it). No bottom
           padding here: PlayerHub's mobile sheet is `fixed` and so occupies
           no space in this flow — clearance for it is reserved inside the
           scrollable panels themselves (the board's and the player list's
           own pb-28), and reserving it here too would shrink the row for
           no reason. */}
-      <div className="flex flex-1 flex-col overflow-hidden pt-[62px] md:pt-[86px]">
+      <div className="flex flex-1 flex-col overflow-hidden pt-[62px]">
         {view === 'decide' ? (
           /* Decide owns the whole content area, not half of it — its own
              roster rail and room-live rail already cover what the panels
@@ -748,11 +761,13 @@ export default function DraftRoom() {
             }
           >
             {view === 'analysis' ? (
-              <AnalysisTab engine={engine} league={league} picks={picks} mySlot={mySlot} />
+              // onClose: the report's own "Close" exit action. Analysis is a
+              // tab, not a modal, so dismissing it means switching tabs —
+              // Board is the obvious landing spot, the same content this
+              // strip shows for every other tab.
+              <AnalysisTab engine={engine} league={league} picks={picks} mySlot={mySlot} onClose={() => setView('board')} />
             ) : (
             <DraftBoardGrid
-              rosterOf={(slot) => engine.rosterStrip(slot)}
-              photoFor={photoFor}
               shortNameOf={engine.shortName}
               league={league}
               picks={picks}
@@ -830,6 +845,7 @@ export default function DraftRoom() {
               initialsFor={initialsFor}
               onDraft={handleDraft}
               myTurn={myTurn}
+              draftOver={draftIsOver}
               queuedNames={queuedNames}
               onToggleQueue={handleToggleQueue}
               draftedByFor={draftedByFor}
