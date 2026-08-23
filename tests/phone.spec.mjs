@@ -186,3 +186,196 @@ test("nothing overflows sideways that cannot scroll or ellipsise", async ({ brow
   expect(await page.evaluate(() => document.body.scrollWidth > window.innerWidth)).toBe(false);
   await context.close();
 });
+
+/* ---------------------------------------------------------------------------
+   The mobile handoff's own artboards, checked against what actually renders.
+   Three separate failures, all found by measuring the built page against
+   `Juke Mobile.dc.html` rather than by reading the components.
+   ------------------------------------------------------------------------- */
+
+/* Artboard 1a puts the hero's eyebrow 36px under a 56px header. It was at
+   206px, because <main> carried a flat pt-[108px] — the header's real height
+   at lg+, where the nav is h-16 and the ticker is on. Below lg the ticker is
+   `hidden lg:block` and the nav is h-14, so 51px of that padding sat over
+   nothing, on top of Hero's own pt-[92px].
+
+   The assertion is the gap between the header's bottom edge and the first
+   thing under it, not an absolute offset — an absolute number would have to
+   move every time the header's own height did, and the defect is the
+   relationship between the two, not either one. */
+test("the homepage hero starts under the header, not a screen below it", async ({ browser }) => {
+  const context = await browser.newContext(PHONE);
+  const page = await openApp(context, "#/");
+  await page.waitForTimeout(600);
+
+  const r = await page.evaluate(() => {
+    const root = document.getElementById("view-home");
+    const header = root.querySelector("header");
+    // The eyebrow is desktop's mint pill at every width now — the phone's
+    // own teal "FREE · UNLIMITED MOCKS" line was retired by the revised
+    // handoff, and "FREE · UNLIMITED · NO ACCOUNT" is a different element
+    // that sits below the CTA pair. Anchor on whatever is genuinely first,
+    // which is what this test is about.
+    const eyebrow = [...root.querySelectorAll("span")]
+      .find((e) => e.textContent.trim() === "AGILITY THROUGH ANALYTICS" && e.getBoundingClientRect().height > 0);
+    if (!header || !eyebrow) return { found: false };
+    return {
+      found: true,
+      headerBottom: header.getBoundingClientRect().bottom,
+      eyebrowTop: eyebrow.getBoundingClientRect().top,
+    };
+  });
+
+  expect(r.found, "the phone hero draws its own eyebrow").toBe(true);
+  // 36px in the artboard. 60 is slack for the line box the span sits in; the
+  // bug this catches was 149px of gap, not five.
+  expect(r.eyebrowTop - r.headerBottom,
+    "the gap between the fixed header and the first thing under it").toBeLessThan(60);
+  await context.close();
+});
+
+/* Artboard 1c: clock band, a one-line roster strip, then "Three ways to go"
+   and the three cards. The build put the desktop roster rail — nine lineup
+   rows, four need bars, the next-picks chips — above the cards instead, so
+   the recommendations started roughly a screen and a half down on a
+   thirty-second clock.
+
+   Two assertions, because either alone passes the bug. "The rail is hidden"
+   passes a screen that hid it and put something equally tall in its place;
+   "the first card is on screen" passes a screen that kept the rail and simply
+   made it shorter. Together they are the artboard's actual claim: Decide is
+   the only tab you need to draft. */
+test("Decide leads with the recommendations, not the roster rail", async ({ browser }) => {
+  const context = await browser.newContext(PHONE);
+  const page = await openApp(context, "#/draft-room");
+  // Seat 0, so pick 1.01 is mine and Decide draws the three cards rather than
+  // its own not-your-turn branch. The other tests in this file take seat 3
+  // because they only need a board; this one needs the turn.
+  await page.evaluate(() => {
+    window.JukeEngine.startDraft({ mySlot: 0, clockLength: 90 });
+    render();
+  });
+  await page.waitForTimeout(700);
+
+  const r = await page.evaluate(() => {
+    const root = document.getElementById("draftroom-root");
+    const seen = (el) => { const b = el.getBoundingClientRect(); return b.width > 0 && b.height > 0 };
+    const leaf = (text) => [...root.querySelectorAll("*")]
+      .find((e) => e.children.length === 0 && e.textContent.trim() === text && seen(e));
+    // The live heading at both widths now — the phone-specific
+    // "Three ways to go" it briefly carried is gone.
+    const heading = leaf("What Juke would do");
+    /* Two measurements off the first card, not one.
+
+       Its top edge is the assertion that matters: the recommendation has to
+       be the thing you land on. Its Draft button is the second, and it is
+       deliberately a looser bound — following the revised handoff (a
+       two-line still-to-fill block, and the live subline restored under the
+       heading) costs about 45px, which puts the button just under the fold
+       on a 664px-tall device profile while the card itself is plainly
+       visible. That is a fair trade and not the bug this test exists for.
+
+       What it must still catch is the 644px desktop rail coming back, which
+       put the button past 780px and the card's own top past the fold with
+       it. So the button gets a ceiling of 1.2 viewports — a thumb-flick —
+       rather than no assertion at all. */
+    const rankLabel = [...root.querySelectorAll("*")]
+      .find((e) => e.children.length === 0 && /^(JUKE.S PICK|SCARCEST|SAFEST WAIT|ALSO AVAILABLE)$/i.test(e.textContent.trim()) && seen(e));
+    const draftBtn = [...root.querySelectorAll("button")]
+      .find((b) => /^Draft .+/.test(b.textContent.trim()) && seen(b));
+    // The compact block that replaced the rail: a "Still to fill" label with
+    // a Roster link beside it, and the four count chips on their own line.
+    // It was one line and is now two — the revised handoff's shape — so this
+    // anchors on the label and a chip rather than on their concatenation.
+    const stripLabel = [...root.querySelectorAll("span")]
+      .find((e) => e.textContent.trim() === "Still to fill" && seen(e));
+    const stripChip = [...root.querySelectorAll("span")]
+      .find((e) => /^QB \d+(\/\d+)?$/.test(e.textContent.trim()) && seen(e));
+    const strip = stripLabel && stripChip ? stripLabel : null;
+    return {
+      headingTop: heading ? heading.getBoundingClientRect().top : null,
+      cardTop: rankLabel ? rankLabel.getBoundingClientRect().top : null,
+      draftBtnTop: draftBtn ? draftBtn.getBoundingClientRect().top : null,
+      railShown: !!leaf("Your team"),
+      stripShown: !!strip,
+      viewport: innerHeight,
+    };
+  });
+
+  expect(r.railShown, "the desktop roster rail is not on the phone").toBe(false);
+  expect(r.stripShown, "the compact still-to-fill block replaced it").toBe(true);
+  expect(r.headingTop, "What Juke would do is drawn").not.toBeNull();
+  expect(r.headingTop, "and it is above the fold").toBeLessThan(r.viewport);
+  expect(r.cardTop, "and so is the first recommendation card").toBeLessThan(r.viewport);
+  expect(r.draftBtnTop, "with its Draft button no more than a flick below").toBeLessThan(r.viewport * 1.2);
+  await context.close();
+});
+
+/* Not a phone width, deliberately. DraftCockpitHeader's tab nav is `md:flex`
+   and MobileDraftTabBar is `lg:hidden`, so between 768px and 1023px both are
+   on screen — and the header's nav was handed the raw setView, which does not
+   clear hubOpen the way openHub and selectMobileView both do. Tap Roster in
+   the bottom bar, then Decide in the header, and PlayerHub unmounts (it only
+   mounts in the view !== 'decide' branch) while the bottom bar goes on
+   drawing Roster as the selected tab.
+
+   A tab bar claiming a tab that is not on screen is the failure CLAUDE.md's
+   goToTab() note names: the app is on a tab its own nav says it is not. It
+   renders, it contrasts, nothing throws — pressing it is the only thing that
+   finds it, which is why it is asserted here rather than left to a sweep. */
+test("the draft tab bar never marks a tab whose panel is not mounted", async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 900, height: 800 } });
+  const page = await openApp(context, "#/draft-room");
+  await page.evaluate(() => {
+    window.JukeEngine.startDraft({ mySlot: 3, clockLength: 90 });
+    render();
+  });
+  await page.waitForTimeout(700);
+
+  const READ = `window.readBars = function () {
+    var root = document.getElementById("draftroom-root");
+    var navs = [].slice.call(root.querySelectorAll("nav"));
+    var label = function (n) {
+      return [].slice.call(n.querySelectorAll("button")).map(function (b) { return b.textContent.trim() });
+    };
+    return {
+      bottom: navs.filter(function (n) { return label(n).indexOf("Players") >= 0 })[0],
+      cockpit: navs.filter(function (n) { return label(n).indexOf("Analysis") >= 0 })[0]
+    };
+  };
+  window.seenBox = function (el) { var b = el.getBoundingClientRect(); return b.width > 0 && b.height > 0 };
+  window.barState = function () {
+    var b = window.readBars();
+    return {
+      bothVisible: !!(b.bottom && b.cockpit && window.seenBox(b.bottom) && window.seenBox(b.cockpit)),
+      active: [].slice.call(b.bottom.querySelectorAll("button"))
+        .filter(function (x) { return x.className.indexOf("border-teal-400") >= 0 })
+        .map(function (x) { return x.textContent.trim() }),
+      sheetMounted: [].slice.call(document.querySelectorAll("div"))
+        .some(function (d) { return String(d.className).indexOf("fixed inset-x-0 bottom-[calc") >= 0 })
+    };
+  };
+  window.tapBar = function (which, name) {
+    var b = window.readBars();
+    [].slice.call(b[which].querySelectorAll("button"))
+      .filter(function (x) { return x.textContent.trim() === name })[0].click();
+  }`;
+  await page.evaluate(READ);
+
+  expect(await page.evaluate(() => barState().bothVisible),
+    "this width shows both navs at once, which is the whole setup").toBe(true);
+
+  await page.evaluate(() => tapBar("bottom", "Roster"));
+  await page.waitForTimeout(350);
+  const opened = await page.evaluate(() => barState());
+  expect(opened.active, "Roster is selected").toEqual(["Roster"]);
+  expect(opened.sheetMounted, "and its sheet is really there").toBe(true);
+
+  await page.evaluate(() => tapBar("cockpit", "Decide"));
+  await page.waitForTimeout(350);
+  const after = await page.evaluate(() => barState());
+  expect(after.sheetMounted, "Decide unmounts the sheet").toBe(false);
+  expect(after.active,
+    "so the bottom bar must not still be pointing at Roster").toEqual(["Decide"]);
+  await context.close();
+});

@@ -8,15 +8,28 @@ body,
   height: 100%;
 }
 
-/* Header.jsx's two rows (h-16 nav + h-9 ticker + 1px border = 101px) are
-   `fixed`, so an anchor landing at its natural scroll position would have
-   its top slice of content — a heading, a card's first row — sitting behind
-   them. scroll-padding-top reserves that height on every scroll-into-view,
-   anchor click included; a few px of slack beyond the exact 101 so a
-   section's own heading isn't flush against the header's bottom edge. */
+/* Header.jsx's rows are `fixed`, so an anchor landing at its natural scroll
+   position would have its top slice of content — a heading, a card's first
+   row — sitting behind them. scroll-padding-top reserves that height on
+   every scroll-into-view, anchor click included; a few px of slack beyond
+   the exact header height so a section's own heading isn't flush against
+   its bottom edge.
+
+   Two values, tracking Homepage.jsx's own `pt-[57px] lg:pt-[108px]` — below
+   lg the ticker is `hidden lg:block` and the nav is h-14, so the header is
+   57px, not the 101px (h-16 + h-9 + 1px) it is at lg+. The desktop number
+   on a phone reserved 51px nothing occupies, landing every anchor click
+   half a screen short of the section it named. 1024px is Tailwind's own
+   `lg`, which is what Header.jsx switches on. */
 html {
   scroll-behavior: smooth;
-  scroll-padding-top: 108px;
+  scroll-padding-top: 65px;
+}
+
+@media (min-width: 1024px) {
+  html {
+    scroll-padding-top: 108px;
+  }
 }
 
 body {
@@ -29,4 +42,14 @@ body {
 .coming-soon-dialog::backdrop {
   background: rgba(11, 14, 20, 0.7);
   backdrop-filter: blur(4px);
+}
+
+/* A backgrounded tab would otherwise run Sonar's ring loop indefinitely on
+   somebody's battery. SonarLoader.jsx toggles the attribute on
+   visibilitychange; animation-play-state rather than unmounting, so the ring
+   loop resumes mid-flight and the mark's entrance is not replayed when the tab
+   comes back. Both attributes sit on the same element - the component's own
+   root - and the rings are its descendants. */
+[data-sonar][data-sonar-paused] [data-sonar-ring] {
+  animation-play-state: paused;
 }

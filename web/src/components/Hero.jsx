@@ -17,18 +17,21 @@ export default function Hero() {
         }}
       />
 
-      <div className="relative mx-auto grid max-w-7xl gap-[72px] px-6 pb-[76px] pt-[92px] lg:grid-cols-[1.05fr_1fr] lg:items-center">
+      <div className="relative mx-auto grid max-w-7xl gap-[72px] px-6 pb-[76px] pt-9 lg:grid-cols-[1.05fr_1fr] lg:items-center lg:pt-[92px]">
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
-          {/* Mobile eyebrow/headline/paragraph/CTAs are a separate stack
-              from desktop's, not a resized copy of it — the mobile handoff
-              (design_handoff_mobile) writes shorter, phone-specific copy
-              throughout the hero, the same way Header.jsx already renders
-              two whole <JukeLogo> instances rather than one resized by CSS.
-              lg:hidden / hidden lg:* is the toggle, matching that precedent. */}
-          <span className="font-plex text-[11.5px] font-bold tracking-[0.14em] text-teal-400 lg:hidden">
-            FREE &middot; UNLIMITED MOCKS
-          </span>
-          <span className="hidden items-center gap-[9px] rounded-full border border-mint/30 bg-mint/[0.06] px-[15px] py-[7px] text-[11.5px] font-bold tracking-[0.13em] text-mint lg:inline-flex">
+          {/* One eyebrow at every width now, and it is desktop's mint pill.
+              The phone used to get its own teal mono line reading
+              "FREE · UNLIMITED MOCKS" — the revised mobile handoff retires
+              it on brand-architecture grounds rather than typographic ones:
+              price was the first thing a visitor read, and naming the
+              category pinned the brand to one room while the Rooms section
+              four rows below says five more are coming. "Free" is still
+              said, in its own mono line under the CTA pair.
+
+              The paragraph and CTAs below stay split by breakpoint — those
+              really are phone-specific — so this is one element leaving that
+              arrangement, not the arrangement being abandoned. */}
+          <span className="inline-flex items-center gap-[9px] rounded-full border border-mint/30 bg-mint/[0.06] px-[15px] py-[7px] text-[11.5px] font-bold tracking-[0.13em] text-mint">
             <span className="relative flex h-1.5 w-1.5">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-mint opacity-75" />
               <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-mint" />
@@ -36,79 +39,93 @@ export default function Hero() {
             AGILITY THROUGH ANALYTICS
           </span>
 
-          {/* 39px Archivo 900, per the handoff — Archivo is already fetched
-              (index.html's Google Fonts link, weights 400..900) for
-              JukeLogo.jsx's wordmark, so this costs no extra request, but
-              nothing routes it through a Tailwind utility: font-display
-              resolves to Barlow Condensed (tailwind.config.js), the Draft
-              Room's own display face. JukeLogo.jsx reaches Archivo with an
-              inline fontFamily rather than a new config token for the same
-              single-call-site reason; this follows that precedent instead
-              of inventing a second way to ask for the same font. Desktop's
-              own h1 (font-display, Barlow Condensed) is untouched below. */}
-          <h1
-            className="mt-4 text-balance text-[39px] font-black leading-[1.02] tracking-[-0.035em] text-white lg:hidden"
-            style={{ fontFamily: "'Archivo', sans-serif" }}
-          >
-            Mock draft until the board makes sense.
-          </h1>
+          {/* One headline at every width, in font-display (Barlow Condensed).
+              The phone used to get its own 39px Archivo 900 sentence; the
+              revised handoff retires it for the reason its own note gives —
+              Archivo is the wordmark's face, and every section header on
+              this page is font-display, so a display headline in a second
+              face is the odd one out rather than the phone-specific choice
+              it looked like.
 
-          {/* The brief's 64px is a desktop-only value (prototype captured at
-              ~1440px) — scaled down for narrower widths rather than copied
-              literally, or "Master the draft." alone overflows a phone's
-              own padding before wrapping ever gets a say. */}
-          <h1 className="mt-7 hidden text-balance font-display text-[40px] font-extrabold leading-[1.05] tracking-[-0.02em] sm:text-[52px] sm:leading-[1.04] lg:block lg:text-[64px] lg:leading-[1.03] lg:tracking-[-0.032em]">
+              46px/700 at 1.04 below sm is the handoff's own value. sm and
+              above keep exactly the sizes and the 800 weight they already
+              had, so this is a change to the phone and to nothing else —
+              the earlier note about 64px being a ~1440px capture still
+              holds for the steps above.
+
+              A condensed face is what makes 46px fit 390px at all: "Master
+              the draft." at 39px Archivo was already close to the padding,
+              and this is seven points larger. */}
+          <h1 className="mt-5 text-balance font-display text-[46px] font-extrabold leading-[1.04] tracking-[-0.02em] sm:mt-7 sm:text-[52px] sm:leading-[1.04] lg:text-[64px] lg:leading-[1.03] lg:tracking-[-0.032em]">
             <span className="text-white">Master the draft.</span>
             <br />
             <span className="text-mint">Dominate the season.</span>
           </h1>
 
-          {/* Mobile paragraph keeps the same "name what's live" discipline
-              the desktop rewrite below already follows, but doesn't repeat
-              the handoff's literal "eleven opponents" — that's an artifact
-              of the mock's own 12-team illustration, and the app's real
-              default (league.teams in app.js) is 10, with the room
-              configurable 4-24 wide from the setup screen. Desktop's own
-              paragraph already avoids committing to a seat count for the
-              same reason; this one follows suit rather than printing a
-              number that's wrong for most rooms drafted. */}
-          <p className="mt-4 max-w-[480px] text-pretty text-base leading-[1.55] text-white/55 lg:hidden">
+          {/* One paragraph at both widths, and it is the phone's.
+
+              These were two entirely different sentences — the phone said
+              "Draft against a room of CPU opponents…", desktop said "Free,
+              unlimited mock drafts against a board that reruns live…" — which
+              is a different message about the product depending on the width
+              of the window it is read in. Reported from the live site as
+              exactly that.
+
+              Desktop's is the one that goes, for the same reason the eyebrow
+              and the CTAs already changed: it opens on the price. After that
+              pass, desktop's own hero was arguing with itself — a brand
+              eyebrow and headline, "Enter the Draft Room" underneath, and a
+              paragraph between them leading with "Free, unlimited mock
+              drafts". The revised handoff says to keep this sentence verbatim
+              on the phone and explicitly not to promote desktop's; making it
+              the only one is the same instruction with the divergence removed.
+
+              It is also the better sentence on its own terms, which is worth
+              recording so nobody swaps it back. It names no seat count — the
+              app's default is 10 and the room is configurable 4-24 wide, so
+              any number here is wrong for most rooms drafted — and it says
+              what the product does rather than what it costs. Price now lives
+              in the mono line under the CTA pair, once, on both widths. */}
+          <p className="mt-4 max-w-[480px] text-pretty text-base leading-[1.55] text-white/55 lg:mt-6 lg:max-w-[530px] lg:text-[17.5px] lg:leading-[1.6]">
             Draft against a room of CPU opponents that react to your picks, then get a graded
             report that shows its working. Change your scoring rules and every number reruns.
           </p>
 
-          {/* Rewritten off a design review: the previous copy ("power your
-              entire fantasy football lifecycle with advanced VORP metrics,
-              predictive modeling, and real-time simulations") promised five
-              rooms that don't exist yet, one paragraph above a grid that
-              itself says so. This names only what a visitor can actually
-              click right now — the scoring toggle immediately to the right
-              is the proof, not just a claim next to one. */}
-          <p className="mt-6 hidden max-w-[530px] text-pretty text-[17.5px] leading-[1.6] text-white/55 lg:block">
-            Free, unlimited mock drafts against a board that reruns live on your own scoring
-            rules — standard, half or full PPR, recalculated the instant you change it — against
-            CPU opponents that understand ADP, tiers and replacement value.
-          </p>
+          {/* Two stacked 54px CTAs, mobile only. The secondary is "Explore
+              The Rooms" pointing at #rooms — desktop's own pair, rather than
+              the "See how it works" → #proof this used to carry. Both are
+              live destinations on this page; what decided it is that the
+              hero's job here is to hand the reader the brand's shape (one
+              room live, five coming) rather than to re-explain the method
+              the section directly below is already the proof of.
 
-          {/* Two stacked 54px CTAs, mobile only. "See how it works" points
-              at #proof rather than the how-it-works doc: SiteNav.jsx's own
-              NAV_LINKS already uses #proof for the identical "How It Works"
-              label, and a second destination behind the same words would be
-              exactly the two-headers drift that file was written to end. */}
+              The primary is "Enter the Draft Room", which is now the only
+              CTA string on the page — Header.jsx's sticky bar and
+              ClosingCta.jsx's band say it too. ClosingCta's own comment
+              already required the band and the hero to be identical at
+              every width; that rule is unchanged, all three strings just
+              moved together. */}
           <div className="mt-8 flex flex-col gap-3 lg:hidden">
+            {/* data-hero-cta is what Header.jsx's sticky bottom bar watches,
+                so it can stand down while this button is on screen rather than
+                floating the same CTA over it. A data attribute rather than an
+                id: there are two of these (this one and desktop's below) and
+                only one is ever rendered, so an id would be a lie at one width
+                or a duplicate at both. */}
             <a
               href="#/draft-room"
+              data-hero-cta=""
               className="flex h-[54px] w-full items-center justify-center rounded-full bg-gradient-to-r from-[#00E5FF] to-[#7B1FA2] text-base font-bold text-white
                          shadow-glass transition-all duration-200 active:scale-[0.98]"
             >
-              Start a mock draft
+              Enter the Draft Room
             </a>
             <a
-              href="#proof"
+              href="#rooms"
               className="flex h-[54px] w-full items-center justify-center rounded-full border border-white/20 text-base font-bold text-white
                          transition-colors duration-200 hover:border-teal-400/60 hover:text-teal-300"
             >
-              See how it works
+              Explore The Rooms
             </a>
           </div>
 
@@ -116,12 +133,18 @@ export default function Hero() {
             {/* #/draft-room, not #/draft — see the comment on ROOMS in
                 app.js. This is the product's actual "start" button, so it
                 was the most direct way this bug shipped. */}
+            {/* Marked too, though only the phone's sticky bar reads it. Both
+                hero CTAs carry it because exactly one of the two is ever
+                rendered, and marking only one means anything looking for "the
+                hero's CTA" finds a display:none element at the other width —
+                which reports a zero box and hit-tests at the page origin. */}
             <a
               href="#/draft-room"
+              data-hero-cta=""
               className="rounded-full bg-gradient-to-r from-[#00E5FF] to-[#7B1FA2] px-8 py-4 text-base font-bold text-white
                          shadow-glass transition-all duration-200 hover:scale-105 hover:shadow-[0_0_15px_rgba(0,229,255,0.4)]"
             >
-              Start a Free Mock Draft
+              Enter the Draft Room
             </a>
             <a
               href="#rooms"
@@ -131,6 +154,24 @@ export default function Hero() {
               <ChevronRight className="h-4 w-4 text-teal-400 transition-transform group-hover:translate-x-0.5" />
             </a>
           </div>
+
+          {/* Where the price went, on both breakpoints. It is true, it is
+              worth saying, and it is no longer the first thing read — which
+              is the whole of the change: a mono caption under the action
+              rather than the eyebrow above the headline, or (on desktop
+              until now) the opening words of the paragraph.
+
+              It sits outside both CTA blocks deliberately. The handoff only
+              specifies it for the phone, and writing it there would have left
+              desktop with no price claim at all once its paragraph stopped
+              leading with one — which is the same divergence this pass exists
+              to close, introduced from the other direction.
+
+              Not a tap target, so exempt from the 44px floor; 11.5px is the
+              handoff's own value and sits on the type floor for mono. */}
+          <p className="mt-3 text-center font-plex text-[11.5px] tracking-[0.1em] text-[#7C8A99] lg:mt-5 lg:text-left">
+            FREE &middot; UNLIMITED &middot; NO ACCOUNT
+          </p>
         </motion.div>
 
         {/* Not rotated, not floating — squared and aligned as a real second

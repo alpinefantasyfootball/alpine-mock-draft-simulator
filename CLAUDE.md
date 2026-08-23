@@ -1025,6 +1025,25 @@ way, not reasoned about.
   `nowrap` they do not shrink — they spill straight over the wordmark. Under
   700px the header keeps only the burger, the brand and Sign up; How it works,
   Log in, Install and the theme toggle move into the rooms panel.
+- **A padding that stands in for a fixed header's height has to be as
+  responsive as the header is.** `Header.jsx` is two rows at lg+ (h-16 nav
+  plus the h-9 ticker, 101px) and one row below it (h-14, ticker
+  `hidden lg:block`, 57px) — and two separate values were written for the
+  desktop number alone: `<main>`'s `pt-[108px]` in `Homepage.jsx` and
+  `scroll-padding-top: 108px` in `index.css`. So a phone got 51px of padding
+  over nothing, which stacked on Hero's own top padding and put the mobile
+  handoff's eyebrow at 206px where artboard 1a puts it at 92 — a screenful of
+  empty page above the hero — while every anchor click landed half a screen
+  short of the section it named.
+
+  **It cannot be caught by looking at either number.** Both were correct for
+  the header they were written against, nothing overflowed, nothing threw,
+  and the page reads as designed-with-a-lot-of-air rather than as broken.
+  What finds it is measuring the gap between the header's own bottom edge and
+  the first thing under it, which is what `phone.spec.mjs` now asserts — the
+  relationship, never an absolute offset, or the test has to be rewritten
+  every time the header's height moves.
+
 - **The rooms panel is inside `#shellbar`.** Scope mobile hide rules to
   `.shell-inner`, not the header, or they hide the panel's copies too.
 - **A `<select>` draws its arrow inside the padding, so padding cannot buy

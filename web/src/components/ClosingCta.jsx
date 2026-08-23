@@ -27,13 +27,17 @@ export default function ClosingCta() {
           rendered once — a size-only responsive change, unlike Hero.jsx's
           two full alternate trees, because nothing about this band's copy
           or destination differs by width. That's deliberate: this file's
-          own top comment already documents "Copy is 'Start a Free Mock
-          Draft' in both places — keep them identical" as the reason this
-          band repeats the hero's own CTA rather than writing a second one,
-          and a mobile-only reword (design_handoff_mobile's mock shows a
-          plain white pill reading "Start a mock draft") would break that
-          on the one width it was never tested against. Full width and 54px
-          tall below lg to clear the handoff's own primary-CTA floor. */}
+          own top comment already documents keeping this band's CTA and the
+          hero's identical as the reason this band repeats the hero's rather
+          than writing a second one. That rule is unchanged; both strings
+          just moved together, from "Start a Free Mock Draft" to "Enter the
+          Draft Room" — the revised mobile handoff's one-screen-one-CTA
+          rule, which also demotes the price out of every button on the page
+          and into a single mono line under the hero's pair. A mobile-only
+          reword would still break the rule; this is not one, because
+          Hero.jsx and Header.jsx's sticky bar changed with it. Full width
+          and 54px tall below lg to clear the handoff's own primary-CTA
+          floor. */}
       <div className="relative mx-auto flex max-w-7xl flex-col gap-8 px-6 py-[84px] lg:flex-row lg:flex-wrap lg:items-center lg:justify-between lg:gap-12">
         <div>
           {/* Italic to match RoomsGrid.jsx's and ShowYourWorking.jsx's own
@@ -51,7 +55,7 @@ export default function ClosingCta() {
           className="flex h-[54px] w-full shrink-0 items-center justify-center rounded-full bg-gradient-to-r from-[#00E5FF] to-[#7B1FA2] text-base font-bold text-white
                      shadow-glass transition-all duration-200 active:scale-[0.98] lg:h-auto lg:w-auto lg:px-[34px] lg:py-[17px] lg:hover:scale-105 lg:hover:shadow-[0_0_15px_rgba(0,229,255,0.4)]"
         >
-          Start a Free Mock Draft
+          Enter the Draft Room
         </a>
       </div>
     </section>

@@ -107,10 +107,48 @@ export default {
           '0%': { transform: 'translateX(0%)' },
           '100%': { transform: 'translateX(-50%)' },
         },
+        // Sonar. These four are a second copy of the keyframes that index.html
+        // carries inline for the #boot-sonar cold-load overlay, and the
+        // duplication is deliberate rather than drift: that copy has to be
+        // readable before any bundle is, and under `vite dev` this stylesheet
+        // arrives via JavaScript. They are global @keyframes under one name
+        // each, so if the two ever disagree, whichever stylesheet the document
+        // loads later wins for the overlay *and* for the components. Change
+        // one, change the other. (index.html writes the same values in CSS's
+        // own shorthand - .16 for 0.16 - so compare values, not characters.)
+        'sonar-ring': {
+          '0%': { transform: 'scale(0.3)', opacity: '0' },
+          '12%': { opacity: '0.65' },
+          '100%': { transform: 'scale(2.2)', opacity: '0' },
+        },
+        'sonar-focus': {
+          '0%': { transform: 'scale(1.2)', opacity: '0', filter: 'blur(7px)' },
+          '100%': { transform: 'scale(1)', opacity: '1', filter: 'blur(0)' },
+        },
+        'sonar-label': {
+          '0%': { opacity: '0', transform: 'translateY(8px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        // The reduced-motion substitute for the two above, not a variant of
+        // them: opacity only, no blur, no travel. It states its own 0% for a
+        // reason - a keyframe declaring only a `to` starts from whatever the
+        // element already computes, which is opacity 1 here, so it would fade
+        // nothing at all. That was a real bug in the handoff's boot overlay.
+        'sonar-fade': { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
+        // Tier 3 only. No index.html counterpart - the overlay has no inline
+        // tier, so this one lives here alone.
+        'sonar-pulse': { '0%, 100%': { opacity: '0.32' }, '50%': { opacity: '1' } },
       },
       animation: {
         'pulse-glow': 'pulse-glow 1.8s ease-in-out infinite',
         marquee: 'marquee 45s linear infinite',
+        // SonarLoader.jsx overrides duration and delay inline per ring, so the
+        // 2100ms here is the default rather than the only value.
+        'sonar-ring': 'sonar-ring 2100ms ease-out infinite both',
+        'sonar-focus': 'sonar-focus 580ms cubic-bezier(0.16,1,0.3,1) both',
+        'sonar-label': 'sonar-label 500ms ease-out 340ms both',
+        'sonar-fade': 'sonar-fade 300ms ease-out both',
+        'sonar-pulse': 'sonar-pulse 1500ms ease-in-out infinite both',
       },
     },
   },

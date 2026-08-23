@@ -5,6 +5,7 @@ import ShowYourWorking from './ShowYourWorking.jsx'
 import RoomsGrid from './RoomsGrid.jsx'
 import ClosingCta from './ClosingCta.jsx'
 import JukeLogo from './juke-logo/JukeLogo.jsx'
+import { freshnessLine } from './dataFreshness.js'
 
 // METHOD footer links deep-link into the existing how-it-works doc rather
 // than to new pages that don't exist — s02 is "Where the numbers come
@@ -42,35 +43,14 @@ function useRoomLinks() {
 function useDataFreshness() {
   const [freshness, setFreshness] = useState(null)
 
+  // One line, from dataFreshness.js, which is also exactly what Ticker.jsx
+  // renders in the header. This used to derive its own answer from the `?v=`
+  // query on app.js's script tag, and the two disagreed by eleven hours on the
+  // same page — "refreshed 17 hrs ago" above, "updated 6 hours ago" below. See
+  // that file for why the pipeline stamp is the right source and a deploy
+  // marker is not.
   useEffect(() => {
-    const engine = typeof window !== 'undefined' ? window.JukeEngine : null
-    if (!engine) return
-    const board = engine.board()
-    if (!board) return
-
-    const src = document.querySelector('script[src*="/app.js"]')?.getAttribute('src') || ''
-    const stamp = src.match(/\?v=(\d{12})/)?.[1]
-    let relative = null
-    if (stamp) {
-      const y = +stamp.slice(0, 4)
-      const mo = +stamp.slice(4, 6)
-      const d = +stamp.slice(6, 8)
-      const h = +stamp.slice(8, 10)
-      const mi = +stamp.slice(10, 12)
-      const updatedMs = Date.UTC(y, mo - 1, d, h, mi)
-      const diffMin = Math.max(0, Math.round((Date.now() - updatedMs) / 60000))
-      if (diffMin < 1) relative = 'just now'
-      else if (diffMin < 60) relative = `${diffMin} minute${diffMin === 1 ? '' : 's'} ago`
-      else if (diffMin < 60 * 24) {
-        const hours = Math.round(diffMin / 60)
-        relative = `${hours} hour${hours === 1 ? '' : 's'} ago`
-      } else {
-        const days = Math.round(diffMin / (60 * 24))
-        relative = `${days} day${days === 1 ? '' : 's'} ago`
-      }
-    }
-
-    setFreshness({ count: board.length, relative })
+    setFreshness(freshnessLine())
   }, [])
 
   return freshness
@@ -85,11 +65,17 @@ export default function Homepage() {
     <div className="min-h-screen overflow-x-hidden bg-void text-white">
       <Header />
 
-      {/* pt-[108px] matches the fixed header's real height (h-16 nav + h-9
-          ticker + 1px border = 101px) plus the same few px of breathing
-          room index.css's scroll-padding-top uses — one number instead of
-          two, so a page load and an anchor click land at the same offset. */}
-      <main className="pt-[108px]">
+      {/* Two heights, because the header has two. At lg+ it is the nav plus
+          the ticker (h-16 + h-9 + 1px border = 101px), and pt-[108px] is
+          that plus the same few px of breathing room index.css's
+          scroll-padding-top uses — one number instead of two, so a page
+          load and an anchor click land at the same offset. Below lg the
+          ticker is `hidden lg:block` (Header.jsx) and the nav drops to
+          h-14, so the real header is 57px: carrying the desktop number
+          down to a phone left 51px of empty page above the hero, on top of
+          Hero's own top padding, and pushed the mobile handoff's eyebrow to
+          206px where artboard 1a puts it at 92. */}
+      <main className="pt-[57px] lg:pt-[108px]">
         <Hero />
         <ShowYourWorking />
         <RoomsGrid />
@@ -97,34 +83,54 @@ export default function Homepage() {
       </main>
 
       <footer className="border-t border-white/[0.07] bg-[#060909]">
-        {/* ---------- Mobile: design_handoff_mobile Prompt 2 ----------
-            One flat, wrapped row instead of the three-column ROOMS/METHOD/
-            COMPANY grid below — the mock shows "Draft Room · How it works ·
-            Method · Privacy · Terms" as a single line, not three headed
-            lists. Still "live destinations only" (review item 34): the
-            room entries are the same live-only filter the desktop grid
-            already applies, and METHOD collapses to its first, real link
-            rather than a fabricated fourth destination standing in for all
-            three — a single "Method" label pointing at nothing worth
-            reading would be worse than the three-link column it replaces. */}
+        {/* ---------- Mobile footer (revised handoff, PROMPT 2 item 6) ----
+            Desktop's tagline verbatim, then its own three link columns as a
+            two-up grid, then the shared freshness line below.
+
+            It replaced a single wrapped row — "Draft Room · How it works ·
+            Method · Privacy · Terms" — built from the first handoff's mock.
+            The revision asks for the columns, and it is right for a reason the
+            flat row made easy to miss: that row collapsed METHOD's three
+            destinations into one link labelled "Method", so two real pages
+            (VORP explained, Data sources) had no way in on a phone at all. A
+            footer whose whole documented job is "live destinations only" was
+            hiding two of them.
+
+            Same liveRoomLinks and METHOD_LINKS arrays the desktop grid below
+            reads, so neither breakpoint can list a destination the other
+            doesn't — which is the failure this whole pass is chasing. */}
         <div className="px-6 pb-6 pt-12 lg:hidden">
           <JukeLogo size={18} />
-          <nav className="mt-4 flex flex-wrap items-center gap-x-1 gap-y-2 text-sm text-white/60">
-            {[
-              ...liveRoomLinks.map((room) => ({ label: room.name.replace(/^The\s+/, ''), href: room.href })),
-              { label: 'How it works', href: '/docs/draft-room-how-it-works.html' },
-              { label: 'Method', href: METHOD_LINKS[0].href },
-              { label: 'Privacy', href: '/docs/privacy.html' },
-              { label: 'Terms', href: '/docs/terms.html' },
-            ].map((link, i) => (
-              <span key={link.label} className="flex items-center gap-x-1">
-                {i > 0 && <span className="text-white/20" aria-hidden="true">&middot;</span>}
-                <a href={link.href} className="px-1 py-1 transition-colors hover:text-white">
+          <p className="mt-[14px] max-w-[300px] text-sm leading-[1.55] text-[#7d888f]">
+            Agility through analytics. Projections you can follow, rebuilt every morning.
+          </p>
+
+          <div className="mt-7 grid grid-cols-2 gap-x-6 gap-y-7">
+            <div className="flex flex-col gap-[11px]">
+              <span className="font-plex text-[11px] tracking-[0.11em] text-[#4f5b62]">ROOMS</span>
+              {liveRoomLinks.map((room) => (
+                <a key={room.name} href={room.href} className="text-sm text-white/60">
+                  {room.name}
+                </a>
+              ))}
+            </div>
+
+            <div className="flex flex-col gap-[11px]">
+              <span className="font-plex text-[11px] tracking-[0.11em] text-[#4f5b62]">METHOD</span>
+              {METHOD_LINKS.map((link) => (
+                <a key={link.label} href={link.href} className="text-sm text-white/60">
                   {link.label}
                 </a>
-              </span>
-            ))}
-          </nav>
+              ))}
+            </div>
+
+            <div className="flex flex-col gap-[11px]">
+              <span className="font-plex text-[11px] tracking-[0.11em] text-[#4f5b62]">COMPANY</span>
+              <a href="/docs/draft-room-how-it-works.html" className="text-sm text-white/60">How it works</a>
+              <a href="/docs/privacy.html" className="text-sm text-white/60">Privacy</a>
+              <a href="/docs/terms.html" className="text-sm text-white/60">Terms</a>
+            </div>
+          </div>
         </div>
 
         <div className="hidden max-w-7xl grid-cols-2 gap-12 px-6 pb-6 pt-14 sm:grid-cols-4 lg:mx-auto lg:grid">
@@ -213,10 +219,7 @@ export default function Homepage() {
           // page and reads as "long enough to challenge the corner" the
           // moment a phone's width is narrow enough to bring the two close.
           <div className="mx-auto max-w-7xl px-6 pb-6 pr-[76px] lg:pr-6">
-            <p className="font-plex text-xs text-[#4f5b62]">
-              {freshness.count} players tracked
-              {freshness.relative && <> &middot; updated {freshness.relative}</>}
-            </p>
+            <p className="font-plex text-xs text-[#4f5b62]">{freshness}</p>
           </div>
         )}
       </footer>

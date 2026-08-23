@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Menu } from 'lucide-react'
 import Ticker from './Ticker.jsx'
 import JukeLogo from './juke-logo/JukeLogo.jsx'
@@ -15,7 +15,49 @@ import { NAV_LINKS, AccountButtons } from './SiteNav.jsx'
 // there, and a second copy behind it would be the identical two-headers bug
 // SiteNav.jsx was written to fix, just moved one level down into "which
 // list does the mobile sheet see."
+/* The sticky bottom CTA hides while the hero's own CTA is on screen.
+
+   Both say "Enter the Draft Room" — that is the one-CTA-string rule working —
+   but the result was the same button twice in one viewport, one of them
+   floating over the other's whitespace, which was reported as looking wrong
+   and does. The handoff asks for a persistent CTA so the action is never more
+   than a thumb away; it does not ask for it to shadow the hero.
+
+   An IntersectionObserver on the hero CTA rather than a scroll offset: the
+   hero's height changes with the headline's wrap, and a hardcoded "past 400px"
+   is wrong the first time the copy changes length. It watches the element that
+   actually matters and needs no threshold arithmetic.
+
+   Defaults to hidden and reveals on the first callback, so the bar never
+   flashes over a hero that was on screen all along. If the CTA is missing —
+   any page that is not the homepage — the observer never fires and the bar
+   stays visible, which is the correct fallback: on a page with no hero CTA,
+   this is the only one. */
+function useHeroCtaOnScreen() {
+  const [onScreen, setOnScreen] = useState(true)
+
+  useEffect(() => {
+    // The visible one: both hero CTAs carry the marker and exactly one is
+    // rendered at any width, so a bare querySelector can land on the
+    // display:none twin and observe an element that never intersects.
+    const cta = [...document.querySelectorAll('[data-hero-cta]')]
+      .find((el) => el.getBoundingClientRect().height > 0)
+    if (!cta) { setOnScreen(false); return }
+    const io = new IntersectionObserver(
+      ([entry]) => setOnScreen(entry.isIntersecting),
+      // A sliver counts as on screen: the bar reappearing while the hero
+      // button is still half visible is the same double-CTA, just briefer.
+      { threshold: 0.15 },
+    )
+    io.observe(cta)
+    return () => io.disconnect()
+  }, [])
+
+  return onScreen
+}
+
 export default function Header() {
+  const heroCtaOnScreen = useHeroCtaOnScreen()
   const modalRef = useRef(null)
   const [navOpen, setNavOpen] = useState(false)
 
@@ -141,14 +183,18 @@ export default function Header() {
         bar's height or breakpoint ever changes, since that rule has to
         track it. */}
     <div
-      className="fixed inset-x-0 bottom-0 z-50 border-t border-white/[0.06] px-4 py-2 lg:hidden"
+      className={
+        'fixed inset-x-0 bottom-0 z-50 border-t border-white/[0.06] px-4 py-2 transition-[opacity,transform] duration-200 lg:hidden ' +
+        (heroCtaOnScreen ? 'pointer-events-none translate-y-full opacity-0' : 'translate-y-0 opacity-100')
+      }
+      aria-hidden={heroCtaOnScreen}
       style={{ background: 'rgba(11,14,20,0.95)', backdropFilter: 'blur(12px)', paddingBottom: 'calc(0.5rem + env(safe-area-inset-bottom))' }}
     >
       <a
         href="#/draft-room"
         className="flex h-[50px] w-full items-center justify-center rounded-full bg-gradient-to-r from-[#00E5FF] to-[#7B1FA2] text-[15px] font-bold text-white shadow-glass transition-transform active:scale-[0.98]"
       >
-        Start a mock draft — free
+        Enter the Draft Room
       </a>
     </div>
     </>

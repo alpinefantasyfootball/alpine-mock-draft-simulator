@@ -1,5 +1,6 @@
 import { useEffect, useReducer, useRef, useState } from 'react'
 import { Image as ImageIcon, Send, X } from 'lucide-react'
+import { SonarPulse } from './SonarLoader.jsx'
 
 // Replaces ChatPlaceholder.jsx at both its mount points (DraftLogDock's
 // desktop column, PlayerHub's mobile Chat tab). Reads and writes the real
@@ -425,7 +426,18 @@ export default function ChatPanel({ engine }) {
               </button>
             </div>
             {!gifQuery.trim() && <p className="py-3 text-center text-[11px] text-white/30">Type to search.</p>}
-            {gifQuery.trim() && !gifPayload && <p className="py-3 text-center text-[11px] text-white/30">Searching…</p>}
+            {/* delay={0} on purpose. Rule 01 says nothing under 300ms gets a
+                loader, and this line clears that bar before it is ever drawn:
+                handleGifQuery waits GIF_DEBOUNCE_MS (350) before the request
+                even opens, and this text has been on screen for all of it. A
+                mark that faded in 300ms after the words beside it would read as
+                a second, later event rather than as the same one. */}
+            {gifQuery.trim() && !gifPayload && (
+              <p className="flex items-center justify-center gap-1.5 py-3 text-[11px] text-white/30">
+                <SonarPulse width={14} delay={0} />
+                Searching…
+              </p>
+            )}
             {gifPayload && !gifPayload.configured && <p className="py-3 text-center text-[11px] text-white/30">GIFs are not set up for this room yet.</p>}
             {gifPayload && gifPayload.configured && gifPayload.error && <p className="py-3 text-center text-[11px] text-white/30">GIPHY did not answer. Try again in a moment.</p>}
             {gifPayload && gifPayload.configured && !gifPayload.error && gifPayload.results.length === 0 && gifQuery.trim() && (
