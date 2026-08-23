@@ -379,3 +379,66 @@ test("the draft tab bar never marks a tab whose panel is not mounted", async ({ 
     "so the bottom bar must not still be pointing at Roster").toEqual(["Decide"]);
   await context.close();
 });
+
+/* The draft entry screen stacks on a phone, and for one release it did not.
+
+   `min-h-0` is right on the three columns at lg — it is what lets each one
+   shrink so the board inside can scroll. Below lg the same three become
+   *rows* dividing one flex-1 height, and there `min-h-0` strips the centre
+   row's min-content floor: the grid handed it 40px against 374px of content,
+   so the headline, the seat board and the first-pick banner painted straight
+   over the board preview beneath them. Reported from a phone as overlapping
+   text on top of the settings list.
+
+   Nothing about it is visible to a box-intersection check, which is worth
+   saying because that is the obvious test to write and it passes against the
+   bug. The three row *boxes* tile perfectly — 301, 40, 472, laid end to end
+   and never intersecting. What overlaps is the centre row's *content*
+   escaping its own border box, so the measurement that sees it is the one
+   CLAUDE.md already prescribes for a leak: scrollHeight against clientHeight
+   on a box that can neither scroll nor ellipsise.
+
+   The second assertion is the other half of the same bug and would survive
+   the first being fixed alone: the wrapper was `overflow-hidden` at every
+   width, so even uncrushed the screen was simply cut off at the fold with
+   nothing able to scroll to the rest of it. */
+test("the entry screen stacks on a phone instead of painting over itself", async ({ browser }) => {
+  const context = await browser.newContext(PHONE);
+  const page = await openApp(context, "#/draft-room");
+
+  await page.evaluate(() => {
+    [...document.querySelectorAll("button")]
+      .filter((b) => b.getBoundingClientRect().height > 0)
+      .find((b) => b.textContent.trim() === "Start mock draft")
+      .click();
+  });
+  await page.waitForTimeout(600);
+
+  const r = await page.evaluate(() => {
+    const grid = [...document.querySelectorAll("div")].find(
+      (d) => typeof d.className === "string" &&
+        d.className.includes("lg:grid-cols-[300px_minmax(0,1fr)_330px]"));
+    if (!grid) return { missing: true };
+    const wrap = grid.parentElement;
+    return {
+      // How far each stacked section's content escapes its own box. A row
+      // that cannot scroll and overflows is a row painting on its neighbour.
+      spills: [...grid.children].map((c) => c.scrollHeight - c.clientHeight),
+      rows: getComputedStyle(grid).gridTemplateRows,
+      wrapOverflowY: getComputedStyle(wrap).overflowY,
+      wrapClipsContent: wrap.scrollHeight > wrap.clientHeight,
+    };
+  });
+
+  expect(r.missing, "the entry screen is the one under test").toBeFalsy();
+  expect(r.spills, `no section overflows its own row (rows were ${r.rows})`)
+    .toEqual([0, 0, 0]);
+  // It is taller than the phone by design — three stacked sections — so the
+  // requirement is not that it fits, only that all of it can be reached.
+  if (r.wrapClipsContent) {
+    expect(r.wrapOverflowY,
+      "content taller than the viewport has to be scrollable, not clipped")
+      .not.toBe("hidden");
+  }
+  await context.close();
+});

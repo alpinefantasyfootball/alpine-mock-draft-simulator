@@ -68,7 +68,15 @@ export default function DraftEntryScreen({
         : null
 
   return (
-    <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[300px_minmax(0,1fr)_330px]">
+    // min-h-0 is gated behind lg: deliberately. At lg these three children
+    // are *columns* sharing one viewport-height row, and min-h-0 is what
+    // lets each shrink so the board inside can scroll. Below lg they
+    // collapse to grid-cols-1 and become three *rows* dividing one flex-1
+    // height — and there min-h-0 strips the centre row's min-content floor,
+    // so the grid crushed it to 40px and 334px of headline, board and pick
+    // banner painted straight over the row beneath it. Same utility,
+    // opposite effect, because the axis it frees flips at the breakpoint.
+    <div className="grid flex-1 grid-cols-1 lg:min-h-0 lg:grid-cols-[300px_minmax(0,1fr)_330px]">
       <div className="border-white/[0.06] px-[18px] py-5 lg:border-r">
         <div className="mb-3.5 flex items-baseline justify-between">
           <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-white/50">This draft</span>
@@ -104,7 +112,9 @@ export default function DraftEntryScreen({
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-col px-[22px] py-5">
+      {/* lg:min-h-0 — see the grid comment above. Below lg this is the row
+          that gets crushed, so it has to keep its min-content floor. */}
+      <div className="flex flex-col px-[22px] py-5 lg:min-h-0">
         {/* "Claim your chair" only describes a room, where a seat is
             genuinely still up for grabs — a design review caught this
             headline showing up over a board that already had a seat

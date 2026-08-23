@@ -522,7 +522,13 @@ export default function DraftRoom() {
             that used to add the ticker strip's own 6-unit band, which a
             design review had removed from the Draft Room entirely (it
             fought the pick clock directly beneath it). */}
-        <div className="flex flex-1 flex-col overflow-hidden pt-[62px]">
+        {/* overflow-hidden only from lg, where the three columns are sized
+            to the viewport and each scrolls internally. Below lg the entry
+            screen stacks to roughly 1520px, and this branch renders no
+            bottom tab bar to reserve clearance for, so it just scrolls.
+            Without this the screen was clipped at the fold with no way to
+            reach the rest of it. */}
+        <div className="flex flex-1 flex-col overflow-y-auto pt-[62px] lg:overflow-hidden">
           <DraftEntryScreen
             engine={engine}
             league={league}

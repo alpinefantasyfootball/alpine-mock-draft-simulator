@@ -27,7 +27,12 @@ import DraftBoardGrid from './DraftBoardGrid.jsx'
    under that headline, saying roughly the same thing a second time. */
 export default function DraftLobby({ engine, league, mySlot, onClaimSeat, seats, roomActive, fill }) {
   return (
-    <div className={'flex flex-col ' + (fill ? 'min-h-0 flex-1' : 'h-[420px]')}>
+    // fill still means "take the whole column" at lg. Below lg the entry
+    // screen scrolls, and an unbounded board there is ~1200px of one
+    // continuous grid wedged between the headline and the pick banner.
+    // 420px is the height this component already uses when it isn't
+    // filling, and DraftBoardGrid scrolls inside it either way.
+    <div className={'flex flex-col ' + (fill ? 'h-[420px] lg:h-auto lg:min-h-0 lg:flex-1' : 'h-[420px]')}>
       <DraftBoardGrid
         league={league}
         picks={[]}
