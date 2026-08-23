@@ -109,7 +109,14 @@ export default function PlayerQueueSidebar({
     // lives on the relative wrapper DraftRoom.jsx puts around this and
     // PlayerProfileDrawer — this fills that wrapper rather than sizing
     // itself against the row a second time.
-    <div className="flex h-full w-full flex-col overflow-hidden bg-slate-900/40">
+    // No h-full. The wrapper above is a flex row, so align-items:stretch
+    // already sizes this to it — and height:100% actively defeats that:
+    // the parent's height comes from flex layout rather than from an
+    // explicit value, so the percentage resolved against an indefinite
+    // height and fell back to auto. Measured on a phone, that made this box
+    // 6867px tall inside a 518px parent, which handed flex-1 below an
+    // unbounded height to divide and left the list unable to scroll at all.
+    <div className="flex w-full flex-col overflow-hidden bg-slate-900/40">
       {/* Tighter chrome at lg+ (p-2.5, space-y-2 rather than p-4/space-y-3):
           on the desktop panel row this header competes with the list for
           about 470px, and every pixel it gives back is another player
@@ -120,18 +127,19 @@ export default function PlayerQueueSidebar({
             now, not just a caption over the search box. Two renders, one
             per breakpoint, because the compact variant is a different
             shape rather than the same card scaled — see its own comment. */}
-        <div className="lg:hidden">
-          <JukeValueAssistant
-            player={recommended}
-            vorp={recommendedVorp}
-            tierLeft={recommendedTierLeft}
-            onDraft={onDraft}
-            myTurn={myTurn}
-            photoFor={photoFor}
-            initialsFor={initialsFor}
-          />
-        </div>
-        <div className="hidden lg:block">
+        {/* Compact at every width now, where this used to render the tall
+            card below lg and the compact one above it. The tall variant is
+            225px of a header that only has 518px to share with the list, and
+            measured on a phone that left the list 47 visible pixels — one
+            row and part of a second, out of 210 players. Compact takes the
+            header from 471 to 309 and the list from 47 to 209, which is four
+            rows and a scroll rather than a dead end.
+
+            Nothing is lost by dropping the tall one here specifically: the
+            Decide tab is three full recommendation cards of exactly this
+            content, so on a phone the tall card was the same advice twice,
+            charging the Players list most of its height for the repeat. */}
+        <div>
           <JukeValueAssistant
             compact
             player={recommended}
@@ -311,8 +319,17 @@ export default function PlayerQueueSidebar({
 
           pb-28 below lg keeps the last row clear of the sheet's own bottom
           edge on a phone; lg:pb-6 is a plain breathing gap in the desktop
-          panel, which has nothing floating over it. */}
-      <div className="flex-1 overflow-auto pb-28 lg:pb-6 [--name-w:168px] lg:[--name-w:208px]">
+          panel, which has nothing floating over it.
+
+          min-h-0 is what makes overflow-auto above actually engage. A flex
+          child defaults to min-height:auto, which refuses to shrink below
+          its own content — so this box sized itself to all 210 rows (7527px
+          measured on a phone), the scroller never had anything to scroll,
+          and the list simply ran off the bottom of the sheet with no way to
+          reach it. Same class as the entry screen's stacking bug, mirrored:
+          there min-h-0 was present where it had to be absent, here it was
+          absent where it has to be present. */}
+      <div className="min-h-0 flex-1 overflow-auto pb-28 lg:pb-6 [--name-w:168px] lg:[--name-w:208px]">
         <div className="min-w-max">
           {/* Group header — the spanning row saying which family of stats
               the columns beneath belong to, so "YDS" three times over is

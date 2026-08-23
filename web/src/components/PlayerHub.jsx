@@ -116,7 +116,13 @@ export default function PlayerHub({
       // mockup's screenshots show — the four-tab bar never disappears, this
       // sheet rises above it. lg:static drops the whole fixed/bottom
       // question at desktop width, where this offset never applies.
-      className="fixed inset-x-0 bottom-[calc(58px+env(safe-area-inset-bottom))] z-40 flex max-h-[75vh] flex-col overflow-hidden rounded-t-xl border-t border-slate-800 bg-slate-900/95 shadow-2xl backdrop-blur-md lg:static lg:bottom-auto lg:z-auto lg:h-full lg:max-h-none lg:flex-1 lg:rounded-none lg:border-t-0 lg:bg-transparent lg:shadow-none"
+      /* 85vh, not 75. On a phone the visible viewport is about 664px once
+         browser chrome is out, and at 75vh this sheet was 498 of it — which
+         after the tab strip and the filter header left the players list 111
+         pixels, a little over two rows out of 210. The board behind the
+         sheet goes from 108px showing to 42px, and that is the right trade
+         on the one tab whose entire job is a long list. */
+      className="fixed inset-x-0 bottom-[calc(58px+env(safe-area-inset-bottom))] z-40 flex max-h-[85vh] flex-col overflow-hidden rounded-t-xl border-t border-slate-800 bg-slate-900/95 shadow-2xl backdrop-blur-md lg:static lg:bottom-auto lg:z-auto lg:h-full lg:max-h-none lg:flex-1 lg:rounded-none lg:border-t-0 lg:bg-transparent lg:shadow-none"
     >
       <motion.div
         drag="y"

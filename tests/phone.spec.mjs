@@ -442,3 +442,93 @@ test("the entry screen stacks on a phone instead of painting over itself", async
   }
   await context.close();
 });
+
+/* Every player is reachable on the Players tab, on a phone.
+
+   Three separate things had to be true and none of them were.
+
+   The list's own scroller is `flex-1 overflow-auto` and was missing
+   `min-h-0`, so min-height:auto pinned it to its content and the scroller
+   had nothing to scroll. Above it, PlayerQueueSidebar's root carried
+   `h-full` inside a flex row — the parent's height comes from flex layout
+   rather than an explicit value, so the percentage resolved against an
+   indefinite height and fell back to auto, making the box 6867px tall
+   inside a 518px parent. And the tall JukeValueAssistant took 225px of a
+   471px header, leaving the list 47 visible pixels of 518.
+
+   Reported as one player and half of another sitting above the footer with
+   no way to scroll to the rest, which is exactly what 47px of a 48px row
+   looks like.
+
+   Why the earlier sweep passed this tab is the part worth keeping. It asked
+   "does any element's content overflow its own box", which is the right
+   question for a clipped layout and the wrong one here: the box had grown
+   to fit its content, so it never overflowed anything — it was simply the
+   wrong size and hung off the bottom of the screen. A box that inflates to
+   its content is invisible to an overflow check by construction. So this
+   measures against the *container* and the *viewport* instead.
+
+   The tab is opened through #draftroom-root deliberately. The legacy draft
+   chrome in .sticky-top has its own "Players" button, earlier in the DOM
+   and laid out (it is painted over by the React overlay, not hidden), so an
+   unscoped click by button text hits that one, changes nothing, and leaves
+   a sweep auditing the Decide tab five times believing it cycled all five.
+   That is how this shipped. Asserting the view actually changed is the
+   cheap guard against it. */
+test("every player on the Players tab is reachable on a phone", async ({ browser }) => {
+  const context = await browser.newContext(PHONE);
+  const page = await openApp(context, "#/draft-room");
+
+  const clickIn = (name) => page.evaluate((label) => {
+    const root = document.getElementById("draftroom-root");
+    const b = [...root.querySelectorAll("button")]
+      .filter((x) => x.getBoundingClientRect().height > 0)
+      .find((x) => x.textContent.trim() === label);
+    if (!b) throw new Error("no button in #draftroom-root reading " + label);
+    b.click();
+  }, name);
+
+  await clickIn("Start mock draft");
+  await page.waitForTimeout(500);
+  await clickIn("Start draft");
+  await page.waitForTimeout(700);
+  await clickIn("Players");
+  await page.waitForTimeout(500);
+
+  const r = await page.evaluate(() => {
+    const root = document.getElementById("draftroom-root");
+    const hub = [...root.querySelectorAll("div")]
+      .find((d) => String(d.className).includes("flex-col overflow-hidden bg-slate-900/40"));
+    if (!hub) return { missing: true };
+    const list = [...hub.querySelectorAll("div")]
+      .find((d) => String(d.className).includes("overflow-auto pb-28"));
+    const hb = hub.getBoundingClientRect(), lb = list.getBoundingClientRect();
+    list.scrollTop = 999999;
+    const maxScroll = Math.round(list.scrollTop);
+    list.scrollTop = 0;
+    return {
+      rows: [...root.querySelectorAll("button")]
+        .filter((b) => b.getBoundingClientRect().height > 0 && b.textContent.trim() === "Draft").length,
+      // the panel must fit its own container rather than inflating past it
+      hubOverflow: hub.scrollHeight - hub.clientHeight,
+      // how much of the list is actually on screen, inside the panel
+      visibleListPx: Math.round(Math.min(lb.bottom, hb.bottom, innerHeight) - lb.top),
+      listCanScroll: list.scrollHeight > list.clientHeight + 1,
+      maxScroll,
+    };
+  });
+
+  expect(r.missing, "the players panel is mounted").toBeFalsy();
+  expect(r.rows, "the tab really switched — Decide shows 3 cards, Players shows the board")
+    .toBeGreaterThan(50);
+  // Not toBe(0): fractional row heights round to a pixel or two on a real
+  // device. The bug this guards was 6349px of it, so the tolerance costs
+  // nothing in discrimination and saves a permanently red test.
+  expect(r.hubOverflow, "the panel fits its container instead of inflating past it")
+    .toBeLessThanOrEqual(4);
+  expect(r.listCanScroll, "the list scrolls").toBe(true);
+  expect(r.maxScroll, "and scrolling reaches the far end of it").toBeGreaterThan(1000);
+  // 47px shipped. Four rows is the bar for a list of 200+ being usable at all.
+  expect(r.visibleListPx, "with enough of it on screen to be a list").toBeGreaterThan(150);
+  await context.close();
+});
