@@ -142,15 +142,35 @@ export default function PlayerHub({
         {open ? <ChevronDown className="h-3.5 w-3.5 text-white/40" /> : <ChevronUp className="h-3.5 w-3.5 text-white/40" />}
       </button>
 
-      <div className="flex shrink-0 border-b border-slate-800 lg:hidden">
+      {/* A filled pill for the active tab, not a teal underline.
+
+          This strip is `lg:hidden`, which puts it on exactly the width where
+          MobileDraftTabBar also lives — and that bar marks its own active item
+          with a 2px teal rule too. With the sheet dragged low the two land
+          about 20px apart: two identical teal rules, same colour and weight,
+          answering different questions (which screen am I on, which sheet tab
+          is open). Reported as "the teal lines aren't aligned", and they never
+          will be, because they belong to different components.
+
+          So the two indicators differ in *form* rather than in colour. The bar
+          keeps the rule, being the primary navigation; this one becomes a
+          fill. Teal still means selected in both places, which is the part
+          worth keeping — what changes is that a fill and a rule cannot be
+          mistaken for each other or read as one misaligned line.
+
+          h-11 while I am here: these were 32px tall against the handoff's own
+          44px floor for anything tappable, and five of them sit in a row on a
+          phone. The 12px comes out of the sheet's content, which is the right
+          side of that trade for a control you hit with a thumb. */}
+      <div className="flex shrink-0 gap-1 border-b border-slate-800 px-2 py-1.5 lg:hidden">
         {TABS.map((t) => (
           <button
             key={t.key}
             type="button"
             onClick={() => { setTab(t.key); setOpen(true) }}
             className={
-              'flex-1 border-b-2 px-2 py-2 text-center text-xs font-semibold transition-colors duration-150 ' +
-              (tab === t.key ? 'border-teal-400 text-teal-300' : 'border-transparent text-white/40 hover:text-white/60')
+              'h-11 flex-1 rounded-full px-2 text-center text-xs font-semibold transition-colors duration-150 ' +
+              (tab === t.key ? 'bg-teal-400/[0.14] text-teal-300' : 'text-white/40 hover:text-white/60')
             }
           >
             {t.label}
