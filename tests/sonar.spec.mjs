@@ -140,12 +140,17 @@ test("the loader is shown on every load, and does not outstay its welcome", asyn
     `it reached full opacity (got ${sonar.maxOpacity}) on a warm local load`,
   ).toBeGreaterThan(0.9);
 
-  /* Measured 930-970ms across desktop, phone and reduced-motion. The floor is
-     the mark's own choreography — sonar-focus is 580ms after a 300ms delay, so
-     it settles at 880 — and leaving before that shows a half-played animation,
-     which reads as a fault rather than a flourish. */
-  expect(sonar.removedAt, "it stays long enough to finish its own animation").toBeGreaterThan(800);
-  expect(sonar.removedAt, "and it is gone inside two seconds on a fast load").toBeLessThan(2000);
+  /* The floor is the overlay's own choreography rather than a chosen number.
+     Its last element to arrive is the third ring, which does not enter until
+     1400ms (sonar-ring, 1400ms delay), and the wordmark does not settle until
+     1140ms (sonar-label, 500ms after a 640ms delay). An earlier version of
+     this held 900ms and asserted 800 — which passed while the wordmark was
+     still animating and the third ring had never appeared at all. The floor
+     now sits past every element's arrival, so a regression that cuts the
+     composition short fails here rather than shipping a loader nobody sees
+     complete. */
+  expect(sonar.removedAt, "it stays until the whole composition has arrived").toBeGreaterThan(1500);
+  expect(sonar.removedAt, "and it is gone inside two and a half seconds").toBeLessThan(2600);
 
   await context.close();
 });

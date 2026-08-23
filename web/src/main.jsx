@@ -69,15 +69,32 @@ if (boot) {
       // .now() is measured from the time origin, so it is exactly how long this
       // page has been loading — no separate start timestamp to keep in step.
       //
-      // 900ms is the logo's own choreography, not a round number: the mark's
-      // sonar-focus runs 580ms after a 300ms delay, so it settles at 880. Any
-      // less and the overlay leaves mid-animation, which looks like a fault
-      // rather than a flourish.
+      // 1800ms is the composition's own choreography, not a round number.
+      // Every element in the overlay finishes arriving before it leaves:
       //
-      // This replaces an early return that removed the element outright while
-      // it was still at opacity 0 — the branch a fast load always took, and the
-      // reason the loader was invisible to anyone on a quick connection.
-      const MIN_VISIBLE_MS = 900
+      //   mark        sonar-focus  580ms after 300ms delay  -> settles  880ms
+      //   wordmark    sonar-label  500ms after 640ms delay  -> settles 1140ms
+      //   ring 1      sonar-ring  2100ms, no delay          -> enters      0ms
+      //   ring 2      sonar-ring  2100ms, 700ms delay       -> enters    700ms
+      //   ring 3      sonar-ring  2100ms, 1400ms delay      -> enters   1400ms
+      //
+      // The first version of this held 900ms, chosen off the mark alone, and
+      // that was too short by the overlay's own design: the wordmark was still
+      // animating when the fade-out began, and the purple third ring — which
+      // does not enter until 1400ms — had never once been seen. A loading
+      // state that never shows its own last element is not finished, it is
+      // interrupted.
+      //
+      // 1800 puts the third ring 400ms into its sweep, which is where the
+      // composition first reads as complete rather than still assembling. The
+      // next natural stop above this is 2100ms, one full ring cycle, if it
+      // ever wants to breathe longer.
+      //
+      // This whole hold replaces an early return that removed the element
+      // outright while it was still at opacity 0 — the branch a fast load
+      // always took, and the reason the loader was invisible to anyone on a
+      // quick connection.
+      const MIN_VISIBLE_MS = 1800
       setTimeout(() => {
       const shown = getComputedStyle(boot).opacity
 
