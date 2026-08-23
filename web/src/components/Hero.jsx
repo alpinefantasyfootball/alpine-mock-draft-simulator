@@ -19,16 +19,19 @@ export default function Hero() {
 
       <div className="relative mx-auto grid max-w-7xl gap-[72px] px-6 pb-[76px] pt-9 lg:grid-cols-[1.05fr_1fr] lg:items-center lg:pt-[92px]">
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
-          {/* Mobile eyebrow/headline/paragraph/CTAs are a separate stack
-              from desktop's, not a resized copy of it — the mobile handoff
-              (design_handoff_mobile) writes shorter, phone-specific copy
-              throughout the hero, the same way Header.jsx already renders
-              two whole <JukeLogo> instances rather than one resized by CSS.
-              lg:hidden / hidden lg:* is the toggle, matching that precedent. */}
-          <span className="font-plex text-[11.5px] font-bold tracking-[0.14em] text-teal-400 lg:hidden">
-            FREE &middot; UNLIMITED MOCKS
-          </span>
-          <span className="hidden items-center gap-[9px] rounded-full border border-mint/30 bg-mint/[0.06] px-[15px] py-[7px] text-[11.5px] font-bold tracking-[0.13em] text-mint lg:inline-flex">
+          {/* One eyebrow at every width now, and it is desktop's mint pill.
+              The phone used to get its own teal mono line reading
+              "FREE · UNLIMITED MOCKS" — the revised mobile handoff retires
+              it on brand-architecture grounds rather than typographic ones:
+              price was the first thing a visitor read, and naming the
+              category pinned the brand to one room while the Rooms section
+              four rows below says five more are coming. "Free" is still
+              said, in its own mono line under the CTA pair.
+
+              The paragraph and CTAs below stay split by breakpoint — those
+              really are phone-specific — so this is one element leaving that
+              arrangement, not the arrangement being abandoned. */}
+          <span className="inline-flex items-center gap-[9px] rounded-full border border-mint/30 bg-mint/[0.06] px-[15px] py-[7px] text-[11.5px] font-bold tracking-[0.13em] text-mint">
             <span className="relative flex h-1.5 w-1.5">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-mint opacity-75" />
               <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-mint" />
@@ -36,28 +39,24 @@ export default function Hero() {
             AGILITY THROUGH ANALYTICS
           </span>
 
-          {/* 39px Archivo 900, per the handoff — Archivo is already fetched
-              (index.html's Google Fonts link, weights 400..900) for
-              JukeLogo.jsx's wordmark, so this costs no extra request, but
-              nothing routes it through a Tailwind utility: font-display
-              resolves to Barlow Condensed (tailwind.config.js), the Draft
-              Room's own display face. JukeLogo.jsx reaches Archivo with an
-              inline fontFamily rather than a new config token for the same
-              single-call-site reason; this follows that precedent instead
-              of inventing a second way to ask for the same font. Desktop's
-              own h1 (font-display, Barlow Condensed) is untouched below. */}
-          <h1
-            className="mt-4 text-balance text-[39px] font-black leading-[1.02] tracking-[-0.035em] text-white lg:hidden"
-            style={{ fontFamily: "'Archivo', sans-serif" }}
-          >
-            Mock draft until the board makes sense.
-          </h1>
+          {/* One headline at every width, in font-display (Barlow Condensed).
+              The phone used to get its own 39px Archivo 900 sentence; the
+              revised handoff retires it for the reason its own note gives —
+              Archivo is the wordmark's face, and every section header on
+              this page is font-display, so a display headline in a second
+              face is the odd one out rather than the phone-specific choice
+              it looked like.
 
-          {/* The brief's 64px is a desktop-only value (prototype captured at
-              ~1440px) — scaled down for narrower widths rather than copied
-              literally, or "Master the draft." alone overflows a phone's
-              own padding before wrapping ever gets a say. */}
-          <h1 className="mt-7 hidden text-balance font-display text-[40px] font-extrabold leading-[1.05] tracking-[-0.02em] sm:text-[52px] sm:leading-[1.04] lg:block lg:text-[64px] lg:leading-[1.03] lg:tracking-[-0.032em]">
+              46px/700 at 1.04 below sm is the handoff's own value. sm and
+              above keep exactly the sizes and the 800 weight they already
+              had, so this is a change to the phone and to nothing else —
+              the earlier note about 64px being a ~1440px capture still
+              holds for the steps above.
+
+              A condensed face is what makes 46px fit 390px at all: "Master
+              the draft." at 39px Archivo was already close to the padding,
+              and this is seven points larger. */}
+          <h1 className="mt-5 text-balance font-display text-[46px] font-bold leading-[1.04] tracking-[-0.02em] sm:mt-7 sm:text-[52px] sm:font-extrabold sm:leading-[1.04] lg:text-[64px] lg:leading-[1.03] lg:tracking-[-0.032em]">
             <span className="text-white">Master the draft.</span>
             <br />
             <span className="text-mint">Dominate the season.</span>
@@ -90,26 +89,44 @@ export default function Hero() {
             CPU opponents that understand ADP, tiers and replacement value.
           </p>
 
-          {/* Two stacked 54px CTAs, mobile only. "See how it works" points
-              at #proof rather than the how-it-works doc: SiteNav.jsx's own
-              NAV_LINKS already uses #proof for the identical "How It Works"
-              label, and a second destination behind the same words would be
-              exactly the two-headers drift that file was written to end. */}
+          {/* Two stacked 54px CTAs, mobile only. The secondary is "Explore
+              The Rooms" pointing at #rooms — desktop's own pair, rather than
+              the "See how it works" → #proof this used to carry. Both are
+              live destinations on this page; what decided it is that the
+              hero's job here is to hand the reader the brand's shape (one
+              room live, five coming) rather than to re-explain the method
+              the section directly below is already the proof of.
+
+              The primary is "Enter the Draft Room", which is now the only
+              CTA string on the page — Header.jsx's sticky bar and
+              ClosingCta.jsx's band say it too. ClosingCta's own comment
+              already required the band and the hero to be identical at
+              every width; that rule is unchanged, all three strings just
+              moved together. */}
           <div className="mt-8 flex flex-col gap-3 lg:hidden">
             <a
               href="#/draft-room"
               className="flex h-[54px] w-full items-center justify-center rounded-full bg-gradient-to-r from-[#00E5FF] to-[#7B1FA2] text-base font-bold text-white
                          shadow-glass transition-all duration-200 active:scale-[0.98]"
             >
-              Start a mock draft
+              Enter the Draft Room
             </a>
             <a
-              href="#proof"
+              href="#rooms"
               className="flex h-[54px] w-full items-center justify-center rounded-full border border-white/20 text-base font-bold text-white
                          transition-colors duration-200 hover:border-teal-400/60 hover:text-teal-300"
             >
-              See how it works
+              Explore The Rooms
             </a>
+            {/* Where the price went. It is true, it is worth saying, and it
+                is no longer the first two words on the page — which is the
+                whole of the change: a mono caption under the action, not the
+                eyebrow above the headline. Not a tap target, so it is exempt
+                from the 44px floor; 11.5px is the handoff's own value and
+                sits on the type floor for non-tappable mono. */}
+            <p className="pt-[3px] text-center font-plex text-[11.5px] tracking-[0.1em] text-[#7C8A99]">
+              FREE &middot; UNLIMITED &middot; NO ACCOUNT
+            </p>
           </div>
 
           <div className="mt-9 hidden flex-wrap items-center gap-[26px] lg:flex">
@@ -121,7 +138,7 @@ export default function Hero() {
               className="rounded-full bg-gradient-to-r from-[#00E5FF] to-[#7B1FA2] px-8 py-4 text-base font-bold text-white
                          shadow-glass transition-all duration-200 hover:scale-105 hover:shadow-[0_0_15px_rgba(0,229,255,0.4)]"
             >
-              Start a Free Mock Draft
+              Enter the Draft Room
             </a>
             <a
               href="#rooms"

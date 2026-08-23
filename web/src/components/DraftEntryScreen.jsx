@@ -113,7 +113,7 @@ export default function DraftEntryScreen({
           {roomActive ? (
             <>Every column is a seat, and the empty cells already show which overall picks come with it. Everyone in the room sees the same board.</>
           ) : (
-            <>The other {Math.max(0, league.teams - 1)} {league.teams - 1 === 1 ? 'team is' : 'teams are'} drafted by Juke. Change your seat from Edit setup on the left if you'd rather draft from a different spot.</>
+            <>The other {Math.max(0, league.teams - 1)} {league.teams - 1 === 1 ? 'team is' : 'teams are'} drafted by Juke. Change your seat from Edit setup if you'd rather draft from a different spot.</>
           )}
         </p>
 

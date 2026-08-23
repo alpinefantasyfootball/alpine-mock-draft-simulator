@@ -1035,6 +1035,7 @@ export default function DraftRoom() {
         hubOpen={hubShowing}
         hubTab={hubTab}
         onOpenHub={openHub}
+        draftIsOver={draftIsOver}
       />
 
       {/* Opens itself on the draft-over edge (see the effect near the top)

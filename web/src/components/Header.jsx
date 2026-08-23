@@ -148,7 +148,7 @@ export default function Header() {
         href="#/draft-room"
         className="flex h-[50px] w-full items-center justify-center rounded-full bg-gradient-to-r from-[#00E5FF] to-[#7B1FA2] text-[15px] font-bold text-white shadow-glass transition-transform active:scale-[0.98]"
       >
-        Start a mock draft — free
+        Enter the Draft Room
       </a>
     </div>
     </>

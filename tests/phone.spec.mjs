@@ -211,8 +211,13 @@ test("the homepage hero starts under the header, not a screen below it", async (
   const r = await page.evaluate(() => {
     const root = document.getElementById("view-home");
     const header = root.querySelector("header");
+    // The eyebrow is desktop's mint pill at every width now — the phone's
+    // own teal "FREE · UNLIMITED MOCKS" line was retired by the revised
+    // handoff, and "FREE · UNLIMITED · NO ACCOUNT" is a different element
+    // that sits below the CTA pair. Anchor on whatever is genuinely first,
+    // which is what this test is about.
     const eyebrow = [...root.querySelectorAll("span")]
-      .find((e) => e.textContent.trim().startsWith("FREE ·") && e.getBoundingClientRect().height > 0);
+      .find((e) => e.textContent.trim() === "AGILITY THROUGH ANALYTICS" && e.getBoundingClientRect().height > 0);
     if (!header || !eyebrow) return { found: false };
     return {
       found: true,

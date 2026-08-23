@@ -190,7 +190,24 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
      benchmarked against — scrolls rather than compresses. 120px is under
      what a long name wants at the widest league sizes, which is exactly
      why the horizontal scroll stays: this is a floor, not a fit. */
-  const cols = `64px repeat(${teams}, minmax(112px, 1fr))`
+  /* 30px gutter below lg, not 64. A round number is one or two digits and
+     the rail is sticky, so it is permanently on screen — 64px of a 390px
+     phone is 16% of the width spent on "12", and the 34px it gives back is
+     most of a column's worth of name. The floor rises to 120 with it, which
+     is the width the handoff measured a hyphenated name against
+     ("J. Smith-Njigba" wants 81px once the pick code's own reserve is out of
+     the way); the grid scrolls either way, so a wider column costs nothing
+     but scroll distance. Desktop keeps its own pair below.
+
+     Fixed 120px below lg, not minmax(120px, 1fr). The floor is the right
+     shape for desktop — see the note above — but combined with this grid's
+     own min-w-max it resolves to max-content, and a board of real player
+     names came out at 179px a column: 1819px of scroll on a 390px phone,
+     4.7 screens wide, against the 1230px (30 + 10 x 120) a fixed track
+     gives. On a width where you can see three columns at once, how far the
+     board runs is the cost that matters, and 120px is already measured
+     against the longest name it has to hold. */
+  const cols = `30px repeat(${teams}, 120px)`
   const colsWide = `56px repeat(${teams}, minmax(120px, 1fr))`
   /* Explicit rows, not another auto-rows floor: the header keeps its own
      natural (avatar + name) height, and every round after it is exactly
@@ -199,7 +216,8 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
      tallest cell's own content, which is exactly the thing a fixed-height
      design needs to stop being possible; naming every track here removes
      the question rather than narrowing it. */
-  const rowsTemplate = `auto repeat(${rounds}, 50px)`
+  const rowsTemplate = `auto repeat(${rounds}, 56px)`
+  const rowsWide = `auto repeat(${rounds}, 50px)`
   const totalPicks = teams * rounds
 
   return (
@@ -310,8 +328,8 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
           every round is exactly 50px, never a minimum a tall cell could
           push past. */}
       <div
-        className="grid min-w-max pb-[calc(7rem+58px+env(safe-area-inset-bottom))] lg:pb-0 [grid-template-columns:var(--cols)] lg:[grid-template-columns:var(--cols-wide)] [grid-template-rows:var(--rows)]"
-        style={{ '--cols': cols, '--cols-wide': colsWide, '--rows': rowsTemplate }}
+        className="grid min-w-max pb-[calc(7rem+58px+env(safe-area-inset-bottom))] lg:pb-0 [grid-template-columns:var(--cols)] lg:[grid-template-columns:var(--cols-wide)] [grid-template-rows:var(--rows)] lg:[grid-template-rows:var(--rows-wide)]"
+        style={{ '--cols': cols, '--cols-wide': colsWide, '--rows': rowsTemplate, '--rows-wide': rowsWide }}
       >
         {/* header row */}
         <div className="sticky left-0 top-0 z-20 flex items-center justify-center border-b border-r border-slate-800 bg-slate-900/95 py-1 text-[10px] font-semibold uppercase tracking-wide text-white/30">
@@ -449,7 +467,7 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
                 return (
                   <div
                     key={round + '-' + s}
-                    className={'h-[50px] box-border border-b border-r border-slate-800/70 p-0.5 ' + mineEdge(isMine, round === 1, round === rounds)}
+                    className={'h-[56px] lg:h-[50px] box-border border-b border-r border-slate-800/70 p-0.5 ' + mineEdge(isMine, round === 1, round === rounds)}
                   >
                     {pick ? (
                       // layoutId matches the same player's row in
@@ -504,10 +522,20 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
                               reason: an initial plus a surname reads as a
                               person where a surname alone reads as a row in
                               a table. Never re-derived here. */}
-                          <p className="min-w-0 truncate text-[13px] font-semibold" title={pick.player.name}>
+                          {/* 11.5px/700 below lg against desktop's 13px, and
+                              the pick code drops to 9px with it. Both are the
+                              handoff's own values, and they are what makes a
+                              120px phone column hold the names it was sized
+                              for: at 13px, five of twenty-five real cards
+                              ellipsised — "J. Smith-Njigba" among them, which
+                              is the exact name the column width was measured
+                              against. 9px is the documented floor and this is
+                              one of the five things allowed to sit on it,
+                              being uppercase mono. */}
+                          <p className="min-w-0 truncate text-[11.5px] font-bold lg:text-[13px] lg:font-semibold" title={pick.player.name}>
                             {shortNameOf ? shortNameOf(pick.player) : pick.player.name}
                           </p>
-                          {code && <span className="shrink-0 font-plex text-[10px] text-white/50">{code}</span>}
+                          {code && <span className="shrink-0 font-plex text-[9px] text-white/50 lg:text-[10px]">{code}</span>}
                         </div>
                         {/* Line 2 — position badge, club, the snake arrow,
                             then the ADP gap on its own side so it never
@@ -543,8 +571,20 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
                       </motion.div>
                     ) : (
                       <div className="relative h-full box-border rounded-md border border-dashed border-slate-800">
+                        {/* One value for one element, and #7C8A99 rather
+                            than the two this used to carry. slate-500
+                            (#64748b) measures 4.06:1 on this ground — under
+                            the bar at 10px, and this number is the sole
+                            content of its cell, so it cannot be the dimmest
+                            thing on screen. Gold measured fine here (13.4:1
+                            on near-black; the "gold never paints type" rule
+                            is about light surfaces) but it was saying a
+                            second time what the column's own gold outline
+                            already says, in the one place a reader is trying
+                            to read a number. #7C8A99 is 5.48:1 and is the
+                            same tone a filled cell's pick code takes. */}
                         {overall != null && (
-                          <span className={'absolute left-1 top-0.5 text-[10px] ' + (isMine ? 'font-bold text-[#FFD166]' : 'text-slate-500')}>
+                          <span className="absolute left-1 top-0.5 text-[10px] text-[#7C8A99]">
                             {overall}
                           </span>
                         )}
