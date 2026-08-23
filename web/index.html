@@ -187,9 +187,29 @@
       position: absolute; width: 150px; height: 150px; border-radius: 50%;
       animation: sonar-ring 2100ms ease-out infinite both;
     }
+    /* purple-400 rather than the base purple, and the order is the design's
+       own: teal, teal, purple, entering 700ms apart across the 2100ms cycle.
+
+       Only the colour moved. Composited on the obsidian ground, #7B1FA2 at .75
+       measures 1.79:1 against 4.37 and 3.28 for the two teals — under half the
+       dimmer one, and that is at the ring keyframe's .65 peak rather than what
+       is on screen most of the sweep. #7B1FA2 is simply a dark purple; even at
+       full alpha it only reaches 2.35, so no alpha rescues it. purple-400
+       #9A3FC0 is already a token in tailwind.config.js, needs no new colour,
+       and at .9 measures 3.07 — alongside the teals instead of under them.
+
+       The reason it went unseen for a while was timing rather than colour, and
+       that is already fixed elsewhere: main.jsx holds the overlay for one full
+       ring cycle precisely so the third ring, which does not enter until
+       1400ms, is not cut off. Reordering the rings here would fight that and
+       falsify the note beside it. Keep the order; the colour was the part that
+       needed help.
+
+       Keep this in step with the RINGS array in SonarLoader.jsx, which carries
+       the same three colours for the panel tier. */
     #boot-sonar i:nth-of-type(1) { border: 1px solid rgba(0,229,255,.55); }
     #boot-sonar i:nth-of-type(2) { border: 1px solid rgba(0,229,255,.45); animation-delay: 700ms; }
-    #boot-sonar i:nth-of-type(3) { border: 1px solid rgba(123,31,162,.75); animation-delay: 1400ms; }
+    #boot-sonar i:nth-of-type(3) { border: 1px solid rgba(154,63,192,.9); animation-delay: 1400ms; }
 
     /* position:relative on the mark and the wordmark is what puts them above
        the rings in paint order - a positioned element draws over a

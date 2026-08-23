@@ -43,10 +43,22 @@ const TIERS = {
   panel: { mark: 104, ring: 96, gap: 16, track: '0.16em' },
 }
 
+// Teal, teal, purple, entering 700ms apart across the cycle — the design's own
+// order, deliberately unchanged. The third ring going unseen was a timing
+// problem and main.jsx fixed it there, by holding the overlay for one full ring
+// cycle rather than cutting it off at the mark.
+//
+// The colour did need help. Composited on obsidian, #7B1FA2 at .75 measures
+// 1.79:1 against the teals' 4.37 and 3.28, and even at full alpha only reaches
+// 2.35 — it is a dark purple and no alpha rescues it. purple-400 at .9 measures
+// 3.07. Both values are existing tokens; neither is new.
+//
+// index.html's inline copy for #boot-sonar carries the same three colours in
+// the same order. Change one, change the other.
 const RINGS = [
   { color: 'rgba(0,229,255,0.55)', at: 0 },
   { color: 'rgba(0,229,255,0.45)', at: 1 / 3 },
-  { color: 'rgba(123,31,162,0.75)', at: 2 / 3 },
+  { color: 'rgba(154,63,192,0.9)', at: 2 / 3 },
 ]
 
 // Rule 01, made structural rather than a thing every call site has to remember:
