@@ -9,6 +9,11 @@
    also what every chat app unfurls without cropping. */
 
 const W = 1200
+// The left text margin and where the component panel starts. The grade sizing
+// below solves against both, so neither may be written down twice.
+const TEXT_X = 64
+const PANEL_X = 760
+const GRADE_MAX_PX = 300
 const H = 630
 
 const TEAL = '#00E5FF'
@@ -24,20 +29,51 @@ const COMPONENTS = [
   { key: 'byePenaltyScaled', label: 'Byes' },
 ]
 
+/* document.fonts.check() cannot answer the question this guard is asking, and
+   for months it answered it wrongly. It reports whether the faces that *would*
+   be used are loaded — and a family with no @font-face rule anywhere has
+   nothing to load, so it returns true for any name at all, including one that
+   certainly does not exist. Measured on the live page: the check below and the
+   same call for a deliberately invented family both returned true.
+
+   That is not academic. This file asked for a face index.html stopped
+   requesting at the rebrand, and the guard went on passing while every card
+   drew in the browser's default sans — the precise failure the paragraph below
+   says must not happen, hidden by the check meant to prevent it.
+
+   So the test is a measurement, which can actually fail: draw a probe string in
+   the face we want and in a name nothing can match. Identical widths mean ours
+   fell back to the same default. tests/share-card.spec.mjs guards the other
+   half of it — that index.html is still asking for what this file draws with. */
+function faceIsReal(family, ctx) {
+  const probe = 'AWjgq0123 juke'
+  ctx.font = `900 72px "${family}", monospace`
+  const wanted = ctx.measureText(probe).width
+  ctx.font = '900 72px "ZzNoSuchFaceXYZ", monospace'
+  return wanted !== ctx.measureText(probe).width
+}
+
 /* The og-image script refuses to write a card in a fallback face, because a
    share card silently rendered wrong looks finished and fails in somebody
-   else's feed — same rule here. By the time this can be clicked the
-   dashboard has been rendering Poppins for a while, so a miss means fonts
-   genuinely failed and the button should say so rather than ship it. */
+   else's feed — same rule here. By the time this can be clicked the dashboard
+   has been rendering both of these faces for a while, so a miss means fonts
+   genuinely failed and the button should say so rather than ship it.
+
+   Archivo is the display face because scripts/build_og.html already moved the
+   link-preview card onto it at the rebrand and this file was missed. Both cards
+   say the same thing about the same draft, so they use the same face — and it
+   is one index.html actually requests. Inter is checked too, which it never
+   was; it carries three lines here and could fail the same silent way. */
 async function ensureFonts() {
   await Promise.all([
-    document.fonts.load('900 300px "Poppins"'),
-    document.fonts.load('700 44px "Poppins"'),
-    document.fonts.load('600 26px "Poppins"'),
-    document.fonts.load('400 22px "Inter"'),
+    document.fonts.load('900 300px "Archivo"'),
+    document.fonts.load('700 52px "Archivo"'),
+    document.fonts.load('600 24px "Archivo"'),
+    document.fonts.load('400 24px "Inter"'),
   ])
-  if (!document.fonts.check('900 300px "Poppins"')) {
-    throw new Error('display font not loaded')
+  const ctx = document.createElement('canvas').getContext('2d')
+  for (const family of ['Archivo', 'Inter']) {
+    if (!faceIsReal(family, ctx)) throw new Error(`${family} did not load`)
   }
 }
 
@@ -84,45 +120,73 @@ export async function drawShareCard(data) {
 
   // eyebrow + identity
   ctx.fillStyle = TEAL
-  ctx.font = '600 24px "Poppins", sans-serif'
+  ctx.font = '600 24px "Archivo", sans-serif'
   ctx.textBaseline = 'alphabetic'
   ctx.fillText('J U K E   ·   D R A F T   R E P O R T', 64, 84)
 
   ctx.fillStyle = '#FFFFFF'
-  ctx.font = '700 52px "Poppins", sans-serif'
+  ctx.font = '700 52px "Archivo", sans-serif'
   ctx.fillText(data.teamName, 64, 152)
 
   ctx.fillStyle = 'rgba(255,255,255,0.5)'
   ctx.font = '400 24px "Inter", sans-serif'
   ctx.fillText(`${data.leagueText}  ·  ${data.dateText}`, 64, 192)
 
-  // the grade, huge, in the gradient — measured off its own metrics so the
-  // rank column can sit beside it whatever letter (A+ vs F) it is
-  const gradeGrad = ctx.createLinearGradient(64, 260, 380, 560)
+  /* The grade is sized to its column rather than pinned at a fixed 300px, and
+     the difference is not cosmetic. A hardcoded size is a promise about one
+     typeface's metrics, and it is exactly the promise this card broke when it
+     moved to Archivo: 900 weight sets a two-glyph grade 431px wide at 300px,
+     against a column that cannot start further right than 429 without running
+     under the component panel. "1st of 10" printed straight through the plus
+     sign. The old code capped the column's *position* instead, which cannot
+     help — past the cap the text simply lands on top of the grade rather than
+     beside it.
+
+     Deriving the size means the next face change is a re-render rather than a
+     redraw. The budget: the column's widest line is the score
+     ("100 / 100 weighted score", 307px at 26px Inter), it has to clear the
+     panel with a margin, and everything left of it is the grade plus the gap.
+     Single-glyph grades keep the full 300px, since they were never the problem.
+     Swept across all thirteen grades: every one clears both the panel and the
+     grade beside it. */
+  const RANK_COL_W = 307
+  const GRADE_GAP = 40
+  const rankXMax = PANEL_X - 24 - RANK_COL_W
+  ctx.font = `900 ${GRADE_MAX_PX}px "Archivo", sans-serif`
+  const gradeAtMax = ctx.measureText(data.grade).width
+  const gradeSize = Math.min(
+    GRADE_MAX_PX,
+    Math.floor((GRADE_MAX_PX * (rankXMax - GRADE_GAP - TEXT_X)) / gradeAtMax),
+  )
+  const gradeWidth = (gradeAtMax * gradeSize) / GRADE_MAX_PX
+
+  // The gradient follows the glyphs rather than a fixed box, or a grade drawn
+  // smaller than that box shows one slice of the ramp instead of all of it.
+  const gradeGrad = ctx.createLinearGradient(
+    TEXT_X,
+    520 - gradeSize * 0.72,
+    TEXT_X + gradeWidth,
+    520,
+  )
   gradeGrad.addColorStop(0, TEAL)
   gradeGrad.addColorStop(1, PURPLE)
   ctx.fillStyle = gradeGrad
-  ctx.font = '900 300px "Poppins", sans-serif'
+  ctx.font = `900 ${gradeSize}px "Archivo", sans-serif`
   ctx.shadowColor = 'rgba(0,229,255,0.35)'
   ctx.shadowBlur = 60
-  ctx.fillText(data.grade, 64, 520)
+  ctx.fillText(data.grade, TEXT_X, 520)
   ctx.shadowBlur = 0
-  const gradeWidth = ctx.measureText(data.grade).width
 
-  // Capped, not purely measured: a two-glyph grade ("D+") is wide enough
-  // to push this column under the component panel at x=760 — seen, not
-  // theorised. 460 leaves the widest line ("13 / 100 weighted score",
-  // ~280px at 26px Inter) clear of the panel with room to spare.
-  const rankX = Math.min(64 + gradeWidth + 48, 460)
+  const rankX = TEXT_X + gradeWidth + GRADE_GAP
   ctx.fillStyle = '#FFFFFF'
-  ctx.font = '700 44px "Poppins", sans-serif'
+  ctx.font = '700 44px "Archivo", sans-serif'
   ctx.fillText(`${data.rankText} of ${data.teams}`, rankX, 400)
   ctx.fillStyle = 'rgba(255,255,255,0.5)'
   ctx.font = '400 26px "Inter", sans-serif'
   ctx.fillText(`${data.total} / 100 weighted score`, rankX, 444)
 
   // component panel, right side
-  const px = 760
+  const px = PANEL_X
   const py = 240
   const pw = 376
   const ph = 250
@@ -138,7 +202,7 @@ export async function drawShareCard(data) {
     const rowY = py + 52 + i * 52
     const score = Math.round(data.components[c.key])
     ctx.fillStyle = 'rgba(255,255,255,0.6)'
-    ctx.font = '600 22px "Poppins", sans-serif'
+    ctx.font = '600 22px "Archivo", sans-serif'
     ctx.fillText(c.label, px + 28, rowY)
     ctx.fillStyle = TEAL
     ctx.textAlign = 'right'
@@ -179,7 +243,7 @@ export async function drawShareCard(data) {
 
   // the marketing line the whole card exists for
   ctx.fillStyle = 'rgba(255,255,255,0.45)'
-  ctx.font = '600 24px "Poppins", sans-serif'
+  ctx.font = '600 24px "Archivo", sans-serif'
   ctx.textAlign = 'right'
   ctx.fillText('jukeff.com', W - 64, 84)
   ctx.textAlign = 'left'
