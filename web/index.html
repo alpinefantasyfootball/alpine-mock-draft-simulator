@@ -115,11 +115,25 @@
       display: flex; flex-direction: column;
       align-items: center; justify-content: center; gap: 30px;
       background: #0B0E14; overflow: hidden;
-      /* The overlay starts transparent and fades in only after 300ms, so a load
-         that resolves faster than that is never seen at all - main.jsx removes
-         the element while it is still at opacity 0. A flash of logo reads as a
-         glitch rather than as polish, and this one delay prevents most of the
-         ways a loading state makes a product feel slower than it is. */
+      /* The overlay fades in immediately now, and main.jsx holds it for a
+         minimum time rather than racing it away. It used to be delayed 300ms
+         specifically so a fast load never showed it at all: the element was
+         removed while still at opacity 0, on the argument that a flash of logo
+         reads as a glitch.
+
+         That argument is sound and the owner has overruled it deliberately.
+         Measured against production before the change: a warm load tore the
+         overlay down at 340ms having never exceeded opacity 0, so the person
+         who built it had never once seen it — only visitors on Fast 4G (first
+         visible 947ms) and slower did. A brand moment nobody on a fast
+         connection ever sees is not much of a brand moment.
+
+         The cost is real and worth stating: every visit now spends about a
+         second before content, including repeat visits on a warm cache. That
+         is the trade, not an oversight. If it ever needs undoing, put the
+         300ms delay back here and restore main.jsx's `if (shown === '0')`
+         early return — those two together are the whole of the old
+         behaviour. */
       opacity: 0;
       /* Two animations. The first is the fade-in; the second is a failsafe that
          takes the overlay away on its own after 8 seconds, and it is not
@@ -144,7 +158,7 @@
 
          visibility, not just opacity — a transparent element still answers a
          hit test, which is the half of this failure that swallows clicks. */
-      animation: sonar-boot-in 200ms ease-out 300ms both,
+      animation: sonar-boot-in 200ms ease-out both,
                  sonar-boot-failsafe 600ms ease-in 8s forwards;
       /* Declared here on the base rule rather than beside the opacity change in
          [data-sonar-out] below, so the fade-out has somewhere settled to start

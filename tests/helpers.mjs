@@ -152,6 +152,30 @@ export async function openApp(context, path = "#/draft-room") {
      a page that is working perfectly. */
   await page.waitForFunction(
     () => typeof state === "object" && typeof Live === "object" && typeof suggestions === "function");
+
+  /* Then wait for the cold-load overlay to leave.
+
+     #boot-sonar is fixed at z-index 9999 over the whole page, and since it
+     started being held for a minimum of 900ms rather than removed as soon as
+     React paints, it genuinely covers the page for about a second after load.
+     Every test that clicks or hit-tests immediately was racing it — phone
+     .spec.mjs's "nothing is sitting on top of the Start button" caught it
+     first, reporting the overlay's own wordmark as the thing covering the
+     button, which was true and not the bug that test exists to find.
+
+     Handled here rather than per-test because it is not one test's problem:
+     it is a property of every page load, and a person cannot click through the
+     overlay either. Waiting for it is what makes a test's timing match a
+     user's.
+
+     Tolerant of the overlay not existing at all — 404.html and the docs pages
+     have no loader — and of it never leaving, which is the failure sonar
+     .spec.mjs owns; a hard wait here would turn that into a timeout in every
+     other file instead. */
+  await page
+    .waitForFunction(() => !document.getElementById("boot-sonar"), null, { timeout: 12000 })
+    .catch(() => {});
+
   await page.evaluate(() => window.__watchSends());
   return page;
 }

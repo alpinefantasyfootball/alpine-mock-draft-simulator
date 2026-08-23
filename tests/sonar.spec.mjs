@@ -111,23 +111,41 @@ for (const [label, opts] of [["a phone", PHONE], ["a desktop", DESKTOP]]) {
   });
 }
 
-/* A load fast enough to beat the 300ms fade-in must never show the logo at all.
-   The overlay's own comment says so — "a flash of logo reads as a glitch rather
-   than as polish" — and it is the reason the fade is delayed rather than
-   immediate. Worth an assertion because the mechanism is easy to lose: drop the
-   delay from the animation and everything still "works", it just flashes. */
-test("a fast load never paints the loader", async ({ browser }) => {
+/* The loader is shown on every load, including a fast one — which is the
+   reverse of what this file asserted first, and the reversal is deliberate.
+
+   It used to assert that a warm load never painted the overlay: the fade-in was
+   delayed 300ms and main.jsx removed the element while it was still at opacity
+   0, on the argument that a flash of logo reads as a glitch. Measured against
+   production, a warm load tore it down at 340ms having never exceeded opacity
+   0 — so the owner had never seen their own loading state, and only visitors on
+   Fast 4G (first visible 947ms) or slower ever did.
+
+   The owner overruled that deliberately. The delay is gone and main.jsx holds
+   the overlay for MIN_VISIBLE_MS (900) measured from navigation start, so it is
+   seen every time and always for long enough to finish its own animation.
+
+   Two bounds, not one. A floor, because the whole point is that it is actually
+   seen. And a ceiling, because this now costs every visit about a second before
+   content — a real price, paid by repeat visitors on a warm cache too — and the
+   thing to catch is that price quietly growing. */
+test("the loader is shown on every load, and does not outstay its welcome", async ({ browser }) => {
   const { context, page } = await loadWithProbe(browser, DESKTOP);
-  await page.waitForTimeout(2500);
+  await page.waitForTimeout(4000);
   const sonar = await page.evaluate(() => window.__sonar);
 
-  // Local, warm, no network — if this ever paints here it will paint for
-  // everyone. Recorded rather than asserted-away: maxOpacity is reported in the
-  // failure message so a regression says how far it got.
+  expect(sonar.existed, "the overlay is in the served markup").toBe(true);
   expect(
     sonar.maxOpacity,
-    `the overlay reached opacity ${sonar.maxOpacity} on a warm local load`,
-  ).toBeLessThan(0.05);
+    `it reached full opacity (got ${sonar.maxOpacity}) on a warm local load`,
+  ).toBeGreaterThan(0.9);
+
+  /* Measured 930-970ms across desktop, phone and reduced-motion. The floor is
+     the mark's own choreography — sonar-focus is 580ms after a 300ms delay, so
+     it settles at 880 — and leaving before that shows a half-played animation,
+     which reads as a fault rather than a flourish. */
+  expect(sonar.removedAt, "it stays long enough to finish its own animation").toBeGreaterThan(800);
+  expect(sonar.removedAt, "and it is gone inside two seconds on a fast load").toBeLessThan(2000);
 
   await context.close();
 });

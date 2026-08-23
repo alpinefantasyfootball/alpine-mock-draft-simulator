@@ -65,8 +65,21 @@ const boot = document.getElementById('boot-sonar')
 if (boot) {
   requestAnimationFrame(() =>
     requestAnimationFrame(() => {
+      // Hold for MIN_VISIBLE_MS from navigation start, then leave. performance
+      // .now() is measured from the time origin, so it is exactly how long this
+      // page has been loading — no separate start timestamp to keep in step.
+      //
+      // 900ms is the logo's own choreography, not a round number: the mark's
+      // sonar-focus runs 580ms after a 300ms delay, so it settles at 880. Any
+      // less and the overlay leaves mid-animation, which looks like a fault
+      // rather than a flourish.
+      //
+      // This replaces an early return that removed the element outright while
+      // it was still at opacity 0 — the branch a fast load always took, and the
+      // reason the loader was invisible to anyone on a quick connection.
+      const MIN_VISIBLE_MS = 900
+      setTimeout(() => {
       const shown = getComputedStyle(boot).opacity
-      if (shown === '0') return boot.remove()
 
       boot.style.opacity = shown
       boot.style.animation = 'none'
@@ -79,6 +92,7 @@ if (boot) {
       // swallows every click on the page, so the one thing that must not happen
       // is this element outliving the load - not a few spare milliseconds.
       setTimeout(() => boot.remove(), 240)
+      }, Math.max(0, MIN_VISIBLE_MS - performance.now()))
     }),
   )
 }
