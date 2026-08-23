@@ -250,3 +250,57 @@ test("the app's own advice beats a deliberately unbuilt roster in most rooms", a
   const medianRank = results.map((r) => r.advised.rank).sort((a, b) => a - b)[Math.floor(results.length / 2)];
   expect(medianRank, `median finishing rank of the advised seat across ${results.length} rooms`).toBeLessThanOrEqual(9);
 });
+
+/* A room of near-identical rosters must not produce a near-total spread.
+
+   scaleAcross() stretches whatever span exists across the full 0-100, so when
+   ten rosters sit inside an 11-point band the lowest becomes 0 and the highest
+   100 — an A+ against an F manufactured from a difference the projection
+   cannot resolve. Measured with every seat running identical logic: raw
+   starter strength 82 to 90, all nine slots filled on every team, and mean
+   finishing ranks from 1.6 to 9.8, stable by seat across every room.
+
+   MIN_SPAN floors the two components whose real spread is inside that error.
+   This asserts the outcome rather than the constant: drive a room where every
+   seat drafts the same way, and the composite spread has to stay well short of
+   the full scale. Without the floor this room measures 100. */
+test("a room of identical drafters does not produce a full-scale grade spread", async ({ browser }) => {
+  const context = await browser.newContext();
+  const page = await openApp(context, "#/draft-room");
+  await startSoloDraft(page);
+
+  const room = await page.evaluate(() => {
+    state.seed = 24757;
+    applyJitter();
+    let guard = 0;
+    while (!draftOver() && guard++ < 900) {
+      const c = onTheClock();
+      if (!c) break;
+      // Every seat, mine included, on the identical rule.
+      const choice = cpuChoice(c.slot, c.round);
+      if (!choice) break;
+      makePick(choice);
+      pruneQueue();
+    }
+    const all = analyseDraft();
+    const totals = all.map((t) => t.total);
+    return {
+      spread: Math.max(...totals) - Math.min(...totals),
+      rawStarterSpread: Math.max(...all.map((t) => t.starters)) - Math.min(...all.map((t) => t.starters)),
+      ranks: all.map((t) => t.rank).sort((a, b) => a - b),
+    };
+  });
+  await context.close();
+
+  // The premise: these rosters really are near-identical, so the grade has
+  // nothing real to spread. If this ever stops being true the assertion below
+  // is measuring something else and should be re-derived.
+  expect(room.rawStarterSpread, "identical drafters produce near-identical starter strength").toBeLessThan(25);
+
+  expect(room.spread, `composite spread across a room of identical drafters (was 100 unfloored)`).toBeLessThan(60);
+
+  // The ordering survives — somebody still finishes first. Flooring the span
+  // compresses the scores, it does not flatten the standings.
+  expect(room.ranks[0], "somebody is still ranked first").toBe(1);
+  expect(new Set(room.ranks).size, "and the room is still ranked, not tied flat").toBeGreaterThan(3);
+});

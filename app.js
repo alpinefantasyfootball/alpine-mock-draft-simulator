@@ -3567,13 +3567,68 @@ function analyseTeam(slot) {
 }
 
 // Scale a raw component onto 0-100 relative to the rest of the room.
+/* The smallest room-wide spread a component may be stretched across.
+
+   This file already records that a span of zero hands everyone 50, so a
+   constant contributes a constant. The near-zero case is the same failure one
+   step along and is worse, because it does not go flat — it goes maximally
+   confident on noise. With ten rosters inside an 11-point band the lowest is
+   scaled to 0 and the highest to 100, and an A+ against an F is manufactured
+   out of a difference nothing can measure.
+
+   That is not hypothetical. Measured with all ten seats running identical
+   logic, so every roster is as good as every other: raw starter strength came
+   out 82 to 90, all nine starting slots filled on every team, and the grade
+   turned that into finishing ranks from 1.6 to 9.8 — stable by seat across
+   every room, because deterministic drafting puts the same seats on the same
+   side of a hair's-breadth gap every time.
+
+   The floors are the two components whose real spread sits inside the
+   measurement error. Across twelve rooms at 10 and 12 teams:
+
+       starters   span  9 - 16   (median 11)   weight 50%
+       value      span 50 - 89   (median 76)   weight 25%
+       build      span 11 - 21   (median 12)   weight 15%
+       byes       span 80 - 100  (median 80)   weight 10%
+
+   starters is a sum of aboveReplacement() over nine players and the projection
+   runs at MAE 6.8 a player, so a lineup total carries roughly 6.8 x sqrt(9) =
+   20 points of error. Every observed span is inside that. 20 is therefore the
+   projection's own resolution, not a taste: the same reasoning MISS_FLOOR = 10
+   already uses to refuse to call a single-digit ADP delta a reach.
+
+   build gets the same 20, and its justification is weaker and should be said
+   so: it is derived from replacement-relative rank distances, so it inherits
+   the same projection error, and its observed spans sit in the same band as
+   starters'. It is calibrated from that distribution rather than from an
+   independent error model. If build ever gets one, this is the number to
+   revisit.
+
+   value and byes are unfloored because they do not need it — their spans are
+   four to eight times these, which is real signal about real differences.
+
+   What this does not change: the ordering. The transform is monotonic, so
+   somebody still finishes first and the standings still rank the room. What
+   stops is manufacturing an elite grade out of a one-point edge — a close room
+   now reads as a close room. */
+const MIN_SPAN = { starters: 20, build: 20 };
+
 function scaleAcross(all, key) {
   const values = all.map((t) => t[key]);
   const low = Math.min.apply(null, values);
   const high = Math.max.apply(null, values);
   const span = high - low;
+  /* Centred on the room's midpoint rather than anchored at its low, which is
+     what lets a floor apply at all: with the old (v - low) / span the lowest
+     team is 0 by construction however close the room is. Where the real span
+     already clears the floor this is arithmetically identical to what it
+     replaced — low maps to 0, high to 100 — so an ordinary room is untouched. */
+  const denom = Math.max(span, MIN_SPAN[key] || 0);
+  const mid = (low + high) / 2;
   all.forEach(function (t) {
-    t[key + "Scaled"] = span === 0 ? 50 : ((t[key] - low) / span) * 100;
+    t[key + "Scaled"] = denom === 0
+      ? 50
+      : Math.max(0, Math.min(100, 50 + ((t[key] - mid) / denom) * 100));
   });
 }
 
