@@ -3382,6 +3382,29 @@ function bestLineup(roster) {
 const FORCED_LATE = { K: true, DST: true };
 function freelyChosen(p) { return !FORCED_LATE[p.player.pos]; }
 
+/* The same argument as the one above, applied to the thing it is actually
+   about.
+
+   The kicker exclusion was justified by board rank landing "past the last pick
+   that exists" — but that is a property of the pick, not of the position, and
+   it is true of plenty of late-round skill players too. The board is around
+   230 deep and a ten-team fourteen-round draft is 140 picks, so anyone taken
+   at the end whose rank is past 140 scores as an enormous reach for no reason
+   anybody controls: there was never a world in which he went earlier.
+
+   Measured with every seat drafting identically, so any difference between
+   seats is the metric rather than the drafting: one seat's round-14 pick was
+   board rank 187 at pick 138, a gap of -49, against another seat's rank 125 at
+   pick 139 for +14. A 63-point swing on one pick out of twelve counted, decided
+   by who happened to be left. Across six rooms that noise spread mean draft
+   value from +2.1 to -5.6 between seats; excluding these picks narrows it to
+   +2.1 to -2.1, and it drops 33 of 720 picks to do it.
+
+   It does not fix the whole seat bias — see the note on that in the grade
+   section — but it removes a component of it that is measuring the board's
+   depth rather than anybody's draft. */
+function reachableRank(p, lastPick) { return p.player.overall <= lastPick; }
+
 /* The label under the bye bar. It used to name the worst week and stop,
    which was the same blind spot the score had: a lineup with two bad weeks
    read as though it had one. Two are named, and beyond that it says how many
@@ -3398,7 +3421,12 @@ function byeSummary(badWeeks) {
 function analyseTeam(slot) {
   const roster = rosterOf(slot);
   const picks  = state.picks.filter((p) => p.slot === slot);
-  const judged = picks.filter(freelyChosen);
+  /* Both filters, and they feed the value sum and both callouts alike — a
+     pick that cannot meaningfully be reached for cannot be the biggest reach
+     either, which is the same lottery the kicker exclusion was written to
+     stop. */
+  const lastPick = league.teams * league.rounds;
+  const judged = picks.filter((p) => freelyChosen(p) && reachableRank(p, lastPick));
   const lineup = bestLineup(roster);
 
   // 1. starter strength
