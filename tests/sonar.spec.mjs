@@ -80,10 +80,22 @@ for (const [label, opts] of [["a phone", PHONE], ["a desktop", DESKTOP]]) {
        working page in every other check — the content is all there underneath
        it — and only a hit test finds it. */
     const reachable = await page.evaluate(() => {
-      const cta = [...document.querySelectorAll("#view-home a")].find(
-        (a) => a.textContent.trim() === "Enter the Draft Room" && a.getBoundingClientRect().height > 0,
-      );
+      /* [data-hero-cta], not a text match. Three anchors on this page read
+         "Enter the Draft Room" — the hero's, the closing band's, and Header's
+         sticky bottom bar — and the sticky one is the first in document order.
+         It is also translated off-screen by `translate-y-full` while the hero
+         CTA is visible, and a translated element still reports a non-zero box,
+         so a height check does not exclude it. Hit-testing its centre asks
+         about a point outside the viewport and gets null back, which reads as
+         "something is covering the button" when nothing is. */
+      const cta = [...document.querySelectorAll("[data-hero-cta]")]
+        .find((el) => el.getBoundingClientRect().height > 0);
       if (!cta) return { found: false };
+      // Short device profiles (iPhone 13 is 664 CSS px tall here) put the hero
+      // CTA below the fold, and elementFromPoint only answers about the
+      // viewport. Bring it into view first — the question is whether the
+      // overlay is in the way, not where the page happens to be scrolled.
+      cta.scrollIntoView({ block: "center" });
       const b = cta.getBoundingClientRect();
       const hit = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
       return {

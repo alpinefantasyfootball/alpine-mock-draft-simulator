@@ -56,7 +56,7 @@ export default function Hero() {
               A condensed face is what makes 46px fit 390px at all: "Master
               the draft." at 39px Archivo was already close to the padding,
               and this is seven points larger. */}
-          <h1 className="mt-5 text-balance font-display text-[46px] font-bold leading-[1.04] tracking-[-0.02em] sm:mt-7 sm:text-[52px] sm:font-extrabold sm:leading-[1.04] lg:text-[64px] lg:leading-[1.03] lg:tracking-[-0.032em]">
+          <h1 className="mt-5 text-balance font-display text-[46px] font-extrabold leading-[1.04] tracking-[-0.02em] sm:mt-7 sm:text-[52px] sm:leading-[1.04] lg:text-[64px] lg:leading-[1.03] lg:tracking-[-0.032em]">
             <span className="text-white">Master the draft.</span>
             <br />
             <span className="text-mint">Dominate the season.</span>
@@ -106,8 +106,15 @@ export default function Hero() {
               every width; that rule is unchanged, all three strings just
               moved together. */}
           <div className="mt-8 flex flex-col gap-3 lg:hidden">
+            {/* data-hero-cta is what Header.jsx's sticky bottom bar watches,
+                so it can stand down while this button is on screen rather than
+                floating the same CTA over it. A data attribute rather than an
+                id: there are two of these (this one and desktop's below) and
+                only one is ever rendered, so an id would be a lie at one width
+                or a duplicate at both. */}
             <a
               href="#/draft-room"
+              data-hero-cta=""
               className="flex h-[54px] w-full items-center justify-center rounded-full bg-gradient-to-r from-[#00E5FF] to-[#7B1FA2] text-base font-bold text-white
                          shadow-glass transition-all duration-200 active:scale-[0.98]"
             >
@@ -126,8 +133,14 @@ export default function Hero() {
             {/* #/draft-room, not #/draft — see the comment on ROOMS in
                 app.js. This is the product's actual "start" button, so it
                 was the most direct way this bug shipped. */}
+            {/* Marked too, though only the phone's sticky bar reads it. Both
+                hero CTAs carry it because exactly one of the two is ever
+                rendered, and marking only one means anything looking for "the
+                hero's CTA" finds a display:none element at the other width —
+                which reports a zero box and hit-tests at the page origin. */}
             <a
               href="#/draft-room"
+              data-hero-cta=""
               className="rounded-full bg-gradient-to-r from-[#00E5FF] to-[#7B1FA2] px-8 py-4 text-base font-bold text-white
                          shadow-glass transition-all duration-200 hover:scale-105 hover:shadow-[0_0_15px_rgba(0,229,255,0.4)]"
             >

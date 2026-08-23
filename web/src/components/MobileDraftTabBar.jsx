@@ -23,20 +23,33 @@ import { ChartColumn, ClipboardList, LayoutGrid, List, Sparkle } from 'lucide-re
 // equivalent to copy from, and the set it replaced was differentiated mostly
 // by corner radius — Grid3x3 and ClipboardList read as the same glyph at 20px.
 export default function MobileDraftTabBar({ view, onSelectView, hubOpen, hubTab, onOpenHub, draftIsOver }) {
+  /* The hub has five internal tabs and this bar maps two of them. Queue, Chat
+     and Log are reachable — the Board's own "Log ›" button opens one directly —
+     and while any of those was showing, every item here fell through to
+     inactive and the bar drew *nothing* as selected. A five-item nav with no
+     selection reads as "no tab is on", which is never true.
+
+     So an item that owns a hub tab lights for that tab, and a view item lights
+     when its view is showing and the hub is not sitting on one of those two.
+     The sheet is a layer over the current view, so on Queue/Chat/Log the bar
+     correctly keeps pointing at the Board or Decide underneath it. */
+  const hubOwnsTab = hubOpen && (hubTab === 'team' || hubTab === 'players')
+  const viewActive = (v) => view === v && !hubOwnsTab
+
   const items = [
     // Decide has nothing left to decide once the board is full, and
     // DraftRoom.jsx already redirects the view off it at that point — so the
     // tab goes with it rather than staying as a button that silently lands
     // somewhere else.
-    ...(draftIsOver ? [] : [{ key: 'decide', label: 'Decide', icon: Sparkle, active: view === 'decide' && !hubOpen,
+    ...(draftIsOver ? [] : [{ key: 'decide', label: 'Decide', icon: Sparkle, active: viewActive('decide'),
       onClick: () => onSelectView('decide') }]),
-    { key: 'board', label: 'Board', icon: LayoutGrid, active: view === 'board' && !hubOpen,
+    { key: 'board', label: 'Board', icon: LayoutGrid, active: viewActive('board'),
       onClick: () => onSelectView('board') },
     { key: 'roster', label: 'Roster', icon: ClipboardList, active: hubOpen && hubTab === 'team',
       onClick: () => onOpenHub('team') },
     { key: 'players', label: 'Players', icon: List, active: hubOpen && hubTab === 'players',
       onClick: () => onOpenHub('players') },
-    { key: 'analysis', label: 'Analysis', icon: ChartColumn, active: view === 'analysis' && !hubOpen,
+    { key: 'analysis', label: 'Analysis', icon: ChartColumn, active: viewActive('analysis'),
       onClick: () => onSelectView('analysis') },
   ]
 
