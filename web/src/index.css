@@ -43,3 +43,13 @@ body {
   background: rgba(11, 14, 20, 0.7);
   backdrop-filter: blur(4px);
 }
+
+/* A backgrounded tab would otherwise run Sonar's ring loop indefinitely on
+   somebody's battery. SonarLoader.jsx toggles the attribute on
+   visibilitychange; animation-play-state rather than unmounting, so the ring
+   loop resumes mid-flight and the mark's entrance is not replayed when the tab
+   comes back. Both attributes sit on the same element - the component's own
+   root - and the rings are its descendants. */
+[data-sonar][data-sonar-paused] [data-sonar-ring] {
+  animation-play-state: paused;
+}
