@@ -85,16 +85,18 @@ if (boot) {
       // state that never shows its own last element is not finished, it is
       // interrupted.
       //
-      // 1800 puts the third ring 400ms into its sweep, which is where the
-      // composition first reads as complete rather than still assembling. The
-      // next natural stop above this is 2100ms, one full ring cycle, if it
-      // ever wants to breathe longer.
+      // 2100 is one full sonar-ring cycle: ring 1 completes the sweep it
+      // started at 0ms, by which point every other element has long since
+      // arrived. It is also the duration the design this came from shipped
+      // with, which is the deciding reason — the timing is the design's to
+      // choose, and 2100 is what it chose. Holding past a full cycle would
+      // only repeat a sweep the reader has already watched.
       //
       // This whole hold replaces an early return that removed the element
       // outright while it was still at opacity 0 — the branch a fast load
       // always took, and the reason the loader was invisible to anyone on a
       // quick connection.
-      const MIN_VISIBLE_MS = 1800
+      const MIN_VISIBLE_MS = 2100
       setTimeout(() => {
       const shown = getComputedStyle(boot).opacity
 

@@ -150,7 +150,7 @@ test("the loader is shown on every load, and does not outstay its welcome", asyn
      composition short fails here rather than shipping a loader nobody sees
      complete. */
   expect(sonar.removedAt, "it stays until the whole composition has arrived").toBeGreaterThan(1500);
-  expect(sonar.removedAt, "and it is gone inside two and a half seconds").toBeLessThan(2600);
+  expect(sonar.removedAt, "and it is gone inside three seconds").toBeLessThan(3000);
 
   await context.close();
 });
