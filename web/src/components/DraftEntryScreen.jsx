@@ -85,7 +85,13 @@ export default function DraftEntryScreen({
           ))}
         </div>
 
-        <div className="mt-5 border-t border-white/[0.07] pt-[18px]">
+        {/* Desktop only. Nine rows reading "Empty" is roughly 300px of a
+            390px phone spent saying nothing has happened yet — which the
+            heading three lines above ("Nobody has picked yet") already
+            says in five words. The roster earns its space from the Roster
+            tab once it has contents in it. On desktop it costs a rail
+            nothing else wants, so it stays. */}
+        <div className="mt-5 hidden border-t border-white/[0.07] pt-[18px] lg:block">
           <div className="mb-3 text-[10px] font-bold uppercase tracking-[0.12em] text-white/50">Your roster, empty</div>
           <div className="flex flex-col gap-[3px]">
             {lineup.seats.map((s, i) => (

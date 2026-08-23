@@ -416,7 +416,22 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
               >
                 {initialsOf(teamLabelOf(s))}
               </span>
-              <span className={'truncate text-xs font-semibold ' + (s === mySlot ? 'text-[#FFD166]' : 'text-white/60')}>
+              {/* Two lines below lg, one with an ellipsis above it. A
+                  120px column cannot hold "Bone-Thugs-N-Montgomery" on one
+                  line at any size worth reading, and the room's team names
+                  are most of its personality — so the phone spends a second
+                  9.5px line on them rather than a smaller single line.
+                  overflow-wrap:anywhere is what lets a long unbroken run
+                  like that one split at all; line-clamp caps it at two and
+                  ellipsises the rest. Desktop keeps the single truncated
+                  line its wider columns can afford. */}
+              <span
+                className={
+                  'w-full text-center text-[9.5px] font-semibold leading-[1.15] [overflow-wrap:anywhere] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] [display:-webkit-box] overflow-hidden ' +
+                  'lg:block lg:truncate lg:text-xs lg:leading-normal ' +
+                  (s === mySlot ? 'text-[#FFD166]' : 'text-white/60')
+                }
+              >
                 {label}
               </span>
             </>

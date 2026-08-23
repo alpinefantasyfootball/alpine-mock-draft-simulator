@@ -262,16 +262,40 @@ test("Decide leads with the recommendations, not the roster rail", async ({ brow
     const seen = (el) => { const b = el.getBoundingClientRect(); return b.width > 0 && b.height > 0 };
     const leaf = (text) => [...root.querySelectorAll("*")]
       .find((e) => e.children.length === 0 && e.textContent.trim() === text && seen(e));
-    const heading = leaf("Three ways to go");
-    // The first card's own Draft button — the thing the screen is for, and
-    // the one element on it that is unambiguously part of a recommendation.
+    // The live heading at both widths now — the phone-specific
+    // "Three ways to go" it briefly carried is gone.
+    const heading = leaf("What Juke would do");
+    /* Two measurements off the first card, not one.
+
+       Its top edge is the assertion that matters: the recommendation has to
+       be the thing you land on. Its Draft button is the second, and it is
+       deliberately a looser bound — following the revised handoff (a
+       two-line still-to-fill block, and the live subline restored under the
+       heading) costs about 45px, which puts the button just under the fold
+       on a 664px-tall device profile while the card itself is plainly
+       visible. That is a fair trade and not the bug this test exists for.
+
+       What it must still catch is the 644px desktop rail coming back, which
+       put the button past 780px and the card's own top past the fold with
+       it. So the button gets a ceiling of 1.2 viewports — a thumb-flick —
+       rather than no assertion at all. */
+    const rankLabel = [...root.querySelectorAll("*")]
+      .find((e) => e.children.length === 0 && /^(JUKE.S PICK|SCARCEST|SAFEST WAIT|ALSO AVAILABLE)$/i.test(e.textContent.trim()) && seen(e));
     const draftBtn = [...root.querySelectorAll("button")]
       .find((b) => /^Draft .+/.test(b.textContent.trim()) && seen(b));
-    const strip = [...root.querySelectorAll("button")]
-      .find((b) => b.textContent.replace(/\s+/g, "").startsWith("RosterQB") && seen(b));
+    // The compact block that replaced the rail: a "Still to fill" label with
+    // a Roster link beside it, and the four count chips on their own line.
+    // It was one line and is now two — the revised handoff's shape — so this
+    // anchors on the label and a chip rather than on their concatenation.
+    const stripLabel = [...root.querySelectorAll("span")]
+      .find((e) => e.textContent.trim() === "Still to fill" && seen(e));
+    const stripChip = [...root.querySelectorAll("span")]
+      .find((e) => /^QB \d+(\/\d+)?$/.test(e.textContent.trim()) && seen(e));
+    const strip = stripLabel && stripChip ? stripLabel : null;
     return {
       headingTop: heading ? heading.getBoundingClientRect().top : null,
-      cardTop: draftBtn ? draftBtn.getBoundingClientRect().top : null,
+      cardTop: rankLabel ? rankLabel.getBoundingClientRect().top : null,
+      draftBtnTop: draftBtn ? draftBtn.getBoundingClientRect().top : null,
       railShown: !!leaf("Your team"),
       stripShown: !!strip,
       viewport: innerHeight,
@@ -279,10 +303,11 @@ test("Decide leads with the recommendations, not the roster rail", async ({ brow
   });
 
   expect(r.railShown, "the desktop roster rail is not on the phone").toBe(false);
-  expect(r.stripShown, "the one-line roster strip replaced it").toBe(true);
-  expect(r.headingTop, "Three ways to go is drawn").not.toBeNull();
+  expect(r.stripShown, "the compact still-to-fill block replaced it").toBe(true);
+  expect(r.headingTop, "What Juke would do is drawn").not.toBeNull();
   expect(r.headingTop, "and it is above the fold").toBeLessThan(r.viewport);
-  expect(r.cardTop, "so is the first card's own Draft button").toBeLessThan(r.viewport);
+  expect(r.cardTop, "and so is the first recommendation card").toBeLessThan(r.viewport);
+  expect(r.draftBtnTop, "with its Draft button no more than a flick below").toBeLessThan(r.viewport * 1.2);
   await context.close();
 });
 
