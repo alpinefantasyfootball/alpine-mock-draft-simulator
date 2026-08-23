@@ -587,15 +587,26 @@ quarter of it; an unrated one stays exactly where the market put him. No
 centre point to argue about, and a player with no projection scores `null` and
 is left alone rather than pushed down for the want of one. The cap is there
 because ADP is the one input that knows when a player will actually be gone,
-and advice that forgets that is not advice. Under default scoring it barely
-moves — at pick one it swaps the sixth name and reaches no further than ADP 7
-— and grows more assertive late, which is where ADP is noisiest.
+and advice that forgets that is not advice.
+
+**And it only applies when the scoring table has left the one ADP was drawn
+from.** `scoringIsStock()` is the gate. FFC publishes one ADP set per format
+and the pipeline picks the set by `league.scoring`, so on a standard, half or
+full PPR table the market already saw these rules — discounting a player again
+for a projection built from those same rules counts one fact twice. It was
+unconditional at first and that is the bug this gate fixes; the measurement is
+below.
 
 **`cpuChoice()` deliberately never sees any of this.** The CPU teams are meant
 to behave like a room drafting off a market, and in a shared room every client
-has to reach the same answer for an empty chair. Your suggestions and the CPU
-no longer share one formula, which is why the how-it-works page had to be
-changed too — it previously implied they did.
+has to reach the same answer for an empty chair.
+
+On a stock table your suggestions and `cpuChoice()` now reach the same answer
+again, and that is the gate above rather than a regression — measured over ten
+pinned seeds they agree on every seat and every seed. They diverge exactly
+where the scoring table does. The how-it-works page says this in those terms;
+it has been rewritten twice now, once when the model arrived and once when the
+gate did, and it must not be left describing the other one.
 
 ### Tried and rejected: pricing depth by `aboveReplacement`
 
@@ -633,11 +644,61 @@ contradiction. The grade is scoring who *starts*. This is choosing who to
 *hold*. **Do not reach for `aboveReplacement` again without re-reading this.**
 
 **Whether it helps is a measurable question, so measure it.** Same seed, same
-computer teams, your seat drafting each way, across pinned seeds: starter
-strength rose every time by four to five points and the finishing rank
-improved every time. Draft value moved both ways, which is the tell that it is
-finding value rather than reaching. A suggestion change that cannot show this
-is a change to the numbers, not to the advice.
+computer teams, your seat drafting each way, across pinned seeds. A suggestion
+change that cannot show this is a change to the numbers, not to the advice.
+
+**This section used to record that the model multiplier passed that test, and
+re-run against today's board it fails it.** Ten pinned seeds, stock half-PPR:
+
+```
+with the multiplier:     mean finishing rank 9.30, starter strength 83.0
+without it:              mean finishing rank 6.20, starter strength 87.3
+```
+
+Stronger starting lineup without it in **10 of 10**, and with it the advice
+never once outranked `cpuChoice()` at the same seat — it finished last in the
+room in five of eight unpinned runs. Whether that is drift in the data or an
+error in the original measurement is not recoverable now, and the lesson is
+the one this file keeps arriving at: **a measurement is true of the board it
+was taken on.** Re-run it before trusting a number in here that decides
+behaviour.
+
+**At five points a reception the sign flips, which is what saved the feature
+from being deleted.** The first fix was to remove the term outright, and it was
+wrong for a reason worth keeping: measured only under the default league, which
+is the one scenario the term was never for.
+
+```
+rec 0.5   with 82.0 / rank 9.33      without 87.0 / rank 5.50
+rec 5     with 90.7 / rank 5.17      without 87.0 / rank 5.50
+```
+
+The "without" row is identical at both, because without it the advice does not
+answer to the scoring table at all — the exact complaint at the top of this
+section, reproduced. So the term is neither good nor bad in general. It is
+right precisely when ADP is wrong, which is what `scoringIsStock()` tests.
+
+**It looked like a tight end problem and it was not.** The advice held 2.3
+tight ends to `cpuChoice()`'s 1.8, and `overallScore()` is points above
+replacement at a player's own position — TE replacement is low, so a second and
+third keep scoring well while `bestLineup()` can start one. The discount was
+therefore gated on still having a startable slot at that position, twice:
+strictly on `league.starters`, and again granting the FLEX to RB and WR only.
+Both brought tight ends to 1.8 and **neither improved the roster at all**
+(rank 9.40, starter strength 82.6). Fixing the symptom moved nothing, which is
+what said the term was mispriced rather than misaimed. Do not re-derive this
+gate from roster slots without re-reading that.
+
+**`shotPicks()` applies the multiplier unconditionally and should keep doing
+so.** It is what puts an elite quarterback and two tight ends in the hero shot
+rather than the forty-name ADP slice that came out two colours. A picture is
+not a roster and being wrong about who to draft costs it nothing — so a global
+`MODEL_CAP = 0` is the wrong shape of fix and would regress the landing page.
+
+**And the whole thing surfaced from a test nobody trusted.** `grade.spec.mjs`
+asserts an advised roster out-totals a deliberately unbuilt one, and it had
+been failing intermittently — which reads as flake, because the seed is random
+per draft. It was not flake. It was this, firing about six times in ten.
 
 ## Latest news
 

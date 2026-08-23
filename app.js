@@ -2422,7 +2422,40 @@ function suggestions(filter) {
     return true;
   });
 
-  const modelMultiplier = modelMultipliers(pool);
+  /* The fourth term, and it only applies when the scoring table has left the
+     one ADP was drawn from — see scoringIsStock(). It was unconditional, and
+     measured over ten pinned seeds with my seat drafting each way against an
+     identical room, that cost real rosters:
+
+       stock table, with it:     mean rank 9.30, starter strength 83.0
+       stock table, without it:  mean rank 6.20, starter strength 87.3
+
+     Stronger starting lineup without it in 10 of 10, and it never once
+     outranked cpuChoice at the same seat. On a stock table ADP has already
+     priced the rules in, so discounting a player again for a projection built
+     from those same rules is counting the same fact twice.
+
+     The reverse holds where it was aimed. At five points a reception it is
+     worth about four points of starter strength over ignoring the rules, and
+     ignoring them is what the ungated-off version does — its numbers do not
+     move at all between half-PPR and 5-point PPR, which is precisely the
+     complaint this term was written to answer.
+
+     It looked like a tight end problem and it is not, which is worth keeping.
+     The advice held 2.3 tight ends against the CPU's 1.8, and overallScore()
+     is points above replacement at a player's own position — TE replacement is
+     low, so a second and third keep scoring well while bestLineup() can start
+     one. So the discount was gated on still having a startable slot, twice:
+     strictly on league.starters, and again granting the FLEX to RB and WR
+     only. Both brought tight ends back to 1.8 and neither improved the roster
+     at all. Fixing the symptom moved nothing, which is what said the term was
+     mispriced rather than misaimed.
+
+     shotPicks() applies it unconditionally and should keep doing so. It is
+     what puts an elite quarterback and two tight ends in the hero shot instead
+     of the forty-name ADP slice that came out two colours — a picture is not a
+     roster, and being wrong about who to draft costs it nothing. */
+  const modelMultiplier = scoringIsStock() ? null : modelMultipliers(pool);
 
   return pool
     .map(function (p) {
@@ -2430,7 +2463,7 @@ function suggestions(filter) {
       return { player: p, score: (p.adp + p.jitter)
                  * needMultiplier(state.mySlot, p.pos, round)
                  * risk
-                 * modelMultiplier(p) };
+                 * (modelMultiplier ? modelMultiplier(p) : 1) };
     })
     .sort((a, b) => a.score - b.score)
     .slice(0, 6)
@@ -2739,6 +2772,27 @@ function rulesForFormat(fmt) {
 // Seeded here rather than in the league object itself, because the defaults
 // are defined in this section and a const cannot be read before it exists.
 league.rules = rulesForFormat(league.scoring);
+
+/* Whether the scoring table is still one ADP already knows about.
+
+   FFC publishes one set of ADP per format, and the pipeline picks the set by
+   league.scoring — so on a stock table, average draft position was drawn from
+   drafts scored the way this league is scored, and it has already priced the
+   rules in. Deviate from it and ADP is describing a different game: set
+   receptions to five points and every projection moves while ADP does not
+   budge, which is the hole the model multiplier in suggestions() exists to
+   fill.
+
+   Measured both ways over pinned seeds, my seat drafting each against an
+   identical room. On a stock table the model costs about five points of
+   starter strength and three places, and gives the stronger lineup in 0 of 6.
+   At five points a reception it gains about four points of starter strength
+   over ignoring the rules. So it is not a good or a bad idea in general — it
+   is right exactly when ADP is wrong, and this is the test for that. */
+function scoringIsStock() {
+  const stock = rulesForFormat(league.scoring);
+  return Object.keys(stock).every((k) => stock[k] === league.rules[k]);
+}
 
 // Defaults to the league on screen, but takes a format so a saved draft can
 // be described in its own terms.
