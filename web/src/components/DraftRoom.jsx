@@ -323,6 +323,25 @@ export default function DraftRoom() {
   // the sheet is still visually sitting over the top of it, which reads as
   // the tap having done nothing.
   const selectMobileView = (v) => { setHubOpen(false); setView(v) }
+  // Whether the sheet is actually on screen, which is not the same question
+  // as whether hubOpen is true — PlayerHub only mounts in the view !== 'decide'
+  // branch, so hubOpen alone can outlive the thing it describes.
+  //
+  // It gets there through DraftCockpitHeader's own tab nav, which is handed
+  // the raw setView (openHub and selectMobileView are the two setters that
+  // keep the pair in step; that is a third that doesn't). Its nav is
+  // `md:flex` and MobileDraftTabBar is `lg:hidden`, so between 768px and
+  // 1023px both are on screen at once: tap Roster in the bottom bar, then
+  // Decide in the header, and the sheet unmounts while the bottom bar goes
+  // on drawing Roster as the selected tab. CLAUDE.md's goToTab() note names
+  // exactly this — "the app is then on a tab its own nav says it is not".
+  //
+  // Derived rather than a third flag, because two flags that must agree is
+  // one flag with a second copy. Both consumers take this one: inside the
+  // branch where PlayerHub mounts it is identical to hubOpen, so the sheet's
+  // own behaviour is unchanged and desktop keeps its remembered tab across a
+  // trip through Decide.
+  const hubShowing = hubOpen && view !== 'decide'
   useEffect(() => {
     if (draftIsOver) {
       setInsightsSlot(mySlot)
@@ -791,6 +810,13 @@ export default function DraftRoom() {
             queuedNames={queuedNames}
             nextOverall={nextOverall}
             nextPicks={nextPicks}
+            /* The same openHub MobileDraftTabBar's Roster and Players
+               buttons call. Decide's mobile roster strip and its "Browse
+               all N players" button are two more ways into the one
+               PlayerHub sheet, not a second player surface — passing the
+               opener rather than letting that screen mount its own is what
+               keeps that true. */
+            onOpenHub={openHub}
           />
         ) : (
         <>
@@ -906,7 +932,7 @@ export default function DraftRoom() {
                 profile drawer that slides over it. */}
             <div className="relative flex min-h-0 flex-1 lg:flex-[5] lg:min-w-0">
             <PlayerHub
-              open={hubOpen}
+              open={hubShowing}
               onOpenChange={setHubOpen}
               tab={hubTab}
               onTabChange={setHubTab}
@@ -1006,7 +1032,7 @@ export default function DraftRoom() {
       <MobileDraftTabBar
         view={view}
         onSelectView={selectMobileView}
-        hubOpen={hubOpen}
+        hubOpen={hubShowing}
         hubTab={hubTab}
         onOpenHub={openHub}
       />

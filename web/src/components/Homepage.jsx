@@ -85,11 +85,17 @@ export default function Homepage() {
     <div className="min-h-screen overflow-x-hidden bg-void text-white">
       <Header />
 
-      {/* pt-[108px] matches the fixed header's real height (h-16 nav + h-9
-          ticker + 1px border = 101px) plus the same few px of breathing
-          room index.css's scroll-padding-top uses — one number instead of
-          two, so a page load and an anchor click land at the same offset. */}
-      <main className="pt-[108px]">
+      {/* Two heights, because the header has two. At lg+ it is the nav plus
+          the ticker (h-16 + h-9 + 1px border = 101px), and pt-[108px] is
+          that plus the same few px of breathing room index.css's
+          scroll-padding-top uses — one number instead of two, so a page
+          load and an anchor click land at the same offset. Below lg the
+          ticker is `hidden lg:block` (Header.jsx) and the nav drops to
+          h-14, so the real header is 57px: carrying the desktop number
+          down to a phone left 51px of empty page above the hero, on top of
+          Hero's own top padding, and pushed the mobile handoff's eyebrow to
+          206px where artboard 1a puts it at 92. */}
+      <main className="pt-[57px] lg:pt-[108px]">
         <Hero />
         <ShowYourWorking />
         <RoomsGrid />

@@ -1,4 +1,4 @@
-import { Sparkles } from 'lucide-react'
+import { ChevronRight, Sparkles } from 'lucide-react'
 import { POS_BADGE, POS_SOLID } from './draftRoomPositions.js'
 import QueueList from './QueueList.jsx'
 
@@ -178,7 +178,7 @@ function SurvivorCard({ candidate, engine, onQueueToggle, onDraft, myTurn, queue
   )
 }
 
-export default function DraftDecideScreen({ engine, league, mySlot, myTurn, picks, onDraft, onQueueToggle, onOpenProfile, queuedNames, nextOverall, nextPicks }) {
+export default function DraftDecideScreen({ engine, league, mySlot, myTurn, picks, onDraft, onQueueToggle, onOpenProfile, queuedNames, nextOverall, nextPicks, onOpenHub }) {
   // A finished draft has no decision left to make — suggestions('ALL')
   // returns nothing, survivalProbability() has no next pick to check
   // against, and the not-your-turn cards would otherwise show three
@@ -266,6 +266,11 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, pick
   const runDepth = runPos ? engine.positionDepthRemaining(runPos) : null
 
   const boardForQueue = engine.board()
+  // The count both mobile-only labels print — "N available" over the cards
+  // and "Browse all N players" under them. One read of the same board array
+  // the queue below already resolves against, never a second call that
+  // could answer differently between two lines of the same screen.
+  const availableCount = boardForQueue.filter((p) => !p.drafted).length
   const queue = engine
     .queue()
     .map((name) => boardForQueue.find((p) => p.name === name))
@@ -292,8 +297,56 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, pick
        naturally-sized flex child needs no scroll container of its own; the
        one on this wrapper is what scrolls the whole stack on a phone. */
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-[calc(58px+env(safe-area-inset-bottom))] lg:grid lg:grid-cols-[300px_minmax(0,1fr)_330px] lg:overflow-hidden lg:pb-0">
-      {/* Roster rail */}
-      <div className="border-white/[0.06] px-[18px] py-5 lg:overflow-y-auto lg:border-r">
+      {/* ---------- Mobile roster strip (handoff artboard 1c) ----------
+          The rail below is 644px tall on a 390px phone — nine lineup rows,
+          four need bars and the next-picks chip set — and it sat above the
+          recommendation cards, so the one thing this screen exists for
+          started a full screen-and-a-half below the fold on a 30-second
+          clock. The handoff's own note is explicit that "Decide is the
+          default and the only tab you need to draft", and 1c replaces the
+          whole rail with this: the four positions still owed, and a tap
+          through to the Roster tab for everything else. That tab is not a
+          second surface — onOpenHub('team') is the same PlayerHub sheet
+          MobileDraftTabBar's own Roster button opens, so the rail's real
+          content is one tap away rather than duplicated here.
+
+          `r.have || '—'` is the mock's dash: a position you hold none of
+          reads as empty rather than as a zero, and the dashed border says
+          the same thing a second way. A met requirement goes solid and
+          drops the dash for the real count — CLAUDE.md's own rule that a
+          fraction is a promise about its denominator, so a discharged
+          requirement stops printing one. */}
+      {onOpenHub && (
+        <button
+          type="button"
+          onClick={() => onOpenHub('team')}
+          className="flex shrink-0 items-center gap-2 overflow-x-auto border-b border-white/[0.06] px-4 py-2.5 text-left lg:hidden"
+        >
+          <span className="shrink-0 font-plex text-[10.5px] font-bold uppercase tracking-[0.12em] text-white/45">
+            Roster
+          </span>
+          {needRows.map((r) => {
+            const met = r.need > 0 && r.have >= r.need
+            return (
+              <span
+                key={r.pos}
+                className={
+                  'shrink-0 rounded-[5px] border px-2 py-1 font-plex text-[11px] font-semibold ' +
+                  (met
+                    ? 'border-white/10 bg-white/[0.07] text-white/70'
+                    : 'border-dashed border-white/[0.14] bg-white/[0.045] text-white/40')
+                }
+              >
+                {r.pos} {r.have || '—'}
+              </span>
+            )
+          })}
+          <ChevronRight className="ml-auto h-4 w-4 shrink-0 text-white/30" aria-hidden="true" />
+        </button>
+      )}
+
+      {/* Roster rail — desktop only, see the strip above. */}
+      <div className="hidden border-white/[0.06] px-[18px] py-5 lg:block lg:overflow-y-auto lg:border-r">
         <div className="mb-3.5 text-[10px] font-bold uppercase tracking-[0.12em] text-white/50">Your team</div>
         <div className="mb-5 flex flex-col gap-1">
           {lineup.seats.map((s, i) => (
@@ -352,11 +405,22 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, pick
       <div className="min-w-0 px-[22px] py-5 lg:overflow-y-auto">
         {myTurn ? (
           <>
-            <div className="mb-1 flex items-center gap-2.5">
+            {/* Two headers, one per breakpoint. Desktop's 32px display
+                headline plus a two-line explainer is 96px of preamble on a
+                phone, above three cards that are themselves the
+                explanation; 1c spends 25px on a plain 17px label and the
+                live count instead. Same split Hero.jsx already makes for
+                the same reason — phone-specific copy, not a resized copy
+                of desktop's. */}
+            <div className="mb-3 flex items-baseline justify-between gap-3 lg:hidden">
+              <h2 className="text-[17px] font-extrabold tracking-[-0.02em] text-white">Three ways to go</h2>
+              <span className="shrink-0 font-plex text-[11px] text-white/45">{availableCount} available</span>
+            </div>
+            <div className="mb-1 hidden items-center gap-2.5 lg:flex">
               <Sparkles className="h-4 w-4 text-teal-300" />
               <h2 className="font-display text-[32px] font-bold leading-none text-white">What Juke would do</h2>
             </div>
-            <p className="mb-4 text-sm text-white/60">Three options, ranked. Every number is the same one the grade uses.</p>
+            <p className="mb-4 hidden text-sm text-white/60 lg:block">Three options, ranked. Every number is the same one the grade uses.</p>
 
             <div className="mb-[18px] grid grid-cols-1 gap-3.5 md:grid-cols-3">
               {candidates.map((c, i) => (
@@ -364,8 +428,15 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, pick
               ))}
             </div>
 
+            {/* Desktop only. It is a five-column table — position, name,
+                VORP, Juke, a Draft button — and 1c gives a phone the
+                "Browse all N players" button below instead, which opens
+                PlayerHub's real Players tab: sortable, filterable, the
+                whole board rather than the next four names. Squeezing five
+                columns into 358px to show four of 217 players is the worse
+                half of that trade. */}
             {others.length > 0 && (
-              <>
+              <div className="hidden lg:block">
                 <div className="mb-2.5 text-[10px] font-bold uppercase tracking-[0.12em] text-white/50">Everyone else</div>
                 {/* Column heads — a design review caught "+64 · 38 · Draft"
                     with nothing saying which number was which. */}
@@ -399,7 +470,7 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, pick
                     </div>
                   ))}
                 </div>
-              </>
+              </div>
             )}
           </>
         ) : (
@@ -433,10 +504,30 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, pick
             </div>
           </>
         )}
+        {/* The mobile exit to the full board, on both turn states — the
+            handoff draws it under the three cards on 1c, and it is the
+            other half of dropping "Everyone else" above: three
+            recommendations plus one door to all 217, rather than three
+            recommendations and an arbitrary four more. */}
+        {onOpenHub && (
+          <button
+            type="button"
+            onClick={() => onOpenHub('players')}
+            className="mt-4 flex h-[46px] w-full items-center justify-center gap-1.5 rounded-[10px] border border-white/[0.12] text-[14.5px] font-semibold text-white/65 lg:hidden"
+          >
+            Browse all {availableCount} players
+            <ChevronRight className="h-4 w-4" aria-hidden="true" />
+          </button>
+        )}
       </div>
 
-      {/* Room-live rail */}
-      <div className="border-white/[0.06] px-[18px] py-5 lg:overflow-y-auto lg:border-l">
+      {/* Room-live rail — desktop only. On a phone the same information has
+          a better home already: the Board tab's own "Log ›" button
+          (DraftBoardGrid.jsx) opens PlayerHub's Log tab, which is the full
+          pick history rather than the last nine, and the board itself shows
+          the position runs this rail summarises. Artboard 1c draws neither
+          on the phone for that reason. */}
+      <div className="hidden border-white/[0.06] px-[18px] py-5 lg:block lg:overflow-y-auto lg:border-l">
         <div className="mb-3 text-[10px] font-bold uppercase tracking-[0.12em] text-white/50">The room, live</div>
 
         {runPos && runCount >= 3 && (

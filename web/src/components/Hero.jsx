@@ -17,7 +17,7 @@ export default function Hero() {
         }}
       />
 
-      <div className="relative mx-auto grid max-w-7xl gap-[72px] px-6 pb-[76px] pt-[92px] lg:grid-cols-[1.05fr_1fr] lg:items-center">
+      <div className="relative mx-auto grid max-w-7xl gap-[72px] px-6 pb-[76px] pt-9 lg:grid-cols-[1.05fr_1fr] lg:items-center lg:pt-[92px]">
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
           {/* Mobile eyebrow/headline/paragraph/CTAs are a separate stack
               from desktop's, not a resized copy of it — the mobile handoff
