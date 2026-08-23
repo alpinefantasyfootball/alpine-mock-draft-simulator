@@ -111,12 +111,16 @@ export default function RoomsGrid() {
               className="rounded-2xl border border-teal-400/40 p-6"
               style={{ background: 'linear-gradient(170deg, rgba(0,229,255,0.09), #0d1216 62%)' }}
             >
-              <span className="inline-flex items-center gap-[7px] font-plex text-[11px] font-semibold tracking-[0.12em] text-teal-300">
+              <span className="inline-flex items-center gap-[7px] font-plex text-[11px] font-semibold uppercase tracking-[0.12em] text-teal-300">
                 <span className="relative flex h-[7px] w-[7px]">
                   <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-teal-400 opacity-75" />
                   <span className="relative inline-flex h-[7px] w-[7px] rounded-full bg-teal-400" />
                 </span>
-                LIVE NOW
+                {/* "Live", not "LIVE NOW" — RoomCard.jsx's own badge is the
+                    word this status owns, and the phone was saying it
+                    differently for the same room on the same page. The
+                    uppercase treatment is the class, not the string. */}
+                Live
               </span>
 
               <div className="mt-3 flex items-center gap-[11px]">

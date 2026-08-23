@@ -62,31 +62,33 @@ export default function Hero() {
             <span className="text-mint">Dominate the season.</span>
           </h1>
 
-          {/* Mobile paragraph keeps the same "name what's live" discipline
-              the desktop rewrite below already follows, but doesn't repeat
-              the handoff's literal "eleven opponents" — that's an artifact
-              of the mock's own 12-team illustration, and the app's real
-              default (league.teams in app.js) is 10, with the room
-              configurable 4-24 wide from the setup screen. Desktop's own
-              paragraph already avoids committing to a seat count for the
-              same reason; this one follows suit rather than printing a
-              number that's wrong for most rooms drafted. */}
-          <p className="mt-4 max-w-[480px] text-pretty text-base leading-[1.55] text-white/55 lg:hidden">
+          {/* One paragraph at both widths, and it is the phone's.
+
+              These were two entirely different sentences — the phone said
+              "Draft against a room of CPU opponents…", desktop said "Free,
+              unlimited mock drafts against a board that reruns live…" — which
+              is a different message about the product depending on the width
+              of the window it is read in. Reported from the live site as
+              exactly that.
+
+              Desktop's is the one that goes, for the same reason the eyebrow
+              and the CTAs already changed: it opens on the price. After that
+              pass, desktop's own hero was arguing with itself — a brand
+              eyebrow and headline, "Enter the Draft Room" underneath, and a
+              paragraph between them leading with "Free, unlimited mock
+              drafts". The revised handoff says to keep this sentence verbatim
+              on the phone and explicitly not to promote desktop's; making it
+              the only one is the same instruction with the divergence removed.
+
+              It is also the better sentence on its own terms, which is worth
+              recording so nobody swaps it back. It names no seat count — the
+              app's default is 10 and the room is configurable 4-24 wide, so
+              any number here is wrong for most rooms drafted — and it says
+              what the product does rather than what it costs. Price now lives
+              in the mono line under the CTA pair, once, on both widths. */}
+          <p className="mt-4 max-w-[480px] text-pretty text-base leading-[1.55] text-white/55 lg:mt-6 lg:max-w-[530px] lg:text-[17.5px] lg:leading-[1.6]">
             Draft against a room of CPU opponents that react to your picks, then get a graded
             report that shows its working. Change your scoring rules and every number reruns.
-          </p>
-
-          {/* Rewritten off a design review: the previous copy ("power your
-              entire fantasy football lifecycle with advanced VORP metrics,
-              predictive modeling, and real-time simulations") promised five
-              rooms that don't exist yet, one paragraph above a grid that
-              itself says so. This names only what a visitor can actually
-              click right now — the scoring toggle immediately to the right
-              is the proof, not just a claim next to one. */}
-          <p className="mt-6 hidden max-w-[530px] text-pretty text-[17.5px] leading-[1.6] text-white/55 lg:block">
-            Free, unlimited mock drafts against a board that reruns live on your own scoring
-            rules — standard, half or full PPR, recalculated the instant you change it — against
-            CPU opponents that understand ADP, tiers and replacement value.
           </p>
 
           {/* Two stacked 54px CTAs, mobile only. The secondary is "Explore
@@ -118,15 +120,6 @@ export default function Hero() {
             >
               Explore The Rooms
             </a>
-            {/* Where the price went. It is true, it is worth saying, and it
-                is no longer the first two words on the page — which is the
-                whole of the change: a mono caption under the action, not the
-                eyebrow above the headline. Not a tap target, so it is exempt
-                from the 44px floor; 11.5px is the handoff's own value and
-                sits on the type floor for non-tappable mono. */}
-            <p className="pt-[3px] text-center font-plex text-[11.5px] tracking-[0.1em] text-[#7C8A99]">
-              FREE &middot; UNLIMITED &middot; NO ACCOUNT
-            </p>
           </div>
 
           <div className="mt-9 hidden flex-wrap items-center gap-[26px] lg:flex">
@@ -148,6 +141,24 @@ export default function Hero() {
               <ChevronRight className="h-4 w-4 text-teal-400 transition-transform group-hover:translate-x-0.5" />
             </a>
           </div>
+
+          {/* Where the price went, on both breakpoints. It is true, it is
+              worth saying, and it is no longer the first thing read — which
+              is the whole of the change: a mono caption under the action
+              rather than the eyebrow above the headline, or (on desktop
+              until now) the opening words of the paragraph.
+
+              It sits outside both CTA blocks deliberately. The handoff only
+              specifies it for the phone, and writing it there would have left
+              desktop with no price claim at all once its paragraph stopped
+              leading with one — which is the same divergence this pass exists
+              to close, introduced from the other direction.
+
+              Not a tap target, so exempt from the 44px floor; 11.5px is the
+              handoff's own value and sits on the type floor for mono. */}
+          <p className="mt-3 text-center font-plex text-[11.5px] tracking-[0.1em] text-[#7C8A99] lg:mt-5 lg:text-left">
+            FREE &middot; UNLIMITED &middot; NO ACCOUNT
+          </p>
         </motion.div>
 
         {/* Not rotated, not floating — squared and aligned as a real second
