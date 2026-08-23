@@ -206,7 +206,16 @@ export default function SonarLoader({
 // button, which is what lets the same element sit on teal and on obsidian.
 //
 // Do not shrink SonarLoader to get here.
-export function SonarPulse({ width = 20, srLabel = 'Loading', className = '', style }) {
+//
+// It takes the same delay gate as the tiers above, for the same reason: a share
+// card that draws off a warm cache resolves in well under 300ms, and a glyph
+// that appears and vanishes inside a button reads as a flicker rather than as a
+// loading state. Pass delay={0} only where something else has already waited -
+// ChatPanel's GIF search does, behind a 350ms debounce.
+export function SonarPulse({ width = 20, delay = 300, srLabel = 'Loading', className = '', style }) {
+  const shown = useAfter(delay)
+  if (!shown) return null
+
   return (
     <span
       role="status"
