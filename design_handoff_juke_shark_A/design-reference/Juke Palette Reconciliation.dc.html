@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  html, body { margin:0; background:#070a0d; font-family:'Inter',system-ui,sans-serif; -webkit-font-smoothing:antialiased; }
+  a { color:#00E5FF; text-decoration:none; }
+  a:hover { color:#66F0FF; }
+</style>
+</helmet>
+
+<section id="3a" data-screen-label="Palette reconciliation" style="width:1460px;margin:0 auto;padding:0 0 130px;color:#E7ECF3;background:#070a0d">
+
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;padding:68px 72px 44px;border-bottom:1px solid rgba(255,255,255,0.1)">
+    <div style="max-width:800px">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:0.2em;color:#00E5FF;margin-bottom:22px">READ FROM playjukeff/juke@main</div>
+      <h1 style="font-family:'Archivo',sans-serif;font-size:54px;line-height:1.03;font-weight:800;letter-spacing:-0.03em;margin:0 0 20px;text-wrap:pretty">The shark palette does not match your product.</h1>
+      <p style="font-size:18px;line-height:1.55;color:#A2B0BE;margin:0;max-width:680px;text-wrap:pretty">I told you earlier that no colour change was needed. That was wrong — I had only the logo file. Your repo runs a different palette and a different logo, and the two cannot both be Juke.</p>
+    </div>
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:0.18em;color:#00E5FF;border:1px solid rgba(0,229,255,0.4);padding:6px 12px">3a</div>
+  </div>
+
+  <div style="padding:64px 72px 0">
+    <div style="display:flex;align-items:baseline;gap:18px;margin-bottom:34px">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#00E5FF">01</span>
+      <h2 style="font-family:'Archivo',sans-serif;font-size:28px;font-weight:700;letter-spacing:-0.02em;margin:0">Two palettes, no overlap</h2>
+      <span style="flex:1;height:1px;background:rgba(255,255,255,0.1)"></span>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:2px;background:rgba(255,255,255,0.1)">
+      <div style="background:#0B0E14;padding:38px 34px">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:0.16em;color:#00E5FF;margin-bottom:8px">SHIPPED — web/tailwind.config.js</div>
+        <div style="font-size:14px;color:#7C8A99;margin-bottom:26px">What jukeff.com actually renders today</div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:2px">
+          <div style="background:#00E5FF;height:96px;display:flex;align-items:flex-end;padding:11px;color:#0B0E14"><span style="font-family:'IBM Plex Mono',monospace;font-size:10px">00E5FF</span></div>
+          <div style="background:#7B1FA2;height:96px;display:flex;align-items:flex-end;padding:11px;color:#F2F5FA"><span style="font-family:'IBM Plex Mono',monospace;font-size:10px">7B1FA2</span></div>
+          <div style="background:#0B0E14;height:96px;display:flex;align-items:flex-end;padding:11px;color:#F2F5FA;box-shadow:inset 0 0 0 1px rgba(255,255,255,0.12)"><span style="font-family:'IBM Plex Mono',monospace;font-size:10px">0B0E14</span></div>
+          <div style="background:#151923;height:96px;display:flex;align-items:flex-end;padding:11px;color:#F2F5FA"><span style="font-family:'IBM Plex Mono',monospace;font-size:10px">151923</span></div>
+        </div>
+        <div style="margin-top:18px;font-size:14px;line-height:1.5;color:#A2B0BE">Electric cyan and a real purple on a near-black neutral. <span style="color:#E7ECF3">Purple is a brand colour here</span> — the logo stem, the card-hover wash, the gradient tile.</div>
+      </div>
+
+      <div style="background:#002F3F;padding:38px 34px">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:0.16em;color:#84E4E4;margin-bottom:8px">THE SHARK ARTWORK</div>
+        <div style="font-size:14px;color:#6E97A4;margin-bottom:26px">What you sent me</div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:2px">
+          <div style="background:#84E4E4;height:96px;display:flex;align-items:flex-end;padding:11px;color:#00202C"><span style="font-family:'IBM Plex Mono',monospace;font-size:10px">84E4E4</span></div>
+          <div style="background:#1A6386;height:96px;display:flex;align-items:flex-end;padding:11px;color:#EDF3F4"><span style="font-family:'IBM Plex Mono',monospace;font-size:10px">1A6386</span></div>
+          <div style="background:#002F3F;height:96px;display:flex;align-items:flex-end;padding:11px;color:#EDF3F4;box-shadow:inset 0 0 0 1px rgba(132,228,228,0.2)"><span style="font-family:'IBM Plex Mono',monospace;font-size:10px">002F3F</span></div>
+          <div style="background:#001E2B;height:96px;display:flex;align-items:flex-end;padding:11px;color:#EDF3F4"><span style="font-family:'IBM Plex Mono',monospace;font-size:10px">001E2B</span></div>
+        </div>
+        <div style="margin-top:18px;font-size:14px;line-height:1.5;color:#9FBAC4">Desaturated aqua on a teal ground. <span style="color:#EDF3F4">No purple anywhere</span>, and the ground is a hue rather than a near-black.</div>
+      </div>
+    </div>
+
+    <div style="background:#0B0E14;border:1px solid rgba(255,255,255,0.1);margin-top:2px;padding:30px 34px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:34px">
+      <div><div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.16em;color:#00E5FF;margin-bottom:9px">THE ACCENT</div><p style="margin:0;font-size:14px;line-height:1.5;color:#A2B0BE"><span style="font-family:'IBM Plex Mono',monospace;color:#E7ECF3">#00E5FF</span> is near-full saturation. <span style="font-family:'IBM Plex Mono',monospace;color:#E7ECF3">#84E4E4</span> is roughly a third of it. Side by side the shark aqua reads as a faded version of your teal, not a sibling.</p></div>
+      <div><div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.16em;color:#00E5FF;margin-bottom:9px">THE GROUND</div><p style="margin:0;font-size:14px;line-height:1.5;color:#A2B0BE">Your surfaces are blue-tinted neutrals. The shark's <span style="font-family:'IBM Plex Mono',monospace;color:#E7ECF3">#002F3F</span> is a saturated teal — dropping it in as a surface would tint every panel in the app.</p></div>
+      <div><div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.16em;color:#00E5FF;margin-bottom:9px">THE PURPLE</div><p style="margin:0;font-size:14px;line-height:1.5;color:#A2B0BE">Your logo's stem is purple, and <span style="font-family:'IBM Plex Mono',monospace;color:#E7ECF3">shadow.card-hover</span> washes purple inside every card. The shark system has no answer for it.</p></div>
+    </div>
+  </div>
+
+  <div style="padding:64px 72px 0">
+    <div style="display:flex;align-items:baseline;gap:18px;margin-bottom:16px">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#00E5FF">02</span>
+      <h2 style="font-family:'Archivo',sans-serif;font-size:28px;font-weight:700;letter-spacing:-0.02em;margin:0">There is already a logo in the code</h2>
+      <span style="flex:1;height:1px;background:rgba(255,255,255,0.1)"></span>
+    </div>
+    <p style="font-size:16px;color:#A2B0BE;margin:0 0 34px;max-width:740px;text-wrap:pretty"><span style="font-family:'IBM Plex Mono',monospace;font-size:14px;color:#00E5FF">web/src/components/juke-logo/JukeLogo.jsx</span> ships a goalpost monogram — teal uprights and crossbar, purple stem — wired into six components. Its own README calls it "option 6a".</p>
+
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:2px;background:rgba(255,255,255,0.1)">
+      <div style="background:#0B0E14;padding:48px 34px;display:grid;place-items:center;gap:30px;align-content:center">
+        <div style="display:inline-flex;align-items:center;gap:20px">
+          <img src="brand-product/goalpost-mark.svg" alt="" style="width:46px;display:block">
+          <span style="font-family:'Archivo',sans-serif;font-weight:900;font-size:42px;line-height:0.9;letter-spacing:-0.045em;text-transform:uppercase;color:#F2F5FA">Juke</span>
+        </div>
+        <div style="text-align:center"><div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.16em;color:#00E5FF;margin-bottom:7px">INCUMBENT · SHIPPED</div><div style="font-size:13px;color:#7C8A99;line-height:1.45">Goalpost mark + Archivo 900</div></div>
+      </div>
+      <div style="background:#002F3F;padding:48px 34px;display:grid;place-items:center;gap:30px;align-content:center">
+        <img src="brand/juke-horizontal-dark.svg" alt="" style="width:100%;max-width:300px;display:block">
+        <div style="text-align:center"><div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.16em;color:#84E4E4;margin-bottom:7px">SHARK · AS DESIGNED</div><div style="font-size:13px;color:#6E97A4;line-height:1.45">Brand palette, split-K wordmark</div></div>
+      </div>
+      <div style="background:#0B0E14;padding:48px 34px;display:grid;place-items:center;gap:30px;align-content:center">
+        <div style="display:inline-flex;align-items:center;gap:20px">
+          <img src="brand-product/shark-product-duo.svg" alt="" style="width:92px;display:block">
+          <span style="font-family:'Archivo',sans-serif;font-weight:900;font-size:42px;line-height:0.9;letter-spacing:-0.045em;text-transform:uppercase;color:#F2F5FA">Juke</span>
+        </div>
+        <div style="text-align:center"><div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.16em;color:#00E5FF;margin-bottom:7px">SHARK · RECONCILED</div><div style="font-size:13px;color:#7C8A99;line-height:1.45">Your palette, your shipped wordmark</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div style="padding:64px 72px 0">
+    <div style="display:flex;align-items:baseline;gap:18px;margin-bottom:16px">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#00E5FF">03</span>
+      <h2 style="font-family:'Archivo',sans-serif;font-size:28px;font-weight:700;letter-spacing:-0.02em;margin:0">The shark in your palette</h2>
+      <span style="flex:1;height:1px;background:rgba(255,255,255,0.1)"></span>
+    </div>
+    <p style="font-size:16px;color:#A2B0BE;margin:0 0 34px;max-width:740px;text-wrap:pretty">Same geometry, recoloured to <span style="font-family:'IBM Plex Mono',monospace;font-size:14px;color:#00E5FF">#00E5FF</span> on <span style="font-family:'IBM Plex Mono',monospace;font-size:14px;color:#00E5FF">#0B0E14</span>. The duo version uses your purple for the shading, which is the one that stops looking like a shark from somewhere else.</p>
+
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:2px;background:rgba(255,255,255,0.1)">
+      <div style="background:#0B0E14;padding:44px 30px;display:grid;place-items:center;gap:22px"><img src="brand-product/shark-product-teal.svg" alt="" style="width:100%;max-width:170px"><div style="text-align:center"><div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.14em;color:#00E5FF;margin-bottom:6px">TEAL, NEUTRAL SHADE</div><div style="font-size:12px;color:#7C8A99">Literal translation</div></div></div>
+      <div style="background:#0B0E14;padding:44px 30px;display:grid;place-items:center;gap:22px"><img src="brand-product/shark-product-duo.svg" alt="" style="width:100%;max-width:170px"><div style="text-align:center"><div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.14em;color:#00E5FF;margin-bottom:6px">TEAL + PURPLE SHADE</div><div style="font-size:12px;color:#00E5FF">Recommended</div></div></div>
+      <div style="background:#0B0E14;padding:44px 30px;display:grid;place-items:center;gap:22px"><img src="brand-product/shark-product-mono.svg" alt="" style="width:100%;max-width:170px"><div style="text-align:center"><div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.14em;color:#00E5FF;margin-bottom:6px">TWO-VALUE</div><div style="font-size:12px;color:#7C8A99">In-app icon</div></div></div>
+      <div style="background:#00E5FF;padding:44px 30px;display:grid;place-items:center;gap:22px"><img src="brand-product/silhouette-product-obsidian.svg" alt="" style="width:100%;max-width:170px"><div style="text-align:center"><div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.14em;color:#0B0E14;margin-bottom:6px">ON TEAL FILL</div><div style="font-size:12px;color:#0B4A55">Obsidian, per your rule</div></div></div>
+    </div>
+  </div>
+
+  <div style="padding:64px 72px 0">
+    <div style="display:flex;align-items:baseline;gap:18px;margin-bottom:16px">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#00E5FF">04</span>
+      <h2 style="font-family:'Archivo',sans-serif;font-size:28px;font-weight:700;letter-spacing:-0.02em;margin:0">In your header</h2>
+      <span style="flex:1;height:1px;background:rgba(255,255,255,0.1)"></span>
+    </div>
+    <p style="font-size:16px;color:#A2B0BE;margin:0 0 26px;max-width:740px">Your real chrome: <span style="font-family:'IBM Plex Mono',monospace;font-size:14px;color:#00E5FF">h-16</span> nav over an <span style="font-family:'IBM Plex Mono',monospace;font-size:14px;color:#00E5FF">h-9</span> ticker on obsidian, lockup at <span style="font-family:'IBM Plex Mono',monospace;font-size:14px;color:#00E5FF">size=21</span>.</p>
+
+    <div style="display:grid;gap:2px;background:rgba(255,255,255,0.1)">
+      <div style="background:#0B0E14">
+        <div style="height:64px;padding:0 26px;display:flex;align-items:center;gap:30px">
+          <div style="display:inline-flex;align-items:center;gap:10px">
+            <img src="brand-product/goalpost-mark.svg" alt="" style="width:24px;display:block">
+            <span style="font-family:'Archivo',sans-serif;font-weight:900;font-size:21px;line-height:0.9;letter-spacing:-0.045em;text-transform:uppercase;color:#F2F5FA">Juke</span>
+          </div>
+          <div style="display:flex;gap:24px;font-size:14px;font-weight:500;color:#A2B0BE"><span style="color:#F2F5FA">Rooms</span><span>Draft</span><span>Players</span><span>Method</span></div>
+          <div style="flex:1"></div>
+          <span style="background:#00E5FF;color:#0B0E14;font-size:13px;font-weight:600;padding:8px 16px;border-radius:8px">Start a mock</span>
+        </div>
+        <div style="height:36px;border-top:1px solid rgba(255,255,255,0.08);padding:0 26px;display:flex;align-items:center;gap:20px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#7C8A99"><span style="color:#00E5FF">●</span><span>3 of the last 5 picks were running backs</span></div>
+        <div style="padding:14px 26px;border-top:1px solid rgba(255,255,255,0.08);font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.16em;color:#7C8A99">INCUMBENT — GOALPOST</div>
+      </div>
+      <div style="background:#0B0E14">
+        <div style="height:64px;padding:0 26px;display:flex;align-items:center;gap:30px">
+          <div style="display:inline-flex;align-items:center;gap:12px">
+            <img src="brand-product/shark-product-duo.svg" alt="" style="width:42px;display:block">
+            <span style="font-family:'Archivo',sans-serif;font-weight:900;font-size:21px;line-height:0.9;letter-spacing:-0.045em;text-transform:uppercase;color:#F2F5FA">Juke</span>
+          </div>
+          <div style="display:flex;gap:24px;font-size:14px;font-weight:500;color:#A2B0BE"><span style="color:#F2F5FA">Rooms</span><span>Draft</span><span>Players</span><span>Method</span></div>
+          <div style="flex:1"></div>
+          <span style="background:#00E5FF;color:#0B0E14;font-size:13px;font-weight:600;padding:8px 16px;border-radius:8px">Start a mock</span>
+        </div>
+        <div style="height:36px;border-top:1px solid rgba(255,255,255,0.08);padding:0 26px;display:flex;align-items:center;gap:20px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#7C8A99"><span style="color:#00E5FF">●</span><span>3 of the last 5 picks were running backs</span></div>
+        <div style="padding:14px 26px;border-top:1px solid rgba(255,255,255,0.08);font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.16em;color:#00E5FF">SHARK — RECONCILED, SHIPPED WORDMARK</div>
+      </div>
+      <div style="background:#0B0E14">
+        <div style="height:64px;padding:0 26px;display:flex;align-items:center;gap:30px">
+          <div style="display:inline-flex;align-items:center;gap:14px">
+            <img src="brand-product/shark-product-mono.svg" alt="" style="width:40px;display:block">
+            <span style="width:1px;height:22px;background:rgba(0,229,255,0.34)"></span>
+            <img src="brand-product/wordmark-teal.svg" alt="JUKE" style="height:19px;display:block">
+          </div>
+          <div style="display:flex;gap:24px;font-size:14px;font-weight:500;color:#A2B0BE"><span style="color:#F2F5FA">Rooms</span><span>Draft</span><span>Players</span><span>Method</span></div>
+          <div style="flex:1"></div>
+          <span style="background:#00E5FF;color:#0B0E14;font-size:13px;font-weight:600;padding:8px 16px;border-radius:8px">Start a mock</span>
+        </div>
+        <div style="height:36px;border-top:1px solid rgba(255,255,255,0.08);padding:0 26px;display:flex;align-items:center;gap:20px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#7C8A99"><span style="color:#00E5FF">●</span><span>3 of the last 5 picks were running backs</span></div>
+        <div style="padding:14px 26px;border-top:1px solid rgba(255,255,255,0.08);font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.16em;color:#7C8A99">SHARK — WITH THE SPLIT-K WORDMARK INSTEAD</div>
+      </div>
+    </div>
+    <p style="font-size:15px;line-height:1.55;color:#A2B0BE;margin:24px 0 0;max-width:760px;text-wrap:pretty">The third row is the one I would not ship. Archivo 900 is already loaded, already the wordmark, and sits better with Barlow Condensed and Inter than the stencil letterforms do — those came from an older navy-era generation of the brand, not this one.</p>
+  </div>
+
+  <div style="padding:64px 72px 0">
+    <div style="display:flex;align-items:baseline;gap:18px;margin-bottom:16px">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#00E5FF">05</span>
+      <h2 style="font-family:'Archivo',sans-serif;font-size:28px;font-weight:700;letter-spacing:-0.02em;margin:0">Three ways forward</h2>
+      <span style="flex:1;height:1px;background:rgba(255,255,255,0.1)"></span>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:2px;background:rgba(255,255,255,0.1)">
+      <div style="background:#0B0E14;padding:40px 34px;display:grid;gap:20px;align-content:start;box-shadow:inset 0 0 0 1.5px rgba(0,229,255,0.55)">
+        <div style="display:flex;align-items:baseline;gap:12px"><span style="font-family:'IBM Plex Mono',monospace;font-size:20px;color:#00E5FF">A</span><span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.16em;color:#00E5FF;border:1px solid rgba(0,229,255,0.4);padding:3px 8px">RECOMMENDED</span></div>
+        <div style="font-family:'Archivo',sans-serif;font-size:21px;font-weight:700;letter-spacing:-0.02em">Shark replaces the goalpost, recoloured to your palette</div>
+        <p style="margin:0;font-size:14px;line-height:1.55;color:#A2B0BE">One logo. The shark becomes the mark, keeps Archivo 900 as the wordmark, and adopts <span style="font-family:'IBM Plex Mono',monospace;color:#E7ECF3">#00E5FF</span> / <span style="font-family:'IBM Plex Mono',monospace;color:#E7ECF3">#7B1FA2</span> / <span style="font-family:'IBM Plex Mono',monospace;color:#E7ECF3">#0B0E14</span>. Nothing in the app's colour system moves.</p>
+        <div style="border-top:1px solid rgba(255,255,255,0.1);padding-top:16px"><div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.16em;color:#7C8A99;margin-bottom:9px">COST</div><p style="margin:0;font-size:13px;line-height:1.5;color:#A2B0BE">Swap the internals of <span style="font-family:'IBM Plex Mono',monospace">JukeLogo.jsx</span>. Six call sites keep working unchanged. Re-export favicons, PWA icons and the OG card.</p></div>
+        <div><div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.16em;color:#7C8A99;margin-bottom:9px">TRADE</div><p style="margin:0;font-size:13px;line-height:1.5;color:#A2B0BE">The goalpost is a cleverer piece of design than the shark. You would be trading wit for memorability.</p></div>
+      </div>
+
+      <div style="background:#0B0E14;padding:40px 34px;display:grid;gap:20px;align-content:start">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:20px;color:#00E5FF">B</span>
+        <div style="font-family:'Archivo',sans-serif;font-size:21px;font-weight:700;letter-spacing:-0.02em">Goalpost stays the logo, shark becomes the mascot</div>
+        <p style="margin:0;font-size:14px;line-height:1.55;color:#A2B0BE">Header, favicon and app icon stay as they are. The shark appears in draft-room moments, empty states, the grade reveal, launch art and merch — the places a character earns its keep.</p>
+        <div style="border-top:1px solid rgba(255,255,255,0.1);padding-top:16px"><div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.16em;color:#7C8A99;margin-bottom:9px">COST</div><p style="margin:0;font-size:13px;line-height:1.5;color:#A2B0BE">Lowest. No migration at all — additive only.</p></div>
+        <div><div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.16em;color:#7C8A99;margin-bottom:9px">TRADE</div><p style="margin:0;font-size:13px;line-height:1.5;color:#A2B0BE">You maintain two marks, and the shark never becomes the recognisable asset you asked for. Mascots that never appear in the header stay decoration.</p></div>
+      </div>
+
+      <div style="background:#0B0E14;padding:40px 34px;display:grid;gap:20px;align-content:start">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:20px;color:#00E5FF">C</span>
+        <div style="font-family:'Archivo',sans-serif;font-size:21px;font-weight:700;letter-spacing:-0.02em">Move the product palette to the shark's teal</div>
+        <p style="margin:0;font-size:14px;line-height:1.55;color:#A2B0BE">Obsidian becomes <span style="font-family:'IBM Plex Mono',monospace;color:#E7ECF3">#002F3F</span>, teal becomes <span style="font-family:'IBM Plex Mono',monospace;color:#E7ECF3">#84E4E4</span>, purple is retired.</p>
+        <div style="border-top:1px solid rgba(255,255,255,0.1);padding-top:16px"><div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.16em;color:#7C8A99;margin-bottom:9px">COST</div><p style="margin:0;font-size:13px;line-height:1.5;color:#A2B0BE">Highest. Every surface, the CTA gradient, the card-hover wash, the glow keyframes and the gradient tile. The six position colours survive — see <a href="#4a">4a</a>.</p></div>
+        <div><div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.16em;color:#FF9E7A;margin-bottom:9px">I'D ARGUE AGAINST</div><p style="margin:0;font-size:13px;line-height:1.5;color:#A2B0BE">The aqua is a third of your teal's saturation. The product would get noticeably calmer, and your own design notes say atmosphere is already the gap.</p></div>
+      </div>
+    </div>
+  </div>
+
+  <div style="padding:64px 72px 0">
+    <div style="display:flex;align-items:baseline;gap:18px;margin-bottom:16px">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#00E5FF">06</span>
+      <h2 style="font-family:'Archivo',sans-serif;font-size:28px;font-weight:700;letter-spacing:-0.02em;margin:0">Where the logo actually lives</h2>
+      <span style="flex:1;height:1px;background:rgba(255,255,255,0.1)"></span>
+    </div>
+    <p style="font-size:16px;color:#A2B0BE;margin:0 0 30px;max-width:740px">Read from the repo, so the handoff no longer has to guess. There are three brand generations live at once.</p>
+
+    <div style="display:grid;gap:2px;background:rgba(255,255,255,0.1)">
+      <div style="background:#151923;padding:16px 26px;display:grid;grid-template-columns:340px 1fr 140px;gap:26px;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.14em;color:#7C8A99"><span>FILE</span><span>WHAT IT HOLDS</span><span>GENERATION</span></div>
+      <div style="background:#0B0E14;padding:15px 26px;display:grid;grid-template-columns:340px 1fr 140px;gap:26px;align-items:baseline"><span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#00E5FF">web/src/components/juke-logo/JukeLogo.jsx</span><span style="font-size:14px;color:#A2B0BE">The component. Lockup, mark, stacked, mono. Hardcodes the three hexes.</span><span style="font-size:13px;color:#E7ECF3">Goalpost</span></div>
+      <div style="background:#0B0E14;padding:15px 26px;display:grid;grid-template-columns:340px 1fr 140px;gap:26px;align-items:baseline"><span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#00E5FF">Header · AppHeader · Homepage · LobbyBar<br>DraftCockpitHeader · DraftRoomStatusBar</span><span style="font-size:14px;color:#A2B0BE">Six call sites, sizes 18–21. All go through the component — they need no edit if A is chosen.</span><span style="font-size:13px;color:#E7ECF3">Goalpost</span></div>
+      <div style="background:#0B0E14;padding:15px 26px;display:grid;grid-template-columns:340px 1fr 140px;gap:26px;align-items:baseline"><span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#00E5FF">web/public/juke-favicon.svg<br>juke-app-icon-{dark,gradient}.svg<br>juke-app-icon-{180,192,512,1024}.png</span><span style="font-size:14px;color:#A2B0BE">Favicon and PWA icons, tile built in. The gradient tile is teal→purple.</span><span style="font-size:13px;color:#E7ECF3">Goalpost</span></div>
+      <div style="background:#0B0E14;padding:15px 26px;display:grid;grid-template-columns:340px 1fr 140px;gap:26px;align-items:baseline"><span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#00E5FF">web/public/manifest.json</span><span style="font-size:14px;color:#A2B0BE">Three icon entries, <span style="color:#E7ECF3">theme_color #0B0E14</span>.</span><span style="font-size:13px;color:#E7ECF3">Goalpost</span></div>
+      <div style="background:#0B0E14;padding:15px 26px;display:grid;grid-template-columns:340px 1fr 140px;gap:26px;align-items:baseline"><span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#FF9E7A">favicon.ico · favicon-16.png<br>favicon-32.png · og-image.png</span><span style="font-size:14px;color:#A2B0BE">Repo root. The <span style="color:#E7ECF3">navy shield</span>, not the goalpost. Referenced by 404.html and all three docs pages. Your CLAUDE.md already flags these as unreachable by the CSS-driven passes.</span><span style="font-size:13px;color:#FF9E7A">Navy — stale</span></div>
+      <div style="background:#0B0E14;padding:15px 26px;display:grid;grid-template-columns:340px 1fr 140px;gap:26px;align-items:baseline"><span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#FF9E7A">style.css · <span style="color:#7C8A99">.wordmark, --navy #152A49, --mark-ink</span></span><span style="font-size:14px;color:#A2B0BE">The no-build site's own navy lockup, inlined per page. Separate from the React app entirely.</span><span style="font-size:13px;color:#FF9E7A">Navy — stale</span></div>
+      <div style="background:#0B0E14;padding:15px 26px;display:grid;grid-template-columns:340px 1fr 140px;gap:26px;align-items:baseline"><span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#00E5FF">scripts/build_og.html</span><span style="font-size:14px;color:#A2B0BE">Generates og-image.png and <span style="color:#E7ECF3">carries its own copy of the logo paths</span> — a second place the mark is drawn.</span><span style="font-size:13px;color:#FF9E7A">Navy — stale</span></div>
+      <div style="background:#0B0E14;padding:15px 26px;display:grid;grid-template-columns:340px 1fr 140px;gap:26px;align-items:baseline"><span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#00E5FF">docs/draft-room-how-it-works.html:121</span><span style="font-size:14px;color:#A2B0BE">"Same mark as the app, traced from the logo artwork" — inlined by hand.</span><span style="font-size:13px;color:#FF9E7A">Navy — stale</span></div>
+    </div>
+
+    <div style="background:#151923;border:1px solid rgba(255,159,122,0.3);margin-top:2px;padding:26px 30px">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.16em;color:#FF9E7A;margin-bottom:11px">WORTH FIXING WHICHEVER OPTION YOU PICK</div>
+      <p style="margin:0;font-size:15px;line-height:1.55;color:#A2B0BE;text-wrap:pretty">Your 404 page, privacy, terms and the how-it-works doc still serve the navy shield favicon while the app serves the goalpost. The mark is also hand-inlined in at least three places rather than referenced once. That is a consolidation job independent of which logo wins, and it is the cheapest brand work available to you right now.</p>
+    </div>
+  </div>
+
+</section>
+
+</x-dc>
+</body>
+</html>

@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  html, body { margin:0; background:#00151F; font-family:'Archivo',system-ui,sans-serif; -webkit-font-smoothing:antialiased; }
+  a { color:#84E4E4; text-decoration:none; }
+  a:hover { color:#B6F0F0; }
+</style>
+</helmet>
+
+<section id="1a" data-screen-label="Brand board" style="width:1500px;margin:0 auto;padding:0 0 140px;color:#EDF3F4;background:#00151F">
+
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;padding:72px 80px 56px;border-bottom:1px solid rgba(132,228,228,0.16)">
+    <div style="max-width:760px">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:0.22em;color:#84E4E4;margin-bottom:26px">JUKE — IDENTITY EXPLORATION / V1</div>
+      <h1 style="font-size:60px;line-height:1.02;font-weight:800;letter-spacing:-0.025em;margin:0 0 22px;text-wrap:pretty">Built forward from the shark you already have.</h1>
+      <p style="font-size:19px;line-height:1.55;color:#9FBAC4;margin:0;max-width:640px;text-wrap:pretty">Every mark below is derived from your supplied vector art — same silhouette, same palette, same letterforms. What changes is construction, proportion and the system around it.</p>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:14px">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:0.18em;color:#84E4E4;border:1px solid rgba(132,228,228,0.4);padding:6px 12px">1a</div>
+      <img src="assets/shark-dark.svg" alt="Juke shark" style="width:132px;display:block">
+    </div>
+  </div>
+
+  <!-- 00 AUDIT -->
+  <div style="padding:80px 80px 0">
+    <div style="display:flex;align-items:baseline;gap:20px;margin-bottom:44px">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#84E4E4">00</span>
+      <h2 style="font-size:30px;font-weight:700;letter-spacing:-0.02em;margin:0">Audit of the current mark</h2>
+      <span style="flex:1;height:1px;background:rgba(132,228,228,0.16)"></span>
+    </div>
+
+    <div style="display:grid;grid-template-columns:420px 1fr;gap:56px;align-items:start">
+      <div style="background:#002F3F;border:1px solid rgba(132,228,228,0.14);padding:44px;display:grid;place-items:center;gap:28px">
+        <img src="assets/shark-dark.svg" alt="Current shark" style="width:280px;display:block">
+        <img src="assets/wordmark-aqua.svg" alt="Current wordmark" style="width:190px;display:block">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:0.16em;color:#5C8896">AS SUPPLIED</div>
+      </div>
+
+      <div style="display:grid;gap:2px;background:rgba(132,228,228,0.14)">
+        <div style="background:#001E2B;padding:26px 30px;display:grid;grid-template-columns:34px 1fr;gap:22px">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#84E4E4;padding-top:4px">01</span>
+          <div><div style="font-size:17px;font-weight:700;margin-bottom:7px">The interior detail is painted in the background colour</div><p style="margin:0;font-size:15px;line-height:1.5;color:#9FBAC4">Eyes, teeth, jaw and gill separations are all filled <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#84E4E4">#002F3F</span> — the same value as the canvas. Placed on white, a jersey, or a photo, the face fills in and the shark loses its expression. These need to become true negative shapes.</p></div>
+        </div>
+        <div style="background:#001E2B;padding:26px 30px;display:grid;grid-template-columns:34px 1fr;gap:22px">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#84E4E4;padding-top:4px">02</span>
+          <div><div style="font-size:17px;font-weight:700;margin-bottom:7px">Six interior values compete below 48px</div><p style="margin:0;font-size:15px;line-height:1.5;color:#9FBAC4">Aqua linework, deep teal, a second shadow at <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#84E4E4">#001E2B</span> and a steel mid-tone at <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#84E4E4">#1A6386</span>. At favicon scale they average into one muddy shape.</p></div>
+        </div>
+        <div style="background:#001E2B;padding:26px 30px;display:grid;grid-template-columns:34px 1fr;gap:22px">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#84E4E4;padding-top:4px">03</span>
+          <div><div style="font-size:17px;font-weight:700;margin-bottom:7px">The fins are not quite mirrored</div><p style="margin:0;font-size:15px;line-height:1.5;color:#9FBAC4">Left and right pectoral groups sit at <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#84E4E4">−38.16</span> and <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#84E4E4">40.88</span> with different sweep lengths. There is also a two-point sliver path near the right gill that renders as a stray artifact. A symmetric master with one reflected half fixes both.</p></div>
+        </div>
+        <div style="background:#001E2B;padding:26px 30px;display:grid;grid-template-columns:34px 1fr;gap:22px">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#84E4E4;padding-top:4px">04</span>
+          <div><div style="font-size:17px;font-weight:700;margin-bottom:7px">The lockup has no defined relationship</div><p style="margin:0;font-size:15px;line-height:1.5;color:#9FBAC4">The wordmark reads small and floats a long way below the mark. Fixing the gap and the width to the shark's own measurements is what turns two drawings into one logo.</p></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 01 PRIMARY -->
+  <div style="padding:96px 80px 0">
+    <div style="display:flex;align-items:baseline;gap:20px;margin-bottom:44px">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#84E4E4">01</span>
+      <h2 style="font-size:30px;font-weight:700;letter-spacing:-0.02em;margin:0">Primary logo — refined vertical lockup</h2>
+      <span style="flex:1;height:1px;background:rgba(132,228,228,0.16)"></span>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 340px;gap:44px;align-items:stretch">
+      <div style="background:#002F3F;border:1px solid rgba(132,228,228,0.14);padding:80px;display:flex;flex-direction:column;align-items:center;gap:32px;position:relative">
+        <div style="position:absolute;inset:40px;border:1px dashed rgba(132,228,228,0.2)"></div>
+        <img src="assets/shark-dark.svg" alt="Juke primary" style="width:400px;display:block">
+        <img src="assets/wordmark-aqua.svg" alt="JUKE" style="width:248px;display:block">
+        <div style="position:absolute;left:52px;top:40px;bottom:40px;display:flex;align-items:center;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.16em;color:#5C8896;writing-mode:vertical-rl">CLEAR SPACE = 1 FIN HEIGHT</div>
+      </div>
+      <div style="display:grid;gap:2px;background:rgba(132,228,228,0.14);align-content:start">
+        <div style="background:#001E2B;padding:24px 26px">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.18em;color:#5C8896;margin-bottom:9px">WORDMARK WIDTH</div>
+          <div style="font-size:26px;font-weight:700">0.62 × mark width</div>
+        </div>
+        <div style="background:#001E2B;padding:24px 26px">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.18em;color:#5C8896;margin-bottom:9px">GAP</div>
+          <div style="font-size:26px;font-weight:700">0.75 × cap height</div>
+        </div>
+        <div style="background:#001E2B;padding:24px 26px">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.18em;color:#5C8896;margin-bottom:9px">CLEAR SPACE</div>
+          <div style="font-size:26px;font-weight:700">1 × fin height</div>
+        </div>
+        <div style="background:#001E2B;padding:24px 26px">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.18em;color:#5C8896;margin-bottom:9px">MINIMUM WIDTH</div>
+          <div style="font-size:26px;font-weight:700">96px / 28mm</div>
+        </div>
+        <div style="background:#001E2B;padding:24px 26px">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.18em;color:#5C8896;margin-bottom:9px">ALIGNMENT</div>
+          <div style="font-size:16px;line-height:1.45;color:#9FBAC4">Optical centre on the snout ridge, not the bounding box — the swept fins pull the geometric centre off-axis.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 02 HORIZONTAL -->
+  <div style="padding:96px 80px 0">
+    <div style="display:flex;align-items:baseline;gap:20px;margin-bottom:16px">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#84E4E4">02</span>
+      <h2 style="font-size:30px;font-weight:700;letter-spacing:-0.02em;margin:0">Horizontal lockups</h2>
+      <span style="flex:1;height:1px;background:rgba(132,228,228,0.16)"></span>
+    </div>
+    <p style="font-size:16px;color:#9FBAC4;margin:0 0 40px;max-width:660px">Three relationships rather than three placements. B is the recommended header lockup.</p>
+
+    <div style="display:grid;gap:2px;background:rgba(132,228,228,0.14)">
+      <div style="background:#002F3F;padding:52px 60px;display:grid;grid-template-columns:64px 1fr 300px;gap:40px;align-items:center">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:22px;color:#84E4E4">A</span>
+        <div style="display:flex;align-items:center;gap:30px">
+          <img src="assets/shark-dark.svg" alt="" style="width:150px;display:block">
+          <img src="assets/wordmark-aqua.svg" alt="JUKE" style="width:210px;display:block">
+        </div>
+        <div><div style="font-size:16px;font-weight:700;margin-bottom:5px">Cap-height locked</div><p style="margin:0;font-size:14px;line-height:1.45;color:#8FA9B3">Wordmark cap height set to the shark's jaw-to-crest height. Safe, conventional, wide.</p></div>
+      </div>
+
+      <div style="background:#002F3F;padding:52px 60px;display:grid;grid-template-columns:64px 1fr 300px;gap:40px;align-items:center">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:22px;color:#84E4E4">B</span>
+        <div style="display:flex;align-items:center;gap:22px">
+          <img src="assets/shark-mono-white.svg" alt="" style="width:104px;display:block">
+          <span style="width:1px;height:56px;background:rgba(132,228,228,0.32)"></span>
+          <img src="assets/wordmark-aqua.svg" alt="JUKE" style="width:196px;display:block">
+        </div>
+        <div><div style="font-size:16px;font-weight:700;margin-bottom:5px">Nested with a rule <span style="color:#84E4E4;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:0.14em">RECOMMENDED</span></div><p style="margin:0;font-size:14px;line-height:1.45;color:#8FA9B3">A hairline divider does the spacing work, so the fins can overrun their box without crowding the J. Holds at 40px bar height.</p></div>
+      </div>
+
+      <div style="background:#002F3F;padding:52px 60px;display:grid;grid-template-columns:64px 1fr 300px;gap:40px;align-items:center">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:22px;color:#84E4E4">C</span>
+        <div style="display:flex;align-items:center;gap:26px">
+          <div style="width:96px;height:96px;background:#84E4E4;display:grid;place-items:center;flex:none">
+            <img src="assets/shark-simple-navy.svg" alt="" style="width:70px;display:block">
+          </div>
+          <div style="display:flex;flex-direction:column;gap:9px">
+            <img src="assets/wordmark-aqua.svg" alt="JUKE" style="width:176px;display:block">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:0.3em;color:#6E97A4">FANTASY FOOTBALL</div>
+          </div>
+        </div>
+        <div><div style="font-size:16px;font-weight:700;margin-bottom:5px">Containered + descriptor</div><p style="margin:0;font-size:14px;line-height:1.45;color:#8FA9B3">The reduced fin silhouette in a solid tile. Best where the logo sits on photography or a busy product surface.</p></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 03 SHARK ONLY -->
+  <div style="padding:96px 80px 0">
+    <div style="display:flex;align-items:baseline;gap:20px;margin-bottom:44px">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#84E4E4">03</span>
+      <h2 style="font-size:30px;font-weight:700;letter-spacing:-0.02em;margin:0">Shark-only brand mark</h2>
+      <span style="flex:1;height:1px;background:rgba(132,228,228,0.16)"></span>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:2px;background:rgba(132,228,228,0.14)">
+      <div style="background:#002F3F;padding:44px;display:grid;place-items:center;gap:22px"><img src="assets/shark-dark.svg" alt="" style="width:100%;max-width:190px"><div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.16em;color:#5C8896">FULL — 3 VALUE</div></div>
+      <div style="background:#002F3F;padding:44px;display:grid;place-items:center;gap:22px"><img src="assets/shark-mono-white.svg" alt="" style="width:100%;max-width:190px"><div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.16em;color:#5C8896">REDUCED — 2 VALUE</div></div>
+      <div style="background:#002F3F;padding:44px;display:grid;place-items:center;gap:22px"><img src="assets/shark-simple-aqua.svg" alt="" style="width:100%;max-width:190px"><div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.16em;color:#5C8896">SILHOUETTE — 1 VALUE</div></div>
+      <div style="background:#84E4E4;padding:44px;display:grid;place-items:center;gap:22px"><img src="assets/shark-simple-navy.svg" alt="" style="width:100%;max-width:190px"><div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.16em;color:#0D4453">SILHOUETTE — REVERSED</div></div>
+    </div>
+    <p style="font-size:16px;line-height:1.55;color:#9FBAC4;margin:26px 0 0;max-width:760px;text-wrap:pretty">The silhouette is the asset that can eventually carry Juke without the wordmark. It survives embroidery, a 16px tab and a single-colour stamp, and the crest-and-fin shape is already unique to you.</p>
+  </div>
+
+  <!-- 04 WORDMARK -->
+  <div style="padding:96px 80px 0">
+    <div style="display:flex;align-items:baseline;gap:20px;margin-bottom:16px">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#84E4E4">04</span>
+      <h2 style="font-size:30px;font-weight:700;letter-spacing:-0.02em;margin:0">Wordmark directions</h2>
+      <span style="flex:1;height:1px;background:rgba(132,228,228,0.16)"></span>
+    </div>
+    <p style="font-size:16px;color:#9FBAC4;margin:0 0 40px;max-width:680px">All three are drawn from your existing letterforms, so JUKE stays recognisable. Each is a transformation you can hand to a type designer as a spec.</p>
+
+    <div style="display:grid;gap:2px;background:rgba(132,228,228,0.14)">
+      <div style="background:#001E2B;padding:44px 60px;display:grid;grid-template-columns:120px 1fr 260px;gap:44px;align-items:center">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:0.16em;color:#5C8896">BASELINE</span>
+        <img src="assets/wm-standard.svg" alt="JUKE" style="height:62px;width:auto;display:block;justify-self:start">
+        <p style="margin:0;font-size:14px;line-height:1.45;color:#8FA9B3">As supplied. Stencil-cut athletic sans, even tracking.</p>
+      </div>
+      <div style="background:#002F3F;padding:44px 60px;display:grid;grid-template-columns:120px 1fr 260px;gap:44px;align-items:center">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:0.16em;color:#84E4E4">01 / SPEED</span>
+        <img src="assets/wm-italic.svg" alt="JUKE italic" style="height:74px;width:auto;display:block;justify-self:start">
+        <div><div style="font-size:15px;font-weight:700;margin-bottom:5px">Angular italic</div><p style="margin:0;font-size:14px;line-height:1.45;color:#8FA9B3">12° shear, tracking tightened to 9, 7-unit chamfer off every top-left corner. The cuts all face the direction of travel.</p></div>
+      </div>
+      <div style="background:#002F3F;padding:44px 60px;display:grid;grid-template-columns:120px 1fr 260px;gap:44px;align-items:center">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:0.16em;color:#84E4E4">02 / PRODUCT</span>
+        <img src="assets/wm-wide.svg" alt="JUKE wide" style="height:62px;width:auto;display:block;justify-self:start">
+        <div><div style="font-size:15px;font-weight:700;margin-bottom:5px">Wide geometric, split K</div><p style="margin:0;font-size:14px;line-height:1.45;color:#8FA9B3">1.18× horizontal scale, tracking opened to 17, and a 2.6-unit gap detaching the K's arms from its stem. Reads as software, not merchandise.</p></div>
+      </div>
+      <div style="background:#002F3F;padding:44px 60px;display:grid;grid-template-columns:120px 1fr 260px;gap:44px;align-items:center">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:0.16em;color:#84E4E4">03 / TICKER</span>
+        <img src="assets/wm-condensed.svg" alt="JUKE condensed" style="height:62px;width:auto;display:block;justify-self:start">
+        <div><div style="font-size:15px;font-weight:700;margin-bottom:5px">Compressed</div><p style="margin:0;font-size:14px;line-height:1.45;color:#8FA9B3">0.74× scale, tracking 6. The utility cut — scoreboards, jersey chest strips, narrow app bars.</p></div>
+      </div>
+    </div>
+
+    <div style="background:#FFFFFF;margin-top:2px;padding:52px 60px;display:flex;align-items:center;gap:70px;flex-wrap:wrap">
+      <img src="assets/wm-italic-navy.svg" alt="" style="height:56px;width:auto;display:block">
+      <img src="assets/wm-wide-navy.svg" alt="" style="height:48px;width:auto;display:block">
+      <img src="assets/wm-condensed-navy.svg" alt="" style="height:48px;width:auto;display:block">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.16em;color:#5C8896">ON LIGHT</span>
+    </div>
+  </div>
+
+  <!-- 05 SHARK + J -->
+  <div style="padding:96px 80px 0">
+    <div style="display:flex;align-items:baseline;gap:20px;margin-bottom:16px">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#84E4E4">05</span>
+      <h2 style="font-size:30px;font-weight:700;letter-spacing:-0.02em;margin:0">Shark into the J</h2>
+      <span style="flex:1;height:1px;background:rgba(132,228,228,0.16)"></span>
+    </div>
+    <p style="font-size:16px;color:#9FBAC4;margin:0 0 40px;max-width:680px">Three ways to put the shark inside the letter. The J already leans and hooks, which is why it takes this better than the other three characters.</p>
+
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:2px;background:rgba(132,228,228,0.14)">
+      <div style="background:#002F3F;padding:48px 40px;display:grid;gap:26px;align-content:start">
+        <img src="assets/j-fin.svg" alt="Fin J" style="width:100%;display:block">
+        <div><div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:0.16em;color:#84E4E4;margin-bottom:10px">A / DORSAL</div><div style="font-size:17px;font-weight:700;margin-bottom:7px">The fin grows off the cap</div><p style="margin:0;font-size:14px;line-height:1.5;color:#8FA9B3">A single swept triangle rising from the J's crossbar, angled to match the shark's dorsal. Loud, and the most likely to become a signature — it also gives you a standalone glyph.</p></div>
+      </div>
+      <div style="background:#002F3F;padding:48px 40px;display:grid;gap:26px;align-content:start">
+        <img src="assets/j-shear.svg" alt="Sheared J" style="width:100%;display:block">
+        <div><div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:0.16em;color:#84E4E4;margin-bottom:10px">B / TOOTH CUT</div><div style="font-size:17px;font-weight:700;margin-bottom:7px">The terminal is bitten away</div><p style="margin:0;font-size:14px;line-height:1.5;color:#8FA9B3">The J's upper terminal is sheared at the same angle as the shark's tooth line. Quietest of the three and the only one that costs nothing in width — it reads as craft, not gimmick.</p></div>
+      </div>
+      <div style="background:#002F3F;padding:48px 40px;display:grid;gap:26px;align-content:start">
+        <img src="assets/j-snout.svg" alt="Snout J" style="width:100%;display:block">
+        <div><div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:0.16em;color:#84E4E4;margin-bottom:10px">C / NEGATIVE SNOUT</div><div style="font-size:17px;font-weight:700;margin-bottom:7px">A snout notched out of the stem</div><p style="margin:0;font-size:14px;line-height:1.5;color:#8FA9B3">The profile cut into the J as negative space. The most sophisticated idea, and the most fragile — it needs the notch enlarged and the stem thickened to survive small sizes.</p></div>
+      </div>
+    </div>
+
+    <div style="background:#FFFFFF;margin-top:2px;padding:48px 60px;display:flex;align-items:center;gap:64px;flex-wrap:wrap">
+      <img src="assets/j-fin-navy.svg" alt="" style="height:74px;width:auto;display:block">
+      <img src="assets/j-shear-navy.svg" alt="" style="height:56px;width:auto;display:block">
+      <img src="assets/j-snout-navy.svg" alt="" style="height:56px;width:auto;display:block">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.16em;color:#5C8896">ON LIGHT</span>
+    </div>
+  </div>
+
+  <!-- 06 REDUCTION -->
+  <div style="padding:96px 80px 0">
+    <div style="display:flex;align-items:baseline;gap:20px;margin-bottom:16px">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#84E4E4">06</span>
+      <h2 style="font-size:30px;font-weight:700;letter-spacing:-0.02em;margin:0">Reduction ladder</h2>
+      <span style="flex:1;height:1px;background:rgba(132,228,228,0.16)"></span>
+    </div>
+    <p style="font-size:16px;color:#9FBAC4;margin:0 0 40px;max-width:680px">Shown at true pixel size. Each variant has a floor, and the system's job is to swap at the right one.</p>
+
+    <div style="background:#002F3F;border:1px solid rgba(132,228,228,0.14);padding:56px 60px">
+      <div style="display:grid;grid-template-columns:130px 1fr;gap:34px 40px;align-items:end">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:0.14em;color:#5C8896;padding-bottom:6px">FULL</span>
+        <div style="display:flex;align-items:flex-end;gap:44px"><img src="assets/shark-dark.svg" alt="" style="width:96px"><img src="assets/shark-dark.svg" alt="" style="width:48px"><img src="assets/shark-dark.svg" alt="" style="width:32px"><img src="assets/shark-dark.svg" alt="" style="width:16px"></div>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:0.14em;color:#5C8896;padding-bottom:6px">REDUCED</span>
+        <div style="display:flex;align-items:flex-end;gap:44px"><img src="assets/shark-mono-white.svg" alt="" style="width:96px"><img src="assets/shark-mono-white.svg" alt="" style="width:48px"><img src="assets/shark-mono-white.svg" alt="" style="width:32px"><img src="assets/shark-mono-white.svg" alt="" style="width:16px"></div>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:0.14em;color:#5C8896;padding-bottom:6px">SILHOUETTE</span>
+        <div style="display:flex;align-items:flex-end;gap:44px"><img src="assets/shark-simple-aqua.svg" alt="" style="width:96px"><img src="assets/shark-simple-aqua.svg" alt="" style="width:48px"><img src="assets/shark-simple-aqua.svg" alt="" style="width:32px"><img src="assets/shark-simple-aqua.svg" alt="" style="width:16px"></div>
+        <span></span>
+        <div style="display:flex;align-items:flex-end;gap:44px;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.14em;color:#5C8896"><span style="width:96px">96</span><span style="width:48px">48</span><span style="width:32px">32</span><span style="width:16px">16</span></div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:2px;background:rgba(132,228,228,0.14);margin-top:2px">
+      <div style="background:#001E2B;padding:26px 30px"><div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.16em;color:#84E4E4;margin-bottom:9px">FULL — FLOOR 64px</div><p style="margin:0;font-size:14px;line-height:1.45;color:#8FA9B3">Marketing, hero, print, jersey crest.</p></div>
+      <div style="background:#001E2B;padding:26px 30px"><div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.16em;color:#84E4E4;margin-bottom:9px">REDUCED — FLOOR 28px</div><p style="margin:0;font-size:14px;line-height:1.45;color:#8FA9B3">App icon, site header, social avatar.</p></div>
+      <div style="background:#001E2B;padding:26px 30px"><div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.16em;color:#84E4E4;margin-bottom:9px">SILHOUETTE — FLOOR 12px</div><p style="margin:0;font-size:14px;line-height:1.45;color:#8FA9B3">Favicon, badges, watermarks, embroidery.</p></div>
+    </div>
+  </div>
+
+  <!-- 07 COLOR -->
+  <div style="padding:96px 80px 0">
+    <div style="display:flex;align-items:baseline;gap:20px;margin-bottom:44px">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#84E4E4">07</span>
+      <h2 style="font-size:30px;font-weight:700;letter-spacing:-0.02em;margin:0">Colour and background system</h2>
+      <span style="flex:1;height:1px;background:rgba(132,228,228,0.16)"></span>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:2px;background:rgba(132,228,228,0.14)">
+      <div style="background:#84E4E4;padding:34px 26px;height:190px;display:flex;flex-direction:column;justify-content:flex-end;color:#00202C"><div style="font-size:17px;font-weight:800;margin-bottom:6px">Aqua</div><div style="font-family:'IBM Plex Mono',monospace;font-size:12px">#84E4E4</div><div style="font-size:12px;margin-top:8px;opacity:0.65">Primary accent · all linework</div></div>
+      <div style="background:#002F3F;padding:34px 26px;height:190px;display:flex;flex-direction:column;justify-content:flex-end;color:#EDF3F4;box-shadow:inset 0 0 0 1px rgba(132,228,228,0.14)"><div style="font-size:17px;font-weight:800;margin-bottom:6px">Deep Teal</div><div style="font-family:'IBM Plex Mono',monospace;font-size:12px">#002F3F</div><div style="font-size:12px;margin-top:8px;color:#8FA9B3">Brand ground · default canvas</div></div>
+      <div style="background:#001E2B;padding:34px 26px;height:190px;display:flex;flex-direction:column;justify-content:flex-end;color:#EDF3F4"><div style="font-size:17px;font-weight:800;margin-bottom:6px">Abyss</div><div style="font-family:'IBM Plex Mono',monospace;font-size:12px">#001E2B</div><div style="font-size:12px;margin-top:8px;color:#8FA9B3">Shading · surfaces · depth</div></div>
+      <div style="background:#1A6386;padding:34px 26px;height:190px;display:flex;flex-direction:column;justify-content:flex-end;color:#EDF3F4"><div style="font-size:17px;font-weight:800;margin-bottom:6px">Steel</div><div style="font-size:12px;font-family:'IBM Plex Mono',monospace">#1A6386</div><div style="font-size:12px;margin-top:8px;opacity:0.75">Mid-tone · secondary UI</div></div>
+      <div style="background:#EDF3F4;padding:34px 26px;height:190px;display:flex;flex-direction:column;justify-content:flex-end;color:#00202C"><div style="font-size:17px;font-weight:800;margin-bottom:6px">Paper</div><div style="font-family:'IBM Plex Mono',monospace;font-size:12px">#EDF3F4</div><div style="font-size:12px;margin-top:8px;opacity:0.6">Light ground · body copy</div></div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:2px;background:rgba(132,228,228,0.14);margin-top:2px">
+      <div style="background:#002F3F;padding:52px 30px;display:grid;place-items:center;gap:26px"><img src="assets/shark-dark.svg" alt="" style="width:100%;max-width:150px"><div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.16em;color:#5C8896">DARK</div></div>
+      <div style="background:#EDF3F4;padding:52px 30px;display:grid;place-items:center;gap:26px"><img src="assets/shark-light.svg" alt="" style="width:100%;max-width:150px"><div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.16em;color:#5C8896">LIGHT</div></div>
+      <div style="background:#101416;padding:52px 30px;display:grid;place-items:center;gap:26px"><img src="assets/shark-mono-white.svg" alt="" style="width:100%;max-width:150px"><div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.16em;color:#7C8A8E">MONOCHROME</div></div>
+      <div style="background:#84E4E4;padding:52px 30px;display:grid;place-items:center;gap:26px"><img src="assets/shark-simple-navy.svg" alt="" style="width:100%;max-width:150px"><div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.16em;color:#0D4453">SINGLE COLOUR</div></div>
+    </div>
+  </div>
+
+  <!-- 08 APPLICATIONS -->
+  <div style="padding:96px 80px 0">
+    <div style="display:flex;align-items:baseline;gap:20px;margin-bottom:44px">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#84E4E4">08</span>
+      <h2 style="font-size:30px;font-weight:700;letter-spacing:-0.02em;margin:0">In application</h2>
+      <span style="flex:1;height:1px;background:rgba(132,228,228,0.16)"></span>
+    </div>
+
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.16em;color:#5C8896;margin-bottom:14px">WEBSITE HEADER</div>
+    <div style="background:#002F3F;border:1px solid rgba(132,228,228,0.14)">
+      <div style="height:76px;padding:0 34px;display:flex;align-items:center;gap:32px;border-bottom:1px solid rgba(132,228,228,0.12)">
+        <div style="display:flex;align-items:center;gap:16px">
+          <img src="assets/shark-mono-white.svg" alt="" style="width:38px;display:block">
+          <span style="width:1px;height:26px;background:rgba(132,228,228,0.3)"></span>
+          <img src="assets/wordmark-aqua.svg" alt="JUKE" style="width:84px;display:block">
+        </div>
+        <div style="display:flex;gap:28px;font-size:14px;font-weight:600;color:#B7CDD5;margin-left:14px">
+          <span style="color:#EDF3F4">My Leagues</span><span>Draft</span><span>Players</span><span>Trades</span><span>Research</span>
+        </div>
+        <div style="flex:1"></div>
+        <div style="display:flex;align-items:center;gap:18px">
+          <span style="font-size:13px;font-weight:600;color:#B7CDD5">Week 3</span>
+          <span style="background:#84E4E4;color:#00202C;font-size:13px;font-weight:700;padding:10px 20px">Join a league</span>
+        </div>
+      </div>
+      <div style="padding:56px 34px 60px;display:grid;grid-template-columns:1fr 300px;gap:44px;align-items:center">
+        <div>
+          <h3 style="font-size:44px;line-height:1.05;font-weight:800;letter-spacing:-0.03em;margin:0 0 16px;color:#EDF3F4;max-width:520px;text-wrap:pretty">Your league is about to get juked.</h3>
+          <p style="margin:0;font-size:17px;line-height:1.5;color:#9FBAC4;max-width:440px">Live draft rooms, real projections, no nonsense.</p>
+        </div>
+        <div style="background:#001E2B;border:1px solid rgba(132,228,228,0.14);padding:26px">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.16em;color:#84E4E4;margin-bottom:16px">NEXT DRAFT</div>
+          <div style="font-size:34px;font-weight:800;letter-spacing:-0.02em;color:#EDF3F4">02:14:09</div>
+          <div style="font-size:13px;color:#8FA9B3;margin-top:6px">Dynasty Sharks · 12 team</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:56px">
+      <div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.16em;color:#5C8896;margin-bottom:14px">APP ICON</div>
+        <div style="background:#001E2B;border:1px solid rgba(132,228,228,0.14);padding:44px;display:flex;align-items:flex-end;gap:36px">
+          <div style="width:120px;height:120px;border-radius:27px;background:#002F3F;display:grid;place-items:center;flex:none"><img src="assets/shark-mono-white.svg" alt="" style="width:82px"></div>
+          <div style="width:76px;height:76px;border-radius:17px;background:#84E4E4;display:grid;place-items:center;flex:none"><img src="assets/shark-simple-navy.svg" alt="" style="width:52px"></div>
+          <div style="width:52px;height:52px;border-radius:12px;background:#002F3F;display:grid;place-items:center;flex:none"><img src="assets/shark-simple-aqua.svg" alt="" style="width:34px"></div>
+        </div>
+      </div>
+      <div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.16em;color:#5C8896;margin-bottom:14px">BROWSER TAB / FAVICON</div>
+        <div style="background:#1B2226;border:1px solid rgba(132,228,228,0.14);padding:44px 34px;display:grid;gap:12px;align-content:center">
+          <div style="display:flex;align-items:center;gap:11px;background:#2C3438;border-radius:9px 9px 0 0;padding:11px 15px;max-width:290px">
+            <img src="assets/shark-simple-aqua.svg" alt="" style="width:16px;height:16px;object-fit:contain">
+            <span style="font-size:13px;color:#DDE5E8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Draft Room — Dynasty Sharks | Juke</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:11px;padding:11px 15px;max-width:290px;opacity:0.55">
+            <img src="assets/shark-simple-aqua.svg" alt="" style="width:16px;height:16px;object-fit:contain">
+            <span style="font-size:13px;color:#DDE5E8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Waivers | Juke</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.16em;color:#5C8896;margin:56px 0 14px">DRAFT ROOM</div>
+    <div style="background:#001E2B;border:1px solid rgba(132,228,228,0.14);padding:0">
+      <div style="height:58px;padding:0 26px;display:flex;align-items:center;gap:20px;border-bottom:1px solid rgba(132,228,228,0.12)">
+        <img src="assets/shark-simple-aqua.svg" alt="" style="width:24px;display:block">
+        <span style="font-size:14px;font-weight:700;color:#EDF3F4">Dynasty Sharks — Round 4</span>
+        <div style="flex:1"></div>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:0.16em;color:#FFC2A6">● ON THE CLOCK</span>
+      </div>
+      <div style="display:grid;grid-template-columns:290px 1fr;gap:1px;background:rgba(132,228,228,0.12)">
+        <div style="background:#002F3F;padding:26px">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.16em;color:#84E4E4;margin-bottom:18px">YOUR PICK IN</div>
+          <div style="font-size:52px;font-weight:800;letter-spacing:-0.03em;color:#EDF3F4;line-height:1">0:47</div>
+          <div style="height:4px;background:rgba(132,228,228,0.2);margin:22px 0 26px"><div style="width:38%;height:100%;background:#84E4E4"></div></div>
+          <div style="display:grid;gap:12px">
+            <div style="display:flex;justify-content:space-between;font-size:13px;color:#8FA9B3"><span>Pick</span><span style="color:#EDF3F4;font-weight:700">4.07</span></div>
+            <div style="display:flex;justify-content:space-between;font-size:13px;color:#8FA9B3"><span>Roster</span><span style="color:#EDF3F4;font-weight:700">QB RB RB WR</span></div>
+            <div style="display:flex;justify-content:space-between;font-size:13px;color:#8FA9B3"><span>Budget left</span><span style="color:#EDF3F4;font-weight:700">$118</span></div>
+          </div>
+        </div>
+        <div style="background:#002F3F;padding:26px">
+          <div style="display:flex;gap:22px;font-size:13px;font-weight:600;color:#8FA9B3;margin-bottom:20px;padding-bottom:14px;border-bottom:1px solid rgba(132,228,228,0.12)">
+            <span style="color:#84E4E4;font-weight:700">Best available</span><span>Watchlist</span><span>By position</span><span>Trade block</span>
+          </div>
+          <div style="display:grid;gap:1px;background:rgba(132,228,228,0.1)">
+            <div style="background:#002F3F;display:grid;grid-template-columns:38px 1fr 74px 74px 92px;gap:16px;align-items:center;padding:13px 4px;font-size:14px"><span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#5C8896">01</span><span style="font-weight:700;color:#EDF3F4">A. Whitfield <span style="color:#8FA9B3;font-weight:500">RB · DEN</span></span><span style="color:#8FA9B3">18.4</span><span style="color:#8FA9B3">92%</span><span style="background:#84E4E4;color:#00202C;font-weight:700;font-size:12px;text-align:center;padding:7px 0">Draft</span></div>
+            <div style="background:#002F3F;display:grid;grid-template-columns:38px 1fr 74px 74px 92px;gap:16px;align-items:center;padding:13px 4px;font-size:14px"><span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#5C8896">02</span><span style="font-weight:700;color:#EDF3F4">M. Okonjo <span style="color:#8FA9B3;font-weight:500">WR · CIN</span></span><span style="color:#8FA9B3">17.9</span><span style="color:#8FA9B3">88%</span><span style="border:1px solid rgba(132,228,228,0.4);color:#84E4E4;font-weight:700;font-size:12px;text-align:center;padding:6px 0">Queue</span></div>
+            <div style="background:#002F3F;display:grid;grid-template-columns:38px 1fr 74px 74px 92px;gap:16px;align-items:center;padding:13px 4px;font-size:14px"><span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#5C8896">03</span><span style="font-weight:700;color:#EDF3F4">T. Reyes <span style="color:#8FA9B3;font-weight:500">TE · SEA</span></span><span style="color:#8FA9B3">14.2</span><span style="color:#8FA9B3">71%</span><span style="border:1px solid rgba(132,228,228,0.4);color:#84E4E4;font-weight:700;font-size:12px;text-align:center;padding:6px 0">Queue</span></div>
+            <div style="background:#002F3F;display:grid;grid-template-columns:38px 1fr 74px 74px 92px;gap:16px;align-items:center;padding:13px 4px;font-size:14px"><span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#5C8896">04</span><span style="font-weight:700;color:#EDF3F4">D. Brannon <span style="color:#8FA9B3;font-weight:500">RB · LAC</span></span><span style="color:#8FA9B3">13.8</span><span style="color:#8FA9B3">64%</span><span style="border:1px solid rgba(132,228,228,0.4);color:#84E4E4;font-weight:700;font-size:12px;text-align:center;padding:6px 0">Queue</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.16em;color:#5C8896;margin:56px 0 14px">SPLASH</div>
+    <div style="background:#002F3F;border:1px solid rgba(132,228,228,0.14);height:400px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:34px;position:relative;overflow:hidden">
+      <img src="assets/shark-mono-white.svg" alt="" style="width:190px;display:block">
+      <img src="assets/wordmark-aqua.svg" alt="JUKE" style="width:150px;display:block">
+      <div style="position:absolute;bottom:34px;width:140px;height:2px;background:rgba(132,228,228,0.22)"><div style="width:62%;height:100%;background:#84E4E4"></div></div>
+    </div>
+  </div>
+
+  <!-- 09 TYPOGRAPHY -->
+  <div style="padding:96px 80px 0">
+    <div style="display:flex;align-items:baseline;gap:20px;margin-bottom:16px">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#84E4E4">09</span>
+      <h2 style="font-size:30px;font-weight:700;letter-spacing:-0.02em;margin:0">Type system for web and app</h2>
+      <span style="flex:1;height:1px;background:rgba(132,228,228,0.16)"></span>
+    </div>
+    <p style="font-size:16px;color:#9FBAC4;margin:0 0 40px;max-width:700px;text-wrap:pretty">Lockup B puts the wordmark directly beside product type at small sizes, so the interface face has to stay out of its way. Two faces, three roles. The JUKE letterforms are a logo, never a heading font.</p>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:2px;background:rgba(132,228,228,0.14)">
+      <div style="background:#002F3F;padding:48px 44px">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:0.16em;color:#84E4E4;margin-bottom:24px">PRIMARY / ARCHIVO</div>
+        <div style="font-size:60px;font-weight:800;letter-spacing:-0.03em;line-height:1;margin-bottom:18px">Aa Gg 04</div>
+        <div style="font-size:20px;font-weight:500;line-height:1.4;color:#B7CDD5;margin-bottom:26px">Broad grotesque with real weight at 800 and a quiet 400. Headlines, nav, buttons, body.</div>
+        <p style="margin:0;font-size:14px;line-height:1.5;color:#8FA9B3">Chosen because it is wide where the wordmark is narrow — beside the mark it reads as a different voice rather than a worse version of the same one. It also holds up at 12px, which display sports faces do not.</p>
+      </div>
+      <div style="background:#002F3F;padding:48px 44px">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:0.16em;color:#84E4E4;margin-bottom:24px">DATA / IBM PLEX MONO</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:56px;font-weight:500;letter-spacing:-0.02em;line-height:1;margin-bottom:22px">0:47 · 4.07</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:15px;line-height:1.5;color:#B7CDD5;margin-bottom:26px">Clocks, pick numbers, projections, labels, eyebrow text.</div>
+        <p style="margin:0;font-size:14px;line-height:1.5;color:#8FA9B3">Fantasy is a numbers product. Fixed-width digits stop draft clocks and stat columns twitching as they tick, and the tracked-out caps give you a label style that never competes with the wordmark.</p>
+      </div>
+    </div>
+
+    <div style="display:grid;gap:2px;background:rgba(132,228,228,0.14);margin-top:2px">
+      <div style="background:#001E2B;padding:24px 34px;display:grid;grid-template-columns:180px 1fr 200px;gap:34px;align-items:baseline">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.16em;color:#5C8896">DISPLAY</span>
+        <span style="font-size:40px;font-weight:800;letter-spacing:-0.03em">Your league is about to get juked</span>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#8FA9B3">800 · −3% · 1.05</span>
+      </div>
+      <div style="background:#001E2B;padding:24px 34px;display:grid;grid-template-columns:180px 1fr 200px;gap:34px;align-items:baseline">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.16em;color:#5C8896">HEADING</span>
+        <span style="font-size:26px;font-weight:700;letter-spacing:-0.02em">Best available</span>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#8FA9B3">700 · −2% · 1.2</span>
+      </div>
+      <div style="background:#001E2B;padding:24px 34px;display:grid;grid-template-columns:180px 1fr 200px;gap:34px;align-items:baseline">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.16em;color:#5C8896">UI / BUTTON</span>
+        <span style="font-size:15px;font-weight:700">Draft player</span>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#8FA9B3">700 · 0 · 1.2</span>
+      </div>
+      <div style="background:#001E2B;padding:24px 34px;display:grid;grid-template-columns:180px 1fr 200px;gap:34px;align-items:baseline">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.16em;color:#5C8896">BODY</span>
+        <span style="font-size:17px;font-weight:400;line-height:1.55;color:#B7CDD5">Live draft rooms, real projections, no nonsense.</span>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#8FA9B3">400 · 0 · 1.55</span>
+      </div>
+      <div style="background:#001E2B;padding:24px 34px;display:grid;grid-template-columns:180px 1fr 200px;gap:34px;align-items:baseline">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.16em;color:#5C8896">NUMERIC</span>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:30px;font-weight:500;letter-spacing:-0.02em">18.4 · 92% · $118</span>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#8FA9B3">500 · −2% · tabular</span>
+      </div>
+      <div style="background:#001E2B;padding:24px 34px;display:grid;grid-template-columns:180px 1fr 200px;gap:34px;align-items:baseline">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.16em;color:#5C8896">EYEBROW</span>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:0.18em;color:#84E4E4">ON THE CLOCK</span>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#8FA9B3">400 · +18% · caps</span>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:2px;background:rgba(132,228,228,0.14);margin-top:2px">
+      <div style="background:#002F3F;padding:30px 34px">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.16em;color:#84E4E4;margin-bottom:12px">DO</div>
+        <p style="margin:0;font-size:15px;line-height:1.55;color:#9FBAC4">Set the wordmark's own optical size next to Archivo — in lockup B the wordmark cap height should sit 1.15× the adjacent nav text so it holds rank without growing the bar.</p>
+      </div>
+      <div style="background:#002F3F;padding:30px 34px">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.16em;color:#FFC2A6;margin-bottom:12px">DON'T</div>
+        <p style="margin:0;font-size:15px;line-height:1.55;color:#9FBAC4">Never typeset headlines in the JUKE letterforms. They have four glyphs' worth of resolved design; the rest of the alphabet would have to be invented, and the mark loses its scarcity.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- CLOSE -->
+  <div style="padding:96px 80px 0">
+    <div style="border-top:1px solid rgba(132,228,228,0.16);padding-top:52px;display:grid;grid-template-columns:1fr 1fr;gap:64px">
+      <div>
+        <h2 style="font-size:26px;font-weight:700;letter-spacing:-0.02em;margin:0 0 18px">Where I'd take it</h2>
+        <p style="font-size:16px;line-height:1.6;color:#9FBAC4;margin:0 0 14px;text-wrap:pretty">Lockup <a href="#1a">B</a> as the primary header, the two-value reduced shark as the everyday icon, and the silhouette as the small-size and single-colour asset. On the wordmark, the wide geometric cut with the split K puts the most distance between Juke and the mascot-heavy category — it is the one that reads as a product rather than a team.</p>
+        <p style="font-size:16px;line-height:1.6;color:#9FBAC4;margin:0;text-wrap:pretty">For the J, the tooth cut is the safe signature and the dorsal fin is the memorable one. I would develop both and drop the negative snout.</p>
+      </div>
+      <div>
+        <h2 style="font-size:26px;font-weight:700;letter-spacing:-0.02em;margin:0 0 18px">Needs a hand redraw</h2>
+        <div style="display:grid;gap:2px;background:rgba(132,228,228,0.14)">
+          <div style="background:#001E2B;padding:20px 24px;font-size:15px;line-height:1.45;color:#9FBAC4">Symmetric master with a single reflected half, stray sliver path removed</div>
+          <div style="background:#001E2B;padding:20px 24px;font-size:15px;line-height:1.45;color:#9FBAC4">Eyes, teeth and jaw rebuilt as true negative shapes instead of background-coloured fills</div>
+          <div style="background:#001E2B;padding:20px 24px;font-size:15px;line-height:1.45;color:#9FBAC4">A purpose-drawn 16px mark — the silhouette here is the right shape, but it wants pixel-fitting</div>
+          <div style="background:#001E2B;padding:20px 24px;font-size:15px;line-height:1.45;color:#9FBAC4">The mischievous expression pass: brow angle and jaw line, which is illustration work rather than geometry</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</section>
+
+</x-dc>
+</body>
+</html>
