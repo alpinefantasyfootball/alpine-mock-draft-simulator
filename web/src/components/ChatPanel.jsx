@@ -77,7 +77,7 @@ function EmptyNoRoom() {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-1 px-6 text-center">
       <p className="text-sm font-semibold text-white/70">Nobody to talk to here</p>
-      <p className="text-xs leading-relaxed text-white/35">
+      <p className="text-xs leading-relaxed text-ink-muted">
         Chat is for a shared room. Invite a friend from the menu and this fills in for both of you.
       </p>
     </div>
@@ -85,7 +85,7 @@ function EmptyNoRoom() {
 }
 
 function SystemLine({ text }) {
-  return <p className="my-1.5 text-center text-[11px] text-white/35">{text}</p>
+  return <p className="my-1.5 text-center text-[11px] text-ink-muted">{text}</p>
 }
 
 function PickLine({ entry, room, DE, mine }) {
@@ -98,11 +98,11 @@ function PickLine({ entry, room, DE, mine }) {
         (mine ? 'border-l-[#FFD166] bg-[#FFD166]/5' : 'border-l-transparent bg-white/[0.03]')
       }
     >
-      <span className="font-plex text-[10px] tabular-nums text-white/40">{code}</span>
+      <span className="font-plex text-[10px] tabular-nums text-ink-muted">{code}</span>
       <span className="min-w-0 flex-1 truncate text-white/70">
         <b className="font-semibold text-white/90">{seatLabel(room, entry.seat, null)}</b> drafted {entry.player}
       </span>
-      <span className="shrink-0 text-[10px] text-white/30">{chatTime(entry.at)}</span>
+      <span className="shrink-0 text-[10px] text-ink-muted">{chatTime(entry.at)}</span>
     </div>
   )
 }
@@ -145,13 +145,13 @@ function SaidLine({ entry, grouped, room, mine, gif, reactions, connected, picke
       <button
         type="button"
         onClick={() => onTogglePicker(entry.id)}
-        className="rounded px-1 text-xs text-white/25 opacity-0 transition-opacity hover:text-white/60 group-hover:opacity-100"
+        className="rounded px-1 text-xs text-ink-muted opacity-0 transition-opacity hover:text-white/60 group-hover:opacity-100"
         aria-label="React to this message"
       >
         +
       </button>
       {pickerOpen && (
-        <div ref={pickerRef} className="absolute right-0 top-full z-10 mt-1 flex gap-0.5 rounded-lg border border-white/10 bg-slate-800 p-1 shadow-xl">
+        <div ref={pickerRef} className="absolute right-0 top-full z-10 mt-1 flex gap-0.5 rounded-lg border border-white/10 bg-slate-rule p-1 shadow-xl">
           {reactions.map((emoji) => (
             <button
               key={emoji}
@@ -184,7 +184,7 @@ function SaidLine({ entry, grouped, room, mine, gif, reactions, connected, picke
       <div className="min-w-0 flex-1">
         <p className={'mb-0.5 flex items-baseline gap-1.5 text-[11px]' + (mine ? ' flex-row-reverse' : '')}>
           <span className="font-semibold text-white/80">{who}</span>
-          <span className="text-white/30">{chatTime(entry.at)}</span>
+          <span className="text-ink-muted">{chatTime(entry.at)}</span>
         </p>
         {body}
       </div>
@@ -347,14 +347,14 @@ export default function ChatPanel({ engine }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex shrink-0 items-baseline justify-between gap-2 border-b border-white/[0.06] px-2.5 py-1.5">
-        <span className="text-[10px] text-white/40">
+        <span className="text-[10px] text-ink-muted">
           {taken} {taken === 1 ? 'manager' : 'managers'} here
         </span>
         <span className="truncate text-[10px] italic text-teal-300/80">{typingLine}</span>
       </div>
 
       <div ref={logRef} onScroll={handleScroll} className="relative min-h-0 flex-1 overflow-y-auto px-2.5 py-1.5">
-        {display.length === 0 && <p className="py-6 text-center text-xs text-white/30">Nobody has said anything yet.</p>}
+        {display.length === 0 && <p className="py-6 text-center text-xs text-ink-muted">Nobody has said anything yet.</p>}
         {display.map(({ entry, grouped }) => {
           if (entry.kind === 'system') return <SystemLine key={'sys-' + entry.id} text={entry.text} />
           if (entry.kind === 'pick') {
@@ -412,20 +412,20 @@ export default function ChatPanel({ engine }) {
         </div>
 
         {gifOpen && (
-          <div className="mb-1.5 rounded-lg border border-white/10 bg-slate-800/80 p-2">
+          <div className="mb-1.5 rounded-lg border border-white/10 bg-slate-rule/80 p-2">
             <div className="mb-1.5 flex items-center gap-1.5">
               <input
                 autoFocus
                 value={gifQuery}
                 onChange={(e) => handleGifQuery(e.target.value)}
                 placeholder="Search GIPHY…"
-                className="min-w-0 flex-1 rounded-md border border-white/10 bg-slate-900/60 px-2 py-1 text-xs text-white outline-none focus:border-teal-400/50"
+                className="min-w-0 flex-1 rounded-md border border-white/10 bg-slate-panel/60 px-2 py-1 text-xs text-white outline-none focus:border-teal-400/50"
               />
-              <button type="button" onClick={() => setGifOpen(false)} className="rounded p-1 text-white/40 hover:text-white/70" aria-label="Close GIF search">
+              <button type="button" onClick={() => setGifOpen(false)} className="rounded p-1 text-ink-muted hover:text-white/70" aria-label="Close GIF search">
                 <X className="h-3.5 w-3.5" />
               </button>
             </div>
-            {!gifQuery.trim() && <p className="py-3 text-center text-[11px] text-white/30">Type to search.</p>}
+            {!gifQuery.trim() && <p className="py-3 text-center text-[11px] text-ink-muted">Type to search.</p>}
             {/* delay={0} on purpose. Rule 01 says nothing under 300ms gets a
                 loader, and this line clears that bar before it is ever drawn:
                 handleGifQuery waits GIF_DEBOUNCE_MS (350) before the request
@@ -433,15 +433,15 @@ export default function ChatPanel({ engine }) {
                 mark that faded in 300ms after the words beside it would read as
                 a second, later event rather than as the same one. */}
             {gifQuery.trim() && !gifPayload && (
-              <p className="flex items-center justify-center gap-1.5 py-3 text-[11px] text-white/30">
+              <p className="flex items-center justify-center gap-1.5 py-3 text-[11px] text-ink-muted">
                 <SonarPulse width={14} delay={0} />
                 Searching…
               </p>
             )}
-            {gifPayload && !gifPayload.configured && <p className="py-3 text-center text-[11px] text-white/30">GIFs are not set up for this room yet.</p>}
-            {gifPayload && gifPayload.configured && gifPayload.error && <p className="py-3 text-center text-[11px] text-white/30">GIPHY did not answer. Try again in a moment.</p>}
+            {gifPayload && !gifPayload.configured && <p className="py-3 text-center text-[11px] text-ink-muted">GIFs are not set up for this room yet.</p>}
+            {gifPayload && gifPayload.configured && gifPayload.error && <p className="py-3 text-center text-[11px] text-ink-muted">GIPHY did not answer. Try again in a moment.</p>}
             {gifPayload && gifPayload.configured && !gifPayload.error && gifPayload.results.length === 0 && gifQuery.trim() && (
-              <p className="py-3 text-center text-[11px] text-white/30">Nothing found.</p>
+              <p className="py-3 text-center text-[11px] text-ink-muted">Nothing found.</p>
             )}
             {gifPayload && gifPayload.configured && !gifPayload.error && gifPayload.results.length > 0 && (
               <div className="grid max-h-40 grid-cols-3 gap-1 overflow-y-auto">

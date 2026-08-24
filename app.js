@@ -62,7 +62,12 @@ function slotCount(slot) {
   return league.starters[slot] || 0;
 }
 
-function totalPicks()   { return DraftEngine.totalPicks(league); }
+// Guarded because players.js/stats.js/draft-engine.js now load off the
+// critical path (see the deferred-data boot below) — the setup screen has
+// to be able to compute a picture of "no draft yet" before DraftEngine has
+// arrived, rather than throwing and taking the rest of the boot sequence
+// down with it.
+function totalPicks()   { return typeof DraftEngine === "undefined" ? 0 : DraftEngine.totalPicks(league); }
 function starterCount() { return POSITIONS.reduce((n, pos) => n + league.starters[pos], 0); }
 function flexCount()    { return league.flex + league.superflex; }
 function rosterSize()   { return starterCount() + flexCount() + league.bench; }
@@ -443,15 +448,19 @@ const ROOMS = [
     lead: "Win the wire.",
     blurb: "Connect your live league to simulate waiver claims and evaluate which free agents will actually impact your bottom line." },
   { name: "The Trade Room", live: false, season: "In-season",
-    lead: "Deal with confidence.",
-    blurb: "Model complex trade proposals to evaluate their fairness and long-term impact on your remaining schedule." },
+    // Homepage v4 pass 2's fix: a trade changes your roster, not your
+    // remaining schedule — the old body's own claim, corrected.
+    lead: "Price the deal.",
+    blurb: "Both rosters valued against replacement, with the rest-of-season swing for each side shown before you send it." },
   { name: "The Strategy Room", live: false, season: "In-season",
     lead: "Optimize every week.",
     blurb: "Set your lineup using predictive analytics, probabilistic matchup outcomes, and deep opponent analysis." },
 
   { name: "The League Room", live: false, season: "Post-season",
-    lead: "See the big picture.",
-    blurb: "Track season-long trends, monitor league-wide analytics, and calculate your exact playoff odds as the season unfolds." }
+    // Homepage v4 pass 2's fix: odds are not exact and this audience will
+    // notice — "exact playoff odds" is gone regardless of which body ships.
+    lead: "See the whole table.",
+    blurb: "Playoff odds, strength of schedule and league-wide trends, rebuilt every week as results land." }
 ];
 
 /* ---------- the product shot ----------
@@ -727,10 +736,15 @@ function renderHome() {
     PLAYERS_META.count + " players · ADP and projections refreshed " +
     PLAYERS_META.generated;
 
+  // loadScores() used to run here on every landing. #scoreWrap/#scoreStrip
+  // are legacy markup, display:none !important since the React homepage
+  // replaced this screen — the fetch was updating an element nobody has
+  // been able to see since that redesign. Homepage v4 pass 0 removes it;
+  // fetchScores() itself stays on the JukeEngine bridge, unused today but
+  // real infrastructure, not deleted along with the call site.
+
   // A saved draft is the most useful thing this page can offer someone, so it
   // sits above the rooms rather than being buried on the setup screen.
-  loadScores();
-
   const bar = $("homeResume");
   const data = readSave();
   if (!data || !data.picks.length) { bar.hidden = true; return; }
@@ -927,8 +941,12 @@ const DEFAULT_SET = "half";
 // Football Calculator was down when the pipeline ran. Fall back rather
 // than leaving the app with no players at all.
 function adpSet() {
-  if (typeof ADP_SETS === "undefined") return PLAYERS;
-  return ADP_SETS[league.scoring] || ADP_SETS[DEFAULT_SET] || PLAYERS;
+  // Same reason as totalPicks() above: players.js can still be in flight
+  // when this runs. An empty board is a real, renderable state everywhere
+  // this gets called; a ReferenceError is not.
+  const fallback = typeof PLAYERS === "undefined" ? [] : PLAYERS;
+  if (typeof ADP_SETS === "undefined") return fallback;
+  return ADP_SETS[league.scoring] || ADP_SETS[DEFAULT_SET] || fallback;
 }
 
 // How many picks the selected set can actually support. A 14-team, 15-round
@@ -1009,20 +1027,25 @@ const state = {
    implementation of what a snake draft is — the same one a server will run
    when a room has more than one person in it. */
 
-function pickInfo(overall)  { return DraftEngine.pickInfo(overall, league.teams); }
+// Guarded the same way totalPicks() is (see the deferred-data boot near the
+// foot of this file): with state.started always false before a draft has
+// begun, every one of these can be — and, on a marketing-homepage load
+// before draft-engine.js has landed, is — reached while board is still [].
+// "No draft is happening" is the correct answer here, not a thrown error.
+function pickInfo(overall)  { return typeof DraftEngine === "undefined" ? null : DraftEngine.pickInfo(overall, league.teams); }
 function currentOverall()   { return state.picks.length + 1; }
-function draftOver()        { return DraftEngine.draftOver(league, state.picks.length); }
-function onTheClock()       { return DraftEngine.onTheClock(league, state.picks.length); }
+function draftOver()        { return typeof DraftEngine === "undefined" ? false : DraftEngine.draftOver(league, state.picks.length); }
+function onTheClock()       { return typeof DraftEngine === "undefined" ? null : DraftEngine.onTheClock(league, state.picks.length); }
 function isMyTurn()         { const c = onTheClock(); return c !== null && c.slot === state.mySlot; }
 
 function teamLabel(slot) {
   return slot === state.mySlot ? "Your Team" : cpuName(slot);
 }
 
-function pickCode(overall) { return DraftEngine.pickCode(overall, league.teams); }
+function pickCode(overall) { return typeof DraftEngine === "undefined" ? "" : DraftEngine.pickCode(overall, league.teams); }
 
 function picksUntilMyTurn() {
-  return DraftEngine.picksUntil(league, state.picks.length, state.mySlot);
+  return typeof DraftEngine === "undefined" ? 0 : DraftEngine.picksUntil(league, state.picks.length, state.mySlot);
 }
 
 
@@ -2832,6 +2855,9 @@ function didPlay(block) {
    halfway through. Nothing about the arithmetic moved. */
 function pointsUnder(block, rules) {
   if (!block) return 0;
+  // stats.js can still be in flight — see the deferred-data boot at the
+  // foot of this file. Nothing to score yet is not an error.
+  if (typeof STAT_KEYS === "undefined") return 0;
   let total = 0;
   Object.keys(rules).forEach(function (rule) {
     const key = STAT_KEYS[rule];
@@ -3183,6 +3209,50 @@ function replacementGap(player) {
   // a position we will not rank has no gap to report either.
   if (UNRANKED_POSITIONS.indexOf(player.pos) >= 0) return null;
   return player.projPts - (REPLACEMENT_PTS[player.pos] || 0);
+}
+
+/* Points above replacement for the whole board, under an arbitrary scoring
+   format rather than the live league's own rules — what homepage v4 pass
+   2 needs in two places (the hero board widget's VORP column, the Show
+   Your Working VORP chart) whenever a reader clicks the PPR toggle.
+   "The curve falls when the reception bonus drops, but replacement falls
+   with it" only holds if replacement is recomputed under that SAME
+   format — reading REPLACEMENT_PTS here would answer under whatever this
+   solo session's own league.rules happens to be instead, which drifts
+   the instant a visitor's toggle disagrees with the league default.
+
+   Side-effect-free by design: does not touch REPLACEMENT_PTS, board, or
+   any player's real projPts, all of which the scoring editor still owns
+   alone. Same per-position replacement-rank algorithm buildProjections()
+   already uses — replacementRank() is pure and league-shape-only, so it's
+   reused rather than re-derived a second way.
+
+   Returns a plain object keyed by player.id: { projPts, vorp }, both null
+   for a player with no games projected — the same "absent, not zero" rule
+   replacementGap() already follows. */
+function vorpTableUnder(format) {
+  const rules = rulesForFormat(format);
+  const byPos = {};
+  const out = {};
+  board.forEach(function (p) {
+    if (UNRANKED_POSITIONS.indexOf(p.pos) >= 0) { out[p.id] = { projPts: null, vorp: null }; return; }
+    const s = statOf(p);
+    const pts = s && s.p && s.p.gp > 0 ? pointsUnder(s.p, rules) : null;
+    out[p.id] = { projPts: pts, vorp: null };
+    if (pts !== null) {
+      (byPos[p.pos] = byPos[p.pos] || []).push({ id: p.id, pts: pts });
+    }
+  });
+  POSITIONS.forEach(function (pos) {
+    const list = byPos[pos];
+    if (!list || !list.length) return;
+    list.sort(function (a, b) { return b.pts - a.pts; });
+    const rank = replacementRank(pos);
+    const cut = Math.min(rank, list.length) - 1;
+    const replacement = cut >= 0 ? list[cut].pts : list[list.length - 1].pts;
+    list.forEach(function (row) { out[row.id].vorp = row.pts - replacement; });
+  });
+  return out;
 }
 
 /* The reasoning behind a score, said in one line. Built from figures already
@@ -3674,6 +3744,160 @@ function analyseDraft() {
   });
 
   return all;
+}
+
+/* ---- Take a pick: homepage v4 pass 2's three real, seeded scenarios ---
+
+   "Three third-round decisions, playing out. Nothing here is a marketing
+   screenshot" is the whole promise of this section, so every player, every
+   opponent pick and every grade below has to come from an actual simulated
+   draft — not three hand-picked names. shotPicks() already proves the
+   pattern this needs: simulate picks locally (a `taken` map and a `have`
+   count, never board[].drafted or state.picks) so the hero product shot
+   can run on every homepage load without touching the real, shared draft
+   state a visitor might resume seconds later. This reuses that same
+   scoring, not a second opinion of what a CPU seat would take.
+
+   Grading is different. analyseTeam()/analyseDraft() are not pure — they
+   read state.picks and league directly — and reimplementing the 50/25/15/10
+   grade a second time for this section is exactly the "nothing about the
+   league shape may be written down twice" mistake this file's own history
+   warns about (the superflex bug was precisely that, in the CPU). So
+   gradeAndRosterAt() below does the opposite of shotPicks(): it swaps the
+   real state.picks and the real players' .drafted flags to the simulated
+   picture, calls the real analyseDraft(), reads the result into plain
+   numbers, and restores both in a `finally` — synchronously, no `await` and
+   no timer in between, so nothing else ever observes the swapped state. */
+
+// The exact scoring shotPicks() uses for its own simulated draft, factored
+// out so both can call it rather than one drifting from the other.
+function bestAvailable(pool, have, slot, round) {
+  const modelMultiplier = modelMultipliers(pool);
+  let best = null, bestScore = Infinity;
+  pool.forEach(function (p) {
+    const score = (p.adp + p.jitter)
+      * needFromCount(have[slot][p.pos] || 0, p.pos, round)
+      * (isRisky(p) ? 1.35 : 1)
+      * modelMultiplier(p);
+    if (score < bestScore) { bestScore = score; best = p; }
+  });
+  return best;
+}
+
+function generateThirdRoundScenario(targetSlot) {
+  const teams = league.teams;
+  const taken = {};
+  const have = [];
+  for (let s = 0; s < teams; s++) have.push({});
+  const picks = [];   // { overall, round, slot, player }, in draft order
+
+  let targetOverall = null;
+  const total = teams * league.rounds;
+  for (let n = 1; n <= total; n++) {
+    const c = DraftEngine.pickInfo(n, teams);
+    const pool = board.filter(function (p) { return !taken[p.name] && !isRuledOut(p); });
+    if (!pool.length) break;
+    const best = bestAvailable(pool, have, c.slot, c.round);
+    if (!best) break;
+
+    taken[best.name] = true;
+    have[c.slot][best.pos] = (have[c.slot][best.pos] || 0) + 1;
+    picks.push({ overall: n, round: c.round, slot: c.slot, player: best });
+
+    if (c.slot === targetSlot && c.round === 3) targetOverall = n;
+    // Two more picks past mine — phase 2's "the room reacts" — then stop;
+    // nothing later in the draft is ever shown.
+    if (targetOverall !== null && n >= targetOverall + 2) break;
+  }
+  if (targetOverall === null) return null;
+
+  const myIndex = picks.findIndex(function (p) { return p.overall === targetOverall; });
+  const myPick = picks[myIndex];
+  const opponentPicks = picks.slice(myIndex + 1, myIndex + 3);
+  if (opponentPicks.length < 2) return null;
+
+  // "On the board" panel: my pick, the two players taken right after, and
+  // a handful more who stay available throughout — a fixed row set, so the
+  // phases only ever change a row's own appearance (§4.3), never add or
+  // remove one.
+  const takenBeforeMine = {};
+  picks.slice(0, myIndex).forEach(function (p) { takenBeforeMine[p.player.name] = true; });
+  const boardRows = [myPick.player].concat(opponentPicks.map(function (p) { return p.player; }));
+  board
+    .filter(function (p) { return !takenBeforeMine[p.name] && boardRows.indexOf(p) < 0 && !isRuledOut(p); })
+    .sort(function (a, b) { return (a.adp + a.jitter) - (b.adp + b.jitter); })
+    .slice(0, 5)
+    .forEach(function (p) { boardRows.push(p); });
+
+  // Survival to my own next turn from this exact pick, off the identical
+  // model the Hero widget and the Show Your Working chart use — not a
+  // fourth copy of "how many picks until my turn" math either.
+  const nextTurnGap = DraftEngine.picksUntil(league, myPick.overall, targetSlot);
+  const survival = survivalProbability(myPick.player, myPick.overall + nextTurnGap);
+
+  // The one part of this file allowed to touch state.picks and
+  // board[].drafted outside a real draft — see the comment above this
+  // section for why it is safe here and nowhere else. cutIndex picks are
+  // "already made" for this call only.
+  function gradeAndRosterAt(cutIndex) {
+    const slice = picks.slice(0, cutIndex);
+    const savedPicks = state.picks;
+    const touched = slice.map(function (p) { return p.player; });
+    touched.forEach(function (p) { p.drafted = true; });
+    state.picks = slice;
+    try {
+      const mine = analyseDraft()[targetSlot];
+      const lineup = bestLineup(rosterOf(targetSlot)).map(function (s) {
+        return { slot: s.slot, player: s.player ? { name: s.player.name, pos: s.player.pos } : null };
+      });
+      return {
+        composite: Math.round(mine.total),
+        letter: mine.grade,
+        components: {
+          starters: Math.round(mine.startersScaled),
+          value: Math.round(mine.valueScaled),
+          build: Math.round(mine.buildScaled),
+          byes: Math.round(mine.byePenaltyScaled),
+        },
+        lineup: lineup,
+        picksMade: cutIndex,
+      };
+    } finally {
+      state.picks = savedPicks;
+      touched.forEach(function (p) { p.drafted = false; });
+    }
+  }
+
+  const before = gradeAndRosterAt(myIndex);
+  const after = gradeAndRosterAt(myIndex + 3);
+
+  return {
+    pickCode: DraftEngine.pickCode(myPick.overall, teams),
+    overall: myPick.overall,
+    round: myPick.round,
+    slot: targetSlot,
+    player: { name: myPick.player.name, pos: myPick.player.pos, team: myPick.player.team },
+    survivalPct: survival == null ? null : Math.round(survival * 100),
+    boardRows: boardRows.map(function (p) {
+      return { name: p.name, pos: p.pos, team: p.team, isMine: p === myPick.player, isOpponent: opponentPicks.indexOf(picks.find(function (pk) { return pk.player === p; })) >= 0 };
+    }),
+    opponentPicks: opponentPicks.map(function (p) { return { name: p.player.name, slot: p.slot }; }),
+    before: before,
+    after: after,
+  };
+}
+
+/* Three scenarios, three seats — the third round plays out differently for
+   seat 2, seat 5 and seat 8 of the same simulated draft (different boards
+   remaining when each reaches its own third pick), which is what makes
+   these three genuinely different decisions rather than the same one
+   described three times. All three walk the identical shotPicks()-style
+   simulation from pick 1, so seat 5's scenario already reflects seats 0-4
+   having picked "in front of" it, same as a real snake draft. */
+function thirdRoundScenarios() {
+  return [2, 5, 8]
+    .map(function (slot) { return generateThirdRoundScenario(slot); })
+    .filter(Boolean);
 }
 
 
@@ -4342,6 +4566,10 @@ function rosterStrip(slot) {
 }
 
 function boardArrow(round, slot, teams) {
+  // Same guard as the wrappers above: the board grid draws league.teams x
+  // league.rounds empty cells from league shape alone, with no dependence
+  // on board/state, so it runs during the deferred-data window too.
+  if (typeof DraftEngine === "undefined") return round % 2 === 0 ? "&larr;" : "&rarr;";
   if (DraftEngine.pickInRound(round, slot, teams) === teams) return "&darr;";
   return round % 2 === 0 ? "&larr;" : "&rarr;";
 }
@@ -4404,7 +4632,12 @@ function renderBoard() {
            that mirror — this line used to be `s + 1`, which is the same fact
            written down twice and drifting in the half of the board where the
            two disagree. */
-        const inRound = DraftEngine.pickInRound(r, s, league.teams);
+        // "?" rather than s + 1 while draft-engine.js is still in flight:
+        // that fallback is the exact seat-for-pick-number bug documented
+        // above, and this cell gets rebuilt from scratch the moment real
+        // data lands (see the deferred-data boot), so there's nothing to
+        // gain from an approximation here, correct or not.
+        const inRound = typeof DraftEngine === "undefined" ? "?" : DraftEngine.pickInRound(r, s, league.teams);
 
         /* `mine` goes on an empty cell too, and that is the half of this
            that was missing. The class only ever went on a filled one, so the
@@ -4444,7 +4677,7 @@ function renderBoard() {
            DraftEngine.overallOf() rather than the sum written out here: the
            mirror is inside it, and a caller holding a round and a seat must
            never work that out again. */
-        const ovr = `<span class="cell-ovr">${DraftEngine.overallOf(r, s, league.teams)}</span>`;
+        const ovr = `<span class="cell-ovr">${typeof DraftEngine === "undefined" ? "" : DraftEngine.overallOf(r, s, league.teams)}</span>`;
 
         // The cell on the clock is the clock. Looking away from where the
         // pick lands to find out how long is left is the thing this removes.
@@ -7632,6 +7865,64 @@ $("playerFilter").addEventListener("click", function (e) {
 ["tab-suggest", "tab-players", "tab-team", "tab-picks", "tab-grades"]
   .forEach(function (id) { $("workMain").appendChild($(id)); });
 
+/* ---- deferred data: players.js, stats.js, draft-engine.js -----------
+   These three are 636KB combined — most of what this page weighs — and
+   nothing in this file's own boot needs them synchronously any more:
+   totalPicks(), adpSet() and pointsUnder() above all complete a full,
+   empty-board boot without them. So they no longer ship as blocking
+   <script> tags in index.html; this loads them off requestIdleCallback
+   instead, which keeps them off the marketing homepage's first paint
+   while still landing within a second or two of it — real board data
+   for Ticker.jsx's facts and ScoringDemoCard.jsx's scoring demo, just
+   not render-blocking. The Draft Room needs them synchronously long
+   before a real user could reach it from a cold load, since reaching
+   #/draft-room means clicking through the homepage first.
+
+   Dynamically-injected classic <script> tags, not import() — these
+   three files are not ES modules (players.js/stats.js are bare top-level
+   const, draft-engine.js assigns window.DraftEngine itself for exactly
+   this reason), and app.js's whole dependency on them being plain
+   shared-scope globals would break under import()'s module namespace. */
+function loadDeferredData() {
+  if (typeof DraftEngine !== "undefined" && typeof PLAYERS !== "undefined" &&
+      typeof STAT_KEYS !== "undefined") return;
+  let remaining = 3;
+  const done = function () {
+    remaining--;
+    if (remaining === 0) window.dispatchEvent(new Event("juke:data-loaded"));
+  };
+  ["draft-engine.js", "players.js", "stats.js"].forEach(function (name) {
+    const s = document.createElement("script");
+    s.src = "/" + name + "?v=202608231526";
+    s.onload = done;
+    s.onerror = done;   // a missing file must not hang the retry forever
+    document.head.appendChild(s);
+  });
+}
+
+if (typeof requestIdleCallback === "function") {
+  requestIdleCallback(loadDeferredData, { timeout: 2000 });
+} else {
+  setTimeout(loadDeferredData, 200);   // Safari has no requestIdleCallback
+}
+
+// refreshSetup() below runs the moment this file finishes parsing, almost
+// certainly before the deferred data above has landed — it renders the
+// correct "nothing to draft yet" empty state rather than throwing. This
+// listener re-runs it once the real data arrives, which rebuilds the board
+// and (via render() -> renderHeader()) redispatches "juke:header" — the
+// same signal Ticker.jsx already listens for to refresh what it shows.
+// Registered before refreshSetup() runs, not after, so a callback that
+// somehow resolves synchronously can't fire before anything is listening.
+window.addEventListener("juke:data-loaded", function onDeferredData() {
+  window.removeEventListener("juke:data-loaded", onDeferredData);
+  // Not applyRoute() — that ends in window.scrollTo(0, 0), which would
+  // silently yank a reader on the marketing homepage back to the top the
+  // moment the deferred data lands. refreshSetup() rebuilds the board and
+  // re-renders without touching scroll position.
+  refreshSetup();
+});
+
 // Everything above this line is a definition. This reads the setup screen,
 // builds the board from the matching ADP set, and draws the page.
 refreshSetup();
@@ -7649,6 +7940,14 @@ applyRoute();
    rooms() return live references on purpose: call them fresh on each use
    rather than caching across a route change, the same way this file does. */
 window.JukeEngine = {
+  // Whether draft-engine.js/players.js/stats.js have landed — see the
+  // deferred-data boot above. React reads this rather than reaching for
+  // DraftEngine/PLAYERS/STAT_KEYS directly, the same way it reads board()
+  // and league() instead of the bare module-scope bindings: one bridge,
+  // not a second copy of what "ready" means creeping into web/src.
+  dataReady:    () => typeof DraftEngine !== "undefined" &&
+                       typeof PLAYERS !== "undefined" &&
+                       typeof STAT_KEYS !== "undefined",
   board:        () => board,
   league:       () => league,
   rooms:        () => ROOMS,
@@ -7887,6 +8186,8 @@ window.JukeEngine = {
   // scarcity metric invented for this card.
   suggestions:     suggestions,
   replacementGap:  replacementGap,
+  vorpUnder:       vorpTableUnder,
+  thirdRoundScenarios: thirdRoundScenarios,
   tierRemaining:   tierRemaining,
   // Added for the Draft Room Cockpit's Decide screen — see each
   // function's own comment for why these are closed-form measurements

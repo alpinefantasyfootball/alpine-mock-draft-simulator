@@ -2,6 +2,66 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Self-hosted, homepage v4 pass 1. Archivo and IBM Plex Mono used to load
+   from Google Fonts, bundled into the same CSS2 request as Barlow
+   Condensed and Inter (index.html's font <link>) — a third-party origin
+   round trip for two faces this page controls the only two uses of that
+   actually matter for load time: the JUKE wordmark and the mono/tabular
+   text the status strip and share card use. Barlow Condensed and Inter
+   stay on Google Fonts, untouched — font-display/font-body
+   (tailwind.config.js) are shared with the Draft Room, which this pass
+   does not touch. See index.html for the matching <link rel="preload">
+   on the two above-the-fold files (the wordmark's Archivo weight and the
+   header ticker's IBM Plex Mono 500).
+
+   Latin subset only, matching what Google's own CSS2 API serves for a
+   plain `display=swap` request with no unicode-range override — the same
+   bytes as before, just fetched from this origin instead of
+   fonts.gstatic.com. font-display: swap is set here explicitly rather
+   than assumed, since nothing about self-hosting carries it over
+   automatically the way the Google-served CSS did.
+
+   One file for all of Archivo: it is Google's own variable font, not
+   three static instances — confirmed by fetching the CSS2 API for
+   wght@600, @700 and @900 and finding all three "latin" blocks pointing
+   at the identical URL, matching what a wght@400..900 request returns
+   with font-weight: 400 900. A single @font-face with a weight range is
+   the correct declaration for that, not three copies of one file under
+   three names. IBM Plex Mono has no such registered axis — Google serves
+   400/500/600 as three distinct static files, so it stays three rules. */
+@font-face {
+  font-family: 'Archivo';
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url('/fonts/archivo-variable-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/ibm-plex-mono-400-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/ibm-plex-mono-500-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/ibm-plex-mono-600-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
 html,
 body,
 #root {
@@ -11,24 +71,25 @@ body,
 /* Header.jsx's rows are `fixed`, so an anchor landing at its natural scroll
    position would have its top slice of content — a heading, a card's first
    row — sitting behind them. scroll-padding-top reserves that height on
-   every scroll-into-view, anchor click included; a few px of slack beyond
-   the exact header height so a section's own heading isn't flush against
-   its bottom edge.
+   every scroll-into-view, anchor click included; 8px of slack beyond the
+   exact header height so a section's own heading isn't flush against its
+   bottom edge — main's own pt in Homepage.jsx carries no such slack, since
+   clearing the fixed header at initial load has no anchor to breathe under.
 
-   Two values, tracking Homepage.jsx's own `pt-[57px] lg:pt-[108px]` — below
-   lg the ticker is `hidden lg:block` and the nav is h-14, so the header is
-   57px, not the 101px (h-16 + h-9 + 1px) it is at lg+. The desktop number
-   on a phone reserved 51px nothing occupies, landing every anchor click
-   half a screen short of the section it named. 1024px is Tailwind's own
-   `lg`, which is what Header.jsx switches on. */
+   Two values, tracking Homepage.jsx's own `pt-[89px] md:pt-[97px]` plus 8px
+   each: homepage v4 pass 2's status strip renders at every width (unlike
+   the old ticker's `hidden lg:block`), so md — where the nav row itself
+   steps from h-14 to h-16 — is the only breakpoint left that changes the
+   header's height, not lg. Measured against the real rendered header
+   before being written down: 89px below md, 97px at md+. */
 html {
   scroll-behavior: smooth;
-  scroll-padding-top: 65px;
+  scroll-padding-top: 97px;
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 768px) {
   html {
-    scroll-padding-top: 108px;
+    scroll-padding-top: 105px;
   }
 }
 

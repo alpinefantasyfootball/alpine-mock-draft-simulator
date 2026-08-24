@@ -45,7 +45,7 @@ export default function MobileAppTabBar() {
           with no inset gets 58px of dead padding for nothing. lg:hidden:
           desktop's Locker keeps its own header-only nav, no bottom bar. */}
       <nav
-        className="fixed inset-x-0 bottom-0 z-40 flex border-t border-white/[0.06] bg-obsidian/95 backdrop-blur-md lg:hidden"
+        className="fixed inset-x-0 bottom-0 z-40 flex border-t border-white/[0.06] bg-slate-bar/95 backdrop-blur-md lg:hidden"
         style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       >
         {TABS.map((t) => {

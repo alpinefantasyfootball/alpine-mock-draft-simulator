@@ -40,6 +40,55 @@ export default {
         // rewritten once already to end.
         mint: '#5eead4',
         skyblue: '#38bdf8',
+        // ---- The two-surface split (Claude Design, "Slate & Mint") ----
+        //
+        // Marketing surfaces stay on `void`. App surfaces — lobby, draft
+        // room, cockpit, insights — move to `slate`. The reasoning is that
+        // the two are looked at differently: a marketing or scores page is
+        // scanned in bursts and has to host thirty-two team palettes, so
+        // near-black is the only ground that lets all of them look right. A
+        // draft room is sat in for an hour. Different jobs, different grounds
+        // — and the switch itself signals you have crossed out of marketing
+        // and into the tool.
+        //
+        // Nothing about the brand changes here. Every accent keeps its hex;
+        // only the ground under them moves, and the three text values below
+        // are re-derived against that new ground rather than carried over.
+        // A value tuned against #070A0D does not hold at #1E2733 — see
+        // DraftBoardGrid's empty-cell number for the case that proves it.
+        //
+        // `obsidian` and `charcoal` above are deliberately NOT deleted:
+        // RoomPanel, TendenciesStrip and LockerTable still use them, and
+        // some of those are marketing-side surfaces.
+        slate: {
+          // page / board ground
+          DEFAULT: '#1E2733',
+          // fixed header, lobby bar — a step under the page so a bar
+          // still reads as a bar once the page is no longer near-black
+          bar: '#1A222D',
+          // cards, filled board cells — a step above the page
+          panel: '#232D3A',
+          // sunken: inputs, the queue's identity column. Must stay opaque
+          // where the source says so; a sticky cell that lets the board
+          // scroll under it is not a sticky cell.
+          sunk: '#161D26',
+          // borders, and the one step of lift above `panel` — avatar
+          // placeholders and meter tracks use it as a fill for the same
+          // reason a rule uses it as an edge: it is the value that reads
+          // as "raised off the panel" without becoming a surface itself.
+          rule: '#38434F',
+        },
+        // Text on slate. These are re-derived, not the void values moved
+        // across: measured 13.1:1, 6.6:1 and 4.9:1 against #1E2733. The
+        // last is the floor for 11px and up and there is nothing under it
+        // — anything dimmer than `muted` on this ground fails AA, which
+        // is why `text-white/40` and `text-white/30` had to go rather than
+        // be re-tuned.
+        ink: {
+          DEFAULT: '#EDF1F5',
+          soft: '#A0AEBC',
+          muted: '#8A9BAA',
+        },
         // This page's background. Close to but deliberately not `obsidian`
         // (#0B0E14, used everywhere else) — the handoff's own value, and
         // this project's rule once a hex is explicitly chosen is to keep it
@@ -49,9 +98,20 @@ export default {
       boxShadow: {
         // resting glass panel: barely-there edge, no glow
         glass: '0 1px 0 0 rgb(255 255 255 / 0.04) inset',
-        // hover state: teal ring + glow outside, soft purple wash inside
-        'card-hover':
-          '0 0 0 1.5px rgb(0 229 255 / 0.9), 0 0 32px rgb(0 229 255 / 0.4), inset 0 0 40px rgb(123 31 162 / 0.5)',
+        // hover state: a teal ring, and nothing else. It used to carry a
+        // 32px outer glow and an `inset 0 0 40px rgb(123 31 162 / 0.5)`
+        // purple wash as well. The inset was the real problem — an inset
+        // shadow paints inside the box, which is where the card's own body
+        // copy is, so it was a purple haze under text rather than ambience
+        // around a card. The ring alone says "hovered" and says it more
+        // precisely.
+        //
+        // Note this fixes a definition rather than a rendering: `shadow-
+        // card-hover` has no call site in web/src, so Tailwind's JIT has
+        // never emitted the rule and the purple wash has never been on
+        // anybody's screen. Kept and corrected rather than deleted, so the
+        // next surface that reaches for a hover shadow gets the right one.
+        'card-hover': '0 0 0 1.5px rgb(0 229 255 / 0.9)',
         // "Your seat" identity — the Draft Room Cockpit's gold ring, named
         // by role rather than added as a `gold` colour token. #FFD166 is
         // 1.4:1 as text (CLAUDE.md), so the colour-ownership rule is
@@ -86,11 +146,12 @@ export default {
         // there — grepped `web/src` for the literal class `font-mono` and
         // got zero matches. Nothing in the Draft Room was using it at all,
         // despite an older version of this comment claiming pick codes and
-        // AnalysisTab did. `font-plex` is now used explicitly by both the
+        // AnalysisTab did. `font-plex` is used explicitly by both the
         // homepage components and the Cockpit's pick codes/team
-        // abbreviations/tabular figures, loaded from Google Fonts in
-        // index.html next to Archivo — same font, no new infrastructure,
-        // just no longer homepage-only.
+        // abbreviations/tabular figures — self-hosted from /fonts/ as of
+        // homepage v4 pass 1 (see index.css's @font-face rules and
+        // index.html's preload), not loaded from Google Fonts any more.
+        // Same font either way, still not homepage-only.
         plex: ['"IBM Plex Mono"', 'ui-monospace', 'SFMono-Regular', 'monospace'],
       },
       keyframes: {

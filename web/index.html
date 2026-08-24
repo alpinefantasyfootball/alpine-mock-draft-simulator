@@ -42,14 +42,30 @@
        resolves the same way whether you are at "/" or "/#/draft". -->
   <script src="/theme.js?v=202608231526"></script>
 
+  <!-- Homepage v4 pass 1: Archivo and IBM Plex Mono moved off Google Fonts
+       entirely — self-hosted from /fonts/, @font-face declared in
+       web/src/index.css. Barlow Condensed and Inter stay here: they are
+       font-display/font-body (tailwind.config.js), shared with the whole
+       Draft Room, which this pass does not touch. Two families instead of
+       four on this one request now, and the two preconnects below still
+       earn their keep for it. -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <!-- Barlow Condensed and Inter are the Draft Room's fonts, unchanged.
-       Archivo is the homepage's display face; IBM Plex Mono (400/500/600,
-       matching the weights the design actually uses) is its data/numerals
-       face — both homepage-only, both loaded together rather than the Draft
-       Room losing its type. -->
-  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600;700&family=Archivo:wght@400..900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <!-- The two self-hosted faces actually on screen before anything else
+       loads: the JUKE wordmark in the nav (Archivo, every weight in one
+       variable file) and the header ticker's "N players" badge (IBM Plex
+       Mono 500 — font-medium in Ticker.jsx). preload warms the fetch in
+       parallel with everything else in <head>; the @font-face rule that
+       makes the browser actually use it lives in index.css, wherever that
+       stylesheet happens to load from. as="font" and crossorigin are both
+       required for a font preload to be picked up rather than silently
+       ignored — a bare <link rel="preload" href="...woff2"> with neither
+       fetches the file and then fetches it *again* when @font-face asks,
+       because the browser has no way to know the two requests should share
+       a cache entry without crossorigin matching on both. -->
+  <link rel="preload" as="font" type="font/woff2" href="/fonts/archivo-variable-latin.woff2" crossorigin>
+  <link rel="preload" as="font" type="font/woff2" href="/fonts/ibm-plex-mono-500-latin.woff2" crossorigin>
   <!-- ?v=202608231526 on every local file below, and it has to be bumped on any deploy
        that changes one of them.
 
@@ -90,6 +106,21 @@
        See the comment there for why the loader is markup rather than a
        component.
 
+       Homepage v4 pass 0 scopes this overlay to the installed app's cold
+       launch only — it no longer fires on an ordinary browser visit to the
+       marketing site. theme.js (same file, same "must run before body
+       paints" slot this project already trusts for the light/dark flash)
+       stamps data-standalone on <html> synchronously, before this <style>
+       block is even applied, from matchMedia('(display-mode: standalone)')
+       plus the older navigator.standalone for iOS Safari. The
+       html:not([data-standalone]) #boot-sonar rule below is the only thing
+       that reads it: display:none removes the overlay from layout, paint
+       and hit-testing outright on a plain page load, so a marketing visit
+       never spends the frame this element used to cost. Nothing about
+       #boot-sonar's own markup, animation or teardown changes for the
+       standalone case — only whether it ever gets painted at all on every
+       other one.
+
        Inline rather than in index.css, because Tailwind's stylesheet is a Vite
        artefact: a production build injects it as a <link>, but under `vite dev`
        it arrives via JavaScript. A dev cold load would therefore paint an
@@ -110,6 +141,8 @@
        components. Change one, change the other. sonar-boot-in has no Tailwind
        counterpart; it belongs to this overlay alone. -->
   <style>
+    html:not([data-standalone]) #boot-sonar { display: none; }
+
     #boot-sonar {
       position: fixed; inset: 0; z-index: 9999;
       display: flex; flex-direction: column;
@@ -818,13 +851,33 @@
 
   <!-- Every one of these carries the same ?v=202608231526 as the stylesheet. See the note
        beside it in <head>: bump them together or don't bump them at all.
-       Root-relative for the same reason theme.js and style.css are above. -->
-  <script src="/players.js?v=202608231526"></script>
-  <script src="/stats.js?v=202608231526"></script>
-  <!-- The rules of a snake draft, with no reference to this page. It loads
-       before app.js because app.js is a caller, and it is a separate file
-       because a server will eventually have to run the same one. -->
-  <script src="/draft-engine.js?v=202608231526"></script>
+       Root-relative for the same reason theme.js and style.css are above.
+
+       players.js, stats.js and draft-engine.js used to load here too, as
+       three more blocking classic scripts — 636KB combined, most of this
+       page's weight, fetched before first paint on every marketing-site
+       load. app.js's own boot now loads them itself, off
+       requestIdleCallback, once it's already running (see the
+       "deferred data" block near the foot of app.js) — keeping them off
+       the homepage's critical path while still landing in time for the
+       ticker and the hero scoring demo to fill in with real data.
+
+       The three tags below stay blocking classic scripts, not defer — that
+       was tried and measured broken. Vite's production build always
+       injects the entry <script type="module"> into <head>, regardless of
+       where main.jsx's own tag sits in this source file — confirmed by
+       reading a real `vite build` output, not assumed. A blocking script
+       still executes the moment the parser reaches it, before parsing (and
+       therefore every deferred/module script, wherever it landed) even
+       finishes — which is the one guarantee this page actually needs:
+       window.JukeEngine assigned before React's first effects run. `defer`
+       here would put these three in the same document-order queue as a
+       script Vite relocates out from under them, and in that build
+       window.JukeEngine did not exist yet when Ticker.jsx's and
+       ScoringDemoCard.jsx's mount effects ran — confirmed with a
+       throwaway console.log, not inferred: "effect ran, engine= false".
+       Their listeners never got attached, so neither one ever picked up
+       real data, deferred-load or not. -->
   <!-- The socket to a shared room. Loaded always, connected never unless a
        manager asks for it: a solo draft touches nothing. -->
   <script src="/live.js?v=202608231526"></script>

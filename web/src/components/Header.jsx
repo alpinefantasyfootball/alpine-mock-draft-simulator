@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Menu } from 'lucide-react'
-import Ticker from './Ticker.jsx'
+import StatusStrip from './StatusStrip.jsx'
 import JukeLogo from './juke-logo/JukeLogo.jsx'
 import ComingSoonModal from './ComingSoonModal.jsx'
 import MobileNavSheet from './MobileNavSheet.jsx'
@@ -15,49 +15,99 @@ import { NAV_LINKS, AccountButtons } from './SiteNav.jsx'
 // there, and a second copy behind it would be the identical two-headers bug
 // SiteNav.jsx was written to fix, just moved one level down into "which
 // list does the mobile sheet see."
-/* The sticky bottom CTA hides while the hero's own CTA is on screen.
+/* The sticky bottom CTA hides while ANY primary "Enter the Draft Room" CTA
+   is on screen — Hero's own pair, RoomsGrid's live-room card, and
+   ClosingCta's closing band all carry the same data-hero-cta marker now.
 
-   Both say "Enter the Draft Room" — that is the one-CTA-string rule working —
-   but the result was the same button twice in one viewport, one of them
-   floating over the other's whitespace, which was reported as looking wrong
-   and does. The handoff asks for a persistent CTA so the action is never more
-   than a thumb away; it does not ask for it to shadow the hero.
+   This used to watch only Hero's copy of the button, on the reasoning that
+   the same button showing twice in one viewport looks wrong. That's still
+   the reasoning; it just didn't go far enough. Homepage v4 pass 2 added two
+   more sections with their own full "Enter the Draft Room" CTA (the Rooms
+   grid's live card, the closing band) and neither one told this hook it
+   existed — so scrolling to either one floated an identical sticky-bar
+   button directly over a section that already had one, the exact bug this
+   hook exists to prevent, just unfixed at two more places. Reported
+   directly: four total appearances of the button on one mobile page.
 
-   An IntersectionObserver on the hero CTA rather than a scroll offset: the
-   hero's height changes with the headline's wrap, and a hardcoded "past 400px"
-   is wrong the first time the copy changes length. It watches the element that
-   actually matters and needs no threshold arithmetic.
+   An IntersectionObserver on the real elements rather than scroll offsets:
+   every one of these sections' heights can change (copy length, a chart's
+   loading state), and a hardcoded pixel range is wrong the first time any
+   of them does. It watches what actually matters and needs no threshold
+   arithmetic re-derived per section.
 
    Defaults to hidden and reveals on the first callback, so the bar never
-   flashes over a hero that was on screen all along. If the CTA is missing —
-   any page that is not the homepage — the observer never fires and the bar
-   stays visible, which is the correct fallback: on a page with no hero CTA,
-   this is the only one. */
-function useHeroCtaOnScreen() {
+   flashes over a CTA that was on screen all along. If none of the marked
+   CTAs exist — any page that is not the homepage — the observer never
+   fires and the bar stays visible, which is the correct fallback: on a
+   page with no other CTA, this is the only one. */
+function useAnyCtaOnScreen() {
   const [onScreen, setOnScreen] = useState(true)
 
   useEffect(() => {
-    // The visible one: both hero CTAs carry the marker and exactly one is
-    // rendered at any width, so a bare querySelector can land on the
-    // display:none twin and observe an element that never intersects.
-    const cta = [...document.querySelectorAll('[data-hero-cta]')]
-      .find((el) => el.getBoundingClientRect().height > 0)
-    if (!cta) { setOnScreen(false); return }
+    // Multiple targets, one shared observer: onScreen is true whenever
+    // *any* of them is intersecting, tracked as a set rather than the
+    // single boolean the old one-target version used, since entries only
+    // report the targets whose intersection state actually changed.
+    const intersecting = new Set()
     const io = new IntersectionObserver(
-      ([entry]) => setOnScreen(entry.isIntersecting),
-      // A sliver counts as on screen: the bar reappearing while the hero
-      // button is still half visible is the same double-CTA, just briefer.
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) intersecting.add(entry.target)
+          else intersecting.delete(entry.target)
+        })
+        setOnScreen(intersecting.size > 0)
+      },
+      // A sliver counts as on screen: the bar reappearing while a CTA is
+      // still half visible is the same double-CTA, just briefer.
       { threshold: 0.15 },
     )
-    io.observe(cta)
-    return () => io.disconnect()
+
+    // RoomsGrid's own CTA doesn't exist at mount — it's behind
+    // window.JukeEngine.rooms(), read in RoomsGrid's own effect, so the
+    // component renders null for one or more paints before that marked
+    // button is ever in the DOM. A querySelectorAll run once here, on
+    // this effect's own mount, misses it permanently: not because the bar
+    // fails to hide over it, but because this hook never learns the
+    // element exists at all. Caught by watching the actual page rather
+    // than trusting the fix: the sticky bar stayed visible, aria-hidden
+    // "false", directly over RoomsGrid's fully-on-screen CTA.
+    //
+    // No height filter is needed to skip Hero's hidden mobile/desktop
+    // twin the way the single-query version needed one: a display:none
+    // element has no box to intersect, so IntersectionObserver reports it
+    // as never-intersecting on its own — observing it costs nothing.
+    const observed = new WeakSet()
+    function observeNew() {
+      const all = document.querySelectorAll('[data-hero-cta]')
+      // A page with no marked CTA at all — anything but the homepage —
+      // has nothing for the observer to ever fire on, so onScreen would
+      // sit at its initial `true` forever and the bar would stay hidden
+      // with no other CTA on the page to justify that. Checked on every
+      // scan, not just the first, since it has to stay correct as
+      // RoomsGrid's element arrives (0 markers -> hide bar goes away).
+      if (all.length === 0) setOnScreen(false)
+      all.forEach((el) => {
+        if (observed.has(el)) return
+        observed.add(el)
+        io.observe(el)
+      })
+    }
+    observeNew()
+
+    const mo = new MutationObserver(observeNew)
+    mo.observe(document.body, { childList: true, subtree: true })
+
+    return () => {
+      io.disconnect()
+      mo.disconnect()
+    }
   }, [])
 
   return onScreen
 }
 
 export default function Header() {
-  const heroCtaOnScreen = useHeroCtaOnScreen()
+  const ctaOnScreen = useAnyCtaOnScreen()
   const modalRef = useRef(null)
   const [navOpen, setNavOpen] = useState(false)
 
@@ -97,7 +147,12 @@ export default function Header() {
             about, just for `display` instead of colour. The wrapper's own
             display is plain and un-fought-over, so its hidden/block toggle
             actually applies. */}
-        <a href="#/" aria-label="Juke home" className="shrink-0">
+        {/* min-h-[44px] flex items-center: the logo itself renders ~26px
+            tall at size=19 (measured during homepage v4 pass 3's
+            tap-target audit) and stays that size — this pads the link's
+            own hit area around it rather than growing the mark. h-14's
+            56px row has room to centre a 44px target inside it. */}
+        <a href="#/" aria-label="Juke home" className="flex min-h-[44px] shrink-0 items-center">
           <span className="md:hidden"><JukeLogo size={19} /></span>
           <span className="hidden md:block"><JukeLogo size={38} /></span>
         </a>
@@ -131,7 +186,7 @@ export default function Header() {
                   'so you can close the tab and pick up where you left off.'
               )
             }
-            className="rounded-full px-3 py-2 text-sm text-white/60 transition-colors hover:text-white"
+            className="inline-flex h-11 items-center justify-center rounded-full px-3 text-sm text-white/60 transition-colors hover:text-white"
           >
             Log in
           </button>
@@ -150,16 +205,15 @@ export default function Header() {
         </div>
       </div>
 
-      {/* lg:block, not md: the ticker is a horizontal-scroll marquee of
-          short stat cards — legible at tablet width, where it already ran
-          before this pass, but review item 24's whole complaint (clipped
-          mid-word, competing with whatever is beneath it) is worse, not
-          better, in the ~375px this bar drops to below md. Cut on mobile
-          per the mobile handoff's own Prompt 2, kept everywhere it already
-          worked. */}
-      <div className="hidden lg:block">
-        <Ticker />
-      </div>
+      {/* Homepage v4 pass 2: the status strip replaces the marquee ticker
+          and, unlike it, renders at every width rather than hidden below lg
+          — §4.1's own mobile row just drops content (fact 3, condensed
+          fact 2/right text; see StatusStrip.jsx), it doesn't hide the bar.
+          That's a real change to the header's total height at every
+          breakpoint — Homepage.jsx's pt-[] and index.css's
+          scroll-padding-top both had to move with it; see the comments on
+          both for the measured values. */}
+      <StatusStrip />
 
       <MobileNavSheet open={navOpen} onClose={() => setNavOpen(false)} modalRef={modalRef} />
       <ComingSoonModal ref={modalRef} />
@@ -185,9 +239,9 @@ export default function Header() {
     <div
       className={
         'fixed inset-x-0 bottom-0 z-50 border-t border-white/[0.06] px-4 py-2 transition-[opacity,transform] duration-200 lg:hidden ' +
-        (heroCtaOnScreen ? 'pointer-events-none translate-y-full opacity-0' : 'translate-y-0 opacity-100')
+        (ctaOnScreen ? 'pointer-events-none translate-y-full opacity-0' : 'translate-y-0 opacity-100')
       }
-      aria-hidden={heroCtaOnScreen}
+      aria-hidden={ctaOnScreen}
       style={{ background: 'rgba(11,14,20,0.95)', backdropFilter: 'blur(12px)', paddingBottom: 'calc(0.5rem + env(safe-area-inset-bottom))' }}
     >
       <a

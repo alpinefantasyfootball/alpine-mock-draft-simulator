@@ -55,7 +55,7 @@ export default function MobileDraftTabBar({ view, onSelectView, hubOpen, hubTab,
 
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-30 flex border-t border-white/[0.06] bg-obsidian/95 backdrop-blur-md lg:hidden"
+      className="fixed inset-x-0 bottom-0 z-30 flex border-t border-white/[0.06] bg-slate-bar/95 backdrop-blur-md lg:hidden"
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
     >
       {items.map((t) => {
@@ -67,13 +67,19 @@ export default function MobileDraftTabBar({ view, onSelectView, hubOpen, hubTab,
             onClick={t.onClick}
             className={
               'flex h-[58px] flex-1 flex-col items-center justify-center gap-1 border-t-2 text-[11px] font-semibold transition-colors ' +
-              // #7C8A99, not PROMPT 6's #55616f: measured on this bar's own
-              // #0B0E14 ground that is 3.06:1 behind an 11px label, under
-              // the 4.5:1 bar. PROMPT 1 of the same handoff specifies this
-              // value, and PROMPT 5 quotes its 5.48:1 approvingly for the
-              // board's empty-cell pick number — so this follows the
-              // document's own reasoning rather than one of its numbers.
-              (t.active ? 'border-teal-400 text-teal-300' : 'border-transparent text-[#7C8A99]')
+              // The inactive label is `ink-muted`, the palette's stated floor
+              // for an 11px label, measured 5.59:1 on this bar's composited
+              // ground. It was #7C8A99, chosen against the old #0B0E14 bar
+              // where PROMPT 6's #55616f measured 3.06:1 and failed; the
+              // reasoning was right and the value did not survive the ground
+              // moving to slate, where it scrapes 4.53:1 — past the bar by
+              // 0.03, which is not a margin. The board's empty-cell pick
+              // number carried a second copy of the same hex for the same
+              // reason and moved to the token scale too — to `ink-soft`
+              // rather than this one, because a board cell can carry the
+              // gold identity wash and this bar cannot. Same scale, one
+              // step apart, and the step is the ground rather than taste.
+              (t.active ? 'border-teal-400 text-teal-300' : 'border-transparent text-ink-muted')
             }
           >
             <Icon className="h-5 w-5" strokeWidth={t.active ? 2.25 : 1.75} />

@@ -128,7 +128,7 @@ function Row({ entry, onAnalyze, onDeleteRequest, menuOpen, onToggleMenu }) {
               <span className="truncate text-sm text-white/75">{entry.round1Pick}</span>
             </>
           ) : (
-            <span className="text-sm text-white/30">—</span>
+            <span className="text-sm text-ink-muted">—</span>
           )}
         </div>
 
@@ -152,7 +152,7 @@ function Row({ entry, onAnalyze, onDeleteRequest, menuOpen, onToggleMenu }) {
           {menuOpen && (
             <div
               onClick={(e) => e.stopPropagation()}
-              className="absolute right-0 top-7 z-10 w-40 overflow-hidden rounded-lg border border-white/10 bg-charcoal shadow-lg"
+              className="absolute right-0 top-7 z-10 w-40 overflow-hidden rounded-lg border border-white/10 bg-slate-panel shadow-lg"
             >
               <button
                 type="button"
@@ -205,7 +205,7 @@ function Row({ entry, onAnalyze, onDeleteRequest, menuOpen, onToggleMenu }) {
           </p>
         </div>
 
-        <ChevronRight className="h-4 w-4 shrink-0 text-white/30" />
+        <ChevronRight className="h-4 w-4 shrink-0 text-ink-muted" />
       </div>
     </>
   )
@@ -295,13 +295,19 @@ export default function LockerTable({ entries, onAnalyze, onDeleteConfirmed }) {
     // the extra space; the summary/"Load more" footer stays a normal
     // sibling after it, so it settles at the bottom of a tall card instead
     // of hugging the last row with a gap of bare background beneath it.
-    <div className="flex h-full flex-col overflow-hidden rounded-xl border border-white/[0.08]" style={{ background: 'rgba(21,25,35,0.5)' }}>
+    // The ground is an inline style rather than a class only because it
+    // always was; it is slate-panel at the same alpha the charcoal it
+    // replaced carried. Worth knowing that an inline colour is invisible to
+    // a class-name sweep — this one survived a repo-wide pass over every
+    // bg-* utility and turned up only by reading computed styles off the
+    // running page.
+    <div className="flex h-full flex-col overflow-hidden rounded-xl border border-white/[0.08]" style={{ background: 'rgba(35,45,58,0.5)' }}>
       <div className="flex flex-wrap items-center gap-4 border-b border-white/[0.06] px-5 py-4">
         <h2 className="font-display text-[23px] font-bold text-white">The Locker</h2>
 
         {showControls && (
           <>
-            <div className="flex w-[226px] items-center gap-2 rounded-lg border border-white/[0.08] bg-obsidian/60 px-3 py-[7px]">
+            <div className="flex w-[226px] items-center gap-2 rounded-lg border border-white/[0.08] bg-slate-sunk/60 px-3 py-[7px]">
               <Search className="h-3.5 w-3.5 shrink-0 text-white/50" />
               <input
                 value={query}
@@ -333,7 +339,7 @@ export default function LockerTable({ entries, onAnalyze, onDeleteConfirmed }) {
                 <select
                   value={sort}
                   onChange={(e) => setSort(e.target.value)}
-                  className="appearance-none rounded-lg border border-white/[0.08] bg-obsidian/60 py-[7px] pl-3 pr-8 text-sm font-medium text-white/80 focus:outline-none"
+                  className="appearance-none rounded-lg border border-white/[0.08] bg-slate-sunk/60 py-[7px] pl-3 pr-8 text-sm font-medium text-white/80 focus:outline-none"
                 >
                   {SORTS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
                 </select>
@@ -356,7 +362,7 @@ export default function LockerTable({ entries, onAnalyze, onDeleteConfirmed }) {
           <div className="flex-1">
             {/* hidden lg:grid: the eight-column header has nothing to head
                 below lg, where Row() renders cards instead of grid cells. */}
-            <div className="hidden grid-cols-[minmax(0,2.1fr)_64px_62px_104px_minmax(0,1.5fr)_92px_96px_40px] gap-[14px] border-b border-white/[0.06] bg-obsidian/40 px-5 py-[9px] lg:grid">
+            <div className="hidden grid-cols-[minmax(0,2.1fr)_64px_62px_104px_minmax(0,1.5fr)_92px_96px_40px] gap-[14px] border-b border-white/[0.06] bg-slate-sunk/40 px-5 py-[9px] lg:grid">
               {['Format', 'Seat', 'Grade', 'Proj. finish', 'First pick'].map((h) => (
                 <span key={h} className="text-[10px] font-semibold uppercase tracking-[0.08em] text-white/50">{h}</span>
               ))}
@@ -401,7 +407,7 @@ export default function LockerTable({ entries, onAnalyze, onDeleteConfirmed }) {
         // so the toast doesn't surface behind the tab bar it would otherwise
         // sit under.
         <div
-          className="fixed bottom-[calc(58px+env(safe-area-inset-bottom)+16px)] left-1/2 z-50 flex -translate-x-1/2 items-center gap-4 rounded-full border border-white/10 bg-charcoal px-5 py-3 shadow-lg lg:bottom-6"
+          className="fixed bottom-[calc(58px+env(safe-area-inset-bottom)+16px)] left-1/2 z-50 flex -translate-x-1/2 items-center gap-4 rounded-full border border-white/10 bg-slate-panel px-5 py-3 shadow-lg lg:bottom-6"
         >
           <span className="text-sm text-white/80">Draft removed</span>
           <button type="button" onClick={undo} className="text-sm font-semibold text-teal-300 hover:text-teal-200">

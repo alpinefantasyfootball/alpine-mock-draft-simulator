@@ -41,6 +41,14 @@ export const NAV_LINKS = [
 export function AccountButtons({ modalRef }) {
   return (
     <>
+      {/* h-11 (44px) below md, §9's own tap-target floor — py-2 alone
+          measured 36px, found during homepage v4 pass 3's tap-target
+          audit (this pill is the exact one §9 names: "the nav Sign Up
+          pill"). md:h-9 keeps the shorter desktop nav pill AccountButtons
+          shipped with, the same split CLAUDE.md documents ScoringDemoCard's
+          own mobile pills already using ("h-11 ... not met by desktop's
+          shorter chip") — one shared component, two heights, not two
+          components. */}
       <button
         type="button"
         onClick={() =>
@@ -50,7 +58,7 @@ export function AccountButtons({ modalRef }) {
               'so you can close the tab and pick up where you left off.'
           )
         }
-        className="rounded-full px-4 py-2 text-sm text-white/60 transition-colors hover:text-white"
+        className="inline-flex h-11 items-center justify-center rounded-full px-4 text-sm text-white/60 transition-colors hover:text-white md:h-9"
       >
         Log in
       </button>
@@ -63,8 +71,8 @@ export function AccountButtons({ modalRef }) {
               'sign-up, and your drafts already save to this device.'
           )
         }
-        className="rounded-full bg-gradient-to-r from-[#00E5FF] to-[#7B1FA2] px-4 py-2 text-sm font-semibold text-white
-                   shadow-glass transition-all duration-200 hover:scale-105 hover:shadow-[0_0_15px_rgba(0,229,255,0.4)]"
+        className="inline-flex h-11 items-center justify-center rounded-full bg-gradient-to-r from-[#00E5FF] to-[#7B1FA2] px-4 text-sm font-semibold text-white
+                   shadow-glass transition-all duration-200 hover:scale-105 hover:shadow-[0_0_15px_rgba(0,229,255,0.4)] md:h-9"
       >
         Sign Up
       </button>

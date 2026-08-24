@@ -10,7 +10,7 @@ export default function GameLogsTab({ engine, player }) {
 
   if (!log.year) {
     return (
-      <p className="px-1 py-6 text-center text-sm text-white/40">
+      <p className="px-1 py-6 text-center text-sm text-ink-muted">
         No week-by-week logs stored for this player.
       </p>
     )
@@ -27,7 +27,7 @@ export default function GameLogsTab({ engine, player }) {
               onClick={() => setPickedYear(y)}
               className={
                 'rounded-full px-2.5 py-1 text-xs font-semibold transition-colors duration-150 ' +
-                (y === log.year ? 'bg-teal-500 text-obsidian' : 'bg-slate-950/60 text-white/50 hover:text-white/80')
+                (y === log.year ? 'bg-teal-500 text-obsidian' : 'bg-slate-sunk/60 text-white/50 hover:text-white/80')
               }
             >
               {y}
@@ -36,22 +36,22 @@ export default function GameLogsTab({ engine, player }) {
         </div>
       )}
 
-      <p className="text-xs text-white/40">
+      <p className="text-xs text-ink-muted">
         {log.year} week by week &middot; {log.perGameAvg} per game played
       </p>
 
-      <div className="overflow-x-auto rounded-lg border border-slate-800">
+      <div className="overflow-x-auto rounded-lg border border-slate-rule">
         <table className="w-full min-w-max text-xs">
           <thead>
-            <tr className="border-b border-slate-800 bg-slate-950/60">
+            <tr className="border-b border-slate-rule bg-slate-sunk/60">
               {log.head.map((h) => (
-                <th key={h} className="whitespace-nowrap px-2 py-1.5 text-left font-semibold text-white/40">{h}</th>
+                <th key={h} className="whitespace-nowrap px-2 py-1.5 text-left font-semibold text-ink-muted">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {log.rows.map((row, i) => (
-              <tr key={i} className={'border-b border-slate-800/60 last:border-0 ' + (row.blank ? 'opacity-40' : '')}>
+              <tr key={i} className={'border-b border-slate-rule/60 last:border-0 ' + (row.blank ? 'opacity-40' : '')}>
                 {row.cells.map((v, j) => (
                   <td
                     key={j}

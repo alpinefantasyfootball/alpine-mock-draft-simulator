@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { ArrowUp, ArrowDown } from 'lucide-react'
+import { RotateCw } from 'lucide-react'
 import { POS_BADGE } from './draftRoomPositions.js'
 
 // standard/half/full PPR — the same three keys rulesForFormat() already
@@ -18,7 +18,7 @@ const PPR_OPTIONS = [
 ]
 
 // The mobile card's closing line — dynamic by format rather than the static
-// "the receivers climb and Barkley slides" the mock illustrates: which six
+// "the receivers climb and Barkley slides" the mock illustrates: which
 // players are even in the pool is real, nightly-refreshed board data (see
 // usePlayerPool below), so a sentence naming specific movers would be wrong
 // the first morning the board changes and is exactly the kind of hardcoded
@@ -30,39 +30,146 @@ const PPR_EXPLAIN = {
   ppr: 'Receptions are worth a full point here, so pass-catchers climb and pure runners slide.',
 }
 
-// A fixed set of six real, PPR-relevant skill players, chosen once (sorted
-// by half-PPR points) and re-scored live as the toggle changes — the pool
-// itself is real board data via the bridge, not invented. K/DST are excluded
-// (FORCED_LATE) the same way the app's own suggestions engine treats them,
-// and only players a reception rule can actually move are eligible, same
-// filter the deleted proofScoring() used.
-function usePlayerPool(count) {
+// The candidate pool: real, PPR-relevant skill players (only ones a
+// reception rule can actually move — K/DST excluded, same FORCED_LATE
+// filter the app's own suggestions engine uses). Wider than either row
+// count needs (20, not 6) because homepage v4 pass 2 sorts this pool by
+// VORP *per format* (see useRankedRows below) rather than by raw points —
+// a player who ranks outside the old fixed six-player cut under one
+// format can rank inside the new top seven under another, and a pool
+// sized to the smaller number would silently miss him.
+function usePlayerPool() {
   const [pool, setPool] = useState([])
+  const [ready, setReady] = useState(false)
 
   useEffect(() => {
     const engine = typeof window !== 'undefined' ? window.JukeEngine : null
     if (!engine) return
 
-    const statKeys = engine.statKeys()
-    const forcedLate = engine.forcedLate()
-    if (!statKeys) return
+    // players.js/stats.js/draft-engine.js load off the critical path now
+    // (app.js's deferred-data boot) — engine.dataReady() is false in the
+    // window before they land, and vorpUnder()/survivalProbability() both
+    // need DraftEngine loaded (nextPicksFor() calls DraftEngine.onTheClock
+    // directly, unguarded, the same as every other Draft-Room-only bridge
+    // call). Re-reads on "juke:header" the same way ScoringDemoCard always
+    // has, so the empty window here fills in once the deferred data lands
+    // rather than staying empty for the rest of the page's life.
+    const read = () => {
+      if (!engine.dataReady()) return
+      const statKeys = engine.statKeys()
+      const forcedLate = engine.forcedLate()
+      if (!statKeys) return
 
-    const eligible = engine
-      .board()
-      .filter((p) => {
+      const eligible = engine.board().filter((p) => {
         if (forcedLate[p.pos]) return false
         const s = engine.statOf(p)
         return s && s.p && s.p.gp > 0 && s.p[statKeys.rec] > 0
       })
-      .map((p) => ({ player: p, half: engine.pointsUnder(engine.statOf(p).p, engine.rulesForFormat('half')) }))
-      .sort((a, b) => b.half - a.half)
-      .slice(0, count)
-      .map((row) => row.player)
 
-    setPool(eligible)
-  }, [count])
+      if (eligible.length) { setPool(eligible); setReady(true) }
+    }
 
+    read()
+    window.addEventListener('juke:header', read)
+    return () => window.removeEventListener('juke:header', read)
+  }, [])
+
+  return { pool, ready }
+}
+
+// Board · sorted by value over replacement (§3.4's panel title) — VORP
+// and Proj both reran under the clicked format, not just Proj: engine.
+// vorpUnder(format) recomputes replacement level under that SAME format
+// rather than reading REPLACEMENT_PTS (the league's own live rules,
+// which may disagree with whatever this solo visitor's toggle is on).
+// "The curve falls when the reception bonus drops, but replacement falls
+// with it" is the whole argument CLAUDE.md documents for this pattern —
+// a fixed VORP that only Proj reran under would be exactly the "half the
+// grade was reading a lie" class of bug that file is written to prevent.
+//
+// Survival is asked once per pool refresh, not per format: "still on the
+// board at your next turn" describes when a real draft would take him,
+// which a scoring toggle does not change.
+function useRankedRows(pool, ready, format, count) {
+  const [secondPick, setSecondPick] = useState(null)
+  // Declared before the effect below, not after — a dependency array is
+  // evaluated at the point useEffect() is called, so referencing a const
+  // declared later in the same function body throws "Cannot access
+  // before initialization" rather than reading it as a later reassignment
+  // the way a var would.
+  const engine = typeof window !== 'undefined' ? window.JukeEngine : null
+
+  useEffect(() => {
+    if (!engine || !ready) return
+    // Seat 0's own second pick in the default league — there is no real
+    // draft in progress on the marketing homepage to ask "my next turn"
+    // of, so this is the one league config every control on the setup
+    // screen still defaults to (CLAUDE.md), read live rather than assumed.
+    const picks = engine.nextPicksFor(0, 2)
+    setSecondPick(picks.length > 1 ? picks[1] : null)
+  }, [engine, ready])
+
+  if (!engine || !ready || !pool.length) return []
+
+  const vorpTable = engine.vorpUnder(format)
   return pool
+    .map((player) => {
+      const row = vorpTable[player.id]
+      return row && row.vorp !== null ? { player, projPts: row.projPts, vorp: row.vorp } : null
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.vorp - a.vorp)
+    .slice(0, count)
+    .map((row, i) => {
+      // survivalProbability() returns a raw 0-1 fraction (it's a
+      // probability, not a UI value) — the "%" is this component's own
+      // formatting choice, not something the bridge should bake in for
+      // every caller.
+      const raw = secondPick != null ? engine.survivalProbability(row.player, secondPick) : null
+      return { ...row, rank: i + 1, surv: raw != null ? Math.round(raw * 100) : null }
+    })
+}
+
+// 34px | minmax(0,1fr) | 66px | 68px | 56px — §4.2's own grid, Pos/Player/
+// Proj/VORP/Surv. Shared by the header row and every data row so the two
+// can never drift out of alignment with each other.
+const ROW_GRID = 'grid-cols-[34px_minmax(0,1fr)_66px_68px_56px]'
+const MOBILE_ROW_GRID = 'grid-cols-[28px_minmax(0,1fr)_46px_46px_40px]'
+
+function RowCells({ row, grid, dense }) {
+  const { player, projPts, vorp, surv, rank } = row
+  // Top three by VORP, not an absolute threshold — the emphasis has to
+  // survive a scoring change, and a fixed cutoff (e.g. "VORP > 100")
+  // would not: a reception bonus dropping to zero can pull every VORP on
+  // the board down together without changing who the top three actually
+  // are relative to each other.
+  const emphasized = rank <= 3
+  return (
+    <div className={`grid ${grid} items-center gap-2 rounded-[11px] border border-white/[0.06] bg-[#0c1114] px-[14px] py-[12px]`}>
+      <span className={`shrink-0 rounded-md px-1.5 py-0.5 text-center text-[10px] font-bold ${POS_BADGE[player.pos] || 'bg-white/10 text-white/50'}`}>
+        {player.pos}
+      </span>
+      <span className={`min-w-0 truncate font-semibold text-white/90 ${dense ? 'text-[13px]' : 'text-[14.5px]'}`}>
+        {player.name}
+      </span>
+      <span className={`text-right font-plex tabular-nums text-white/60 ${dense ? 'text-[11px]' : 'text-[13px]'}`}>
+        {projPts != null ? Math.round(projPts) : '—'}
+      </span>
+      {/* text-white/45 measured 4.42:1 here (§9's bar is 4.5) — #8e9aa1 is
+          the same solid-colour fix applied throughout TakeAPick.jsx; see
+          that file's own comment on why opacity failed in the first place. */}
+      <span
+        className={`text-right font-plex tabular-nums font-semibold ${dense ? 'text-[11px]' : 'text-[13px]'} ${emphasized ? 'text-teal-300' : ''}`}
+        style={emphasized ? undefined : { color: '#8e9aa1' }}
+      >
+        {vorp >= 0 ? '+' : ''}
+        {Math.round(vorp)}
+      </span>
+      <span className={`text-right font-plex tabular-nums ${dense ? 'text-[11px]' : 'text-[13px]'}`} style={{ color: '#8e9aa1' }}>
+        {surv != null ? `${surv}%` : '—'}
+      </span>
+    </div>
+  )
 }
 
 // The interactive proof behind "Show Your Working" — every number here
@@ -74,61 +181,34 @@ function usePlayerPool(count) {
 // now the hero's own second column, and ShowYourWorking.jsx (further down
 // the page) no longer carries a second copy of the same demo.
 export default function ScoringDemoCard() {
-  const pool = usePlayerPool(6)
+  const { pool, ready } = usePlayerPool()
   const [ppr, setPpr] = useState(1)
-  const prevRanks = useRef({})
-  const [deltas, setDeltas] = useState({})
-
-  const engine = typeof window !== 'undefined' ? window.JukeEngine : null
   const format = PPR_OPTIONS.find((o) => o.value === ppr)?.format ?? 'ppr'
-  const rules = engine ? engine.rulesForFormat(format) : null
 
-  const ranked = engine
-    ? pool
-        .map((p) => ({ player: p, points: engine.pointsUnder(engine.statOf(p).p, rules) }))
-        .sort((a, b) => b.points - a.points)
-        .map((row, i) => ({ ...row, rank: i + 1 }))
-    : []
-
-  useEffect(() => {
-    const nextDeltas = {}
-    ranked.forEach((row) => {
-      const prev = prevRanks.current[row.player.name]
-      nextDeltas[row.player.name] = prev == null ? 0 : prev - row.rank
-    })
-    setDeltas(nextDeltas)
-    const nextRanks = {}
-    ranked.forEach((row) => {
-      nextRanks[row.player.name] = row.rank
-    })
-    prevRanks.current = nextRanks
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ppr, pool])
-
-  // Mobile shows five rows, not desktop's six (design_handoff_mobile Prompt
-  // 2) — sliced off the same ranked-six rather than fetching a second,
-  // differently-sized pool, so both widths agree on who's #1-#5 and mobile
-  // just doesn't get a bonus sixth row.
-  const mobileRanked = ranked.slice(0, 5)
+  const ranked = useRankedRows(pool, ready, format, 7)
+  // Not a second, differently-sorted seven-cut — the mobile board's own
+  // "not optional" rule (§3.9) is six rows off the *same* VORP order,
+  // so mobile and desktop always agree on who's #1 through #6.
+  const mobileRanked = ranked.slice(0, 6)
 
   return (
     <>
-      {/* ---------- Mobile: design_handoff_mobile Prompt 2 ----------
-          Promoted into the hero itself (Hero.jsx mounts this component
-          unconditionally; the grid it sits in already stacks below `lg`,
-          so no repositioning was needed, only this card's own content).
-          Shares every hook/state above with the desktop render below —
-          usePlayerPool, ppr, deltas — rather than a second copy of the
-          scoring math, the same rule CLAUDE.md states for the CPU and the
-          grade: nothing about how a player is scored gets written down
-          twice. */}
+      {/* ---------- Mobile ----------
+          Five columns per §3.9's own "ship five if it fits" instruction —
+          measured at 375px with the dense sizing below and it does; the
+          documented fallback (drop Proj, keep Surv — "survival is the
+          differentiator, projection is the commodity") is a one-line
+          change to MOBILE_ROW_GRID and RowCells' dense branch if a
+          narrower target ever needs it. */}
       <div
         className="rounded-2xl border border-white/[0.09] p-5 lg:hidden"
         style={{ background: 'linear-gradient(170deg, #111a1f, #0b1013)' }}
       >
-        <p className="font-plex text-[11px] font-semibold tracking-[0.12em] text-[#7C8A99]">
-          CHANGE THE RULES, WATCH IT RERUN
-        </p>
+        <div className="flex items-center justify-between gap-3">
+          <p className="font-plex text-[11px] font-semibold tracking-[0.12em] text-[#7C8A99]">
+            BOARD · SORTED BY VORP
+          </p>
+        </div>
 
         {/* Full PPR / Half / Standard, left to right — the mock's own
             order, reversed from desktop's Standard-first array rather than
@@ -150,34 +230,20 @@ export default function ScoringDemoCard() {
           ))}
         </div>
 
-        <div className="mt-4 flex flex-col gap-[7px]">
-          {mobileRanked.map((row) => {
-            const delta = deltas[row.player.name] || 0
-            const rose = delta > 0
-            const fell = delta < 0
-            return (
-              <motion.div
-                key={row.player.name}
-                layout
-                transition={{ type: 'spring', stiffness: 350, damping: 32 }}
-                className="grid grid-cols-[16px_30px_1fr_28px] items-center gap-3 rounded-[11px] border border-white/[0.06] px-[14px] py-[12px]"
-                style={{ backgroundColor: rose ? 'rgba(0,229,255,0.045)' : '#0c1114' }}
-              >
-                <span className="text-right font-plex text-xs text-white/40">{row.rank}</span>
-                <span className={`shrink-0 rounded-md px-1.5 py-0.5 text-center text-[10px] font-bold ${POS_BADGE[row.player.pos] || 'bg-white/10 text-white/50'}`}>
-                  {row.player.pos}
-                </span>
-                <span className="min-w-0 truncate text-[14.5px] font-semibold text-white/90">{row.player.name}</span>
-                <span
-                  className={`text-right font-plex text-[12px] font-semibold ${
-                    rose ? 'text-teal-400' : fell ? 'text-[#F87171]' : 'text-[#55616f]'
-                  }`}
-                >
-                  {rose ? `↑${delta}` : fell ? `↓${-delta}` : '—'}
-                </span>
-              </motion.div>
-            )
-          })}
+        <div className={`mt-4 grid ${MOBILE_ROW_GRID} gap-2 px-[14px] font-plex text-[9px] uppercase tracking-wide text-[#8e9aa1]`}>
+          <span>Pos</span>
+          <span>Player</span>
+          <span className="text-right">Proj</span>
+          <span className="text-right">VORP</span>
+          <span className="text-right">Surv</span>
+        </div>
+
+        <div className="mt-1 flex flex-col gap-[7px]">
+          {mobileRanked.map((row) => (
+            <motion.div key={row.player.name} layout transition={{ type: 'spring', stiffness: 350, damping: 32 }}>
+              <RowCells row={row} grid={MOBILE_ROW_GRID} dense />
+            </motion.div>
+          ))}
         </div>
 
         <p className="mt-4 text-[13.5px] leading-[1.5] text-white/50">
@@ -185,13 +251,13 @@ export default function ScoringDemoCard() {
         </p>
       </div>
 
-      {/* ---------- Desktop: unchanged ---------- */}
+      {/* ---------- Desktop ---------- */}
       <div
         className="hidden rounded-2xl border border-white/[0.09] px-[22px] pb-[22px] pt-6 lg:block"
         style={{ background: 'linear-gradient(170deg, #111a1f, #0b1013)' }}
       >
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <span className="text-base font-bold text-white">Points per reception</span>
+          <span className="text-base font-bold text-white">Board · sorted by value over replacement</span>
           <div className="inline-flex gap-1 rounded-full bg-white/5 p-1">
             {PPR_OPTIONS.map((opt) => (
               <button
@@ -208,40 +274,29 @@ export default function ScoringDemoCard() {
           </div>
         </div>
 
-        <div className="mt-5 flex flex-col gap-[7px]">
-          {ranked.map((row) => {
-            const delta = deltas[row.player.name] || 0
-            return (
-              <motion.div
-                key={row.player.name}
-                layout
-                transition={{ type: 'spring', stiffness: 350, damping: 32 }}
-                className="grid grid-cols-[20px_32px_1fr_auto] items-center gap-3 rounded-[11px] border border-white/[0.06] bg-[#0c1114] px-[14px] py-[12px]"
-              >
-                <span className="text-right font-plex text-xs text-white/40">{row.rank}</span>
-                <span className={`shrink-0 rounded-md px-1.5 py-0.5 text-center text-[10px] font-bold ${POS_BADGE[row.player.pos] || 'bg-white/10 text-white/50'}`}>
-                  {row.player.pos}
-                </span>
-                <span className="flex min-w-0 items-center gap-2 truncate text-[14.5px] font-semibold text-white/90">
-                  {row.player.name}
-                  {delta > 0 && (
-                    <ArrowUp className="h-3.5 w-3.5 shrink-0 text-teal-400 drop-shadow-[0_0_6px_rgba(0,229,255,0.8)]" />
-                  )}
-                  {delta < 0 && <ArrowDown className="h-3.5 w-3.5 shrink-0 text-white/30" />}
-                </span>
-
-                <span className="shrink-0 text-right font-plex text-sm text-[#cbd5da]">
-                  {row.points.toFixed(1)}
-                </span>
-              </motion.div>
-            )
-          })}
+        <div className={`mt-4 grid ${ROW_GRID} gap-3 px-[14px] font-plex text-[10px] uppercase tracking-wide text-[#8e9aa1]`}>
+          <span>Pos</span>
+          <span>Player</span>
+          <span className="text-right">Proj</span>
+          <span className="text-right">VORP</span>
+          <span className="text-right">Surv</span>
         </div>
 
-        <p className="mt-4 font-plex text-[11px] text-white/40">
-          Projected season points · {ppr === 1 ? '1.0' : ppr === 0.5 ? '0.5' : 'no reception bonus'}
-          {ppr !== 0 && ' per reception'}
-        </p>
+        <div className="mt-2 flex flex-col gap-[7px]">
+          {ranked.map((row) => (
+            <motion.div key={row.player.name} layout transition={{ type: 'spring', stiffness: 350, damping: 32 }}>
+              <RowCells row={row} grid={ROW_GRID} />
+            </motion.div>
+          ))}
+        </div>
+
+        <div className="mt-4 flex items-center gap-[7px] font-plex text-[11px] text-[#8e9aa1]">
+          <RotateCw className="h-3 w-3 shrink-0" aria-hidden="true" />
+          <span>
+            Projected season points · {ppr === 1 ? '1.0' : ppr === 0.5 ? '0.5' : 'no reception bonus'}
+            {ppr !== 0 && ' per reception'}
+          </span>
+        </div>
       </div>
     </>
   )

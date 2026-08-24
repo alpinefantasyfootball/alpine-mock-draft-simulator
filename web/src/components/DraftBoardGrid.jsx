@@ -54,10 +54,24 @@ function adpGap(pick) {
 // own header comment says why: it's reserved). Matching the wash to the
 // text turns "beat ADP" into one signal instead of two slightly
 // different ones sharing a cell.
+//
+// The two alphas moved with the ground, and by less than it looks like they
+// should. The obvious reasoning — a lighter ground washes out a tint, so
+// roughly double it — solves the wrong problem: it measures the tint against
+// black, and nobody ever sees it against black. What a reader compares is a
+// tinted cell against the neutral cell beside it, and the neutral cell got
+// lighter too (charcoal → slate-panel), so most of the loss cancels.
+//
+// Solved as CIE76 between the tinted cell and its neutral neighbour, holding
+// that distance constant across the move: teal was 4.78 at 0.05 on obsidian
+// and needs 0.062 on slate; red was 5.57 at 0.06 and needs 0.083. Rounded to
+// 0.06 and 0.08, both inside a just-noticeable difference of the old reading.
+// Doubling them would have landed at 8.3 — not a restoration, a 70% louder
+// board.
 function adpTint(gap) {
-  if (gap == null) return { bg: 'bg-charcoal', text: '' }
-  if (gap >= 0) return { bg: 'bg-[rgba(0,229,255,0.05)]', text: 'text-teal-500' }
-  return { bg: 'bg-[rgba(248,113,113,0.06)]', text: 'text-red-400' }
+  if (gap == null) return { bg: 'bg-slate-panel', text: '' }
+  if (gap >= 0) return { bg: 'bg-[rgba(0,229,255,0.06)]', text: 'text-teal-500' }
+  return { bg: 'bg-[rgba(248,113,113,0.08)]', text: 'text-red-400' }
 }
 
 // The legend's position row and the cell's own rail read the same six
@@ -230,7 +244,7 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
     // column at its real width, never squashed), so on a phone it's always
     // wider than the viewport — this box is what scrolls, both directions,
     // with touch.
-    <div className="flex h-full min-h-[240px] w-full flex-1 flex-col overflow-hidden border-b border-slate-800 bg-[#0B0E14] lg:border-b-0 lg:border-r">
+    <div className="flex h-full min-h-[240px] w-full flex-1 flex-col overflow-hidden border-b border-slate-rule bg-slate lg:border-b-0 lg:border-r">
       {/* Title, the real picks-made count, and the Log link — mobile only.
           Desktop draws none of this row: it already has DraftLogDock as a
           permanent side panel, and that panel's own "Log" tab content
@@ -239,7 +253,7 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
           dead-control failure CLAUDE.md names outright. The count is real,
           not a placeholder: picks.length and totalPicks are the same
           numbers the rest of the room already reads off picks/league. */}
-      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-800 px-3 py-2 lg:hidden">
+      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-rule px-3 py-2 lg:hidden">
         <h2 className="text-lg font-bold text-white">The board</h2>
         <div className="flex items-center gap-3">
           <span className="font-plex text-xs text-white/60">
@@ -272,23 +286,23 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
           LEGEND_POSITIONS/POS_SOLID directly, the same map the cell rail
           itself uses, so this can never list a colour the board doesn't
           actually draw. */}
-      <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-slate-800 px-3 py-2 lg:hidden">
+      <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-slate-rule px-3 py-2 lg:hidden">
         <span className="font-plex text-[10px] uppercase tracking-wide text-white/60">
           Tint = value vs ADP
         </span>
         <span className="flex items-center gap-1 text-[10px] text-white/60">
-          <span className="h-2.5 w-2.5 shrink-0 rounded-sm border border-teal-500/60 bg-[rgba(0,229,255,0.12)]" aria-hidden="true" />
+          <span className="h-2.5 w-2.5 shrink-0 rounded-sm border border-teal-500/60 bg-[rgba(0,229,255,0.14)]" aria-hidden="true" />
           beat it
         </span>
         <span className="flex items-center gap-1 text-[10px] text-white/60">
-          <span className="h-2.5 w-2.5 shrink-0 rounded-sm border border-red-400/60 bg-[rgba(248,113,113,0.14)]" aria-hidden="true" />
+          <span className="h-2.5 w-2.5 shrink-0 rounded-sm border border-red-400/60 bg-[rgba(248,113,113,0.16)]" aria-hidden="true" />
           reached
         </span>
         <span className="flex items-center gap-1 text-[10px] text-white/60">
           <span className="h-2.5 w-2.5 shrink-0 rounded-sm border-2 border-[#FFD166]" aria-hidden="true" />
           you
         </span>
-        <span className="flex flex-wrap items-center gap-2 border-l border-slate-800 pl-2">
+        <span className="flex flex-wrap items-center gap-2 border-l border-slate-rule pl-2">
           {LEGEND_POSITIONS.map((pos) => (
             <span key={pos} className="flex items-center gap-1 text-[10px] text-white/60">
               <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ backgroundColor: POS_SOLID[pos] }} aria-hidden="true" />
@@ -332,7 +346,7 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
         style={{ '--cols': cols, '--cols-wide': colsWide, '--rows': rowsTemplate, '--rows-wide': rowsWide }}
       >
         {/* header row */}
-        <div className="sticky left-0 top-0 z-20 flex items-center justify-center border-b border-r border-slate-800 bg-slate-900/95 py-1 text-[10px] font-semibold uppercase tracking-wide text-white/30">
+        <div className="sticky left-0 top-0 z-20 flex items-center justify-center border-b border-r border-slate-rule bg-slate-panel/95 py-1 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
           Rd
         </div>
         {/* A real <button> only while there's somewhere for the click to
@@ -362,7 +376,7 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
           return (
             <div
               key={'hd-' + s}
-              className="sticky top-0 z-10 flex flex-col items-center gap-1 border-b border-r border-slate-800 bg-slate-900/95 px-1 py-1.5"
+              className="sticky top-0 z-10 flex flex-col items-center gap-1 border-b border-r border-slate-rule bg-slate-panel/95 px-1 py-1.5"
             >
               <button
                 type="button"
@@ -441,7 +455,7 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
               key={'hd-' + s}
               type="button"
               onClick={() => onTeamClick(s)}
-              className="sticky top-0 z-10 flex flex-col items-center justify-center gap-1 truncate border-b border-r border-slate-800 bg-slate-900/95 px-1.5 py-1.5 transition-colors duration-150 hover:bg-teal-500/10"
+              className="sticky top-0 z-10 flex flex-col items-center justify-center gap-1 truncate border-b border-r border-slate-rule bg-slate-panel/95 px-1.5 py-1.5 transition-colors duration-150 hover:bg-teal-500/10"
               title={'View ' + teamLabelOf(s) + "'s draft insights"}
             >
               {content}
@@ -449,7 +463,7 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
           ) : (
             <div
               key={'hd-' + s}
-              className="sticky top-0 z-10 flex flex-col items-center justify-center gap-1 border-b border-r border-slate-800 bg-slate-900/95 px-1.5 py-1.5"
+              className="sticky top-0 z-10 flex flex-col items-center justify-center gap-1 border-b border-r border-slate-rule bg-slate-panel/95 px-1.5 py-1.5"
               title={teamLabelOf(s)}
             >
               {content}
@@ -461,7 +475,7 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
           const round = ri + 1
           return (
             <div key={'row-' + round} className="contents">
-              <div className="sticky left-0 z-10 flex items-center justify-center border-b border-r border-slate-800 bg-slate-900/95 text-xs font-semibold text-white/30">
+              <div className="sticky left-0 z-10 flex items-center justify-center border-b border-r border-slate-rule bg-slate-panel/95 text-xs font-semibold text-ink-muted">
                 {round}
               </div>
               {Array.from({ length: teams }, (_, s) => {
@@ -482,7 +496,7 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
                 return (
                   <div
                     key={round + '-' + s}
-                    className={'h-[56px] lg:h-[50px] box-border border-b border-r border-slate-800/70 p-0.5 ' + mineEdge(isMine, round === 1, round === rounds)}
+                    className={'h-[56px] lg:h-[50px] box-border border-b border-r border-slate-rule/70 p-0.5 ' + mineEdge(isMine, round === 1, round === rounds)}
                   >
                     {pick ? (
                       // layoutId matches the same player's row in
@@ -550,7 +564,7 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
                           <p className="min-w-0 truncate text-[11.5px] font-bold lg:text-[13px] lg:font-semibold" title={pick.player.name}>
                             {shortNameOf ? shortNameOf(pick.player) : pick.player.name}
                           </p>
-                          {code && <span className="shrink-0 font-plex text-[9px] text-white/50 lg:text-[10px]">{code}</span>}
+                          {code && <span className="shrink-0 font-plex text-[9px] text-ink-soft lg:text-[10px]">{code}</span>}
                         </div>
                         {/* Line 2 — position badge, club, the snake arrow,
                             then the ADP gap on its own side so it never
@@ -561,8 +575,8 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
                             <span className={'shrink-0 rounded px-1 py-px text-[9px] font-bold ' + (POS_BADGE[pick.player.pos] || 'bg-white/10 text-white/60')}>
                               {pick.player.pos}
                             </span>
-                            <span className="truncate text-[10px] font-medium text-white/50">{pick.player.team}</span>
-                            <Arrow dir={arrow} className="shrink-0 text-[9px] text-white/50" />
+                            <span className="truncate text-[10px] font-medium text-ink-soft">{pick.player.team}</span>
+                            <Arrow dir={arrow} className="shrink-0 text-[9px] text-ink-soft" />
                           </span>
                           {gap != null && (
                             <span className={'shrink-0 text-[10px] font-semibold ' + tint.text}>
@@ -576,30 +590,47 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
                       <motion.div
                         animate={{ opacity: [1, 0.75, 1] }}
                         transition={{ duration: 1.4, repeat: Infinity, ease: 'easeInOut' }}
-                        className="relative flex h-full box-border items-center justify-center rounded-md border-2 border-teal-400 bg-teal-500/10 text-[10px] font-bold uppercase tracking-wide text-teal-300 shadow-[0_0_15px_rgba(0,229,255,0.4)]"
+                        className="relative flex h-full box-border items-center justify-center rounded-md border-2 border-teal-400 bg-teal-500/20 text-[10px] font-bold uppercase tracking-wide text-teal-300"
                       >
                         {overall != null && (
-                          <span className="absolute left-1 top-0.5 text-[10px] font-normal normal-case text-teal-300/60">{overall}</span>
+                          <span className="absolute left-1 top-0.5 text-[10px] font-normal normal-case text-teal-300/75">{overall}</span>
                         )}
                         On the clock
-                        <Arrow dir={arrow} className="absolute right-1 top-0.5 text-[9px] font-normal normal-case text-teal-300/60" />
+                        <Arrow dir={arrow} className="absolute right-1 top-0.5 text-[9px] font-normal normal-case text-teal-300/75" />
                       </motion.div>
                     ) : (
-                      <div className="relative h-full box-border rounded-md border border-dashed border-slate-800">
-                        {/* One value for one element, and #7C8A99 rather
-                            than the two this used to carry. slate-500
-                            (#64748b) measures 4.06:1 on this ground — under
-                            the bar at 10px, and this number is the sole
-                            content of its cell, so it cannot be the dimmest
-                            thing on screen. Gold measured fine here (13.4:1
-                            on near-black; the "gold never paints type" rule
-                            is about light surfaces) but it was saying a
-                            second time what the column's own gold outline
-                            already says, in the one place a reader is trying
-                            to read a number. #7C8A99 is 5.48:1 and is the
-                            same tone a filled cell's pick code takes. */}
+                      <div className="relative h-full box-border rounded-md border border-dashed border-slate-rule">
+                        {/* One value for one element. Gold measured fine
+                            here (13.4:1 on near-black; the "gold never
+                            paints type" rule is about light surfaces) but it
+                            was saying a second time what the column's own
+                            gold outline already says, in the one place a
+                            reader is trying to read a number.
+
+                            The value itself was #7C8A99 and had to move when
+                            the board's ground did — this is the case that
+                            proves a number tuned against near-black does not
+                            survive the trip to slate. Measured: #7C8A99 is
+                            5.48:1 on obsidian and 4.27:1 on #1E2733, which is
+                            under the bar at 10px, and this number is the sole
+                            content of its cell so it cannot be the dimmest
+                            thing on screen. Nothing about the colour was
+                            wrong; the ground under it moved.
+
+                            It is `ink-soft` now rather than a third hardcoded
+                            hex, and one step brighter than the `ink-muted`
+                            the mobile tab bar's inactive label takes — which
+                            is not an inconsistency, it is the ground. This
+                            cell can carry the gold identity wash, and a wash
+                            lightens what is under the type: measured, the
+                            same `ink-muted` reads 5.28:1 on a bare cell, 4.48
+                            on a gold one and 3.94 where a value tint sits
+                            under the gold too. `ink-soft` clears 4.5 on all
+                            three. `ink-muted` is safe on a plain ground and
+                            not on a washed one, which is the rule to carry
+                            forward rather than either number. */}
                         {overall != null && (
-                          <span className="absolute left-1 top-0.5 text-[10px] text-[#7C8A99]">
+                          <span className="absolute left-1 top-0.5 text-[10px] text-ink-soft">
                             {overall}
                           </span>
                         )}

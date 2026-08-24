@@ -29,13 +29,13 @@ function buildPickItems(picks) {
 
 function PicksList({ items, engine, DE, league, mySlot }) {
   if (items.length === 0) {
-    return <p className="px-2 py-6 text-center text-xs text-white/30">No picks yet.</p>
+    return <p className="px-2 py-6 text-center text-xs text-ink-muted">No picks yet.</p>
   }
   return items.map((item) =>
     item.type === 'divider' ? (
       <p
         key={'round-' + item.round}
-        className="mb-1 mt-2 px-1 text-[10px] font-semibold uppercase tracking-wide text-white/30 first:mt-0"
+        className="mb-1 mt-2 px-1 text-[10px] font-semibold uppercase tracking-wide text-ink-muted first:mt-0"
       >
         Round {item.round}
       </p>
@@ -52,12 +52,12 @@ function PicksList({ items, engine, DE, league, mySlot }) {
             : 'border-l-transparent text-white/60')
         }
       >
-        <span className="text-white/30">
+        <span className="text-ink-muted">
           {DE ? DE.pickCode(item.pick.overall, league.teams) : item.pick.overall}
         </span>{' '}
         <span className="font-medium text-white/80">{engine.teamLabel(item.pick.slot)}</span> took{' '}
         <span className="text-white/90">{item.pick.player.name}</span>{' '}
-        <span className="text-white/30">({item.pick.player.pos})</span>
+        <span className="text-ink-muted">({item.pick.player.pos})</span>
       </p>
     )
   )
@@ -97,7 +97,7 @@ export default function DraftLogDock({ recentOthers }) {
   // show the moment a draft exists — same reasoning PlayerHub.jsx's mobile
   // strip defaults to 'players' rather than its own Chat tab.
   const [tab, setTab] = useState('log')
-  // border-slate-700, not -800 — see SidePanel.jsx's own comment. This
+  // border-slate-rule, not -800 — see SidePanel.jsx's own comment. This
   // panel's tab row (Chat/Log/Picks) is the other half of the seam a
   // design review flagged: the two adjacent tab strips read as one bar.
 
@@ -110,8 +110,8 @@ export default function DraftLogDock({ recentOthers }) {
   const pickItems = buildPickItems(picks)
 
   return (
-    <div className="flex h-full w-full min-h-0 flex-col border-r border-slate-700 bg-slate-900/40 last:border-r-0">
-      <div className="flex shrink-0 border-b border-slate-700">
+    <div className="flex h-full w-full min-h-0 flex-col border-r border-slate-rule bg-slate-panel/40 last:border-r-0">
+      <div className="flex shrink-0 border-b border-slate-rule">
         {TABS.map((t) => (
           <button
             key={t.key}
@@ -119,7 +119,7 @@ export default function DraftLogDock({ recentOthers }) {
             onClick={() => setTab(t.key)}
             className={
               'flex-1 border-b-2 px-2 py-2 text-[10px] font-semibold uppercase tracking-wide transition-colors duration-150 ' +
-              (tab === t.key ? 'border-teal-400 text-teal-300' : 'border-transparent text-white/40 hover:text-white/60')
+              (tab === t.key ? 'border-teal-400 text-teal-300' : 'border-transparent text-ink-muted hover:text-white/60')
             }
           >
             {t.label}

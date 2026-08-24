@@ -11,10 +11,10 @@
 // already shipped once.
 function FitRow({ label, value, tone, note }) {
   return (
-    <div className="rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2.5">
-      <p className="text-[10px] font-medium uppercase tracking-wide text-white/35">{label}</p>
+    <div className="rounded-lg border border-slate-rule bg-slate-sunk/50 px-3 py-2.5">
+      <p className="text-[10px] font-medium uppercase tracking-wide text-ink-muted">{label}</p>
       <p className={'text-lg font-bold ' + (tone || 'text-white')}>{value}</p>
-      {note && <p className="mt-0.5 text-[11px] leading-snug text-white/45">{note}</p>}
+      {note && <p className="mt-0.5 text-[11px] leading-snug text-ink-muted">{note}</p>}
     </div>
   )
 }
@@ -26,7 +26,7 @@ export default function DraftFitTab({ fit, player }) {
   // arriving from the UI side.
   if (!fit) {
     return (
-      <p className="px-1 py-6 text-center text-sm text-white/40">
+      <p className="px-1 py-6 text-center text-sm text-ink-muted">
         Draft fit appears once a draft is running — it measures this player
         against your roster and your next pick.
       </p>
@@ -150,7 +150,7 @@ export default function DraftFitTab({ fit, player }) {
       </div>
 
       {survives !== null && (
-        <p className="rounded-lg border border-slate-800 bg-slate-950/40 px-3 py-2 text-[11px] leading-relaxed text-white/50">
+        <p className="rounded-lg border border-slate-rule bg-slate-sunk/40 px-3 py-2 text-[11px] leading-relaxed text-white/50">
           His ADP is {adp.toFixed(1)} and your next pick is {nextOverall}.{' '}
           {survives
             ? 'On average he lasts that long — though ADP is an average, and no single draft looks like one.'

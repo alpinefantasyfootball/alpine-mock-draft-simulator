@@ -38,7 +38,7 @@ export default function LatestNewsTab({ engine, player }) {
 
   if (items.length === 0) {
     return (
-      <p className="px-1 py-6 text-center text-sm text-white/40">
+      <p className="px-1 py-6 text-center text-sm text-ink-muted">
         No recent headlines for this player.
       </p>
     )
@@ -52,16 +52,16 @@ export default function LatestNewsTab({ engine, player }) {
           href={n.url}
           target="_blank"
           rel="noopener noreferrer"
-          className="rounded-lg border border-slate-800 bg-slate-950/50 p-2.5 transition-colors duration-150 hover:border-teal-400/40"
+          className="rounded-lg border border-slate-rule bg-slate-sunk/50 p-2.5 transition-colors duration-150 hover:border-teal-400/40"
         >
           <p className="text-sm font-semibold text-white">{n.title}</p>
           {n.summary && <p className="mt-1 text-xs leading-relaxed text-white/50">{n.summary}</p>}
-          <p className="mt-1.5 text-[10px] uppercase tracking-wide text-white/30">
+          <p className="mt-1.5 text-[10px] uppercase tracking-wide text-ink-muted">
             {n.source}{n.when ? ` · ${n.when}` : ''}
           </p>
         </a>
       ))}
-      <p className="mt-1 text-xs leading-relaxed text-white/30">
+      <p className="mt-1 text-xs leading-relaxed text-ink-muted">
         Headlines from our news provider, linked rather than reproduced. Juke does not write these and does not endorse them.
       </p>
     </div>

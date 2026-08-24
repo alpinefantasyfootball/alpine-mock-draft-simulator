@@ -43,10 +43,10 @@ const SLOT_LABEL = { FLEX: 'FLEX (W/R/T)', SFLEX: 'SUPERFLEX (Q/W/R/T)', BN: 'Be
 
 function Row({ label, children, hint }) {
   return (
-    <label className="flex items-center justify-between gap-4 border-b border-slate-800/60 py-2.5 last:border-b-0">
+    <label className="flex items-center justify-between gap-4 border-b border-slate-rule/60 py-2.5 last:border-b-0">
       <span className="min-w-0">
         <span className="block text-sm text-white/80">{label}</span>
-        {hint && <span className="block text-[11px] leading-snug text-white/40">{hint}</span>}
+        {hint && <span className="block text-[11px] leading-snug text-ink-muted">{hint}</span>}
       </span>
       <span className="shrink-0">{children}</span>
     </label>
@@ -61,7 +61,7 @@ function Select({ value, onChange, disabled, children }) {
       disabled={disabled}
       /* 16px on a touch screen or iOS zooms the page in and does not zoom
          back out — CLAUDE.md's floor, which the type scale already meets. */
-      className="rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5 text-base text-white disabled:cursor-not-allowed disabled:text-white/30 lg:text-sm"
+      className="rounded-lg border border-slate-rule bg-slate-sunk px-2 py-1.5 text-base text-white disabled:cursor-not-allowed disabled:text-white/30 lg:text-sm"
     >
       {children}
     </select>
@@ -74,13 +74,13 @@ function Stepper({ value, onAdd, onRemove, disabled, min = 0, max = 9 }) {
       <button
         type="button" onClick={onRemove} disabled={disabled || value <= min}
         aria-label="One fewer" title="One fewer"
-        className="flex h-6 w-6 items-center justify-center rounded-md border border-slate-700 text-white/60 transition-colors duration-150 hover:border-teal-400/50 hover:text-teal-300 disabled:cursor-not-allowed disabled:border-slate-800 disabled:text-white/15"
+        className="flex h-6 w-6 items-center justify-center rounded-md border border-slate-rule text-white/60 transition-colors duration-150 hover:border-teal-400/50 hover:text-teal-300 disabled:cursor-not-allowed disabled:border-slate-rule disabled:text-white/15"
       >−</button>
       <span className="w-5 text-center text-sm font-semibold tabular-nums text-white">{value}</span>
       <button
         type="button" onClick={onAdd} disabled={disabled || value >= max}
         aria-label="One more" title="One more"
-        className="flex h-6 w-6 items-center justify-center rounded-md border border-slate-700 text-white/60 transition-colors duration-150 hover:border-teal-400/50 hover:text-teal-300 disabled:cursor-not-allowed disabled:border-slate-800 disabled:text-white/15"
+        className="flex h-6 w-6 items-center justify-center rounded-md border border-slate-rule text-white/60 transition-colors duration-150 hover:border-teal-400/50 hover:text-teal-300 disabled:cursor-not-allowed disabled:border-slate-rule disabled:text-white/15"
       >+</button>
     </span>
   )
@@ -119,7 +119,7 @@ function DivisorInput({ rule, disabled, onCommit }) {
       onChange={(e) => setText(e.target.value)}
       onBlur={commit}
       onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
-      className="w-16 rounded-lg border border-slate-700 bg-slate-950 px-2 py-1 text-base tabular-nums text-white disabled:text-white/30 lg:text-sm"
+      className="w-16 rounded-lg border border-slate-rule bg-slate-sunk px-2 py-1 text-base tabular-nums text-white disabled:text-white/30 lg:text-sm"
     />
   )
 }
@@ -203,17 +203,17 @@ export default function DraftSettingsModal({ engine, onClose, started, inRoom, m
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 p-3 backdrop-blur-sm">
-      <div className="flex h-full max-h-[760px] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-slate-800 bg-[#0B0E14] shadow-2xl">
-        <div className="flex shrink-0 items-center justify-between border-b border-slate-800 px-4 py-3">
+      <div className="flex h-full max-h-[760px] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-slate-rule bg-slate shadow-2xl">
+        <div className="flex shrink-0 items-center justify-between border-b border-slate-rule px-4 py-3">
           <div className="min-w-0">
             <h2 className="font-display text-base font-bold text-white">Draft settings</h2>
             {/* leagueSummary() is the same string the shut setup box shows —
                 never a second copy of the same lookup. */}
-            <p className="truncate text-[11px] text-white/45">{engine.settingsText(league)}</p>
+            <p className="truncate text-[11px] text-ink-muted">{engine.settingsText(league)}</p>
           </div>
           <button
             type="button" onClick={onClose} title="Close" aria-label="Close draft settings"
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-800 bg-slate-950/60 text-white/60 transition-colors duration-150 hover:border-slate-700 hover:text-white"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-rule bg-slate-sunk/60 text-white/60 transition-colors duration-150 hover:border-slate-rule hover:text-white"
           >
             <X className="h-4 w-4" />
           </button>
@@ -234,7 +234,7 @@ export default function DraftSettingsModal({ engine, onClose, started, inRoom, m
         )}
 
         <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
-          <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-slate-800 p-2 sm:w-44 sm:flex-col sm:border-b-0 sm:border-r">
+          <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-slate-rule p-2 sm:w-44 sm:flex-col sm:border-b-0 sm:border-r">
             {TABS.map((t) => (
               <button
                 key={t} type="button" onClick={() => setTab(t)}
@@ -314,14 +314,14 @@ export default function DraftSettingsModal({ engine, onClose, started, inRoom, m
 
             {tab === 'Roster' && (
               <div>
-                <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-white/35">
+                <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
                   Roster size {slots.length}
                 </p>
-                <div className="mb-4 overflow-hidden rounded-lg border border-slate-800">
+                <div className="mb-4 overflow-hidden rounded-lg border border-slate-rule">
                   {slots.map((pos, i) => (
                     <div
                       key={pos + i}
-                      className="flex items-center gap-2 border-b border-slate-800/60 px-2 py-1.5 last:border-b-0"
+                      className="flex items-center gap-2 border-b border-slate-rule/60 px-2 py-1.5 last:border-b-0"
                     >
                       <span className={'shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold ' + (POS_BADGE[pos] || 'bg-white/10 text-white/50')}>
                         {pos === 'SFLEX' ? 'SF' : pos === 'DST' ? 'DEF' : pos}
@@ -363,14 +363,14 @@ export default function DraftSettingsModal({ engine, onClose, started, inRoom, m
             {tab === 'Scoring' && (
               <div className="flex flex-col gap-5">
                 <div className="flex items-center justify-between gap-3">
-                  <p className="text-[11px] leading-snug text-white/45">
+                  <p className="text-[11px] leading-snug text-ink-muted">
                     Every number here rescores the whole board as you change it —
                     projections, value over replacement and the Juke score with it.
                   </p>
                   <button
                     type="button" disabled={locked}
                     onClick={() => { engine.resetScoringRules(); redraw() }}
-                    className="shrink-0 rounded-full border border-slate-700 px-3 py-1 text-xs font-semibold text-white/60 transition-colors duration-150 hover:border-teal-400/50 hover:text-teal-300 disabled:cursor-not-allowed disabled:border-slate-800 disabled:text-white/20"
+                    className="shrink-0 rounded-full border border-slate-rule px-3 py-1 text-xs font-semibold text-white/60 transition-colors duration-150 hover:border-teal-400/50 hover:text-teal-300 disabled:cursor-not-allowed disabled:border-slate-rule disabled:text-white/20"
                   >
                     Reset
                   </button>
@@ -378,7 +378,7 @@ export default function DraftSettingsModal({ engine, onClose, started, inRoom, m
 
                 {engine.scoringEditor().map((group) => (
                   <div key={group.title}>
-                    <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-white/35">{group.title}</p>
+                    <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">{group.title}</p>
                     <div className="flex flex-col">
                       {group.rules.map((rule) => (
                         <Row
@@ -393,19 +393,19 @@ export default function DraftSettingsModal({ engine, onClose, started, inRoom, m
                         >
                           {rule.perYard ? (
                             <span className="flex items-center gap-1.5">
-                              <span className="text-[11px] text-white/40">1 pt every</span>
+                              <span className="text-[11px] text-ink-muted">1 pt every</span>
                               <DivisorInput
                                 rule={rule}
                                 disabled={locked}
                                 onCommit={(n) => { engine.setScoringRule(rule.key, n, true); redraw() }}
                               />
-                              <span className="text-[11px] text-white/40">yds</span>
+                              <span className="text-[11px] text-ink-muted">yds</span>
                             </span>
                           ) : (
                             <input
                               type="number" step="0.5" min="-99" max="99" value={rule.value} disabled={locked}
                               onChange={(e) => { engine.setScoringRule(rule.key, e.target.value); redraw() }}
-                              className="w-20 rounded-lg border border-slate-700 bg-slate-950 px-2 py-1 text-base tabular-nums text-white disabled:text-white/30 lg:text-sm"
+                              className="w-20 rounded-lg border border-slate-rule bg-slate-sunk px-2 py-1 text-base tabular-nums text-white disabled:text-white/30 lg:text-sm"
                             />
                           )}
                         </Row>
@@ -460,16 +460,16 @@ export default function DraftSettingsModal({ engine, onClose, started, inRoom, m
                    seat, with no comparison left to get stale. */
                 return (
                   <div>
-                    <p className="mb-3 text-[11px] leading-relaxed text-white/45">
+                    <p className="mb-3 text-[11px] leading-relaxed text-ink-muted">
                       Draft order is something a room decides. On your own the other
                       chairs are computer teams and the order between them changes
                       nothing — the only seat that matters is yours, and you claim
                       that on the board.
                     </p>
-                    <ol className="overflow-hidden rounded-lg border border-slate-800">
+                    <ol className="overflow-hidden rounded-lg border border-slate-rule">
                       {Array.from({ length: league.teams }, (_, i) => (
-                        <li key={i} className="flex items-center gap-3 border-b border-slate-800/60 px-3 py-2 last:border-b-0">
-                          <span className="w-5 shrink-0 text-right text-xs tabular-nums text-white/30">{i + 1}</span>
+                        <li key={i} className="flex items-center gap-3 border-b border-slate-rule/60 px-3 py-2 last:border-b-0">
+                          <span className="w-5 shrink-0 text-right text-xs tabular-nums text-ink-muted">{i + 1}</span>
                           <span className={'text-sm ' + (i === mySlot ? 'font-semibold text-teal-300' : 'text-white/60')}>
                             {i === mySlot ? 'You' : engine.cpuName(i)}
                           </span>
@@ -483,7 +483,7 @@ export default function DraftSettingsModal({ engine, onClose, started, inRoom, m
               return (
                 <div>
                   <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-                    <p className="text-[11px] leading-relaxed text-white/45">
+                    <p className="text-[11px] leading-relaxed text-ink-muted">
                       {started
                         ? 'The draft has started, so the order is fixed.'
                         : isHost
@@ -509,14 +509,14 @@ export default function DraftSettingsModal({ engine, onClose, started, inRoom, m
                           }
                           hold(null)
                         }}
-                        className="shrink-0 rounded-full border border-slate-700 px-3 py-1 text-xs font-semibold text-white/70 transition-colors duration-150 hover:border-teal-400/50 hover:text-teal-300"
+                        className="shrink-0 rounded-full border border-slate-rule px-3 py-1 text-xs font-semibold text-white/70 transition-colors duration-150 hover:border-teal-400/50 hover:text-teal-300"
                       >
                         Randomize order
                       </button>
                     )}
                   </div>
 
-                  <ol className="overflow-hidden rounded-lg border border-slate-800">
+                  <ol className="overflow-hidden rounded-lg border border-slate-rule">
                     {seats.map((chair, i) => {
                       const isHeld = held === i
                       return (
@@ -531,13 +531,13 @@ export default function DraftSettingsModal({ engine, onClose, started, inRoom, m
                               hold(null)
                             }}
                             className={
-                              'flex w-full items-center gap-3 border-b border-slate-800/60 px-3 py-2 text-left transition-colors duration-150 last:border-b-0 ' +
+                              'flex w-full items-center gap-3 border-b border-slate-rule/60 px-3 py-2 text-left transition-colors duration-150 last:border-b-0 ' +
                               (isHeld
                                 ? 'bg-teal-500/15 ring-1 ring-inset ring-teal-400/50'
                                 : canOrder ? 'hover:bg-white/5' : 'cursor-default')
                             }
                           >
-                            <span className="w-5 shrink-0 text-right text-xs tabular-nums text-white/30">{i + 1}</span>
+                            <span className="w-5 shrink-0 text-right text-xs tabular-nums text-ink-muted">{i + 1}</span>
                             <span className={'min-w-0 flex-1 truncate text-sm ' + (chair.you ? 'font-semibold text-teal-300' : 'text-white/70')}>
                               {chair.you ? 'You' : chair.name || (chair.taken ? 'A manager' : 'Open')}
                             </span>
@@ -545,7 +545,7 @@ export default function DraftSettingsModal({ engine, onClose, started, inRoom, m
                                 has not filled up, and it is not the same as a
                                 manager who has not named themselves. */}
                             {!chair.taken && (
-                              <span className="shrink-0 text-[10px] uppercase tracking-wide text-white/25">Open</span>
+                              <span className="shrink-0 text-[10px] uppercase tracking-wide text-ink-muted">Open</span>
                             )}
                           </button>
                         </li>

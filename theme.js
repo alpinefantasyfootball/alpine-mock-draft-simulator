@@ -21,3 +21,21 @@
     }
   } catch (err) {}   // private browsing can make localStorage throw
 })();
+
+/* Same file, same reason: whatever reads this has to know before body
+   paints, or the thing it's deciding has already been drawn wrong once.
+   #boot-sonar (index.html) is scoped to the installed app's cold launch —
+   homepage v4 pass 0 — and this is the one synchronous place that can
+   tell it apart from an ordinary browser visit before the CSS deciding
+   its display applies. matchMedia is synchronous; nothing here waits on
+   anything. navigator.standalone is the older iOS Safari signal, absent
+   as a property on browsers that don't need it rather than false. */
+(function () {
+  try {
+    var standalone = window.matchMedia &&
+      window.matchMedia("(display-mode: standalone)").matches;
+    if (standalone || navigator.standalone) {
+      document.documentElement.setAttribute("data-standalone", "");
+    }
+  } catch (err) {}
+})();

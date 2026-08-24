@@ -75,12 +75,12 @@ export default function DraftCockpitHeader({
           it is the one that has to fit. At 14px this cleared 768 and missed 375
           by a single pixel, which is the kind of margin that is not a margin -
           12 takes the phone to 368 against 375 and 768 to 746. */}
-      <header className="fixed inset-x-0 top-0 z-50 flex h-[62px] shrink-0 items-center gap-3 border-b border-white/[0.06] bg-obsidian/90 px-4 backdrop-blur-md lg:gap-[22px] lg:px-6">
+      <header className="fixed inset-x-0 top-0 z-50 flex h-[62px] shrink-0 items-center gap-3 border-b border-white/[0.06] bg-slate-bar/90 px-4 backdrop-blur-md lg:gap-[22px] lg:px-6">
         <a
           href="#/drafts"
           aria-label="Back to your draft locker"
           title="Back to your draft locker"
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-slate-800 bg-slate-950/60 text-white/50 transition-colors duration-150 hover:border-slate-700 hover:text-white"
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-slate-rule bg-slate-sunk/60 text-white/50 transition-colors duration-150 hover:border-slate-rule hover:text-white"
         >
           <ChevronLeft className="h-4 w-4" />
         </a>
@@ -93,7 +93,7 @@ export default function DraftCockpitHeader({
             divider and its gap is 140px, the largest single saving available
             here, and mark-only would have returned just 63 of it. */}
         <a href="#/" aria-label="Juke home" className="hidden shrink-0 lg:block">
-          <JukeLogo size={19} />
+          <JukeLogo size={19} surface="appbar" />
         </a>
 
         <div className="hidden h-6 w-px shrink-0 bg-white/10 lg:block" />
@@ -150,8 +150,8 @@ export default function DraftCockpitHeader({
               'flex items-center gap-3.5 rounded-full px-3.5 py-1.5 transition-colors duration-300 ' +
               (myTurn
                 ? urgent
-                  ? 'animate-pulse-glow bg-rose-500/10'
-                  : 'animate-pulse-glow bg-teal-500/10'
+                  ? 'bg-rose-500/20 shadow-[inset_0_0_0_1.5px_rgba(251,113,133,0.55)]'
+                  : 'bg-teal-500/20 shadow-[inset_0_0_0_1.5px_rgba(0,229,255,0.55)]'
                 : 'bg-white/[0.045]')
             }
           >

@@ -498,7 +498,7 @@ test("every player on the Players tab is reachable on a phone", async ({ browser
   const r = await page.evaluate(() => {
     const root = document.getElementById("draftroom-root");
     const hub = [...root.querySelectorAll("div")]
-      .find((d) => String(d.className).includes("flex-col overflow-hidden bg-slate-900/40"));
+      .find((d) => String(d.className).includes("flex-col overflow-hidden bg-slate-bar/40"));
     if (!hub) return { missing: true };
     const list = [...hub.querySelectorAll("div")]
       .find((d) => String(d.className).includes("overflow-auto pb-28"));

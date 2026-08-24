@@ -104,7 +104,7 @@ export default function ShareBar({ shareData }) {
     typeof navigator !== 'undefined' && !!navigator.clipboard && typeof window !== 'undefined' && !!window.ClipboardItem
 
   const btn =
-    'flex items-center gap-1.5 rounded-full border border-slate-700 px-3.5 py-1.5 text-xs font-semibold ' +
+    'flex items-center gap-1.5 rounded-full border border-slate-rule px-3.5 py-1.5 text-xs font-semibold ' +
     'text-white/70 transition-colors duration-150 hover:border-teal-400/60 hover:text-teal-300'
 
   // One glyph slot, three states, in priority order: drawing, then the flash of
@@ -124,7 +124,7 @@ export default function ShareBar({ shareData }) {
 
   return (
     <div className="flex w-full flex-wrap items-center gap-2 border-t border-white/5 pt-4">
-      <span className="mr-1 text-[10px] font-semibold uppercase tracking-wide text-white/35">
+      <span className="mr-1 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
         Share this result
       </span>
       {canNativeShare && (
@@ -143,7 +143,7 @@ export default function ShareBar({ shareData }) {
         {glyph('download', Download)}
         Download PNG
       </button>
-      {status.note && <span className="text-xs text-white/45">{status.note}</span>}
+      {status.note && <span className="text-xs text-ink-muted">{status.note}</span>}
     </div>
   )
 }
