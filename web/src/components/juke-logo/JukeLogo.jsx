@@ -22,19 +22,44 @@
 //      rendering mush was the failure mode of the artwork this replaces.
 //
 // Colours come from the existing palette — no new tokens.
-//   teal      #00E5FF   linework
-//   obsidian  #0B0E14   negative shapes (eyes, teeth, jaw)
+//   mint      #5EEAD4   linework
 //   foreground #F2F5FA  wordmark
+//   negatives           whatever the ground is; see `surface` below
+//
+// The ink is ONE hex on every surface. What changes per surface is the
+// interior negatives — the eyes, the jaw line, the gill slits — and the
+// two are different things in a way that is worth being explicit about,
+// because the wrong one looks deliberate.
+//
+// A viewer does not read those shapes as colour. They read as holes in the
+// shark, and a hole shows the surface behind it. So a mark carrying #070A0D
+// negatives onto a #1E2733 screen drags a visibly darker patch around inside
+// itself — which is exactly what "the logo changed between pages" looks
+// like. Negatives tracking the ground is correct and invisible; the ink
+// tracking the ground is the thing that would actually be wrong.
+//
+// That is why these are separate files rather than one file recoloured: in
+// the supplied artwork the negatives are filled, not knocked out, so there
+// is no transparency to let a ground show through and no `fill` override
+// that could put one there.
 
 import React from "react";
 
 const FOREGROUND = "#F2F5FA";
 
 // Assets live in web/public, same as the icons already there.
-const MARK = "/juke-mark.svg";                       // two-value, the default
+// One entry per ground the mark can land on. `void` is the React marketing
+// ground, `obsidian` the legacy pages and the boot overlay, and the two
+// slate steps come from the two-surface split (see tailwind.config.js).
+const SURFACE = {
+  void:     "/juke-mark-void.svg",    // #070A0D negatives — Hero, Header, footer
+  obsidian: "/juke-mark.svg",         // #0B0E14 — 404, docs, the boot sonar
+  appbar:   "/juke-mark-appbar.svg",  // #1A222D — cockpit header, lobby bar
+  app:      "/juke-mark-app.svg",     // #1E2733 — anything on the app ground
+  light:    "/juke-mark-light.svg",   // #0E7C74 on #FFFFFF — light grounds
+};
 const MARK_DETAIL = "/juke-mark-detail.svg";         // adds shading, >= 120px only
 const MARK_FG = "/juke-mark-fg.svg";                 // white linework, for gradient/photo chrome
-const MARK_LIGHT = "/juke-mark-light.svg";           // for light grounds
 const SILHOUETTE = "/juke-mark-mono.svg";            // one shape, used as a CSS mask
 
 const ASPECT = 564 / 352;          // 1.602 — do not stretch
@@ -47,6 +72,7 @@ export function JukeMark({
   mono = false,
   detail = false,
   onLight = false,
+  surface = "void",
   className = "",
   style,
 }) {
@@ -82,7 +108,13 @@ export function JukeMark({
     );
   }
 
-  const src = onLight ? MARK_LIGHT : detail && width >= DETAIL_ABOVE ? MARK_DETAIL : MARK;
+  // onLight predates `surface` and still wins, so the existing call sites
+  // that pass it keep behaving exactly as they did.
+  const ground = onLight ? "light" : surface;
+  const src =
+    detail && width >= DETAIL_ABOVE && ground !== "light"
+      ? MARK_DETAIL
+      : SURFACE[ground] || SURFACE.void;
 
   return (
     <img
@@ -122,6 +154,7 @@ export default function JukeLogo({
   mono = false,
   detail = false,
   onLight = false,
+  surface = "void",
   color = FOREGROUND,
   className = "",
   style,
@@ -138,6 +171,7 @@ export default function JukeLogo({
         mono={mono}
         detail={detail}
         onLight={onLight}
+        surface={surface}
         className={className}
         style={style}
       />
@@ -156,7 +190,7 @@ export default function JukeLogo({
           ...style,
         }}
       >
-        <JukeMark width={Math.round(size * 2.4)} mono={mono} detail={detail} onLight={onLight} />
+        <JukeMark width={Math.round(size * 2.4)} mono={mono} detail={detail} onLight={onLight} surface={surface} />
         <JukeWordmark size={size} color={color} />
       </span>
     );
@@ -167,7 +201,7 @@ export default function JukeLogo({
       className={className}
       style={{ display: "inline-flex", alignItems: "center", gap: size * 0.42, ...style }}
     >
-      <JukeMark width={markWidth} mono={mono} detail={detail} onLight={onLight} />
+      <JukeMark width={markWidth} mono={mono} detail={detail} onLight={onLight} surface={surface} />
       <JukeWordmark size={size} color={color} />
     </span>
   );

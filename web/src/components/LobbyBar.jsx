@@ -48,8 +48,8 @@ export default function LobbyBar({ onOpenSettings }) {
             inline style beats a Tailwind display class of any specificity —
             md:hidden on the component itself would be silently defeated. */}
         <a href="#/" aria-label="Juke home" className="shrink-0">
-          <span className="md:hidden"><JukeLogo size={19} /></span>
-          <span className="hidden md:block"><JukeLogo size={34} /></span>
+          <span className="md:hidden"><JukeLogo size={19} surface="appbar" /></span>
+          <span className="hidden md:block"><JukeLogo size={34} surface="appbar" /></span>
         </a>
 
         <div className="hidden h-5 w-px shrink-0 bg-white/10 md:block" />

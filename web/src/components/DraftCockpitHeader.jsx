@@ -93,7 +93,7 @@ export default function DraftCockpitHeader({
             divider and its gap is 140px, the largest single saving available
             here, and mark-only would have returned just 63 of it. */}
         <a href="#/" aria-label="Juke home" className="hidden shrink-0 lg:block">
-          <JukeLogo size={19} />
+          <JukeLogo size={19} surface="appbar" />
         </a>
 
         <div className="hidden h-6 w-px shrink-0 bg-white/10 lg:block" />

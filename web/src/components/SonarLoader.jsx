@@ -17,8 +17,19 @@
 // inline copy of four of them for the #boot-sonar cold-load overlay - see the
 // comment in the config for why that duplication is deliberate.
 //
-// Colours are #00E5FF and #7B1FA2 from the existing palette. No new tokens. The
-// mark is /juke-mark.svg, already in web/public.
+// The rings are teal and purple-400 from the existing palette; the exact
+// values and why the purple is 400 rather than the base are in the RINGS
+// array below and in index.html's own copy, which has to agree with it.
+//
+// They stayed teal when the shark went mint, and that is a decision rather
+// than an oversight. The ink rule is about the *mark* - one hex on every
+// surface - and a sonar ring is not the mark. The purple in particular was
+// moved to #9A3FC0 on a contrast measurement recorded beside it, and letting
+// it inherit a brand change it was never part of would throw that away.
+//
+// The mark itself is surface="obsidian": the boot overlay paints obsidian
+// because index.css pins body to it, so that is the ground its negatives
+// have to match.
 
 import React, { useEffect, useRef, useState } from 'react'
 import { JukeMark, JukeWordmark } from './juke-logo/JukeLogo.jsx'
@@ -180,7 +191,7 @@ export default function SonarLoader({
               light surface needs onLight threaded through here and a light ink
               beside it; picking one before then would be inventing a tier nobody
               has reviewed. */}
-          <JukeMark width={t.mark} />
+          <JukeMark width={t.mark} surface="obsidian" />
         </span>
 
         {showsWordmark ? (
