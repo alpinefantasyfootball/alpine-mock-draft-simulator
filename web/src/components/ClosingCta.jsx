@@ -50,8 +50,15 @@ export default function ClosingCta() {
           <p className="mt-[10px] text-base text-white/55">No setup, no league import. Pick your scoring and start.</p>
         </div>
 
+        {/* data-hero-cta: same marker Hero.jsx's own CTAs carry. Header.jsx's
+            sticky bottom bar was only ever watching the hero's copy of this
+            button, so scrolling this far left it floating a third, identical
+            "Enter the Draft Room" over this section's own — reported directly
+            (four total appearances of the button on one mobile page, two of
+            them stacked at once at every section that has its own). */}
         <a
           href="#/draft-room"
+          data-hero-cta=""
           className="flex h-[54px] w-full shrink-0 items-center justify-center rounded-full bg-gradient-to-r from-[#00E5FF] to-[#7B1FA2] text-base font-bold text-white
                      shadow-glass transition-all duration-200 active:scale-[0.98] lg:h-auto lg:w-auto lg:px-[34px] lg:py-[17px] lg:hover:scale-105 lg:hover:shadow-[0_0_15px_rgba(0,229,255,0.4)]"
         >

@@ -40,11 +40,16 @@ export default function RoomCard({ room, onComingSoon }) {
 
       <p className="flex-1 text-[14.5px] leading-[1.55] text-[#8b979e]">{room.blurb}</p>
 
+      {/* text-white/45 measured 4.45:1 here — just under §9's 4.5 bar,
+          found during homepage v4 pass 3's contrast audit. #8e9aa1: same
+          solid-colour fix as everywhere else in that pass, not a new
+          token invented for this one chip. */}
       <span
         className={
           'inline-flex w-fit items-center gap-[6px] self-start rounded-full px-3 py-[5px] font-plex text-[10.5px] font-semibold ' +
-          (live ? 'bg-teal-500/[0.14] text-teal-300' : 'bg-white/5 text-white/45')
+          (live ? 'bg-teal-500/[0.14] text-teal-300' : 'bg-white/5')
         }
+        style={live ? undefined : { color: '#8e9aa1' }}
       >
         <span className={'h-[5px] w-[5px] rounded-full ' + (live ? 'bg-teal-400' : 'bg-white/35')} />
         {live ? 'Live' : 'Coming soon'}

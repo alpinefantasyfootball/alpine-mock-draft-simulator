@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import Header from './Header.jsx'
 import Hero from './Hero.jsx'
+import TakeAPick from './TakeAPick.jsx'
 import ShowYourWorking from './ShowYourWorking.jsx'
 import RoomsGrid from './RoomsGrid.jsx'
 import ClosingCta from './ClosingCta.jsx'
@@ -65,18 +66,22 @@ export default function Homepage() {
     <div className="min-h-screen overflow-x-hidden bg-void text-white">
       <Header />
 
-      {/* Two heights, because the header has two. At lg+ it is the nav plus
-          the ticker (h-16 + h-9 + 1px border = 101px), and pt-[108px] is
-          that plus the same few px of breathing room index.css's
-          scroll-padding-top uses — one number instead of two, so a page
-          load and an anchor click land at the same offset. Below lg the
-          ticker is `hidden lg:block` (Header.jsx) and the nav drops to
-          h-14, so the real header is 57px: carrying the desktop number
-          down to a phone left 51px of empty page above the hero, on top of
-          Hero's own top padding, and pushed the mobile handoff's eyebrow to
-          206px where artboard 1a puts it at 92. */}
-      <main className="pt-[57px] lg:pt-[108px]">
+      {/* Two heights, because the header has two — nav row (h-14/h-16) plus
+          StatusStrip (h-8 + 1px border), and the only breakpoint that moves
+          either is md (768px), not lg: homepage v4 pass 2's status strip
+          replaces the old ticker's `hidden lg:block` with something that
+          renders at every width (see Header.jsx), so there's exactly one
+          switch left to track instead of two. Measured against the real
+          rendered header rather than added up from the Tailwind classes —
+          this is the section CLAUDE.md warns is easy to get right on paper
+          and wrong on screen: 56 + 32 + 1 = 89px below md,
+          64 + 32 + 1 = 97px at md+, both confirmed via
+          getBoundingClientRect() before being written down here.
+          index.css's scroll-padding-top tracks the same two numbers, plus
+          its own 8px of anchor-scroll slack — see the comment there. */}
+      <main className="pt-[89px] md:pt-[97px]">
         <Hero />
+        <TakeAPick />
         <ShowYourWorking />
         <RoomsGrid />
         <ClosingCta />
@@ -105,30 +110,53 @@ export default function Homepage() {
             Agility through analytics. Projections you can follow, rebuilt every morning.
           </p>
 
-          <div className="mt-7 grid grid-cols-2 gap-x-6 gap-y-7">
-            <div className="flex flex-col gap-[11px]">
-              <span className="font-plex text-[11px] tracking-[0.11em] text-[#4f5b62]">ROOMS</span>
-              {liveRoomLinks.map((room) => (
-                <a key={room.name} href={room.href} className="text-sm text-white/60">
-                  {room.name}
-                </a>
-              ))}
-            </div>
+          {/* Each link is flex + min-h-[44px] rather than the gap-[11px]
+              column spacing alone providing separation — measured at 20px
+              (the bare text-sm line height) during homepage v4 pass 3's
+              tap-target audit, which is what §9 means naming "footer
+              links" specifically. The column's own gap drops to 0 so the
+              links' own padding is what separates them, rather than
+              stacking on top of it and pushing the footer taller than it
+              needs to be. Desktop's footer (below) keeps its original
+              gap-[11px]/no-padding links — §9's 44px floor is a mobile
+              requirement, not a desktop one, and mouse-driven nav doesn't
+              need it. */}
+          {/* ROOMS is its own full-width row rather than a third grid-cols-2
+              cell alongside METHOD and COMPANY — a CSS grid row sizes to its
+              tallest cell, and ROOMS (one live room today) shares a row with
+              METHOD (three links) in that layout. That left the ROOMS cell
+              stretched to METHOD's height with nothing in the bottom of it,
+              which reads as a gap between the Rooms and Company groups
+              because COMPANY (row 2) doesn't start until the row METHOD
+              dictated finishes — reported directly from a real mobile
+              screenshot. METHOD and COMPANY keep the 2-column grid below:
+              three links each, so they size the same row without a mismatch
+              to hide. This is a structural fix, not a spacing tweak — the
+              gap was never a margin/padding value to shrink. */}
+          <div className="mt-7 flex flex-col">
+            <span className="font-plex text-[11px] tracking-[0.11em] text-[#8e9aa1]">ROOMS</span>
+            {liveRoomLinks.map((room) => (
+              <a key={room.name} href={room.href} className="flex min-h-[44px] items-center text-sm text-white/60">
+                {room.name}
+              </a>
+            ))}
+          </div>
 
-            <div className="flex flex-col gap-[11px]">
-              <span className="font-plex text-[11px] tracking-[0.11em] text-[#4f5b62]">METHOD</span>
+          <div className="mt-4 grid grid-cols-2 gap-x-6">
+            <div className="flex flex-col">
+              <span className="font-plex text-[11px] tracking-[0.11em] text-[#8e9aa1]">METHOD</span>
               {METHOD_LINKS.map((link) => (
-                <a key={link.label} href={link.href} className="text-sm text-white/60">
+                <a key={link.label} href={link.href} className="flex min-h-[44px] items-center text-sm text-white/60">
                   {link.label}
                 </a>
               ))}
             </div>
 
-            <div className="flex flex-col gap-[11px]">
-              <span className="font-plex text-[11px] tracking-[0.11em] text-[#4f5b62]">COMPANY</span>
-              <a href="/docs/draft-room-how-it-works.html" className="text-sm text-white/60">How it works</a>
-              <a href="/docs/privacy.html" className="text-sm text-white/60">Privacy</a>
-              <a href="/docs/terms.html" className="text-sm text-white/60">Terms</a>
+            <div className="flex flex-col">
+              <span className="font-plex text-[11px] tracking-[0.11em] text-[#8e9aa1]">COMPANY</span>
+              <a href="/docs/draft-room-how-it-works.html" className="flex min-h-[44px] items-center text-sm text-white/60">How it works</a>
+              <a href="/docs/privacy.html" className="flex min-h-[44px] items-center text-sm text-white/60">Privacy</a>
+              <a href="/docs/terms.html" className="flex min-h-[44px] items-center text-sm text-white/60">Terms</a>
             </div>
           </div>
         </div>
@@ -142,7 +170,7 @@ export default function Homepage() {
           </div>
 
           <div className="flex flex-col gap-[11px]">
-            <span className="font-plex text-[11px] tracking-[0.11em] text-[#4f5b62]">ROOMS</span>
+            <span className="font-plex text-[11px] tracking-[0.11em] text-[#8e9aa1]">ROOMS</span>
             {/* Live rooms only — a design review pointed out that five of
                 these six links went nowhere of their own: every "coming
                 soon" room fell back to the same #rooms anchor, so five
@@ -162,7 +190,7 @@ export default function Homepage() {
           </div>
 
           <div className="flex flex-col gap-[11px]">
-            <span className="font-plex text-[11px] tracking-[0.11em] text-[#4f5b62]">METHOD</span>
+            <span className="font-plex text-[11px] tracking-[0.11em] text-[#8e9aa1]">METHOD</span>
             {METHOD_LINKS.map((link) => (
               <a
                 key={link.label}
@@ -175,7 +203,7 @@ export default function Homepage() {
           </div>
 
           <div className="flex flex-col gap-[11px]">
-            <span className="font-plex text-[11px] tracking-[0.11em] text-[#4f5b62]">COMPANY</span>
+            <span className="font-plex text-[11px] tracking-[0.11em] text-[#8e9aa1]">COMPANY</span>
             {/* Real links only. Privacy and Terms already exist; About,
                 Changelog and Contact don't have anywhere real to point yet,
                 so they're left out rather than pointing at nothing. */}
@@ -198,11 +226,11 @@ export default function Homepage() {
               draft-room-how-it-works.html already scopes the claim
               correctly (section 01, section 08). This says the same true
               thing the docs say, not a second, looser one. */}
-          <p className="text-[13px] text-[#656f76]">
+          <p className="text-[13px] text-[#8e9aa1]">
             A solo mock draft runs entirely in your browser — nothing you draft is sent anywhere.
             Drafting with your league uses a server, just for that room.
           </p>
-          <span className="font-plex text-xs text-[#4f5b62]">© 2026 Juke</span>
+          <span className="font-plex text-xs text-[#8e9aa1]">© 2026 Juke</span>
         </div>
 
         {/* The footer's one static closing line — see useDataFreshness()
@@ -219,7 +247,7 @@ export default function Homepage() {
           // page and reads as "long enough to challenge the corner" the
           // moment a phone's width is narrow enough to bring the two close.
           <div className="mx-auto max-w-7xl px-6 pb-6 pr-[76px] lg:pr-6">
-            <p className="font-plex text-xs text-[#4f5b62]">{freshness}</p>
+            <p className="font-plex text-xs text-[#8e9aa1]">{freshness}</p>
           </div>
         )}
       </footer>

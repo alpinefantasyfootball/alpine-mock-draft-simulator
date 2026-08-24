@@ -83,7 +83,13 @@ export default function RoomsGrid() {
     <section id="rooms" className="border-t border-white/[0.06] bg-[#080b0e] px-6 py-24">
       <div className="mx-auto max-w-7xl">
         <div className="mb-11 max-w-[620px]">
-          <h2 className="font-display text-[30px] font-extrabold italic leading-[1.15] tracking-[-0.015em] text-white sm:text-[38px] sm:leading-[1.1] lg:text-[46px] lg:leading-[1.08] lg:tracking-[-0.025em]">
+          {/* Homepage v4 pass 2, new — same mint-pill eyebrow shape Hero.jsx
+              already uses ("AGILITY THROUGH ANALYTICS"), not a second
+              treatment invented for this one section. */}
+          <span className="inline-flex items-center gap-[9px] rounded-full border border-mint/30 bg-mint/[0.06] px-[15px] py-[7px] text-[11.5px] font-bold tracking-[0.13em] text-mint">
+            THE SEASON-LONG SYSTEM
+          </span>
+          <h2 className="mt-4 font-display text-[30px] font-extrabold italic leading-[1.15] tracking-[-0.015em] text-white sm:text-[38px] sm:leading-[1.1] lg:text-[46px] lg:leading-[1.08] lg:tracking-[-0.025em]">
             The Rooms
           </h2>
           {/* The forward-looking claim the hero used to open with, moved
@@ -135,6 +141,16 @@ export default function RoomsGrid() {
               {liveRoom.href && (
                 <a
                   href={liveRoom.href}
+                  // data-hero-cta: this is a mobile-only ("lg:hidden" parent)
+                  // full "Enter the Draft Room" CTA, the same button Hero.jsx
+                  // and ClosingCta.jsx already mark — Header.jsx's sticky
+                  // bottom bar needs to stand down here too, not just over
+                  // the hero's own copy of it. Found by inspection: a reader
+                  // could see two identical "Enter the Draft Room" buttons on
+                  // screen at once here, which is the exact bug this marker
+                  // was invented to prevent, just not extended past Hero.jsx
+                  // when this card grew its own CTA.
+                  data-hero-cta=""
                   className="mt-5 flex h-12 w-full items-center justify-center rounded-full bg-gradient-to-r from-[#00E5FF] to-[#7B1FA2] text-[15px] font-bold text-white
                              shadow-glass transition-all duration-200 active:scale-[0.98]"
                 >

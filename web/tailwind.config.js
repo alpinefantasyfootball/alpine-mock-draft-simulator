@@ -146,11 +146,12 @@ export default {
         // there — grepped `web/src` for the literal class `font-mono` and
         // got zero matches. Nothing in the Draft Room was using it at all,
         // despite an older version of this comment claiming pick codes and
-        // AnalysisTab did. `font-plex` is now used explicitly by both the
+        // AnalysisTab did. `font-plex` is used explicitly by both the
         // homepage components and the Cockpit's pick codes/team
-        // abbreviations/tabular figures, loaded from Google Fonts in
-        // index.html next to Archivo — same font, no new infrastructure,
-        // just no longer homepage-only.
+        // abbreviations/tabular figures — self-hosted from /fonts/ as of
+        // homepage v4 pass 1 (see index.css's @font-face rules and
+        // index.html's preload), not loaded from Google Fonts any more.
+        // Same font either way, still not homepage-only.
         plex: ['"IBM Plex Mono"', 'ui-monospace', 'SFMono-Regular', 'monospace'],
       },
       keyframes: {

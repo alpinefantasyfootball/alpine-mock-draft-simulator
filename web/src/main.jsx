@@ -5,11 +5,32 @@ import AppHeader from './components/AppHeader.jsx'
 import DraftRoom from './components/DraftRoom.jsx'
 import './index.css'
 
-ReactDOM.createRoot(document.getElementById('root')).render(
+// scripts/prerender.mjs (homepage v4 pass 0) fills #root with real,
+// server-rendered markup as part of `npm run build` — see its own header
+// comment for what App renders without a window.JukeEngine to read.
+// hydrateRoot() attaches to that markup instead of discarding and
+// re-rendering it, which is the entire point: the browser already has
+// pixels for the hero before this module has even finished parsing.
+//
+// `vite dev` never runs the prerender step (only the production build
+// script does), so #root is genuinely empty there — hydrating empty
+// markup is a real mismatch, not a false positive, and React's recovery
+// from it is a full client render preceded by a console warning on every
+// single dev reload. Checking for existing content rather than branching
+// on import.meta.env.DEV is what keeps this correct for the one case that
+// actually matters: `vite preview` serving a real dist/ build locally,
+// which DEV cannot distinguish from dev but a filled #root can.
+const rootEl = document.getElementById('root')
+const app = (
   <React.StrictMode>
     <App />
-  </React.StrictMode>,
+  </React.StrictMode>
 )
+if (rootEl.innerHTML.trim()) {
+  ReactDOM.hydrateRoot(rootEl, app)
+} else {
+  ReactDOM.createRoot(rootEl).render(app)
+}
 
 // #appbar-root lives inside #appbar, which applyRoute() already shows and
 // hides (home vs. draft route) — same contract as the two mounts above.
@@ -38,6 +59,15 @@ if (draftRoomRoot) {
 // Sonar - see #boot-sonar at the top of index.html - covers the blocking
 // classic scripts and React's own boot. This is where it comes down.
 //
+// Homepage v4 pass 0 scopes the element to the installed app's cold
+// launch (index.html's own <style> hides it outright everywhere else via
+// the data-standalone attribute theme.js stamps before paint). The teardown
+// below still runs unconditionally on every load — it's a no-op-shaped
+// couple of rAFs and a setTimeout against an element that's either really
+// there or display:none, never a correctness question — but skipping it
+// outright when the attribute isn't set avoids scheduling work for an
+// overlay nobody is going to see, on every single marketing-site visit.
+//
 // Two nested rAFs put the teardown after React's first paint, which is the real
 // "ready" signal on this page. app.js is a classic script, so window.JukeEngine
 // already exists by the time this module runs at all; there is no timing hazard
@@ -62,7 +92,7 @@ if (draftRoomRoot) {
 // animation, forcing a style flush, and only then handing over to the
 // [data-sonar-out] rule makes the fade deterministic in every engine.
 const boot = document.getElementById('boot-sonar')
-if (boot) {
+if (boot && document.documentElement.hasAttribute('data-standalone')) {
   requestAnimationFrame(() =>
     requestAnimationFrame(() => {
       // Hold for MIN_VISIBLE_MS from navigation start, then leave. performance

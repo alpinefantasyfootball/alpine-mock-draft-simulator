@@ -27,9 +27,11 @@
 // moved to #9A3FC0 on a contrast measurement recorded beside it, and letting
 // it inherit a brand change it was never part of would throw that away.
 //
-// The mark itself is surface="obsidian": the boot overlay paints obsidian
-// because index.css pins body to it, so that is the ground its negatives
-// have to match.
+// The mark defaults to surface="obsidian" because every call site until
+// the lobby -> draft room placement sat on the boot overlay's own obsidian
+// ground (index.css pins body to it). `surface` is a real prop now — pass
+// whatever JukeLogo.jsx's SURFACE map matches the ground this instance is
+// actually painted on.
 
 import React, { useEffect, useRef, useState } from 'react'
 import { JukeMark, JukeWordmark } from './juke-logo/JukeLogo.jsx'
@@ -121,6 +123,16 @@ export default function SonarLoader({
   // job itself; this is for screen tier, where everything drawn is brand artwork
   // and none of it describes the wait.
   srLabel = 'Loading',
+  // Threaded straight to JukeMark — see JukeLogo.jsx's SURFACE map. Both
+  // tiers were dark-ground-only and hardcoded to "obsidian" until the
+  // lobby -> draft room placement (homepage v4 pass 0) needed to sit on
+  // the app's own `slate` (#1E2733), which is not obsidian (#0B0E14):
+  // close enough to look "roughly the same" and different enough that the
+  // negatives would carry a visibly darker patch around inside the mark,
+  // per JukeLogo.jsx's own note on why the ink and the negatives are not
+  // the same question. Defaults preserve every existing call site's
+  // behaviour exactly.
+  surface = 'obsidian',
   delay = 300,
   ringMs = RING_MS,
   className = '',
@@ -191,7 +203,7 @@ export default function SonarLoader({
               light surface needs onLight threaded through here and a light ink
               beside it; picking one before then would be inventing a tier nobody
               has reviewed. */}
-          <JukeMark width={t.mark} surface="obsidian" />
+          <JukeMark width={t.mark} surface={surface} />
         </span>
 
         {showsWordmark ? (

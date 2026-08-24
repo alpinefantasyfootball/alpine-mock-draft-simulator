@@ -16,6 +16,7 @@ import DraftInsightsDashboard from './DraftInsightsDashboard.jsx'
 import DraftSettingsModal from './DraftSettingsModal.jsx'
 import DraftEntryScreen from './DraftEntryScreen.jsx'
 import DraftLobby from './DraftLobby.jsx'
+import SonarLoader from './SonarLoader.jsx'
 import LobbyBar from './LobbyBar.jsx'
 import MobileAppTabBar from './MobileAppTabBar.jsx'
 import MobileDraftTabBar from './MobileDraftTabBar.jsx'
@@ -136,6 +137,20 @@ export default function DraftRoom() {
   // seat" has nothing saved to resume into anyway, so there is no save to
   // desync from by starting back at the Locker.
   const [enteredRoom, setEnteredRoom] = useState(false)
+  // Homepage v4 pass 0's lobby -> draft room sonar placement. Pressing
+  // Start Draft flips this true; the poll effect below drops it once the
+  // engine both reports started AND has real data loaded (players.js/
+  // stats.js/draft-engine.js — see app.js's deferred-data boot and its
+  // dataReady() bridge method), held to a 400ms floor. Distinct from
+  // `started` itself: engine.startDraft() flips state.started
+  // synchronously in app.js, before React has had a chance to paint
+  // anything for it, and reaching #/draft-room at all almost always means
+  // the deferred data landed long ago on the homepage — so this is mostly
+  // the floor doing its job, not a real wait, but the brief's requirement
+  // is unconditional ("every surface, always"), not "only when slow".
+  const [starting, setStarting] = useState(false)
+  const startingSinceRef = useRef(0)
+  const START_TRANSITION_MIN_MS = 400
   // The one thing that can refuse the Start button, said beside it rather
   // than folded away — the rule the legacy setup screen already followed.
   const problem = engine ? engine.setupProblem() : ''
@@ -254,6 +269,26 @@ export default function DraftRoom() {
   // by definition — there's no state where started should be true and
   // this should still be showing Settings & Locker.
   useEffect(() => { if (started) setEnteredRoom(true) }, [started])
+  // Polls the engine directly on rAF rather than waiting on another
+  // "juke:header" tick: app.js's deferred-data retry (see the boot at its
+  // foot) only re-runs refreshSetup() while state.started is still false,
+  // so if the deferred files finish loading *after* Start Draft was
+  // pressed, nothing re-dispatches that event and a listener keyed on it
+  // would hang here forever. engine.headerInfo().started and
+  // engine.dataReady() are read fresh every frame instead, independent of
+  // whether app.js has any further reason to re-render.
+  useEffect(() => {
+    if (!starting || !engine) return
+    let raf
+    const check = () => {
+      const ready = !!engine.headerInfo().started && engine.dataReady()
+      const elapsed = performance.now() - startingSinceRef.current
+      if (ready && elapsed >= START_TRANSITION_MIN_MS) { setStarting(false); return }
+      raf = requestAnimationFrame(check)
+    }
+    raf = requestAnimationFrame(check)
+    return () => { if (raf) cancelAnimationFrame(raf) }
+  }, [starting, engine])
   // A real invite link (#/draft-room?room=CODE) joins the room over the
   // socket the moment app.js boots — see joinRoom() in app.js — entirely
   // independently of this component's own local enteredRoom state. Without
@@ -382,6 +417,22 @@ export default function DraftRoom() {
 
   if (!(active || draftsActive) || !engine) return null
 
+  // Takes priority over every branch below, including the entry screen
+  // Start Draft was pressed from and the live board `started` now points
+  // at — the loader is the thing standing between those two, not a state
+  // alongside them. bg-slate matches the ground DraftLocker/DraftEntryScreen
+  // already render on (see their own "fixed inset-0 ... bg-slate" shells
+  // below); JukeMark's surface="app" is the negatives variant measured
+  // against that exact hex (#1E2733, tailwind.config.js's slate.DEFAULT),
+  // not "obsidian", which is the boot overlay's own void-page ground.
+  if (starting) {
+    return (
+      <div className="fixed inset-0 z-[60] flex flex-col bg-slate text-white">
+        <SonarLoader tier="screen" surface="app" srLabel="Setting up your draft" style={{ height: '100%' }} />
+      </div>
+    )
+  }
+
   // Enter takes you to #/draft-room whether you arrived here via that
   // route already or via the direct #/drafts link — location.hash is a
   // harmless no-op when it's already what it's being set to.
@@ -495,6 +546,13 @@ export default function DraftRoom() {
           startLabel={startLabel}
           startDisabled={!!problem || (roomActive && !engine.isHost())}
           onStartDraft={() => {
+            // Homepage v4 pass 0's lobby -> draft room loader — see the
+            // starting state and its poll effect above. Timestamp before
+            // the engine call, not after: startDraft() is synchronous, but
+            // the 400ms floor is measured from the moment the reader acted,
+            // not from whenever this closure happens to finish running.
+            startingSinceRef.current = performance.now()
+            setStarting(true)
             /* The clock comes from state, which is where it lives — the
                settings modal writes it through setClockLength(). Reading it
                here rather than holding a second copy is what stopped the

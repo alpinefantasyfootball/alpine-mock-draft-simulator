@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && node scripts/copy-legacy-assets.mjs",
+    "build": "vite build && node scripts/prerender.mjs && node scripts/copy-legacy-assets.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
