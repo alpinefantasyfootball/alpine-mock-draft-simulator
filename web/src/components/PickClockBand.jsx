@@ -54,12 +54,12 @@ export default function PickClockBand({ code, myTurn, urgent, timeLeft, clockLen
 
       {nextPicks && nextPicks.length > 0 && (
         <div className="flex items-baseline gap-2 text-[11px] text-white/50">
-          <span className="shrink-0 font-bold uppercase tracking-[0.08em] text-white/40">Next</span>
+          <span className="shrink-0 font-bold uppercase tracking-[0.08em] text-ink-muted">Next</span>
           <span className="min-w-0 flex-1 truncate font-plex">
             {nextPicks.slice(0, 3).map((o) => (window.DraftEngine ? window.DraftEngine.pickCode(o, teams) : o)).join(' · ')}
           </span>
           {picksAway != null && picksAway > 0 && (
-            <span className="shrink-0 font-plex text-white/45">{picksAway} pick{picksAway === 1 ? '' : 's'} away</span>
+            <span className="shrink-0 font-plex text-ink-muted">{picksAway} pick{picksAway === 1 ? '' : 's'} away</span>
           )}
         </div>
       )}

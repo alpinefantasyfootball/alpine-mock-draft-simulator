@@ -14,7 +14,7 @@ import { POS_BADGE } from './draftRoomPositions.js'
 export default function QueueList({ players, myTurn, engine, survivalOf }) {
   if (players.length === 0) {
     return (
-      <p className="px-2 py-6 text-center text-xs leading-relaxed text-white/30">
+      <p className="px-2 py-6 text-center text-xs leading-relaxed text-ink-muted">
         Star a player in the list to line them up here — this is your own plan, and
         it's what gets drafted for you if the clock runs out while you're away.
       </p>
@@ -24,9 +24,9 @@ export default function QueueList({ players, myTurn, engine, survivalOf }) {
   return players.map((p, i) => (
     <div
       key={p.name}
-      className="mb-1.5 flex items-center gap-2 rounded-lg border border-slate-800 bg-slate-950/50 px-2.5 py-2"
+      className="mb-1.5 flex items-center gap-2 rounded-lg border border-slate-rule bg-slate-sunk/50 px-2.5 py-2"
     >
-      <span className="w-3.5 shrink-0 text-center text-[10px] text-white/30">{i + 1}</span>
+      <span className="w-3.5 shrink-0 text-center text-[10px] text-ink-muted">{i + 1}</span>
       <span
         className={
           'shrink-0 rounded px-1 text-[9px] font-bold ' +
@@ -64,7 +64,7 @@ export default function QueueList({ players, myTurn, engine, survivalOf }) {
         type="button"
         onClick={() => engine.queueToggle(p.name)}
         title="Remove from your queue"
-        className="shrink-0 text-white/30 hover:text-rose-400"
+        className="shrink-0 text-ink-muted hover:text-rose-400"
       >
         <X className="h-3 w-3" />
       </button>

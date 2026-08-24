@@ -40,7 +40,7 @@ export default function LobbyBar({ onOpenSettings }) {
   const [navOpen, setNavOpen] = useState(false)
 
   return (
-    <header className="sticky top-0 z-30 border-b border-white/[0.06] bg-obsidian/95 backdrop-blur-md">
+    <header className="sticky top-0 z-30 border-b border-white/[0.06] bg-slate-bar/95 backdrop-blur-md">
       <div className="mx-auto flex h-14 max-w-[1600px] items-center gap-4 px-4 md:px-8">
         {/* Two instances behind a wrapper's hidden/block, matching
             Header.jsx's own fix for the identical trap: JukeLogo's root
@@ -80,7 +80,7 @@ export default function LobbyBar({ onOpenSettings }) {
             onClick={onOpenSettings}
             aria-label="Draft settings"
             title="Draft settings"
-            className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full border border-slate-800 bg-obsidian/60 text-white/55 transition-colors duration-150 hover:border-teal-400/50 hover:text-teal-300"
+            className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full border border-slate-rule bg-slate-sunk/60 text-white/55 transition-colors duration-150 hover:border-teal-400/50 hover:text-teal-300"
           >
             <Settings className="h-4 w-4" />
           </button>

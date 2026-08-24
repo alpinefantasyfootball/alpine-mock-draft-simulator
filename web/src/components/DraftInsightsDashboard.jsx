@@ -13,7 +13,7 @@ const ordinal = (n) => {
 // that subtly glows on hover, matching the card treatment the rest of the
 // draft room already uses (same slate-800 border, same teal accent).
 const PANEL =
-  'rounded-2xl border border-slate-800 bg-slate-900/60 transition-all duration-300 ' +
+  'rounded-2xl border border-slate-rule bg-slate-panel/60 transition-all duration-300 ' +
   'hover:border-teal-400/40 hover:shadow-[0_0_18px_rgba(0,229,255,0.12)]'
 
 // The four grade components, in the order and under the names the Analysis
@@ -121,12 +121,12 @@ function VorpRow({ seat, gap, maxAbs }) {
       <span
         className={
           'w-11 shrink-0 rounded px-1.5 py-0.5 text-center text-[10px] font-bold ' +
-          (player ? POS_BADGE[player.pos] || 'bg-white/10 text-white/50' : 'bg-white/5 text-white/25')
+          (player ? POS_BADGE[player.pos] || 'bg-white/10 text-white/50' : 'bg-white/5 text-ink-muted')
         }
       >
         {seat.slot}
       </span>
-      <span className={'w-28 shrink-0 truncate text-xs sm:w-36 ' + (player ? 'font-medium text-white/85' : 'text-white/25')}>
+      <span className={'w-28 shrink-0 truncate text-xs sm:w-36 ' + (player ? 'font-medium text-white/85' : 'text-ink-muted')}>
         {player ? player.name : 'Empty'}
       </span>
 
@@ -150,7 +150,7 @@ function VorpRow({ seat, gap, maxAbs }) {
       <span
         className={
           'w-12 shrink-0 text-right text-xs font-semibold tabular-nums ' +
-          (gap === null || !player ? 'text-white/25' : gap >= 0 ? 'text-teal-300' : 'text-rose-400')
+          (gap === null || !player ? 'text-ink-muted' : gap >= 0 ? 'text-teal-300' : 'text-rose-400')
         }
       >
         {!player || gap === null ? '—' : (gap >= 0 ? '+' : '') + Math.round(gap)}
@@ -174,7 +174,7 @@ function TimelineRow({ pick, gap, maxAbs, shortName }) {
   const width = maxAbs > 0 ? (Math.abs(gap) / maxAbs) * 100 : 0
   return (
     <div className="flex items-center gap-2">
-      <span className="w-7 shrink-0 text-[10px] font-bold text-white/30">R{pick.round}</span>
+      <span className="w-7 shrink-0 text-[10px] font-bold text-ink-muted">R{pick.round}</span>
       <span
         className={
           'w-9 shrink-0 rounded px-1 py-0.5 text-center text-[9px] font-bold ' +
@@ -322,13 +322,13 @@ export default function DraftInsightsDashboard({ engine, league, mySlot, viewSlo
   }
 
   return (
-    <div className="fixed inset-0 z-[70] overflow-y-auto bg-[#0B0E14]/97 backdrop-blur-md">
+    <div className="fixed inset-0 z-[70] overflow-y-auto bg-slate/97 backdrop-blur-md">
       <div className="mx-auto flex min-h-full w-full max-w-4xl flex-col gap-5 px-4 py-8 sm:px-6">
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-teal-400">Draft complete</p>
             <h1 className="font-display text-2xl font-bold text-white">
-              Draft Insights <span className="text-white/40">·</span>{' '}
+              Draft Insights <span className="text-ink-muted">·</span>{' '}
               <span className={isMe ? 'text-teal-300' : 'text-[#B784E0]'}>{teamName}</span>
             </h1>
           </div>
@@ -347,7 +347,7 @@ export default function DraftInsightsDashboard({ engine, league, mySlot, viewSlo
               onClick={onClose}
               title="View the board"
               aria-label="Close insights and view the board"
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-800 bg-slate-950/60 text-white/60 transition-colors duration-150 hover:border-teal-400/50 hover:text-white"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-rule bg-slate-sunk/60 text-white/60 transition-colors duration-150 hover:border-teal-400/50 hover:text-white"
             >
               <X className="h-4 w-4" />
             </button>
@@ -373,10 +373,10 @@ export default function DraftInsightsDashboard({ engine, league, mySlot, viewSlo
             </span>
             <div>
               <p className="font-display text-xl font-bold text-white">
-                {ordinal(mine.rank)} <span className="text-white/40">of {league.teams}</span>
+                {ordinal(mine.rank)} <span className="text-ink-muted">of {league.teams}</span>
               </p>
               <p className="mt-0.5 text-sm text-white/50">
-                {Math.round(mine.total)} <span className="text-white/30">/ 100 weighted score</span>
+                {Math.round(mine.total)} <span className="text-ink-muted">/ 100 weighted score</span>
               </p>
             </div>
           </div>
@@ -386,13 +386,13 @@ export default function DraftInsightsDashboard({ engine, league, mySlot, viewSlo
               <p className="text-white/60">
                 <span className="font-semibold uppercase tracking-wide text-teal-400">Best value</span>{' '}
                 {bargain.pick.player.name}
-                {bargain.gap > 0 && <span className="text-white/35"> · {bargain.gap} picks late</span>}
+                {bargain.gap > 0 && <span className="text-ink-muted"> · {bargain.gap} picks late</span>}
               </p>
             )}
             {reach && (
               <p className="text-white/60">
                 <span className="font-semibold uppercase tracking-wide text-rose-400">Biggest reach</span>{' '}
-                {reach.pick.player.name} <span className="text-white/35">· {Math.abs(reach.gap)} picks early</span>
+                {reach.pick.player.name} <span className="text-ink-muted">· {Math.abs(reach.gap)} picks early</span>
               </p>
             )}
           </div>
@@ -442,7 +442,7 @@ export default function DraftInsightsDashboard({ engine, league, mySlot, viewSlo
             className={PANEL + ' p-5'}
           >
             <h2 className="font-display text-sm font-bold uppercase tracking-wide text-white/80">Team analysis</h2>
-            <p className="mb-3 mt-0.5 text-xs text-white/35">The four grade components, scaled against the room</p>
+            <p className="mb-3 mt-0.5 text-xs text-ink-muted">The four grade components, scaled against the room</p>
             <RadarChart mine={mine} />
           </motion.section>
 
@@ -453,7 +453,7 @@ export default function DraftInsightsDashboard({ engine, league, mySlot, viewSlo
             className={PANEL + ' p-5'}
           >
             <h2 className="font-display text-sm font-bold uppercase tracking-wide text-white/80">VORP matrix</h2>
-            <p className="mb-3 mt-0.5 text-xs text-white/35">
+            <p className="mb-3 mt-0.5 text-xs text-ink-muted">
               Each starter against a replacement-level player at his position
             </p>
             <div className="flex flex-col gap-1.5">
@@ -461,7 +461,7 @@ export default function DraftInsightsDashboard({ engine, league, mySlot, viewSlo
                 <VorpRow key={i} seat={seat} gap={gaps[i]} maxAbs={maxAbs} />
               ))}
             </div>
-            <p className="mt-3 text-[10px] leading-relaxed text-white/25">
+            <p className="mt-3 text-[10px] leading-relaxed text-ink-muted">
               Kickers and defenses show a dash: measured against three seasons of archived forecasts the
               projection ranks them no better than chance, so no bar is drawn from it.
             </p>
@@ -474,7 +474,7 @@ export default function DraftInsightsDashboard({ engine, league, mySlot, viewSlo
             className={PANEL + ' p-5'}
           >
             <h2 className="font-display text-sm font-bold uppercase tracking-wide text-white/80">Draft value timeline</h2>
-            <p className="mb-3 mt-0.5 text-xs text-white/35">
+            <p className="mb-3 mt-0.5 text-xs text-ink-muted">
               Where each pick landed against the board's rank — right means he fell to {isMe ? 'you' : 'them'}
             </p>
             <div className="flex flex-col gap-1.5">
@@ -488,7 +488,7 @@ export default function DraftInsightsDashboard({ engine, league, mySlot, viewSlo
                 />
               ))}
             </div>
-            <p className="mt-3 text-[10px] leading-relaxed text-white/25">
+            <p className="mt-3 text-[10px] leading-relaxed text-ink-muted">
               Kickers and defenses sit this out too — the app schedules those picks itself, so their
               timing says nothing about the drafting.
             </p>
@@ -505,7 +505,7 @@ export default function DraftInsightsDashboard({ engine, league, mySlot, viewSlo
                 CLAUDE.md's standings rule: a column between the rank and
                 the letter showing anything else makes the table look
                 broken, and once did. */}
-            <p className="mb-3 mt-0.5 text-xs text-white/35">
+            <p className="mb-3 mt-0.5 text-xs text-ink-muted">
               Every team's weighted score, best to worst — click any team to view their report
             </p>
             <div className="flex flex-col gap-1">
@@ -525,7 +525,7 @@ export default function DraftInsightsDashboard({ engine, league, mySlot, viewSlo
                       : 'text-white/60 hover:bg-white/5 hover:text-white')
                   }
                 >
-                  <span className="w-5 shrink-0 text-right tabular-nums text-white/35">{t.rank}</span>
+                  <span className="w-5 shrink-0 text-right tabular-nums text-ink-muted">{t.rank}</span>
                   <span className={'min-w-0 flex-1 truncate ' + (t.slot === mySlot ? 'text-teal-300' : '')}>
                     {engine.teamLabel(t.slot)}
                   </span>

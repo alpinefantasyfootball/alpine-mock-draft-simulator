@@ -4,7 +4,7 @@
 export default function ProjectionsTab({ summary, record }) {
   if (!summary) {
     return (
-      <p className="px-1 py-6 text-center text-sm text-white/40">
+      <p className="px-1 py-6 text-center text-sm text-ink-muted">
         No projection stored for this player yet.
       </p>
     )
@@ -29,13 +29,13 @@ export default function ProjectionsTab({ summary, record }) {
 
       {summary.stats.length > 0 && (
         <div>
-          <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-white/35">
+          <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
             Projected stat line
           </p>
           <div className="grid grid-cols-3 gap-1.5">
             {summary.stats.map((s) => (
-              <div key={s.label} className="rounded-lg border border-slate-800 bg-slate-950/50 px-2 py-1.5 text-center">
-                <p className="text-[10px] font-medium uppercase tracking-wide text-white/35">{s.label}</p>
+              <div key={s.label} className="rounded-lg border border-slate-rule bg-slate-sunk/50 px-2 py-1.5 text-center">
+                <p className="text-[10px] font-medium uppercase tracking-wide text-ink-muted">{s.label}</p>
                 <p className="text-sm font-semibold text-white">{s.value}</p>
               </div>
             ))}
@@ -51,13 +51,13 @@ export default function ProjectionsTab({ summary, record }) {
           scoring editor like everything else. */}
       {record && record.length > 0 && (
         <div>
-          <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-white/35">
+          <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
             Our record on him
           </p>
-          <div className="overflow-hidden rounded-lg border border-slate-800">
+          <div className="overflow-hidden rounded-lg border border-slate-rule">
             <table className="w-full text-xs">
               <thead>
-                <tr className="border-b border-slate-800 bg-slate-950/60 text-[10px] uppercase tracking-wide text-white/35">
+                <tr className="border-b border-slate-rule bg-slate-sunk/60 text-[10px] uppercase tracking-wide text-ink-muted">
                   <th className="px-2 py-1.5 text-left font-medium">Year</th>
                   <th className="px-2 py-1.5 text-right font-medium">We said</th>
                   <th className="px-2 py-1.5 text-right font-medium">He got</th>
@@ -73,7 +73,7 @@ export default function ProjectionsTab({ summary, record }) {
               </thead>
               <tbody>
                 {record.map((r) => (
-                  <tr key={r.year} className="border-b border-slate-800/60 last:border-b-0">
+                  <tr key={r.year} className="border-b border-slate-rule/60 last:border-b-0">
                     <td className="px-2 py-1.5 text-white/70">{r.year}</td>
                     <td className="px-2 py-1.5 text-right tabular-nums text-white/70">{Math.round(r.proj)}</td>
                     <td className="px-2 py-1.5 text-right tabular-nums text-white">{Math.round(r.act)}</td>
@@ -81,7 +81,7 @@ export default function ProjectionsTab({ summary, record }) {
                       (r.diff >= 0 ? 'text-teal-300' : 'text-rose-300')}>
                       {r.diff >= 0 ? '+' : ''}{Math.round(r.diff)}
                     </td>
-                    <td className="px-2 py-1.5 text-right tabular-nums text-white/35">
+                    <td className="px-2 py-1.5 text-right tabular-nums text-ink-muted">
                       {r.games === null ? '—' : r.games}
                     </td>
                   </tr>
@@ -91,7 +91,7 @@ export default function ProjectionsTab({ summary, record }) {
           </div>
           {/* Without this a column of green reads as a model that is simply
               too low, rather than one doing its job. */}
-          <p className="mt-1.5 text-[11px] leading-snug text-white/40">
+          <p className="mt-1.5 text-[11px] leading-snug text-ink-muted">
             A projection is an expected value that prices in injury risk, so it
             runs about 20 points light on anyone who stays fit — most healthy
             seasons beat it.
@@ -104,8 +104,8 @@ export default function ProjectionsTab({ summary, record }) {
 
 function StatBox({ label, value, tone }) {
   return (
-    <div className="rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2.5">
-      <p className="text-[10px] font-medium uppercase tracking-wide text-white/35">{label}</p>
+    <div className="rounded-lg border border-slate-rule bg-slate-sunk/50 px-3 py-2.5">
+      <p className="text-[10px] font-medium uppercase tracking-wide text-ink-muted">{label}</p>
       <p className={'text-lg font-bold ' + (tone || 'text-white')}>{value}</p>
     </div>
   )

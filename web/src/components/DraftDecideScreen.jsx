@@ -86,17 +86,17 @@ function Card({ candidate, rankLabel, primary, onDraft, myTurn, engine }) {
 
       <div className="mb-4 grid grid-cols-3 gap-2 rounded-lg bg-white/[0.03] px-3 py-2.5">
         <div>
-          <div className="text-[9px] font-semibold uppercase tracking-[0.08em] text-white/45">VORP</div>
+          <div className="text-[9px] font-semibold uppercase tracking-[0.08em] text-ink-muted">VORP</div>
           <div className="font-plex text-lg font-bold tabular-nums text-emerald-300">
             {vorp != null ? `${vorp >= 0 ? '+' : ''}${Math.round(vorp)}` : '—'}
           </div>
         </div>
         <div>
-          <div className="text-[9px] font-semibold uppercase tracking-[0.08em] text-white/45">Juke score</div>
+          <div className="text-[9px] font-semibold uppercase tracking-[0.08em] text-ink-muted">Juke score</div>
           <div className="font-plex text-lg font-bold tabular-nums text-teal-300">{juke ?? '—'}</div>
         </div>
         <div>
-          <div className="text-[9px] font-semibold uppercase tracking-[0.08em] text-white/45">Proj</div>
+          <div className="text-[9px] font-semibold uppercase tracking-[0.08em] text-ink-muted">Proj</div>
           <div className="font-plex text-lg font-bold tabular-nums text-white">{proj ?? '—'}</div>
         </div>
       </div>
@@ -325,7 +325,7 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, pick
       {onOpenHub && (
         <div className="shrink-0 border-b border-white/[0.06] px-4 py-2.5 lg:hidden">
           <div className="flex items-center justify-between gap-3">
-            <span className="font-plex text-[10.5px] font-bold uppercase tracking-[0.12em] text-white/45">
+            <span className="font-plex text-[10.5px] font-bold uppercase tracking-[0.12em] text-ink-muted">
               Still to fill
             </span>
             <button
@@ -347,7 +347,7 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, pick
                     'rounded-[5px] border px-2 py-1 font-plex text-[11px] font-semibold ' +
                     (met
                       ? 'border-white/10 bg-white/[0.07] text-white/70'
-                      : 'border-dashed border-white/[0.14] bg-white/[0.045] text-white/40')
+                      : 'border-dashed border-white/[0.14] bg-white/[0.045] text-ink-muted')
                   }
                 >
                   {r.pos} {met ? r.have : `${r.have}/${r.need}`}
@@ -364,10 +364,10 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, pick
         <div className="mb-5 flex flex-col gap-1">
           {lineup.seats.map((s, i) => (
             <div key={i} className="grid h-8 grid-cols-[38px_minmax(0,1fr)_auto] items-center gap-2.5 rounded-md px-2.5">
-              <span className={'rounded py-0.5 text-center text-[10px] font-bold ' + (s.player ? POS_BADGE[s.player.pos] || 'bg-white/10 text-white/60' : 'bg-white/5 text-white/40')}>
+              <span className={'rounded py-0.5 text-center text-[10px] font-bold ' + (s.player ? POS_BADGE[s.player.pos] || 'bg-white/10 text-white/60' : 'bg-white/5 text-ink-muted')}>
                 {s.slot}
               </span>
-              <span className={'truncate text-xs font-medium ' + (s.player ? 'text-white' : 'text-white/35')}>
+              <span className={'truncate text-xs font-medium ' + (s.player ? 'text-white' : 'text-ink-muted')}>
                 {s.player ? s.player.name : '—'}
               </span>
               {s.player && (
@@ -456,11 +456,11 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, pick
               <div>
                 <div className="mb-2.5 flex items-baseline justify-between gap-3">
                   <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-white/50">Everyone else</span>
-                  <span className="font-plex text-[10px] text-white/35 lg:hidden">VORP &middot; JUKE</span>
+                  <span className="font-plex text-[10px] text-ink-muted lg:hidden">VORP &middot; JUKE</span>
                 </div>
                 {/* Column heads — a design review caught "+64 · 38 · Draft"
                     with nothing saying which number was which. */}
-                <div className="hidden h-5 grid-cols-[30px_minmax(0,1fr)_60px_64px_70px] items-center gap-3.5 px-3 text-[9px] font-semibold uppercase tracking-wide text-white/30 lg:grid">
+                <div className="hidden h-5 grid-cols-[30px_minmax(0,1fr)_60px_64px_70px] items-center gap-3.5 px-3 text-[9px] font-semibold uppercase tracking-wide text-ink-muted lg:grid">
                   <span />
                   <span />
                   <span className="text-right">VORP</span>

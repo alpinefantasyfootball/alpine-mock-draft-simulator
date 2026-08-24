@@ -42,10 +42,10 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
 
   if (picks.length < teams) {
     return (
-      <div className="flex flex-1 items-center justify-center bg-[#0B0E14] p-6">
+      <div className="flex flex-1 items-center justify-center bg-slate p-6">
         <div className="text-center">
           <p className="text-sm font-semibold text-white/70">Nothing to grade yet</p>
-          <p className="mt-1 text-xs text-white/40">
+          <p className="mt-1 text-xs text-ink-muted">
             Analysis appears once the first round is done, and updates after every pick.
           </p>
         </div>
@@ -186,7 +186,7 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
           the locker." `lg:hidden` — at lg+ the Cockpit's own tab nav is back
           and this never renders. Solid background (no blur) so nothing of the
           bar underneath shows through. */}
-      <header className="fixed inset-x-0 top-0 z-[55] flex h-[62px] shrink-0 items-center justify-between border-b border-white/[0.06] bg-[#0B0E14] px-2 lg:hidden">
+      <header className="fixed inset-x-0 top-0 z-[55] flex h-[62px] shrink-0 items-center justify-between border-b border-white/[0.06] bg-slate px-2 lg:hidden">
         <button
           type="button"
           onClick={onClose}
@@ -195,7 +195,7 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
         >
           <ChevronLeft className="h-5 w-5" />
         </button>
-        <span className="font-plex text-[11px] font-bold uppercase tracking-[0.14em] text-white/45">
+        <span className="font-plex text-[11px] font-bold uppercase tracking-[0.14em] text-ink-muted">
           {done ? 'Draft complete' : 'Grade so far'}
         </span>
         <button
@@ -208,13 +208,13 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
         </button>
       </header>
 
-      <div className="flex-1 overflow-y-auto bg-[#0B0E14] pb-64">
+      <div className="flex-1 overflow-y-auto bg-slate pb-64">
         {/* ============================= MOBILE ============================= */}
         <div className="mx-auto max-w-xl p-4 pt-5 sm:p-6 lg:hidden">
           <div className="flex items-start gap-3.5">
             <div className="flex h-[92px] w-[92px] shrink-0 flex-col items-center justify-center rounded-2xl border border-teal-400/25 bg-teal-400/[0.07]">
               <div className="font-display text-[38px] font-black leading-none text-teal-300">{me.grade}</div>
-              <div className="mt-1.5 font-plex text-[11px] text-white/40">{Math.round(me.total)} / 100</div>
+              <div className="mt-1.5 font-plex text-[11px] text-ink-muted">{Math.round(me.total)} / 100</div>
             </div>
             <div className="min-w-0 flex-1 pt-1">
               <h2 className="font-display text-[21px] font-extrabold leading-tight text-white">
@@ -241,7 +241,7 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
                   <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-white/[0.08]">
                     <div className={'h-1.5 rounded-full transition-all duration-300 ' + barFill[t]} style={{ width: width + '%' }} />
                   </div>
-                  <div className="mt-1.5 flex items-center justify-between font-plex text-[11px] text-white/40">
+                  <div className="mt-1.5 flex items-center justify-between font-plex text-[11px] text-ink-muted">
                     <span>{Math.round(b.weight * 100)}% weight</span>
                     <span>contributes {contributes.toFixed(1)}</span>
                   </div>
@@ -253,10 +253,10 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
           <div className="mt-6 flex items-center justify-between border-t border-white/10 pt-5">
             <span className="text-[15px] font-bold text-white">Composite</span>
             <span className="font-plex text-[17px] font-bold text-teal-300">
-              {me.total.toFixed(1)} <span className="text-white/30">&rarr;</span> {me.grade}
+              {me.total.toFixed(1)} <span className="text-ink-muted">&rarr;</span> {me.grade}
             </span>
           </div>
-          <p className="mt-3 text-[13.5px] leading-relaxed text-white/45">
+          <p className="mt-3 text-[13.5px] leading-relaxed text-ink-muted">
             Every score is your value ranked against the other {teams - 1} teams, so 50 is the room average.
             Bars run one direction: right is better.
           </p>
@@ -265,20 +265,20 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
               <details>, 70ch cap, identical wording) — mobile-width styling
               only, per the handoff's own instruction not to invent new
               behavior here. */}
-          <details className="group mt-5 rounded-xl border border-slate-800 bg-slate-900/40 p-4">
+          <details className="group mt-5 rounded-xl border border-slate-rule bg-slate-panel/40 p-4">
             <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
               <span>
                 <span className="block text-[14px] font-bold text-white">How this grade is calculated</span>
-                <span className="mt-0.5 block text-[13.5px] text-white/40">The full method, in plain English</span>
+                <span className="mt-0.5 block text-[13.5px] text-ink-muted">The full method, in plain English</span>
               </span>
-              <Plus className="h-4 w-4 shrink-0 text-white/40 transition-transform duration-150 group-open:rotate-45" />
+              <Plus className="h-4 w-4 shrink-0 text-ink-muted transition-transform duration-150 group-open:rotate-45" />
             </summary>
-            <p className="mt-3 max-w-[70ch] text-[13.5px] leading-relaxed text-white/45">{methodologyText}</p>
+            <p className="mt-3 max-w-[70ch] text-[13.5px] leading-relaxed text-ink-muted">{methodologyText}</p>
           </details>
 
           <div className="mt-7 flex items-center justify-between">
             <h3 className="font-display text-lg font-extrabold text-white">The room</h3>
-            <span className="font-plex text-[11px] text-white/35">{teams} teams</span>
+            <span className="font-plex text-[11px] text-ink-muted">{teams} teams</span>
           </div>
           <div className="mt-3 space-y-2">
             {mobileStandings.map((t) => {
@@ -291,7 +291,7 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
                     (mine ? 'border-teal-400/40 bg-teal-400/[0.08]' : 'border-white/[0.06] bg-white/[0.02]')
                   }
                 >
-                  <span className="w-4 shrink-0 font-plex text-[12px] text-white/35">{t.rank}</span>
+                  <span className="w-4 shrink-0 font-plex text-[12px] text-ink-muted">{t.rank}</span>
                   <span className={'min-w-0 flex-1 truncate text-[14px] font-bold ' + (mine ? 'text-teal-300' : 'text-white/85')}>
                     {mine ? 'You · seat ' + (t.slot + 1) : engine.teamLabel(t.slot)}
                   </span>
@@ -306,7 +306,7 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
             <button
               type="button"
               onClick={() => setShowAllTeams((v) => !v)}
-              className="mt-2.5 inline-block py-1.5 text-[13.5px] font-semibold text-white/45 transition-colors duration-150 hover:text-teal-300"
+              className="mt-2.5 inline-block py-1.5 text-[13.5px] font-semibold text-ink-muted transition-colors duration-150 hover:text-teal-300"
             >
               {showAllTeams ? 'Show fewer ‹' : 'Show all ' + teams + ' ›'}
             </button>
@@ -361,7 +361,7 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
             same content. This prompt is the mobile layout; the lg+ report
             below is deliberately untouched. */}
         <div className="mx-auto hidden max-w-6xl p-6 lg:block">
-          <div className="flex items-center gap-4 rounded-xl border border-slate-800 bg-slate-900/60 p-4 sm:p-5">
+          <div className="flex items-center gap-4 rounded-xl border border-slate-rule bg-slate-panel/60 p-4 sm:p-5">
             <div className="font-display text-4xl font-black text-teal-300">{me.grade}</div>
             <div>
               <h3 className="font-display text-base font-bold text-white">
@@ -381,10 +381,10 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
               return (
                 <div key={b.label} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                   <b className="w-32 shrink-0 font-semibold text-white/80 sm:w-40">{b.label}</b>
-                  <div className="h-1.5 min-w-[100px] max-w-[420px] flex-1 rounded-full bg-slate-800">
+                  <div className="h-1.5 min-w-[100px] max-w-[420px] flex-1 rounded-full bg-slate-rule">
                     <div className={'h-1.5 rounded-full transition-all duration-300 ' + barFill[t]} style={{ width: width + '%' }} />
                   </div>
-                  <span className="shrink-0 text-white/40">{b.detail}</span>
+                  <span className="shrink-0 text-ink-muted">{b.detail}</span>
                 </div>
               )
             })}
@@ -407,7 +407,7 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
                 <div
                   className={
                     'rounded-lg border p-3 ' +
-                    (me.reach.gap < -8 ? 'border-rose-500/30 bg-rose-500/5' : 'border-slate-800 bg-slate-900/40')
+                    (me.reach.gap < -8 ? 'border-rose-500/30 bg-rose-500/5' : 'border-slate-rule bg-slate-panel/40')
                   }
                 >
                   <div className={'text-[10px] font-semibold uppercase tracking-wide ' + (me.reach.gap < -8 ? 'text-rose-400' : 'text-white/50')}>
@@ -423,7 +423,7 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
             </div>
           )}
 
-          <p className="mt-5 text-[10px] font-semibold uppercase tracking-wide text-white/30">Starters on bye, by week</p>
+          <p className="mt-5 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Starters on bye, by week</p>
           <div className="mt-1.5 flex gap-1">
             {Array.from({ length: 10 }, (_, i) => i + 5).map((w) => {
               const n = me.byes[w] || 0
@@ -434,7 +434,7 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
                     ? 'bg-amber-500/20 text-amber-300'
                     : n === 2
                       ? 'bg-sky-500/20 text-sky-300'
-                      : 'bg-slate-800 text-white/30'
+                      : 'bg-slate-rule text-ink'
               return (
                 <span key={w} className={'flex h-6 w-6 items-center justify-center rounded text-[10px] font-semibold ' + cls}>
                   {w}
@@ -443,12 +443,12 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
             })}
           </div>
 
-          <p className="mt-5 text-[10px] font-semibold uppercase tracking-wide text-white/30">Room standings</p>
+          <p className="mt-5 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Room standings</p>
           <table className="mt-1.5 w-full text-xs">
             <tbody>
               {standings.map((t) => (
                 <tr key={t.slot} className={t.slot === mySlot ? 'bg-[#FFD166]/10' : ''}>
-                  <td className="py-1 pr-2 text-white/40">{t.rank}</td>
+                  <td className="py-1 pr-2 text-ink-muted">{t.rank}</td>
                   <td className="py-1 pr-2 font-medium text-white/80">{engine.teamLabel(t.slot)}</td>
                   <td className="py-1 pr-2 text-right font-semibold text-white/90">{Math.round(t.total)}</td>
                   <td className="py-1 text-right text-white/60">{t.grade}</td>
@@ -458,13 +458,13 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
           </table>
 
           <details className="mt-5">
-            <summary className="cursor-pointer text-[10px] font-semibold uppercase tracking-wide text-white/30 hover:text-white/50">
+            <summary className="cursor-pointer text-[10px] font-semibold uppercase tracking-wide text-ink-muted hover:text-white/50">
               How this grade is calculated
             </summary>
-            <p className="mt-2 max-w-[70ch] text-[11px] leading-relaxed text-white/40">{methodologyText}</p>
+            <p className="mt-2 max-w-[70ch] text-[11px] leading-relaxed text-ink-muted">{methodologyText}</p>
           </details>
 
-          <div className="mt-6 flex flex-wrap items-center justify-center gap-2.5 border-t border-slate-800/80 pt-5">
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-2.5 border-t border-slate-rule/80 pt-5">
             <a
               href="#/drafts"
               className="rounded-full border border-white/15 px-4 py-2 text-xs font-semibold text-white/60 transition-colors duration-150 hover:border-teal-400/60 hover:text-teal-300"

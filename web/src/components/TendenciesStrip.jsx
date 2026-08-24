@@ -27,7 +27,7 @@ const MIN_MOCKS_FOR_TENDENCIES = 5
 
 function Card({ label, children }) {
   return (
-    <div className="rounded-xl border border-white/[0.07] bg-charcoal p-4">
+    <div className="rounded-xl border border-white/[0.07] bg-slate-panel p-4">
       <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-white/50">{label}</p>
       {children}
     </div>
@@ -66,14 +66,14 @@ export default function TendenciesStrip({ stats }) {
               {total} of {MIN_MOCKS_FOR_TENDENCIES} mocks
             </span>
           </StripHeader>
-          <div className="flex flex-1 flex-col items-center justify-center rounded-xl border border-white/[0.07] bg-charcoal/60 p-8 text-center">
+          <div className="flex flex-1 flex-col items-center justify-center rounded-xl border border-white/[0.07] bg-slate-panel/60 p-8 text-center">
             <p className="max-w-[320px] text-sm text-white/60">
               Run a few more mocks and Juke will start showing your tendencies.
             </p>
             {/* The one real, non-misleading number worth stating below the
                 threshold — how many mocks it's actually counted, not a
                 placeholder pretending to be an insight. */}
-            <p className="mt-3 text-xs tabular-nums text-white/40">
+            <p className="mt-3 text-xs tabular-nums text-ink-muted">
               {total} mock{total === 1 ? '' : 's'} logged so far
             </p>
           </div>

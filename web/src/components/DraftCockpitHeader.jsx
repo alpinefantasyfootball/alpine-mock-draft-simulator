@@ -75,12 +75,12 @@ export default function DraftCockpitHeader({
           it is the one that has to fit. At 14px this cleared 768 and missed 375
           by a single pixel, which is the kind of margin that is not a margin -
           12 takes the phone to 368 against 375 and 768 to 746. */}
-      <header className="fixed inset-x-0 top-0 z-50 flex h-[62px] shrink-0 items-center gap-3 border-b border-white/[0.06] bg-obsidian/90 px-4 backdrop-blur-md lg:gap-[22px] lg:px-6">
+      <header className="fixed inset-x-0 top-0 z-50 flex h-[62px] shrink-0 items-center gap-3 border-b border-white/[0.06] bg-slate-bar/90 px-4 backdrop-blur-md lg:gap-[22px] lg:px-6">
         <a
           href="#/drafts"
           aria-label="Back to your draft locker"
           title="Back to your draft locker"
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-slate-800 bg-slate-950/60 text-white/50 transition-colors duration-150 hover:border-slate-700 hover:text-white"
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-slate-rule bg-slate-sunk/60 text-white/50 transition-colors duration-150 hover:border-slate-rule hover:text-white"
         >
           <ChevronLeft className="h-4 w-4" />
         </a>

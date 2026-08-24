@@ -12,7 +12,7 @@
    caller sits inside DraftRoom's panel row, so this never needs to know
    about breakpoints.
 
-   border-slate-700, not -800: this panel's own tab row (Queue/Roster) sits
+   border-slate-rule, not -800: this panel's own tab row (Queue/Roster) sits
    directly beside DraftLogDock's tab row (Chat/Log/Picks), same height,
    same underline style, and a design review read the two as one four-item
    strip with two selections lit at once rather than as two adjacent
@@ -21,9 +21,9 @@
    a glance, not restructuring what's already correct underneath it. */
 export default function SidePanel({ title, count, tabs, active, onTab, action, children }) {
   return (
-    <div className="flex h-full min-h-0 w-full flex-col border-r border-slate-700 bg-slate-900/40 last:border-r-0">
+    <div className="flex h-full min-h-0 w-full flex-col border-r border-slate-rule bg-slate-panel/40 last:border-r-0">
       {tabs ? (
-        <div className="flex shrink-0 border-b border-slate-700">
+        <div className="flex shrink-0 border-b border-slate-rule">
           {tabs.map((t) => (
             <button
               key={t.key}
@@ -33,7 +33,7 @@ export default function SidePanel({ title, count, tabs, active, onTab, action, c
                 'flex-1 border-b-2 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide transition-colors duration-150 ' +
                 (active === t.key
                   ? 'border-teal-400 text-teal-300'
-                  : 'border-transparent text-white/40 hover:text-white/60')
+                  : 'border-transparent text-ink-muted hover:text-white/60')
               }
             >
               {t.label}
@@ -42,8 +42,8 @@ export default function SidePanel({ title, count, tabs, active, onTab, action, c
           ))}
         </div>
       ) : (
-        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-700 px-3 py-2">
-          <span className="text-[10px] font-semibold uppercase tracking-wide text-white/40">
+        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-rule px-3 py-2">
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
             {title}
             {count > 0 ? <span className="ml-1 text-teal-400">{count}</span> : null}
           </span>

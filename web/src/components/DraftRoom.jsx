@@ -81,8 +81,8 @@ function TrayButton({ onClick, disabled, title, children }) {
       className={
         'flex h-6 w-6 items-center justify-center rounded-md border transition-colors duration-150 ' +
         (disabled
-          ? 'cursor-not-allowed border-slate-800 bg-slate-950/70 text-white/15'
-          : 'border-slate-700 bg-slate-950/80 text-white/60 hover:border-teal-400/50 hover:text-teal-300')
+          ? 'cursor-not-allowed border-slate-rule bg-slate-sunk/70 text-white/15'
+          : 'border-slate-rule bg-slate-sunk/80 text-white/60 hover:border-teal-400/50 hover:text-teal-300')
       }
     >
       {children}
@@ -425,7 +425,7 @@ export default function DraftRoom() {
        root behind this one, per main.jsx — and its own fixed header is z-50.
        z-40 would trap this whole overlay beneath it. */
     return (
-      <div className="fixed inset-0 z-[60] flex flex-col bg-[#0B0E14] text-white">
+      <div className="fixed inset-0 z-[60] flex flex-col bg-slate text-white">
         <LobbyBar onOpenSettings={() => setSettingsOpen(true)} />
 
         {settingsOpen && (
@@ -488,7 +488,7 @@ export default function DraftRoom() {
       : 'Start draft'
 
     return (
-      <div className="fixed inset-0 z-[60] flex flex-col bg-[#0B0E14] text-white">
+      <div className="fixed inset-0 z-[60] flex flex-col bg-slate text-white">
         <DraftCockpitHeader
           preDraft
           problem={problem}
@@ -732,7 +732,7 @@ export default function DraftRoom() {
     // <Header/> on top, but this view's header now has different content
     // (round/pick/clock/autopick, no login/signup), so the trap became a
     // real bug: Homepage's header was painting over this one entirely.
-    <div className="fixed inset-0 z-[60] flex flex-col bg-[#0B0E14] text-white">
+    <div className="fixed inset-0 z-[60] flex flex-col bg-slate text-white">
       {/* DraftCockpitHeader is the fixed top bar for this view now — it
           carries the brand/ticker Header.jsx used to own here, consolidated
           with the round/pick/clock/autopick/tab-nav controls into one
@@ -929,7 +929,7 @@ export default function DraftRoom() {
               PlayerHub's fixed sheet too, which is the whole mobile UI. */}
           <div
             className={
-              'flex min-h-0 flex-none border-slate-800 ' +
+              'flex min-h-0 flex-none border-slate-rule ' +
               (isolate ? 'lg:hidden' : 'lg:flex-1 lg:border-t')
             }
           >
@@ -1075,7 +1075,7 @@ export default function DraftRoom() {
         <button
           type="button"
           onClick={() => { setInsightsSlot(mySlot); setShowInsights(true) }}
-          className="fixed left-1/2 top-16 z-[65] -translate-x-1/2 rounded-full border border-teal-400/40 bg-slate-950/90 px-4 py-1.5 text-xs font-semibold text-teal-300 shadow-[0_0_15px_rgba(0,229,255,0.2)] backdrop-blur transition-colors duration-200 hover:border-teal-400 hover:bg-teal-400/10"
+          className="fixed left-1/2 top-16 z-[65] -translate-x-1/2 rounded-full border border-teal-400/40 bg-slate-sunk/90 px-4 py-1.5 text-xs font-semibold text-teal-300 shadow-[0_0_15px_rgba(0,229,255,0.2)] backdrop-blur transition-colors duration-200 hover:border-teal-400 hover:bg-teal-400/10"
         >
           Draft Insights
         </button>

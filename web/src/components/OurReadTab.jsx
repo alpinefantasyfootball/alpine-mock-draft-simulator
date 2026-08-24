@@ -18,7 +18,7 @@
 function Meter({ name, score, label, why, tone }) {
   const filled = Math.round(score / 20)
   return (
-    <div className="rounded-lg border border-slate-800 bg-slate-950/50 p-2.5">
+    <div className="rounded-lg border border-slate-rule bg-slate-sunk/50 p-2.5">
       <div className="flex items-baseline justify-between gap-2">
         <span className="text-xs font-semibold text-white/80">{name}</span>
         <span className={'text-[11px] font-semibold ' + tone}>{label}</span>
@@ -35,7 +35,7 @@ function Meter({ name, score, label, why, tone }) {
         ))}
       </div>
       {why.length > 0 && (
-        <p className="mt-1.5 text-[11px] leading-relaxed text-white/40">{why.join(' · ')}</p>
+        <p className="mt-1.5 text-[11px] leading-relaxed text-ink-muted">{why.join(' · ')}</p>
       )}
     </div>
   )
@@ -48,7 +48,7 @@ export default function OurReadTab({ engine, player }) {
   // than scored as a zero. Same rule as a missing season being blank.
   if (r.score === null && !r.unranked) {
     return (
-      <p className="px-1 py-6 text-center text-sm leading-relaxed text-white/40">
+      <p className="px-1 py-6 text-center text-sm leading-relaxed text-ink-muted">
         No projection for this player yet, so there is nothing to score him on. The nightly data
         refresh fills this in for anyone Sleeper carries.
       </p>
@@ -65,28 +65,28 @@ export default function OurReadTab({ engine, player }) {
   const belowReplacement = r.gap !== null && r.gap < 0 && Math.abs(r.gap) > 20
   const aboveReplacement = r.gap !== null && r.gap > 0
   const scoreTone =
-    r.score === null ? 'text-white/40' : r.score >= 55 ? 'text-teal-300' : r.score >= 18 ? 'text-white/80' : 'text-white/50'
+    r.score === null ? 'text-ink-muted' : r.score >= 55 ? 'text-teal-300' : r.score >= 18 ? 'text-white/80' : 'text-white/50'
 
   return (
     <div className="flex flex-col gap-3">
       {/* The score itself, with its own name beside it — never a bare
           number. "Juke score" everywhere, per the one-number-one-name
           rule; this is the same figure the queue's Value column shows. */}
-      <div className="rounded-lg border border-slate-800 bg-slate-950/50 p-3">
+      <div className="rounded-lg border border-slate-rule bg-slate-sunk/50 p-3">
         <div className="flex items-baseline justify-between gap-2">
           <span className="text-xs font-semibold uppercase tracking-wide text-white/50">Juke score</span>
           {r.unranked ? (
-            <span className="text-sm font-bold text-white/40">Not rated</span>
+            <span className="text-sm font-bold text-ink-muted">Not rated</span>
           ) : (
             <span className="flex items-baseline gap-2">
               <span className={'font-display text-2xl font-bold ' + scoreTone}>{r.score}</span>
-              <span className="text-[11px] font-semibold text-white/40">{r.label}</span>
+              <span className="text-[11px] font-semibold text-ink-muted">{r.label}</span>
             </span>
           )}
         </div>
 
         {r.unranked ? (
-          <p className="mt-2 text-[11px] leading-relaxed text-white/40">{r.unrankedNote}</p>
+          <p className="mt-2 text-[11px] leading-relaxed text-ink-muted">{r.unrankedNote}</p>
         ) : (
           <>
             {/* The clamped-zero explanation. This is the line that stops a
@@ -126,7 +126,7 @@ export default function OurReadTab({ engine, player }) {
                 <span className="font-semibold">{r.replacementRank}</span> on this board.
               </p>
             )}
-            <p className="mt-1.5 text-[11px] leading-relaxed text-white/45">{r.reason}</p>
+            <p className="mt-1.5 text-[11px] leading-relaxed text-ink-muted">{r.reason}</p>
           </>
         )}
       </div>
@@ -154,12 +154,12 @@ export default function OurReadTab({ engine, player }) {
           this card that can be checked rather than believed. A missing
           season is blank, never zero. */}
       {r.priorScore !== null && r.priorSeason && (
-        <div className="rounded-lg border border-slate-800 bg-slate-950/50 p-2.5">
+        <div className="rounded-lg border border-slate-rule bg-slate-sunk/50 p-2.5">
           <p className="text-[11px] leading-relaxed text-white/50">
             Scored <span className="font-semibold text-white/80">{r.priorScore}</span> on {r.priorSeason}{' '}
             actuals
             {r.priorGames !== null && (
-              <span className="text-white/35">
+              <span className="text-ink-muted">
                 {' '}
                 ({r.priorGames} game{r.priorGames === 1 ? '' : 's'})
               </span>
@@ -170,7 +170,7 @@ export default function OurReadTab({ engine, player }) {
       )}
 
       {!r.unranked && (
-        <p className="text-[10px] leading-relaxed text-white/25">
+        <p className="text-[10px] leading-relaxed text-ink-muted">
           The Juke score is projected points above the last startable player at this position in a{' '}
           {r.teams}-team league, as a share of the best such figure on the board. It is a ranking against
           the pool, not a rating of the player — somebody always scores 100, and most of the {r.boardSize}{' '}

@@ -86,7 +86,7 @@ export default function DraftMenuOverlay({
     <div className="fixed inset-0 z-[70]" onClick={onClose}>
       <div
         onClick={(e) => e.stopPropagation()}
-        className="absolute right-4 top-[68px] w-[292px] rounded-xl border border-white/10 bg-[#151b24] p-2 shadow-[0_24px_60px_-12px_rgba(0,0,0,0.85)] sm:right-6"
+        className="absolute right-4 top-[68px] w-[292px] rounded-xl border border-white/10 bg-slate-panel p-2 shadow-[0_24px_60px_-12px_rgba(0,0,0,0.85)] sm:right-6"
       >
         <Item label="Draft settings" onClick={act(onOpenSettings)} />
         {inRoom && (

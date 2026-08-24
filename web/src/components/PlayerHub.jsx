@@ -122,7 +122,7 @@ export default function PlayerHub({
          pixels, a little over two rows out of 210. The board behind the
          sheet goes from 108px showing to 42px, and that is the right trade
          on the one tab whose entire job is a long list. */
-      className="fixed inset-x-0 bottom-[calc(58px+env(safe-area-inset-bottom))] z-40 flex max-h-[85vh] flex-col overflow-hidden rounded-t-xl border-t border-slate-800 bg-slate-900/95 shadow-2xl backdrop-blur-md lg:static lg:bottom-auto lg:z-auto lg:h-full lg:max-h-none lg:flex-1 lg:rounded-none lg:border-t-0 lg:bg-transparent lg:shadow-none"
+      className="fixed inset-x-0 bottom-[calc(58px+env(safe-area-inset-bottom))] z-40 flex max-h-[85vh] flex-col overflow-hidden rounded-t-xl border-t border-slate-rule bg-slate-panel/95 shadow-2xl backdrop-blur-md lg:static lg:bottom-auto lg:z-auto lg:h-full lg:max-h-none lg:flex-1 lg:rounded-none lg:border-t-0 lg:bg-transparent lg:shadow-none"
     >
       <motion.div
         drag="y"
@@ -134,7 +134,7 @@ export default function PlayerHub({
         }}
         className="flex shrink-0 cursor-grab touch-none justify-center pt-1.5 active:cursor-grabbing lg:hidden"
       >
-        <span className="h-1 w-9 rounded-full bg-slate-700" />
+        <span className="h-1 w-9 rounded-full bg-slate-rule" />
       </motion.div>
 
       <button
@@ -142,10 +142,10 @@ export default function PlayerHub({
         onClick={() => setOpen((o) => !o)}
         className="flex w-full shrink-0 items-center justify-between px-4 py-1 text-left lg:hidden"
       >
-        <span className="text-[10px] font-semibold uppercase tracking-wide text-white/40">
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
           {TABS.find((t) => t.key === tab)?.label}
         </span>
-        {open ? <ChevronDown className="h-3.5 w-3.5 text-white/40" /> : <ChevronUp className="h-3.5 w-3.5 text-white/40" />}
+        {open ? <ChevronDown className="h-3.5 w-3.5 text-ink-muted" /> : <ChevronUp className="h-3.5 w-3.5 text-ink-muted" />}
       </button>
 
       {/* A filled pill for the active tab, not a teal underline.
@@ -168,7 +168,7 @@ export default function PlayerHub({
           44px floor for anything tappable, and five of them sit in a row on a
           phone. The 12px comes out of the sheet's content, which is the right
           side of that trade for a control you hit with a thumb. */}
-      <div className="flex shrink-0 gap-1 border-b border-slate-800 px-2 py-1.5 lg:hidden">
+      <div className="flex shrink-0 gap-1 border-b border-slate-rule px-2 py-1.5 lg:hidden">
         {TABS.map((t) => (
           <button
             key={t.key}
@@ -176,7 +176,7 @@ export default function PlayerHub({
             onClick={() => { setTab(t.key); setOpen(true) }}
             className={
               'h-11 flex-1 rounded-full px-2 text-center text-xs font-semibold transition-colors duration-150 ' +
-              (tab === t.key ? 'bg-teal-400/[0.14] text-teal-300' : 'text-white/40 hover:text-white/60')
+              (tab === t.key ? 'bg-teal-400/[0.14] text-teal-300' : 'text-ink-muted hover:text-white/60')
             }
           >
             {t.label}

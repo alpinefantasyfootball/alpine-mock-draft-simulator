@@ -40,6 +40,55 @@ export default {
         // rewritten once already to end.
         mint: '#5eead4',
         skyblue: '#38bdf8',
+        // ---- The two-surface split (Claude Design, "Slate & Mint") ----
+        //
+        // Marketing surfaces stay on `void`. App surfaces — lobby, draft
+        // room, cockpit, insights — move to `slate`. The reasoning is that
+        // the two are looked at differently: a marketing or scores page is
+        // scanned in bursts and has to host thirty-two team palettes, so
+        // near-black is the only ground that lets all of them look right. A
+        // draft room is sat in for an hour. Different jobs, different grounds
+        // — and the switch itself signals you have crossed out of marketing
+        // and into the tool.
+        //
+        // Nothing about the brand changes here. Every accent keeps its hex;
+        // only the ground under them moves, and the three text values below
+        // are re-derived against that new ground rather than carried over.
+        // A value tuned against #070A0D does not hold at #1E2733 — see
+        // DraftBoardGrid's empty-cell number for the case that proves it.
+        //
+        // `obsidian` and `charcoal` above are deliberately NOT deleted:
+        // RoomPanel, TendenciesStrip and LockerTable still use them, and
+        // some of those are marketing-side surfaces.
+        slate: {
+          // page / board ground
+          DEFAULT: '#1E2733',
+          // fixed header, lobby bar — a step under the page so a bar
+          // still reads as a bar once the page is no longer near-black
+          bar: '#1A222D',
+          // cards, filled board cells — a step above the page
+          panel: '#232D3A',
+          // sunken: inputs, the queue's identity column. Must stay opaque
+          // where the source says so; a sticky cell that lets the board
+          // scroll under it is not a sticky cell.
+          sunk: '#161D26',
+          // borders, and the one step of lift above `panel` — avatar
+          // placeholders and meter tracks use it as a fill for the same
+          // reason a rule uses it as an edge: it is the value that reads
+          // as "raised off the panel" without becoming a surface itself.
+          rule: '#38434F',
+        },
+        // Text on slate. These are re-derived, not the void values moved
+        // across: measured 13.1:1, 6.6:1 and 4.9:1 against #1E2733. The
+        // last is the floor for 11px and up and there is nothing under it
+        // — anything dimmer than `muted` on this ground fails AA, which
+        // is why `text-white/40` and `text-white/30` had to go rather than
+        // be re-tuned.
+        ink: {
+          DEFAULT: '#EDF1F5',
+          soft: '#A0AEBC',
+          muted: '#8A9BAA',
+        },
         // This page's background. Close to but deliberately not `obsidian`
         // (#0B0E14, used everywhere else) — the handoff's own value, and
         // this project's rule once a hex is explicitly chosen is to keep it

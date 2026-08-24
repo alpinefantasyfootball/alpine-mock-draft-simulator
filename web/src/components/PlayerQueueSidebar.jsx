@@ -116,12 +116,12 @@ export default function PlayerQueueSidebar({
     // height and fell back to auto. Measured on a phone, that made this box
     // 6867px tall inside a 518px parent, which handed flex-1 below an
     // unbounded height to divide and left the list unable to scroll at all.
-    <div className="flex w-full flex-col overflow-hidden bg-slate-900/40">
+    <div className="flex w-full flex-col overflow-hidden bg-slate-bar/40">
       {/* Tighter chrome at lg+ (p-2.5, space-y-2 rather than p-4/space-y-3):
           on the desktop panel row this header competes with the list for
           about 470px, and every pixel it gives back is another player
           visible. Below lg the sheet is 75vh and can afford the room. */}
-      <div className="shrink-0 space-y-3 border-b border-slate-800 p-4 lg:space-y-2 lg:p-2.5">
+      <div className="shrink-0 space-y-3 border-b border-slate-rule p-4 lg:space-y-2 lg:p-2.5">
         {/* Replaces the old plain "Juke AI Draft Assistant" label — this
             is that framing with an actual real recommendation behind it
             now, not just a caption over the search box. Two renders, one
@@ -152,13 +152,13 @@ export default function PlayerQueueSidebar({
           />
         </div>
         <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/30" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" />
           <input
             type="text"
             value={search}
             onChange={(e) => onSearch(e.target.value)}
             placeholder="Search players..."
-            className="w-full rounded-lg border border-slate-800 bg-slate-950/60 py-2 pl-9 pr-3 text-sm text-white placeholder:text-white/30 focus:border-teal-400/60 focus:outline-none"
+            className="w-full rounded-lg border border-slate-rule bg-slate-sunk/60 py-2 pl-9 pr-3 text-sm text-white placeholder:text-white/30 focus:border-teal-400/60 focus:outline-none"
           />
         </div>
 
@@ -169,7 +169,7 @@ export default function PlayerQueueSidebar({
             say on its own. One label, not a rebuild: moving the counts out
             to the roster pane would drop the "which position still needs
             help" read this row exists to give at a glance while filtering. */}
-        <p className="text-[9px] font-semibold uppercase tracking-wide text-white/25">Filter by position · your roster need alongside</p>
+        <p className="text-[9px] font-semibold uppercase tracking-wide text-ink-muted">Filter by position · your roster need alongside</p>
         <div className="flex flex-wrap gap-1.5">
           {FILTERS.map((pos) => (
             <button
@@ -200,7 +200,7 @@ export default function PlayerQueueSidebar({
                     (posFilter === pos
                       ? 'text-obsidian/60'
                       : counts[pos].short ? 'text-amber-300/80'
-                        : counts[pos].full ? 'text-white/30' : 'text-white/40')
+                        : counts[pos].full ? 'text-ink-muted' : 'text-ink-muted')
                   }
                 >
                   {counts[pos].text}
@@ -269,7 +269,7 @@ export default function PlayerQueueSidebar({
             scroll sideways to reach. Same tap-to-sort, tap-again-to-flip
             as the headers. */}
         <div className="flex flex-wrap items-center gap-1.5 lg:hidden">
-          <span className="text-[10px] font-semibold uppercase tracking-wide text-white/30">Sort</span>
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Sort</span>
           {MOBILE_SORTS.map((col) => {
             const active = sortBy === col.key
             return (
@@ -297,7 +297,7 @@ export default function PlayerQueueSidebar({
             exact line still reading "disabled until it's your turn" on a
             finished draft, where there is no turn left to wait for. */}
         {!myTurn && (
-          <p className="text-[10px] leading-relaxed text-white/30">
+          <p className="text-[10px] leading-relaxed text-ink-muted">
             {draftOver ? 'Draft complete.' : "Draft is disabled until it's your turn."}
           </p>
         )}
@@ -334,15 +334,15 @@ export default function PlayerQueueSidebar({
           {/* Group header — the spanning row saying which family of stats
               the columns beneath belong to, so "YDS" three times over is
               never ambiguous. */}
-          <div className="sticky top-0 z-30 flex border-b border-slate-800 bg-slate-900">
-            <div className={STICKY_CELL + ' bg-slate-900'} style={{ width: NAME_W_VAR }} />
+          <div className="sticky top-0 z-30 flex border-b border-slate-rule bg-slate-panel">
+            <div className={STICKY_CELL + ' bg-slate-panel'} style={{ width: NAME_W_VAR }} />
             {visibleGroups.map((g) => {
               const w = g.keys.reduce((sum, k) => sum + COL_BY_KEY[k].width, 0)
               return (
                 <div
                   key={g.label || 'core'}
                   style={{ width: w }}
-                  className="shrink-0 border-l border-slate-800/60 px-1 pt-1 text-center text-[9px] font-semibold uppercase tracking-wide text-white/25"
+                  className="shrink-0 border-l border-slate-rule/60 px-1 pt-1 text-center text-[9px] font-semibold uppercase tracking-wide text-ink-muted"
                 >
                   {g.label}
                 </div>
@@ -353,9 +353,9 @@ export default function PlayerQueueSidebar({
 
           {/* Column header — sortable where the sort reader can order by
               it. Sticky under the group row, hence the offset top. */}
-          <div className="sticky top-[18px] z-30 flex border-b border-slate-800 bg-slate-900">
+          <div className="sticky top-[18px] z-30 flex border-b border-slate-rule bg-slate-panel">
             <div
-              className={STICKY_CELL + ' bg-slate-900 text-[10px] font-semibold uppercase tracking-wide text-white/30'}
+              className={STICKY_CELL + ' bg-slate-panel text-[10px] font-semibold uppercase tracking-wide text-ink-muted'}
               style={{ width: NAME_W_VAR }}
             >
               Player
@@ -377,8 +377,8 @@ export default function PlayerQueueSidebar({
                   onClick={() => onSort(col.key)}
                   style={{ width: col.width }}
                   className={
-                    'flex shrink-0 items-center justify-end gap-0.5 border-l border-slate-800/60 px-1.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide transition-colors duration-150 ' +
-                    (active ? 'text-teal-300' : 'text-white/30 hover:text-white/60')
+                    'flex shrink-0 items-center justify-end gap-0.5 border-l border-slate-rule/60 px-1.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide transition-colors duration-150 ' +
+                    (active ? 'text-teal-300' : 'text-ink-muted hover:text-white/60')
                   }
                 >
                   {content}
@@ -387,13 +387,13 @@ export default function PlayerQueueSidebar({
                 <div
                   key={col.key}
                   style={{ width: col.width }}
-                  className="flex shrink-0 items-center justify-end border-l border-slate-800/60 px-1.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-white/30"
+                  className="flex shrink-0 items-center justify-end border-l border-slate-rule/60 px-1.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-ink-muted"
                 >
                   {content}
                 </div>
               )
             })}
-            <div style={{ width: ACTION_W }} className="shrink-0 border-l border-slate-800/60" />
+            <div style={{ width: ACTION_W }} className="shrink-0 border-l border-slate-rule/60" />
           </div>
 
           <AnimatePresence initial={false}>
@@ -419,13 +419,13 @@ export default function PlayerQueueSidebar({
                      layoutId still flies the card into its cell. */
                   transition={{ type: 'spring', stiffness: 380, damping: 32 }}
                   onClick={() => onSelectPlayer(player)}
-                  className="flex cursor-pointer border-b border-slate-800/50 transition-colors duration-150 hover:bg-white/[0.03]"
+                  className="flex cursor-pointer border-b border-slate-rule/50 transition-colors duration-150 hover:bg-white/[0.03]"
                 >
                   {/* Sticky identity cell — who the row is about stays put
                       while the numbers scroll. Opaque on purpose: a
                       transparent sticky cell lets the scrolling cells
                       slide visibly beneath it. */}
-                  <div className={STICKY_CELL + ' gap-2 bg-slate-950'} style={{ width: NAME_W_VAR }}>
+                  <div className={STICKY_CELL + ' gap-2 bg-slate-sunk'} style={{ width: NAME_W_VAR }}>
                     {player.drafted ? (
                       <Star className="h-4 w-4 shrink-0 text-white/10" />
                     ) : (
@@ -433,7 +433,7 @@ export default function PlayerQueueSidebar({
                         type="button"
                         onClick={(e) => { e.stopPropagation(); onToggleQueue(player.name) }}
                         title={queued ? 'Remove from your queue' : 'Add to your queue'}
-                        className="shrink-0 text-white/25 transition-colors duration-150 hover:text-amber-300"
+                        className="shrink-0 text-ink-muted transition-colors duration-150 hover:text-amber-300"
                       >
                         <Star className={'h-4 w-4 ' + (queued ? 'fill-amber-300 text-amber-300' : '')} />
                       </button>
@@ -447,7 +447,7 @@ export default function PlayerQueueSidebar({
                           "grainy" without being a resolution problem at all.
                           40px at dpr 2 asks for 80 device pixels, still a
                           third of the smallest source. */}
-                      <div className="relative flex h-7 w-7 lg:h-10 lg:w-10 items-center justify-center overflow-hidden rounded-full bg-slate-800 text-[8px] lg:text-[10px] font-bold text-white/40">
+                      <div className="relative flex h-7 w-7 lg:h-10 lg:w-10 items-center justify-center overflow-hidden rounded-full bg-slate-sunk text-[8px] lg:text-[10px] font-bold text-ink-soft">
                         {initialsFor(player)}
                         {photo && (
                           <img
@@ -461,7 +461,7 @@ export default function PlayerQueueSidebar({
                       </div>
                       <span
                         className={
-                          'absolute -bottom-1 -right-1 rounded px-1 py-px text-[7px] font-bold leading-tight ring-2 ring-slate-950 ' +
+                          'absolute -bottom-1 -right-1 rounded px-1 py-px text-[7px] font-bold leading-tight ring-2 ring-slate-sunk ' +
                           (POS_BADGE[player.pos] || 'bg-white/10 text-white/50')
                         }
                       >
@@ -471,7 +471,7 @@ export default function PlayerQueueSidebar({
 
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-xs font-medium text-white/90">{player.name}</p>
-                      <p className="truncate text-[10px] text-white/40">{player.team}</p>
+                      <p className="truncate text-[10px] text-ink-muted">{player.team}</p>
                     </div>
                   </div>
 
@@ -482,7 +482,7 @@ export default function PlayerQueueSidebar({
                         key={col.key}
                         style={{ width: col.width }}
                         className={
-                          'flex shrink-0 items-center justify-end border-l border-slate-800/40 px-1.5 py-2 text-xs tabular-nums ' +
+                          'flex shrink-0 items-center justify-end border-l border-slate-rule/40 px-1.5 py-2 text-xs tabular-nums ' +
                           (v == null
                             ? 'text-white/15'
                             : col.tone === 'teal'
@@ -503,10 +503,10 @@ export default function PlayerQueueSidebar({
                       is left for the stats this change exists to show. */}
                   <div
                     style={{ width: ACTION_W }}
-                    className="flex shrink-0 items-center justify-center border-l border-slate-800/40 px-1.5"
+                    className="flex shrink-0 items-center justify-center border-l border-slate-rule/40 px-1.5"
                   >
                     {draftedBy ? (
-                      <span className="truncate text-[9px] font-semibold uppercase tracking-wide text-white/30">
+                      <span className="truncate text-[9px] font-semibold uppercase tracking-wide text-ink-muted">
                         {draftedBy}
                       </span>
                     ) : (
@@ -532,7 +532,7 @@ export default function PlayerQueueSidebar({
           </AnimatePresence>
 
           {players.length === 0 && (
-            <p className="mt-8 text-center text-sm text-white/30">No players match this search.</p>
+            <p className="mt-8 text-center text-sm text-ink-muted">No players match this search.</p>
           )}
         </div>
       </div>

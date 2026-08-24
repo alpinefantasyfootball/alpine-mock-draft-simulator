@@ -67,7 +67,7 @@ export default function PlayerProfileDrawer({ player, onClose, photoFor, initial
           animate={{ x: 0 }}
           exit={{ x: '100%' }}
           transition={{ type: 'spring', stiffness: 340, damping: 34 }}
-          /* Opaque, not frosted. This was bg-[#0B0E14]/95 with a
+          /* Opaque, not frosted. This was bg-slate/95 with a
              backdrop-blur, and what sits behind it is the stat table - a
              dense grid of small, high-contrast type. Five per cent of that
              is legible, and it landed across the Juke score: "PROJECTED",
@@ -87,11 +87,11 @@ export default function PlayerProfileDrawer({ player, onClose, photoFor, initial
              cover, and the header band painted straight across every tab
              of the open sheet. This has to clear every z-30 in this panel,
              not just that one, since it's meant to be a full overlay. */
-          className="absolute inset-0 z-40 flex flex-col border-l border-slate-800 bg-[#0B0E14]"
+          className="absolute inset-0 z-40 flex flex-col border-l border-slate-rule bg-slate"
         >
-          <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-800 p-4">
+          <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-rule p-4">
             <div className="flex min-w-0 items-center gap-3">
-              <div className="relative flex h-11 w-11 lg:h-16 lg:w-16 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-800 text-[10px] lg:text-sm font-bold text-white/40">
+              <div className="relative flex h-11 w-11 lg:h-16 lg:w-16 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-sunk text-[10px] lg:text-sm font-bold text-ink-soft">
                 {initialsFor(player)}
                 {photoFor(player) && (
                   <img
@@ -105,7 +105,7 @@ export default function PlayerProfileDrawer({ player, onClose, photoFor, initial
               </div>
               <div className="min-w-0">
                 <p className="truncate font-display text-base font-bold text-white">{player.name}</p>
-                <p className="flex items-center gap-1.5 text-xs text-white/40">
+                <p className="flex items-center gap-1.5 text-xs text-ink-muted">
                   <span className={'rounded px-1.5 py-0.5 text-[10px] font-bold ' + (POS_BADGE[player.pos] || 'bg-white/10 text-white/50')}>
                     {player.pos}
                   </span>
@@ -128,7 +128,7 @@ export default function PlayerProfileDrawer({ player, onClose, photoFor, initial
                     'flex h-8 w-8 items-center justify-center rounded-full border transition-colors duration-150 ' +
                     (engine.watchlisted(player)
                       ? 'border-amber-400/40 bg-amber-400/10 text-amber-300'
-                      : 'border-slate-800 bg-slate-950/60 text-white/60 hover:border-slate-700 hover:text-white')
+                      : 'border-slate-rule bg-slate-sunk/60 text-white/60 hover:border-slate-rule hover:text-white')
                   }
                 >
                   <Bookmark className={'h-4 w-4 ' + (engine.watchlisted(player) ? 'fill-amber-300' : '')} />
@@ -139,7 +139,7 @@ export default function PlayerProfileDrawer({ player, onClose, photoFor, initial
                 onClick={onClose}
                 title="Close"
                 aria-label="Close player profile"
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-800 bg-slate-950/60 text-white/60 transition-colors duration-150 hover:border-slate-700 hover:text-white"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-rule bg-slate-sunk/60 text-white/60 transition-colors duration-150 hover:border-slate-rule hover:text-white"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -151,7 +151,7 @@ export default function PlayerProfileDrawer({ player, onClose, photoFor, initial
               News" mid-word. whitespace-nowrap + shrink-0 keeps each label
               whole and lets the strip pan, the same treatment the draft
               room's own tab row already uses at narrow widths. */}
-          <div className="flex shrink-0 overflow-x-auto border-b border-slate-800">
+          <div className="flex shrink-0 overflow-x-auto border-b border-slate-rule">
             {TABS.map((t) => (
               <button
                 key={t}
@@ -159,7 +159,7 @@ export default function PlayerProfileDrawer({ player, onClose, photoFor, initial
                 onClick={() => setTab(t)}
                 className={
                   'shrink-0 whitespace-nowrap border-b-2 px-3 py-2.5 text-center text-[11px] font-semibold transition-colors duration-150 ' +
-                  (tab === t ? 'border-teal-400 text-teal-300' : 'border-transparent text-white/40 hover:text-white/60')
+                  (tab === t ? 'border-teal-400 text-teal-300' : 'border-transparent text-ink-muted hover:text-white/60')
                 }
               >
                 {t}

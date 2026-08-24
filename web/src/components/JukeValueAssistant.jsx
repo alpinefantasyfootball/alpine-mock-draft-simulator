@@ -34,9 +34,9 @@ export default function JukeValueAssistant({ player, vorp, tierLeft, onDraft, my
      it is still spelled out in full on the player's own card. */
   if (compact) {
     return (
-      <div className="mb-2 flex items-center gap-2 rounded-lg border border-teal-500/40 bg-slate-900/90 px-2.5 py-2">
+      <div className="mb-2 flex items-center gap-2 rounded-lg border border-teal-500/40 bg-slate-panel/90 px-2.5 py-2">
         <Sparkles className="h-3 w-3 shrink-0 text-teal-300" />
-        <div className="relative flex h-7 w-7 lg:h-10 lg:w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-800 text-[8px] lg:text-[10px] font-bold text-white/40">
+        <div className="relative flex h-7 w-7 lg:h-10 lg:w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-sunk text-[8px] lg:text-[10px] font-bold text-ink-soft">
           {initialsFor(player)}
           {photo && (
             <img
@@ -50,7 +50,7 @@ export default function JukeValueAssistant({ player, vorp, tierLeft, onDraft, my
         </div>
         <div className="min-w-0 flex-1">
           <p className="truncate text-xs font-semibold text-white">{player.name}</p>
-          <p className="truncate text-[10px] text-white/40">
+          <p className="truncate text-[10px] text-ink-muted">
             {player.pos} · {player.team}
             {tierLeft != null && tierLeft <= 3 && (
               <span className="text-amber-300"> · {tierLeft} left in tier {player.tier}</span>
@@ -66,7 +66,7 @@ export default function JukeValueAssistant({ player, vorp, tierLeft, onDraft, my
               {vorp >= 0 ? '+' : ''}
               {vorp.toFixed(0)}
             </span>
-            <span className="text-[7px] font-semibold uppercase tracking-wide text-white/30">VORP</span>
+            <span className="text-[7px] font-semibold uppercase tracking-wide text-ink-muted">VORP</span>
           </div>
         )}
         <button
@@ -88,15 +88,15 @@ export default function JukeValueAssistant({ player, vorp, tierLeft, onDraft, my
   }
 
   return (
-    <div className="mb-3 rounded-xl border border-teal-500/40 bg-slate-900/90 p-4 shadow-[0_0_20px_rgba(0,229,255,0.1)]">
+    <div className="mb-3 rounded-xl border border-teal-500/40 bg-slate-panel/90 p-4 shadow-[0_0_20px_rgba(0,229,255,0.1)]">
       <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-teal-300">
         <Sparkles className="h-3 w-3" />
         Juke Value Assistant
       </p>
 
-      <p className="mt-3 text-[9px] font-semibold uppercase tracking-wide text-white/40">Recommended pick</p>
+      <p className="mt-3 text-[9px] font-semibold uppercase tracking-wide text-ink-muted">Recommended pick</p>
       <div className="mt-1.5 flex items-center gap-2.5">
-        <div className="relative flex h-9 w-9 lg:h-12 lg:w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-800 text-[9px] lg:text-xs font-bold text-white/40">
+        <div className="relative flex h-9 w-9 lg:h-12 lg:w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-sunk text-[9px] lg:text-xs font-bold text-ink-soft">
           {initialsFor(player)}
           {photo && (
             <img
@@ -115,7 +115,7 @@ export default function JukeValueAssistant({ player, vorp, tierLeft, onDraft, my
             </span>
             <p className="truncate text-sm font-semibold text-white">{player.name}</p>
           </div>
-          <p className="truncate text-[11px] text-white/40">{player.team}</p>
+          <p className="truncate text-[11px] text-ink-muted">{player.team}</p>
         </div>
         {vorp != null && (
           <div className="shrink-0 text-right leading-none">
@@ -123,7 +123,7 @@ export default function JukeValueAssistant({ player, vorp, tierLeft, onDraft, my
               {vorp >= 0 ? '+' : ''}
               {vorp.toFixed(1)}
             </span>
-            <span className="text-[8px] font-semibold uppercase tracking-wide text-white/30">VORP</span>
+            <span className="text-[8px] font-semibold uppercase tracking-wide text-ink-muted">VORP</span>
           </div>
         )}
       </div>
