@@ -3767,7 +3767,28 @@ function analyseDraft() {
    real state.picks and the real players' .drafted flags to the simulated
    picture, calls the real analyseDraft(), reads the result into plain
    numbers, and restores both in a `finally` — synchronously, no `await` and
-   no timer in between, so nothing else ever observes the swapped state. */
+   no timer in between.
+
+   "No timer in between" turned out not to be enough on its own. This still
+   ran interleaved with a real, concurrent draft: DraftRoom.jsx mounts into
+   its own #draftroom-root, entirely separate from Homepage's #root, and
+   neither one ever unmounts the other on a route change — Homepage stays
+   mounted (just hidden) under #/draft-room, timers and event listeners
+   included. TakeAPick.jsx's own read() listens for "juke:header", which
+   headerInfo() dispatches on every tick and every pick of a real draft, so
+   a live draft was calling into this function once a second on the CPU
+   clock alone — and the restore step forced every touched player back to
+   `false` unconditionally, which is only correct if none of them could
+   possibly be drafted for a *different*, real reason. Once a real draft was
+   running underneath, that assumption broke: `board[].drafted` is one
+   shared flag, not one per caller, and this function was resetting the
+   real board's own answer moments after a genuine pick had set it — read
+   next by cpuChoice(), which offered the same "available" player forever,
+   rejected every time by name, silently, because cpuStep() never checked
+   makePick()'s return. Each gradeAndRosterAt() call now saves what every
+   touched player's own `.drafted` actually was before it touched him, and
+   restores exactly that — not a blanket `false` — which is what "safe here
+   and nowhere else" was always supposed to mean. */
 
 // The exact scoring shotPicks() uses for its own simulated draft, factored
 // out so both can call it rather than one drifting from the other.
@@ -3843,6 +3864,12 @@ function generateThirdRoundScenario(targetSlot) {
     const slice = picks.slice(0, cutIndex);
     const savedPicks = state.picks;
     const touched = slice.map(function (p) { return p.player; });
+    // Each player's own prior value, not an assumed `false` — a real,
+    // concurrent draft (see the comment above this function) can have
+    // already drafted one of these players for a genuine reason before
+    // this call ever touched him, and forcing him back to undrafted would
+    // erase that real pick out from under it.
+    const priorDrafted = touched.map(function (p) { return p.drafted; });
     touched.forEach(function (p) { p.drafted = true; });
     state.picks = slice;
     try {
@@ -3864,7 +3891,7 @@ function generateThirdRoundScenario(targetSlot) {
       };
     } finally {
       state.picks = savedPicks;
-      touched.forEach(function (p) { p.drafted = false; });
+      touched.forEach(function (p, i) { p.drafted = priorDrafted[i]; });
     }
   }
 
