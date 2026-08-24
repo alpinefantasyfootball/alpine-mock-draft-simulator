@@ -19,10 +19,23 @@
    it — because no single colour survives what it lands on there: six position
    solids that are fixed across themes, and an empty cell that is near-black
    in dark and near-white in light, where gold falls to 1.26. This board has
-   no light theme. Its ground is hardcoded #0B0E14 and its position cells are
-   translucent over it, so every surface is dark and one colour is enough;
-   measured, gold runs 11.25:1 at worst against a 3:1 bar while the keyline
-   ran 1.01 to 1.12 and was doing nothing.
+   no light theme, and its position cells are translucent over its own ground,
+   so every surface is dark and one colour is enough — the keyline ran 1.01 to
+   1.12 there and was doing nothing.
+
+   That ground is slate #1E2733 now rather than the #0B0E14 this comment used
+   to name, and the conclusion survived the move rather than being assumed to.
+   Re-measured: the ground's luminance goes 0.0044 to 0.0197, still an order
+   of magnitude inside the < 0.05 the precondition below asks for, and gold's
+   worst case across the surfaces it lands on goes 9.66:1 to 9.19:1 against a
+   3:1 bar. Both moved and neither mattered, which is the only reason one
+   colour is still enough.
+
+   Note the test does not hardcode either number — it reads the computed
+   ground and composites what is actually over it. That is why the ground
+   change surfaced here as six selector failures and not as a wrong answer:
+   what broke was `border-slate-800/70`, the class these tests use to find a
+   real board cell, which is now `border-slate-rule/70`.
 
    So the assertion here is stronger than the legacy one — every surface, not
    one half of a pair — and it is guarded by the precondition that makes it
@@ -110,7 +123,7 @@ const CONTRAST = `
      first and every assertion in this file came back 0, which reads as the
      feature being missing rather than the selector being wrong. */
   function cells() {
-    return [...grid().querySelectorAll('[class*="border-slate-800/70"]')];
+    return [...grid().querySelectorAll('[class*="border-slate-rule/70"]')];
   }
 `;
 

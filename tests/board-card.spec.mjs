@@ -194,15 +194,15 @@ test.describe("the draft board card", () => {
        visible team name beside it already says the same thing, so the
        initial is decorative) and — for a club like "Bone-Thugs-N-Montgomery"
        — also exactly one character. An unscoped query counts that as a
-       141st arrow pointing nowhere. border-slate-800/70 is a real board
+       141st arrow pointing nowhere. border-slate-rule/70 is a real board
        cell's own border colour, one shade lighter than the header's plain
-       border-slate-800, so it reaches only the fourteen rounds and never the
+       border-slate-rule, so it reaches only the fourteen rounds and never the
        row above them. */
     const r = await page.evaluate(() => {
       const root = document.getElementById("draftroom-root");
       const grid = [...root.querySelectorAll("div")].find(
         (d) => getComputedStyle(d).display === "grid" && d.style.getPropertyValue("--cols"));
-      const arrows = [...grid.querySelectorAll('[class*="border-slate-800/70"] span[aria-hidden="true"]')]
+      const arrows = [...grid.querySelectorAll('[class*="border-slate-rule/70"] span[aria-hidden="true"]')]
         .filter((s) => s.textContent.trim().length === 1);
       const dirOf = (a) => {
         const t = getComputedStyle(a).transform;
@@ -280,14 +280,14 @@ test.describe("the draft board card", () => {
        row plus fourteen wrappers, none of them a cell — the corner box is
        the one child that does carry "border-b" in its own class, so the
        naive query used to measure exactly one thing, and the wrong one.
-       border-slate-800/70 is the real cells' own border colour and reaches
+       border-slate-rule/70 is the real cells' own border colour and reaches
        them directly, the same selector board-marks.spec.mjs already uses to
        find the same grandchildren. */
     const r = await page.evaluate(() => {
       const root = document.getElementById("draftroom-root");
       const grid = [...root.querySelectorAll("div")].find(
         (d) => getComputedStyle(d).display === "grid" && d.style.getPropertyValue("--cols"));
-      const cells = [...grid.querySelectorAll('[class*="border-slate-800/70"]')];
+      const cells = [...grid.querySelectorAll('[class*="border-slate-rule/70"]')];
       const h = (el) => Math.round(el.getBoundingClientRect().height);
       const filled = cells.filter((c) => c.querySelector("p.truncate")).map(h);
       const empty = cells.filter((c) => !c.querySelector("p.truncate") && h(c) > 10).map(h);
