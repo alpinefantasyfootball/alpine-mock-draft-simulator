@@ -150,8 +150,8 @@ export default function DraftCockpitHeader({
               'flex items-center gap-3.5 rounded-full px-3.5 py-1.5 transition-colors duration-300 ' +
               (myTurn
                 ? urgent
-                  ? 'animate-pulse-glow bg-rose-500/10'
-                  : 'animate-pulse-glow bg-teal-500/10'
+                  ? 'bg-rose-500/20 shadow-[inset_0_0_0_1.5px_rgba(251,113,133,0.55)]'
+                  : 'bg-teal-500/20 shadow-[inset_0_0_0_1.5px_rgba(0,229,255,0.55)]'
                 : 'bg-white/[0.045]')
             }
           >

@@ -98,9 +98,20 @@ export default {
       boxShadow: {
         // resting glass panel: barely-there edge, no glow
         glass: '0 1px 0 0 rgb(255 255 255 / 0.04) inset',
-        // hover state: teal ring + glow outside, soft purple wash inside
-        'card-hover':
-          '0 0 0 1.5px rgb(0 229 255 / 0.9), 0 0 32px rgb(0 229 255 / 0.4), inset 0 0 40px rgb(123 31 162 / 0.5)',
+        // hover state: a teal ring, and nothing else. It used to carry a
+        // 32px outer glow and an `inset 0 0 40px rgb(123 31 162 / 0.5)`
+        // purple wash as well. The inset was the real problem — an inset
+        // shadow paints inside the box, which is where the card's own body
+        // copy is, so it was a purple haze under text rather than ambience
+        // around a card. The ring alone says "hovered" and says it more
+        // precisely.
+        //
+        // Note this fixes a definition rather than a rendering: `shadow-
+        // card-hover` has no call site in web/src, so Tailwind's JIT has
+        // never emitted the rule and the purple wash has never been on
+        // anybody's screen. Kept and corrected rather than deleted, so the
+        // next surface that reaches for a hover shadow gets the right one.
+        'card-hover': '0 0 0 1.5px rgb(0 229 255 / 0.9)',
         // "Your seat" identity — the Draft Room Cockpit's gold ring, named
         // by role rather than added as a `gold` colour token. #FFD166 is
         // 1.4:1 as text (CLAUDE.md), so the colour-ownership rule is

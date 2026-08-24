@@ -590,7 +590,7 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
                       <motion.div
                         animate={{ opacity: [1, 0.75, 1] }}
                         transition={{ duration: 1.4, repeat: Infinity, ease: 'easeInOut' }}
-                        className="relative flex h-full box-border items-center justify-center rounded-md border-2 border-teal-400 bg-teal-500/10 text-[10px] font-bold uppercase tracking-wide text-teal-300 shadow-[0_0_15px_rgba(0,229,255,0.4)]"
+                        className="relative flex h-full box-border items-center justify-center rounded-md border-2 border-teal-400 bg-teal-500/20 text-[10px] font-bold uppercase tracking-wide text-teal-300"
                       >
                         {overall != null && (
                           <span className="absolute left-1 top-0.5 text-[10px] font-normal normal-case text-teal-300/75">{overall}</span>

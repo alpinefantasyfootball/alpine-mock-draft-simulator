@@ -1075,7 +1075,7 @@ export default function DraftRoom() {
         <button
           type="button"
           onClick={() => { setInsightsSlot(mySlot); setShowInsights(true) }}
-          className="fixed left-1/2 top-16 z-[65] -translate-x-1/2 rounded-full border border-teal-400/40 bg-slate-sunk/90 px-4 py-1.5 text-xs font-semibold text-teal-300 shadow-[0_0_15px_rgba(0,229,255,0.2)] backdrop-blur transition-colors duration-200 hover:border-teal-400 hover:bg-teal-400/10"
+          className="fixed left-1/2 top-16 z-[65] -translate-x-1/2 rounded-full border border-teal-400/40 bg-slate-sunk px-4 py-1.5 text-xs font-semibold text-teal-300 backdrop-blur transition-colors duration-200 hover:border-teal-400 hover:bg-teal-400/10"
         >
           Draft Insights
         </button>

@@ -225,7 +225,7 @@ export default function ScoringDemoCard() {
                 <span className="flex min-w-0 items-center gap-2 truncate text-[14.5px] font-semibold text-white/90">
                   {row.player.name}
                   {delta > 0 && (
-                    <ArrowUp className="h-3.5 w-3.5 shrink-0 text-teal-400 drop-shadow-[0_0_6px_rgba(0,229,255,0.8)]" />
+                    <ArrowUp className="h-3.5 w-3.5 shrink-0 text-teal-400" />
                   )}
                   {delta < 0 && <ArrowDown className="h-3.5 w-3.5 shrink-0 text-white/30" />}
                 </span>

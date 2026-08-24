@@ -368,7 +368,7 @@ export default function DraftInsightsDashboard({ engine, league, mySlot, viewSlo
           className={PANEL + ' flex flex-col items-center gap-4 p-6 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:p-8'}
         >
           <div className="flex items-center gap-5">
-            <span className="bg-gradient-to-br from-[#00E5FF] to-[#7B1FA2] bg-clip-text font-display text-7xl font-black leading-none text-transparent drop-shadow-[0_0_28px_rgba(0,229,255,0.35)] sm:text-8xl">
+            <span className="bg-gradient-to-br from-[#00E5FF] to-[#7B1FA2] bg-clip-text font-display text-7xl font-black leading-none text-transparent sm:text-8xl">
               {mine.grade}
             </span>
             <div>
