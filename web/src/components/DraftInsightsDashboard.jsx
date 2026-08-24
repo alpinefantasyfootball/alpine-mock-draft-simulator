@@ -16,91 +16,60 @@ const PANEL =
   'rounded-2xl border border-slate-rule bg-slate-panel/60 transition-all duration-300 ' +
   'hover:border-teal-400/40 hover:shadow-[0_0_18px_rgba(0,229,255,0.12)]'
 
-// The four grade components, in the order and under the names the Analysis
-// tab's own bars use — these are the radar's axes, so the chart can never
-// invent a dimension the grade does not actually measure.
-const AXES = [
-  { key: 'startersScaled', label: 'Starters' },
-  { key: 'valueScaled', label: 'Value' },
-  { key: 'buildScaled', label: 'Build' },
-  { key: 'byePenaltyScaled', label: 'Byes' },
-]
-
-/* The real radar, no charting library after all — four axes is a polygon,
-   not a dependency. Rings and axes frame it; the data shape is each
-   component's 0-100 room-scaled score pushed out along its own axis,
-   filled with the brand gradient and dotted at the vertices so a
-   collapsed axis (a genuine 0 — last in the room on that component) still
-   reads as a point at the center rather than vanishing. */
-function RadarChart({ mine }) {
-  const cx = 110
-  const cy = 100
-  const r = 68
-  // Four axes: up, right, down, left.
-  const points = AXES.map((axis, i) => {
-    const angle = (Math.PI / 2) * i - Math.PI / 2
-    const score = Math.round(mine[axis.key])
-    return {
-      ...axis,
-      x: cx + Math.cos(angle) * r,
-      y: cy + Math.sin(angle) * r,
-      dx: cx + Math.cos(angle) * r * (score / 100),
-      dy: cy + Math.sin(angle) * r * (score / 100),
-      score,
-    }
-  })
-  const dataPoints = points.map((p) => `${p.dx},${p.dy}`).join(' ')
+/* Four horizontal bars on one 0-100 scale, replacing the four-axis radar a
+   design review flagged directly: two near-equal values read very
+   differently depending on which axis they land on, and a radar has no
+   way to show the weights or prove the components sum to the composite.
+   A bar does both. Same component order and labels Analysis's own bars
+   use, same weakest-only-warning-colour rule (the other three stay a
+   neutral teal whatever their own score is), so a reader moving between
+   the two screens never has to relearn what a colour means. */
+function ComponentBars({ mine, weights }) {
+  const bars = [
+    { key: 'starters', label: 'Starter strength', pct: mine.startersScaled, weight: weights.starters },
+    { key: 'value', label: 'Draft value', pct: mine.valueScaled, weight: weights.value },
+    { key: 'build', label: 'Roster construction', pct: mine.buildScaled, weight: weights.build },
+    { key: 'byes', label: 'Bye-week safety', pct: mine.byePenaltyScaled, weight: weights.byes },
+  ]
+  const weakest = bars.reduce((a, b) => (b.pct < a.pct ? b : a))
 
   return (
-    <svg viewBox="0 0 220 200" className="mx-auto w-full max-w-[300px]" aria-hidden="true">
-      <defs>
-        <linearGradient id="radar-fill" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#00E5FF" />
-          <stop offset="100%" stopColor="#7B1FA2" />
-        </linearGradient>
-      </defs>
-      {[0.25, 0.5, 0.75, 1].map((ring) => (
-        <polygon
-          key={ring}
-          points={points.map((p) => `${cx + (p.x - cx) * ring},${cy + (p.y - cy) * ring}`).join(' ')}
-          fill="none"
-          stroke="rgba(148,163,184,0.15)"
-          strokeWidth="1"
-        />
-      ))}
-      {points.map((p) => (
-        <line key={p.key} x1={cx} y1={cy} x2={p.x} y2={p.y} stroke="rgba(0,229,255,0.25)" strokeWidth="1" />
-      ))}
-
-      {/* the data shape — scale-in from the center, matching the VORP
-          bars' own entrance */}
-      <motion.g
-        initial={{ scale: 0, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        transition={{ type: 'spring', stiffness: 120, damping: 18 }}
-        style={{ transformOrigin: `${cx}px ${cy}px` }}
-      >
-        <polygon points={dataPoints} fill="url(#radar-fill)" fillOpacity="0.3" stroke="#00E5FF" strokeWidth="1.5" strokeLinejoin="round" />
-        {points.map((p) => (
-          <circle key={p.key + '-dot'} cx={p.dx} cy={p.dy} r="3" fill="#00E5FF" />
-        ))}
-      </motion.g>
-
-      {points.map((p, i) => (
-        <text
-          key={p.key + '-label'}
-          x={cx + (p.x - cx) * 1.22}
-          y={cy + (p.y - cy) * 1.22 + (i === 0 ? -2 : i === 2 ? 8 : 4)}
-          textAnchor="middle"
-          className="fill-white/60"
-          fontSize="10"
-          fontWeight="600"
-        >
-          {p.label} · {p.score}
-        </text>
-      ))}
-      <circle cx={cx} cy={cy} r="2" fill="rgba(0,229,255,0.5)" />
-    </svg>
+    <div>
+      <div className="space-y-3">
+        {bars.map((b) => {
+          const isWeakest = b.key === weakest.key
+          return (
+            <div key={b.key}>
+              <div className="flex items-baseline justify-between gap-2 text-xs">
+                <span className="font-semibold text-white/80">{b.label}</span>
+                <span className="font-plex text-ink-muted">wt {Math.round(b.weight * 100)}%</span>
+              </div>
+              <div className="mt-1.5 flex items-center gap-2">
+                <div className="h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-white/[0.08]">
+                  <motion.div
+                    initial={{ width: 0 }}
+                    animate={{ width: `${Math.max(2, Math.min(100, b.pct))}%` }}
+                    transition={{ type: 'spring', stiffness: 120, damping: 20 }}
+                    className={'h-full rounded-full ' + (isWeakest ? 'bg-rose-400' : 'bg-teal-400')}
+                  />
+                </div>
+                <span className={'w-8 shrink-0 text-right font-plex text-sm font-bold ' + (isWeakest ? 'text-rose-400' : 'text-teal-300')}>
+                  {Math.round(b.pct)}
+                </span>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+      {/* The components must visibly add up to the composite in the
+          summary card above — mine.total itself, never a local recompute,
+          so this can never drift a decimal from what that card shows. */}
+      <div className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-slate-rule/70 pt-3 text-xs">
+        <span className="font-semibold uppercase tracking-wide text-teal-300">Weighted sum</span>
+        <span className="flex-1 font-plex text-ink-muted">{bars.map((b) => (b.pct * b.weight).toFixed(1)).join(' + ')}</span>
+        <span className="font-plex text-sm font-bold text-teal-300">= {mine.total.toFixed(1)}</span>
+      </div>
+    </div>
   )
 }
 
@@ -225,6 +194,11 @@ export default function DraftInsightsDashboard({ engine, league, mySlot, viewSlo
   const analysis = engine.draftAnalysis()
   const mine = analysis && analysis[viewSlot]
   if (!mine) return null
+
+  // The real component weights (50/25/15/10), bridged — not hand-copied,
+  // so this can never quote a stale percentage after WEIGHTS moves in
+  // app.js. Same fallback AnalysisTab.jsx uses for the same reason.
+  const weights = engine.weights ? engine.weights() : { starters: 0.5, value: 0.25, build: 0.15, byes: 0.1 }
 
   const isMe = viewSlot === mySlot
   const teamName = engine.teamLabel(viewSlot)
@@ -401,37 +375,57 @@ export default function DraftInsightsDashboard({ engine, league, mySlot, viewSlo
         </motion.div>
 
         {/* Sliding doors — the single biggest value upgrade that left the
-            board between two of your turns. When nothing clears MISS_FLOOR
-            the panel says so in the positive, because that is a checkable
-            claim about this draft, not an empty box. */}
+            board between two of your turns. It is the strongest analytic in
+            the product and the thing most likely to trigger another mock,
+            so it gets a treatment nothing else on this screen has: its own
+            accent colour (the same purple the missed player's own name
+            already carries below) rather than the shared teal PANEL border,
+            and its own number pulled out at scale rather than folded into
+            the sentence where a reader has to go looking for it. When
+            nothing clears MISS_FLOOR the panel says so in the positive,
+            because that is a checkable claim about this draft, not an
+            empty box — and the number is dropped rather than shown as a
+            hollow zero, since there is no "amount forgone" to report. */}
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.04 }}
-          className={PANEL + ' p-5'}
+          className="rounded-2xl border-2 border-[#B784E0]/40 bg-gradient-to-br from-[#B784E0]/[0.07] to-transparent p-5 transition-all duration-300 hover:border-[#B784E0]/70 hover:shadow-[0_0_20px_rgba(183,132,224,0.18)]"
         >
-          <h2 className="font-display text-sm font-bold uppercase tracking-wide text-white/80">
-            The One That Got Away
-          </h2>
-          {realMiss ? (
-            <p className="mt-2 text-sm leading-relaxed text-white/60">
-              <span className="font-semibold text-[#B784E0]">{realMiss.theirs.player.name}</span>{' '}
-              was still on the board when {subject} took {realMiss.mine.player.name} in round{' '}
-              {realMiss.mine.round} — {engine.teamLabel(realMiss.theirs.slot)} got him{' '}
-              {realMiss.theirs.overall - realMiss.mine.overall === 1
-                ? 'with the very next pick'
-                : `${realMiss.theirs.overall - realMiss.mine.overall} picks later`}
-              , and he projects{' '}
-              <span className="font-semibold text-teal-300">+{Math.round(realMiss.delta)} more points</span>{' '}
-              over a replacement starter than {poss} pick does.
-            </p>
-          ) : (
-            <p className="mt-2 text-sm leading-relaxed text-white/60">
-              Nothing got away. At every turn, nobody taken before {poss} next pick out-valued {poss}{' '}
-              choice by more than the projection can honestly measure — that is the mark of a draft
-              with no real regrets in it.
-            </p>
-          )}
+          <div className="flex flex-wrap items-center gap-5">
+            <div className="min-w-0 flex-1">
+              <h2 className="font-display text-sm font-bold uppercase tracking-wide text-[#B784E0]">
+                The One That Got Away
+              </h2>
+              {realMiss ? (
+                <p className="mt-2 text-sm leading-relaxed text-white/60">
+                  <span className="font-semibold text-[#B784E0]">{realMiss.theirs.player.name}</span>{' '}
+                  was still on the board when {subject} took {realMiss.mine.player.name} in round{' '}
+                  {realMiss.mine.round} — {engine.teamLabel(realMiss.theirs.slot)} got him{' '}
+                  {realMiss.theirs.overall - realMiss.mine.overall === 1
+                    ? 'with the very next pick'
+                    : `${realMiss.theirs.overall - realMiss.mine.overall} picks later`}
+                  , and he projects more points over a replacement starter than {poss} pick does.
+                </p>
+              ) : (
+                <p className="mt-2 text-sm leading-relaxed text-white/60">
+                  Nothing got away. At every turn, nobody taken before {poss} next pick out-valued {poss}{' '}
+                  choice by more than the projection can honestly measure — that is the mark of a draft
+                  with no real regrets in it.
+                </p>
+              )}
+            </div>
+            {realMiss && (
+              <div className="shrink-0 text-right">
+                <div className="font-display text-4xl font-black leading-none text-[#B784E0] sm:text-5xl">
+                  +{Math.round(realMiss.delta)}
+                </div>
+                <div className="mt-1.5 font-plex text-[9.5px] font-semibold uppercase tracking-wide text-ink-muted">
+                  points forgone
+                </div>
+              </div>
+            )}
+          </div>
         </motion.div>
 
         <div className="grid gap-5 lg:grid-cols-2">
@@ -443,7 +437,7 @@ export default function DraftInsightsDashboard({ engine, league, mySlot, viewSlo
           >
             <h2 className="font-display text-sm font-bold uppercase tracking-wide text-white/80">Team analysis</h2>
             <p className="mb-3 mt-0.5 text-xs text-ink-muted">The four grade components, scaled against the room</p>
-            <RadarChart mine={mine} />
+            <ComponentBars mine={mine} weights={weights} />
           </motion.section>
 
           <motion.section
@@ -473,10 +467,15 @@ export default function DraftInsightsDashboard({ engine, league, mySlot, viewSlo
             transition={{ delay: 0.24 }}
             className={PANEL + ' p-5'}
           >
-            <h2 className="font-display text-sm font-bold uppercase tracking-wide text-white/80">Draft value timeline</h2>
-            <p className="mb-3 mt-0.5 text-xs text-ink-muted">
-              Where each pick landed against the board's rank — right means he fell to {isMe ? 'you' : 'them'}
-            </p>
+            <div className="mb-3 flex items-baseline justify-between gap-2">
+              <div>
+                <h2 className="font-display text-sm font-bold uppercase tracking-wide text-white/80">Draft value timeline</h2>
+                <p className="mt-0.5 text-xs text-ink-muted">
+                  Where each pick landed against the board's rank — right means he fell to {isMe ? 'you' : 'them'}
+                </p>
+              </div>
+              <span className="shrink-0 font-plex text-[9.5px] font-semibold uppercase tracking-wide text-ink-muted">Unit: picks</span>
+            </div>
             <div className="flex flex-col gap-1.5">
               {timeline.map((t) => (
                 <TimelineRow

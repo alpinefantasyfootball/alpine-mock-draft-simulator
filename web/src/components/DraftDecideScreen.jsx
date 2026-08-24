@@ -55,7 +55,57 @@ function reasonFor(rankLabel, candidate, engine) {
   return fit && fit.startsNow ? 'Best value for a slot you still need to fill.' : 'Best value still on the board.'
 }
 
-function Card({ candidate, rankLabel, primary, onDraft, myTurn, engine }) {
+/* Every card answers the same question about what it forgoes, not a
+   different one depending on rank — "what it costs" always means "the best
+   available player at your other most pressing need, and whether the
+   market says he lasts to your next pick." Built entirely from real,
+   already-bridged reads (replacementGap, survivalProbability); nothing
+   here estimates a future board the way a single "-34 points" delta would
+   have to. */
+function whatItCosts(engine, board, player, counts, nextOverall) {
+  if (!counts) return "Nothing to compare yet — the draft hasn't started."
+  const short = ['QB', 'RB', 'WR', 'TE'].filter((pos) => pos !== player.pos && counts[pos] && counts[pos].short)
+  if (!short.length) return 'Nothing — every other starting slot is already filled.'
+  // The position furthest from covered, first.
+  short.sort((a, b) => (counts[b].need - counts[b].have) - (counts[a].need - counts[a].have))
+  const need = short[0]
+  const bestAtNeed = board
+    .filter((p) => !p.drafted && p.pos === need)
+    .map((p) => ({ p, gap: engine.replacementGap(p) }))
+    .filter((x) => x.gap != null)
+    .sort((a, b) => b.gap - a.gap)[0]
+  if (!bestAtNeed) return `Nothing left at ${need} worth comparing against.`
+  const vorpText = `${bestAtNeed.gap >= 0 ? '+' : ''}${Math.round(bestAtNeed.gap)}`
+  const survival = nextOverall != null ? engine.survivalProbability(bestAtNeed.p, nextOverall) : null
+  if (survival == null) {
+    return `The board's best ${need} right now is ${bestAtNeed.p.name} (${vorpText} VORP) — no market read on whether he lasts.`
+  }
+  const pct = Math.round(survival * 100)
+  return survival < 0.4
+    ? `The board's best ${need}, ${bestAtNeed.p.name} (${vorpText}), is unlikely to last — ${pct}% chance he's still there at your next pick.`
+    : `The board's best ${need}, ${bestAtNeed.p.name} (${vorpText}), should still be around — ${pct}% chance he lasts to your next pick.`
+}
+
+/* When two of the three cards land on the identical rounded Juke score, a
+   reader has no way to know why one outranks the other without this — the
+   suggestion engine's own weighting (ADP, need, risk, the model) is
+   opaque from here, so this names a real, checkable difference between the
+   tied pair rather than claiming to know the algorithm's own reasoning. */
+function tiebreakNote(candidate, siblings) {
+  if (candidate.juke == null) return null
+  const tied = siblings.find((s) => s !== candidate && s.juke != null && Math.round(s.juke) === Math.round(candidate.juke))
+  if (!tied) return null
+  const vorpGap = Math.round((candidate.vorp ?? 0) - (tied.vorp ?? 0))
+  if (Math.abs(vorpGap) >= 3) {
+    return `Ties ${tied.player.name} on Juke score — ${vorpGap > 0 ? 'edges him' : 'trails him'} by ${Math.abs(vorpGap)} VORP.`
+  }
+  if (candidate.player.bye && tied.player.bye && candidate.player.bye !== tied.player.bye) {
+    return `Ties ${tied.player.name} on Juke score — byes land in different weeks (${candidate.player.bye} vs ${tied.player.bye}).`
+  }
+  return `Ties ${tied.player.name} on Juke score.`
+}
+
+function Card({ candidate, rankLabel, primary, onDraft, myTurn, engine, board, counts, siblings }) {
   const { player, vorp, juke, survival, nextOverall } = candidate
   const proj = typeof player.projPts === 'number' ? Math.round(player.projPts) : null
   const risky = survival != null && survival < 0.4
@@ -107,7 +157,7 @@ function Card({ candidate, rankLabel, primary, onDraft, myTurn, engine }) {
       </div>
 
       {survival != null && (
-        <div className={'mb-4 rounded-lg p-3 ' + (risky ? 'bg-rose-500/10' : 'bg-emerald-500/10')}>
+        <div className={'mb-2 rounded-lg p-3 ' + (risky ? 'bg-rose-500/10' : 'bg-emerald-500/10')}>
           <div className={'mb-[5px] text-[10px] font-bold uppercase tracking-[0.09em] ' + (risky ? 'text-rose-300' : 'text-emerald-300')}>
             If you wait
           </div>
@@ -118,6 +168,19 @@ function Card({ candidate, rankLabel, primary, onDraft, myTurn, engine }) {
           </div>
         </div>
       )}
+
+      {/* Every card names what it adds ("What it does" above); this is the
+          other half — what it forgoes. Same question asked of all three
+          cards, so a reader can compare them on this too, not just VORP. */}
+      <div className="mb-4 rounded-lg bg-white/[0.04] p-3">
+        <div className="mb-[5px] text-[10px] font-bold uppercase tracking-[0.09em] text-white/50">What it costs</div>
+        <div className="text-sm leading-[1.45] text-white/90">{whatItCosts(engine, board, player, counts, nextOverall)}</div>
+      </div>
+
+      {siblings && (() => {
+        const note = tiebreakNote(candidate, siblings)
+        return note ? <div className="mb-3 text-[11.5px] leading-relaxed text-white/50">{note}</div> : null
+      })()}
 
       <button
         type="button"
@@ -226,24 +289,43 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, pick
   }))
 
   // Index 0 is already "Juke's pick" (suggestions() is best-first). Of the
-  // other two, whichever has fewer players left in his own tier is the
-  // scarcer one — the other gets "Safest wait" by elimination, so the two
-  // labels can never both land on the same card.
+  // other two, "Safest wait" now goes to whichever is more LIKELY TO
+  // SURVIVE to your next pick — the same real number the card's own "If
+  // you wait" box prints — not whichever sits in the deeper tier. Tier
+  // depth is a proxy for survival and the two can disagree; when they do,
+  // a card labelled "safest wait" in teal and then, two inches below, a
+  // red "gone before your next pick" is the exact self-contradiction this
+  // screen opened with.
   let rankLabels = ['Juke’s pick', 'Scarcest', 'Safest wait']
-  if (candidates.length === 3 && candidates[2].tierLeft < candidates[1].tierLeft) {
-    rankLabels = ['Juke’s pick', 'Safest wait', 'Scarcest']
+  if (candidates.length === 3) {
+    const s1 = candidates[1].survival ?? -1
+    const s2 = candidates[2].survival ?? -1
+    const safer = s2 > s1 ? 2 : 1
+    const scarcer = safer === 1 ? 2 : 1
+    rankLabels = []
+    rankLabels[0] = 'Juke’s pick'
+    rankLabels[scarcer] = 'Scarcest'
+    rankLabels[safer] = 'Safest wait'
   }
-  // "Scarcest" means "grab him before the tier runs out" — a claim that
-  // only makes sense if the tier is worth being in. Late rounds routinely
-  // hand suggestions() three below-replacement players with nothing else
-  // left to rank them by, and stamping the deepest-negative one
-  // "Scarcest" reads as advice to rush a player who isn't worth having.
-  // Caught by a design review against a real −100 VORP card.
+  // Two ways a label can fail to earn itself. "Scarcest" means "grab him
+  // before the tier runs out" — a claim that only makes sense if the tier
+  // is worth being in; late rounds routinely hand suggestions() three
+  // below-replacement players with nothing else to rank them by, and
+  // stamping the deepest-negative one "Scarcest" reads as advice to rush a
+  // player who isn't worth having (caught by a design review against a
+  // real −100 VORP card). "Safest wait" fails the same way whenever the
+  // survival number that just chose it is itself below the same 0.4 the
+  // "If you wait" box already treats as a real risk — genuinely likely
+  // gone is not safe to wait on, whichever of the two candidates it is.
   const BAD_VORP = -30
   rankLabels = rankLabels.map((label, i) => {
     const c = candidates[i]
-    if ((label === 'Scarcest' || label === 'Safest wait') && c && c.vorp != null && c.vorp < BAD_VORP) {
-      return 'Also available'
+    if (!c) return label
+    if (label === 'Scarcest' && c.vorp != null && c.vorp < BAD_VORP) return 'Also available'
+    if (label === 'Safest wait') {
+      const genuinelyAtRisk = c.survival != null && c.survival < 0.4
+      const badPick = c.vorp != null && c.vorp < BAD_VORP
+      if (genuinelyAtRisk || badPick) return 'Also available'
     }
     return label
   })
@@ -253,6 +335,40 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, pick
     vorp: round1(engine.replacementGap(player)),
     juke: round1(engine.overallScore(player)),
   }))
+  // Why the model did not put each of these in the top three — a real
+  // comparison, not a bare number a reader has to interpret alone. Prefers
+  // the top-three card sharing this player's position (the natural point
+  // of comparison); failing that, an earlier row in this same list at the
+  // same position; failing that, the player's own roster count, for the
+  // "highest value here, but you're already stocked" case.
+  others.forEach((o, i) => {
+    const fit = engine.draftFit(o.player)
+    const topSibling = candidates.find((c) => c.player.pos === o.player.pos)
+    if (topSibling) {
+      const gap = Math.round((topSibling.juke ?? 0) - (o.juke ?? 0))
+      o.whyNot = gap > 0
+        ? `Fills the slot you need, ${gap} points of Juke score below ${topSibling.player.name}.`
+        : `Fills the slot you need and rates within a few points of ${topSibling.player.name}.`
+      return
+    }
+    const earlierSibling = others.slice(0, i).find((e) => e.player.pos === o.player.pos)
+    if (earlierSibling) {
+      // Positive: this row trails the earlier one, the usual case since
+      // suggestions() is already best-first. Negative is real too, just
+      // rarer — the earlier row can rate higher on need or risk while
+      // scoring less on raw VORP, and the sentence has to say which one
+      // actually happened rather than always claiming "behind."
+      const gap = Math.round((earlierSibling.vorp ?? 0) - (o.vorp ?? 0))
+      o.whyNot = gap >= 0
+        ? `Same slot as ${earlierSibling.player.name} and ${gap} points behind on VORP.`
+        : `Same slot as ${earlierSibling.player.name} — ${Math.abs(gap)} points ahead on VORP, but rated lower here.`
+      return
+    }
+    const have = fit ? fit.have : 0
+    o.whyNot = have > 0
+      ? `Highest value here, but you already hold ${have} ${o.player.pos}${have === 1 ? '' : 's'}.`
+      : null
+  })
 
   // Room-live rail. Last 10 for the strip, last 6 for the sentence — same
   // slice the strip's own tail already is, not a second read of picks()
@@ -265,18 +381,54 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, pick
   Object.entries(posCounts).forEach(([pos, n]) => { if (n > runCount) { runCount = n; runPos = pos } })
   const runDepth = runPos ? engine.positionDepthRemaining(runPos) : null
 
-  const boardForQueue = engine.board()
+  const board = engine.board()
   // The count both mobile-only labels print — "N available" over the cards
   // and "Browse all N players" under them. One read of the same board array
   // the queue below already resolves against, never a second call that
   // could answer differently between two lines of the same screen.
-  const availableCount = boardForQueue.filter((p) => !p.drafted).length
+  const availableCount = board.filter((p) => !p.drafted).length
   const queue = engine
     .queue()
-    .map((name) => boardForQueue.find((p) => p.name === name))
+    .map((name) => board.find((p) => p.name === name))
     .filter(Boolean)
 
   const survivalOfName = (p) => engine.survivalProbability(p, nextOverall)
+
+  /* Tier ladder — real tiers straight off the board (buildTiers() in
+     app.js already stamped every player), not a new scarcity metric. One
+     row per skill position: how many of tier 1 are left, and how big the
+     drop to tier 2 actually is once it runs out, so "cliff" means a real
+     points gap rather than a feeling. */
+  const tierLadder = ['QB', 'RB', 'WR', 'TE'].map((pos) => {
+    const posBoard = board.filter((p) => p.pos === pos)
+    const tier1 = posBoard.filter((p) => p.tier === 1)
+    const remaining = tier1.filter((p) => !p.drafted).length
+    const tier2 = posBoard.filter((p) => p.tier === 2)
+    let drop = null
+    if (tier1.length && tier2.length) {
+      const avg = (list) => list.reduce((s, p) => s + (p.projPts || 0), 0) / list.length
+      drop = Math.round(avg(tier1) - avg(tier2))
+    }
+    return { pos, tier1, remaining, drop }
+  })
+
+  /* Projected board at the next pick — the same survival model the cards'
+     own "If you wait" boxes use, applied to the players actually worth
+     asking about. The board's very top is never in question this many
+     picks out (of course the consensus top five are gone by pick 20 —
+     that's not a preview, it's arithmetic), so this centres on the
+     players whose board rank sits nearest your *next* pick, where real
+     uncertainty actually lives, then restores board order for display. */
+  const projectedSurvivors = nextOverall == null
+    ? []
+    : board
+        .filter((p) => !p.drafted)
+        .slice()
+        .sort((a, b) => Math.abs(a.overall - nextOverall) - Math.abs(b.overall - nextOverall))
+        .slice(0, 5)
+        .sort((a, b) => a.overall - b.overall)
+        .map((p) => ({ player: p, survival: engine.survivalProbability(p, nextOverall) }))
+  const survivalTextColor = (s) => (s == null ? 'text-white/40' : s < 0.2 ? 'text-rose-300' : s < 0.65 ? 'text-amber-300' : 'text-emerald-300')
 
   return (
     /* flex-col below lg, grid at lg+ — not grid-cols-1 at every width down
@@ -412,6 +564,30 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, pick
             </div>
           </div>
         )}
+
+        {/* The same survival model the cards use, run down the board's own
+            best-available order to the pick that actually returns to you —
+            not a guess dressed as a preview. */}
+        {projectedSurvivors.length > 0 && (
+          <div className="mt-3 rounded-lg border border-teal-400/20 bg-teal-400/[0.03] p-3.5">
+            <div className="mb-2.5 text-[10px] font-bold uppercase tracking-[0.12em] text-teal-300">
+              Likely there at {window.DraftEngine ? window.DraftEngine.pickCode(nextOverall, league.teams) : nextOverall}
+            </div>
+            <div className="flex flex-col gap-2">
+              {projectedSurvivors.map(({ player, survival }) => (
+                <div key={player.name} className="flex items-center gap-2">
+                  <span className="min-w-0 flex-1 truncate text-xs text-white/80">{player.name}</span>
+                  <span className={'font-plex text-[11px] font-semibold ' + survivalTextColor(survival)}>
+                    {survival != null ? `${Math.round(survival * 100)}%` : '—'}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <div className="mt-2.5 font-plex text-[9px] leading-relaxed text-white/40">
+              The same survival model the cards use, run forward to your next pick.
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Centre */}
@@ -434,9 +610,69 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, pick
             </div>
             <p className="mb-4 text-[13.5px] text-white/60 lg:text-sm">Three options, ranked. Every number is the same one the grade uses.</p>
 
+            {/* Tier ladder — you already compute tiers; this just shows the
+                structure the three cards below are reacting to. Faded pips
+                are gone; a lit one is still on the board. */}
+            <div className="mb-[18px] rounded-xl border border-white/[0.08] bg-white/[0.02] p-4">
+              <div className="mb-3 flex items-baseline justify-between">
+                <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-white/50">Tier 1 remaining, by position</span>
+                <span className="hidden text-[10.5px] text-white/50 sm:inline">Faded = already drafted</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+                {tierLadder.map((row) => {
+                  const caption = row.tier1.length === 0
+                    ? 'none this deep'
+                    : row.remaining === 0
+                      ? 'tier gone'
+                      : row.remaining <= 4
+                        ? `cliff after ${row.remaining} more`
+                        : 'no rush'
+                  return (
+                    <div key={row.pos} className="rounded-lg bg-white/[0.03] p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="flex items-center gap-1.5">
+                          <span className={'rounded px-1.5 py-0.5 text-[9px] font-bold ' + (POS_BADGE[row.pos] || 'bg-white/10 text-white/60')}>
+                            {row.pos}
+                          </span>
+                          <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-white/50">tier 1</span>
+                        </span>
+                        <span className="font-plex text-[10.5px] text-white/50">{row.remaining} left</span>
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-[3px]">
+                        {row.tier1.map((p) => (
+                          <span
+                            key={p.name}
+                            className="h-[9px] w-[9px] rounded-sm"
+                            style={{ background: p.drafted ? 'rgba(255,255,255,0.13)' : POS_SOLID[row.pos] || 'rgba(255,255,255,0.4)' }}
+                          />
+                        ))}
+                      </div>
+                      <div
+                        className="mt-2 font-plex text-[10px] text-white/50"
+                        title={row.drop != null ? `Next tier projects about ${row.drop} fewer points` : undefined}
+                      >
+                        {caption}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
             <div className="mb-[18px] grid grid-cols-1 gap-3.5 md:grid-cols-3">
               {candidates.map((c, i) => (
-                <Card key={c.player.name} candidate={c} rankLabel={rankLabels[i]} primary={i === 0} onDraft={onDraft} myTurn={myTurn} engine={engine} />
+                <Card
+                  key={c.player.name}
+                  candidate={c}
+                  rankLabel={rankLabels[i]}
+                  primary={i === 0}
+                  onDraft={onDraft}
+                  myTurn={myTurn}
+                  engine={engine}
+                  board={board}
+                  counts={counts}
+                  siblings={candidates}
+                />
               ))}
             </div>
 
@@ -472,10 +708,17 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, pick
                     <div
                       key={o.player.name}
                       onClick={() => onOpenProfile(o.player)}
-                      className="grid h-11 cursor-pointer grid-cols-[30px_minmax(0,1fr)_60px_64px_70px] items-center gap-3.5 rounded-md px-3 transition-colors hover:bg-white/[0.05] lg:h-10"
+                      className="grid min-h-[44px] cursor-pointer grid-cols-[30px_minmax(0,1fr)_60px_64px_70px] items-center gap-3.5 rounded-md px-3 py-1.5 transition-colors hover:bg-white/[0.05] lg:min-h-[40px]"
                     >
                       <span className="text-[10px] font-bold text-white/55">{o.player.pos}</span>
-                      <span className="truncate text-sm font-medium text-white">{o.player.name}</span>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-white">{o.player.name}</p>
+                        {/* The why-not — the board leader on VORP and Juke
+                            score used to sit here unexplained, which read
+                            as the model missing its own top player rather
+                            than weighing need on purpose. */}
+                        {o.whyNot && <p className="truncate text-[10.5px] leading-tight text-ink-muted">{o.whyNot}</p>}
+                      </div>
                       <span className="text-right text-xs tabular-nums text-white/85">
                         {o.vorp != null ? `${o.vorp >= 0 ? '+' : ''}${Math.round(o.vorp)}` : '—'}
                       </span>

@@ -3488,8 +3488,12 @@ function byeSummary(badWeeks) {
   return `${first}, and ${badWeeks.length - 1} more bad weeks`;
 }
 
-function analyseTeam(slot) {
-  const roster = rosterOf(slot);
+function analyseTeam(slot, extra) {
+  // extra: an optional hypothetical additional player, for simulating "what
+  // would this component become if I drafted him" (see bestUpgrade() below)
+  // without a second copy of this function's own logic. Every real caller
+  // passes nothing, so roster is exactly rosterOf(slot), unchanged.
+  const roster = extra ? rosterOf(slot).concat([extra]) : rosterOf(slot);
   const picks  = state.picks.filter((p) => p.slot === slot);
   /* Both filters, and they feed the value sum and both callouts alike — a
      pick that cannot meaningfully be reached for cannot be the biggest reach
@@ -3553,7 +3557,8 @@ function analyseTeam(slot) {
        `cpuScore()` has had the right expression all along, which is why the
        CPU drafts two and then got marked down for it. */
     const allowed = league.starters[pos] + (pos === "QB" ? league.superflex : 0);
-    build -= Math.max(0, countAt(slot, pos) - allowed) * 9;
+    const extraCount = extra && extra.pos === pos ? 1 : 0;
+    build -= Math.max(0, countAt(slot, pos) + extraCount - allowed) * 9;
   });
 
   const benched = roster.filter(function (p) {
@@ -3744,6 +3749,49 @@ function analyseDraft() {
   });
 
   return all;
+}
+
+/* The single available player who would move one grade component the most,
+   and what the component becomes if he is drafted — simulated by literally
+   adding him to the roster and re-running the exact analyseTeam()/
+   scaleAcross() pipeline the real grade uses, never a second formula for
+   "how much would this help."
+
+   Only starters and build get a simulation. Draft value is a function of
+   the price paid for a pick that has not happened yet, and bye-week safety
+   only ever worsens or holds from a single addition — it cannot repair a
+   clash between starters already on the roster — so neither has an honest
+   "draft this player, get this score" story to tell. Asked for either, this
+   returns null and the caller shows the diagnosis without inventing a fix.
+
+   The caller already holds the real "before" (analyseDraft()'s own scaled
+   value for this component), so this returns only the winner and the score
+   he produces — not a second copy of the same "before" figure. */
+function bestUpgrade(slot, componentKey) {
+  if (componentKey !== "starters" && componentKey !== "build") return null;
+  const scaledKey = componentKey + "Scaled";
+
+  const baseline = [];
+  for (let i = 0; i < league.teams; i++) baseline.push(analyseTeam(i));
+
+  /* FORCED_LATE excluded on purpose — an empty K/DST slot costs -14 of
+     build and any rostered kicker would fill it, so without this the
+     simulation would happily recommend drafting one in round 2. Same
+     reasoning as freelyChosen(): the app schedules these two, not the
+     manager, so neither may be judged — or, here, recommended — outside
+     the rounds the app actually allows them. */
+  const pool = board.filter((p) => !p.drafted && !isRuledOut(p) && !FORCED_LATE[p.pos]);
+  let best = null;
+  pool.forEach(function (candidate) {
+    const withHim = analyseTeam(slot, candidate);
+    const trial = baseline.map((t, i) => (i === slot ? withHim : t));
+    scaleAcross(trial, componentKey);
+    const after = trial[slot][scaledKey];
+    if (!best || after > best.after) best = { player: candidate, after: after };
+  });
+
+  if (!best) return null;
+  return { player: best.player, after: Math.round(best.after) };
 }
 
 /* ---- Take a pick: homepage v4 pass 2's three real, seeded scenarios ---
@@ -6249,6 +6297,11 @@ function historySummary(entry) {
   return {
     id: entry.id,
     leagueType: leagueTypeLabel(entry.league),
+    // The raw key, alongside the formatted leagueType above — "what to run
+    // next" groups entries by format and needs the key setLeague() itself
+    // accepts, not a string it would have to parse back out of "10-Team
+    // Half PPR" the way LockerTable.jsx's own filter already has to.
+    scoring: entry.league.scoring,
     pickPosition: ordinal(entry.mySlot + 1),
     // The raw seat number, alongside the ordinal string above — the Locker
     // table's own Seat column prints a plain "3", not "3rd" (that's the
@@ -6391,6 +6444,120 @@ function historyStats() {
     let pos = null, count = 0;
     weakCounts.forEach((c, p) => { if (c > count) { count = c; pos = p; } });
     stats.weakestSpot = { pos, pct: Math.round((count / weakTotal) * 100) };
+  }
+
+  // Format split — average gradeScore per scoring format. Needs two formats
+  // with two or more graded entries apiece, or there is nothing to compare
+  // a weak one against; a single format has no "instead of what" to name.
+  const byFormat = new Map();
+  list.forEach((entry) => {
+    if (typeof entry.gradeScore !== "number" || !entry.league) return;
+    const key = entry.league.scoring;
+    if (!byFormat.has(key)) byFormat.set(key, []);
+    byFormat.get(key).push(entry.gradeScore);
+  });
+  const formatRows = [...byFormat.entries()]
+    .filter(([, scores]) => scores.length >= 2)
+    .map(([scoring, scores]) => ({
+      scoring: scoring,
+      count: scores.length,
+      avg: scores.reduce((sum, v) => sum + v, 0) / scores.length
+    }));
+  if (formatRows.length >= 2) {
+    stats.formatSplit = formatRows.sort((a, b) => b.avg - a.avg);
+  }
+
+  // Seat split — average gradeScore from the front third of the draft order
+  // against the back third. Each seat is read as a fraction of *that
+  // draft's own* team count, not a fixed seat number, so a 10-team and a
+  // 12-team mock compare on the same footing.
+  const earlyScores = [], lateScores = [];
+  list.forEach((entry) => {
+    if (typeof entry.gradeScore !== "number") return;
+    const teams = entry.teams || (entry.league && entry.league.teams);
+    if (!teams) return;
+    const frac = (entry.mySlot + 1) / teams;
+    if (frac <= 1 / 3) earlyScores.push(entry.gradeScore);
+    else if (frac > 2 / 3) lateScores.push(entry.gradeScore);
+  });
+  if (earlyScores.length >= 2 && lateScores.length >= 2) {
+    const avg = (arr) => arr.reduce((sum, v) => sum + v, 0) / arr.length;
+    stats.seatSplit = {
+      early: { count: earlyScores.length, avg: avg(earlyScores) },
+      late: { count: lateScores.length, avg: avg(lateScores) }
+    };
+  }
+
+  /* Which rounds the weakest position actually goes missing in — the
+     insight that connects "most drafted, round 1" and "weakest spot"
+     instead of leaving them sitting three inches apart with nothing
+     joining them. Walks each entry's own snake (its own teams/mySlot,
+     since entries can differ) to reconstruct which player it drafted in
+     every round, the same way the round-by-round strip on a live board
+     would read it — never a second copy of the pick list, just the one
+     already stored, indexed by the real snake math. DraftEngine has to be
+     loaded for this; on the rare load where it is not yet, the block is
+     skipped rather than guessed at, the same rule survivalProbability()
+     and friends already apply to anything touching the deferred data. */
+  if (stats.weakestSpot && typeof DraftEngine !== "undefined") {
+    const targetPos = stats.weakestSpot.pos;
+    const perRound = new Map(); // round -> { target, otherCounts: Map(pos->n), total }
+    list.forEach((entry) => {
+      const teams = entry.teams || (entry.league && entry.league.teams);
+      if (!teams || !entry.picks || !entry.picks.length) return;
+      const totalRounds = Math.floor(entry.picks.length / teams);
+      for (let round = 1; round <= totalRounds; round++) {
+        const overall = DraftEngine.overallOf(round, entry.mySlot, teams);
+        const name = entry.picks[overall - 1];
+        const player = name && byName.get(name);
+        if (!player) continue;
+        const row = perRound.get(round) || { target: 0, otherCounts: new Map(), total: 0 };
+        row.total++;
+        if (player.pos === targetPos) row.target++;
+        else row.otherCounts.set(player.pos, (row.otherCounts.get(player.pos) || 0) + 1);
+        perRound.set(round, row);
+      }
+    });
+
+    // The longest contiguous run of rounds that both have a real sample
+    // and never once produced the weak position.
+    const rounds = [...perRound.keys()].sort((a, b) => a - b);
+    let bestRun = null, curStart = null, curTotal = 0, curOthers = null;
+    rounds.forEach((r, i) => {
+      const row = perRound.get(r);
+      const clean = row.target === 0 && row.total >= 2;
+      if (clean) {
+        if (curStart === null) { curStart = r; curTotal = 0; curOthers = new Map(); }
+        curTotal += row.total;
+        row.otherCounts.forEach((n, pos) => curOthers.set(pos, (curOthers.get(pos) || 0) + n));
+      }
+      const isLast = i === rounds.length - 1;
+      const runBroke = !clean || isLast;
+      if (runBroke && curStart !== null) {
+        const end = clean ? r : rounds[i - 1];
+        if (end > curStart && curTotal >= 6) {
+          if (!bestRun || (end - curStart) > (bestRun.end - bestRun.start)) {
+            bestRun = { start: curStart, end: end, total: curTotal, others: curOthers };
+          }
+        }
+        curStart = null;
+      }
+    });
+
+    if (bestRun) {
+      let topPos = null, topCount = 0;
+      bestRun.others.forEach((n, pos) => { if (n > topCount) { topCount = n; topPos = pos; } });
+      if (topPos) {
+        stats.holeRounds = {
+          pos: targetPos,
+          startRound: bestRun.start,
+          endRound: bestRun.end,
+          total: bestRun.total,
+          topOtherPos: topPos,
+          topOtherCount: topCount
+        };
+      }
+    }
   }
 
   // Avg roster VORP, and the room average to put it beside — both means
@@ -8567,6 +8734,11 @@ window.JukeEngine = {
   // renderGrades()'s bye label and method note already use verbatim —
   // bridged so that prose is never re-derived in React.
   analyseDraft: analyseDraft,
+  // Added for the Analysis tab's "Fix this first" card — see bestUpgrade()'s
+  // own comment for why only starters/build are simulated and why "before"
+  // isn't part of what this returns (the caller already has it, off the
+  // same analyseDraft() call the four bars already read).
+  bestUpgrade: bestUpgrade,
   byeSummary: byeSummary,
   replacementText: replacementText,
   lineupText: lineupText,

@@ -285,8 +285,16 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
           its left on this exact row. The six position hues read off
           LEGEND_POSITIONS/POS_SOLID directly, the same map the cell rail
           itself uses, so this can never list a colour the board doesn't
-          actually draw. */}
-      <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-slate-rule px-3 py-2 lg:hidden">
+          actually draw.
+
+          Not lg:hidden any more. This was mobile-only while desktop had
+          nothing in its place — every filled cell on the lg+ board carries
+          the identical tint and the identical ADP-gap number this legend
+          decodes, with zero explanation beside them. A reader on the wider
+          screen was left to guess what a red cell or a "+0.4" meant; the
+          numbers were always real (adpGap() below), only the key to them
+          was missing. */}
+      <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-slate-rule px-3 py-2">
         <span className="font-plex text-[10px] uppercase tracking-wide text-white/60">
           Tint = value vs ADP
         </span>

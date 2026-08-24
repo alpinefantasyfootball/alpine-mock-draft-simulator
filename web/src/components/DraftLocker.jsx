@@ -4,6 +4,7 @@ import NewMockPanel from './NewMockPanel.jsx'
 import TendenciesStrip from './TendenciesStrip.jsx'
 import InProgressBand from './InProgressBand.jsx'
 import LockerTable from './LockerTable.jsx'
+import WhatToRunNext from './WhatToRunNext.jsx'
 
 // Replaces the old tabbed card list (DraftHistoryCard.jsx,
 // DraftInProgressCard.jsx, both deleted) with the handoff's launcher-and-
@@ -12,7 +13,7 @@ import LockerTable from './LockerTable.jsx'
 // child here is presentational — this component owns the one thing that
 // has to live above all of them, which is knowing whether an in-progress
 // draft or history entry changed and needs a re-render.
-export default function DraftLocker({ onStartNew, problem, lobbySlot, onOpenSettings }) {
+export default function DraftLocker({ onStartNew, problem, lobbySlot, onSetLobbySlot, onOpenSettings }) {
   const engine = useEngine()
   useJukeTick(engine)
   // clearSave()/deleteHistoryDraft() are plain localStorage writes with no
@@ -97,6 +98,19 @@ export default function DraftLocker({ onStartNew, problem, lobbySlot, onOpenSett
       </div>
 
       {inProgress && <InProgressBand draft={inProgress} onResume={resume} onDiscard={discard} />}
+
+      {/* Only when there's no in-progress draft already asking for a
+          decision — competing with the resume banner's own "pick this
+          back up" would bury the more urgent of the two asks. */}
+      {!inProgress && (
+        <WhatToRunNext
+          engine={engine}
+          league={league}
+          stats={stats}
+          onSetLobbySlot={onSetLobbySlot}
+          onStartNew={onStartNew}
+        />
+      )}
 
       {/* items-stretch (the default — items-start used to override it) so
           Your Tendencies always matches New Mock panel's height instead of

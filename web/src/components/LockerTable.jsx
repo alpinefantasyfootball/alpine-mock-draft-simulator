@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
-import { Search, ChevronDown, ChevronRight, MoreHorizontal } from 'lucide-react'
+import { Search, ChevronDown, ChevronRight, MoreHorizontal, HardDrive } from 'lucide-react'
+import ComingSoonModal from './ComingSoonModal.jsx'
 
 const FORMAT_FILTERS = [
   { key: 'all', label: 'All formats' },
@@ -13,6 +14,30 @@ const SORTS = [
   { key: 'oldest', label: 'Oldest first' },
   { key: 'grade', label: 'Best grade' },
   { key: 'finish', label: 'Best finish' },
+]
+
+// Thirds of the draft order, not individual seat numbers — a dropdown of
+// every seat 1 through N is a lot of chrome for a question that's really
+// "front, middle or back," and it's the same bucketing historyStats()'s
+// own seatSplit already uses for "what to run next," so the two agree on
+// what "early" and "late" mean rather than drawing the line twice.
+const SEAT_FILTERS = [
+  { key: 'all', label: 'All seats' },
+  { key: 'early', label: 'Early' },
+  { key: 'middle', label: 'Middle' },
+  { key: 'late', label: 'Late' },
+]
+function seatBucket(entry) {
+  if (!entry.teams) return null
+  const frac = entry.seat / entry.teams
+  return frac <= 1 / 3 ? 'early' : frac > 2 / 3 ? 'late' : 'middle'
+}
+
+const DATE_FILTERS = [
+  { key: 'all', label: 'All time' },
+  { key: '7', label: 'Last 7 days' },
+  { key: '30', label: 'Last 30 days' },
+  { key: '90', label: 'Last 90 days' },
 ]
 
 const PAGE_SIZE = 20
@@ -221,11 +246,14 @@ const UNDO_MS = 5000
 export default function LockerTable({ entries, onAnalyze, onDeleteConfirmed }) {
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState('all')
+  const [seatFilter, setSeatFilter] = useState('all')
+  const [dateFilter, setDateFilter] = useState('all')
   const [sort, setSort] = useState('newest')
   const [visibleCount, setVisibleCount] = useState(8)
   const [menuOpenId, setMenuOpenId] = useState(null)
   const [pending, setPending] = useState(null) // { id, entry }
   const pendingTimer = useRef(null)
+  const comingSoonRef = useRef(null)
 
   // Takes the id directly rather than reading `pending` from closure — a
   // setTimeout callback scheduled inside requestDelete() closes over
@@ -263,6 +291,11 @@ export default function LockerTable({ entries, onAnalyze, onDeleteConfirmed }) {
     if (filter !== 'all') list = list.filter((e) => e.leagueType.toLowerCase().includes(
       filter === 'ppr' ? 'full ppr' : filter === 'half' ? 'half ppr' : 'standard'
     ))
+    if (seatFilter !== 'all') list = list.filter((e) => seatBucket(e) === seatFilter)
+    if (dateFilter !== 'all') {
+      const cutoff = Date.now() - Number(dateFilter) * 86400000
+      list = list.filter((e) => typeof e.completedAt === 'number' && e.completedAt >= cutoff)
+    }
     if (query.trim()) {
       const q = query.trim().toLowerCase()
       list = list.filter((e) =>
@@ -276,7 +309,7 @@ export default function LockerTable({ entries, onAnalyze, onDeleteConfirmed }) {
     // 'newest' is entries' own order — historyList() already returns
     // newest-first, matching recordHistory()'s unshift().
     return sorted
-  }, [entries, filter, query, sort, pending])
+  }, [entries, filter, seatFilter, dateFilter, query, sort, pending])
 
   const visible = filtered.slice(0, visibleCount)
 
@@ -331,6 +364,33 @@ export default function LockerTable({ entries, onAnalyze, onDeleteConfirmed }) {
                   {f.label}
                 </button>
               ))}
+            </div>
+
+            <div className="flex gap-[3px] rounded-full bg-white/5 p-[3px]">
+              {SEAT_FILTERS.map((f) => (
+                <button
+                  key={f.key}
+                  type="button"
+                  onClick={() => { setSeatFilter(f.key); setVisibleCount(8) }}
+                  className={
+                    'rounded-full px-[13px] py-1.5 text-xs font-semibold transition-colors ' +
+                    (seatFilter === f.key ? 'bg-teal-400/[0.16] text-teal-300' : 'text-white/55 hover:text-white')
+                  }
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="relative">
+              <select
+                value={dateFilter}
+                onChange={(e) => { setDateFilter(e.target.value); setVisibleCount(8) }}
+                className="appearance-none rounded-lg border border-white/[0.08] bg-slate-sunk/60 py-[7px] pl-3 pr-8 text-sm font-medium text-white/80 focus:outline-none"
+              >
+                {DATE_FILTERS.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/50" />
             </div>
 
             <div className="ml-auto flex items-center gap-2">
@@ -397,8 +457,38 @@ export default function LockerTable({ entries, onAnalyze, onDeleteConfirmed }) {
               </button>
             )}
           </div>
+
+          {/* The honest and strongest sign-up argument on the page: every
+              row above is real, local, and one cache-clear from gone. The
+              button is real too, not a dead click — same ComingSoonModal
+              every other not-built-yet account control in this app already
+              opens (SiteNav.jsx's AccountButtons), not a second, silent
+              implementation of "coming soon." */}
+          <div className="flex flex-wrap items-center gap-4 border-t border-teal-400/[0.15] bg-teal-400/[0.03] px-5 py-[13px]">
+            <HardDrive className="h-[15px] w-[15px] shrink-0 text-teal-300" aria-hidden="true" />
+            <p className="min-w-0 flex-1 text-[13px] leading-snug text-white/80">
+              These {entries.length} mock{entries.length === 1 ? '' : 's'} live in <b>this browser only</b>. Clear
+              your history and the locker and your tendencies go with them.
+            </p>
+            <button
+              type="button"
+              onClick={() =>
+                comingSoonRef.current?.open(
+                  'Sign-up is coming',
+                  'Juke does not have accounts yet, so there is nowhere to back this up to — everything here ' +
+                    'is free and saves to this device only. Signing up will let you keep it across devices once ' +
+                    'accounts exist.'
+                )
+              }
+              className="shrink-0 rounded-lg bg-teal-400 px-[18px] py-2.5 text-xs font-bold uppercase tracking-wide text-obsidian transition-colors hover:bg-teal-300"
+            >
+              Sign up to keep it
+            </button>
+          </div>
         </>
       )}
+
+      <ComingSoonModal ref={comingSoonRef} />
 
       {pending && (
         // bottom offset clears MobileAppTabBar's own fixed 58px + safe-area

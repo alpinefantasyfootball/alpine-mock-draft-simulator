@@ -21,6 +21,7 @@ import LobbyBar from './LobbyBar.jsx'
 import MobileAppTabBar from './MobileAppTabBar.jsx'
 import MobileDraftTabBar from './MobileDraftTabBar.jsx'
 import PickClockBand from './PickClockBand.jsx'
+import { POS_LIST } from './draftRoomPositions.js'
 
 function useEngine() {
   const [ready, setReady] = useState(false)
@@ -506,6 +507,7 @@ export default function DraftRoom() {
             onStartNew={enterDraftRoom}
             problem={problem}
             lobbySlot={lobbySlot}
+            onSetLobbySlot={setLobbySlot}
             onOpenSettings={() => setSettingsOpen(true)}
           />
         </div>
@@ -667,6 +669,36 @@ export default function DraftRoom() {
     const s = engine.statOf(player)
     return s && s.p ? s.p : null
   }
+
+  /* Per-position, per-tier average points — what the pool's tier-cliff
+     divider names as "the next tier projects N fewer points." Built off
+     the whole board (drafted players included), because a tier's own
+     quality doesn't change as it empties out — the same reasoning
+     DraftDecideScreen.jsx's tierLadder already applies to tier 1 vs 2,
+     generalised here to whichever tier boundary the pool is actually
+     showing. Reuses pointsFor() rather than reading board.projPts
+     directly, so this can never disagree with the PTS column sitting in
+     the very same table (CLAUDE.md: "never a second calculation" — see
+     DraftBoardGrid's adpGap()/adpTint() for the same rule applied to the
+     ADP-gap tint). Scoped to POS_LIST (QB/RB/WR/TE): K/DST are excluded
+     from tiering-adjacent measures everywhere else in this app (their
+     projections are the ones CLAUDE.md documents as unranked), and
+     Decide's own tierLadder makes the identical exclusion. */
+  const tierAvgByPos = {}
+  POS_LIST.forEach((pos) => {
+    const byTier = {}
+    board.filter((p) => p.pos === pos).forEach((p) => {
+      if (p.tier == null) return
+      const pts = pointsFor(p)
+      if (pts == null) return
+      if (!byTier[p.tier]) byTier[p.tier] = { sum: 0, n: 0 }
+      byTier[p.tier].sum += pts
+      byTier[p.tier].n += 1
+    })
+    tierAvgByPos[pos] = Object.fromEntries(
+      Object.entries(byTier).map(([t, { sum, n }]) => [t, sum / n])
+    )
+  })
 
   // The Value Assistant card's one recommendation — suggestions('ALL')[0],
   // the exact real ranking (adp+jitter) x need x risk x model that already
@@ -908,8 +940,35 @@ export default function DraftRoom() {
               Height, not width, is what the two breakpoints now argue
               over: flex-1 below lg (the board owns the column, the sheet
               floats above it), a fixed share at lg+ so the panel row
-              beneath always gets its half. isolate hands the whole height
-              back to the board. */}
+              beneath keeps a real share too. isolate hands the whole
+              height back to the board.
+
+              default is 55%, not the 45% this used to be. Every round on
+              the grid is a fixed 50px (rowsWide) and the header row above
+              them is ~65px, so ten full rounds — the brief's own number —
+              would need ~565px, and 45% gave the board about 345px at a
+              typical 900px-tall window: five and a half rounds above a
+              player list and queue occupying the rest, which is the
+              "panel occupying half the viewport" the brief is describing.
+
+              72% was tried first, measured to land exactly on ten rounds
+              at 900px, and produced a 24px sliver for the player list
+              underneath it — under one row. The pool's own header (the
+              recommended-pick card, search, the two filter-pill rows) is
+              a real, mostly-fixed ~235px on its own; past a certain board
+              share every pixel taken from the panel row comes out of the
+              list itself, not the chrome around it, because the chrome
+              doesn't shrink. Ten full rounds and a usable list do not
+              both fit a 900px window at once — measured, not assumed,
+              after the first number produced a pool nobody could read.
+
+              55% is the trade: seven rounds (429px, up from ~345px) and
+              roughly three real player rows (141px) below the
+              recommendation card and filters, rather than a technically-
+              satisfied round count sitting over an unusable list. raised
+              stays at 30% — that state is a deliberate trade the other
+              way, more list and less board, and shrinking it isn't what
+              "give the board more room" is asking for. */}
           {/* Board / Analysis tab switching moved to DraftCockpitHeader's
               own tab nav — this used to be a second, redundant strip right
               here, doing the same job the header now does above it. */}
@@ -920,7 +979,7 @@ export default function DraftRoom() {
                 ? 'lg:flex-1'
                 : tray === 'raised'
                   ? 'lg:flex-none lg:h-[30%]'
-                  : 'lg:flex-none lg:h-[45%]')
+                  : 'lg:flex-none lg:h-[55%]')
             }
           >
             {view === 'analysis' ? (
@@ -1031,6 +1090,7 @@ export default function DraftRoom() {
               recommendedVorp={recommendedVorp}
               recommendedTierLeft={recommendedTierLeft}
               projOf={projOf}
+              tierAvgByPos={tierAvgByPos}
               queuePlayers={queuePlayers}
               recentOthers={recentOthers}
               engine={engine}

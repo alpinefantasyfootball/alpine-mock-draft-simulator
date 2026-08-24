@@ -85,6 +85,7 @@ export default function PlayerHub({
   recommendedVorp,
   recommendedTierLeft,
   projOf,
+  tierAvgByPos,
   // Queue tab
   queuePlayers,
   recentOthers,
@@ -219,6 +220,7 @@ export default function PlayerHub({
           recommendedVorp={recommendedVorp}
           recommendedTierLeft={recommendedTierLeft}
           projOf={projOf}
+          tierAvgByPos={tierAvgByPos}
         />
         <PlayerProfileDrawer
           player={selectedPlayer}

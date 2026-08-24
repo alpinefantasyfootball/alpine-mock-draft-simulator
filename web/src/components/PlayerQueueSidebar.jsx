@@ -88,6 +88,7 @@ export default function PlayerQueueSidebar({
   recommendedVorp,
   recommendedTierLeft,
   projOf,
+  tierAvgByPos,
 }) {
   /* What statValue() reads a cell from: the two derived columns keep the
      readers this list already had, so the table can never disagree with
@@ -103,6 +104,59 @@ export default function PlayerQueueSidebar({
   const visibleGroups = STAT_GROUPS.filter((g) => !g.positions || posFilter === 'ALL' || g.positions.includes(posFilter))
   const visibleKeys = new Set(visibleGroups.flatMap((g) => g.keys))
   const visibleColumns = STAT_COLUMNS.filter((c) => visibleKeys.has(c.key))
+
+  /* Tier-cliff dividers, interleaved into the row list rather than drawn
+     per-row — a divider belongs *between* two players, so it has to be
+     built as its own pass over the list rather than something a single
+     row can decide to render above itself.
+
+     Only when the list is in board order. buildTiers() in app.js assigns
+     tiers by walking each position's board-sorted (ADP) sublist and only
+     ever incrementing — "already ADP sorted" is that function's own
+     comment — so tier climbs monotonically per position along board order
+     and nowhere else. Sorted by VORP or any raw stat, a lower tier can
+     follow a higher one for reasons that have nothing to do with a real
+     cliff; showing a divider there would label a coincidence as a cliff,
+     so it simply doesn't fire outside 'board'.
+
+     tierCounts is a first pass — how many undrafted players this position
+     has left at each tier in the list currently on screen — computed
+     before the second pass needs it, since "how many left before the
+     drop" has to count every remaining player in the ending tier, not
+     just the ones already walked past. */
+  const rows = []
+  if (sortBy === 'board' && tierAvgByPos) {
+    const tierCounts = {}
+    players.forEach((p) => {
+      if (p.drafted || !POS_LIST.includes(p.pos) || p.tier == null) return
+      tierCounts[p.pos] = tierCounts[p.pos] || {}
+      tierCounts[p.pos][p.tier] = (tierCounts[p.pos][p.tier] || 0) + 1
+    })
+    const lastTier = {}
+    players.forEach((player) => {
+      if (!player.drafted && POS_LIST.includes(player.pos) && player.tier != null) {
+        const last = lastTier[player.pos]
+        if (last != null && player.tier > last) {
+          const posAvgs = tierAvgByPos[player.pos] || {}
+          const endingAvg = posAvgs[last]
+          const nextAvg = posAvgs[last + 1]
+          const drop = endingAvg != null && nextAvg != null ? Math.round(endingAvg - nextAvg) : null
+          rows.push({
+            type: 'divider',
+            key: 'tier-' + player.pos + '-' + last,
+            pos: player.pos,
+            tierEnding: last,
+            remaining: tierCounts[player.pos]?.[last] || 0,
+            drop,
+          })
+        }
+        lastTier[player.pos] = player.tier
+      }
+      rows.push({ type: 'player', key: player.id || player.name, player })
+    })
+  } else {
+    players.forEach((player) => rows.push({ type: 'player', key: player.id || player.name, player }))
+  }
 
   return (
     // Sizing against the board+queue row (flex-1, lg:flex-[3], lg:min-w) now
@@ -397,13 +451,42 @@ export default function PlayerQueueSidebar({
           </div>
 
           <AnimatePresence initial={false}>
-            {players.map((player) => {
+            {rows.map((row) => {
+              if (row.type === 'divider') {
+                return (
+                  // Amber, not gold — #FFD166/--mine is reserved for
+                  // "whose seat/turn this is" everywhere else in the app
+                  // (CLAUDE.md: "Gold is identity... a colour doing five
+                  // jobs is not a signal"). Amber is a different, already-
+                  // established colour for this exact meaning: it's what
+                  // JukeValueAssistant's own "Tier scarcity" warning uses a
+                  // few rows above this list, for the identical idea of a
+                  // tier running out.
+                  <div
+                    key={row.key}
+                    className="flex min-w-max items-center gap-3 border-y border-amber-400/25 bg-amber-400/[0.05] px-3 py-2"
+                  >
+                    <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-amber-300">
+                      {row.pos} tier {row.tierEnding} ends here
+                    </span>
+                    <span className="text-[11px] text-white/60">
+                      {row.remaining} {row.pos}{row.remaining === 1 ? '' : 's'} left before the drop
+                      {row.drop == null
+                        ? ' — no more after this tier'
+                        : row.drop > 0
+                          ? ` — the next tier projects ${row.drop} fewer points`
+                          : ' — the next tier projects about the same'}
+                    </span>
+                  </div>
+                )
+              }
+              const player = row.player
               const photo = photoFor(player)
               const queued = queuedNames.has(player.name)
               const draftedBy = player.drafted ? draftedByFor(player) : null
               return (
                 <motion.div
-                  key={player.id || player.name}
+                  key={row.key}
                   layoutId={'player-' + (player.id || player.name)}
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -510,16 +593,25 @@ export default function PlayerQueueSidebar({
                         {draftedBy}
                       </span>
                     ) : (
+                      // Ghost, not the gradient — a gradient is an emphasis
+                      // device, and every one of ~200 rows getting the full
+                      // teal-to-purple treatment the instant it's your turn
+                      // is noise, not emphasis (nothing on the list stands
+                      // out if everything does). The one gradient "Draft"
+                      // button on this screen lives on the recommended-pick
+                      // card above the list (JukeValueAssistant's compact
+                      // variant) — that's the single primary action; every
+                      // row here stays a quiet, equally-weighted option.
                       <button
                         type="button"
                         onClick={(e) => { e.stopPropagation(); onDraft(player) }}
                         disabled={!myTurn}
                         title={myTurn ? undefined : 'Not your turn'}
                         className={
-                          'w-full rounded-full px-2 py-1.5 text-[11px] font-bold transition-all duration-200 ' +
+                          'w-full rounded-full border px-2 py-1.5 text-[11px] font-bold transition-colors duration-150 ' +
                           (myTurn
-                            ? 'bg-gradient-to-r from-[#00E5FF] to-[#7B1FA2] text-white active:scale-95'
-                            : 'cursor-not-allowed bg-white/5 text-white/25')
+                            ? 'border-white/15 text-white/70 hover:border-teal-400/50 hover:bg-teal-400/[0.06] hover:text-teal-300 active:scale-95'
+                            : 'cursor-not-allowed border-white/5 text-white/20')
                         }
                       >
                         Draft

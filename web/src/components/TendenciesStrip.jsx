@@ -25,6 +25,50 @@ import { POS_SOLID } from './draftRoomPositions.js'
 // small sample, but no longer a coin flip dressed as an insight.
 const MIN_MOCKS_FOR_TENDENCIES = 5
 
+// Shared between the weakest-spot card and its own paradox-resolving
+// sentence — one lookup, not two copies drifting apart. weakestSpot itself
+// can only ever be QB/RB/WR/TE (weakestStartingSpot() in app.js reads
+// replacementGap() over the starting lineup, and K/DST are excluded from
+// that measure the same way they're excluded from draft value elsewhere —
+// see CLAUDE.md), but holeRounds' topOtherPos names whichever position
+// filled that round most often, which is real and can be K or DST — a
+// missing name here read as the literal code, lowercased ("a dst 7 of 14
+// times"), so both are covered even though only one card can ever ask for
+// them.
+const POS_NAMES = { QB: 'Quarterback', RB: 'Running back', WR: 'Wide receiver', TE: 'Tight end', DST: 'Defense', K: 'Kicker' }
+
+/* A real chart, not a row of solid blocks — gridlines at 0/50/100 so the
+   axis a reader needs to judge "is 63 good" is on screen, not implied.
+   Built from however many graded entries there actually are; the label
+   beside it (below) is what used to say "last 12" over six blocks — the
+   label and the data disagreeing was the bug, not the six blocks. */
+function GradeChart({ entries }) {
+  const w = 300, h = 100, padTop = 10, innerH = 74
+  const n = entries.length
+  const stepX = n > 1 ? (w - 20) / (n - 1) : 0
+  const points = entries.map((e, i) => ({
+    ...e,
+    x: 10 + i * stepX,
+    y: padTop + innerH * (1 - Math.max(0, Math.min(100, e.score)) / 100),
+  }))
+  const path = points.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
+
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="mt-1 block h-[84px] w-full" aria-hidden="true">
+      <line x1="10" y1={padTop} x2={w - 10} y2={padTop} stroke="rgba(255,255,255,0.08)" strokeWidth="0.7" />
+      <line x1="10" y1={padTop + innerH / 2} x2={w - 10} y2={padTop + innerH / 2} stroke="rgba(255,255,255,0.08)" strokeWidth="0.7" />
+      <line x1="10" y1={padTop + innerH} x2={w - 10} y2={padTop + innerH} stroke="rgba(255,255,255,0.18)" strokeWidth="0.7" />
+      <text x="0" y={padTop + 3} fill="#7E868F" fontSize="7">100</text>
+      <text x="2" y={padTop + innerH / 2 + 3} fill="#7E868F" fontSize="7">50</text>
+      <text x="5" y={padTop + innerH + 3} fill="#7E868F" fontSize="7">0</text>
+      {n > 1 && <polyline points={path} fill="none" stroke="#00E5FF" strokeWidth="1.6" strokeLinejoin="round" />}
+      {points.map((p) => (
+        <circle key={p.id} cx={p.x} cy={p.y} r={n > 1 ? 2.4 : 3} fill="#00E5FF" stroke="#151b26" strokeWidth="1.2" />
+      ))}
+    </svg>
+  )
+}
+
 function Card({ label, children }) {
   return (
     <div className="rounded-xl border border-white/[0.07] bg-slate-panel p-4">
@@ -143,22 +187,13 @@ export default function TendenciesStrip({ stats }) {
   }
 
   if (stats.gradeLast12) {
+    const n = stats.gradeLast12.entries.length
+    // The label used to say "last 12" over however many blocks actually
+    // existed — true only once you have twelve. Below that it names the
+    // real count instead of a number the data can't back up.
     cards.push(
-      <Card key="gradeLast12" label="Grade, last 12">
-        <div className="flex h-[42px] items-end gap-1">
-          {stats.gradeLast12.entries.map((e) => {
-            const height = Math.max(4, Math.min(42, Math.round((e.score / 100) * 42)))
-            const fill = e.score >= 80 ? '#00E5FF' : e.score >= 60 ? 'rgba(0,229,255,0.5)' : 'rgba(255,255,255,0.18)'
-            return (
-              <div
-                key={e.id}
-                title={`${e.grade} (${e.score})`}
-                className="flex-1 rounded-sm"
-                style={{ height, background: fill }}
-              />
-            )
-          })}
-        </div>
+      <Card key="gradeLast12" label={n < 12 ? `Grade, all ${n}` : 'Grade, last 12'}>
+        <GradeChart entries={stats.gradeLast12.entries} />
         <p className="mt-1.5 text-xs text-white/55">{stats.gradeLast12.caption}</p>
       </Card>
     )
@@ -176,16 +211,37 @@ export default function TendenciesStrip({ stats }) {
   // no differently on screen than "best of 20."
 
   if (stats.weakestSpot) {
+    const posName = POS_NAMES[stats.weakestSpot.pos] || stats.weakestSpot.pos
+    const h = stats.holeRounds
+    // "Most drafted" (a round-1 pick, above) and "weakest spot" read like a
+    // contradiction sitting three inches apart until something names which
+    // rounds actually carry the hole — h is only present when a real,
+    // sampled round range backs that claim; without it this falls back to
+    // the plain stat rather than asserting a range with nothing behind it.
     cards.push(
-      <Card key="weakestSpot" label="Weakest spot">
-        <p className="font-display text-[23px] font-bold text-white">
-          {{ QB: 'Quarterback', RB: 'Running back', WR: 'Wide receiver', TE: 'Tight end' }[stats.weakestSpot.pos]
-            || stats.weakestSpot.pos}
+      <div
+        key="weakestSpot"
+        className={
+          'rounded-xl border p-4 ' +
+          (h ? 'border-rose-400/25 bg-rose-400/[0.04] sm:col-span-2' : 'border-white/[0.07] bg-slate-panel')
+        }
+      >
+        <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-rose-300/90">
+          Weakest spot{h ? ' — and it is not where you think' : ''}
         </p>
-        <p className="mt-1 text-xs text-white/50">
-          Below replacement in {stats.weakestSpot.pct}% of your rosters
-        </p>
-      </Card>
+        {h ? (
+          <p className="text-[15px] leading-[1.55] text-white/85">
+            You finish below replacement at {posName} in {stats.weakestSpot.pct}% of your rosters. The hole isn't
+            your first pick — it's rounds {h.startRound}–{h.endRound}, where you've taken a{' '}
+            {(POS_NAMES[h.topOtherPos] || h.topOtherPos).toLowerCase()} {h.topOtherCount} of {h.total} times.
+          </p>
+        ) : (
+          <>
+            <p className="font-display text-[23px] font-bold text-white">{posName}</p>
+            <p className="mt-1 text-xs text-white/50">Below replacement in {stats.weakestSpot.pct}% of your rosters</p>
+          </>
+        )}
+      </div>
     )
   }
 

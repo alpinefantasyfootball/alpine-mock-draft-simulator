@@ -1,5 +1,71 @@
 import { useState } from 'react'
 import { ChevronLeft, Share2, Check, Plus } from 'lucide-react'
+import { POS_BADGE } from './draftRoomPositions.js'
+
+/* One row of the "against the room" panel — where "you" sits on a 0-100
+   track against this component's room median and best. All three come off
+   the same analyseDraft() call the four bars already read; nothing here is
+   a second measurement. */
+function ComponentBand({ item }) {
+  const clamp = (v) => Math.max(0, Math.min(100, v))
+  const below = item.pct < item.median
+  return (
+    <div className="mb-3.5 last:mb-0">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="text-[12.5px] font-medium text-white/80">{item.label}</span>
+        <span className={'font-plex text-[11px] font-semibold ' + (below ? 'text-rose-400' : 'text-teal-300')}>
+          {item.pct >= item.median ? '+' : ''}
+          {Math.round(item.pct - item.median)} vs room median
+        </span>
+      </div>
+      <div className="relative mt-2 h-4">
+        <div className="absolute inset-x-0 top-[7px] h-1 rounded-full bg-white/[0.07]" />
+        <div className="absolute top-0 h-4 w-px bg-white/35" style={{ left: clamp(item.median) + '%' }} />
+        <div className="absolute top-0 h-4 w-px bg-white/15" style={{ left: clamp(item.best) + '%' }} />
+        <div
+          className={'absolute top-0 h-4 w-2.5 -translate-x-1/2 rounded-sm ' + (below ? 'bg-rose-400' : 'bg-teal-400')}
+          style={{ left: clamp(item.pct) + '%' }}
+        />
+      </div>
+    </div>
+  )
+}
+
+/* "Fix this first" — the one component costing the most, in weighted
+   points, against where the room's middle team sits, plus the single real
+   available player who'd move it and what it becomes. Shared between the
+   mobile and desktop layouts below rather than written out twice. */
+function FixThisFirst({ item, upgrade, before, dense }) {
+  return (
+    <div
+      className={
+        'rounded-xl border border-teal-400/30 bg-teal-400/[0.05] ' + (dense ? 'p-4' : 'p-4 sm:p-5')
+      }
+    >
+      <p className="font-plex text-[10px] font-semibold uppercase tracking-wide text-teal-300">Fix this first</p>
+      <p className={'mt-2 font-bold text-white ' + (dense ? 'text-[15px] leading-snug' : 'font-display text-lg')}>
+        {item.label} — your weakest number, carrying the most weight
+      </p>
+      <p className={'mt-2 leading-relaxed text-white/60 ' + (dense ? 'text-[13px]' : 'max-w-2xl text-xs')}>
+        At {Math.round(item.pct)} it is {Math.round(item.median - item.pct)} points below the room median, and at{' '}
+        {Math.round(item.weight * 100)}% weight it is your single most expensive component right now.
+      </p>
+      <div className="mt-3 flex flex-wrap items-center gap-2.5 rounded-lg bg-white/[0.05] px-3.5 py-2.5">
+        <span className={'rounded px-1.5 py-0.5 text-[10px] font-bold ' + (POS_BADGE[upgrade.player.pos] || 'bg-white/10 text-white/60')}>
+          {upgrade.player.pos}
+        </span>
+        <span className="text-[13px] font-semibold text-white">{upgrade.player.name}</span>
+        <span className="text-[11px] text-ink-muted">
+          {upgrade.player.team}
+          {upgrade.player.bye ? ` · bye ${upgrade.player.bye}` : ''}
+        </span>
+        <span className="ml-auto font-plex text-[13px] font-bold text-teal-300">
+          {before} → {upgrade.after}
+        </span>
+      </div>
+    </div>
+  )
+}
 
 // Real grading only — every number here comes from engine.analyseDraft(),
 // the exact function renderGrades() (app.js) calls, computed fresh on
@@ -64,14 +130,11 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
   // only if an older bundle without the bridge entry is somehow live.
   const weights = engine.weights ? engine.weights() : { starters: 0.5, value: 0.25, build: 0.15, byes: 0.1 }
 
-  const tone = (v) => (v >= 66 ? 'good' : v >= 33 ? 'neutral' : 'bad')
-  const barFill = { good: 'bg-emerald-400', neutral: 'bg-teal-400', bad: 'bg-rose-400' }
-
   const bars = [
-    { label: 'Starter strength', detail: Math.round(me.starters) + ' pts above replacement', pct: me.startersScaled, weight: weights.starters },
-    { label: 'Draft value', detail: (me.value >= 0 ? '+' : '') + me.value + ' picks, K and D/ST aside', pct: me.valueScaled, weight: weights.value },
-    { label: 'Roster construction', detail: me.build + ' / 100', pct: me.buildScaled, weight: weights.build },
-    { label: 'Bye week safety', detail: engine.byeSummary(me.badWeeks), pct: me.byePenaltyScaled, weight: weights.byes },
+    { key: 'starters', label: 'Starter strength', detail: Math.round(me.starters) + ' pts above replacement', pct: me.startersScaled, weight: weights.starters },
+    { key: 'value', label: 'Draft value', detail: (me.value >= 0 ? '+' : '') + me.value + ' picks, K and D/ST aside', pct: me.valueScaled, weight: weights.value },
+    { key: 'build', label: 'Roster construction', detail: me.build + ' / 100', pct: me.buildScaled, weight: weights.build },
+    { key: 'byes', label: 'Bye week safety', detail: engine.byeSummary(me.badWeeks), pct: me.byePenaltyScaled, weight: weights.byes },
   ]
 
   const standings = all.slice().sort((a, b) => a.rank - b.rank)
@@ -102,6 +165,50 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
   const summarySentence =
     goodPhrase.charAt(0).toUpperCase() + goodPhrase.slice(1) + ', ' + PHRASE[weakest.label][1] + '. ' +
     'The room averaged ' + roomAverage + '.'
+
+  /* Only the single weakest component (the same `weakest` the summary
+     sentence above already names) is coloured as a warning; the other three
+     stay a neutral accent regardless of their own score. This is a
+     different question from "Fix this first" below — that one asks which
+     component costs the most, weighted, against the room, which can
+     legitimately land on a different bar than the plain lowest score does. */
+  const toneOf = (b) => (b.key === weakest.key ? 'bad' : 'neutral')
+  const barFill = { neutral: 'bg-teal-400', bad: 'bg-rose-400' }
+
+  function median(nums) {
+    const sorted = nums.slice().sort((a, b) => a - b)
+    const mid = Math.floor(sorted.length / 2)
+    return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2
+  }
+  // Each bar's scaled key, so the room-wide spread for "against the room"
+  // and "Fix this first" reads off the identical field the bar itself does.
+  const scaledKeyOf = { starters: 'startersScaled', value: 'valueScaled', build: 'buildScaled', byes: 'byePenaltyScaled' }
+  const componentStats = bars.map((b) => {
+    const values = all.map((t) => t[scaledKeyOf[b.key]])
+    const roomMedian = median(values)
+    const best = Math.max(...values)
+    return { ...b, median: roomMedian, best, cost: b.weight * Math.max(0, roomMedian - b.pct) }
+  })
+  // "Fix this first" targets whichever component costs the most, in
+  // weighted points, against the room's middle team — not just the lowest
+  // raw score (that's `weakest`, above, and the two can differ: a
+  // high-weight component sitting a little under the median can cost more
+  // than a low-weight one sitting far under it).
+  const weakestByCost = componentStats.reduce((a, c) => (c.cost > a.cost ? c : a))
+  /* cost is Math.max(0, median - pct) under the hood, so it's 0 whenever a
+     component sits at or above the room median — and reduce() over an
+     all-zero array just returns its first element regardless of that
+     element's own value. Without this guard, a team sitting above median on
+     every single component still got handed bars[0] ("Starter strength")
+     as its supposed weak spot, with "points below the room median" text
+     that was true of nothing on the board. Real weakness or no card. */
+  const hasRealWeakness = weakestByCost.cost > 0
+  // bestUpgrade() only simulates starters/build (see its own comment in
+  // app.js for why value/byes have no honest single-player "fix"), and
+  // returns null once nothing left on the board actually helps.
+  const upgrade = hasRealWeakness ? engine.bestUpgrade(mySlot, weakestByCost.key) : null
+  const upgradeBefore = Math.round(weakestByCost.pct)
+  const showUpgrade = !!(upgrade && upgrade.after > upgradeBefore)
 
   /* The exact "Discard draft" / "Leave the room" bridge DraftMenuOverlay's
      own kebab menu already uses (engine.restart() = clearSave() +
@@ -212,26 +319,38 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
         {/* ============================= MOBILE ============================= */}
         <div className="mx-auto max-w-xl p-4 pt-5 sm:p-6 lg:hidden">
           <div className="flex items-start gap-3.5">
-            <div className="flex h-[92px] w-[92px] shrink-0 flex-col items-center justify-center rounded-2xl border border-teal-400/25 bg-teal-400/[0.07]">
-              <div className="font-display text-[38px] font-black leading-none text-teal-300">{me.grade}</div>
-              <div className="mt-1.5 font-plex text-[11px] text-ink-muted">{Math.round(me.total)} / 100</div>
-            </div>
-            <div className="min-w-0 flex-1 pt-1">
-              <h2 className="font-display text-[21px] font-extrabold leading-tight text-white">
-                {ordinal(me.rank)} of {teams}
+            <div className="min-w-0 flex-1">
+              <p className="font-plex text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Where you stand</p>
+              <h2 className="mt-1 font-display text-[38px] font-black leading-none text-white">
+                {ordinal(me.rank)} <span className="text-[16px] font-semibold text-white/50">of {teams}</span>
               </h2>
-              <p className="mt-1.5 text-[14px] leading-snug text-white/55">{summarySentence}</p>
+              <p className="mt-2 flex items-baseline gap-1.5">
+                <span className="font-plex text-[20px] font-bold text-teal-300">{me.total.toFixed(1)}</span>
+                <span className="font-plex text-[11px] text-ink-muted">/ 100 weighted score</span>
+              </p>
+              <p className="mt-2 text-[14px] leading-snug text-white/55">{summarySentence}</p>
+            </div>
+            {/* The letter, demoted — a 68 is a B mid-draft and an A+ at the
+                end, because the letter is finishing position and the score
+                above it is a weighted composite (both room-relative, but
+                on different scales), so the two must never carry equal
+                visual weight. */}
+            <div className="w-[74px] shrink-0 pt-1 text-right">
+              <p className="font-plex text-[9px] font-semibold uppercase leading-tight tracking-wide text-ink-muted">
+                Letter, for the share card
+              </p>
+              <p className="mt-1.5 font-display text-2xl font-bold text-white/50">{me.grade}</p>
             </div>
           </div>
 
           <h3 className="mt-8 font-display text-lg font-extrabold text-white">How the grade is built</h3>
           <div className="mt-4 space-y-5">
             {bars.map((b) => {
-              const t = tone(b.pct)
+              const t = toneOf(b)
               const width = Math.max(2, Math.min(100, b.pct))
               const contributes = b.pct * b.weight
               return (
-                <div key={b.label}>
+                <div key={b.key}>
                   <div className="flex items-baseline justify-between gap-3">
                     <span className="text-[15px] font-bold text-white">{b.label}</span>
                     <span className={'shrink-0 font-plex text-[15px] font-bold ' + (t === 'bad' ? 'text-rose-400' : 'text-teal-300')}>
@@ -260,6 +379,30 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
             Every score is your value ranked against the other {teams - 1} teams, so 50 is the room average.
             Bars run one direction: right is better.
           </p>
+
+          {showUpgrade && (
+            <div className="mt-5">
+              <FixThisFirst item={weakestByCost} upgrade={upgrade} before={upgradeBefore} dense />
+            </div>
+          )}
+
+          <h3 className="mt-7 font-display text-lg font-extrabold text-white">Each component, against the room</h3>
+          <div className="mt-2 flex items-center gap-3 text-[10px] text-ink-muted">
+            <span className="flex items-center gap-1">
+              <span className="h-2.5 w-px bg-white/35" /> median
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="h-2.5 w-px bg-white/15" /> best in room
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="h-2 w-2 rounded-sm bg-teal-400" /> you
+            </span>
+          </div>
+          <div className="mt-3">
+            {componentStats.map((c) => (
+              <ComponentBand key={c.key} item={c} />
+            ))}
+          </div>
 
           {/* Same behaviour as the desktop disclosure below (collapsed
               <details>, 70ch cap, identical wording) — mobile-width styling
@@ -357,37 +500,98 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
         </div>
 
         {/* ============================= DESKTOP ============================= */}
-        {/* Unchanged from before this pass — same structure, same classes,
-            same content. This prompt is the mobile layout; the lg+ report
-            below is deliberately untouched. */}
+        {/* Header, bars and the two new panels (Fix this first, against the
+            room) mirror the mobile section above rather than duplicating its
+            own comments — see those for why the letter is demoted, why only
+            one bar ever turns rose, and why Fix this first can target a
+            different component than the plain lowest bar does. Bargain/
+            reach, the bye chart, standings and the exit row below are
+            unchanged from before this pass. */}
         <div className="mx-auto hidden max-w-6xl p-6 lg:block">
-          <div className="flex items-center gap-4 rounded-xl border border-slate-rule bg-slate-panel/60 p-4 sm:p-5">
-            <div className="font-display text-4xl font-black text-teal-300">{me.grade}</div>
+          <div className="flex flex-wrap items-center gap-5 rounded-xl border border-slate-rule bg-slate-panel/60 p-4 sm:gap-6 sm:p-5">
             <div>
-              <h3 className="font-display text-base font-bold text-white">
-                {done ? 'Final grade' : 'Grade so far'} — {me.rank} of {teams}
-              </h3>
-              <p className="mt-0.5 text-xs leading-relaxed text-white/50">
-                {done ? 'Draft complete.' : 'Updates after every pick.'} Graded against the {teams - 1} teams in
-                this room, not against the league at large.
+              <p className="font-plex text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Where you stand</p>
+              <p className="mt-1 flex items-baseline gap-2">
+                <span className="font-display text-4xl font-black text-white">{ordinal(me.rank)}</span>
+                <span className="text-sm text-white/50">of {teams}</span>
               </p>
+            </div>
+            <div className="hidden h-10 w-px bg-slate-rule sm:block" />
+            <div>
+              <p className="font-plex text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Weighted score</p>
+              <p className="mt-1 font-plex text-2xl font-bold text-teal-300">
+                {me.total.toFixed(1)} <span className="text-sm font-normal text-ink-muted">/ 100</span>
+              </p>
+            </div>
+            <div className="hidden h-10 w-px bg-slate-rule sm:block" />
+            <p className="max-w-sm text-xs leading-relaxed text-white/50">
+              {done ? 'Draft complete.' : 'Updates after every pick.'} Graded against the {teams - 1} teams in
+              this room, not against the league at large.
+            </p>
+            {/* The letter, demoted — see the mobile header's own comment on
+                why finishing position and the weighted composite can't
+                share top billing. */}
+            <div className="ml-auto shrink-0 text-right">
+              <p className="font-plex text-[9px] font-semibold uppercase tracking-wide text-ink-muted">
+                Letter, for the share card
+              </p>
+              <p className="mt-1 font-display text-lg font-bold text-white/50">{me.grade}</p>
             </div>
           </div>
 
           <div className="mt-4 space-y-2.5">
             {bars.map((b) => {
-              const t = tone(b.pct)
+              const t = toneOf(b)
               const width = Math.max(2, Math.min(100, b.pct))
               return (
-                <div key={b.label} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                <div key={b.key} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                   <b className="w-32 shrink-0 font-semibold text-white/80 sm:w-40">{b.label}</b>
+                  <span className="w-14 shrink-0 font-plex text-[10px] text-ink-muted">wt {Math.round(b.weight * 100)}%</span>
                   <div className="h-1.5 min-w-[100px] max-w-[420px] flex-1 rounded-full bg-slate-rule">
                     <div className={'h-1.5 rounded-full transition-all duration-300 ' + barFill[t]} style={{ width: width + '%' }} />
                   </div>
-                  <span className="shrink-0 text-ink-muted">{b.detail}</span>
+                  <span className={'w-7 shrink-0 text-right font-plex text-sm font-bold ' + (t === 'bad' ? 'text-rose-400' : 'text-teal-300')}>
+                    {Math.round(b.pct)}
+                  </span>
+                  <span className="w-full shrink-0 text-ink-muted sm:w-auto sm:flex-1">{b.detail}</span>
                 </div>
               )
             })}
+            {/* The components must visibly add up to the composite above —
+                not just agree with it in principle. */}
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-slate-rule/70 pt-2.5 text-xs">
+              <span className="w-32 shrink-0 font-semibold uppercase tracking-wide text-teal-300 sm:w-40">Weighted sum</span>
+              <span className="flex-1 font-plex text-ink-muted">{bars.map((b) => (b.pct * b.weight).toFixed(1)).join(' + ')}</span>
+              <span className="font-plex text-sm font-bold text-teal-300">= {me.total.toFixed(1)}</span>
+            </div>
+          </div>
+
+          {showUpgrade && (
+            <div className="mt-4">
+              <FixThisFirst item={weakestByCost} upgrade={upgrade} before={upgradeBefore} />
+            </div>
+          )}
+
+          <div className="mt-4 rounded-xl border border-slate-rule bg-slate-panel/40 p-4 sm:p-5">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Each component, against the room</p>
+              <div className="flex items-center gap-3 text-[10px] text-ink-muted">
+                <span className="flex items-center gap-1">
+                  <span className="h-2.5 w-px bg-white/35" /> median
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="h-2.5 w-px bg-white/15" /> best in room
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-sm bg-teal-400" /> you
+                </span>
+              </div>
+            </div>
+            <div className="mt-3">
+              {componentStats.map((c) => (
+                <ComponentBand key={c.key} item={c} />
+              ))}
+            </div>
           </div>
 
           {(me.bargain || me.reach) && (
