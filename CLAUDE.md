@@ -1356,6 +1356,31 @@ projected 50-yard field goal — 183 of them — and makes kickers look far wors
 than they are. `reconcile()` folds the coarse keys in. Check any new stat
 across all three feeds before trusting it.
 
+**A `window.JukeEngine` entry is only as safe as its own guard, not its
+caller's.** Every bare `DraftEngine` reference in `app.js` was already
+guarded — `typeof DraftEngine === "undefined" ? fallback : DraftEngine.x(…)`
+— except two: `nextPicksFor()` and `inProgressSummary()`. Both were safe for
+as long as they had only ever been called in response to a click (Resume,
+Start), by which point the deferred boot (`draft-engine.js`/`players.js`/
+`stats.js`, loaded via `requestIdleCallback`, not a blocking `<script>`) had
+always finished. `DraftLocker.jsx` broke that assumption: it calls
+`engine.inProgressSummary()` on mount, gated only on `window.JukeEngine`
+existing — true almost immediately, since `app.js` is a blocking classic
+script — never on `dataReady()`, which is the actual promise that
+`draft-engine.js` has landed. A cold, direct load of `#/draft-room` with a
+save already on disk hit this reliably: `ReferenceError: DraftEngine is not
+defined`, before any interaction. Navigating there by hash-change from an
+already-open homepage never showed it, because by then the deferred files
+had had time to land — which is what made it look like a routing bug before
+it looked like a timing one. Fixed the same way the rest of the file already
+was: the guard belongs on the function itself, not on each caller, because
+nothing about `window.JukeEngine` existing implies the deferred data does.
+Any new entry added to the bridge that touches `DraftEngine`, `PLAYERS` or
+`STAT_KEYS` needs the same guard rather than trusting a React call site to
+check `dataReady()` first — `ScoringDemoCard.jsx` and `TakeAPick.jsx` do
+check it, and were fine; the bug was in the two bridge functions that had no
+guard of their own to fall back on.
+
 **Bump `?v=` in `index.html` on every deploy that changes a file it loads.**
 Everything the page asks for is cached, so without a version in the address a
 returning visitor runs today's HTML against Tuesday's JavaScript. That does
