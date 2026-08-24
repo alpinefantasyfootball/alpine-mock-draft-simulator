@@ -101,10 +101,20 @@
   <link rel="icon" href="/favicon-16.png" sizes="16x16" type="image/png">
   <link rel="icon" href="/favicon.ico" sizes="any">
 
-  <!-- ================== Sonar, the cold-load overlay ==================
+  <!-- ================== Breach, the cold-load overlay ==================
        These style the #boot-sonar element, which is the first child of <body>.
        See the comment there for why the loader is markup rather than a
-       component.
+       component. The element id stayed "boot-sonar" through this pass on
+       purpose — theme.js's comment, main.jsx's teardown and tests/sonar.spec.mjs
+       all key off that exact id, and none of that had to change; only what
+       plays inside it did. "Sonar" — the ring-and-mark treatment — is still
+       exactly what SonarLoader.jsx shows everywhere else in the app (the
+       Lobby → Draft Room transition, share buttons, the chat GIF search).
+       This overlay alone moved to "Breach": the shark leaps through a
+       waterline instead of the mark fading up inside a ring sweep. Sonar's
+       own keyframes (sonar-ring, sonar-label, sonar-fade) are still used
+       below — for the idle fallback and the wordmark — so the duplication
+       note two paragraphs down still applies to those three.
 
        Homepage v4 pass 0 scopes this overlay to the installed app's cold
        launch only — it no longer fires on an ordinary browser visit to the
@@ -121,6 +131,13 @@
        standalone case — only whether it ever gets painted at all on every
        other one.
 
+       There is also no skip-gate for a fast boot, and carrying that forward
+       is a deliberate choice rather than an oversight. The overlay used to
+       delay 300ms so a fast load never painted it at all; the owner measured
+       that production traffic on a fast connection never once saw it that
+       way — only Fast 4G and slower did — and removed the gate. Breach
+       inherits that reversal rather than reintroducing the thing it undid.
+
        Inline rather than in index.css, because Tailwind's stylesheet is a Vite
        artefact: a production build injects it as a <link>, but under `vite dev`
        it arrives via JavaScript. A dev cold load would therefore paint an
@@ -132,18 +149,30 @@
        teardown lives in main.jsx - a module served from origin - and nothing in
        this block is script-shaped.
 
-       Four of the five keyframes below - sonar-ring, sonar-focus, sonar-label
-       and sonar-fade - get a second, identical copy in web/tailwind.config.js
-       when SonarLoader.jsx lands. That duplication is deliberate rather than
-       drift: this copy has to be readable before any bundle is. They are global
-       @keyframes under one name each, so if the two ever disagree, whichever
-       stylesheet the document loads later wins for the overlay *and* for the
-       components. Change one, change the other. sonar-boot-in has no Tailwind
-       counterpart; it belongs to this overlay alone. -->
+       Three of the keyframes below - sonar-ring, sonar-label and sonar-fade -
+       get a second, identical copy in web/tailwind.config.js, because
+       SonarLoader.jsx uses all three too. That duplication is deliberate
+       rather than drift: this copy has to be readable before any bundle is.
+       They are global @keyframes under one name each, so if the two ever
+       disagree, whichever stylesheet the document loads later wins for the
+       overlay *and* for the components. Change one, change the other.
+       sonar-boot-in and the four breach* keyframes have no Tailwind
+       counterpart; they belong to this overlay alone. sonar-focus, which
+       used to be the fifth shared keyframe, is gone from this file — nothing
+       here uses it any more now that the mark is breachMark/breachSettle
+       instead, and it stays exactly where it always has in tailwind.config.js
+       for SonarLoader.jsx's own benefit. -->
   <style>
     html:not([data-standalone]) #boot-sonar { display: none; }
 
     #boot-sonar {
+      /* Every delay below is a calc() off this one number rather than a
+         literal, because the design's own timing was tuned as fractions of
+         its stated total (see the droplet/ripple rules further down) — change
+         this and every delay rescales with it, which is the whole reason to
+         write them this way instead of copying the handoff's millisecond
+         values directly. */
+      --breach-total: 1600ms;
       position: fixed; inset: 0; z-index: 9999;
       display: flex; flex-direction: column;
       align-items: center; justify-content: center; gap: 30px;
@@ -216,49 +245,121 @@
        The overlay is obsidian because the page underneath always is. If body
        ever becomes theme-aware, this is the block that has to follow it. */
 
+    /* Sonar's own idle ring, reused rather than reinvented for the case
+       Breach has no answer for on its own: a fixed one-shot has nothing left
+       to show if the JS bundle still hasn't run by the time it finishes.
+       Silent for the whole breach sequence (delayed past --breach-total),
+       then picking up the ordinary infinite sweep exactly where breach-settled
+       takes over below — so on the fast path, where main.jsx tears the
+       overlay down at --breach-total, a ring is only just leaving opacity 0
+       when the whole element starts fading with it, and is not perceptible.
+       Only a boot slow enough to still be here past --breach-total ever
+       actually watches one complete a sweep. */
     #boot-sonar i {
       position: absolute; width: 150px; height: 150px; border-radius: 50%;
       animation: sonar-ring 2100ms ease-out infinite both;
+      animation-delay: var(--breach-total);
     }
-    /* purple-400 rather than the base purple, and the order is the design's
-       own: teal, teal, purple, entering 700ms apart across the 2100ms cycle.
+    /* purple-400 rather than the base purple — unchanged from Sonar's own
+       ring, and the reasoning is the same reasoning the ripple below reuses:
+       composited on obsidian, #7B1FA2 at .75 measures 1.79:1 against 4.37 and
+       3.28 for the two teals; even at full alpha it only reaches 2.35, so no
+       alpha rescues it. purple-400 #9A3FC0 is already a token in
+       tailwind.config.js and at .9 measures 3.07.
 
-       Only the colour moved. Composited on the obsidian ground, #7B1FA2 at .75
-       measures 1.79:1 against 4.37 and 3.28 for the two teals — under half the
-       dimmer one, and that is at the ring keyframe's .65 peak rather than what
-       is on screen most of the sweep. #7B1FA2 is simply a dark purple; even at
-       full alpha it only reaches 2.35, so no alpha rescues it. purple-400
-       #9A3FC0 is already a token in tailwind.config.js, needs no new colour,
-       and at .9 measures 3.07 — alongside the teals instead of under them.
-
-       The reason it went unseen for a while was timing rather than colour, and
-       that is already fixed elsewhere: main.jsx holds the overlay for one full
-       ring cycle precisely so the third ring, which does not enter until
-       1400ms, is not cut off. Reordering the rings here would fight that and
-       falsify the note beside it. Keep the order; the colour was the part that
-       needed help.
-
-       Keep this in step with the RINGS array in SonarLoader.jsx, which carries
-       the same three colours for the panel tier. */
+       Keep this in step with the RINGS array in SonarLoader.jsx, which
+       carries the same three colours for the panel tier. */
     #boot-sonar i:nth-of-type(1) { border: 1px solid rgba(0,229,255,.55); }
-    #boot-sonar i:nth-of-type(2) { border: 1px solid rgba(0,229,255,.45); animation-delay: 700ms; }
-    #boot-sonar i:nth-of-type(3) { border: 1px solid rgba(154,63,192,.9); animation-delay: 1400ms; }
+    #boot-sonar i:nth-of-type(2) { border: 1px solid rgba(0,229,255,.45); animation-delay: calc(var(--breach-total) + 700ms); }
+    #boot-sonar i:nth-of-type(3) { border: 1px solid rgba(154,63,192,.9); animation-delay: calc(var(--breach-total) + 1400ms); }
 
-    /* position:relative on the mark and the wordmark is what puts them above
-       the rings in paint order - a positioned element draws over a
-       non-positioned one - so the rings pass behind the lockup rather than
-       across its face. Both are in normal flow; only the rings are absolute.
-
-       The mark is a background-image rather than an <img> because that is the
-       shape the prototype was reviewed in, and it costs nothing: this element
-       is inside an aria-hidden overlay, so it needs no alt text, and its box is
-       stated outright so there is nothing to shift. Fixed 564:352 - never
-       derive this from anything but the width. */
-    #boot-sonar span {
+    /* The scene is the same 212x132 box the old sonar-focus mark used — the
+       fixed 564:352 ratio, at the size the design was reviewed at. Everything
+       below is positioned absolutely against this one box, which is what
+       keeps the shark, the waterline and the splash lined up with each other
+       without hand-placing five separate elements against the viewport.
+       position:relative on it is what puts the whole scene above the rings
+       in paint order, same as the wordmark below — a positioned element
+       draws over a non-positioned one, so the rings pass behind the lockup
+       rather than across its face. */
+    #boot-sonar .breach-scene {
       position: relative; width: 212px; height: 132px;
-      background: url(/juke-mark.svg) center / contain no-repeat;
-      animation: sonar-focus 580ms cubic-bezier(.16,1,.3,1) 300ms both;
     }
+
+    /* Two copies of the mark, not one animated in place. breachMark's own
+       100% keyframe fades the shark to opacity 0 — right for the fast path,
+       where main.jsx tears the whole overlay down within a frame or two of
+       that. Wrong for the slow path, where nothing tears it down for several
+       more seconds: a shark that fades to nothing leaves a blank dark screen,
+       which reads as more broken than a settled logo ever would. So a second,
+       motionless mark sits underneath, invisible until breachSettle
+       crossfades it in right as the animated one fades out — by
+       --breach-total there is always a shark on screen, animated or settled.
+       Both are background-images rather than <img>s for the same reason the
+       old sonar-focus mark was: this element is inside an aria-hidden
+       overlay, so it needs no alt text, and the box is stated outright so
+       nothing shifts. */
+    #boot-sonar .breach-mark, #boot-sonar .breach-settled {
+      position: absolute; inset: 0;
+      background: url(/juke-mark.svg) center / contain no-repeat;
+    }
+    #boot-sonar .breach-mark {
+      animation: breachMark var(--breach-total) linear 1 both;
+    }
+    #boot-sonar .breach-settled {
+      opacity: 0;
+      animation: breachSettle var(--breach-total) linear 1 both;
+    }
+
+    /* The waterline the shark launches out of and falls back through. 18px
+       2px glow at .7 is the design's own value; the bar itself is solid
+       #00E5FF rather than the glow colour at the glow's own alpha, because a
+       glow with nothing solid at its centre reads as a smear, not a surface. */
+    #boot-sonar .breach-water {
+      position: absolute; left: 50%; top: 63%;
+      width: 150px; height: 2px; margin-left: -75px; border-radius: 1px;
+      background: #00E5FF;
+      box-shadow: 0 0 18px 2px rgba(0,229,255,.7);
+      animation: breachWaterPulse var(--breach-total) linear 1 both;
+    }
+
+    /* Six droplets, two waves of three: wave 1 fires with the water's first
+       pulse (the shark breaking the surface on the way up), wave 2 with its
+       second (the re-entry). Positioned by eye around the waterline rather
+       than derived, because breachDroplet's own keyframe is vertical-only —
+       the fan is entirely in each droplet's static `left`, not in the shared
+       keyframe, so as not to touch motion values the handoff called exact.
+       One delay per wave rather than one per droplet, because that is what
+       the handoff gives: three droplets, one moment. */
+    #boot-sonar .breach-droplet {
+      position: absolute; top: 63%; width: 5px; height: 5px; border-radius: 50%;
+      animation: breachDroplet 550ms linear 1 both;
+    }
+    #boot-sonar .breach-droplet:nth-child(-n+3) { animation-delay: calc(var(--breach-total) * .06); }
+    #boot-sonar .breach-droplet:nth-child(n+4)  { animation-delay: calc(var(--breach-total) * .41); }
+    #boot-sonar .breach-droplet:nth-child(1) { left: calc(50% - 22px); background: #7CE9FA; }
+    #boot-sonar .breach-droplet:nth-child(2) { left: calc(50% - 2px);  background: #00E5FF; }
+    #boot-sonar .breach-droplet:nth-child(3) { left: calc(50% + 16px); background: #7CE9FA; }
+    #boot-sonar .breach-droplet:nth-child(4) { left: calc(50% - 30px); background: #00E5FF; }
+    #boot-sonar .breach-droplet:nth-child(5) { left: calc(50% + 4px);  background: #7CE9FA; }
+    #boot-sonar .breach-droplet:nth-child(6) { left: calc(50% + 26px); background: #00E5FF; }
+
+    /* The closing ripple: rgba(154,63,192,.9), not the handoff's own
+       rgba(168,85,247,.5). Measured against #0B0E14, the handoff's exact
+       value comes out 2.04:1 — under this project's own 3:1 bar for a
+       decorative ring, the identical failure mode the purple-400 note above
+       already measured once for the idle rings. This is purple-400 at the
+       same .9 alpha those rings already use, for the same reason: 3.07:1,
+       and no colour jump at the exact moment the ripple hands off to the
+       rings sitting right beside it. */
+    #boot-sonar .breach-ripple {
+      position: absolute; left: 50%; top: 63%;
+      width: 60px; height: 60px; margin-left: -30px; margin-top: -30px;
+      border-radius: 50%; border: 1.5px solid rgba(154,63,192,.9);
+      animation: breachRipple 500ms linear 1 both;
+      animation-delay: calc(var(--breach-total) * .88);
+    }
+
     /* The wordmark at the stacked lockup's own proportions: Archivo 900,
        uppercase, -0.045em, sized at the mark width over 2.4 - the ratio
        JukeLogo's variant="stacked" already computes (212 / 2.4 = 88). The 30px
@@ -284,35 +385,82 @@
       12%  { opacity: .65; }
       100% { transform: scale(2.2); opacity: 0; }
     }
-    @keyframes sonar-focus {
-      0%   { transform: scale(1.2); opacity: 0; filter: blur(7px); }
-      100% { transform: scale(1); opacity: 1; filter: blur(0); }
-    }
     @keyframes sonar-label {
       0%   { opacity: 0; transform: translateY(8px); }
       100% { opacity: 1; transform: translateY(0); }
     }
     /* Opacity only - no blur, no travel. This is the reduced-motion substitute
-       for the two above rather than a variant of them, which is why it states
-       its own 0% instead of reusing sonar-boot-in: that keyframe declares only
-       a `to`, so its implied start is whatever the element already computes,
-       and the mark and wordmark both compute to opacity 1. Reused there it
-       would animate 1 to 1 and fade nothing at all. */
+       for sonar-label and breachSettle rather than a variant of either, which
+       is why it states its own 0% instead of reusing sonar-boot-in: that
+       keyframe declares only a `to`, so its implied start is whatever the
+       element already computes, and both compute to opacity 1. Reused there
+       it would animate 1 to 1 and fade nothing at all. */
     @keyframes sonar-fade { 0% { opacity: 0; } 100% { opacity: 1; } }
 
-    /* The rings go, and so do the blur and the scale and the travel. The
-       opacity fade stays - style.css already draws that line for .to-top ("the
-       fade stays - it is an opacity change, not motion") and this follows it. */
+    /* Exact motion, extracted from the approved mockup. The percentages are
+       duration-independent — --breach-total above is the only number that
+       needs to change to retime the whole sequence; see its own comment and
+       the calc()s on the droplets and the ripple. */
+    @keyframes breachMark {
+      0%   { transform: translate(-30px,190px) rotate(-16deg) scale(.92); }
+      8%   { transform: translate(-18px,60px) rotate(-10deg) scale(.96); }
+      22%  { transform: translate(6px,-118px) rotate(8deg) scale(1); }
+      34%  { transform: translate(14px,-20px) rotate(16deg) scale(1); }
+      42%  { transform: translate(10px,74px) rotate(10deg) scale(1); }
+      54%  { transform: translate(0,-10px) rotate(-2deg) scale(1.02); }
+      62%  { transform: translate(0,0) rotate(0deg) scale(1); opacity: 1; }
+      88%  { transform: translate(0,0) rotate(0deg) scale(1); opacity: 1; }
+      100% { transform: translate(0,-14px) rotate(0deg) scale(.98); opacity: 0; }
+    }
+    @keyframes breachDroplet {
+      0%   { transform: translateY(0) scale(0); opacity: 0; }
+      2%   { transform: translateY(-8px) scale(1); opacity: 1; }
+      12%  { transform: translateY(-54px) scale(.45); opacity: 0; }
+      100% { transform: translateY(-54px) scale(.45); opacity: 0; }
+    }
+    @keyframes breachWaterPulse {
+      0%   { transform: scaleY(1); opacity: .55; }
+      7%   { transform: scaleY(3); opacity: 1; }
+      16%  { transform: scaleY(1); opacity: .6; }
+      40%  { transform: scaleY(1); opacity: .6; }
+      45%  { transform: scaleY(4); opacity: 1; }
+      56%  { transform: scaleY(1); opacity: .7; }
+      88%  { opacity: .55; }
+      100% { opacity: 0; }
+    }
+    @keyframes breachRipple {
+      0%   { transform: scale(.25); opacity: 0; }
+      28%  { opacity: .5; }
+      62%  { transform: scale(2); opacity: 0; }
+      100% { opacity: 0; }
+    }
+    /* Not from the handoff — the crossfade that lets the settled mark take
+       over from the animated one at exactly the moment it fades, so there is
+       never a frame with neither on screen. Timed against the same
+       --breach-total as breachMark, so the two stay locked together even if
+       the total is retuned. */
+    @keyframes breachSettle {
+      0%, 85% { opacity: 0; }
+      100%    { opacity: 1; }
+    }
+
+    /* The rings go, and so does the launch, the splash and the ripple —
+       everything that was travel or scale under motion becomes a single
+       settled mark. style.css already draws this line for .to-top ("the fade
+       stays - it is an opacity change, not motion") and this follows it:
+       breach-settled fades straight in on its own and nothing else plays. */
     @media (prefers-reduced-motion: reduce) {
       #boot-sonar i { display: none; }
-      #boot-sonar span { animation: sonar-fade 300ms ease-out 300ms both; }
+      #boot-sonar .breach-mark, #boot-sonar .breach-water,
+      #boot-sonar .breach-droplet, #boot-sonar .breach-ripple { display: none; }
+      #boot-sonar .breach-settled { animation: sonar-fade 300ms ease-out 300ms both; }
       #boot-sonar b { animation: sonar-fade 300ms ease-out 420ms both; }
     }
   </style>
 </head>
 <body>
 
-  <!-- Sonar, the cold-load overlay. It is markup rather than a component
+  <!-- Breach, the cold-load overlay. It is markup rather than a component
        because it has to cover React's own boot: everything below this element
        is a blocking classic script, and Vite's module bundle runs after all of
        them, so React cannot draw its own loading state. main.jsx removes this
@@ -330,16 +478,32 @@
        every click on the page. The teardown lives in main.jsx.
 
        The <b> is the wordmark, not a caption, and the string is exactly `Juke`.
-       Screen tier is the stacked lockup - mark over wordmark - and carries no
-       line under it. A visitor who arrived from a pasted link needs to know
-       whose product this is; what the product does is the homepage's job and it
-       is one second behind. Naming the category here would also pin the brand
-       to the one room that exists today, against this project's own rule that
-       Juke is the brand and The Draft Room is one of several planned rooms. Do
-       not add a tagline here. -->
+       This is a brand moment - the shark and nothing else under it - and
+       carries no line under it. A visitor who arrived from a pasted link needs
+       to know whose product this is; what the product does is the homepage's
+       job and it is one second behind. Naming the category here would also pin
+       the brand to the one room that exists today, against this project's own
+       rule that Juke is the brand and The Draft Room is one of several planned
+       rooms. The design mockup this animation was built from labelled the
+       overlay "MOCK DRAFT" - dropped rather than shipped, for the same reason
+       this comment already gave the Sonar version of this screen: do not add
+       a tagline here.
+
+       breach-water/-droplet/-ripple are the splash; breach-mark is the shark
+       in flight; breach-settled is its motionless understudy, invisible until
+       the very end - see the CSS for why there are two. The three <i> rings
+       are Sonar's own idle loop, silent until breach-settled takes over, for
+       the boot slow enough to still be waiting past --breach-total. -->
   <div id="boot-sonar" aria-hidden="true">
     <i></i><i></i><i></i>
-    <span></span>
+    <div class="breach-scene">
+      <span class="breach-water"></span>
+      <span class="breach-droplet"></span><span class="breach-droplet"></span><span class="breach-droplet"></span>
+      <span class="breach-droplet"></span><span class="breach-droplet"></span><span class="breach-droplet"></span>
+      <span class="breach-ripple"></span>
+      <span class="breach-settled"></span>
+      <span class="breach-mark"></span>
+    </div>
     <b>Juke</b>
   </div>
 

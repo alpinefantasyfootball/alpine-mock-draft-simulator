@@ -99,28 +99,26 @@ if (boot && document.documentElement.hasAttribute('data-standalone')) {
       // .now() is measured from the time origin, so it is exactly how long this
       // page has been loading — no separate start timestamp to keep in step.
       //
-      // 1800ms is the composition's own choreography, not a round number.
-      // Every element in the overlay finishes arriving before it leaves:
+      // 2100ms held unchanged across the Sonar → Breach swap, and for the same
+      // shape of reason it was chosen the first time: it is past every element
+      // in the overlay's own arrival, not a round number.
       //
-      //   mark        sonar-focus  580ms after 300ms delay  -> settles  880ms
-      //   wordmark    sonar-label  500ms after 640ms delay  -> settles 1140ms
-      //   ring 1      sonar-ring  2100ms, no delay          -> enters      0ms
-      //   ring 2      sonar-ring  2100ms, 700ms delay       -> enters    700ms
-      //   ring 3      sonar-ring  2100ms, 1400ms delay      -> enters   1400ms
+      //   shark      breachMark        --breach-total (1600ms), no delay  -> settles/fades 1600ms
+      //   wordmark   sonar-label       500ms after 640ms delay            -> settles       1140ms
+      //   ripple     breachRipple      500ms after .88 * 1600ms delay     -> completes      1908ms
+      //   idle ring 1 sonar-ring       2100ms, --breach-total delay       -> enters         1600ms
       //
-      // The first version of this held 900ms, chosen off the mark alone, and
-      // that was too short by the overlay's own design: the wordmark was still
-      // animating when the fade-out began, and the purple third ring — which
-      // does not enter until 1400ms — had never once been seen. A loading
-      // state that never shows its own last element is not finished, it is
-      // interrupted.
-      //
-      // 2100 is one full sonar-ring cycle: ring 1 completes the sweep it
-      // started at 0ms, by which point every other element has long since
-      // arrived. It is also the duration the design this came from shipped
-      // with, which is the deciding reason — the timing is the design's to
-      // choose, and 2100 is what it chose. Holding past a full cycle would
-      // only repeat a sweep the reader has already watched.
+      // breachMark's own 100% fades the shark to opacity 0, so what is on
+      // screen at 1600ms is a blank instant — covered by breach-settled's
+      // crossfade (see index.html), which finishes at the same 1600ms mark.
+      // The ripple is the actual last arrival, completing at 1908ms; holding
+      // to 2100ms leaves it ~200ms of room rather than cutting it off flush,
+      // and keeps the overall boot experience the same length it has always
+      // been even though everything inside it changed. A loading state that
+      // never shows its own last element is not finished, it is interrupted —
+      // the lesson the first version of this hold (900ms, the mark alone) was
+      // written to fix, and it applies exactly as much to a ripple as it did
+      // to a third ring.
       //
       // This whole hold replaces an early return that removed the element
       // outright while it was still at opacity 0 — the branch a fast load
