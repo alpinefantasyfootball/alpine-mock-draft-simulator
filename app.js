@@ -2736,6 +2736,11 @@ function nextPickFor(slot) {
 // nextPickFor() above stays as the single-answer case everything else
 // already depends on.
 function nextPicksFor(slot, count) {
+  // Bridged straight to window.JukeEngine and read by the React Draft Room
+  // on mount (see the bridge comment on nextPicksFor below) — unlike every
+  // caller inside this file, that read has no guarantee draft-engine.js has
+  // landed yet. Same guard as onTheClock()/pickCode() above.
+  if (typeof DraftEngine === "undefined") return [];
   const total = league.teams * league.rounds;
   const out = [];
   for (let overall = state.picks.length + 1; overall <= total && out.length < count; overall++) {
@@ -6633,6 +6638,15 @@ function startFromHistoryLeague(id) {
 // would put the same draft behind two different buttons in two different
 // tabs of the same panel.
 function inProgressSummary() {
+  // DraftLocker.jsx calls this on mount, gated only on window.JukeEngine
+  // existing rather than on dataReady() — draft-engine.js is still one of
+  // the deferred files at that point (see the boot sequence below), so a
+  // cold direct load of #/draft-room with a save already on disk can reach
+  // the DraftEngine calls below before draft-engine.js has landed. Same
+  // guard as onTheClock()/pickCode() above; null reads as "nothing to
+  // resume" for one render and DraftLocker's own "juke:header" tick
+  // repaints it correctly the moment the deferred data arrives.
+  if (typeof DraftEngine === "undefined") return null;
   const data = readSave();
   if (!data || !data.picks || !data.picks.length) return null;
   const total = data.league.teams * data.league.rounds;
