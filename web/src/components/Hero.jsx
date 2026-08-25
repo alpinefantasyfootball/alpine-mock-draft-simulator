@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion'
 import { ChevronRight } from 'lucide-react'
 import ScoringDemoCard from './ScoringDemoCard.jsx'
+import PhaseRail from './PhaseRail.jsx'
 
 export default function Hero() {
   return (
@@ -18,7 +19,20 @@ export default function Hero() {
       />
 
       <div className="relative mx-auto grid max-w-7xl gap-[72px] px-6 pb-[76px] pt-9 lg:grid-cols-[1.05fr_1fr] lg:items-center lg:pt-[92px]">
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
+        {/* min-w-0: a CSS grid item's default min-width is auto, not 0, so
+            without this a wide-enough descendant (PhaseRail's mobile chip
+            row, at its natural 440px) visually spills past this column's
+            actual ~375px track instead of being constrained to it — the
+            grid track itself still reports the right width, only this
+            item's rendered content ignores it. Caught only because
+            PhaseRail's own overflow-x-auto had nothing bounded to scroll
+            within; the fix belongs here; on the grid item, not on the row. */}
+        <motion.div
+          className="min-w-0"
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+        >
           {/* One eyebrow at every width now, and it is desktop's mint pill.
               The phone used to get its own teal mono line reading
               "FREE · UNLIMITED MOCKS" — the revised mobile handoff retires
@@ -56,7 +70,7 @@ export default function Hero() {
               A condensed face is what makes 46px fit 390px at all: "Master
               the draft." at 39px Archivo was already close to the padding,
               and this is seven points larger. */}
-          <h1 className="mt-5 text-balance font-display text-[46px] font-extrabold leading-[1.04] tracking-[-0.02em] sm:mt-7 sm:text-[52px] sm:leading-[1.04] lg:text-[64px] lg:leading-[1.03] lg:tracking-[-0.032em]">
+          <h1 className="mt-5 text-balance font-display text-[46px] font-extrabold italic leading-[1.04] tracking-[-0.02em] sm:mt-7 sm:text-[52px] sm:leading-[1.04] lg:text-[64px] lg:leading-[1.03] lg:tracking-[-0.032em]">
             <span className="text-white">Master the draft.</span>
             <br />
             <span className="text-mint">Dominate the season.</span>
@@ -115,7 +129,7 @@ export default function Hero() {
             <a
               href="#/drafts"
               data-hero-cta=""
-              className="flex h-[54px] w-full items-center justify-center rounded-full bg-gradient-to-r from-[#00E5FF] to-[#7B1FA2] text-base font-bold text-white
+              className="flex h-[54px] w-full items-center justify-center rounded-full bg-gradient-to-r from-[#22d3ee] to-[#a78bfa] text-base font-bold text-white
                          shadow-glass transition-all duration-200 active:scale-[0.98]"
             >
               Enter the Draft Room
@@ -144,8 +158,8 @@ export default function Hero() {
             <a
               href="#/drafts"
               data-hero-cta=""
-              className="rounded-full bg-gradient-to-r from-[#00E5FF] to-[#7B1FA2] px-8 py-4 text-base font-bold text-white
-                         shadow-glass transition-all duration-200 hover:scale-105 hover:shadow-[0_0_15px_rgba(0,229,255,0.4)]"
+              className="rounded-full bg-gradient-to-r from-[#22d3ee] to-[#a78bfa] px-8 py-4 text-base font-bold text-white
+                         shadow-glass transition-all duration-200 hover:scale-105 hover:shadow-[0_0_15px_rgba(34,211,238,0.4)]"
             >
               Enter the Draft Room
             </a>
@@ -175,6 +189,8 @@ export default function Hero() {
           <p className="mt-3 text-center font-plex text-[11.5px] tracking-[0.1em] text-[#7C8A99] lg:mt-5 lg:text-left">
             FREE &middot; UNLIMITED &middot; NO ACCOUNT
           </p>
+
+          <PhaseRail />
         </motion.div>
 
         {/* Not rotated, not floating — squared and aligned as a real second

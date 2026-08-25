@@ -32,19 +32,31 @@ function useRooms() {
 
 // Replaces the 3D coverflow carousel this file used to be — the brief's own
 // complaint about it was real: only one card fully legible at a time, with
-// touch/keyboard/resize logic just to look at the other five. A plain grid
-// shows all six at once, which is the actual goal of a "here's everything
-// Juke does" section on a marketing page.
+// touch/keyboard/resize logic just to look at the other five.
 //
-// Live rooms first, a display-only sort rather than a change to ROOMS
-// itself: app.js's own comment on that array explains it was deliberately
-// reordered to run chronologically across a season (Prospect, Draft,
-// Waiver, ...) rather than live-first, and the footer reads the same array
-// — reordering the source would have silently reordered the footer too.
-// This is the one place on the page a design review specifically asked to
-// lead with what a visitor can actually click; Array.prototype.sort is
-// stable in every current engine, so the five "coming soon" rooms keep
-// their existing relative order behind whichever ones are live.
+// Desktop was a flat live-first grid for a while; a design review asked for
+// a chronological timeline instead — grouped by season, in the order a
+// fantasy year actually runs, rather than by what happens to be clickable
+// today. `season` already exists on every entry in ROOMS (app.js) for
+// exactly this reason, so grouping reads it rather than re-deciding which
+// room belongs to which phase a second time.
+const SEASON_ORDER = ['Pre-season', 'In-season', 'Post-season']
+
+function bySeasonGroup(rooms) {
+  return SEASON_ORDER.map((season) => ({ season, rooms: rooms.filter((r) => r.season === season) })).filter(
+    (group) => group.rooms.length > 0
+  )
+}
+
+// Mobile keeps live-first: the phone-only pattern below leads with whichever
+// room you can actually enter today, not with the season calendar — a
+// display-only sort rather than a change to ROOMS itself. app.js's own
+// comment on that array explains it was deliberately reordered to run
+// chronologically (Prospect, Draft, Waiver, ...) rather than live-first, and
+// the footer reads the same array — reordering the source would have
+// silently reordered the footer too. Array.prototype.sort is stable in
+// every current engine, so the five "coming soon" rooms keep their existing
+// relative order behind whichever ones are live.
 function liveFirst(rooms) {
   return [...rooms].sort((a, b) => (a.live === b.live ? 0 : a.live ? -1 : 1))
 }
@@ -78,6 +90,7 @@ export default function RoomsGrid() {
   const liveRoom = ordered.find((r) => r.live)
   const comingSoon = ordered.filter((r) => !r.live)
   const LiveIcon = liveRoom ? (ICON_BY_NAME[liveRoom.name] ?? DraftIcon) : null
+  const seasonGroups = bySeasonGroup(rooms)
 
   return (
     <section id="rooms" className="border-t border-white/[0.06] bg-[#080b0e] px-6 py-24">
@@ -151,7 +164,7 @@ export default function RoomsGrid() {
                   // was invented to prevent, just not extended past Hero.jsx
                   // when this card grew its own CTA.
                   data-hero-cta=""
-                  className="mt-5 flex h-12 w-full items-center justify-center rounded-full bg-gradient-to-r from-[#00E5FF] to-[#7B1FA2] text-[15px] font-bold text-white
+                  className="mt-5 flex h-12 w-full items-center justify-center rounded-full bg-gradient-to-r from-[#22d3ee] to-[#a78bfa] text-[15px] font-bold text-white
                              shadow-glass transition-all duration-200 active:scale-[0.98]"
                 >
                   Enter the {shortRoomName(liveRoom.name)} Room
@@ -185,22 +198,38 @@ export default function RoomsGrid() {
           </div>
         )}
 
-        <div className="hidden gap-4 lg:grid lg:grid-cols-3">
-          {ordered.map((room) => {
-            const Icon = ICON_BY_NAME[room.name] ?? DraftIcon
-            return (
-              <RoomCard
-                key={room.name}
-                room={{ ...room, icon: <Icon className="h-[18px] w-[18px]" /> }}
-                onComingSoon={(r) =>
-                  modalRef.current?.open(
-                    `${r.name} is coming soon`,
-                    `${r.blurb} There's nothing to sign up for yet — check back once it's live.`
+        <div className="hidden lg:block">
+          {seasonGroups.map((group) => (
+            <div key={group.season} className="mb-11 last:mb-0">
+              {/* The rule fades into the row rather than running edge to edge —
+                  a full-width line reads as a table divider; this reads as a
+                  season heading, which is what it is. */}
+              <div className="mb-4 flex items-center gap-3">
+                <span className="font-plex text-[11px] font-semibold uppercase tracking-[0.14em] text-white/85">{group.season}</span>
+                <span className="h-px flex-1 bg-gradient-to-r from-teal-400/35 via-white/10 to-transparent" />
+                <span className="font-plex text-[11px] text-white/40">
+                  {group.rooms.length} room{group.rooms.length === 1 ? '' : 's'}
+                </span>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {group.rooms.map((room) => {
+                  const Icon = ICON_BY_NAME[room.name] ?? DraftIcon
+                  return (
+                    <RoomCard
+                      key={room.name}
+                      room={{ ...room, icon: <Icon className="h-[18px] w-[18px]" /> }}
+                      onComingSoon={(r) =>
+                        modalRef.current?.open(
+                          `${r.name} is coming soon`,
+                          `${r.blurb} There's nothing to sign up for yet — check back once it's live.`
+                        )
+                      }
+                    />
                   )
-                }
-              />
-            )
-          })}
+                })}
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 

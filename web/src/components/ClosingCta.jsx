@@ -59,8 +59,8 @@ export default function ClosingCta() {
         <a
           href="#/drafts"
           data-hero-cta=""
-          className="flex h-[54px] w-full shrink-0 items-center justify-center rounded-full bg-gradient-to-r from-[#00E5FF] to-[#7B1FA2] text-base font-bold text-white
-                     shadow-glass transition-all duration-200 active:scale-[0.98] lg:h-auto lg:w-auto lg:px-[34px] lg:py-[17px] lg:hover:scale-105 lg:hover:shadow-[0_0_15px_rgba(0,229,255,0.4)]"
+          className="flex h-[54px] w-full shrink-0 items-center justify-center rounded-full bg-gradient-to-r from-[#22d3ee] to-[#a78bfa] text-base font-bold text-white
+                     shadow-glass transition-all duration-200 active:scale-[0.98] lg:h-auto lg:w-auto lg:px-[34px] lg:py-[17px] lg:hover:scale-105 lg:hover:shadow-[0_0_15px_rgba(34,211,238,0.4)]"
         >
           Enter the Draft Room
         </a>

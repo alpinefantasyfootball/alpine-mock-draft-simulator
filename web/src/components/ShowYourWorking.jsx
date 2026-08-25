@@ -252,6 +252,113 @@ function SurvivalChart({ data }) {
   )
 }
 
+// 04's own real number: the same third-round scenarios TakeAPick.jsx reads
+// from engine.thirdRoundScenarios() — not a second engine call inventing a
+// number, just this section's own read of the same live data, the same way
+// useVorpCurve and useFeaturedSurvival above each call window.JukeEngine
+// directly rather than threading state down from a shared parent. The last
+// scenario's own "after" grade is the most fully-realized of the three.
+function useLatestGrade() {
+  const [grade, setGrade] = useState(null)
+
+  useEffect(() => {
+    const engine = typeof window !== 'undefined' ? window.JukeEngine : null
+    if (!engine) return
+
+    const read = () => {
+      if (!engine.dataReady()) return
+      const rows = engine.thirdRoundScenarios()
+      if (rows && rows.length) setGrade(rows[rows.length - 1].after)
+    }
+
+    read()
+    window.addEventListener('juke:header', read)
+    return () => window.removeEventListener('juke:header', read)
+  }, [])
+
+  return grade
+}
+
+// Whether Waiver/Trade are actually live — the same `live` flag
+// RoomsGrid.jsx reads off ROOMS (app.js), not a second guess at it. No
+// juke:header re-read: a room's live flag is a feature flag, not something
+// that changes as picks land, so reading it once is the honest scope of
+// this value rather than implying a live dependency that isn't real.
+function useRoomStatus() {
+  const [status, setStatus] = useState({ waiverLive: false, tradeLive: false })
+
+  useEffect(() => {
+    const engine = typeof window !== 'undefined' ? window.JukeEngine : null
+    if (!engine || !engine.rooms) return
+    const rooms = engine.rooms()
+    setStatus({
+      waiverLive: rooms.find((r) => r.name === 'The Waiver Room')?.live ?? false,
+      tradeLive: rooms.find((r) => r.name === 'The Trade Room')?.live ?? false,
+    })
+  }, [])
+
+  return status
+}
+
+function ProofRow({ label, active, value, note }) {
+  return (
+    <div className="rounded-[10px] bg-white/[0.03] px-3 py-[9px]">
+      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+        <span
+          className={`font-plex text-[9.5px] font-semibold uppercase tracking-[0.1em] ${active ? '' : 'text-white/40'}`}
+          style={active ? { color: '#a78bfa' } : undefined}
+        >
+          {label}
+        </span>
+        <span className={`text-[13.5px] font-semibold ${active ? 'text-white/90' : 'text-white/55'}`}>{value}</span>
+      </div>
+      <p className="mt-[3px] font-plex text-[10.5px] text-[#8e9aa1]">{note}</p>
+    </div>
+  )
+}
+
+// Card 04: the one genuinely new claim in this section (01–03 already ship).
+// Its own promise is that the draft-grade engine is the same engine that
+// will price a waiver claim and score a trade — so unlike 01–03, it cannot
+// borrow a real number for two of its three rows: the Waiver and Trade
+// rooms don't exist yet, and there is no service to source one from. This
+// project's own rule is to degrade honestly rather than ship a fixture
+// (see CLAUDE.md's "Claim and proof" and "Real data requirements" sections),
+// so those two rows read "Not live yet" off the real room flag instead of a
+// plausible-looking number nobody computed.
+function SameEngineCard() {
+  const grade = useLatestGrade()
+  const { waiverLive, tradeLive } = useRoomStatus()
+
+  return (
+    <div
+      className="flex h-full flex-col rounded-[14px] border px-[26px] py-6 transition-colors duration-200"
+      style={{ borderColor: 'rgba(167,139,250,0.35)', background: 'linear-gradient(180deg, rgba(167,139,250,0.10), #0d1216 60%)' }}
+    >
+      <p className="font-plex text-[11px] font-semibold tracking-[0.12em]" style={{ color: '#a78bfa' }}>
+        04 &middot; SAME ENGINE, ALL SEASON
+      </p>
+      <h3 className="mt-[9px] font-display text-[17px] font-bold text-white">
+        Draft grades today. Waivers and trades once those rooms open.
+      </h3>
+      <p className="mt-[9px] text-[15px] leading-[1.55] text-[#8e9aa1]">
+        The same VORP baseline and the same four weighted parts that grade tonight&rsquo;s draft will price a
+        waiver claim and score both sides of a trade once those rooms are live. One engine, not three.
+      </p>
+      <div className="mt-4 flex flex-col gap-2">
+        <ProofRow
+          label="Draft"
+          active
+          value={grade ? `Grade · ${grade.composite}/100 · ${grade.letter}` : 'Grade · —'}
+          note="4 weighted parts, computed tonight"
+        />
+        <ProofRow label="Waivers" active={waiverLive} value={waiverLive ? 'Live' : 'Not live yet'} note="same VORP baseline, once it ships" />
+        <ProofRow label="Trades" active={tradeLive} value={tradeLive ? 'Live' : 'Not live yet'} note="same projections, once it ships" />
+      </div>
+    </div>
+  )
+}
+
 // The live PPR-toggle demo used to live in this section, in a two-column
 // layout beside these three cards. A design review found it buried a full
 // scroll down the page while the hero above showed a static, non-
@@ -349,10 +456,17 @@ export default function ShowYourWorking() {
         </div>
       </div>
 
-      <div className="mt-[14px] rounded-[14px] border border-white/[0.07] bg-[#0d1216] px-[26px] py-6 transition-colors duration-200 hover:border-teal-400/70">
-        <p className="font-plex text-[11px] font-semibold tracking-[0.12em] text-teal-400">03 &middot; THE GRADE</p>
-        <h3 className="mt-[9px] font-display text-[17px] font-bold text-white">Four parts, each shown</h3>
-        <p className="mt-[9px] max-w-[640px] text-[15px] leading-[1.55] text-[#8e9aa1]">{GRADE_BODY}</p>
+      {/* 03 paired with 04 rather than stacked full-width: neither is a
+          chart, so pairing them keeps the chart row (01/02) visually
+          distinct from the two card-only rows below it — the same reason
+          03 was never squeezed into a three-up row with the charts. */}
+      <div className="mt-[14px] grid gap-[14px] lg:grid-cols-2">
+        <div className="rounded-[14px] border border-white/[0.07] bg-[#0d1216] px-[26px] py-6 transition-colors duration-200 hover:border-teal-400/70">
+          <p className="font-plex text-[11px] font-semibold tracking-[0.12em] text-teal-400">03 &middot; THE GRADE</p>
+          <h3 className="mt-[9px] font-display text-[17px] font-bold text-white">Four parts, each shown</h3>
+          <p className="mt-[9px] max-w-[640px] text-[15px] leading-[1.55] text-[#8e9aa1]">{GRADE_BODY}</p>
+        </div>
+        <SameEngineCard />
       </div>
     </section>
   )

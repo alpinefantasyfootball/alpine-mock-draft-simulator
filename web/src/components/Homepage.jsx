@@ -66,20 +66,14 @@ export default function Homepage() {
     <div className="min-h-screen overflow-x-hidden bg-void text-white">
       <Header />
 
-      {/* Two heights, because the header has two — nav row (h-14/h-16) plus
-          StatusStrip (h-8 + 1px border), and the only breakpoint that moves
-          either is md (768px), not lg: homepage v4 pass 2's status strip
-          replaces the old ticker's `hidden lg:block` with something that
-          renders at every width (see Header.jsx), so there's exactly one
-          switch left to track instead of two. Measured against the real
-          rendered header rather than added up from the Tailwind classes —
-          this is the section CLAUDE.md warns is easy to get right on paper
-          and wrong on screen: 56 + 32 + 1 = 89px below md,
-          64 + 32 + 1 = 97px at md+, both confirmed via
-          getBoundingClientRect() before being written down here.
-          index.css's scroll-padding-top tracks the same two numbers, plus
+      {/* The fixed header is just its nav row now — the status strip that
+          used to sit under it (h-8 + 1px border) was removed as redundant.
+          pt-14/pt-16 matches Header.jsx's own h-14/h-16 exactly, which is
+          why this can be the Tailwind scale rather than an arbitrary value
+          with arithmetic in a comment: there's nothing left to add to it.
+          index.css's scroll-padding-top tracks the same two heights, plus
           its own 8px of anchor-scroll slack — see the comment there. */}
-      <main className="pt-[89px] md:pt-[97px]">
+      <main className="pt-14 md:pt-16">
         <Hero />
         <TakeAPick />
         <ShowYourWorking />

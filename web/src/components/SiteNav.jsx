@@ -75,8 +75,8 @@ export function AccountButtons({ modalRef }) {
               'sign-up, and your drafts already save to this device.'
           )
         }
-        className="inline-flex h-11 items-center justify-center rounded-full bg-gradient-to-r from-[#00E5FF] to-[#7B1FA2] px-4 text-sm font-semibold text-white
-                   shadow-glass transition-all duration-200 hover:scale-105 hover:shadow-[0_0_15px_rgba(0,229,255,0.4)] md:h-9"
+        className="inline-flex h-11 items-center justify-center rounded-full bg-gradient-to-r from-[#22d3ee] to-[#a78bfa] px-4 text-sm font-semibold text-white
+                   shadow-glass transition-all duration-200 hover:scale-105 hover:shadow-[0_0_15px_rgba(34,211,238,0.4)] md:h-9"
       >
         Sign Up
       </button>

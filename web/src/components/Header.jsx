@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import { Menu } from 'lucide-react'
-import StatusStrip from './StatusStrip.jsx'
 import JukeLogo from './juke-logo/JukeLogo.jsx'
 import ComingSoonModal from './ComingSoonModal.jsx'
 import MobileNavSheet from './MobileNavSheet.jsx'
@@ -205,15 +204,14 @@ export default function Header() {
         </div>
       </div>
 
-      {/* Homepage v4 pass 2: the status strip replaces the marquee ticker
-          and, unlike it, renders at every width rather than hidden below lg
-          — §4.1's own mobile row just drops content (fact 3, condensed
-          fact 2/right text; see StatusStrip.jsx), it doesn't hide the bar.
-          That's a real change to the header's total height at every
-          breakpoint — Homepage.jsx's pt-[] and index.css's
-          scroll-padding-top both had to move with it; see the comments on
-          both for the measured values. */}
-      <StatusStrip />
+      {/* The status strip (live dot, player count, ADP time, league shape)
+          lived here — homepage v4 pass 2's replacement for the old marquee
+          ticker. Removed as redundant once the rest of the page carried the
+          same facts elsewhere. The header stays `fixed`, unchanged: removing
+          a row from inside it just makes the pinned box shorter, which is
+          why Homepage.jsx's <main> padding and index.css's
+          scroll-padding-top both had to shrink with it — see the comments
+          on both. */}
 
       <MobileNavSheet open={navOpen} onClose={() => setNavOpen(false)} modalRef={modalRef} />
       <ComingSoonModal ref={modalRef} />
@@ -246,7 +244,7 @@ export default function Header() {
     >
       <a
         href="#/drafts"
-        className="flex h-[50px] w-full items-center justify-center rounded-full bg-gradient-to-r from-[#00E5FF] to-[#7B1FA2] text-[15px] font-bold text-white shadow-glass transition-transform active:scale-[0.98]"
+        className="flex h-[50px] w-full items-center justify-center rounded-full bg-gradient-to-r from-[#22d3ee] to-[#a78bfa] text-[15px] font-bold text-white shadow-glass transition-transform active:scale-[0.98]"
       >
         Enter the Draft Room
       </a>

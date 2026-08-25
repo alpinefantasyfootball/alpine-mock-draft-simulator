@@ -1,10 +1,13 @@
 import { motion } from 'framer-motion'
 
-// Live keeps the existing brand teal (border, icon, pill) rather than the
-// design brief's own slightly different #22d3ee — the hybrid palette
-// decision: every "Live"/CTA-adjacent signal on this page reads the same
-// teal the Draft Room and the logo already use, so a room going from
-// "Coming soon" to live one day doesn't introduce a second teal next to it.
+// Live keeps the existing brand teal (border, icon, pill) on purpose — it is
+// a status colour, not the action colour, and stays put even after the
+// page's primary CTAs moved to the newer cyan/violet gradient (Hero.jsx,
+// ClosingCta.jsx, SiteNav.jsx, Header.jsx, and this grid's own mobile "Enter
+// the ... Room" button). The two are allowed to differ: "Live" is answering
+// "is this room open," the CTA is answering "click here" — the same
+// teal-acts/blue-states split this project already draws elsewhere, just
+// with a status colour on one side instead of a second action colour.
 export default function RoomCard({ room, onComingSoon }) {
   const live = room.live
 
