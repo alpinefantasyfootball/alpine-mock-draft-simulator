@@ -156,7 +156,7 @@
        They are global @keyframes under one name each, so if the two ever
        disagree, whichever stylesheet the document loads later wins for the
        overlay *and* for the components. Change one, change the other.
-       sonar-boot-in and the four breach* keyframes have no Tailwind
+       sonar-boot-failsafe and the four breach* keyframes have no Tailwind
        counterpart; they belong to this overlay alone. sonar-focus, which
        used to be the fifth shared keyframe, is gone from this file — nothing
        here uses it any more now that the mark is breachMark/breachSettle
@@ -173,48 +173,39 @@
       --breach-total: 1600ms;
       /* Every breach element's own animation-delay is
          var(--breach-start-delay) plus its share of --breach-total, not
-         --breach-total alone — reported directly, from a recording that
-         caught it: the shark was already mid-launch, translated and
-         rotated, while the homepage was still visible faintly through the
-         overlay behind it. #boot-sonar itself takes 200ms (sonar-boot-in)
-         to reach full opacity, and every breach* animation had delay 0, so
-         for that entire 200ms the reader was watching the site, a
-         half-opaque panel, and an already-moving shark all layered on top
-         of each other at once — three things changing when the eye can
-         only parse one. Sonar's own mark avoided this by construction:
-         sonar-focus carried its own 300ms delay, longer than the fade-in,
-         so the container had already finished becoming opaque before
-         anything inside it started moving. --breach-start-delay restores
-         that same ordering for Breach: nothing animates until the overlay
-         itself is a solid panel, then the whole sequence plays exactly as
-         choreographed, just 200ms later start to finish. */
+         --breach-total alone. Kept at 200ms for the reason it always had —
+         a brief, deliberate beat before anything moves, the same shape of
+         pause Sonar's own mark already takes (sonar-focus, 300-340ms) —
+         but it no longer exists to wait out #boot-sonar's own fade-in,
+         because that fade-in is gone; see the opacity note just below for
+         why. */
       --breach-start-delay: 200ms;
       position: fixed; inset: 0; z-index: 9999;
       display: flex; flex-direction: column;
       align-items: center; justify-content: center; gap: 30px;
       background: #0B0E14; overflow: hidden;
-      /* The overlay fades in immediately now, and main.jsx holds it for a
-         minimum time rather than racing it away. It used to be delayed 300ms
-         specifically so a fast load never showed it at all: the element was
-         removed while still at opacity 0, on the argument that a flash of logo
-         reads as a glitch.
-
-         That argument is sound and the owner has overruled it deliberately.
-         Measured against production before the change: a warm load tore the
-         overlay down at 340ms having never exceeded opacity 0, so the person
-         who built it had never once seen it — only visitors on Fast 4G (first
-         visible 947ms) and slower did. A brand moment nobody on a fast
-         connection ever sees is not much of a brand moment.
-
-         The cost is real and worth stating: every visit now spends about a
-         second before content, including repeat visits on a warm cache. That
-         is the trade, not an oversight. If it ever needs undoing, put the
-         300ms delay back here and restore main.jsx's `if (shown === '0')`
-         early return — those two together are the whole of the old
-         behaviour. */
-      opacity: 0;
-      /* Two animations. The first is the fade-in; the second is a failsafe that
-         takes the overlay away on its own after 8 seconds, and it is not
+      /* opacity: 1, not 0-animating-to-1 — this used to fade in over 200ms
+         (sonar-boot-in), and that was a real bug, not just a cosmetic one.
+         #boot-sonar is the first child of body, position:fixed over the
+         actual homepage markup sitting right behind it in the same
+         document — prerendered, real, already in the DOM before a single
+         line of JS has run (see scripts/prerender.mjs). An element's own
+         `opacity` is not the same question as its background colour's
+         alpha: #0B0E14 has none, but CSS opacity applies to the whole
+         subtree's compositing regardless, so for that entire 200ms the
+         real marketing page was visibly bleeding through a panel that
+         looked like it was supposed to already be hiding it. Reported
+         directly from production, where it is unmissable, because
+         `vite dev` never prerenders #root at all — there was nothing behind
+         the fade to see locally, which is exactly why this survived the
+         first round of testing. Content still gets its own entrance
+         (--breach-start-delay, above) — only the container's fade is gone,
+         because the container was never supposed to be see-through in the
+         first place. If a soft entrance is wanted back, it has to be a
+         second, solid element crossfading over this one, never this
+         element's own opacity. */
+      opacity: 1;
+      /* One animation now instead of two: the failsafe, and it is not
          optional.
 
          The teardown that normally removes this element is the last statement
@@ -224,20 +215,20 @@
          index.html asks for an `assets/index-<hash>.js` that no longer exists
          and gets a 404. That has already happened once here. Without this
          rule the same event leaves a fixed, fully opaque, z-index 9999 panel
-         over the whole site — and because `animation: … both` holds the
-         fade-in's end state, it stays there for ever.
+         over the whole site — opacity: 1 is this element's resting state,
+         not an animation's end point, so there is nothing to fall back out
+         of on its own — it stays there for ever.
 
          A page that looks like it is loading for ever is a worse failure than
          one that looks broken, because nobody reports it as a bug. Eight
          seconds is far past any real load and far short of a visitor giving
-         up. `forwards` rather than `both` on purpose: with backwards fill this
-         animation would also apply during its own delay and fight the
-         fade-in.
+         up. `forwards` rather than `both`: this element's own opacity is 1
+         from its very first frame now (see above), so there is no earlier
+         state left for a backwards fill to reach into.
 
          visibility, not just opacity — a transparent element still answers a
          hit test, which is the half of this failure that swallows clicks. */
-      animation: sonar-boot-in 200ms ease-out both,
-                 sonar-boot-failsafe 600ms ease-in 8s forwards;
+      animation: sonar-boot-failsafe 600ms ease-in 8s forwards;
       /* Declared here on the base rule rather than beside the opacity change in
          [data-sonar-out] below, so the fade-out has somewhere settled to start
          from. main.jsx pins the animated opacity and drops the animation before
@@ -335,15 +326,19 @@
        solid #00E5FF rather than the glow colour at the glow's own alpha,
        because a glow with nothing solid at its centre reads as a smear, not
        a surface. The wash is the second thing the approved mockup carries
-       that a box-shadow alone can't reach: a wide gradient fading down from
-       the line, reported back after it was missing here entirely ("no green
-       fading like the water"). Both share breachWaterPulse, so the wash
-       swells with the same two pulses the line does rather than sitting
-       there as flat, static light. */
+       that a box-shadow alone can't reach: a wide glow fading out from the
+       line, reported back after it was missing here entirely ("no green
+       fading like the water"). radial-gradient, not linear: a linear fade
+       only softens the top and bottom, so the box's own left and right
+       edges show up as a hard rectangle the instant it's bright enough to
+       read at all — caught in the same recording as the opacity bug above.
+       An ellipse has no edges to show. Both share breachWaterPulse, so the
+       wash swells with the same two pulses the line does rather than
+       sitting there as flat, static light. */
     #boot-sonar .breach-water-wash {
       position: absolute; left: 50%; top: 63%;
       width: 320px; height: 110px; margin-left: -160px;
-      background: linear-gradient(to bottom, rgba(0,229,255,.3), rgba(0,229,255,0) 75%);
+      background: radial-gradient(ellipse 160px 55px at center, rgba(0,229,255,.3), rgba(0,229,255,0) 75%);
       animation: breachWaterPulse var(--breach-total) linear 1 both;
       animation-delay: var(--breach-start-delay);
     }
@@ -412,7 +407,6 @@
       animation: sonar-label 500ms ease-out 640ms both;
     }
 
-    @keyframes sonar-boot-in { to { opacity: 1; } }
     @keyframes sonar-ring {
       0%   { transform: scale(.3); opacity: 0; }
       12%  { opacity: .65; }
@@ -424,10 +418,10 @@
     }
     /* Opacity only - no blur, no travel. This is the reduced-motion substitute
        for sonar-label and breachSettle rather than a variant of either, which
-       is why it states its own 0% instead of reusing sonar-boot-in: that
-       keyframe declares only a `to`, so its implied start is whatever the
-       element already computes, and both compute to opacity 1. Reused there
-       it would animate 1 to 1 and fade nothing at all. */
+       is why it states its own 0%: a keyframe that declared only a `to` would
+       take its implied start from whatever the element already computes -
+       opacity 1 for both of these - and animate 1 to 1, fading nothing at
+       all. */
     @keyframes sonar-fade { 0% { opacity: 0; } 100% { opacity: 1; } }
 
     /* Exact motion, extracted from the approved mockup. The percentages are
