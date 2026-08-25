@@ -159,27 +159,23 @@
        sonar-boot-failsafe and the four breach* keyframes have no Tailwind
        counterpart; they belong to this overlay alone. sonar-focus, which
        used to be the fifth shared keyframe, is gone from this file — nothing
-       here uses it any more now that the mark is breachMark/breachSettle
-       instead, and it stays exactly where it always has in tailwind.config.js
+       here uses it any more now that the mark is breachMark instead, and it
+       stays exactly where it always has in tailwind.config.js
        for SonarLoader.jsx's own benefit. -->
   <style>
     #boot-sonar {
-      /* Every delay below is a calc() off this one number rather than a
-         literal, because the design's own timing was tuned as fractions of
-         its stated total (see the droplet/ripple rules further down) — change
-         this and every delay rescales with it, which is the whole reason to
-         write them this way instead of copying the handoff's millisecond
-         values directly. */
-      --breach-total: 2800ms;
-      /* Every breach element's own animation-delay is
-         var(--breach-start-delay) plus its share of --breach-total, not
-         --breach-total alone. Kept at 200ms for the reason it always had —
-         a brief, deliberate beat before anything moves, the same shape of
-         pause Sonar's own mark already takes (sonar-focus, 300-340ms) —
-         but it no longer exists to wait out #boot-sonar's own fade-in,
-         because that fade-in is gone; see the opacity note just below for
-         why. */
-      --breach-start-delay: 200ms;
+      /* Breach II: a single --total rather than Breach I's two-variable
+         --breach-total/--breach-start-delay pair. --wave1/--wave2/--ripple
+         are calc()s off --total alone, exactly as the second handoff
+         specifies — "derived delays, computed from --total, never
+         hard-coded" is the fix for the sync drift that caused the earlier
+         glitching, and layering this file's old start-delay convention back
+         on top of that would reintroduce the same class of drift the
+         handoff exists to close out. Retiming is one number again. */
+      --total: 4000ms;
+      --wave1: calc(var(--total) * .06);
+      --wave2: calc(var(--total) * .41);
+      --ripple: calc(var(--total) * .55);
       position: fixed; inset: 0; z-index: 9999;
       display: flex; flex-direction: column;
       align-items: center; justify-content: center; gap: 30px;
@@ -198,11 +194,13 @@
          directly from production, where it is unmissable, because
          `vite dev` never prerenders #root at all — there was nothing behind
          the fade to see locally, which is exactly why this survived the
-         first round of testing. Content still gets its own entrance
-         (--breach-start-delay, above) — only the container's fade is gone,
-         because the container was never supposed to be see-through in the
-         first place. If a soft entrance is wanted back, it has to be a
-         second, solid element crossfading over this one, never this
+         first round of testing. Content still gets its own entrance — the
+         mark, water and droplets all start moving immediately at 0% of
+         --total rather than waiting out a container fade that no longer
+         exists — only the container's own fade is gone, because the
+         container was never supposed to be see-through in the first place.
+         If a soft entrance is wanted back, it has to be a second, solid
+         element crossfading over this one, never this
          element's own opacity. */
       opacity: 1;
       /* One animation now instead of two: the failsafe, and it is not
@@ -255,17 +253,17 @@
     /* Sonar's own idle ring, reused rather than reinvented for the case
        Breach has no answer for on its own: a fixed one-shot has nothing left
        to show if the JS bundle still hasn't run by the time it finishes.
-       Silent for the whole breach sequence (delayed past --breach-total),
-       then picking up the ordinary infinite sweep exactly where breach-settled
-       takes over below — so on the fast path, where main.jsx tears the
-       overlay down at --breach-total, a ring is only just leaving opacity 0
-       when the whole element starts fading with it, and is not perceptible.
-       Only a boot slow enough to still be here past --breach-total ever
-       actually watches one complete a sweep. */
+       Silent for the whole breach sequence (delayed past --total), then
+       picking up the ordinary infinite sweep exactly where the settled mark
+       holds below — so on the fast path, where main.jsx tears the overlay
+       down soon after --total, a ring is only just leaving opacity 0 when
+       the whole element starts fading with it, and is not perceptible. Only
+       a boot slow enough to still be here past --total ever actually
+       watches one complete a sweep. */
     #boot-sonar i {
       position: absolute; width: 150px; height: 150px; border-radius: 50%;
       animation: sonar-ring 2100ms ease-out infinite both;
-      animation-delay: calc(var(--breach-start-delay) + var(--breach-total));
+      animation-delay: var(--total);
     }
     /* purple-400 rather than the base purple — unchanged from Sonar's own
        ring, and the reasoning is the same reasoning the ripple below reuses:
@@ -277,115 +275,177 @@
        Keep this in step with the RINGS array in SonarLoader.jsx, which
        carries the same three colours for the panel tier. */
     #boot-sonar i:nth-of-type(1) { border: 1px solid rgba(0,229,255,.55); }
-    #boot-sonar i:nth-of-type(2) { border: 1px solid rgba(0,229,255,.45); animation-delay: calc(var(--breach-start-delay) + var(--breach-total) + 700ms); }
-    #boot-sonar i:nth-of-type(3) { border: 1px solid rgba(154,63,192,.9); animation-delay: calc(var(--breach-start-delay) + var(--breach-total) + 1400ms); }
+    #boot-sonar i:nth-of-type(2) { border: 1px solid rgba(0,229,255,.45); animation-delay: calc(var(--total) + 700ms); }
+    #boot-sonar i:nth-of-type(3) { border: 1px solid rgba(154,63,192,.9); animation-delay: calc(var(--total) + 1400ms); }
 
-    /* The scene is the same 212x132 box the old sonar-focus mark used — the
-       fixed 564:352 ratio, at the size the design was reviewed at. Everything
-       below is positioned absolutely against this one box, which is what
-       keeps the shark, the waterline and the splash lined up with each other
-       without hand-placing five separate elements against the viewport.
-       position:relative on it is what puts the whole scene above the rings
-       in paint order, same as the wordmark below — a positioned element
-       draws over a non-positioned one, so the rings pass behind the lockup
-       rather than across its face. */
+    /* Breach II's own reference frame, not a box sized to the mark. The
+       handoff states its numbers against "a 520px-tall frame" (desktop) and
+       a "296x604px card" (mobile) and says to scale proportionally for any
+       other size — so rather than rescale, this uses those exact reference
+       dimensions directly, which is what lets every top/margin value below
+       be copied straight out of the two prompts with no arithmetic of its
+       own to get wrong. 480px wide on desktop is this file's own choice, not
+       the handoff's: the handoff's waterline is "full-width" of whatever
+       holds it, and 100vw is the wrong reading of that inside a centred,
+       flex-centred scene — it would draw a hairline most of the way across
+       a 1440px monitor, disconnected from the mark sitting in the middle of
+       it. 480px is a little over double the mark's own 220px, wide enough to
+       read as "full-width of this moment" without spanning the screen.
+       position:relative is what puts the whole scene above the idle rings in
+       paint order, same as the wordmark below — a positioned element draws
+       over a non-positioned one, so the rings pass behind the lockup rather
+       than across its face. overflow:hidden matches the handoff's own outer
+       wrapper; nothing here should actually reach the edge at these sizes,
+       but the mark's own travel (down to 190px below rest, up to 118px
+       above it) is close enough to the frame edges that it is worth keeping
+       as a backstop rather than proving it is never needed. */
     #boot-sonar .breach-scene {
-      position: relative; width: 212px; height: 132px;
+      position: relative; overflow: hidden; width: 480px; height: 520px;
     }
 
-    /* Two copies of the mark, not one animated in place. breachMark's own
-       100% keyframe fades the shark to opacity 0 — right for the fast path,
-       where main.jsx tears the whole overlay down within a frame or two of
-       that. Wrong for the slow path, where nothing tears it down for several
-       more seconds: a shark that fades to nothing leaves a blank dark screen,
-       which reads as more broken than a settled logo ever would. So a second,
-       motionless mark sits underneath, invisible until breachSettle
-       crossfades it in right as the animated one fades out — by
-       --breach-total there is always a shark on screen, animated or settled.
-       Both are background-images rather than <img>s for the same reason the
-       old sonar-focus mark was: this element is inside an aria-hidden
-       overlay, so it needs no alt text, and the box is stated outright so
-       nothing shifts. */
-    #boot-sonar .breach-mark, #boot-sonar .breach-settled {
-      position: absolute; inset: 0;
-      background: url(/juke-mark.svg) center / contain no-repeat;
-    }
+    /* An <img>, not a background-image — Breach II's own asset reference,
+       juke-mark-v2.svg, kept as a plain file the way the handoff gives it
+       rather than inlined, so this stays a one-line swap if the mark is
+       revised again. No alt text needed - #boot-sonar carries
+       aria-hidden="true" on the whole overlay - but the attribute is still
+       present empty, matching how every other decorative mark in this file
+       is written.
+
+       There is only one copy of the mark now, where Breach I carried two (an
+       animated one and a motionless understudy crossfaded in at the end).
+       That existed because breachMark's 100% keyframe fades the shark to
+       opacity 0, which needed covering on the slow path where nothing tears
+       the overlay down for several more seconds. Breach II's own keyframe
+       still ends at opacity 0, but not until a slow, 12%-of-total dissolve
+       from 88% to 100% — by the time it is gone, --total has already
+       elapsed and main.jsx's hold is already at or past that mark on any
+       normal load, so there is no longer a "blank dark screen" state for a
+       second element to cover. If a slow-load frame is ever wanted back, add
+       it back the same way — never by feeding this element a shorter, fake
+       version of breachMark. */
     #boot-sonar .breach-mark {
-      animation: breachMark var(--breach-total) linear 1 both;
-      animation-delay: var(--breach-start-delay);
-    }
-    #boot-sonar .breach-settled {
-      opacity: 0;
-      animation: breachSettle var(--breach-total) linear 1 both;
-      animation-delay: var(--breach-start-delay);
+      position: absolute; left: 50%; top: 150px; margin-left: -110px;
+      width: 220px; height: 137px; z-index: 1;
+      will-change: transform, opacity;
+      animation: breachMark var(--total) cubic-bezier(.33,0,.5,1) both;
     }
 
-    /* The waterline the shark launches out of and falls back through: a
-       bright core plus a soft wash beneath it, not the line alone. 18px 2px
-       glow at .7 is the design's own value for the core — the bar itself is
-       solid #00E5FF rather than the glow colour at the glow's own alpha,
-       because a glow with nothing solid at its centre reads as a smear, not
-       a surface. The wash is the second thing the approved mockup carries
-       that a box-shadow alone can't reach: a wide glow fading out from the
-       line, reported back after it was missing here entirely ("no green
-       fading like the water"). radial-gradient, not linear: a linear fade
-       only softens the top and bottom, so the box's own left and right
-       edges show up as a hard rectangle the instant it's bright enough to
-       read at all — caught in the same recording as the opacity bug above.
-       An ellipse has no edges to show. Both share breachWaterPulse, so the
-       wash swells with the same two pulses the line does rather than
-       sitting there as flat, static light. */
-    #boot-sonar .breach-water-wash {
-      position: absolute; left: 50%; top: 63%;
-      width: 320px; height: 110px; margin-left: -160px;
-      background: radial-gradient(ellipse 160px 55px at center, rgba(0,229,255,.3), rgba(0,229,255,0) 75%);
-      animation: breachWaterPulse var(--breach-total) linear 1 both;
-      animation-delay: var(--breach-start-delay);
+    /* The waterline is two layers now, not a line plus a soft radial wash.
+       breach-underwater is a static gradient band - #0e2b33 fading to this
+       file's own #0B0E14 over 130px and then staying there, so past that
+       130px it is pixel-identical to the container's own background and
+       costs nothing to extend all the way to the bottom of the scene. That
+       reads as "there is actually water below this line" in a way the old
+       wash (a soft glow floating with nothing under it) did not, which is
+       the whole reason Breach II changes it: measured directly against
+       recordings of Breach I, a glow with nothing solid beneath it read as
+       a smear rather than a surface, the same failure the old comment here
+       already named for the line itself.
+
+       breach-water is the bright line on top of that band. width is 100%
+       here and 70% under the phone breakpoint below, both centred by auto
+       margins against the full-width left:0/right:0 box - no separate
+       flex-centring wrapper needed, since 100% collapses that centring to a
+       no-op on desktop anyway. */
+    #boot-sonar .breach-underwater {
+      position: absolute; left: 0; right: 0; top: 58%; bottom: 0; z-index: 2;
+      background: linear-gradient(180deg, #0e2b33, #0B0E14 130px);
     }
     #boot-sonar .breach-water {
-      position: absolute; left: 50%; top: 63%;
-      width: 150px; height: 2px; margin-left: -75px; border-radius: 1px;
+      position: absolute; left: 0; right: 0; top: 58%; z-index: 3; pointer-events: none;
+      width: 100%; height: 1px; margin: 0 auto;
       background: #00E5FF;
-      box-shadow: 0 0 18px 2px rgba(0,229,255,.7);
-      animation: breachWaterPulse var(--breach-total) linear 1 both;
-      animation-delay: var(--breach-start-delay);
+      box-shadow: 0 0 24px 3px rgba(0,229,255,.7);
+      will-change: transform, opacity;
+      animation: breachWaterPulse var(--total) ease-out both;
     }
 
-    /* Six droplets, two waves of three: wave 1 fires with the water's first
-       pulse (the shark breaking the surface on the way up), wave 2 with its
-       second (the re-entry). Positioned by eye around the waterline rather
-       than derived, because breachDroplet's own keyframe is vertical-only —
-       the fan is entirely in each droplet's static `left`, not in the shared
-       keyframe, so as not to touch motion values the handoff called exact.
-       One delay per wave rather than one per droplet, because that is what
-       the handoff gives: three droplets, one moment. */
-    #boot-sonar .breach-droplet {
-      position: absolute; top: 63%; width: 5px; height: 5px; border-radius: 50%;
-      animation: breachDroplet 550ms linear 1 both;
+    /* Six droplets, two waves of three, each a static zero-size rotate
+       wrapper (breach-drop) holding one animated dot (breach-drop-dot) -
+       never rotate and translateY on the same animated element. breachDroplet
+       is translateY-only, so it moves straight "up" along whatever direction
+       the wrapper's own rotation already points; flattening the two onto one
+       element sends every droplet the same direction regardless of its
+       intended angle, which the handoff calls out as the most likely source
+       of visible glitching, and matches what this file's own two prior
+       recordings actually showed.
+
+       breach-drops is the zero-height row both waves hang from, positioned
+       once at the waterline rather than repeating top:58% on all six
+       wrappers. :nth-child counts against it rather than against
+       .breach-scene's other children, which is why the droplets need this
+       wrapper and the ripple below does not. */
+    #boot-sonar .breach-drops {
+      position: absolute; left: 0; right: 0; top: 58%; height: 0; z-index: 4; pointer-events: none;
     }
-    #boot-sonar .breach-droplet:nth-child(-n+3) { animation-delay: calc(var(--breach-start-delay) + var(--breach-total) * .06); }
-    #boot-sonar .breach-droplet:nth-child(n+4)  { animation-delay: calc(var(--breach-start-delay) + var(--breach-total) * .41); }
-    #boot-sonar .breach-droplet:nth-child(1) { left: calc(50% - 22px); background: #7CE9FA; }
-    #boot-sonar .breach-droplet:nth-child(2) { left: calc(50% - 2px);  background: #00E5FF; }
-    #boot-sonar .breach-droplet:nth-child(3) { left: calc(50% + 16px); background: #7CE9FA; }
-    #boot-sonar .breach-droplet:nth-child(4) { left: calc(50% - 30px); background: #00E5FF; }
-    #boot-sonar .breach-droplet:nth-child(5) { left: calc(50% + 4px);  background: #7CE9FA; }
-    #boot-sonar .breach-droplet:nth-child(6) { left: calc(50% + 26px); background: #00E5FF; }
+    #boot-sonar .breach-drop {
+      position: absolute; left: 50%; top: 0; width: 0; height: 0;
+    }
+    #boot-sonar .breach-drop-dot {
+      position: absolute; border-radius: 50%;
+      will-change: transform, opacity;
+      animation: breachDroplet var(--total) cubic-bezier(.3,0,.6,1) both;
+    }
+    #boot-sonar .breach-drop:nth-child(1) { transform: rotate(-62deg); }
+    #boot-sonar .breach-drop:nth-child(2) { transform: rotate(-20deg); }
+    #boot-sonar .breach-drop:nth-child(3) { transform: rotate(22deg); }
+    #boot-sonar .breach-drop:nth-child(4) { transform: rotate(64deg); }
+    #boot-sonar .breach-drop:nth-child(5) { transform: rotate(-48deg); }
+    #boot-sonar .breach-drop:nth-child(6) { transform: rotate(30deg); }
+    /* Wave 1 fires with the water's first pulse (the shark breaking the
+       surface on the way up); wave 2 with its second (the re-entry). */
+    #boot-sonar .breach-drop:nth-child(-n+4) .breach-drop-dot { animation-delay: var(--wave1); }
+    #boot-sonar .breach-drop:nth-child(n+5)  .breach-drop-dot { animation-delay: var(--wave2); }
+    #boot-sonar .breach-drop:nth-child(1) .breach-drop-dot { left: -2px;   top: -4px; width: 5px; height: 9px;  background: #7CE9FA; }
+    #boot-sonar .breach-drop:nth-child(2) .breach-drop-dot { left: -3px;   top: -6px; width: 6px; height: 10px; background: #00E5FF; }
+    #boot-sonar .breach-drop:nth-child(3) .breach-drop-dot { left: -3px;   top: -6px; width: 6px; height: 10px; background: #7CE9FA; }
+    #boot-sonar .breach-drop:nth-child(4) .breach-drop-dot { left: -2px;   top: -4px; width: 5px; height: 9px;  background: #00E5FF; }
+    #boot-sonar .breach-drop:nth-child(5) .breach-drop-dot { left: -2px;   top: -4px; width: 5px; height: 9px;  background: #00E5FF; }
+    #boot-sonar .breach-drop:nth-child(6) .breach-drop-dot { left: -2px;   top: -4px; width: 5px; height: 10px; background: #7CE9FA; }
 
     /* The closing ripple: rgba(154,63,192,.9), not the handoff's own
        rgba(168,85,247,.5). Measured against #0B0E14, the handoff's exact
        value comes out 2.04:1 — under this project's own 3:1 bar for a
        decorative ring, the identical failure mode the purple-400 note above
-       already measured once for the idle rings. This is purple-400 at the
-       same .9 alpha those rings already use, for the same reason: 3.07:1,
-       and no colour jump at the exact moment the ripple hands off to the
+       already measured once for the idle rings, and the identical deviation
+       Breach I already made here for the identical reason - this is a
+       property of the colour against this background, not of Breach I's
+       choreography, so a new size and position for the ring do not reopen
+       the question. purple-400 at the same .9 alpha the idle rings use:
+       3.07:1, and no colour jump at the moment the ripple hands off to the
        rings sitting right beside it. */
     #boot-sonar .breach-ripple {
-      position: absolute; left: 50%; top: 63%;
-      width: 60px; height: 60px; margin-left: -30px; margin-top: -30px;
-      border-radius: 50%; border: 1.5px solid rgba(154,63,192,.9);
-      animation: breachRipple 500ms linear 1 both;
-      animation-delay: calc(var(--breach-start-delay) + var(--breach-total) * .88);
+      position: absolute; left: 50%; top: 46%;
+      width: 240px; height: 240px; margin-left: -120px; margin-top: -120px;
+      border-radius: 50%; border: 1px solid rgba(154,63,192,.9);
+      z-index: 3;
+      will-change: transform, opacity;
+      animation: breachRipple var(--total) ease-out both;
+      animation-delay: var(--ripple);
+    }
+
+    /* The phone card, at the handoff's own 296x604 reference size rather
+       than a rescale of the desktop numbers - the two prompts give genuinely
+       different proportions (a narrower, taller card; a waterline at 70%
+       width instead of full-bleed; a mark positioned lower in its frame),
+       not the same scene shrunk down. 600px rather than a device-specific
+       width because this is a full-viewport overlay, not a component with
+       its own container query - it only has the viewport to key off, and
+       600px sits between the widest phone this project tests against
+       (iPhone 13, 390px) and the narrowest desktop viewport in that same
+       suite (1440px), so it cannot land inside either. */
+    @media (max-width: 600px) {
+      #boot-sonar .breach-scene { width: 296px; height: 604px; }
+      #boot-sonar .breach-mark { top: 220px; margin-left: -95px; width: 190px; height: 118px; }
+      #boot-sonar .breach-underwater { background: linear-gradient(180deg, #0e2b33, #0B0E14 90px); }
+      #boot-sonar .breach-water { width: 70%; }
+      #boot-sonar .breach-ripple { width: 200px; height: 200px; margin-left: -100px; margin-top: -100px; }
+      #boot-sonar .breach-drop:nth-child(1) .breach-drop-dot,
+      #boot-sonar .breach-drop:nth-child(4) .breach-drop-dot,
+      #boot-sonar .breach-drop:nth-child(5) .breach-drop-dot { left: -2px; top: -4px; width: 4px; height: 8px; }
+      #boot-sonar .breach-drop:nth-child(2) .breach-drop-dot,
+      #boot-sonar .breach-drop:nth-child(3) .breach-drop-dot { left: -2.5px; top: -5px; width: 5px; height: 9px; }
+      #boot-sonar .breach-drop:nth-child(6) .breach-drop-dot { left: -2px; top: -4px; width: 4px; height: 9px; }
     }
 
     /* The wordmark at the stacked lockup's own proportions: Archivo 900,
@@ -404,16 +464,17 @@
     #boot-sonar b {
       position: relative; font: 900 88px/0.9 'Archivo', system-ui, sans-serif;
       letter-spacing: -.045em; text-transform: uppercase; color: #F2F5FA;
-      /* calc(), not a literal 640ms, and this one was the exception until now:
-         every other timed element in this file already reads --breach-total
-         so a retime is one number. This was hand-copied instead and left at
-         640ms - 0.4 * the *old* 1600ms total - when --breach-total first
-         went to 2800ms, which would have landed the wordmark barely more
-         than a third of the way into a shark flight it used to arrive near
-         the middle of. .4 with no --breach-start-delay term is deliberate:
-         it is what 640 / 1600 actually was, and adding the start delay on
-         top would change the relationship this is trying to preserve. */
-      animation: sonar-label 500ms ease-out calc(var(--breach-total) * .4) both;
+      /* .65 * --total, not a number the handoff states — the wordmark is not
+         part of either Breach II prompt at all, so there is no value to copy
+         and this is this file's own placement. The mark reaches full rest at
+         62% and holds there until 88%, when its own 12%-of-total dissolve
+         begins (see breach-mark and breachMark below); .65 lands the word
+         just after that settle, giving it a beat as the only thing moving
+         before it finishes, and its own 500ms puts it fully in by 82.5% -
+         comfortably inside the hold, before the mark starts fading under it.
+         calc() off --total rather than a literal for the same reason as
+         everything else on this element: a retime is one number. */
+      animation: sonar-label 500ms ease-out calc(var(--total) * .65) both;
     }
 
     @keyframes sonar-ring {
@@ -426,17 +487,21 @@
       100% { opacity: 1; transform: translateY(0); }
     }
     /* Opacity only - no blur, no travel. This is the reduced-motion substitute
-       for sonar-label and breachSettle rather than a variant of either, which
-       is why it states its own 0%: a keyframe that declared only a `to` would
-       take its implied start from whatever the element already computes -
-       opacity 1 for both of these - and animate 1 to 1, fading nothing at
-       all. */
+       for sonar-label and for breach-mark itself (see the media query below),
+       which is why it states its own 0%: a keyframe that declared only a `to`
+       would take its implied start from whatever the element already
+       computes - opacity 1 for both of these - and animate 1 to 1, fading
+       nothing at all. */
     @keyframes sonar-fade { 0% { opacity: 0; } 100% { opacity: 1; } }
 
-    /* Exact motion, extracted from the approved mockup. The percentages are
-       duration-independent — --breach-total above is the only number that
-       needs to change to retime the whole sequence; see its own comment and
-       the calc()s on the droplets and the ripple. */
+    /* Exact motion, from the Breach II handoff verbatim — identical to
+       Breach I's own breachMark/breachDroplet/breachWaterPulse/breachRipple,
+       which is worth stating plainly since so much else about this file
+       changed: the second handoff hardened how the delays are computed and
+       revised the ripple's own delay fraction, not these four shapes. The
+       percentages are duration-independent — --total above is the only
+       number that needs to change to retime the whole sequence; see its own
+       comment and the calc()s on --wave1/--wave2/--ripple. */
     @keyframes breachMark {
       0%   { transform: translate(-30px,190px) rotate(-16deg) scale(.92); }
       8%   { transform: translate(-18px,60px) rotate(-10deg) scale(.96); }
@@ -470,26 +535,22 @@
       62%  { transform: scale(2); opacity: 0; }
       100% { opacity: 0; }
     }
-    /* Not from the handoff — the crossfade that lets the settled mark take
-       over from the animated one at exactly the moment it fades, so there is
-       never a frame with neither on screen. Timed against the same
-       --breach-total as breachMark, so the two stay locked together even if
-       the total is retuned. */
-    @keyframes breachSettle {
-      0%, 85% { opacity: 0; }
-      100%    { opacity: 1; }
-    }
-
     /* The rings go, and so does the launch, the splash and the ripple —
        everything that was travel or scale under motion becomes a single
        settled mark. style.css already draws this line for .to-top ("the fade
        stays - it is an opacity change, not motion") and this follows it:
-       breach-settled fades straight in on its own and nothing else plays. */
+       breach-mark fades straight in at its resting position - no transform
+       of its own, since breachMark is skipped outright and rest is what its
+       base styles already draw - and nothing else plays. There is no second,
+       motionless copy to crossfade from any more (see breach-mark's own
+       comment above for why Breach II dropped it), which actually simplifies
+       this block from what Breach I needed: one mark, one fade, same as the
+       wordmark beside it. */
     @media (prefers-reduced-motion: reduce) {
       #boot-sonar i { display: none; }
-      #boot-sonar .breach-mark, #boot-sonar .breach-water, #boot-sonar .breach-water-wash,
-      #boot-sonar .breach-droplet, #boot-sonar .breach-ripple { display: none; }
-      #boot-sonar .breach-settled { animation: sonar-fade 300ms ease-out 300ms both; }
+      #boot-sonar .breach-water, #boot-sonar .breach-underwater,
+      #boot-sonar .breach-drops, #boot-sonar .breach-ripple { display: none; }
+      #boot-sonar .breach-mark { animation: sonar-fade 300ms ease-out 300ms both; }
       #boot-sonar b { animation: sonar-fade 300ms ease-out 420ms both; }
     }
   </style>
@@ -525,22 +586,27 @@
        this comment already gave the Sonar version of this screen: do not add
        a tagline here.
 
-       breach-water-wash/-water/-droplet/-ripple are the splash; breach-mark
-       is the shark in flight; breach-settled is its motionless understudy,
-       invisible until the very end - see the CSS for why there are two. The
-       three <i> rings are Sonar's own idle loop, silent until breach-settled
-       takes over, for the boot slow enough to still be waiting past
-       --breach-total. -->
+       breach-underwater/-water/-drops/-ripple are the splash; breach-mark is
+       the shark, now the only copy of it - see its own comment in the
+       <style> above for why Breach II no longer needs a second, motionless
+       one crossfaded in at the end. The three <i> rings are Sonar's own idle
+       loop, silent until the mark settles, for the boot slow enough to still
+       be waiting past --total. -->
   <div id="boot-sonar" aria-hidden="true">
     <i></i><i></i><i></i>
     <div class="breach-scene">
-      <span class="breach-water-wash"></span>
+      <img class="breach-mark" src="/juke-mark-v2.svg" alt="">
+      <div class="breach-underwater"></div>
       <span class="breach-water"></span>
-      <span class="breach-droplet"></span><span class="breach-droplet"></span><span class="breach-droplet"></span>
-      <span class="breach-droplet"></span><span class="breach-droplet"></span><span class="breach-droplet"></span>
+      <div class="breach-drops">
+        <span class="breach-drop"><span class="breach-drop-dot"></span></span>
+        <span class="breach-drop"><span class="breach-drop-dot"></span></span>
+        <span class="breach-drop"><span class="breach-drop-dot"></span></span>
+        <span class="breach-drop"><span class="breach-drop-dot"></span></span>
+        <span class="breach-drop"><span class="breach-drop-dot"></span></span>
+        <span class="breach-drop"><span class="breach-drop-dot"></span></span>
+      </div>
       <span class="breach-ripple"></span>
-      <span class="breach-settled"></span>
-      <span class="breach-mark"></span>
     </div>
     <b>Juke</b>
   </div>
