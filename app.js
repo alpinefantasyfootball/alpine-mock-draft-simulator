@@ -6379,9 +6379,16 @@ function teamWeeklyStats(team, cv) {
 // rest of the room it drafted with — see the method note above. Indexed by
 // slot, like analyseDraft() always is. A room of one returns null for that
 // one team: there is nobody to play.
-function projectedWinPctForRoom(all) {
-  const cv = positionWeeklyCV();
-  const weekly = all.map((t) => teamWeeklyStats(t, cv));
+//
+// cv is optional and only exists so historyStats() can compute
+// positionWeeklyCV() once and reuse it across every history entry it
+// reconstructs a room for, rather than re-walking the whole board's weekly
+// logs once per entry for the identical answer. A live caller (the bridge,
+// for the currently-loaded draft) has exactly one room to ask about and
+// can afford to let this compute its own.
+function projectedWinPctForRoom(all, cv) {
+  const cvTable = cv || positionWeeklyCV();
+  const weekly = all.map((t) => teamWeeklyStats(t, cvTable));
   return weekly.map(function (mine, i) {
     const others = weekly.filter((_, j) => j !== i);
     if (!others.length) return null;
@@ -6406,11 +6413,6 @@ function recordHistory() {
   const roomAvgRosterVorp = all.length
     ? all.reduce((sum, t) => sum + rosterVorpOf(t), 0) / all.length
     : null;
-  // Room-wide for the same reason roomAvgRosterVorp is one line up: every
-  // other team's weekly scoring estimate has to exist to say anything about
-  // how often this one would beat it, and this is the one moment they're
-  // all sitting in memory already built.
-  const winPcts = projectedWinPctForRoom(all);
   const round1 = state.picks.find((p) => p.slot === state.mySlot && p.round === 1);
   const list = readHistory();
   list.unshift({
@@ -6445,15 +6447,21 @@ function recordHistory() {
     // strength) rather than sit beside it disagreeing.
     rosterVorp: mine ? rosterVorpOf(mine) : null,
     roomAvgRosterVorp: roomAvgRosterVorp,
-    weakestSpot: mine ? weakestStartingSpot(mine.lineup) : null,
-    // The Locker redesign's remaining three fields — same moment, same
-    // reasoning as everything above it: cheaper to keep what analyseDraft()
-    // already worked out than to rebuild a historical room for it later.
-    // netAdpValue is analyseTeam()'s own unclamped `value`, not a second
-    // computation of the same gap.
-    netAdpValue: mine ? mine.value : null,
-    posStrength: mine ? posStrengthOf(mine.lineup) : null,
-    projectedWinPct: winPcts[state.mySlot] != null ? Math.round(winPcts[state.mySlot] * 1000) / 10 : null
+    weakestSpot: mine ? weakestStartingSpot(mine.lineup) : null
+    // Net ADP value, positional strength and projected win % all used to
+    // be frozen here too, reasoning that this was the one moment the board
+    // matched the draft that was actually played. That reasoning was
+    // correct and the consequence wasn't worth it: every one of those
+    // three fields is reconstructible from the picks already stored two
+    // lines up, the same overallOf() walk avgRoundByPosition and
+    // mostDraftedList already do in historyStats() — and unlike those,
+    // these three were only ever computed going forward, so a real
+    // account with real history recorded before they existed showed three
+    // permanently blank cards no number of future mocks would ever fill
+    // in, because the entries that needed the field already existed
+    // without it. historyStats() reconstructs them against today's board
+    // now, same as everything else per-mock in that function — see its
+    // own comment on exactly this trade.
   });
   writeHistory(list.slice(0, HISTORY_LIMIT));
 }
@@ -6758,48 +6766,87 @@ function historyStats() {
     };
   }
 
-  // Projected win % — see the file comment above projectedWinPctForRoom()
-  // for what this can and can't honestly claim. Absent, not zeroed, for any
-  // entry recorded before the field existed.
-  const withWinPct = list.filter((e) => typeof e.projectedWinPct === "number");
-  if (withWinPct.length) {
-    stats.avgWinPct = withWinPct.reduce((sum, e) => sum + e.projectedWinPct, 0) / withWinPct.length;
-  }
-  // Windowed to the most recent TREND_WINDOW rather than the whole history:
-  // this is a trend a reader is meant to take in at a glance, and one that
-  // silently rescales every time an eleventh mock lands is harder to read
-  // over time than one that stays a fixed width and slides.
-  if (withWinPct.length >= 2) {
-    stats.winPctHistory = withWinPct.slice(0, TREND_WINDOW).reverse()
-      .map((e) => ({ id: e.id, value: e.projectedWinPct, completedAt: e.completedAt }));
-  }
+  /* Net ADP value, positional strength, and projected win % — all three
+     reconstructed from windowList's own stored picks against today's
+     board, the same overallOf() walk avgRoundByPosition and
+     mostDraftedList already use, rather than read off a field frozen at
+     the moment each draft finished. That was the first version of this:
+     reasoned as "the board was still the one the draft was actually
+     played on," which is true, and cost more than it was worth — every
+     one of these three fields was only ever computed going forward, so a
+     real account with real history recorded before this existed showed
+     three permanently blank cards, on entries no future mock could ever
+     retrofit the field onto. Every other per-mock aggregate in this
+     function already accepts drifting against today's board in exchange
+     for working on history that already exists; these three were the
+     only holdouts, and the holdout cost more than the drift does.
 
-  // Net ADP value, per mock — entry.netAdpValue is analyseTeam()'s own
-  // `value` (pick number minus board rank, summed over the picks you were
-  // actually free to time), stored once at the moment the draft finished.
-  // Never reconstructed against today's board the way avgRoundByPosition
-  // and mostDraftedList are: unlike those, this doesn't need to resolve a
-  // name back to a position, so there is no reason to accept the drift that
-  // comes with reading it off a board that has since moved on.
-  const withNetAdp = list.filter((e) => typeof e.netAdpValue === "number");
-  if (withNetAdp.length) {
-    stats.avgNetAdpValue = withNetAdp.reduce((sum, e) => sum + e.netAdpValue, 0) / withNetAdp.length;
-  }
-  // Same TREND_WINDOW as winPctHistory, same reason.
-  if (withNetAdp.length >= 2) {
-    stats.netAdpValueHistory = withNetAdp.slice(0, TREND_WINDOW).reverse()
-      .map((e) => ({ id: e.id, value: e.netAdpValue, completedAt: e.completedAt }));
-  }
+     Windowed to windowList (the same last-TREND_WINDOW slice weakestSpot
+     uses) rather than the whole history — both because a trend a reader
+     takes in at a glance shouldn't silently rescale every time an
+     eleventh mock lands, and because reconstructing win % needs every
+     seat's roster, not just yours, which is the one reconstruction here
+     expensive enough that it's worth not running it over 200 entries. */
+  if (typeof DraftEngine !== "undefined") {
+    const cv = positionWeeklyCV(); // once, reused across every entry below
+    const netAdpEntries = [], strengthEntries = [], winPctEntries = [];
 
-  // Positional weakness heatmap — entry.posStrength is four replacementGap()
-  // averages (QB/RB/WR/TE), stored at the same moment and for the same
-  // reason netAdpValue is: this is what those starters were actually worth
-  // against that draft's own board, not what today's board would say about
-  // players who may since have moved.
-  const withStrength = list.filter((e) => e.posStrength);
-  if (withStrength.length >= 2) {
-    stats.weaknessHeatmap = withStrength.slice(0, TREND_WINDOW).reverse()
-      .map((e) => ({ id: e.id, completedAt: e.completedAt, byPos: e.posStrength }));
+    windowList.forEach((entry) => {
+      const teams = entry.teams || (entry.league && entry.league.teams);
+      if (!teams || !entry.picks || !entry.picks.length) return;
+      const totalRounds = Math.floor(entry.picks.length / teams);
+      const lastPick = teams * totalRounds;
+
+      // Every seat's roster, resolved against today's board — the win-%
+      // model needs the whole room (every other team is the "opponent"
+      // that mock's own room provides); net ADP value and positional
+      // strength only ever needed your own, but it falls out of the same
+      // walk for free.
+      const rosters = Array.from({ length: teams }, () => []);
+      let netAdpSum = 0, netAdpAny = false;
+      for (let round = 1; round <= totalRounds; round++) {
+        for (let slot = 0; slot < teams; slot++) {
+          const overall = DraftEngine.overallOf(round, slot, teams);
+          const name = entry.picks[overall - 1];
+          const player = name && byName.get(name);
+          if (!player) continue;
+          rosters[slot].push(player);
+          if (slot === entry.mySlot && !FORCED_LATE[player.pos] && player.overall <= lastPick) {
+            netAdpSum += overall - player.overall;
+            netAdpAny = true;
+          }
+        }
+      }
+
+      if (netAdpAny) netAdpEntries.push({ id: entry.id, value: netAdpSum, completedAt: entry.completedAt });
+
+      const myRoster = rosters[entry.mySlot];
+      if (myRoster.length) {
+        strengthEntries.push({ id: entry.id, completedAt: entry.completedAt, byPos: posStrengthOf(bestLineup(myRoster)) });
+      }
+
+      const allTeams = rosters.map((roster) => ({ lineup: bestLineup(roster) }));
+      const winPcts = projectedWinPctForRoom(allTeams, cv);
+      const mine = winPcts[entry.mySlot];
+      if (typeof mine === "number") {
+        winPctEntries.push({ id: entry.id, value: Math.round(mine * 1000) / 10, completedAt: entry.completedAt });
+      }
+    });
+
+    // Every list above is windowList's own newest-first order; reversed
+    // to oldest-first so each chart reads left-to-right as a timeline,
+    // same as every other per-mock trend here.
+    if (netAdpEntries.length) {
+      stats.avgNetAdpValue = netAdpEntries.reduce((sum, e) => sum + e.value, 0) / netAdpEntries.length;
+    }
+    if (netAdpEntries.length >= 2) stats.netAdpValueHistory = netAdpEntries.slice().reverse();
+
+    if (strengthEntries.length >= 2) stats.weaknessHeatmap = strengthEntries.slice().reverse();
+
+    if (winPctEntries.length) {
+      stats.avgWinPct = winPctEntries.reduce((sum, e) => sum + e.value, 0) / winPctEntries.length;
+    }
+    if (winPctEntries.length >= 2) stats.winPctHistory = winPctEntries.slice().reverse();
   }
 
   // Draft capital allocation — what share of your early picks, across every
