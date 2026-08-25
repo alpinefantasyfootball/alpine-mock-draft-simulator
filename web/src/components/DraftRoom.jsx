@@ -13,6 +13,7 @@ import TeamTab from './TeamTab.jsx'
 import AnalysisTab from './AnalysisTab.jsx'
 import DraftDecideScreen from './DraftDecideScreen.jsx'
 import DraftInsightsDashboard from './DraftInsightsDashboard.jsx'
+import PlayerProfileModal from './PlayerProfileModal.jsx'
 import DraftSettingsModal from './DraftSettingsModal.jsx'
 import DraftEntryScreen from './DraftEntryScreen.jsx'
 import DraftLobby from './DraftLobby.jsx'
@@ -68,10 +69,14 @@ function useHashActive(prefix) {
   return active
 }
 
-/* Small enough to live here rather than in its own file, and deliberately
-   not IconButton from the status bar: that one is a 28-32px header control
-   with its own hover language, and this sits on top of a busy board where it
-   has to stay legible without shouting. */
+/* Small enough to live here rather than in its own file. This used to be
+   rounded-md on purpose ("deliberately not IconButton from the status bar")
+   — reported back as reading like a mismatched control against every other
+   round icon button in this view (the back chevron, the settings gear, the
+   kebab menu, all rounded-full border-slate-rule bg-slate-sunk/60-80). The
+   distinct border/background treatment was the right call and stays; the
+   corner radius disagreeing with the rest of the family wasn't earning
+   anything, so it's rounded-full now like the others. */
 function TrayButton({ onClick, disabled, title, children }) {
   return (
     <button
@@ -81,7 +86,7 @@ function TrayButton({ onClick, disabled, title, children }) {
       title={title}
       aria-label={title}
       className={
-        'flex h-6 w-6 items-center justify-center rounded-md border transition-colors duration-150 ' +
+        'flex h-6 w-6 items-center justify-center rounded-full border transition-colors duration-150 ' +
         (disabled
           ? 'cursor-not-allowed border-slate-rule bg-slate-sunk/70 text-white/15'
           : 'border-slate-rule bg-slate-sunk/80 text-white/60 hover:border-teal-400/50 hover:text-teal-300')
@@ -651,16 +656,6 @@ export default function DraftRoom() {
   // itself: isMyTurn()'s own clock-under-10s check, not re-derived here.
   const urgent = !!engine.headerInfo().urgent
 
-  // Same gating renderActionBar() already uses in app.js: Undo is
-  // solo-only (a room's copy just gets overwritten by the next
-  // broadcast — see the bridge comment on `undo`), Pause is the host's in
-  // a room, and both disappear once the draft is over. Discard/"Leave the
-  // room" stays offered either way; only its label and danger styling
-  // change. draftIsOver itself is computed above the early returns, where
-  // the insights effect needs it. hasRoomVal itself is computed further up,
-  // above the early returns — the enteredRoom sync effect needs it there.
-  const showUndo = !draftIsOver && !hasRoomVal
-
   const lineup = engine.seatedLineup()
   const rules = engine.rulesForFormat(league.scoring)
   const pointsFor = (player) => {
@@ -689,8 +684,8 @@ export default function DraftRoom() {
      showing. Reuses pointsFor() rather than reading board.projPts
      directly, so this can never disagree with the PTS column sitting in
      the very same table (CLAUDE.md: "never a second calculation" — see
-     DraftBoardGrid's adpGap()/adpTint() for the same rule applied to the
-     ADP-gap tint). Scoped to POS_LIST (QB/RB/WR/TE): K/DST are excluded
+     DraftBoardGrid's adpGap()/adpText() for the same rule applied to the
+     ADP-gap number). Scoped to POS_LIST (QB/RB/WR/TE): K/DST are excluded
      from tiering-adjacent measures everywhere else in this app (their
      projections are the ones CLAUDE.md documents as unranked), and
      Decide's own tierLadder makes the identical exclusion. */
@@ -792,12 +787,9 @@ export default function DraftRoom() {
     engine.draftPlayer(player)
   }
 
-  // Undo/Pause/Discard are all real, direct calls into app.js — undo()
-  // pops picks off state.picks until it's my turn again, togglePause()
-  // stops the clock (or sends Live.pause() in a room), and restart() is
+  // Discard is a real, direct call into app.js — restart() is
   // clearSave()+goHome(), the exact "Discard draft"/"Leave the room"
-  // action. None of them are reimplemented here.
-  const handleUndo = () => engine.undo()
+  // action. Not reimplemented here.
   const handleDiscard = () => engine.restart()
 
   // The real queue (state.queue, an array of player names) — queueToggle()
@@ -861,14 +853,6 @@ export default function DraftRoom() {
           onClose={() => setMenuOpen(false)}
           onOpenSettings={() => setSettingsOpen(true)}
           inRoom={roomActive}
-          isHost={roomActive && engine.isHost()}
-          clockLength={engine.clockLength()}
-          paused={engine.paused()}
-          onTogglePause={() => engine.togglePause()}
-          showFinish={!roomActive && !draftIsOver}
-          onFinish={() => engine.autoDraftRest()}
-          showUndo={showUndo}
-          onUndo={handleUndo}
           soundOn={soundOn}
           onToggleSound={handleToggleSound}
           discardLabel={hasRoomVal ? 'Leave the room' : 'Discard draft'}
@@ -1006,6 +990,7 @@ export default function DraftRoom() {
               mySlot={mySlot}
               onClock={onClock}
               teamLabelOf={(slot) => engine.teamLabel(slot)}
+              onSelectPlayer={setSelectedPlayer}
               onTeamClick={
                 draftIsOver
                   ? (slot) => { setInsightsSlot(slot); setShowInsights(true) }
@@ -1188,6 +1173,18 @@ export default function DraftRoom() {
           onClose={() => setSettingsOpen(false)}
         />
       )}
+
+      {/* Top-level, not nested inside whichever tab happens to be mounted
+          — see PlayerProfileModal.jsx's own comment. A player's name is
+          clickable from the board grid, both Decide-tab card types, the
+          recommended-pick card and the player list itself now, and every
+          one of those sets the same selectedPlayer state this reads. */}
+      <PlayerProfileModal
+        player={selectedPlayer}
+        onClose={() => setSelectedPlayer(null)}
+        photoFor={photoFor}
+        initialsFor={initialsFor}
+      />
 
       {draftIsOver && showInsights && (
         <DraftInsightsDashboard

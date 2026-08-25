@@ -1,0 +1,182 @@
+import { useEffect, useState } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
+import { Bookmark, X } from 'lucide-react'
+import { POS_BADGE, INJURY_META } from './draftRoomPositions.js'
+import { useEngine } from '../hooks/useJukeEngine.js'
+import OurReadTab from './OurReadTab.jsx'
+import ProjectionsTab from './ProjectionsTab.jsx'
+import GameLogsTab from './GameLogsTab.jsx'
+import LatestNewsTab from './LatestNewsTab.jsx'
+import DepthChartTab from './DepthChartTab.jsx'
+import DraftFitTab from './DraftFitTab.jsx'
+
+const BASE_TABS = ['Our Read', 'Projections', 'Game Logs', 'Latest News', 'Depth Chart']
+
+// Replaces PlayerProfileDrawer — a slide-in panel that only ever covered
+// the Player Queue, and only existed inside PlayerHub, which unmounts on
+// the Decide tab. A player's name was clickable in at most one place in
+// the app (the queue row itself) because everywhere else had nowhere to
+// send the click. This mounts once at DraftRoom.jsx's top level instead,
+// alongside DraftInsightsDashboard, so it's reachable from every tab and
+// every card that names a player. Same treatment as that dashboard —
+// fixed inset-0, dimmed and blurred, centered content — rather than a
+// drawer sized to a panel that may not even be on screen: an overlay that
+// only has to cover *something specific* doesn't exist here any more, so
+// there's no "specific" left for it to be scoped to.
+export default function PlayerProfileModal({ player, onClose, photoFor, initialsFor }) {
+  const engine = useEngine()
+  const [tab, setTab] = useState('Our Read')
+
+  const fit = engine && player ? engine.draftFit(player) : null
+  const TABS = fit ? [BASE_TABS[0], 'Draft Fit', ...BASE_TABS.slice(1)] : BASE_TABS
+
+  useEffect(() => {
+    if (!TABS.includes(tab)) setTab(TABS[0])
+  }, [TABS.join('|'), tab])
+
+  useEffect(() => {
+    if (player) setTab('Our Read')
+  }, [player?.id || player?.name])
+
+  useEffect(() => {
+    if (!player) return
+    const onKey = (e) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [player, onClose])
+
+  const inj = player ? INJURY_META[player.inj] : null
+
+  return (
+    <AnimatePresence>
+      {player && (
+        <motion.div
+          key={player.id || player.name}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.18 }}
+          className="fixed inset-0 z-[70] overflow-y-auto bg-slate/97 backdrop-blur-md"
+          onClick={onClose}
+        >
+          {/* mx-auto max-w-2xl, the same "full-bleed backdrop, constrained
+              centered column" shape DraftInsightsDashboard already uses —
+              a reader closing this and opening that a moment later (a
+              board header click, once the draft's over) shouldn't land on
+              two different ideas of what an overlay in this app looks
+              like. stopPropagation keeps a click inside the card from
+              bubbling to the backdrop's own onClose. */}
+          <div className="flex min-h-full items-start justify-center px-4 py-8 sm:px-6">
+            <motion.div
+              initial={{ y: 16, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 16, opacity: 0 }}
+              transition={{ type: 'spring', stiffness: 340, damping: 34 }}
+              onClick={(e) => e.stopPropagation()}
+              className="flex w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-rule bg-slate-panel shadow-[0_24px_60px_-12px_rgba(0,0,0,0.85)]"
+            >
+              <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-rule p-4 sm:p-5">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="relative flex h-14 w-14 sm:h-16 sm:w-16 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-sunk text-sm font-bold text-ink-soft">
+                    {initialsFor(player)}
+                    {photoFor(player) && (
+                      <img
+                        src={photoFor(player)}
+                        alt=""
+                        loading="lazy"
+                        onError={(e) => e.currentTarget.remove()}
+                        className={'absolute inset-0 h-full w-full ' + (player.pos === 'DST' ? 'object-contain p-1.5' : 'object-cover')}
+                      />
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate font-display text-lg sm:text-xl font-bold text-white">{player.name}</p>
+                    <p className="flex flex-wrap items-center gap-1.5 text-xs text-ink-muted">
+                      <span className={'rounded px-1.5 py-0.5 text-[10px] font-bold ' + (POS_BADGE[player.pos] || 'bg-white/10 text-white/50')}>
+                        {player.pos}
+                      </span>
+                      {player.team}
+                      {/* The one non-negotiable fact this card has to carry:
+                          whether he's actually available to play. Same
+                          codes/severity app.js's own injBadge()/RULED_OUT/
+                          RISKY already established — see INJURY_META's own
+                          comment on why the hues don't collide with a
+                          position badge sitting right beside it. */}
+                      {inj && (
+                        <span className={'rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ' + inj.cls} title={inj.label}>
+                          {player.inj}
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  {engine && (
+                    <button
+                      type="button"
+                      onClick={() => engine.watchlistToggle(player.name)}
+                      title={engine.watchlisted(player) ? 'Remove from watchlist' : 'Add to watchlist'}
+                      aria-label={engine.watchlisted(player) ? 'Remove from watchlist' : 'Add to watchlist'}
+                      className={
+                        'flex h-8 w-8 items-center justify-center rounded-full border transition-colors duration-150 ' +
+                        (engine.watchlisted(player)
+                          ? 'border-amber-400/40 bg-amber-400/10 text-amber-300'
+                          : 'border-slate-rule bg-slate-sunk/60 text-white/60 hover:border-slate-rule hover:text-white')
+                      }
+                    >
+                      <Bookmark className={'h-4 w-4 ' + (engine.watchlisted(player) ? 'fill-amber-300' : '')} />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    title="Close"
+                    aria-label="Close player profile"
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-rule bg-slate-sunk/60 text-white/60 transition-colors duration-150 hover:border-slate-rule hover:text-white"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex shrink-0 overflow-x-auto border-b border-slate-rule">
+                {TABS.map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setTab(t)}
+                    className={
+                      'shrink-0 whitespace-nowrap border-b-2 px-3 py-2.5 text-center text-[11px] font-semibold transition-colors duration-150 ' +
+                      (tab === t ? 'border-teal-400 text-teal-300' : 'border-transparent text-ink-muted hover:text-white/60')
+                    }
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+
+              <div className="max-h-[65vh] flex-1 overflow-y-auto p-4 sm:p-5">
+                {!engine ? null : tab === 'Our Read' ? (
+                  <OurReadTab engine={engine} player={player} />
+                ) : tab === 'Draft Fit' ? (
+                  <DraftFitTab fit={fit} player={player} />
+                ) : tab === 'Projections' ? (
+                  <ProjectionsTab
+                    summary={engine.projectionSummary(player)}
+                    record={engine.projectionRecord(player)}
+                  />
+                ) : tab === 'Game Logs' ? (
+                  <GameLogsTab engine={engine} player={player} />
+                ) : tab === 'Latest News' ? (
+                  <LatestNewsTab engine={engine} player={player} />
+                ) : (
+                  <DepthChartTab engine={engine} player={player} />
+                )}
+              </div>
+            </motion.div>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  )
+}

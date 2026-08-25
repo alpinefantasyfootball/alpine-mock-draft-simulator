@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import PlayerQueueSidebar from './PlayerQueueSidebar.jsx'
-import PlayerProfileDrawer from './PlayerProfileDrawer.jsx'
 import QueueList from './QueueList.jsx'
 import TeamTab from './TeamTab.jsx'
 import ChatPanel from './ChatPanel.jsx'
@@ -53,7 +52,9 @@ export default function PlayerHub({
   onOpenChange,
   tab,
   onTabChange,
-  // PlayerQueueSidebar / PlayerProfileDrawer passthrough
+  // PlayerQueueSidebar passthrough — onSelectPlayer included, though the
+  // profile it opens is a top-level modal now rather than a child of this
+  // component (see PlayerProfileModal.jsx)
   players,
   search,
   onSearch,
@@ -76,7 +77,6 @@ export default function PlayerHub({
   queuedNames,
   onToggleQueue,
   draftedByFor,
-  selectedPlayer,
   onSelectPlayer,
   sortBy,
   sortDir,
@@ -185,10 +185,13 @@ export default function PlayerHub({
         ))}
       </div>
 
-      {/* PlayerQueueSidebar's own relative wrapper for PlayerProfileDrawer
-          to slide over — unconditionally at lg+, only while Players is the
-          active tab and the sheet is open below it. */}
-      <div className={'relative min-h-0 flex-1 ' + (open && tab === 'players' ? 'flex' : 'hidden') + ' lg:flex'}>
+      {/* Unconditionally at lg+, only while Players is the active tab and
+          the sheet is open below it. The profile used to slide over this
+          box (PlayerProfileDrawer, absolutely positioned against it); it's
+          a top-level modal now — see PlayerProfileModal.jsx's own comment
+          on why a drawer scoped to one panel couldn't be reached from any
+          other tab. */}
+      <div className={'min-h-0 flex-1 ' + (open && tab === 'players' ? 'flex' : 'hidden') + ' lg:flex'}>
         <PlayerQueueSidebar
           counts={counts}
           players={players}
@@ -221,12 +224,6 @@ export default function PlayerHub({
           recommendedTierLeft={recommendedTierLeft}
           projOf={projOf}
           tierAvgByPos={tierAvgByPos}
-        />
-        <PlayerProfileDrawer
-          player={selectedPlayer}
-          onClose={() => onSelectPlayer(null)}
-          photoFor={photoFor}
-          initialsFor={initialsFor}
         />
       </div>
 

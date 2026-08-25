@@ -1,5 +1,5 @@
 import { Sparkles } from 'lucide-react'
-import { POS_BADGE } from './draftRoomPositions.js'
+import { POS_BADGE, INJURY_META } from './draftRoomPositions.js'
 
 // Every number here is a real, already-existing function — nothing was
 // invented for this card:
@@ -18,10 +18,11 @@ import { POS_BADGE } from './draftRoomPositions.js'
 // legacy tierChip() always prints something, but calling six players left
 // a "scarcity alert" would be crying wolf. Nothing to recommend (no
 // player, or every position full) means no card, not an empty one.
-export default function JukeValueAssistant({ player, vorp, tierLeft, onDraft, myTurn, photoFor, initialsFor, compact }) {
+export default function JukeValueAssistant({ player, vorp, tierLeft, onDraft, myTurn, photoFor, initialsFor, compact, onOpenProfile }) {
   if (!player) return null
 
   const photo = photoFor(player)
+  const inj = INJURY_META[player.inj]
 
   /* Compact is the desktop panel row's variant, not a smaller taste: the
      board now takes the top half of the window, so the Players panel has
@@ -49,11 +50,19 @@ export default function JukeValueAssistant({ player, vorp, tierLeft, onDraft, my
           )}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-xs font-semibold text-white">{player.name}</p>
-          <p className="truncate text-[10px] text-ink-muted">
+          <p
+            onClick={() => onOpenProfile && onOpenProfile(player)}
+            className={'truncate text-xs font-semibold text-white ' + (onOpenProfile ? 'cursor-pointer hover:text-teal-300' : '')}
+          >
+            {player.name}
+          </p>
+          <p className="flex flex-wrap items-center gap-1 truncate text-[10px] text-ink-muted">
             {player.pos} · {player.team}
             {tierLeft != null && tierLeft <= 3 && (
               <span className="text-amber-300"> · {tierLeft} left in tier {player.tier}</span>
+            )}
+            {inj && (
+              <span className={'rounded px-1 py-px text-[8px] font-bold uppercase leading-tight ' + inj.cls}>{player.inj}</span>
             )}
           </p>
         </div>
@@ -113,9 +122,19 @@ export default function JukeValueAssistant({ player, vorp, tierLeft, onDraft, my
             <span className={'shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold ' + (POS_BADGE[player.pos] || 'bg-white/10 text-white/50')}>
               {player.pos}
             </span>
-            <p className="truncate text-sm font-semibold text-white">{player.name}</p>
+            <p
+              onClick={() => onOpenProfile && onOpenProfile(player)}
+              className={'truncate text-sm font-semibold text-white ' + (onOpenProfile ? 'cursor-pointer hover:text-teal-300' : '')}
+            >
+              {player.name}
+            </p>
           </div>
-          <p className="truncate text-[11px] text-ink-muted">{player.team}</p>
+          <p className="flex items-center gap-1 truncate text-[11px] text-ink-muted">
+            {player.team}
+            {inj && (
+              <span className={'rounded px-1 py-px text-[8px] font-bold uppercase leading-tight ' + inj.cls}>{player.inj}</span>
+            )}
+          </p>
         </div>
         {vorp != null && (
           <div className="shrink-0 text-right leading-none">

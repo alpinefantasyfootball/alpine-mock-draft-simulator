@@ -30,7 +30,11 @@
 export const NAV_LINKS = [
   { label: 'How It Works', href: '#proof' },
   { label: 'The Rooms', href: '#rooms' },
-  { label: 'Draft Room', href: '#/draft-room' },
+  // #/drafts (the Lobby), not #/draft-room — see the comment on ROOMS in
+  // app.js. A nav link is a fresh choice, not a resume; #/draft-room
+  // lands wherever DraftRoom.jsx's own enteredRoom state already was,
+  // stale draft included.
+  { label: 'Draft Room', href: '#/drafts' },
 ]
 
 // Log in / Sign Up, verbatim from Header.jsx: neither does anything real

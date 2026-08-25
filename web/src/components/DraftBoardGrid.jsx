@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion'
 import { ChevronRight } from 'lucide-react'
-import { POS_BADGE, POS_SOLID } from './draftRoomPositions.js'
+import { POS_BADGE, POS_SOLID, INJURY_META } from './draftRoomPositions.js'
 
 // A team has no photo, so its header avatar is initials in a solid
 // circle — the same idea chat's seatInitials()/avatar circle already
@@ -39,42 +39,45 @@ function adpGap(pick) {
 }
 
 // The cell's own reading of the same gap adpGap() already returned — one
-// call per pick, reused for the background wash *and* the delta text
-// beside it, never recomputed. Beat-or-tied (gap >= 0, a bargain) reads
-// brand teal; reached (gap < 0) reads the app's one red. No-data (gap ==
-// null — this player carries no adp at all) stays the plain neutral
-// card: a continuous number essentially never lands on precisely zero,
-// so the mobile handoff's "no tint at ADP" is this null case, not a
-// third colour to compute.
+// call per pick, reused for the delta text beside the name, never
+// recomputed. Beat-or-tied (gap >= 0, a bargain) reads brand teal; reached
+// (gap < 0) reads the app's one red. No-data (gap == null — this player
+// carries no adp at all) prints nothing.
 //
-// The text pair replaces the emerald/rose this line used to read.
-// Emerald doubles as the RB rail colour a few lines below — one hue
-// carrying two unrelated meanings on the same card — where teal is
-// never a position colour anywhere in this file (draftRoomPositions.js's
-// own header comment says why: it's reserved). Matching the wash to the
-// text turns "beat ADP" into one signal instead of two slightly
-// different ones sharing a cell.
-//
-// The two alphas moved with the ground, and by less than it looks like they
-// should. The obvious reasoning — a lighter ground washes out a tint, so
-// roughly double it — solves the wrong problem: it measures the tint against
-// black, and nobody ever sees it against black. What a reader compares is a
-// tinted cell against the neutral cell beside it, and the neutral cell got
-// lighter too (charcoal → slate-panel), so most of the loss cancels.
-//
-// Solved as CIE76 between the tinted cell and its neutral neighbour, holding
-// that distance constant across the move: teal was 4.78 at 0.05 on obsidian
-// and needs 0.062 on slate; red was 5.57 at 0.06 and needs 0.083. Rounded to
-// 0.06 and 0.08, both inside a just-noticeable difference of the old reading.
-// Doubling them would have landed at 8.3 — not a restoration, a 70% louder
-// board.
-function adpTint(gap) {
-  if (gap == null) return { bg: 'bg-slate-panel', text: '' }
-  if (gap >= 0) return { bg: 'bg-[rgba(0,229,255,0.06)]', text: 'text-teal-500' }
-  return { bg: 'bg-[rgba(248,113,113,0.08)]', text: 'text-red-400' }
+// This used to also return a full-cell background wash in the same two
+// hues, which was the board's *only* colour signal beyond a 3px rail —
+// reported back as "why are we using red/green" and "we need this colour
+// coded by position, like every serious fantasy site." Position is the
+// cell's background now (posWash() below); this keeps just the number's
+// own colour, which was never the problem — a reader glancing at a column
+// for a position run needs the fill, not a two-tone value judgement
+// competing with it for the same pixels.
+function adpText(gap) {
+  if (gap == null) return ''
+  return gap >= 0 ? 'text-teal-500' : 'text-red-400'
 }
 
-// The legend's position row and the cell's own rail read the same six
+// A light wash in the player's own position hue — POS_SOLID, the identical
+// six colours the rail and the legend already use, just at low alpha
+// instead of full strength. Full-strength position fills were tried twice
+// before this file existed in its current form and lost to "a saturated
+// quilt fighting the ADP-delta tint" (draftRoomPositions.js's own POS_
+// CELL_BLOCK history) — but that verdict was reached *while* a competing
+// full-strength value tint was still painted on top of it. With the value
+// signal reduced to a small coloured number instead of a second wash,
+// position can carry the cell without refighting that exact collision.
+// rgba over a Tailwind arbitrary-value class for the same reason the border
+// rail below is inline style: POS_SOLID is a hex map, not a set of
+// Tailwind classes, and interpolating a hex into a class string is the
+// literal trap this file's own header comment already warns about — the
+// JIT scanner greps source for a complete class token, never sees one built
+// at runtime, and silently compiles to nothing.
+function hexToRgba(hex, alpha) {
+  const n = parseInt(hex.slice(1), 16)
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`
+}
+
+// The legend's position row and the cell's own rail/wash read the same six
 // hues off the same map — Object.keys() rather than a second, hand-typed
 // QB/RB/WR/TE/K/DST list that could drift from this one.
 const LEGEND_POSITIONS = Object.keys(POS_SOLID)
@@ -185,7 +188,7 @@ function mineEdge(isMine, isFirstRound, isLastRound) {
 // "your column" and "the live pick" stay two readable facts instead of one
 // cell trying to carry both.
 
-export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLabelOf, onTeamClick, shortNameOf, onClaimSeat, seats, onOpenLog }) {
+export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLabelOf, onTeamClick, shortNameOf, onClaimSeat, seats, onOpenLog, onSelectPlayer }) {
   const byCell = new Map()
   picks.forEach((p) => byCell.set(p.round + '-' + p.slot, p))
 
@@ -274,49 +277,44 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
 
       {/* The legend, above the grid rather than below it — a reader meets
           it before the first cell, not after scrolling past however many
-          rounds are already on the board. Two facts it decodes, both real
-          things this exact grid draws: the wash a cell picks up from
-          adpTint() above, and the gold outline mineEdge() runs down one
-          column. "you" is drawn in that same #FFD166 rather than a teal
-          swatch, because the ring really is gold (CLAUDE.md: "Gold is
-          identity... a colour doing five jobs is not a signal") — drawing
-          it teal here would make the legend describe a ring the board
-          doesn't have, and teal already means "beat ADP" two swatches to
-          its left on this exact row. The six position hues read off
-          LEGEND_POSITIONS/POS_SOLID directly, the same map the cell rail
-          itself uses, so this can never list a colour the board doesn't
-          actually draw.
+          rounds are already on the board. Position leads now: it's the
+          cell's own background (posWash() above), so it's the fact a
+          reader meets first when they meet the board, and the six hues
+          read off LEGEND_POSITIONS/POS_SOLID directly — the same map the
+          cell wash and rail both use, so this can never list a colour the
+          board doesn't actually draw. The ADP delta comes second, as the
+          coloured *number* it actually is now rather than a second wash —
+          this used to be a background tint too, reported back as "why are
+          we using red/green," which was really two colour signals
+          fighting on the same cell. "you" stays gold, deliberately not
+          teal: the ring really is gold (CLAUDE.md: "Gold is identity... a
+          colour doing five jobs is not a signal"), and teal now belongs to
+          "beat ADP" two swatches to its right on this exact row.
 
           Not lg:hidden any more. This was mobile-only while desktop had
           nothing in its place — every filled cell on the lg+ board carries
-          the identical tint and the identical ADP-gap number this legend
-          decodes, with zero explanation beside them. A reader on the wider
-          screen was left to guess what a red cell or a "+0.4" meant; the
-          numbers were always real (adpGap() below), only the key to them
-          was missing. */}
+          the identical wash and the identical ADP-gap number this legend
+          decodes, with zero explanation beside them. */}
       <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-slate-rule px-3 py-2">
         <span className="font-plex text-[10px] uppercase tracking-wide text-white/60">
-          Tint = value vs ADP
+          Fill = position
         </span>
-        <span className="flex items-center gap-1 text-[10px] text-white/60">
-          <span className="h-2.5 w-2.5 shrink-0 rounded-sm border border-teal-500/60 bg-[rgba(0,229,255,0.14)]" aria-hidden="true" />
-          beat it
-        </span>
-        <span className="flex items-center gap-1 text-[10px] text-white/60">
-          <span className="h-2.5 w-2.5 shrink-0 rounded-sm border border-red-400/60 bg-[rgba(248,113,113,0.16)]" aria-hidden="true" />
-          reached
-        </span>
-        <span className="flex items-center gap-1 text-[10px] text-white/60">
-          <span className="h-2.5 w-2.5 shrink-0 rounded-sm border-2 border-[#FFD166]" aria-hidden="true" />
-          you
-        </span>
-        <span className="flex flex-wrap items-center gap-2 border-l border-slate-rule pl-2">
+        <span className="flex flex-wrap items-center gap-2">
           {LEGEND_POSITIONS.map((pos) => (
             <span key={pos} className="flex items-center gap-1 text-[10px] text-white/60">
               <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ backgroundColor: POS_SOLID[pos] }} aria-hidden="true" />
               {pos}
             </span>
           ))}
+        </span>
+        <span className="flex items-center gap-2 border-l border-slate-rule pl-3">
+          <span className="font-plex text-[10px] uppercase tracking-wide text-white/60">Number = value vs ADP</span>
+          <span className="text-[10px] font-semibold text-teal-500">+0.4 beat it</span>
+          <span className="text-[10px] font-semibold text-red-400">−0.7 reached</span>
+        </span>
+        <span className="flex items-center gap-1 text-[10px] text-white/60">
+          <span className="h-2.5 w-2.5 shrink-0 rounded-sm border-2 border-[#FFD166]" aria-hidden="true" />
+          you
         </span>
       </div>
 
@@ -491,9 +489,7 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
                 const isCurrent = !!onClock && onClock.round === round && onClock.slot === s
                 const isMine = s === mySlot
                 const gap = pick ? adpGap(pick) : null
-                // One call, reused for the card's background and its own
-                // delta text a few lines down — never a second calculation.
-                const tint = adpTint(gap)
+                const gapText = adpText(gap)
                 const overall = DE ? DE.overallOf(round, s, teams) : null
                 // The label for a pick that has landed. Always via
                 // DraftEngine.pickCode() — the snake mirror lives there and
@@ -530,20 +526,25 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
                         initial={{ opacity: 0, scale: 0.85 }}
                         animate={{ opacity: 1, scale: 1 }}
                         transition={{ type: 'spring', stiffness: 400, damping: 32 }}
-                        style={{ borderLeft: '3px solid ' + (POS_SOLID[pick.player.pos] || 'rgba(255,255,255,0.25)') }}
+                        onClick={() => onSelectPlayer && onSelectPlayer(pick.player)}
+                        style={{
+                          borderLeft: '3px solid ' + (POS_SOLID[pick.player.pos] || 'rgba(255,255,255,0.25)'),
+                          backgroundColor: POS_SOLID[pick.player.pos] ? hexToRgba(POS_SOLID[pick.player.pos], 0.14) : undefined,
+                        }}
                         // h-full alone is enough now: the row itself is a
                         // fixed 50px (rowsTemplate above) rather than a
                         // minmax floor, so every card fills the identical
                         // track regardless of its own content — there is no
                         // longer a shorter round for the grid to shrink
                         // toward (the legacy board's "two row heights" bug).
-                        // tint.bg replaces the flat charcoal fill with a
-                        // wash on a pick that moved against its ADP.
+                        // The position wash replaces the flat charcoal fill —
+                        // see posWash()/hexToRgba() above for why this is the
+                        // cell's primary colour now rather than the ADP gap.
                         // box-border restates border-box explicitly (Tailwind
                         // Preflight already sets it globally) because an
                         // explicit height and this card's own padding are
                         // exactly where content-box and border-box disagree.
-                        className={'relative flex h-full box-border flex-col justify-center gap-0.5 rounded-md px-1.5 py-1 text-white/90 ' + tint.bg}
+                        className="relative flex h-full box-border cursor-pointer flex-col justify-center gap-0.5 rounded-md px-1.5 py-1 text-white/90"
                       >
                         {/* Line 1 — name, then the pick code. The code used
                             to share line 1 with the position letters; the
@@ -584,10 +585,21 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
                               {pick.player.pos}
                             </span>
                             <span className="truncate text-[10px] font-medium text-ink-soft">{pick.player.team}</span>
+                            {/* A dot, not a chip — the cell has no room for
+                                a labelled badge on top of everything else
+                                here, but "hurt" is worth a glance even at
+                                this size. Full status is one click away on
+                                the profile now. */}
+                            {INJURY_META[pick.player.inj] && (
+                              <span
+                                className={'h-[5px] w-[5px] shrink-0 rounded-full ' + INJURY_META[pick.player.inj].dot}
+                                title={INJURY_META[pick.player.inj].label}
+                              />
+                            )}
                             <Arrow dir={arrow} className="shrink-0 text-[9px] text-ink-soft" />
                           </span>
                           {gap != null && (
-                            <span className={'shrink-0 text-[10px] font-semibold ' + tint.text}>
+                            <span className={'shrink-0 text-[10px] font-semibold ' + gapText}>
                               {gap >= 0 ? '+' : ''}
                               {gap.toFixed(1)}
                             </span>

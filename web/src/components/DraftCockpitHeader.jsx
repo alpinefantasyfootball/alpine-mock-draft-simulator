@@ -56,16 +56,51 @@ export default function DraftCockpitHeader({
 
   return (
     <Fragment>
-      {/* Five blocks want this bar and it is 62px tall, not wide: measured at
+      {/* Three grid tracks, not a flex row with two flex-1 spacers either
+          side of the pill. Flex-1 spacers only centre content in the space
+          *left over* after both side blocks — and those two blocks are not
+          the same width (chevron+logo+tabs on the left runs to ~400px at
+          lg, autopick+kebab on the right is under half that), so the pill
+          sat visibly off-centre, measured 86px right of the bar's true
+          centre at 1280px. `1fr auto 1fr` is the same fix CLAUDE.md already
+          documents for the legacy `.shellbar`/`.appbar-inner` header doing
+          the identical job: forcing the two outer tracks to equal width is
+          what makes the middle one sit on the bar's real centre regardless
+          of how much either side is carrying, rather than merely being
+          centred between them.
+
+          Two things had to be fixed, not one, and the first fix alone
+          looked like it hadn't worked at all. minmax(0,1fr), not a bare
+          1fr — a bare 1fr track defaults to minmax(auto,1fr), which floors
+          the track at its own content's min-content size before the fr
+          weights ever get a say. With the left block needing ~400px at lg
+          and the right needing under 150, that floor bound asymmetrically:
+          left claimed its whole minimum first, *then* the two shared what
+          was left 1:1, so the tracks ended up unequal again, just less so
+          — measured at 34px off-centre instead of 86. minmax(0,…) removes
+          the content floor entirely, and DOES force the two tracks to the
+          same width — measured 451.2px each afterwards, exactly equal.
+
+          The pill still sat 34px off-centre with equal tracks either side
+          of it, because a grid item's default alignment is stretch: the
+          pill's own div (and the preDraft/over spans in the other two
+          branches) had no width set, so each filled the *entire* middle
+          track and then left-aligned its own content inside that
+          stretched box — visually indistinguishable from never having
+          been centred. justify-self-center on all three is the other
+          half: it sizes each box to its own content instead of stretching
+          it, so *that* box is what lands centred on the track, and its
+          content with it.
+
+          Five blocks want this bar and it is 62px tall, not wide: measured at
           their natural widths, chevron 28 + logo 95 + divider 1 + tabs 210 +
           the pick pill 313 at its widest + controls 158 is 805px of content,
           and seven 22px gaps and 48px of padding put the minimum at 1007. That
           is an lg bar. It had been overflowing every width below it - 916
           against 768, 685 against 640 - with the surplus running off the right
-          edge, where `ml-auto` puts the controls: no scroll, no ellipsis, just
-          the Autopick toggle and the kebab off-screen. So four things stand
-          down below lg, in the order of what can wait, and every one of them
-          is measured rather than guessed.
+          edge, where the controls sat. So four things stand down below lg, in
+          the order of what can wait, and every one of them is measured rather
+          than guessed.
 
           The gaps are the first: 22px between eight blocks is 154px, more than
           the logo and the tabs together. 12px until lg rather than 22 until
@@ -75,7 +110,8 @@ export default function DraftCockpitHeader({
           it is the one that has to fit. At 14px this cleared 768 and missed 375
           by a single pixel, which is the kind of margin that is not a margin -
           12 takes the phone to 368 against 375 and 768 to 746. */}
-      <header className="fixed inset-x-0 top-0 z-50 flex h-[62px] shrink-0 items-center gap-3 border-b border-white/[0.06] bg-slate-bar/90 px-4 backdrop-blur-md lg:gap-[22px] lg:px-6">
+      <header className="fixed inset-x-0 top-0 z-50 grid h-[62px] shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 border-b border-white/[0.06] bg-slate-bar/90 px-4 backdrop-blur-md lg:gap-[22px] lg:px-6">
+        <div className="flex min-w-0 items-center gap-3 lg:gap-[22px]">
         <a
           href="#/drafts"
           aria-label="Back to your draft locker"
@@ -133,21 +169,28 @@ export default function DraftCockpitHeader({
             ))}
           </nav>
         )}
+        </div>
 
-        <div className="min-w-0 flex-1" />
-
+        {/* justify-self-center on all three branches — a grid item's
+            default alignment is stretch, so without this each one filled
+            the whole middle track (itself now correctly centred, per the
+            comment on the header's own grid-cols above) and then
+            left-aligned its own content inside that stretched box, which
+            looked identical to the pill never having been centred at all.
+            centering the box itself at its natural width is what actually
+            lands the content on the bar's true centre. */}
         {preDraft ? (
-          <span className="truncate font-plex text-xs text-white/60" title={problem || undefined}>
+          <span className="justify-self-center truncate font-plex text-xs text-white/60" title={problem || undefined}>
             {problem || 'Nobody has picked yet'}
           </span>
         ) : over ? (
-          <span className="inline-flex items-center gap-2 rounded-full bg-emerald-500/10 px-4 py-1.5 text-xs font-bold uppercase tracking-wide text-emerald-300">
+          <span className="inline-flex items-center gap-2 justify-self-center rounded-full bg-emerald-500/10 px-4 py-1.5 text-xs font-bold uppercase tracking-wide text-emerald-300">
             Draft complete
           </span>
         ) : (
           <div
             className={
-              'flex items-center gap-3.5 rounded-full px-3.5 py-1.5 transition-colors duration-300 ' +
+              'flex items-center gap-3.5 justify-self-center rounded-full px-3.5 py-1.5 transition-colors duration-300 ' +
               (myTurn
                 ? urgent
                   ? 'bg-rose-500/20 shadow-[inset_0_0_0_1.5px_rgba(251,113,133,0.55)]'
@@ -209,17 +252,23 @@ export default function DraftCockpitHeader({
           </div>
         )}
 
-        <div className="min-w-0 flex-1" />
-
-        <div className="ml-auto flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2 justify-self-end">
+          {/* Nothing left to autopick once the draft is over — the toggle
+              stayed fully lit and clickable on a finished board, which reads
+              as a live control for a decision that no longer exists. */}
           <button
             type="button"
             onClick={onToggleAutopick}
+            disabled={over}
             aria-pressed={autopick}
-            className="flex items-center gap-2.5 rounded-full bg-white/5 py-1.5 pl-3.5 pr-1.5 transition-colors duration-150 hover:bg-white/[0.09]"
+            title={over ? 'Draft complete' : undefined}
+            className={
+              'flex items-center gap-2.5 rounded-full bg-white/5 py-1.5 pl-3.5 pr-1.5 transition-colors duration-150 ' +
+              (over ? 'cursor-not-allowed opacity-40' : 'hover:bg-white/[0.09]')
+            }
           >
             <span className="hidden text-xs font-semibold text-white/70 sm:inline">Autopick</span>
-            <span className={'relative block h-[18px] w-[34px] rounded-full transition-colors duration-200 ' + (autopick ? 'bg-teal-500/70' : 'bg-white/[0.16]')}>
+            <span className={'relative block h-[18px] w-[34px] rounded-full transition-colors duration-200 ' + (autopick && !over ? 'bg-teal-500/70' : 'bg-white/[0.16]')}>
               <motion.span
                 layout
                 transition={{ type: 'spring', stiffness: 500, damping: 32 }}

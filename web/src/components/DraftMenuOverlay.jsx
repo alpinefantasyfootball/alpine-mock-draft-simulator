@@ -3,11 +3,20 @@ import { Check, Copy } from 'lucide-react'
 
 // The kebab dropdown replacing DraftRoomStatusBar's flat icon row. Every
 // action here already exists on the engine — this is presentation, not
-// new logic, with one exception: Pause. togglePause()/paused()/isHost()
-// were all already bridged (app.js) for the legacy action bar, but no
-// React control ever called them — the room's own "Pause is the host's
-// in a room" rule (app.js's bridge comment) is reproduced here rather
-// than re-derived.
+// new logic.
+//
+// Pause, Undo and "Auto-draft the rest" used to live here too, and don't
+// any more — a product review dropped all three on purpose. Pause and
+// Undo tested as fully functional (togglePause()/undo() both work
+// correctly), they just read as broken because they were buried in this
+// menu instead of being where a manager would look for them; rather than
+// promote controls a mock draft doesn't need — nobody else is waiting on
+// you to un-pause, and there's no opponent to protect an undo from — the
+// call was to cut them, matching the single "Autopick" toggle every
+// competitor mock drafter actually ships. The engine's own
+// undo()/togglePause()/autoDraftRest() are untouched (autoDraftRest() is
+// still how a finished-draft test harness fills a board), only their
+// button here is gone.
 //
 // "Create a copy" — one of the handoff's own menu items — is deliberately
 // not here. The only engine entry point close to it, createRoom(),
@@ -22,14 +31,6 @@ export default function DraftMenuOverlay({
   onClose,
   onOpenSettings,
   inRoom,
-  isHost,
-  clockLength,
-  paused,
-  onTogglePause,
-  showFinish,
-  onFinish,
-  showUndo,
-  onUndo,
   soundOn,
   onToggleSound,
   discardLabel,
@@ -75,13 +76,6 @@ export default function DraftMenuOverlay({
 
   const Rule = () => <div className="my-1.5 h-px bg-white/[0.08]" />
 
-  // Pause shown only where it can actually do something: a clock has to
-  // exist (clockLength > 0), and in a room only the host may fire it —
-  // togglePause() itself already refuses anyone else server-side, but
-  // the button shouldn't be offered at all rather than offered and
-  // silently ignored, same reasoning Undo's own room-hide already uses.
-  const showPause = clockLength > 0 && (!inRoom || isHost)
-
   return (
     <div className="fixed inset-0 z-[70]" onClick={onClose}>
       <div
@@ -100,23 +94,8 @@ export default function DraftMenuOverlay({
           </button>
         )}
 
-        {(showPause || showFinish || showUndo) && <Rule />}
+        <Rule />
 
-        {showPause && (
-          <Item
-            label={paused ? 'Resume clock' : 'Pause clock'}
-            sub={inRoom ? 'Pauses it for everyone in the room.' : undefined}
-            onClick={act(onTogglePause)}
-          />
-        )}
-        {showFinish && (
-          <Item
-            label="Auto-draft the rest"
-            sub="Fills every remaining pick with what Juke would take."
-            onClick={act(onFinish)}
-          />
-        )}
-        {showUndo && <Item label="Undo last pick" onClick={act(onUndo)} />}
         <Item label={soundOn ? 'Turn draft sounds off' : 'Turn draft sounds on'} onClick={act(onToggleSound)} />
 
         <Rule />

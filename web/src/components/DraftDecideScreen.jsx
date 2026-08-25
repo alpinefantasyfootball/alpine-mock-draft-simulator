@@ -1,5 +1,5 @@
 import { ChevronRight, Sparkles } from 'lucide-react'
-import { POS_BADGE, POS_SOLID } from './draftRoomPositions.js'
+import { POS_BADGE, POS_SOLID, INJURY_META } from './draftRoomPositions.js'
 import QueueList from './QueueList.jsx'
 
 function round1(v) {
@@ -105,10 +105,11 @@ function tiebreakNote(candidate, siblings) {
   return `Ties ${tied.player.name} on Juke score.`
 }
 
-function Card({ candidate, rankLabel, primary, onDraft, myTurn, engine, board, counts, siblings }) {
+function Card({ candidate, rankLabel, primary, onDraft, myTurn, engine, board, counts, siblings, onOpenProfile }) {
   const { player, vorp, juke, survival, nextOverall } = candidate
   const proj = typeof player.projPts === 'number' ? Math.round(player.projPts) : null
   const risky = survival != null && survival < 0.4
+  const inj = INJURY_META[player.inj]
 
   return (
     <div
@@ -124,10 +125,25 @@ function Card({ candidate, rankLabel, primary, onDraft, myTurn, engine, board, c
         <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-white/55">{rankLabel}</span>
       </div>
 
-      <div className="font-display text-[32px] font-bold leading-none text-white">{player.name}</div>
-      <div className="mb-3 text-xs text-white/60">
+      {/* The one player-facing surface on this screen that had no way to
+          open the profile it's describing — every number below is drawn
+          from data the profile explains in full, and there was no path to
+          it from here. cursor-pointer plus a hover state, the same
+          affordance the Everyone Else rows below already carry. */}
+      <div
+        onClick={() => onOpenProfile(player)}
+        className="cursor-pointer font-display text-[32px] font-bold leading-none text-white transition-colors hover:text-teal-300"
+      >
+        {player.name}
+      </div>
+      <div className="mb-3 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-white/60">
         {player.team} · bye {player.bye || '—'}
         {player.tier ? ` · tier ${player.tier}` : ''}
+        {inj && (
+          <span className={'rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ' + inj.cls} title={inj.label}>
+            {player.inj}
+          </span>
+        )}
       </div>
 
       {/* The reason this card won its slot, not just a number a reader has
@@ -201,7 +217,7 @@ function Card({ candidate, rankLabel, primary, onDraft, myTurn, engine, board, c
   )
 }
 
-function SurvivorCard({ candidate, engine, onQueueToggle, onDraft, myTurn, queued }) {
+function SurvivorCard({ candidate, engine, onQueueToggle, onDraft, myTurn, queued, onOpenProfile }) {
   const { player, survival } = candidate
   const verdict = verdictFor(survival)
   const pct = survival != null ? Math.round(survival * 100) : null
@@ -221,7 +237,12 @@ function SurvivorCard({ candidate, engine, onQueueToggle, onDraft, myTurn, queue
         </span>
         <span className={'text-[10px] font-bold uppercase tracking-[0.08em] ' + verdict.color}>{verdict.label}</span>
       </div>
-      <div className="mb-3 font-display text-[23px] font-bold leading-tight text-white">{player.name}</div>
+      <div
+        onClick={() => onOpenProfile(player)}
+        className="mb-3 cursor-pointer font-display text-[23px] font-bold leading-tight text-white transition-colors hover:text-teal-300"
+      >
+        {player.name}
+      </div>
       <div className="mb-2 flex items-baseline gap-2">
         <span className={'font-display text-[32px] font-bold leading-[0.95] ' + verdict.color}>{pct != null ? `${pct}%` : '—'}</span>
         <span className="text-xs text-white/55">still there</span>
@@ -271,7 +292,13 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, pick
   // drifting from this one; see DraftRoom.jsx's own comment on both values.
   const lineup = engine.seatedLineup(mySlot)
   const counts = engine.filterCounts()
-  const needRows = ['QB', 'RB', 'WR', 'TE']
+  // K and DST belong on this list too — a roster isn't full without them,
+  // and their absence here read as the app not knowing they existed.
+  // filterCounts() already builds a real have/need/text for every entry in
+  // POSITIONS (K and DST included, capped by atPositionCap() rather than
+  // league.starters directly, same as everywhere else that asks); this was
+  // just filtering four of the six back out.
+  const needRows = ['QB', 'RB', 'WR', 'TE', 'K', 'DST']
     .map((pos) => ({ pos, ...(counts ? counts[pos] : { have: 0, need: 0 }) }))
 
   const raw = engine.suggestions('ALL').slice(0, 3)
@@ -330,11 +357,25 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, pick
     return label
   })
 
-  const others = engine.suggestions('ALL').slice(3, 7).map((player) => ({
-    player,
-    vorp: round1(engine.replacementGap(player)),
-    juke: round1(engine.overallScore(player)),
-  }))
+  // The board, not suggestions('ALL') sliced past 3 — that was the first
+  // fix tried, and it barely moved anything: suggestions() is itself a
+  // curated shortlist (six players, measured, this many rounds in), so
+  // slicing past the top three ever returned three or four more of the
+  // same shortlist, never "the rest of the board" the way the request for
+  // this asked for ("similar to view located on BOARD tab"). This is that
+  // same board, filtered to what's actually still available and minus the
+  // three already shown above, in board/ADP order — genuinely everyone
+  // else, not another few names off the same short list.
+  const board = engine.board()
+  const topThreeNames = new Set(candidates.map((c) => c.player.name))
+  const others = board
+    .filter((p) => !p.drafted && !topThreeNames.has(p.name))
+    .sort((a, b) => a.overall - b.overall)
+    .map((player) => ({
+      player,
+      vorp: round1(engine.replacementGap(player)),
+      juke: round1(engine.overallScore(player)),
+    }))
   // Why the model did not put each of these in the top three — a real
   // comparison, not a bare number a reader has to interpret alone. Prefers
   // the top-three card sharing this player's position (the natural point
@@ -381,11 +422,11 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, pick
   Object.entries(posCounts).forEach(([pos, n]) => { if (n > runCount) { runCount = n; runPos = pos } })
   const runDepth = runPos ? engine.positionDepthRemaining(runPos) : null
 
-  const board = engine.board()
   // The count both mobile-only labels print — "N available" over the cards
   // and "Browse all N players" under them. One read of the same board array
   // the queue below already resolves against, never a second call that
-  // could answer differently between two lines of the same screen.
+  // could answer differently between two lines of the same screen. `board`
+  // itself is declared up with `others` now, which needs it first.
   const availableCount = board.filter((p) => !p.drafted).length
   const queue = engine
     .queue()
@@ -529,6 +570,30 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, pick
               )}
             </div>
           ))}
+          {/* The starting lineup isn't the whole roster — league.bench more
+              seats exist and this rail stopped at the starters, same gap
+              DraftEntryScreen.jsx's pre-draft rail had. lineup.bench holds
+              whoever's actually there; league.bench is the real ceiling, so
+              an empty slot still prints rather than the row disappearing
+              the moment a bench spot goes unfilled. */}
+          {Array.from({ length: league.bench }, (_, i) => {
+            const p = lineup.bench[i] || null
+            return (
+              <div key={'bn-' + i} className="grid h-8 grid-cols-[38px_minmax(0,1fr)_auto] items-center gap-2.5 rounded-md px-2.5">
+                <span className={'rounded py-0.5 text-center text-[10px] font-bold ' + (p ? POS_BADGE[p.pos] || 'bg-white/10 text-white/60' : 'bg-white/5 text-ink-muted')}>
+                  BN
+                </span>
+                <span className={'truncate text-xs font-medium ' + (p ? 'text-white' : 'text-ink-muted')}>
+                  {p ? p.name : '—'}
+                </span>
+                {p && (
+                  <span className="text-[10px] tabular-nums text-emerald-300">
+                    {(() => { const g = engine.replacementGap(p); return g != null ? `${g >= 0 ? '+' : ''}${Math.round(g)}` : '' })()}
+                  </span>
+                )}
+              </div>
+            )
+          })}
         </div>
 
         <div className="mb-5 border-t border-white/[0.07] pt-[18px]">
@@ -672,6 +737,7 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, pick
                   board={board}
                   counts={counts}
                   siblings={candidates}
+                  onOpenProfile={onOpenProfile}
                 />
               ))}
             </div>
@@ -696,7 +762,14 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, pick
                 </div>
                 {/* Column heads — a design review caught "+64 · 38 · Draft"
                     with nothing saying which number was which. */}
-                <div className="hidden h-5 grid-cols-[30px_minmax(0,1fr)_60px_64px_70px] items-center gap-3.5 px-3 text-[9px] font-semibold uppercase tracking-wide text-ink-muted lg:grid">
+                {/* The name column was minmax(0,1fr) — every pixel this
+                    centre column wasn't using went there, so "Brock Bowers"
+                    sat in a ~290px box on a wide desktop with VORP and Juke
+                    pushed out to the far edge of it, reported as dead space
+                    between the name and the numbers. 280px is plenty for a
+                    name plus its two-line whyNot sentence and stops the
+                    column claiming the rest of the row's width for nothing. */}
+                <div className="hidden h-5 grid-cols-[30px_minmax(0,280px)_60px_64px_70px] items-center gap-3.5 px-3 text-[9px] font-semibold uppercase tracking-wide text-ink-muted lg:grid">
                   <span />
                   <span />
                   <span className="text-right">VORP</span>
@@ -708,7 +781,7 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, pick
                     <div
                       key={o.player.name}
                       onClick={() => onOpenProfile(o.player)}
-                      className="grid min-h-[44px] cursor-pointer grid-cols-[30px_minmax(0,1fr)_60px_64px_70px] items-center gap-3.5 rounded-md px-3 py-1.5 transition-colors hover:bg-white/[0.05] lg:min-h-[40px]"
+                      className="grid min-h-[44px] cursor-pointer grid-cols-[30px_minmax(0,280px)_60px_64px_70px] items-center gap-3.5 rounded-md px-3 py-1.5 transition-colors hover:bg-white/[0.05] lg:min-h-[40px]"
                     >
                       <span className="text-[10px] font-bold text-white/55">{o.player.pos}</span>
                       <div className="min-w-0">
@@ -753,6 +826,7 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, pick
                   onDraft={onDraft}
                   myTurn={myTurn}
                   queued={queuedNames.has(c.player.name)}
+                  onOpenProfile={onOpenProfile}
                 />
               ))}
             </div>

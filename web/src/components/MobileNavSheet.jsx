@@ -11,11 +11,13 @@ import { NAV_LINKS, AccountButtons } from './SiteNav.jsx'
 // on its own click, with the panel itself stopping propagation so a tap
 // inside doesn't bubble up and close what it just opened. That overlay is a
 // 292px corner dropdown, though — a full nav needs the whole link list, not
-// four menu rows, so the panel is PlayerProfileDrawer.jsx's slide-in instead:
-// the same spring, the same `x: '100%' -> 0`, just `fixed inset-0` rather
-// than `absolute inset-0` — this sheet has no shared relative ancestor with
-// what it covers the way that drawer does with the player queue, it has to
-// cover the whole viewport on its own.
+// four menu rows, so the panel borrows the slide-in shape the old
+// PlayerProfileDrawer.jsx used to (now PlayerProfileModal.jsx, which fades
+// and centres instead — this sheet's own reasons for a slide never applied
+// to a player profile the way they do to a nav list): the same spring, the
+// same `x: '100%' -> 0`, just `fixed inset-0` rather than `absolute
+// inset-0` — this sheet has no shared relative ancestor with what it
+// covers, it has to cover the whole viewport on its own.
 //
 // NAV_LINKS/AccountButtons come from SiteNav.jsx rather than being passed in
 // — the whole point of that file's existence is one nav both headers agree

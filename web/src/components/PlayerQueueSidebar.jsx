@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { Bookmark, ChevronDown, ChevronUp, Search, Star } from 'lucide-react'
-import { POS_BADGE, POS_LIST } from './draftRoomPositions.js'
+import { POS_BADGE, POS_LIST, INJURY_META } from './draftRoomPositions.js'
 import JukeValueAssistant from './JukeValueAssistant.jsx'
 import { MOBILE_SORTS, STAT_COLUMNS, STAT_GROUPS, statValue } from './playerColumns.js'
 
@@ -159,10 +159,12 @@ export default function PlayerQueueSidebar({
   }
 
   return (
-    // Sizing against the board+queue row (flex-1, lg:flex-[3], lg:min-w) now
-    // lives on the relative wrapper DraftRoom.jsx puts around this and
-    // PlayerProfileDrawer — this fills that wrapper rather than sizing
-    // itself against the row a second time.
+    // Sizing against the board+queue row (flex-1, lg:flex-[3], lg:min-w)
+    // lives on DraftRoom.jsx's own wrapper around PlayerHub — this fills
+    // that wrapper rather than sizing itself against the row a second
+    // time. The profile that used to share a relative ancestor with this
+    // list (PlayerProfileDrawer) is a top-level modal now and has no
+    // positioning relationship with this component at all.
     // No h-full. The wrapper above is a flex row, so align-items:stretch
     // already sizes this to it — and height:100% actively defeats that:
     // the parent's height comes from flex layout rather than from an
@@ -203,6 +205,7 @@ export default function PlayerQueueSidebar({
             myTurn={myTurn}
             photoFor={photoFor}
             initialsFor={initialsFor}
+            onOpenProfile={onSelectPlayer}
           />
         </div>
         <div className="relative">
@@ -266,13 +269,19 @@ export default function PlayerQueueSidebar({
 
         {/* A second, independent dimension from position — "RB rookies I'm
             watching" is a real combination, which a single-select list
-            can't hold. Rookies/Veterans stays exclusive with itself (a
-            player can't be both); Watchlist and Drafted are plain toggles
-            that combine freely with everything else here. */}
+            can't hold. Watchlist and Drafted are plain toggles that combine
+            freely with everything else here.
+
+            Veterans dropped — the two bands were never symmetric: the
+            question a manager actually asks mid-draft is "show me only the
+            rookies," never "hide the rookies," and a Veterans chip that
+            just meant "everyone else" duplicated what leaving the filter on
+            Rookies-off already showed. `expBand` still supports 'veteran'
+            underneath (app.js's exp filter is unchanged); only the button
+            that could ever set it is gone. */}
         <div className="flex flex-wrap gap-1.5">
           {[
             { key: 'rookie', label: 'Rookies' },
-            { key: 'veteran', label: 'Veterans' },
           ].map((b) => (
             <button
               key={b.key}
@@ -502,7 +511,15 @@ export default function PlayerQueueSidebar({
                      layoutId still flies the card into its cell. */
                   transition={{ type: 'spring', stiffness: 380, damping: 32 }}
                   onClick={() => onSelectPlayer(player)}
-                  className="flex cursor-pointer border-b border-slate-rule/50 transition-colors duration-150 hover:bg-white/[0.03]"
+                  // Shown-but-drafted rows used to sit at the exact same
+                  // brightness as available ones, distinguished only by the
+                  // action column swapping a Draft button for a team name —
+                  // easy to miss at a glance, which is what "greyed out" was
+                  // actually asking for.
+                  className={
+                    'flex cursor-pointer border-b border-slate-rule/50 transition-colors duration-150 hover:bg-white/[0.03] ' +
+                    (player.drafted ? 'opacity-50' : '')
+                  }
                 >
                   {/* Sticky identity cell — who the row is about stays put
                       while the numbers scroll. Opaque on purpose: a
@@ -554,7 +571,14 @@ export default function PlayerQueueSidebar({
 
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-xs font-medium text-white/90">{player.name}</p>
-                      <p className="truncate text-[10px] text-ink-muted">{player.team}</p>
+                      <p className="flex items-center gap-1 truncate text-[10px] text-ink-muted">
+                        {player.team}
+                        {INJURY_META[player.inj] && (
+                          <span className={'rounded px-1 py-px text-[8px] font-bold uppercase leading-tight ' + INJURY_META[player.inj].cls}>
+                            {player.inj}
+                          </span>
+                        )}
+                      </p>
                     </div>
                   </div>
 

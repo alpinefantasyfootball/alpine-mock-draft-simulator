@@ -440,7 +440,17 @@ const ROOMS = [
   { name: "The Prospect Room", live: false, season: "Pre-season",
     lead: "Scout the future.",
     blurb: "Analyze the college production and NFL translation of incoming rookies before they even hit your draft board." },
-  { name: "The Draft Room", href: "#/draft-room", live: true, season: "Pre-season",
+  // #/drafts (the Lobby/Locker), not #/draft-room (the live Cockpit
+  // itself). DraftRoom.jsx's own `enteredRoom` state persists for the rest
+  // of the tab's life once a draft is entered — including a finished one,
+  // until "Discard draft" clears it — so a link straight into #/draft-room
+  // landed on whatever draft was last open rather than on a fresh choice.
+  // Reported exactly that way: view a completed draft, go home, press
+  // "Enter the Draft Room" again, land right back on the same finished
+  // board instead of the Lobby. #/drafts is `draftsActive` in that file,
+  // which forces the Lobby regardless of `enteredRoom` — the one route
+  // built for exactly this "start from a clean choice" entry.
+  { name: "The Draft Room", href: "#/drafts", live: true, season: "Pre-season",
     lead: "Mock smarter.",
     blurb: "Run unlimited draft simulations against a board that automatically adjusts for ADP, tiers, and your custom scoring rules." },
 

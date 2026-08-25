@@ -122,3 +122,29 @@ export const POS_SOLID = {
   K: '#A16207',    // yellow-700, white 4.92
   DST: '#4338CA',  // indigo-700, white 7.90
 }
+
+// Sleeper's injury_status, already computed into player.inj by
+// injury_code() in build_players.py — RULED_OUT/RISKY in app.js group
+// these into two severities for the bust-risk score; this groups them into
+// three for a chip, since a badge has room to say more than "risky or not."
+// None of the three hues below is a POS_BADGE hue: amber and violet aren't
+// spoken for at all, and rose is already the app's one reserved danger
+// colour (CLAUDE.md: "red/rose already mean danger/urgent elsewhere"),
+// which is exactly the meaning IR/O/D carry here rather than a collision
+// with it.
+// `dot` is a full, separate literal per code rather than `cls`'s bg-*/15
+// swapped for a solid bg-* at read time — this file's own header comment
+// already names that exact trap: a class built from a runtime string never
+// appears as a complete token for Tailwind's JIT scanner to find, and
+// compiles to nothing, silently. Written out twice on purpose.
+export const INJURY_META = {
+  Q: { label: 'Questionable', cls: 'bg-amber-500/15 text-amber-300', dot: 'bg-amber-400' },
+  D: { label: 'Doubtful', cls: 'bg-rose-500/15 text-rose-300', dot: 'bg-rose-400' },
+  O: { label: 'Out', cls: 'bg-rose-500/15 text-rose-300', dot: 'bg-rose-400' },
+  IR: { label: 'Injured reserve', cls: 'bg-rose-500/15 text-rose-300', dot: 'bg-rose-400' },
+  PUP: { label: 'Physically unable to perform', cls: 'bg-violet-500/15 text-violet-300', dot: 'bg-violet-400' },
+  NFI: { label: 'Non-football injury', cls: 'bg-violet-500/15 text-violet-300', dot: 'bg-violet-400' },
+  SUS: { label: 'Suspended', cls: 'bg-white/10 text-white/50', dot: 'bg-white/50' },
+  DNR: { label: 'Did not report', cls: 'bg-white/10 text-white/50', dot: 'bg-white/50' },
+  COV: { label: 'Reserve/COVID-19', cls: 'bg-white/10 text-white/50', dot: 'bg-white/50' },
+}

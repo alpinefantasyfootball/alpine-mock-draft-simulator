@@ -113,7 +113,7 @@ export default function Hero() {
                 only one is ever rendered, so an id would be a lie at one width
                 or a duplicate at both. */}
             <a
-              href="#/draft-room"
+              href="#/drafts"
               data-hero-cta=""
               className="flex h-[54px] w-full items-center justify-center rounded-full bg-gradient-to-r from-[#00E5FF] to-[#7B1FA2] text-base font-bold text-white
                          shadow-glass transition-all duration-200 active:scale-[0.98]"
@@ -130,16 +130,19 @@ export default function Hero() {
           </div>
 
           <div className="mt-9 hidden flex-wrap items-center gap-[26px] lg:flex">
-            {/* #/draft-room, not #/draft — see the comment on ROOMS in
-                app.js. This is the product's actual "start" button, so it
-                was the most direct way this bug shipped. */}
+            {/* #/drafts (the Lobby), not #/draft-room or the legacy
+                #/draft — see the comment on ROOMS in app.js. This is the
+                product's actual "start" button, so a link straight into
+                the live Cockpit here was the most direct way a manager
+                landed back on a stale finished draft instead of a fresh
+                choice. */}
             {/* Marked too, though only the phone's sticky bar reads it. Both
                 hero CTAs carry it because exactly one of the two is ever
                 rendered, and marking only one means anything looking for "the
                 hero's CTA" finds a display:none element at the other width —
                 which reports a zero box and hit-tests at the page origin. */}
             <a
-              href="#/draft-room"
+              href="#/drafts"
               data-hero-cta=""
               className="rounded-full bg-gradient-to-r from-[#00E5FF] to-[#7B1FA2] px-8 py-4 text-base font-bold text-white
                          shadow-glass transition-all duration-200 hover:scale-105 hover:shadow-[0_0_15px_rgba(0,229,255,0.4)]"

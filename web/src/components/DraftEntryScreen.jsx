@@ -108,6 +108,18 @@ export default function DraftEntryScreen({
                 <span className="text-xs text-white/50">Empty</span>
               </div>
             ))}
+            {/* The starting lineup is only part of a roster — league.bench
+                more seats are coming, and a rail that stopped at the
+                starters undercounted every league by however many bench
+                spots it carries (5, by default). seatedLineup()'s own
+                `bench` array is empty pre-draft, so the count comes from
+                league.bench directly, same as the legacy renderTeam(). */}
+            {Array.from({ length: league.bench }, (_, i) => (
+              <div key={'bn-' + i} className="grid h-[30px] grid-cols-[38px_minmax(0,1fr)] items-center gap-2.5 rounded-md border border-dashed border-white/[0.09] px-2.5">
+                <span className="rounded bg-white/5 py-0.5 text-center text-[10px] font-bold text-white/50">BN</span>
+                <span className="text-xs text-white/50">Empty</span>
+              </div>
+            ))}
           </div>
         </div>
       </div>
