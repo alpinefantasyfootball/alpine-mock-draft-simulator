@@ -178,7 +178,20 @@
       --ripple: calc(var(--total) * .55);
       position: fixed; inset: 0; z-index: 9999;
       display: flex; flex-direction: column;
-      align-items: center; justify-content: center; gap: 30px;
+      /* stretch, not center — .breach-scene has no explicit width of its own
+         any more specifically so this default fills it edge to edge, which
+         is what lets breach-water and breach-underwater reach the true
+         browser width via a plain left:0/right:0 rather than a 100vw hack.
+         100vw was tried and rejected: this project already has one full-bleed
+         band elsewhere in the app that learned the hard way that vw units
+         count the scrollbar and overflow sideways on whichever machine shows
+         one, and #boot-sonar sits behind a real, potentially-scrolling page
+         for its whole lifetime. left:0/right:0 against an actually-full-width
+         parent has no such gutter to miscount. The wordmark below opts back
+         out with its own align-self, since it still wants its natural,
+         centred width rather than the stretch this now hands out by
+         default. */
+      align-items: stretch; justify-content: center; gap: 30px;
       background: #0B0E14; overflow: hidden;
       /* opacity: 1, not 0-animating-to-1 — this used to fade in over 200ms
          (sonar-boot-in), and that was a real bug, not just a cosmetic one.
@@ -278,29 +291,39 @@
     #boot-sonar i:nth-of-type(2) { border: 1px solid rgba(0,229,255,.45); animation-delay: calc(var(--total) + 700ms); }
     #boot-sonar i:nth-of-type(3) { border: 1px solid rgba(154,63,192,.9); animation-delay: calc(var(--total) + 1400ms); }
 
-    /* Breach II's own reference frame, not a box sized to the mark. The
-       handoff states its numbers against "a 520px-tall frame" (desktop) and
-       a "296x604px card" (mobile) and says to scale proportionally for any
-       other size — so rather than rescale, this uses those exact reference
-       dimensions directly, which is what lets every top/margin value below
-       be copied straight out of the two prompts with no arithmetic of its
-       own to get wrong. 480px wide on desktop is this file's own choice, not
-       the handoff's: the handoff's waterline is "full-width" of whatever
-       holds it, and 100vw is the wrong reading of that inside a centred,
-       flex-centred scene — it would draw a hairline most of the way across
-       a 1440px monitor, disconnected from the mark sitting in the middle of
-       it. 480px is a little over double the mark's own 220px, wide enough to
-       read as "full-width of this moment" without spanning the screen.
-       position:relative is what puts the whole scene above the idle rings in
-       paint order, same as the wordmark below — a positioned element draws
-       over a non-positioned one, so the rings pass behind the lockup rather
-       than across its face. overflow:hidden matches the handoff's own outer
-       wrapper; nothing here should actually reach the edge at these sizes,
-       but the mark's own travel (down to 190px below rest, up to 118px
-       above it) is close enough to the frame edges that it is worth keeping
-       as a backstop rather than proving it is never needed. */
+    /* Breach II's own reference frame, height only — width is deliberately
+       absent so #boot-sonar's align-items: stretch fills it edge to edge.
+       That reversed a first version of this file, which gave the scene an
+       explicit 480px so it would read as "a moment" rather than a hairline
+       across a 1440px monitor — a reasonable-sounding call that was still
+       this file overriding what both Breach II prompts actually ask for:
+       "full-width" (desktop) and "full-bleed" as the thing 70% is explicitly
+       relative to (mobile). Reported back directly after the first push: the
+       water was still boxed to the scene, not the browser.
+
+       Full width does not mean the mark, ripple and droplets move — they
+       stay exactly where they were, because every one of them is positioned
+       by left:50% plus a fixed pixel margin, and left:50% of a horizontally
+       centred parent lands on the viewport's own centre whether that parent
+       is 480px or 3440px wide. Only the two elements that actually ask for
+       left:0/right:0 - breach-underwater and breach-water - are stretch's
+       intended beneficiaries, and they need no changes of their own to get
+       it; they already read the scene's full width, which is now the real
+       one.
+
+       height stays explicit at 520px (desktop) / 604px (mobile, below)
+       because it is what the water's own top:58% and the whole flex block's
+       vertical centring are actually measured against — none of that changed
+       here, only the cross-axis did. position:relative is what puts the
+       whole scene above the idle rings in paint order, same as the wordmark
+       — a positioned element draws over a non-positioned one, so the rings
+       pass behind the lockup rather than across its face. overflow:hidden
+       matches the handoff's own outer wrapper and is still a backstop for
+       the mark's own travel (down to 190px below rest, up to 118px above
+       it), not something the width change needed to touch — nothing was
+       ever asked to overflow a stretched box, only a 480px one. */
     #boot-sonar .breach-scene {
-      position: relative; overflow: hidden; width: 480px; height: 520px;
+      position: relative; overflow: hidden; height: 520px;
     }
 
     /* An <img>, not a background-image — Breach II's own asset reference,
@@ -424,18 +447,26 @@
       animation-delay: var(--ripple);
     }
 
-    /* The phone card, at the handoff's own 296x604 reference size rather
-       than a rescale of the desktop numbers - the two prompts give genuinely
-       different proportions (a narrower, taller card; a waterline at 70%
-       width instead of full-bleed; a mark positioned lower in its frame),
-       not the same scene shrunk down. 600px rather than a device-specific
-       width because this is a full-viewport overlay, not a component with
-       its own container query - it only has the viewport to key off, and
-       600px sits between the widest phone this project tests against
-       (iPhone 13, 390px) and the narrowest desktop viewport in that same
-       suite (1440px), so it cannot land inside either. */
+    /* The phone card, at the handoff's own 604px reference height rather
+       than a rescale of the desktop number - the two prompts give genuinely
+       different proportions (a taller card; a waterline at 70% width instead
+       of full-bleed; a mark positioned lower in its frame), not the same
+       scene shrunk down. There is no width to override here any more:
+       breach-scene has none at either breakpoint (see its own comment), so
+       it stretches to the real, narrower phone viewport the same way it
+       stretches to a desktop one, and breach-water's 70% below is 70% of
+       that actual width - not of a fixed 296px reference card, which is the
+       same correction as the desktop side of this change and the more
+       faithful reading of "70% instead of full-bleed" besides: a phone's own
+       screen is the thing being measured against, not a stand-in for one.
+       600px rather than a device-specific width because this is a
+       full-viewport overlay, not a component with its own container query -
+       it only has the viewport to key off, and 600px sits between the widest
+       phone this project tests against (iPhone 13, 390px) and the narrowest
+       desktop viewport in that same suite (1440px), so it cannot land inside
+       either. */
     @media (max-width: 600px) {
-      #boot-sonar .breach-scene { width: 296px; height: 604px; }
+      #boot-sonar .breach-scene { height: 604px; }
       #boot-sonar .breach-mark { top: 220px; margin-left: -95px; width: 190px; height: 118px; }
       #boot-sonar .breach-underwater { background: linear-gradient(180deg, #0e2b33, #0B0E14 90px); }
       #boot-sonar .breach-water { width: 70%; }
@@ -464,6 +495,11 @@
     #boot-sonar b {
       position: relative; font: 900 88px/0.9 'Archivo', system-ui, sans-serif;
       letter-spacing: -.045em; text-transform: uppercase; color: #F2F5FA;
+      /* #boot-sonar's own align-items is stretch now, for breach-scene's
+         benefit (see that comment) — this opts back out to its own natural
+         width, centred, which is the one thing align-items: center used to
+         give every flex child for free. */
+      align-self: center;
       /* .65 * --total, not a number the handoff states — the wordmark is not
          part of either Breach II prompt at all, so there is no value to copy
          and this is this file's own placement. The mark reaches full rest at
