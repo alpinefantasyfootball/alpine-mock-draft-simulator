@@ -91,7 +91,7 @@ async function loadWithProbe(browser, opts, path = "#/") {
 for (const [label, opts] of [["a phone", PHONE], ["a desktop", DESKTOP]]) {
   test(`the cold-load overlay comes down on ${label}, and leaves nothing over the page`, async ({ browser }) => {
     const { context, page } = await loadWithProbe(browser, opts);
-    await page.waitForTimeout(2500);
+    await page.waitForTimeout(4200);
 
     const sonar = await page.evaluate(() => window.__sonar);
     expect(sonar.existed, "the overlay is in the served markup").toBe(true);
@@ -146,7 +146,7 @@ for (const [label, opts] of [["a phone", PHONE], ["a desktop", DESKTOP]]) {
    Fast 4G (first visible 947ms) or slower ever did.
 
    The owner overruled that deliberately. The delay is gone and main.jsx holds
-   the overlay for MIN_VISIBLE_MS (2100) measured from navigation start, so it
+   the overlay for MIN_VISIBLE_MS (3400) measured from navigation start, so it
    is seen every time and always for long enough to finish its own animation.
 
    Two bounds, not one. A floor, because the whole point is that it is actually
@@ -155,7 +155,7 @@ for (const [label, opts] of [["a phone", PHONE], ["a desktop", DESKTOP]]) {
    thing to catch is that price quietly growing. */
 test("the loader is shown on every load, and does not outstay its welcome", async ({ browser }) => {
   const { context, page } = await loadWithProbe(browser, DESKTOP);
-  await page.waitForTimeout(4000);
+  await page.waitForTimeout(4400);
   const sonar = await page.evaluate(() => window.__sonar);
 
   expect(sonar.existed, "the overlay is in the served markup").toBe(true);
@@ -166,9 +166,9 @@ test("the loader is shown on every load, and does not outstay its welcome", asyn
 
   /* The floor is the overlay's own choreography rather than a chosen number.
      Sonar's ring loop shipped this same shape of bound; Breach's own last
-     arrival is the closing ripple, which does not complete until 2108ms —
+     arrival is the closing ripple, which does not complete until 3164ms —
      200ms (--breach-start-delay, so nothing moves before the overlay itself
-     is opaque) plus breachRipple's 500ms duration after a .88 * 1600ms
+     is opaque) plus breachRipple's 500ms duration after a .88 * 2800ms
      delay — see main.jsx's own comment for the rest of the arrival table.
      An earlier version of this held 900ms and asserted 800, back when the
      mark alone decided it — which passed while the wordmark was still
@@ -176,8 +176,8 @@ test("the loader is shown on every load, and does not outstay its welcome", asyn
      element's arrival now, Breach's included, so a regression that cuts the
      composition short fails here rather than shipping a loader nobody sees
      complete. */
-  expect(sonar.removedAt, "it stays until the whole composition has arrived").toBeGreaterThan(1500);
-  expect(sonar.removedAt, "and it is gone inside three seconds").toBeLessThan(3000);
+  expect(sonar.removedAt, "it stays until the whole composition has arrived").toBeGreaterThan(3300);
+  expect(sonar.removedAt, "and it is gone inside a reasonable window").toBeLessThan(4200);
 
   await context.close();
 });

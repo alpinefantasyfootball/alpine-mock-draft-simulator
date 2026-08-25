@@ -101,37 +101,44 @@ if (boot) {
       // .now() is measured from the time origin, so it is exactly how long this
       // page has been loading — no separate start timestamp to keep in step.
       //
-      // Every breach* element now carries index.html's --breach-start-delay
-      // (200ms) on top of its own share of --breach-total, so every number
-      // below is 200ms later than the design's own choreography states in
-      // isolation — see that custom property's own comment for why: nothing
-      // may start moving before #boot-sonar itself (sonar-boot-in, 200ms)
-      // has actually finished becoming opaque, or the shark launches while
-      // the homepage is still visible through it.
+      // Every breach* element carries index.html's --breach-start-delay (200ms)
+      // on top of its own share of --breach-total, so every number below is
+      // 200ms later than the design's own choreography states in isolation.
       //
-      //   shark      breachMark        200ms + --breach-total, no further delay -> settles/fades 1800ms
-      //   wordmark   sonar-label       500ms after 640ms delay                  -> settles        1140ms
-      //   ripple     breachRipple      500ms after 200ms + .88 * 1600ms delay   -> completes       2108ms
-      //   idle ring 1 sonar-ring       2100ms, 200ms + --breach-total delay     -> enters          1800ms
+      // --breach-total went 1600ms -> 2800ms because 1600ms was not long enough
+      // to actually see: launch, arc, splash, settle, a water pulse, two droplet
+      // waves and a closing ripple were packed into a second and a half, under
+      // 400ms a beat. Reported twice as "doesn't last long enough" against a
+      // production build with no load-time bottleneck to blame for it — DOM
+      // interactive at ~230ms and the bundle fetched in ~55ms on a real
+      // Cloudflare load, measured directly rather than assumed, so the shark's
+      // own duration was the whole story, not network time eating the hold's
+      // budget. 2800ms keeps every element's existing share of the sequence —
+      // everything below still reads off --breach-total, the wordmark included
+      // now (see index.html) — and roughly doubles its clock time, which is
+      // still inside the normal range for a brand splash and short enough to
+      // stay a once-per-cold-load moment rather than one anybody dreads.
+      //
+      //   shark       breachMark       200ms + --breach-total, no further delay -> settles/fades 3000ms
+      //   wordmark    sonar-label      500ms after .4 * --breach-total delay    -> settles        1620ms
+      //   ripple      breachRipple     500ms after 200ms + .88 * --breach-total -> completes       3164ms
+      //   idle ring 1 sonar-ring       2100ms, 200ms + --breach-total delay     -> enters           3000ms
       //
       // breachMark's own 100% fades the shark to opacity 0, so what is on
-      // screen at 1800ms is a blank instant — covered by breach-settled's
-      // crossfade (see index.html), which finishes at the same 1800ms mark.
-      // The ripple is the actual last arrival, completing at 2108ms; holding
-      // to 2300ms leaves it ~200ms of room rather than cutting it off flush.
-      // That is 200ms later than this hold's own pre-Breach value (2100ms),
-      // and it is the same 200ms for the same reason: the whole sequence
-      // moved, so the hold moves with it. A loading state that never shows
-      // its own last element is not finished, it is interrupted — the lesson
-      // the first version of this hold (900ms, the mark alone) was written
-      // to fix, and it applies exactly as much to a ripple as it did to a
-      // third ring.
+      // screen at 3000ms is a blank instant — covered by breach-settled's
+      // crossfade (see index.html), which finishes at the same 3000ms mark.
+      // The ripple is the actual last arrival, completing at 3164ms; holding
+      // to 3400ms leaves it room rather than cutting it off flush. A loading
+      // state that never shows its own last element is not finished, it is
+      // interrupted — the lesson the first version of this hold (900ms, the
+      // mark alone) was written to fix, and it applies exactly as much to a
+      // ripple as it did to a third ring.
       //
       // This whole hold replaces an early return that removed the element
       // outright while it was still at opacity 0 — the branch a fast load
       // always took, and the reason the loader was invisible to anyone on a
       // quick connection.
-      const MIN_VISIBLE_MS = 2300
+      const MIN_VISIBLE_MS = 3400
       setTimeout(() => {
       const shown = getComputedStyle(boot).opacity
 

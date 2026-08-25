@@ -170,7 +170,7 @@
          this and every delay rescales with it, which is the whole reason to
          write them this way instead of copying the handoff's millisecond
          values directly. */
-      --breach-total: 1600ms;
+      --breach-total: 2800ms;
       /* Every breach element's own animation-delay is
          var(--breach-start-delay) plus its share of --breach-total, not
          --breach-total alone. Kept at 200ms for the reason it always had —
@@ -404,7 +404,16 @@
     #boot-sonar b {
       position: relative; font: 900 88px/0.9 'Archivo', system-ui, sans-serif;
       letter-spacing: -.045em; text-transform: uppercase; color: #F2F5FA;
-      animation: sonar-label 500ms ease-out 640ms both;
+      /* calc(), not a literal 640ms, and this one was the exception until now:
+         every other timed element in this file already reads --breach-total
+         so a retime is one number. This was hand-copied instead and left at
+         640ms - 0.4 * the *old* 1600ms total - when --breach-total first
+         went to 2800ms, which would have landed the wordmark barely more
+         than a third of the way into a shark flight it used to arrive near
+         the middle of. .4 with no --breach-start-delay term is deliberate:
+         it is what 640 / 1600 actually was, and adding the start delay on
+         top would change the relationship this is trying to preserve. */
+      animation: sonar-label 500ms ease-out calc(var(--breach-total) * .4) both;
     }
 
     @keyframes sonar-ring {
