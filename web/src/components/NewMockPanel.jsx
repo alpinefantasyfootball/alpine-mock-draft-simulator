@@ -4,10 +4,14 @@
 // DraftLocker's own EmptyState button wearing the identical gradient for
 // the identical job). One launcher, one gradient button, on this one panel.
 //
-// w-full lg:w-[396px]: this panel used to be a hardcoded 396px regardless of
-// viewport — wider than a 375-390px phone outright, the hard blocker the
-// mobile handoff calls out first. Full-bleed below lg, the fixed card width
-// back above it.
+// w-full, no fixed width: this panel used to carry a hardcoded 396px, from
+// when it sat in a flex row beside TendenciesStrip. The analytics grid
+// rebuild gives it its own grid cell (spanning two rows, since it's taller
+// than any chart card beside it) instead, so its width is whatever that
+// cell is — full-bleed below lg for the same reason it always was: 396px
+// on its own is wider than a 375-390px phone outright. justify-center
+// spreads its rows/button out across the taller spanned cell rather than
+// leaving a slab of empty card beneath the button.
 export default function NewMockPanel({ engine, league, problem, lobbySlot, onStartNew, onOpenSettings }) {
   const scoringNames = engine.scoringNames()
   const clockLength = engine.clockLength()
@@ -42,7 +46,7 @@ export default function NewMockPanel({ engine, league, problem, lobbySlot, onSta
 
   return (
     <div
-      className="w-full rounded-xl border border-white/[0.09] p-[22px] lg:w-[396px] lg:shrink-0"
+      className="flex h-full w-full flex-col justify-center rounded-xl border border-white/[0.09] p-[22px]"
       style={{ background: 'linear-gradient(168deg, #171d28, #10141c)' }}
     >
       <div className="mb-4 flex items-center justify-between">

@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { Search, ChevronDown, ChevronRight, MoreHorizontal, HardDrive } from 'lucide-react'
 import ComingSoonModal from './ComingSoonModal.jsx'
+import { POS_BADGE } from './draftRoomPositions.js'
 
 const FORMAT_FILTERS = [
   { key: 'all', label: 'All formats' },
@@ -142,15 +143,35 @@ function Row({ entry, onAnalyze, onDeleteRequest, menuOpen, onToggleMenu }) {
           </div>
         </div>
 
-        <div className="flex min-w-0 items-center gap-2">
+        <div className="flex min-w-0 items-center gap-2.5">
           {entry.round1Pick ? (
             <>
-              {entry.round1PickPos && (
-                <span className="shrink-0 rounded bg-white/[0.06] px-1.5 py-0.5 text-[10px] font-bold text-white/50">
-                  {entry.round1PickPos}
-                </span>
-              )}
-              <span className="truncate text-sm text-white/75">{entry.round1Pick}</span>
+              {/* Same avatar construction the player queue and profile
+                  drawer already use: initials sit underneath as text, the
+                  real photo is an absolutely-positioned <img> over them
+                  that removes itself on a 404 (a player who's since left
+                  the pool, or a photo sleepercdn doesn't have) — never a
+                  broken-image icon, just the initials showing through. */}
+              <div className="relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-sunk text-[10px] font-bold text-ink-soft">
+                {entry.round1PickInitials}
+                {entry.round1PickPhoto && (
+                  <img
+                    src={entry.round1PickPhoto}
+                    alt=""
+                    loading="lazy"
+                    onError={(e) => e.currentTarget.remove()}
+                    className={'absolute inset-0 h-full w-full ' + (entry.round1PickPos === 'DST' ? 'object-contain p-1' : 'object-cover')}
+                  />
+                )}
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-sm text-white/85">{entry.round1Pick}</p>
+                {entry.round1PickPos && (
+                  <span className={'mt-0.5 inline-block rounded px-1 py-px text-[9px] font-bold leading-tight ' + (POS_BADGE[entry.round1PickPos] || 'bg-white/10 text-white/50')}>
+                    {entry.round1PickPos}
+                  </span>
+                )}
+              </div>
             </>
           ) : (
             <span className="text-sm text-ink-muted">—</span>
@@ -340,7 +361,15 @@ export default function LockerTable({ entries, onAnalyze, onDeleteConfirmed }) {
 
         {showControls && (
           <>
-            <div className="flex w-[226px] items-center gap-2 rounded-lg border border-white/[0.08] bg-slate-sunk/60 px-3 py-[7px]">
+            {/* w-full below sm: the fixed 226px this has always been is
+                already tight for its own placeholder text at that width
+                (pre-existing, not something this pass changed) — on a
+                375px phone it clips mid-word ("Search by player or forr"),
+                since text-overflow here is the default clip, not ellipsis.
+                There's no room pressure on a narrow screen the way there is
+                on desktop next to five other controls, so it can simply be
+                as wide as the row and stop needing to be tight at all. */}
+            <div className="flex w-full items-center gap-2 rounded-lg border border-white/[0.08] bg-slate-sunk/60 px-3 py-[7px] sm:w-[226px]">
               <Search className="h-3.5 w-3.5 shrink-0 text-white/50" />
               <input
                 value={query}

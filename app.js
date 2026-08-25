@@ -6246,6 +6246,155 @@ function rosterVorpOf(team) {
   return team.lineup.reduce((sum, s) => sum + (s.player ? replacementGap(s.player) || 0 : 0), 0);
 }
 
+// Skill positions only — the same exclusion draft value, avgValueByPosition
+// and the "one that got away" panel already apply, derived from
+// UNRANKED_POSITIONS rather than written out a second time.
+const STRENGTH_POSITIONS = POSITIONS.filter((p) => UNRANKED_POSITIONS.indexOf(p) < 0);
+
+// Average replacementGap() across every starting slot a position actually
+// filled (FLEX included, credited to whichever position sat in it) — the
+// same unclamped points-above-replacement figure the VORP matrix and
+// weakestStartingSpot() already read, just averaged per position instead of
+// taken at its single worst point. Absent, not zeroed, when the lineup
+// never started that position at all, same "absent, not zeroed" rule as
+// everywhere else history keeps.
+function posStrengthOf(lineup) {
+  const out = {};
+  STRENGTH_POSITIONS.forEach(function (pos) {
+    const gaps = lineup
+      .filter(function (s) { return s.player && s.player.pos === pos; })
+      .map(function (s) { return replacementGap(s.player); })
+      .filter(function (g) { return g !== null; });
+    out[pos] = gaps.length ? gaps.reduce((a, b) => a + b, 0) / gaps.length : null;
+  });
+  return out;
+}
+
+/* ---- projected win % --------------------------------------
+
+   Nothing in this app simulates a season, so "win probability" cannot mean
+   what a real standings page means by it. What it can honestly mean: given
+   each team's projected scoring output, how often would this roster
+   out-score a randomly drawn opponent from the same room on a given week —
+   the same normal-difference approximation sportsbooks and power-rating
+   sites use to turn a projected scoring gap into a win probability, applied
+   to this room instead of a real schedule (which a mock draft doesn't have,
+   so every other team in the room stands in for "a week's opponent").
+
+   A team's weekly mean is its starting lineup's season points (player.projPts,
+   the identical number the Juke score and every VORP figure already read)
+   divided by the games that projection covers (projGames() — never a second
+   denominator). A team's weekly SPREAD has no equivalent already computed
+   anywhere in this app, so it's estimated from real week-to-week variability:
+   positionWeeklyCV() below measures, once, how much a real player's weekly
+   score actually swings around its own mean (stdev / mean, from real weekly
+   logs, never invented), averaged per position. Applied to this season's
+   projected mean, that gives each starter an estimated weekly stdev, and —
+   assuming each starter's week is independent of his teammates', the same
+   simplifying assumption projection tools of this kind make everywhere —
+   the roster's own weekly variance is just the sum of its starters'.
+
+   From there a team's week against any one opponent is a normal difference:
+   P(i beats j) = Φ((mean_i − mean_j) / sqrt(var_i + var_j)). Averaged across
+   every other team in the room, that's this team's expected win rate against
+   a schedule drawn evenly from the room it actually drafted with — which is
+   what "projected win %" means here, and the number should never be shown
+   without that framing: it is a scoring-strength estimate, not a simulated
+   season, and it does not know which week any team's bye falls in relative
+   to anyone else's. */
+
+// Below this many played games, one player-season's own swing is too noisy
+// to trust for the position average it feeds — the same "measured, not
+// assumed" bar this file applies everywhere else a sample might be too thin
+// to mean anything (formatSplit's old >= 2, MIN_MOCKS_FOR_TENDENCIES's 5).
+const MIN_WEEKS_FOR_CV = 4;
+// A position with fewer than this many qualifying player-seasons falls back
+// to a league-wide default rather than a number built from a handful of
+// rows. The default itself is chosen from real fantasy scoring's own
+// well-known shape (skill positions swing roughly half their own mean week
+// to week), not measured here — worth keeping that distinction straight,
+// since everything positionWeeklyCV() itself produces below is measured.
+const MIN_SEASONS_FOR_CV = 5;
+const DEFAULT_WEEKLY_CV = 0.5;
+
+function positionWeeklyCV() {
+  const sums = {}; // pos -> { sum, n }
+  board.forEach(function (player) {
+    const s = statOf(player);
+    if (!s || !s.w) return;
+    logYears(s).forEach(function (year) {
+      const weeks = (s.w[year] || []).filter(didPlay);
+      if (weeks.length < MIN_WEEKS_FOR_CV) return;
+      const pts = weeks.map(fantasyPoints);
+      const mean = pts.reduce((a, b) => a + b, 0) / pts.length;
+      if (mean <= 0) return; // a coefficient of variation is meaningless around zero
+      const variance = pts.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / pts.length;
+      const row = sums[player.pos] || { sum: 0, n: 0 };
+      row.sum += Math.sqrt(variance) / mean;
+      row.n += 1;
+      sums[player.pos] = row;
+    });
+  });
+  const cv = {};
+  POSITIONS.forEach(function (pos) {
+    const row = sums[pos];
+    cv[pos] = row && row.n >= MIN_SEASONS_FOR_CV ? row.sum / row.n : DEFAULT_WEEKLY_CV;
+  });
+  return cv;
+}
+
+// Standard normal CDF (Abramowitz & Stegun 7.1.26, |error| < 1.5e-7) — no
+// erf in the JS standard library, and this is the entire method rather than
+// an approximation of one, so the precision here is not the weak link.
+function normalCdf(z) {
+  const sign = z < 0 ? -1 : 1;
+  const x = Math.abs(z) / Math.SQRT2;
+  const t = 1 / (1 + 0.3275911 * x);
+  const y = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t
+    - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x);
+  return 0.5 * (1 + sign * y);
+}
+
+// One team's weekly scoring estimate — mean and stdev — from its own
+// bestLineup(), under the CV model above. Player-level, not position-level:
+// two teams that both start a TE still each get their own TE's own
+// projected mean scaled by the shared position CV, not a shared figure.
+function teamWeeklyStats(team, cv) {
+  let mean = 0, variance = 0;
+  team.lineup.forEach(function (seat) {
+    const player = seat.player;
+    if (!player || player.projPts === null || player.projPts === undefined) return;
+    const proj = statOf(player) && statOf(player).p;
+    const games = projGames(player.pos, proj);
+    if (!games) return;
+    const weeklyMean = player.projPts / games;
+    const weeklyStdev = (cv[player.pos] || DEFAULT_WEEKLY_CV) * weeklyMean;
+    mean += weeklyMean;
+    variance += weeklyStdev * weeklyStdev;
+  });
+  return { mean: mean, stdev: Math.sqrt(variance) };
+}
+
+// Every team's expected win rate against a schedule drawn evenly from the
+// rest of the room it drafted with — see the method note above. Indexed by
+// slot, like analyseDraft() always is. A room of one returns null for that
+// one team: there is nobody to play.
+function projectedWinPctForRoom(all) {
+  const cv = positionWeeklyCV();
+  const weekly = all.map((t) => teamWeeklyStats(t, cv));
+  return weekly.map(function (mine, i) {
+    const others = weekly.filter((_, j) => j !== i);
+    if (!others.length) return null;
+    const wins = others.map(function (theirs) {
+      const diffMean = mine.mean - theirs.mean;
+      const diffStdev = Math.sqrt(mine.stdev * mine.stdev + theirs.stdev * theirs.stdev);
+      if (diffStdev === 0) return diffMean > 0 ? 1 : diffMean < 0 ? 0 : 0.5;
+      return normalCdf(diffMean / diffStdev);
+    });
+    return wins.reduce((a, b) => a + b, 0) / wins.length;
+  });
+}
+
 function recordHistory() {
   // The whole room, not just mine — the tendencies strip's "room average"
   // roster-VORP baseline needs every team's number, and this is the one
@@ -6257,6 +6406,11 @@ function recordHistory() {
   const roomAvgRosterVorp = all.length
     ? all.reduce((sum, t) => sum + rosterVorpOf(t), 0) / all.length
     : null;
+  // Room-wide for the same reason roomAvgRosterVorp is one line up: every
+  // other team's weekly scoring estimate has to exist to say anything about
+  // how often this one would beat it, and this is the one moment they're
+  // all sitting in memory already built.
+  const winPcts = projectedWinPctForRoom(all);
   const round1 = state.picks.find((p) => p.slot === state.mySlot && p.round === 1);
   const list = readHistory();
   list.unshift({
@@ -6291,7 +6445,15 @@ function recordHistory() {
     // strength) rather than sit beside it disagreeing.
     rosterVorp: mine ? rosterVorpOf(mine) : null,
     roomAvgRosterVorp: roomAvgRosterVorp,
-    weakestSpot: mine ? weakestStartingSpot(mine.lineup) : null
+    weakestSpot: mine ? weakestStartingSpot(mine.lineup) : null,
+    // The Locker redesign's remaining three fields — same moment, same
+    // reasoning as everything above it: cheaper to keep what analyseDraft()
+    // already worked out than to rebuild a historical room for it later.
+    // netAdpValue is analyseTeam()'s own unclamped `value`, not a second
+    // computation of the same gap.
+    netAdpValue: mine ? mine.value : null,
+    posStrength: mine ? posStrengthOf(mine.lineup) : null,
+    projectedWinPct: winPcts[state.mySlot] != null ? Math.round(winPcts[state.mySlot] * 1000) / 10 : null
   });
   writeHistory(list.slice(0, HISTORY_LIMIT));
 }
@@ -6340,6 +6502,11 @@ function historySummary(entry) {
     // name needs a position — absent if the player's since dropped out of
     // the pool entirely, same as a resolution failure is handled elsewhere.
     round1PickPos: round1Player ? round1Player.pos : null,
+    // Same resolution, same guard — photoUrl() itself is the one function
+    // every headshot in the app already goes through (the board, the queue,
+    // the profile drawer), so this is never a second way to build the URL.
+    round1PickPhoto: round1Player ? photoUrl(round1Player) : null,
+    round1PickInitials: entry.round1Pick ? initials(entry.round1Pick) : null,
     // Absent on any entry recorded before recordHistory() started saving
     // them — undefined rather than a guessed value, same rule as
     // projectedRank's own "—" a few lines up, left to the caller to decide
@@ -6369,17 +6536,32 @@ function historyStats() {
 
   const stats = { total: list.length };
 
+  // The window the three per-mock time-series cards (Net ADP Value,
+  // Projected Win % Trend, the Positional Weakness heatmap) draw from —
+  // the most recent ten rather than the whole history. A trend a reader
+  // takes in at a glance is easier to read at a fixed width that slides
+  // forward one mock at a time than one that silently rescales every time
+  // an eleventh, fiftieth, or two-hundredth mock lands.
+  const TREND_WINDOW = 10;
+  // The Weakest Spot card windows to the same ten mocks — "below
+  // replacement in 8 of your last 10 rosters" is a claim about recent
+  // drafting, not lifetime drafting, and the two read very differently
+  // once a real tendency from three months ago is buried under fifty mocks
+  // since. list is already newest-first (readHistory()'s own contract), so
+  // this is simply its first TREND_WINDOW entries.
+  const windowList = list.slice(0, TREND_WINDOW);
+
   // Most drafted — tallied across only *your own* picks in each entry, via
   // the same overall-index reconstruction holeRounds() already uses below
   // (DraftEngine.overallOf(round, mySlot, teams), indexed into entry.picks).
   // This used to sum every pick in the whole room — all ~140 of them, every
   // team, every entry — which named whichever player the board's consensus
   // rated highest, since he gets drafted by *someone* in nearly every mock.
-  // That is not a tendency; it is what the board says about itself. Only the
-  // winning name needs to resolve, and if it doesn't (the board moved on
-  // entirely) the card is dropped rather than naming a runner-up the
-  // function never actually checked. DraftEngine has to be loaded for this,
-  // same guard holeRounds() already applies for the same reason.
+  // That is not a tendency; it is what the board says about itself. Names
+  // that no longer resolve (the board moved on entirely) are dropped rather
+  // than naming a runner-up the function never actually checked. DraftEngine
+  // has to be loaded for this, same guard holeRounds() already applies for
+  // the same reason.
   const pickCounts = new Map();
   if (typeof DraftEngine !== "undefined") {
     list.forEach((entry) => {
@@ -6393,19 +6575,24 @@ function historyStats() {
       }
     });
   }
-  let topName = null, topCount = 0;
-  pickCounts.forEach((count, name) => { if (count > topCount) { topCount = count; topName = name; } });
-  if (topName && byName.has(topName)) {
-    stats.mostDrafted = { name: topName, count: topCount, total: list.length };
-  }
+  // Top five rather than a single name — the Draft Lobby's Most Drafted card
+  // asks "what do I always take", and a whole draft's worth of running backs
+  // answers that better than whichever one happens to sit at the very top.
+  const MOST_DRAFTED_COUNT = 5;
+  const mostDraftedList = [...pickCounts.entries()]
+    .filter(([name]) => byName.has(name))
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, MOST_DRAFTED_COUNT)
+    .map(([name, count]) => ({ name, pos: byName.get(name).pos, count, total: list.length }));
+  if (mostDraftedList.length) stats.mostDraftedList = mostDraftedList;
 
   // Average round for your first pick at each position — replaced a
   // round-1-only breakdown that was RB or WR on nearly every draft (ADP puts
   // backs and receivers at the top of every board, so round 1 alone rarely
   // varies) and so never said anything a reader didn't already know. This
   // walks every round of your own picks instead — the same overall-index
-  // reconstruction mostDrafted and holeRounds already use — and records the
-  // first round each position showed up, per entry, then averages that
+  // reconstruction mostDraftedList and holeRounds already use — and records
+  // the first round each position showed up, per entry, then averages that
   // across every entry where it showed up at all. A position you have never
   // actually drafted contributes nothing rather than a zero, the same
   // "absent, not zeroed" rule the rest of this function already follows.
@@ -6437,61 +6624,22 @@ function historyStats() {
     stats.avgRoundByPosition = avgRoundByPosition;
   }
 
-  // Grade, last 12 — most recent 12 with a stored score, oldest first so the
-  // bars read left-to-right as a timeline. Skips entries with no gradeScore
-  // (recorded before this field existed) rather than gapping the chart with
-  // a zero-height bar that would read as a real bad draft.
-  const graded = list.filter((e) => typeof e.gradeScore === "number").slice(0, 12).reverse();
-  if (graded.length >= 2) {
-    const early = graded.slice(0, Math.ceil(graded.length / 2));
-    const late = graded.slice(Math.ceil(graded.length / 2));
-    const avg = (arr) => arr.reduce((sum, e) => sum + e.gradeScore, 0) / arr.length;
-    const delta = avg(late) - avg(early);
-    const trend = delta > 3 ? "Trending up" : delta < -3 ? "Trending down" : "Holding steady";
-    stats.gradeLast12 = {
-      // completedAt rides along for the hover tooltip on the chart — a
-      // point on a trend line is more useful with "when" attached to it,
-      // and it costs nothing: the raw epoch is already sitting on the entry.
-      entries: graded.map((e) => ({ id: e.id, score: e.gradeScore, grade: e.grade, completedAt: e.completedAt })),
-      // The two real, actual grades at either end of the window — not an
-      // invented "average letter", which the score->letter mapping (rank
-      // within that one room) has no clean way to produce across different
-      // rooms.
-      caption: `${trend} — ${graded[0].grade} to ${graded[graded.length - 1].grade}`
-    };
-  }
-
-  // Best mock — highest recorded gradeScore. rank/teams are already stored
-  // per entry, so "1st of 12" needs no recomputation.
-  const withScore = list.filter((e) => typeof e.gradeScore === "number");
-  if (withScore.length) {
-    const best = withScore.reduce((a, b) => (b.gradeScore > a.gradeScore ? b : a));
-    stats.bestMock = {
-      id: best.id,
-      grade: best.grade,
-      rank: best.projectedRank,
-      teams: best.teams || best.league.teams,
-      leagueType: leagueTypeLabel(best.league),
-      dateCompleted: new Date(best.completedAt)
-        .toLocaleDateString([], { month: "short", day: "numeric" })
-    };
-  }
-
   // Weakest spot — the position that shows up most often as a genuinely
-  // below-replacement starter, and what share of your rosters it accounts
-  // for. The denominator is every entry this field was actually recorded
-  // on — weakestSpot is stored as null when nothing was below replacement,
-  // and that still counts here; only entries from before this field
-  // existed, where the key is missing outright, are excluded. This used to
-  // divide by the count of weak entries alone (entries where *something*
-  // was below replacement), which silently dropped every genuinely clean
-  // roster from the denominator: measured on a 10-entry sample with 2 clean
-  // rosters and 8 sharing the same weak position, the card read "100%" when
-  // the true share of all rosters was 80%. The card's own copy says "of
-  // your rosters," and the denominator has to actually mean that.
+  // below-replacement starter, and what share of your last TREND_WINDOW
+  // rosters it accounts for. The denominator is every entry in that window
+  // this field was actually recorded on — weakestSpot is stored as null
+  // when nothing was below replacement, and that still counts here; only
+  // entries from before this field existed, where the key is missing
+  // outright, are excluded. This used to divide by the count of weak
+  // entries alone (entries where *something* was below replacement), which
+  // silently dropped every genuinely clean roster from the denominator:
+  // measured on a 10-entry sample with 2 clean rosters and 8 sharing the
+  // same weak position, the card read "100%" when the true share of all
+  // rosters was 80%. The card's own copy says "of your rosters," and the
+  // denominator has to actually mean that.
   const weakCounts = new Map();
   let recordedTotal = 0;
-  list.forEach((entry) => {
+  windowList.forEach((entry) => {
     if (entry.weakestSpot === undefined) return;
     recordedTotal++;
     if (entry.weakestSpot) weakCounts.set(entry.weakestSpot, (weakCounts.get(entry.weakestSpot) || 0) + 1);
@@ -6499,49 +6647,16 @@ function historyStats() {
   if (recordedTotal > 0) {
     let pos = null, count = 0;
     weakCounts.forEach((c, p) => { if (c > count) { count = c; pos = p; } });
-    if (pos) stats.weakestSpot = { pos, pct: Math.round((count / recordedTotal) * 100) };
-  }
-
-  // Format split — average gradeScore per scoring format. Needs two formats
-  // with two or more graded entries apiece, or there is nothing to compare
-  // a weak one against; a single format has no "instead of what" to name.
-  const byFormat = new Map();
-  list.forEach((entry) => {
-    if (typeof entry.gradeScore !== "number" || !entry.league) return;
-    const key = entry.league.scoring;
-    if (!byFormat.has(key)) byFormat.set(key, []);
-    byFormat.get(key).push(entry.gradeScore);
-  });
-  const formatRows = [...byFormat.entries()]
-    .filter(([, scores]) => scores.length >= 2)
-    .map(([scoring, scores]) => ({
-      scoring: scoring,
-      count: scores.length,
-      avg: scores.reduce((sum, v) => sum + v, 0) / scores.length
-    }));
-  if (formatRows.length >= 2) {
-    stats.formatSplit = formatRows.sort((a, b) => b.avg - a.avg);
-  }
-
-  // Seat split — average gradeScore from the front third of the draft order
-  // against the back third. Each seat is read as a fraction of *that
-  // draft's own* team count, not a fixed seat number, so a 10-team and a
-  // 12-team mock compare on the same footing.
-  const earlyScores = [], lateScores = [];
-  list.forEach((entry) => {
-    if (typeof entry.gradeScore !== "number") return;
-    const teams = entry.teams || (entry.league && entry.league.teams);
-    if (!teams) return;
-    const frac = (entry.mySlot + 1) / teams;
-    if (frac <= 1 / 3) earlyScores.push(entry.gradeScore);
-    else if (frac > 2 / 3) lateScores.push(entry.gradeScore);
-  });
-  if (earlyScores.length >= 2 && lateScores.length >= 2) {
-    const avg = (arr) => arr.reduce((sum, v) => sum + v, 0) / arr.length;
-    stats.seatSplit = {
-      early: { count: earlyScores.length, avg: avg(earlyScores) },
-      late: { count: lateScores.length, avg: avg(lateScores) }
-    };
+    if (pos) {
+      stats.weakestSpot = { pos, pct: Math.round((count / recordedTotal) * 100) };
+      // The full breakdown behind that headline figure — every position
+      // that has ever finished below replacement, not just the worst one,
+      // so the card can draw the small per-position leaderboard beside the
+      // headline rather than the headline standing alone.
+      stats.weakestSpotBreakdown = [...weakCounts.entries()]
+        .map(([p, c]) => ({ pos: p, count: c, total: recordedTotal }))
+        .sort((a, b) => b.count - a.count);
+    }
   }
 
   /* Which rounds the weakest position actually goes missing in — the
@@ -6558,7 +6673,7 @@ function historyStats() {
   if (stats.weakestSpot && typeof DraftEngine !== "undefined") {
     const targetPos = stats.weakestSpot.pos;
     const perRound = new Map(); // round -> { target, otherCounts: Map(pos->n), total }
-    list.forEach((entry) => {
+    windowList.forEach((entry) => {
       const teams = entry.teams || (entry.league && entry.league.teams);
       if (!teams || !entry.picks || !entry.picks.length) return;
       const totalRounds = Math.floor(entry.picks.length / teams);
@@ -6630,13 +6745,10 @@ function historyStats() {
     };
   }
 
-  // The rest of this block is the all-drafts report's own data — the
-  // Locker's strip above only ever needed a handful of aggregates; a
-  // standalone report asks more of the same history and needs a few more.
-
-  // Average weighted score, and the range it moved across — the same
-  // gradeScore gradeLast12 already buckets, just averaged instead of
-  // charted.
+  // Average weighted score — the same gradeScore every other bucket in this
+  // function reads, just averaged. Read again below as "your overall mean"
+  // for the Recommendation Engine's own gap test, so it is computed once,
+  // here, rather than a second time inside that block.
   const scored = list.filter((e) => typeof e.gradeScore === "number");
   if (scored.length) {
     stats.avgScore = {
@@ -6646,63 +6758,154 @@ function historyStats() {
     };
   }
 
-  // Average finish, as a percentile rather than a raw "X of Y" — the same
-  // fraction LockerTable.jsx's own finishColor() already uses. A raw rank
-  // cannot be averaged honestly across mixed league sizes (5th of 10 and
-  // 5th of 12 are not the same finish), and this report has no way to know
-  // whether every entry shares one team count the way a single draft's own
-  // standings do.
-  const finished = list.filter((e) => typeof e.projectedRank === "number" && (e.teams || (e.league && e.league.teams)));
-  if (finished.length) {
-    const pctOf = (e) => {
-      const teams = e.teams || e.league.teams;
-      return Math.max(0, Math.min(100, (1 - (e.projectedRank - 1) / teams) * 100));
-    };
-    stats.avgFinishPct = finished.reduce((sum, e) => sum + pctOf(e), 0) / finished.length;
+  // Projected win % — see the file comment above projectedWinPctForRoom()
+  // for what this can and can't honestly claim. Absent, not zeroed, for any
+  // entry recorded before the field existed.
+  const withWinPct = list.filter((e) => typeof e.projectedWinPct === "number");
+  if (withWinPct.length) {
+    stats.avgWinPct = withWinPct.reduce((sum, e) => sum + e.projectedWinPct, 0) / withWinPct.length;
+  }
+  // Windowed to the most recent TREND_WINDOW rather than the whole history:
+  // this is a trend a reader is meant to take in at a glance, and one that
+  // silently rescales every time an eleventh mock lands is harder to read
+  // over time than one that stays a fixed width and slides.
+  if (withWinPct.length >= 2) {
+    stats.winPctHistory = withWinPct.slice(0, TREND_WINDOW).reverse()
+      .map((e) => ({ id: e.id, value: e.projectedWinPct, completedAt: e.completedAt }));
   }
 
-  // Grade history, uncapped — gradeLast12 above stays capped at 12 for the
-  // strip's small card; the standalone report has the room to chart every
-  // graded draft there is.
-  if (scored.length >= 2) {
-    stats.gradeHistory = scored
-      .slice()
-      .reverse()
-      .map((e) => ({ id: e.id, score: e.gradeScore, grade: e.grade, completedAt: e.completedAt }));
+  // Net ADP value, per mock — entry.netAdpValue is analyseTeam()'s own
+  // `value` (pick number minus board rank, summed over the picks you were
+  // actually free to time), stored once at the moment the draft finished.
+  // Never reconstructed against today's board the way avgRoundByPosition
+  // and mostDraftedList are: unlike those, this doesn't need to resolve a
+  // name back to a position, so there is no reason to accept the drift that
+  // comes with reading it off a board that has since moved on.
+  const withNetAdp = list.filter((e) => typeof e.netAdpValue === "number");
+  if (withNetAdp.length) {
+    stats.avgNetAdpValue = withNetAdp.reduce((sum, e) => sum + e.netAdpValue, 0) / withNetAdp.length;
+  }
+  // Same TREND_WINDOW as winPctHistory, same reason.
+  if (withNetAdp.length >= 2) {
+    stats.netAdpValueHistory = withNetAdp.slice(0, TREND_WINDOW).reverse()
+      .map((e) => ({ id: e.id, value: e.netAdpValue, completedAt: e.completedAt }));
   }
 
-  // Draft value tendency, by position — the same "pick number minus board
-  // rank" gap CLAUDE.md documents for the single-draft report's Best
-  // Value/Biggest Reach (positive means a bargain, taken later than the
-  // board had him; negative means a reach). Walks every one of your own
-  // picks at a position, not just the first — a reach tendency describes
-  // the position as a whole, not your first look at it. Kickers and
-  // defenses are excluded, the same rule draft value already follows
-  // everywhere else: the app schedules their timing itself, so it is never
-  // a judgement about the drafting.
-  const valueSums = {}; // pos -> { sum, n }
+  // Positional weakness heatmap — entry.posStrength is four replacementGap()
+  // averages (QB/RB/WR/TE), stored at the same moment and for the same
+  // reason netAdpValue is: this is what those starters were actually worth
+  // against that draft's own board, not what today's board would say about
+  // players who may since have moved.
+  const withStrength = list.filter((e) => e.posStrength);
+  if (withStrength.length >= 2) {
+    stats.weaknessHeatmap = withStrength.slice(0, TREND_WINDOW).reverse()
+      .map((e) => ({ id: e.id, completedAt: e.completedAt, byPos: e.posStrength }));
+  }
+
+  // Draft capital allocation — what share of your early picks, across every
+  // mock, went to each position. CAPITAL_EARLY_ROUNDS names "early" once
+  // rather than leaving it a magic number in the loop below — five rounds,
+  // not this file's usual three, to match the design review's own "top
+  // 5-round picks" framing for this specific card. Kickers and defenses
+  // sit out, same reason draft value does everywhere else: the app
+  // schedules them into the closing rounds itself, so neither is ever a
+  // real candidate for an early pick to begin with.
+  const CAPITAL_EARLY_ROUNDS = 5;
+  const earlyCounts = {};
+  let earlyTotal = 0;
   if (typeof DraftEngine !== "undefined") {
     list.forEach((entry) => {
       const teams = entry.teams || (entry.league && entry.league.teams);
       if (!teams || !entry.picks || !entry.picks.length) return;
-      const totalRounds = Math.floor(entry.picks.length / teams);
-      for (let round = 1; round <= totalRounds; round++) {
+      const rounds = Math.min(CAPITAL_EARLY_ROUNDS, Math.floor(entry.picks.length / teams));
+      for (let round = 1; round <= rounds; round++) {
         const overall = DraftEngine.overallOf(round, entry.mySlot, teams);
         const name = entry.picks[overall - 1];
         const player = name && byName.get(name);
         if (!player || FORCED_LATE[player.pos]) continue;
-        const row = valueSums[player.pos] || { sum: 0, n: 0 };
-        row.sum += overall - player.overall;
-        row.n += 1;
-        valueSums[player.pos] = row;
+        earlyCounts[player.pos] = (earlyCounts[player.pos] || 0) + 1;
+        earlyTotal++;
       }
     });
   }
-  const avgValueByPosition = Object.keys(valueSums)
-    .map((pos) => ({ pos, avgGap: valueSums[pos].sum / valueSums[pos].n }))
-    .sort((a, b) => b.avgGap - a.avgGap);
-  if (avgValueByPosition.length > 0) {
-    stats.avgValueByPosition = avgValueByPosition;
+  if (earlyTotal > 0) {
+    stats.capitalAllocation = Object.keys(earlyCounts)
+      .map((pos) => ({ pos, pct: (earlyCounts[pos] / earlyTotal) * 100 }))
+      .sort((a, b) => b.pct - a.pct);
+  }
+
+  /* Recommendation Engine — mean gradeScore per individual seat, crossed
+     with scoring format. This used to bucket seats into early/middle/late
+     thirds; a design review comparing this screen against a real mockup
+     asked for a bar per seat instead, which is a fair ask — a bucket can
+     never say "seat 7", only "somewhere in the middle third" — so this
+     answers the sharper question directly and leaves the honesty problem
+     that caused the bucketing (most individual seats have a thin sample)
+     to the renderer instead: every seat's own `count` rides along so
+     RecommendationEngine.jsx can visibly mute a bar backed by one mock or
+     none, rather than this function silently smoothing seats together to
+     avoid ever showing a thin one.
+
+     Seats only compare within one team count — seat 3 in a 10-team league
+     and seat 3 in a 12-team league are different questions — so this reads
+     off the room's own *current* team count and only counts entries that
+     share it, rather than trying to reconcile mixed league sizes onto one
+     axis. */
+  const seatCount = league.teams;
+  const byFormatSeat = new Map(); // scoring -> Map(seat 1-based -> scores[])
+  list.forEach((entry) => {
+    if (typeof entry.gradeScore !== "number" || !entry.league) return;
+    const teams = entry.teams || entry.league.teams;
+    if (teams !== seatCount) return;
+    const seat = entry.mySlot + 1;
+    const fmt = entry.league.scoring;
+    if (!byFormatSeat.has(fmt)) byFormatSeat.set(fmt, new Map());
+    const m = byFormatSeat.get(fmt);
+    if (!m.has(seat)) m.set(seat, []);
+    m.get(seat).push(entry.gradeScore);
+  });
+  const recEngineFormats = [...byFormatSeat.entries()]
+    .map(([scoring, m]) => ({
+      scoring: scoring,
+      seats: Array.from({ length: seatCount }, (_, i) => {
+        const seat = i + 1;
+        const scores = m.get(seat) || [];
+        return {
+          seat: seat,
+          count: scores.length,
+          avg: scores.length ? scores.reduce((a, v) => a + v, 0) / scores.length : null
+        };
+      })
+    }))
+    .filter((f) => f.seats.some((s) => s.count > 0));
+  if (recEngineFormats.length >= 2) stats.recEngineFormats = recEngineFormats;
+
+  /* The single (format, seat) pair "What to run next" and the Recommendation
+     Engine chart both point at — computed once so the two can never name a
+     different combination. Gated at two samples, not one: the chart itself
+     is allowed to show a single-mock seat (dimmed, so it reads as thin), but
+     recommending a whole mock off one data point would be a coin flip
+     dressed as a tendency. GAP is the same 10-point floor the old bucketed
+     version already used: below it, a difference is inside the projection's
+     own noise (CLAUDE.md's Juke score section: MAE 6.8), not a real
+     tendency worth acting on. */
+  const GAP = 10;
+  if (recEngineFormats.length >= 2 && stats.avgScore) {
+    let worst = null;
+    recEngineFormats.forEach((f) => {
+      f.seats.forEach((s) => {
+        if (s.count < 2 || s.avg === null) return;
+        if (!worst || s.avg < worst.avg) worst = { scoring: f.scoring, seat: s.seat, avg: s.avg, count: s.count };
+      });
+    });
+    if (worst && stats.avgScore.value - worst.avg >= GAP) {
+      stats.recommendation = {
+        scoring: worst.scoring,
+        seat: worst.seat,
+        avg: worst.avg,
+        overallAvg: stats.avgScore.value
+      };
+    }
   }
 
   // The launcher's quick-start presets — each one names a real past entry
@@ -8403,6 +8606,12 @@ window.JukeEngine = {
   // React view can never disagree with the standings about what anyone
   // scored. Indexed by slot, like analyseDraft() has always returned it.
   draftAnalysis: () => analyseDraft(),
+  // Added for the Mock Detail view (DraftInsightsDashboard.jsx). Both take
+  // the same shapes draftAnalysis() already hands out — a lineup, or the
+  // whole per-slot array — rather than a second, React-side reimplementation
+  // of either.
+  posStrengthOf: posStrengthOf,
+  winPctForRoom: (all) => projectedWinPctForRoom(all),
   // Everything the Start button does, minus the DOM read readSetup() used to
   // do — React already wrote the league directly via setLeague(). mySlot is
   // 0-indexed, matching slotSelect's own values (label is 1st, value is 0).

@@ -195,6 +195,15 @@ export default function DraftInsightsDashboard({ engine, league, mySlot, viewSlo
   const mine = analysis && analysis[viewSlot]
   if (!mine) return null
 
+  // Net ADP value is mine.value itself — analyseTeam()'s own unclamped
+  // pick-number-minus-board-rank sum, never a second computation of the
+  // same gap. Projected win % has no equivalent already sitting on the
+  // analysis object, so it's the one figure here that asks the bridge for
+  // something new — see the file comment above projectedWinPctForRoom() in
+  // app.js for what it can and can't honestly claim.
+  const winPcts = engine.winPctForRoom ? engine.winPctForRoom(analysis) : null
+  const winPct = winPcts ? winPcts[viewSlot] : null
+
   // The real component weights (50/25/15/10), bridged — not hand-copied,
   // so this can never quote a stale percentage after WEIGHTS moves in
   // app.js. Same fallback AnalysisTab.jsx uses for the same reason.
@@ -351,6 +360,19 @@ export default function DraftInsightsDashboard({ engine, league, mySlot, viewSlo
               </p>
               <p className="mt-0.5 text-sm text-white/50">
                 {Math.round(mine.total)} <span className="text-ink-muted">/ 100 weighted score</span>
+              </p>
+              <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-white/50">
+                <span>
+                  Net ADP value{' '}
+                  <span className={'font-semibold ' + (mine.value >= 0 ? 'text-teal-300' : 'text-rose-400')}>
+                    {mine.value >= 0 ? '+' : ''}{Math.round(mine.value)}
+                  </span>
+                </span>
+                {typeof winPct === 'number' && (
+                  <span>
+                    Projected win % <span className="font-semibold text-teal-300">{Math.round(winPct * 100)}%</span>
+                  </span>
+                )}
               </p>
             </div>
           </div>

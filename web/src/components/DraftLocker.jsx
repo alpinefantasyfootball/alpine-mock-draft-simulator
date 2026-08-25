@@ -1,12 +1,125 @@
 import { useReducer, useState } from 'react'
+import { Calendar, TrendingUp, Shield } from 'lucide-react'
 import { useEngine, useJukeTick } from '../hooks/useJukeEngine.js'
 import NewMockPanel from './NewMockPanel.jsx'
-import TendenciesStrip from './TendenciesStrip.jsx'
 import InProgressBand from './InProgressBand.jsx'
 import LockerTable from './LockerTable.jsx'
 import WhatToRunNext from './WhatToRunNext.jsx'
 import DraftInsightsDashboard from './DraftInsightsDashboard.jsx'
-import AllDraftsInsights from './AllDraftsInsights.jsx'
+import TrendChart from './TrendChart.jsx'
+import RecommendationEngine from './RecommendationEngine.jsx'
+import MostDraftedCard from './MostDraftedCard.jsx'
+import WeakestSpotCard from './WeakestSpotCard.jsx'
+import AvgRoundByPositionCard from './AvgRoundByPositionCard.jsx'
+import DraftCapitalAllocationCard from './DraftCapitalAllocationCard.jsx'
+import WinPctTrendCard from './WinPctTrendCard.jsx'
+import NetAdpValueCard from './NetAdpValueCard.jsx'
+import PositionalWeaknessHeatmap from './PositionalWeaknessHeatmap.jsx'
+
+// One shell for the three header stat tiles — a bordered card with a label
+// row (an optional icon beside it) and a big value, rather than the plain
+// stacked text these used to be. sparkline is a full element rather than a
+// boolean so only the win-rate tile has to know it draws one.
+function KpiCard({ icon: Icon, label, value, valueColor, sub, sparkline }) {
+  return (
+    <div className="flex min-w-[132px] flex-col gap-1.5 rounded-lg border border-white/[0.09] bg-slate-panel/60 px-4 py-3">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-white/50">{label}</span>
+        {Icon && <Icon className="h-3.5 w-3.5 shrink-0 text-white/30" aria-hidden="true" />}
+      </div>
+      <p className="font-display text-[22px] font-bold leading-none tabular-nums" style={{ color: valueColor || '#fff' }}>
+        {value}
+      </p>
+      {sub && <p className="text-[10px] text-ink-muted">{sub}</p>}
+      {sparkline}
+    </div>
+  )
+}
+
+// Below this many completed mocks, none of the eight chart cells have
+// enough to say — every one of them would independently render its own
+// "not enough data yet" box, which is the same repetitive-empty-boxes
+// problem the retired TendenciesStrip.jsx's own single gate already existed
+// to avoid. One combined prompt stands in for all eight instead; once past
+// it, each card still gates itself on whatever narrower sample it
+// specifically needs (a format needs two full formats, the heatmap needs
+// two entries with the field stored, and so on).
+//
+// New Mock Draft is deliberately NOT behind this gate. It is the launcher,
+// not a piece of analytics — a brand-new visitor with zero mocks still
+// needs a working "Start mock draft" button. Folding it into the same
+// conditional as the eight chart cards was tried once already and is
+// exactly the regression this comment exists to prevent: it deleted the
+// one button this whole screen exists to offer for anyone who hadn't
+// already run five mocks.
+const MIN_MOCKS_FOR_ANALYTICS = 5
+
+// The analytics grid. A plain 4-column, 3-row grid — 12 cells, and every
+// panel here fills exactly one of them except Recommendation Engine (2
+// cols) and the Heatmap (3 cols). New Mock does NOT need an explicit
+// row-span to look as tall as its row-mates: CSS Grid stretches every item
+// to its row's own height by default, and row 1's height is set by
+// whichever sibling needs the most room (Recommendation Engine, once it's
+// drawing a real per-seat bar chart) — NewMockPanel's own `h-full` just
+// rides that stretch. An earlier version of this file read the design
+// brief's "New Mock spans rows 1-2" as a literal grid-row-span, which
+// doesn't fit a 4x3 grid alongside Recommendation Engine's 2-column span
+// and the heatmap's 3-column span (13 cell-units of content into 12 cells)
+// and had to invent a fourth row to make the arithmetic work. It didn't
+// need to: the spec was describing a visual proportion, not a grid mechanic.
+function AnalyticsGrid({ engine, league, stats, problem, lobbySlot, onSetLobbySlot, onStartNew, onOpenSettings }) {
+  const totalMocks = stats.total || 0
+  const thin = totalMocks < MIN_MOCKS_FOR_ANALYTICS
+
+  return (
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="sm:col-span-2 lg:col-span-1 lg:col-start-1 lg:row-start-1">
+        <NewMockPanel engine={engine} league={league} problem={problem} lobbySlot={lobbySlot} onStartNew={onStartNew} onOpenSettings={onOpenSettings} />
+      </div>
+
+      {thin ? (
+        <div className="sm:col-span-2 lg:col-span-3 lg:col-start-2 lg:row-start-1 lg:row-span-3 flex min-h-[420px] flex-col items-center justify-center rounded-xl border border-dashed border-white/[0.14] bg-slate-panel/40 p-10 text-center">
+          <p className="max-w-[360px] text-sm text-white/60">
+            Run {MIN_MOCKS_FOR_ANALYTICS - totalMocks} more mock{MIN_MOCKS_FOR_ANALYTICS - totalMocks === 1 ? '' : 's'} and
+            Juke will start showing your tendencies, your projected win rate, and where each draft left value on the board.
+          </p>
+          <p className="mt-3 text-xs tabular-nums text-ink-muted">
+            {totalMocks} of {MIN_MOCKS_FOR_ANALYTICS} logged so far
+          </p>
+        </div>
+      ) : (
+        <>
+          <div className="sm:col-span-2 lg:col-start-2 lg:col-span-2 lg:row-start-1">
+            <RecommendationEngine engine={engine} league={league} stats={stats} onSetLobbySlot={onSetLobbySlot} onStartNew={onStartNew} />
+          </div>
+          <div className="lg:col-start-4 lg:row-start-1">
+            <MostDraftedCard stats={stats} />
+          </div>
+
+          <div className="lg:col-start-1 lg:row-start-2">
+            <WeakestSpotCard stats={stats} />
+          </div>
+          <div className="lg:col-start-2 lg:row-start-2">
+            <AvgRoundByPositionCard stats={stats} />
+          </div>
+          <div className="lg:col-start-3 lg:row-start-2">
+            <DraftCapitalAllocationCard stats={stats} />
+          </div>
+          <div className="lg:col-start-4 lg:row-start-2">
+            <WinPctTrendCard stats={stats} />
+          </div>
+
+          <div className="lg:col-start-1 lg:row-start-3">
+            <NetAdpValueCard stats={stats} />
+          </div>
+          <div className="sm:col-span-2 lg:col-start-2 lg:col-span-3 lg:row-start-3">
+            <PositionalWeaknessHeatmap stats={stats} />
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
 
 // Replaces the old tabbed card list (DraftHistoryCard.jsx,
 // DraftInProgressCard.jsx, both deleted) with the handoff's launcher-and-
@@ -36,12 +149,6 @@ export default function DraftLocker({ onStartNew, problem, lobbySlot, onSetLobby
   // seat's if a future caller wants that; kept separate from mySlot the
   // same way DraftRoom.jsx's own insightsSlot is.
   const [insightsSlot, setInsightsSlot] = useState(0)
-  // The aggregate report, across every draft rather than one — a second,
-  // independent overlay flag rather than a variant of analyzingId, since
-  // the two can never be open at once but are opened from different places
-  // (a Locker row's kebab menu vs. the tendencies strip's own button) and
-  // answer different questions (one draft's report vs. every draft's).
-  const [showAllDrafts, setShowAllDrafts] = useState(false)
 
   if (!engine) return null
 
@@ -55,6 +162,7 @@ export default function DraftLocker({ onStartNew, problem, lobbySlot, onSetLobby
   // reading "undefined mocks run."
   const totalMocks = stats.total || 0
   const mocksRunSentence = `${totalMocks} mock${totalMocks === 1 ? '' : 's'} run. Unlimited, always free.`
+  const hasWinTrend = stats.winPctHistory && stats.winPctHistory.length >= 2
 
   const resume = () => { engine.resumeSavedDraft(); location.hash = '#/draft-room' }
   const discard = () => { engine.clearSave(); forceLocal() }
@@ -75,14 +183,8 @@ export default function DraftLocker({ onStartNew, problem, lobbySlot, onSetLobby
     // the real ancestor scroller (DraftRoom.jsx's own overflow-y-auto) take
     // over, rather than being capped at 100% and clipping.
     <div className="mx-auto flex min-h-full max-w-[1600px] flex-col px-4 py-5 lg:px-8 lg:py-7">
-      <div className="mb-6 flex items-end justify-between">
+      <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
         <div>
-          {/* "Draft Lobby", not "Draft Room" — the bottom tab bar
-              (MobileAppTabBar.jsx) already names this screen "Lobby" and
-              reserves "Draft" for the live Cockpit one tab over; this
-              heading disagreeing with the nav that gets you here was never
-              right, just never looked at before there was a nav to compare
-              it to. */}
           <h1 className="font-display text-[32px] font-bold text-white">Draft Lobby</h1>
           {/* Mobile: one honest sentence with the real count in it, instead
               of the desktop stat block to the right — that block doesn't
@@ -95,27 +197,54 @@ export default function DraftLocker({ onStartNew, problem, lobbySlot, onSetLobby
             Set up a mock, pick up where you left off, or see what's already in the locker.
           </p>
         </div>
+        {/* The three header KPIs: mocks run, mean projected win % (with its
+            own trailing sparkline), mean roster VORP (with a bar against
+            THIS BROWSER'S OWN drafted rooms, not a "league" — there is no
+            persistent league concept in Juke to baseline against, and
+            inventing one nobody derives from would be exactly the kind of
+            number this codebase's own rules say not to print). All three
+            are absent, not zeroed, until there's a real mock behind them. */}
         {stats.total > 0 && (
-          <div className="hidden items-center gap-6 lg:flex">
-            <div className="text-right">
-              <p className="font-display text-[23px] font-bold tabular-nums text-white">{stats.total}</p>
-              <p className="text-[10px] uppercase tracking-[0.07em] text-white/50">Mocks run</p>
-            </div>
-            {/* Was "Best grade" — a single grade at hero size reads as a
-                badge of honor, and it's exactly as likely to be a D- as an
-                A+ (the grading itself is a separate, known issue). Roster
-                VORP has no such failure mode: it's a real per-user number
-                the engine already tracks, and there's no reading of it
-                that lands as "you did badly," so it's safe to headline at
-                any sample size. */}
+          <div className="hidden items-stretch gap-3 lg:flex">
+            <KpiCard icon={Calendar} label="Mocks Run" value={stats.total} sub="All formats" />
+            {typeof stats.avgWinPct === 'number' && (
+              <KpiCard
+                icon={TrendingUp}
+                label="Avg Win Probability"
+                value={`${Math.round(stats.avgWinPct)}%`}
+                valueColor="#34D399"
+                sparkline={
+                  hasWinTrend && (
+                    <div className="mt-0.5 h-4 opacity-90">
+                      <TrendChart entries={stats.winPctHistory.slice(-12)} compact height={16} scaleToData />
+                    </div>
+                  )
+                }
+              />
+            )}
             {stats.avgRosterVorp && (
-              <div className="text-right">
-                <p className="font-display text-[23px] font-bold tabular-nums text-teal-300">
-                  {stats.avgRosterVorp.mine >= 0 ? '+' : ''}
-                  {stats.avgRosterVorp.mine.toFixed(1)}
-                </p>
-                <p className="text-[10px] uppercase tracking-[0.07em] text-white/50">Avg roster VORP</p>
-              </div>
+              <KpiCard
+                icon={Shield}
+                label="Avg Roster VORP"
+                value={`${stats.avgRosterVorp.mine >= 0 ? '+' : ''}${stats.avgRosterVorp.mine.toFixed(1)}`}
+                valueColor="#34D399"
+                sub={typeof stats.avgRosterVorp.room === 'number' ? 'vs. room average' : undefined}
+                sparkline={
+                  typeof stats.avgRosterVorp.room === 'number' && (
+                    <div className="mt-1 h-1 overflow-hidden rounded-full bg-white/[0.08]">
+                      <div
+                        className="h-full rounded-full"
+                        style={{
+                          background: 'linear-gradient(90deg, #7B1FA2, #00E5FF)',
+                          width: `${Math.max(4, Math.min(100,
+                            50 + ((stats.avgRosterVorp.mine - stats.avgRosterVorp.room) / 40) * 50
+                          ))}%`,
+                        }}
+                      />
+                    </div>
+                  )
+                }
+              />
             )}
           </div>
         )}
@@ -136,27 +265,27 @@ export default function DraftLocker({ onStartNew, problem, lobbySlot, onSetLobby
         />
       )}
 
-      {/* items-stretch (the default — items-start used to override it) so
-          Your Tendencies always matches New Mock panel's height instead of
-          sitting a few lines tall beside it. Below the five-mock gate that
-          panel is a short honest-line message; stretched to the panel's
-          full height, it reads as a considered empty state instead of the
-          ~500px gap this replaced. flex-col below lg: the 396px-wide launcher
-          and the tendencies panel beside it were never going to fit a phone
-          side by side — see NewMockPanel.jsx's own hard-blocker comment —
-          so they stack, launcher first, same reading order the mockup uses. */}
-      <div className="mb-7 flex flex-col items-stretch gap-5 lg:flex-row">
-        <NewMockPanel
+      <div className="mb-7">
+        <div className="mb-3 flex items-baseline justify-between gap-3">
+          <h2 className="font-display text-[19px] font-bold text-white">Your Tendencies</h2>
+          {totalMocks > 0 && (
+            <span className="text-xs text-white/50">Across all {totalMocks} mock{totalMocks === 1 ? '' : 's'}</span>
+          )}
+        </div>
+
+        {/* AnalyticsGrid always renders New Mock Draft, thin sample or not —
+            see its own file comment on why that panel can't live behind the
+            same gate as the eight chart cards beside it. */}
+        <AnalyticsGrid
           engine={engine}
           league={league}
+          stats={stats}
           problem={problem}
           lobbySlot={lobbySlot}
+          onSetLobbySlot={onSetLobbySlot}
           onStartNew={onStartNew}
           onOpenSettings={onOpenSettings}
         />
-        <div className="min-w-0 flex-1">
-          <TendenciesStrip stats={stats} onOpenAllDrafts={() => setShowAllDrafts(true)} />
-        </div>
       </div>
 
       <div className="min-h-0 flex-1">
@@ -171,14 +300,6 @@ export default function DraftLocker({ onStartNew, problem, lobbySlot, onSetLobby
           viewSlot={insightsSlot}
           onViewSlot={setInsightsSlot}
           onClose={() => { engine.closeHistoryDraft(); setAnalyzingId(null) }}
-        />
-      )}
-
-      {showAllDrafts && (
-        <AllDraftsInsights
-          stats={stats}
-          scoringNames={engine.scoringNames() || {}}
-          onClose={() => setShowAllDrafts(false)}
         />
       )}
     </div>
