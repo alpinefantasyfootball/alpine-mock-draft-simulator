@@ -11,7 +11,7 @@
    takes it down never runs. */
 
 import { test, expect, devices } from "@playwright/test";
-import { openApp, standaloneContext, SITE } from "./helpers.mjs";
+import { openApp, SITE } from "./helpers.mjs";
 
 const PHONE = { ...devices["iPhone 13"], defaultBrowserType: undefined };
 const DESKTOP = { viewport: { width: 1440, height: 900 } };
@@ -30,14 +30,26 @@ const DESKTOP = { viewport: { width: 1440, height: 900 } };
    Against a build carrying it, this file's own history is the cautionary
    tale rather than the reassurance: it recorded "4 passed" here for a while,
    and every one of those runs was actually failing for the same reason —
-   nothing anywhere made matchMedia('(display-mode: standalone)') true, which
-   is the one signal theme.js reads to ever set data-standalone at all. Not
-   this test's premise, all four of them, identically, on a build carrying
-   the exact overlay this comment claimed was passing. Confirmed by stashing
-   every other change and re-running against untouched code — still 4 red,
-   which is what proved this was never about what the overlay did. See
-   standaloneContext() in helpers.mjs for the fix and the two things that
-   were tried and did not work before it. */
+   the overlay was scoped to an installed-app cold launch only, and nothing
+   in this suite ever made matchMedia('(display-mode: standalone)') true, so
+   theme.js's data-standalone gate never fired and the whole overlay sat at
+   display:none through every run, un-torn-down, un-everything. Not this
+   test's premise, all four of them, identically, on a build carrying the
+   exact overlay this comment claimed was passing. Confirmed by stashing
+   every other change and re-running against untouched code — still 4 red.
+
+   Fixed twice, in the wrong order. First with a matchMedia shim
+   (standaloneContext(), briefly in helpers.mjs) to actually reach the
+   installed-app code path under test — CDP's own
+   Emulation.setEmulatedMedia with a display-mode feature is a silent no-op
+   in this Chromium build, so a JS-level shim was the only thing that
+   worked. That made the tests pass and was still fixing the wrong layer:
+   the scoping itself turned out to be why nobody could see the overlay on
+   an ordinary browser visit either, reported directly. The owner removed
+   the installed-app restriction rather than the tests' inability to reach
+   it, so the overlay now plays on every cold load and there is no
+   standalone case left to shim — browser.newContext() reaches it directly,
+   same as everything else in this suite. */
 let hasOverlay = null;
 test.beforeAll(async ({ request }) => {
   const res = await request.get(SITE + "/");
@@ -70,7 +82,7 @@ const PROBE = () => {
 };
 
 async function loadWithProbe(browser, opts, path = "#/") {
-  const context = await standaloneContext(browser, opts);
+  const context = await browser.newContext(opts);
   await context.addInitScript(PROBE);
   const page = await openApp(context, path);
   return { context, page };
@@ -154,12 +166,13 @@ test("the loader is shown on every load, and does not outstay its welcome", asyn
 
   /* The floor is the overlay's own choreography rather than a chosen number.
      Sonar's ring loop shipped this same shape of bound; Breach's own last
-     arrival is the closing ripple, which does not complete until 1908ms
-     (breachRipple, 500ms duration after a .88 * 1600ms delay) — see
-     main.jsx's own comment for the rest of the arrival table. An earlier
-     version of this held 900ms and asserted 800, back when the mark alone
-     decided it — which passed while the wordmark was still animating and
-     the third ring had never appeared at all. The floor sits past every
+     arrival is the closing ripple, which does not complete until 2108ms —
+     200ms (--breach-start-delay, so nothing moves before the overlay itself
+     is opaque) plus breachRipple's 500ms duration after a .88 * 1600ms
+     delay — see main.jsx's own comment for the rest of the arrival table.
+     An earlier version of this held 900ms and asserted 800, back when the
+     mark alone decided it — which passed while the wordmark was still
+     animating and the third ring had never appeared at all. The floor sits past every
      element's arrival now, Breach's included, so a regression that cuts the
      composition short fails here rather than shipping a loader nobody sees
      complete. */
@@ -188,7 +201,7 @@ test("the loader is shown on every load, and does not outstay its welcome", asyn
    JavaScript at all — which is the whole point, since the missing JavaScript is
    the fault being survived. */
 test("if the bundle never arrives, the overlay takes itself away", async ({ browser }) => {
-  const context = await standaloneContext(browser, DESKTOP);
+  const context = await browser.newContext(DESKTOP);
   // Every module script, which is how the real failure presents: the classic
   // legacy scripts still load, React never mounts, main.jsx never runs.
   await context.route(/\/(assets\/index-.*\.js|src\/main\.jsx).*/, (route) => route.abort());

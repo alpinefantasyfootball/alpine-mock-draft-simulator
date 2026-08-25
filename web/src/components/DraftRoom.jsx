@@ -142,16 +142,26 @@ export default function DraftRoom() {
   // Start Draft flips this true; the poll effect below drops it once the
   // engine both reports started AND has real data loaded (players.js/
   // stats.js/draft-engine.js — see app.js's deferred-data boot and its
-  // dataReady() bridge method), held to a 400ms floor. Distinct from
-  // `started` itself: engine.startDraft() flips state.started
-  // synchronously in app.js, before React has had a chance to paint
-  // anything for it, and reaching #/draft-room at all almost always means
-  // the deferred data landed long ago on the homepage — so this is mostly
-  // the floor doing its job, not a real wait, but the brief's requirement
-  // is unconditional ("every surface, always"), not "only when slow".
+  // dataReady() bridge method), held to a floor. Distinct from `started`
+  // itself: engine.startDraft() flips state.started synchronously in
+  // app.js, before React has had a chance to paint anything for it, and
+  // reaching #/draft-room at all almost always means the deferred data
+  // landed long ago on the homepage — so this is mostly the floor doing
+  // its job, not a real wait, but the brief's requirement is unconditional
+  // ("every surface, always"), not "only when slow".
+  //
+  // The floor used to be 400ms, which is the same mistake #boot-sonar's own
+  // MIN_VISIBLE_MS made once already (there: 900ms, "chosen off the mark
+  // alone") — short enough that dataReady() being already true (the common
+  // case) meant this screen was never actually seen, just flashed. Reported
+  // directly: the Sonar ring never got the chance to complete a sweep, let
+  // alone loop, before the board appeared underneath it. 2100 is
+  // SonarLoader's own RING_MS — one full ring cycle — the same number and
+  // the same reasoning #boot-sonar's floor already uses, because this is
+  // the same component doing the same job in a second place.
   const [starting, setStarting] = useState(false)
   const startingSinceRef = useRef(0)
-  const START_TRANSITION_MIN_MS = 400
+  const START_TRANSITION_MIN_MS = 2100
   // The one thing that can refuse the Start button, said beside it rather
   // than folded away — the rule the legacy setup screen already followed.
   const problem = engine ? engine.setupProblem() : ''

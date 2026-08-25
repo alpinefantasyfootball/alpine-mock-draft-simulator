@@ -22,20 +22,12 @@
   } catch (err) {}   // private browsing can make localStorage throw
 })();
 
-/* Same file, same reason: whatever reads this has to know before body
-   paints, or the thing it's deciding has already been drawn wrong once.
-   #boot-sonar (index.html) is scoped to the installed app's cold launch —
-   homepage v4 pass 0 — and this is the one synchronous place that can
-   tell it apart from an ordinary browser visit before the CSS deciding
-   its display applies. matchMedia is synchronous; nothing here waits on
-   anything. navigator.standalone is the older iOS Safari signal, absent
-   as a property on browsers that don't need it rather than false. */
-(function () {
-  try {
-    var standalone = window.matchMedia &&
-      window.matchMedia("(display-mode: standalone)").matches;
-    if (standalone || navigator.standalone) {
-      document.documentElement.setAttribute("data-standalone", "");
-    }
-  } catch (err) {}
-})();
+/* This file used to carry a second IIFE here, stamping data-standalone from
+   matchMedia('(display-mode: standalone)') so #boot-sonar (index.html)
+   could tell an installed-app cold launch apart from an ordinary browser
+   visit before its CSS applied. That overlay — Sonar, then Breach — was
+   scoped to the installed case only, which meant it never played on a
+   regular desktop or mobile browser visit at all: reported directly, from
+   someone who opened the site expecting to see it and did not. The owner
+   reversed the scoping rather than the gate, so the overlay now plays on
+   every cold load and nothing here needs to tell the two apart any more. */

@@ -141,39 +141,6 @@ export function clickHidden(page, id) {
   return page.evaluate((id) => document.getElementById(id).click(), id);
 }
 
-/* Chromium never reports display-mode: standalone on its own, and nothing
-   in this repo made it happen — sonar.spec.mjs's every assertion depended on
-   theme.js's data-standalone gate firing and none of it ever did, so all
-   four tests failed identically regardless of what the overlay actually did.
-   Confirmed two ways: baseline matchMedia('(display-mode: standalone)') is
-   false under a plain browser.newContext(), and CDP's own
-   Emulation.setEmulatedMedia with a display-mode feature is a silent no-op
-   in this Chromium build — the PWA emulation panel in DevTools is a
-   browser-UI-only feature with no Playwright-reachable equivalent here.
-   Shimming matchMedia at the JS level is what actually works, and it is the
-   exact signal theme.js reads, so this is testing the real code path rather
-   than working around it. */
-export async function standaloneContext(browser, opts) {
-  const context = await browser.newContext(opts);
-  await context.addInitScript(() => {
-    const real = window.matchMedia ? window.matchMedia.bind(window) : null;
-    window.matchMedia = (q) =>
-      q === "(display-mode: standalone)"
-        ? {
-            matches: true,
-            media: q,
-            addListener() {},
-            removeListener() {},
-            addEventListener() {},
-            removeEventListener() {},
-          }
-        : real
-          ? real(q)
-          : { matches: false, media: q };
-  });
-  return context;
-}
-
 export async function openApp(context, path = "#/draft-room") {
   const page = await context.newPage();
   await page.addInitScript(instrumentation);

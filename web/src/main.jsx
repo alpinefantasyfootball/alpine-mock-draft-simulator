@@ -56,17 +56,17 @@ if (draftRoomRoot) {
   )
 }
 
-// Sonar - see #boot-sonar at the top of index.html - covers the blocking
+// Breach (see #boot-sonar at the top of index.html) covers the blocking
 // classic scripts and React's own boot. This is where it comes down.
 //
-// Homepage v4 pass 0 scopes the element to the installed app's cold
-// launch (index.html's own <style> hides it outright everywhere else via
-// the data-standalone attribute theme.js stamps before paint). The teardown
-// below still runs unconditionally on every load — it's a no-op-shaped
-// couple of rAFs and a setTimeout against an element that's either really
-// there or display:none, never a correctness question — but skipping it
-// outright when the attribute isn't set avoids scheduling work for an
-// overlay nobody is going to see, on every single marketing-site visit.
+// Runs unconditionally on every load now — reversed from Homepage v4 pass
+// 0's original scoping, which skipped this whole block outright unless
+// document.documentElement had a data-standalone attribute theme.js used
+// to stamp. That scoping meant the overlay, Breach included, never played
+// on an ordinary browser visit at all: reported directly, from someone who
+// opened the site expecting to see it and did not, on desktop or mobile
+// either one. theme.js no longer stamps the attribute and nothing here
+// reads it any more.
 //
 // Two nested rAFs put the teardown after React's first paint, which is the real
 // "ready" signal on this page. app.js is a classic script, so window.JukeEngine
@@ -79,10 +79,12 @@ if (draftRoomRoot) {
 // it, so a tab opened in the background and looked at later finds the overlay
 // still at opacity 0 and removes it outright, with no loader mid-flight.
 //
-// Which is the same branch a fast foreground load takes. The fade-in is delayed
-// 300ms, so an overlay still at opacity 0 never became visible and is removed
-// rather than faded - that delay is what keeps a quick load from flashing a
-// logo, and a flash of logo reads as a glitch rather than as polish.
+// Which is the same branch a fast foreground load takes. The fade-in used to be
+// delayed 300ms for exactly that reason — so an overlay still at opacity 0 was
+// removed rather than faded, keeping a quick load from flashing a logo — but
+// that delay is gone now too (see index.html's own note on why) and MIN_VISIBLE_MS
+// below does the same job from the other end: holding a real minimum instead of
+// skipping a fast one.
 //
 // The pin-then-flush dance is not superstition. Setting `animation: none` and
 // changing opacity in one style change is the single case where the
@@ -92,39 +94,44 @@ if (draftRoomRoot) {
 // animation, forcing a style flush, and only then handing over to the
 // [data-sonar-out] rule makes the fade deterministic in every engine.
 const boot = document.getElementById('boot-sonar')
-if (boot && document.documentElement.hasAttribute('data-standalone')) {
+if (boot) {
   requestAnimationFrame(() =>
     requestAnimationFrame(() => {
       // Hold for MIN_VISIBLE_MS from navigation start, then leave. performance
       // .now() is measured from the time origin, so it is exactly how long this
       // page has been loading — no separate start timestamp to keep in step.
       //
-      // 2100ms held unchanged across the Sonar → Breach swap, and for the same
-      // shape of reason it was chosen the first time: it is past every element
-      // in the overlay's own arrival, not a round number.
+      // Every breach* element now carries index.html's --breach-start-delay
+      // (200ms) on top of its own share of --breach-total, so every number
+      // below is 200ms later than the design's own choreography states in
+      // isolation — see that custom property's own comment for why: nothing
+      // may start moving before #boot-sonar itself (sonar-boot-in, 200ms)
+      // has actually finished becoming opaque, or the shark launches while
+      // the homepage is still visible through it.
       //
-      //   shark      breachMark        --breach-total (1600ms), no delay  -> settles/fades 1600ms
-      //   wordmark   sonar-label       500ms after 640ms delay            -> settles       1140ms
-      //   ripple     breachRipple      500ms after .88 * 1600ms delay     -> completes      1908ms
-      //   idle ring 1 sonar-ring       2100ms, --breach-total delay       -> enters         1600ms
+      //   shark      breachMark        200ms + --breach-total, no further delay -> settles/fades 1800ms
+      //   wordmark   sonar-label       500ms after 640ms delay                  -> settles        1140ms
+      //   ripple     breachRipple      500ms after 200ms + .88 * 1600ms delay   -> completes       2108ms
+      //   idle ring 1 sonar-ring       2100ms, 200ms + --breach-total delay     -> enters          1800ms
       //
       // breachMark's own 100% fades the shark to opacity 0, so what is on
-      // screen at 1600ms is a blank instant — covered by breach-settled's
-      // crossfade (see index.html), which finishes at the same 1600ms mark.
-      // The ripple is the actual last arrival, completing at 1908ms; holding
-      // to 2100ms leaves it ~200ms of room rather than cutting it off flush,
-      // and keeps the overall boot experience the same length it has always
-      // been even though everything inside it changed. A loading state that
-      // never shows its own last element is not finished, it is interrupted —
-      // the lesson the first version of this hold (900ms, the mark alone) was
-      // written to fix, and it applies exactly as much to a ripple as it did
-      // to a third ring.
+      // screen at 1800ms is a blank instant — covered by breach-settled's
+      // crossfade (see index.html), which finishes at the same 1800ms mark.
+      // The ripple is the actual last arrival, completing at 2108ms; holding
+      // to 2300ms leaves it ~200ms of room rather than cutting it off flush.
+      // That is 200ms later than this hold's own pre-Breach value (2100ms),
+      // and it is the same 200ms for the same reason: the whole sequence
+      // moved, so the hold moves with it. A loading state that never shows
+      // its own last element is not finished, it is interrupted — the lesson
+      // the first version of this hold (900ms, the mark alone) was written
+      // to fix, and it applies exactly as much to a ripple as it did to a
+      // third ring.
       //
       // This whole hold replaces an early return that removed the element
       // outright while it was still at opacity 0 — the branch a fast load
       // always took, and the reason the loader was invisible to anyone on a
       // quick connection.
-      const MIN_VISIBLE_MS = 2100
+      const MIN_VISIBLE_MS = 2300
       setTimeout(() => {
       const shown = getComputedStyle(boot).opacity
 
