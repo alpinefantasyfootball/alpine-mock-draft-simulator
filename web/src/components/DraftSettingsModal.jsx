@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { motion } from 'framer-motion'
 import { X } from 'lucide-react'
 import RoomPanel from './RoomPanel.jsx'
 import { POS_BADGE } from './draftRoomPositions.js'
@@ -291,18 +292,31 @@ export default function DraftSettingsModal({ engine, onClose, started, inRoom, m
                     one of the five that is set once rather than reached for
                     mid-pick. */}
                 <Row label="Draft sounds" hint="A cue when your turn starts, and when the clock runs down.">
+                  {/* Same switch DraftCockpitHeader.jsx's Autopick control
+                      uses — a pill track with a spring-animated knob —
+                      rather than the On/Off text pill this used to be, so
+                      the two toggles in the product read as the same kind
+                      of control. */}
                   <button
                     type="button"
                     onClick={() => { engine.toggleSound(); redraw() }}
                     aria-pressed={engine.soundWanted()}
-                    className={
-                      'rounded-full px-3 py-1 text-xs font-semibold transition-colors duration-150 ' +
-                      (engine.soundWanted()
-                        ? 'bg-teal-500/20 text-teal-300'
-                        : 'bg-white/5 text-white/50 hover:bg-white/10')
-                    }
+                    aria-label="Draft sounds"
+                    className="rounded-full p-0.5 transition-colors duration-150"
                   >
-                    {engine.soundWanted() ? 'On' : 'Off'}
+                    <span
+                      className={
+                        'relative block h-[18px] w-[34px] rounded-full transition-colors duration-200 ' +
+                        (engine.soundWanted() ? 'bg-teal-500/70' : 'bg-white/[0.16]')
+                      }
+                    >
+                      <motion.span
+                        layout
+                        transition={{ type: 'spring', stiffness: 500, damping: 32 }}
+                        className="absolute top-0.5 h-3.5 w-3.5 rounded-full bg-white"
+                        style={{ left: engine.soundWanted() ? 18 : 2 }}
+                      />
+                    </span>
                   </button>
                 </Row>
 

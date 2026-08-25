@@ -52,6 +52,15 @@ export const POS_BADGE = {
 
 export const POS_LIST = ['QB', 'RB', 'WR', 'TE']
 
+// The plain-English name for a position key — used anywhere a sentence
+// names a position rather than labelling a chip (TendenciesStrip.jsx's
+// weakest-spot sentence, AllDraftsInsights.jsx's report). Promoted here
+// from a local copy in TendenciesStrip.jsx once a second file needed the
+// same six names — this file is already documented as the one position
+// reference for the whole site, and a name is exactly the kind of thing
+// that drifts silently if it is ever written down twice.
+export const POS_NAMES = { QB: 'Quarterback', RB: 'Running back', WR: 'Wide receiver', TE: 'Tight end', DST: 'Defense', K: 'Kicker' }
+
 /* POS_CELL_BLOCK — the board grid's old full-colour-block cells — lived here
    until a third look overturned the verdict directly above this line. Worth
    keeping the record straight, since the comment that used to sit here

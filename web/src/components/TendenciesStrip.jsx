@@ -1,4 +1,5 @@
-import { POS_SOLID } from './draftRoomPositions.js'
+import { POS_SOLID, POS_NAMES } from './draftRoomPositions.js'
+import GradeTrendChart from './GradeTrendChart.jsx'
 
 // Round 1 position's bar fills use each position's own established hue
 // (POS_BADGE's solid form) rather than the handoff's literal teal-for-RB/
@@ -25,49 +26,16 @@ import { POS_SOLID } from './draftRoomPositions.js'
 // small sample, but no longer a coin flip dressed as an insight.
 const MIN_MOCKS_FOR_TENDENCIES = 5
 
-// Shared between the weakest-spot card and its own paradox-resolving
-// sentence — one lookup, not two copies drifting apart. weakestSpot itself
-// can only ever be QB/RB/WR/TE (weakestStartingSpot() in app.js reads
-// replacementGap() over the starting lineup, and K/DST are excluded from
-// that measure the same way they're excluded from draft value elsewhere —
-// see CLAUDE.md), but holeRounds' topOtherPos names whichever position
-// filled that round most often, which is real and can be K or DST — a
-// missing name here read as the literal code, lowercased ("a dst 7 of 14
-// times"), so both are covered even though only one card can ever ask for
-// them.
-const POS_NAMES = { QB: 'Quarterback', RB: 'Running back', WR: 'Wide receiver', TE: 'Tight end', DST: 'Defense', K: 'Kicker' }
-
-/* A real chart, not a row of solid blocks — gridlines at 0/50/100 so the
-   axis a reader needs to judge "is 63 good" is on screen, not implied.
-   Built from however many graded entries there actually are; the label
-   beside it (below) is what used to say "last 12" over six blocks — the
-   label and the data disagreeing was the bug, not the six blocks. */
-function GradeChart({ entries }) {
-  const w = 300, h = 100, padTop = 10, innerH = 74
-  const n = entries.length
-  const stepX = n > 1 ? (w - 20) / (n - 1) : 0
-  const points = entries.map((e, i) => ({
-    ...e,
-    x: 10 + i * stepX,
-    y: padTop + innerH * (1 - Math.max(0, Math.min(100, e.score)) / 100),
-  }))
-  const path = points.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
-
-  return (
-    <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="mt-1 block h-[84px] w-full" aria-hidden="true">
-      <line x1="10" y1={padTop} x2={w - 10} y2={padTop} stroke="rgba(255,255,255,0.08)" strokeWidth="0.7" />
-      <line x1="10" y1={padTop + innerH / 2} x2={w - 10} y2={padTop + innerH / 2} stroke="rgba(255,255,255,0.08)" strokeWidth="0.7" />
-      <line x1="10" y1={padTop + innerH} x2={w - 10} y2={padTop + innerH} stroke="rgba(255,255,255,0.18)" strokeWidth="0.7" />
-      <text x="0" y={padTop + 3} fill="#7E868F" fontSize="7">100</text>
-      <text x="2" y={padTop + innerH / 2 + 3} fill="#7E868F" fontSize="7">50</text>
-      <text x="5" y={padTop + innerH + 3} fill="#7E868F" fontSize="7">0</text>
-      {n > 1 && <polyline points={path} fill="none" stroke="#00E5FF" strokeWidth="1.6" strokeLinejoin="round" />}
-      {points.map((p) => (
-        <circle key={p.id} cx={p.x} cy={p.y} r={n > 1 ? 2.4 : 3} fill="#00E5FF" stroke="#151b26" strokeWidth="1.2" />
-      ))}
-    </svg>
-  )
-}
+// POS_NAMES (imported above, from draftRoomPositions.js) is shared between
+// the weakest-spot card and its own paradox-resolving sentence — one
+// lookup, not two copies drifting apart. weakestSpot itself can only ever
+// be QB/RB/WR/TE (weakestStartingSpot() in app.js reads replacementGap()
+// over the starting lineup, and K/DST are excluded from that measure the
+// same way they're excluded from draft value elsewhere — see CLAUDE.md),
+// but holeRounds' topOtherPos names whichever position filled that round
+// most often, which is real and can be K or DST — a missing name here read
+// as the literal code, lowercased ("a dst 7 of 14 times"), so both are
+// covered even though only one card can ever ask for them.
 
 function Card({ label, children }) {
   return (
@@ -86,7 +54,7 @@ function StripHeader({ children }) {
   return <div className="mb-3 flex items-baseline justify-between">{children}</div>
 }
 
-export default function TendenciesStrip({ stats }) {
+export default function TendenciesStrip({ stats, onOpenAllDrafts }) {
   const total = (stats && stats.total) || 0
 
   // h-full pairs with DraftLocker's row switching to items-stretch: this
@@ -165,20 +133,28 @@ export default function TendenciesStrip({ stats }) {
     )
   }
 
-  if (stats.round1Position) {
+  if (stats.avgRoundByPosition) {
+    // Replaces a round-1-only breakdown, which was RB or WR on virtually
+    // every draft (ADP puts backs and receivers at the top of every board)
+    // and so never varied enough to say anything. This is the average
+    // round you land your *first* player at each position, across every
+    // draft that ever had one — bar length is relative to the slowest
+    // position in the list, not to the league's own round count, so the
+    // card stays readable at any league size without a second prop.
+    const maxRound = Math.max(...stats.avgRoundByPosition.map((row) => row.avgRound))
     cards.push(
-      <Card key="round1Position" label="Round 1 position">
+      <Card key="avgRoundByPosition" label="Avg round by position">
         <div className="flex flex-col gap-2">
-          {stats.round1Position.map((row) => (
+          {stats.avgRoundByPosition.map((row) => (
             <div key={row.pos} className="grid grid-cols-[26px_1fr_34px] items-center gap-2">
               <span className="text-[10px] font-bold text-white/50">{row.pos}</span>
               <div className="h-1 overflow-hidden rounded-full bg-white/[0.07]">
                 <div
                   className="h-full rounded-full"
-                  style={{ width: `${row.pct}%`, background: POS_SOLID[row.pos] || 'rgba(255,255,255,0.3)' }}
+                  style={{ width: `${(row.avgRound / maxRound) * 100}%`, background: POS_SOLID[row.pos] || 'rgba(255,255,255,0.3)' }}
                 />
               </div>
-              <span className="text-right text-[10px] tabular-nums text-white/70">{row.pct}%</span>
+              <span className="text-right text-[10px] tabular-nums text-white/70">Rd {row.avgRound.toFixed(1)}</span>
             </div>
           ))}
         </div>
@@ -193,7 +169,7 @@ export default function TendenciesStrip({ stats }) {
     // real count instead of a number the data can't back up.
     cards.push(
       <Card key="gradeLast12" label={n < 12 ? `Grade, all ${n}` : 'Grade, last 12'}>
-        <GradeChart entries={stats.gradeLast12.entries} />
+        <GradeTrendChart entries={stats.gradeLast12.entries} />
         <p className="mt-1.5 text-xs text-white/55">{stats.gradeLast12.caption}</p>
       </Card>
     )
@@ -254,7 +230,18 @@ export default function TendenciesStrip({ stats }) {
     <div className="flex h-full flex-col">
       <StripHeader>
         <h2 className="font-display text-[23px] font-bold text-white">Your tendencies</h2>
-        <span className="text-xs text-white/50">Across all {stats.total} mocks</span>
+        <span className="flex items-center gap-3">
+          <span className="text-xs text-white/50">Across all {stats.total} mocks</span>
+          {onOpenAllDrafts && (
+            <button
+              type="button"
+              onClick={onOpenAllDrafts}
+              className="rounded-full border border-teal-400/30 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-teal-300 transition-colors duration-150 hover:border-teal-400/60 hover:bg-teal-400/10"
+            >
+              Full report
+            </button>
+          )}
+        </span>
       </StripHeader>
       {/* Four candidate cards, two columns — a clean 2x2 rather than the
           three-wide grid that left an empty bottom-right cell whenever a

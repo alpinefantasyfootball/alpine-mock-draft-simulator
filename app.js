@@ -6359,41 +6359,72 @@ function historyStats() {
 
   const stats = { total: list.length };
 
-  // Most drafted — tallied across every pick in every entry, not just the
-  // ones that resolve; only the winning name needs to resolve, and if it
-  // doesn't (the board moved on entirely) the card is dropped rather than
-  // naming a runner-up the function never actually checked.
+  // Most drafted — tallied across only *your own* picks in each entry, via
+  // the same overall-index reconstruction holeRounds() already uses below
+  // (DraftEngine.overallOf(round, mySlot, teams), indexed into entry.picks).
+  // This used to sum every pick in the whole room — all ~140 of them, every
+  // team, every entry — which named whichever player the board's consensus
+  // rated highest, since he gets drafted by *someone* in nearly every mock.
+  // That is not a tendency; it is what the board says about itself. Only the
+  // winning name needs to resolve, and if it doesn't (the board moved on
+  // entirely) the card is dropped rather than naming a runner-up the
+  // function never actually checked. DraftEngine has to be loaded for this,
+  // same guard holeRounds() already applies for the same reason.
   const pickCounts = new Map();
-  list.forEach((entry) => {
-    (entry.picks || []).forEach((name) => {
-      pickCounts.set(name, (pickCounts.get(name) || 0) + 1);
+  if (typeof DraftEngine !== "undefined") {
+    list.forEach((entry) => {
+      const teams = entry.teams || (entry.league && entry.league.teams);
+      if (!teams || !entry.picks || !entry.picks.length) return;
+      const totalRounds = Math.floor(entry.picks.length / teams);
+      for (let round = 1; round <= totalRounds; round++) {
+        const overall = DraftEngine.overallOf(round, entry.mySlot, teams);
+        const name = entry.picks[overall - 1];
+        if (name) pickCounts.set(name, (pickCounts.get(name) || 0) + 1);
+      }
     });
-  });
+  }
   let topName = null, topCount = 0;
   pickCounts.forEach((count, name) => { if (count > topCount) { topCount = count; topName = name; } });
   if (topName && byName.has(topName)) {
     stats.mostDrafted = { name: topName, count: topCount, total: list.length };
   }
 
-  // Round 1 position — only entries with a resolvable first pick count.
-  // Top four positions by share, matching what real round-1 frequency
-  // actually produces (RB/WR dominate; a fixed position list would print
-  // zeroes for whichever two show up least, which the design doesn't ask
-  // for and a real board wouldn't usually need).
-  const posCounts = new Map();
-  let round1Resolved = 0;
-  list.forEach((entry) => {
-    const name = entry.round1Pick;
-    const player = name && byName.get(name);
-    if (!player) return;
-    round1Resolved++;
-    posCounts.set(player.pos, (posCounts.get(player.pos) || 0) + 1);
-  });
-  if (round1Resolved > 0) {
-    stats.round1Position = [...posCounts.entries()]
-      .map(([pos, count]) => ({ pos, pct: Math.round((count / round1Resolved) * 100) }))
-      .sort((a, b) => b.pct - a.pct)
-      .slice(0, 4);
+  // Average round for your first pick at each position — replaced a
+  // round-1-only breakdown that was RB or WR on nearly every draft (ADP puts
+  // backs and receivers at the top of every board, so round 1 alone rarely
+  // varies) and so never said anything a reader didn't already know. This
+  // walks every round of your own picks instead — the same overall-index
+  // reconstruction mostDrafted and holeRounds already use — and records the
+  // first round each position showed up, per entry, then averages that
+  // across every entry where it showed up at all. A position you have never
+  // actually drafted contributes nothing rather than a zero, the same
+  // "absent, not zeroed" rule the rest of this function already follows.
+  const firstRoundSums = {}; // pos -> { sum, n }
+  if (typeof DraftEngine !== "undefined") {
+    list.forEach((entry) => {
+      const teams = entry.teams || (entry.league && entry.league.teams);
+      if (!teams || !entry.picks || !entry.picks.length) return;
+      const totalRounds = Math.floor(entry.picks.length / teams);
+      const seenPos = new Set();
+      for (let round = 1; round <= totalRounds; round++) {
+        const overall = DraftEngine.overallOf(round, entry.mySlot, teams);
+        const name = entry.picks[overall - 1];
+        const player = name && byName.get(name);
+        if (!player || seenPos.has(player.pos)) continue;
+        seenPos.add(player.pos);
+        const row = firstRoundSums[player.pos] || { sum: 0, n: 0 };
+        row.sum += round;
+        row.n += 1;
+        firstRoundSums[player.pos] = row;
+      }
+    });
+  }
+  const avgRoundByPosition = POSITIONS
+    .filter((pos) => firstRoundSums[pos])
+    .map((pos) => ({ pos, avgRound: firstRoundSums[pos].sum / firstRoundSums[pos].n }))
+    .sort((a, b) => a.avgRound - b.avgRound);
+  if (avgRoundByPosition.length > 0) {
+    stats.avgRoundByPosition = avgRoundByPosition;
   }
 
   // Grade, last 12 — most recent 12 with a stored score, oldest first so the
@@ -6408,7 +6439,10 @@ function historyStats() {
     const delta = avg(late) - avg(early);
     const trend = delta > 3 ? "Trending up" : delta < -3 ? "Trending down" : "Holding steady";
     stats.gradeLast12 = {
-      entries: graded.map((e) => ({ id: e.id, score: e.gradeScore, grade: e.grade })),
+      // completedAt rides along for the hover tooltip on the chart — a
+      // point on a trend line is more useful with "when" attached to it,
+      // and it costs nothing: the raw epoch is already sitting on the entry.
+      entries: graded.map((e) => ({ id: e.id, score: e.gradeScore, grade: e.grade, completedAt: e.completedAt })),
       // The two real, actual grades at either end of the window — not an
       // invented "average letter", which the score->letter mapping (rank
       // within that one room) has no clean way to produce across different
@@ -6434,21 +6468,28 @@ function historyStats() {
   }
 
   // Weakest spot — the position that shows up most often as a genuinely
-  // below-replacement starter, and what share of (weakestSpot-bearing)
-  // entries it accounts for. Entries with no weakestSpot at all (nothing in
-  // the lineup was below replacement, or recorded before this field
-  // existed) don't count toward the denominator either way.
+  // below-replacement starter, and what share of your rosters it accounts
+  // for. The denominator is every entry this field was actually recorded
+  // on — weakestSpot is stored as null when nothing was below replacement,
+  // and that still counts here; only entries from before this field
+  // existed, where the key is missing outright, are excluded. This used to
+  // divide by the count of weak entries alone (entries where *something*
+  // was below replacement), which silently dropped every genuinely clean
+  // roster from the denominator: measured on a 10-entry sample with 2 clean
+  // rosters and 8 sharing the same weak position, the card read "100%" when
+  // the true share of all rosters was 80%. The card's own copy says "of
+  // your rosters," and the denominator has to actually mean that.
   const weakCounts = new Map();
-  let weakTotal = 0;
+  let recordedTotal = 0;
   list.forEach((entry) => {
-    if (!entry.weakestSpot) return;
-    weakTotal++;
-    weakCounts.set(entry.weakestSpot, (weakCounts.get(entry.weakestSpot) || 0) + 1);
+    if (entry.weakestSpot === undefined) return;
+    recordedTotal++;
+    if (entry.weakestSpot) weakCounts.set(entry.weakestSpot, (weakCounts.get(entry.weakestSpot) || 0) + 1);
   });
-  if (weakTotal > 0) {
+  if (recordedTotal > 0) {
     let pos = null, count = 0;
     weakCounts.forEach((c, p) => { if (c > count) { count = c; pos = p; } });
-    stats.weakestSpot = { pos, pct: Math.round((count / weakTotal) * 100) };
+    if (pos) stats.weakestSpot = { pos, pct: Math.round((count / recordedTotal) * 100) };
   }
 
   // Format split — average gradeScore per scoring format. Needs two formats
@@ -6577,6 +6618,81 @@ function historyStats() {
         ? withRoomVorp.reduce((sum, e) => sum + e.roomAvgRosterVorp, 0) / withRoomVorp.length
         : null
     };
+  }
+
+  // The rest of this block is the all-drafts report's own data — the
+  // Locker's strip above only ever needed a handful of aggregates; a
+  // standalone report asks more of the same history and needs a few more.
+
+  // Average weighted score, and the range it moved across — the same
+  // gradeScore gradeLast12 already buckets, just averaged instead of
+  // charted.
+  const scored = list.filter((e) => typeof e.gradeScore === "number");
+  if (scored.length) {
+    stats.avgScore = {
+      value: scored.reduce((sum, e) => sum + e.gradeScore, 0) / scored.length,
+      best: Math.max(...scored.map((e) => e.gradeScore)),
+      worst: Math.min(...scored.map((e) => e.gradeScore))
+    };
+  }
+
+  // Average finish, as a percentile rather than a raw "X of Y" — the same
+  // fraction LockerTable.jsx's own finishColor() already uses. A raw rank
+  // cannot be averaged honestly across mixed league sizes (5th of 10 and
+  // 5th of 12 are not the same finish), and this report has no way to know
+  // whether every entry shares one team count the way a single draft's own
+  // standings do.
+  const finished = list.filter((e) => typeof e.projectedRank === "number" && (e.teams || (e.league && e.league.teams)));
+  if (finished.length) {
+    const pctOf = (e) => {
+      const teams = e.teams || e.league.teams;
+      return Math.max(0, Math.min(100, (1 - (e.projectedRank - 1) / teams) * 100));
+    };
+    stats.avgFinishPct = finished.reduce((sum, e) => sum + pctOf(e), 0) / finished.length;
+  }
+
+  // Grade history, uncapped — gradeLast12 above stays capped at 12 for the
+  // strip's small card; the standalone report has the room to chart every
+  // graded draft there is.
+  if (scored.length >= 2) {
+    stats.gradeHistory = scored
+      .slice()
+      .reverse()
+      .map((e) => ({ id: e.id, score: e.gradeScore, grade: e.grade, completedAt: e.completedAt }));
+  }
+
+  // Draft value tendency, by position — the same "pick number minus board
+  // rank" gap CLAUDE.md documents for the single-draft report's Best
+  // Value/Biggest Reach (positive means a bargain, taken later than the
+  // board had him; negative means a reach). Walks every one of your own
+  // picks at a position, not just the first — a reach tendency describes
+  // the position as a whole, not your first look at it. Kickers and
+  // defenses are excluded, the same rule draft value already follows
+  // everywhere else: the app schedules their timing itself, so it is never
+  // a judgement about the drafting.
+  const valueSums = {}; // pos -> { sum, n }
+  if (typeof DraftEngine !== "undefined") {
+    list.forEach((entry) => {
+      const teams = entry.teams || (entry.league && entry.league.teams);
+      if (!teams || !entry.picks || !entry.picks.length) return;
+      const totalRounds = Math.floor(entry.picks.length / teams);
+      for (let round = 1; round <= totalRounds; round++) {
+        const overall = DraftEngine.overallOf(round, entry.mySlot, teams);
+        const name = entry.picks[overall - 1];
+        const player = name && byName.get(name);
+        if (!player || FORCED_LATE[player.pos]) continue;
+        const row = valueSums[player.pos] || { sum: 0, n: 0 };
+        row.sum += overall - player.overall;
+        row.n += 1;
+        valueSums[player.pos] = row;
+      }
+    });
+  }
+  const avgValueByPosition = Object.keys(valueSums)
+    .map((pos) => ({ pos, avgGap: valueSums[pos].sum / valueSums[pos].n }))
+    .sort((a, b) => b.avgGap - a.avgGap);
+  if (avgValueByPosition.length > 0) {
+    stats.avgValueByPosition = avgValueByPosition;
   }
 
   // The launcher's quick-start presets — each one names a real past entry
@@ -6734,6 +6850,18 @@ function openHistoryDraft(id) {
     return false;
   }
 
+  // render() below calls saveDraft(), which unconditionally overwrites
+  // SAVE_KEY whenever state.started is true — exactly right for a real live
+  // draft persisting itself, and exactly wrong here, where "started" only
+  // means "this replay has state.picks to look at." Reopening a finished
+  // draft from the Locker would silently overwrite a genuinely unfinished
+  // one sitting in SAVE_KEY, and the Locker shows both the Locker table and
+  // the in-progress "Resume" band on the same screen — a reader can open a
+  // past draft's analysis while a real one is still waiting to be resumed.
+  // Snapshotting and restoring the key around this call means viewing
+  // history can never cost you the draft you have not finished yet.
+  const savedGame = localStorage.getItem(SAVE_KEY);
+
   Object.assign(league, entryLeague);
   buildBoard();
   const resolved = entry.picks.map((name) => board.find((p) => p.name === name));
@@ -6759,7 +6887,41 @@ function openHistoryDraft(id) {
   resetClock();
   render();
   window.scrollTo(0, 0);
+
+  try {
+    if (savedGame === null) localStorage.removeItem(SAVE_KEY);
+    else localStorage.setItem(SAVE_KEY, savedGame);
+  } catch (err) {
+    // Same posture as saveDraft() itself: private browsing and full quotas
+    // both land here, and losing the restore is not worth breaking the
+    // history view over.
+  }
+
   return true;
+}
+
+// The counterpart to openHistoryDraft(), for a reader who closes the report
+// without ever leaving the Lobby. openHistoryDraft() sets state.started to
+// treat the replay as a real draft (draftOver(), onTheClock() and the rest
+// all read it), and nothing put it back — so pressing "Start mock draft"
+// right after closing the report skipped the whole entry screen and landed
+// on what looked like an already-finished draft, because state.started was
+// still true and state.picks still held the historical entry's 140 picks.
+//
+// goHome() looks like the obvious fix and is the wrong one: it also
+// disconnects an active room (Live.disconnect()), which is exactly right
+// for a real "leave the draft" action and exactly wrong for "I looked at an
+// old draft's report from the Lobby" — #/drafts is reachable while a room
+// is still in its lobby (a direct link, per DraftRoom.jsx's own comment),
+// so a room in the middle of being formed could be sitting behind this
+// screen the whole time the report was open. This clears only what
+// openHistoryDraft() itself set, and touches nothing room- or save-related.
+function closeHistoryDraft() {
+  state.picks = [];
+  state.started = false;
+  state.paused = false;
+  board.forEach((p) => { p.drafted = false; p.jitter = 0; });
+  render();
 }
 
 function showResumeBar() {
@@ -8220,6 +8382,9 @@ window.JukeEngine = {
   // does for the single in-progress save, extended to one entry among many.
   deleteHistoryDraft: (id) => writeHistory(readHistory().filter((e) => e.id !== id)),
   openHistoryDraft: openHistoryDraft,
+  // The counterpart — see closeHistoryDraft()'s own comment for why this is
+  // not just goHome() again.
+  closeHistoryDraft: closeHistoryDraft,
   inProgressSummary: inProgressSummary,
   resumeSavedDraft:  resumeSavedDraft,
   // Added for the Draft Insights Dashboard (DraftInsightsDashboard.jsx).

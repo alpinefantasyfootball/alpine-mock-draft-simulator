@@ -1,10 +1,12 @@
-import { useReducer } from 'react'
+import { useReducer, useState } from 'react'
 import { useEngine, useJukeTick } from '../hooks/useJukeEngine.js'
 import NewMockPanel from './NewMockPanel.jsx'
 import TendenciesStrip from './TendenciesStrip.jsx'
 import InProgressBand from './InProgressBand.jsx'
 import LockerTable from './LockerTable.jsx'
 import WhatToRunNext from './WhatToRunNext.jsx'
+import DraftInsightsDashboard from './DraftInsightsDashboard.jsx'
+import AllDraftsInsights from './AllDraftsInsights.jsx'
 
 // Replaces the old tabbed card list (DraftHistoryCard.jsx,
 // DraftInProgressCard.jsx, both deleted) with the handoff's launcher-and-
@@ -22,6 +24,24 @@ export default function DraftLocker({ onStartNew, problem, lobbySlot, onSetLobby
   // the engine tick alone — forced locally instead, same as the previous
   // implementation did.
   const [, forceLocal] = useReducer((x) => x + 1, 0)
+  // Which history entry's report is open, if any — analyzing a past draft
+  // used to mean navigating to #/draft-room and mounting the entire live
+  // Cockpit (board, player pool, Queue/Roster/Chat) underneath the insights
+  // modal, with the Analysis tab rendering the same numbers a second time
+  // beneath it. DraftInsightsDashboard is self-contained (engine/league/
+  // mySlot/viewSlot/onClose, nothing else), so it can sit directly over the
+  // Lobby instead — no route change, nothing else to mount.
+  const [analyzingId, setAnalyzingId] = useState(null)
+  // Which team's report the dashboard shows — yours on open, or another
+  // seat's if a future caller wants that; kept separate from mySlot the
+  // same way DraftRoom.jsx's own insightsSlot is.
+  const [insightsSlot, setInsightsSlot] = useState(0)
+  // The aggregate report, across every draft rather than one — a second,
+  // independent overlay flag rather than a variant of analyzingId, since
+  // the two can never be open at once but are opened from different places
+  // (a Locker row's kebab menu vs. the tendencies strip's own button) and
+  // answer different questions (one draft's report vs. every draft's).
+  const [showAllDrafts, setShowAllDrafts] = useState(false)
 
   if (!engine) return null
 
@@ -38,7 +58,11 @@ export default function DraftLocker({ onStartNew, problem, lobbySlot, onSetLobby
 
   const resume = () => { engine.resumeSavedDraft(); location.hash = '#/draft-room' }
   const discard = () => { engine.clearSave(); forceLocal() }
-  const analyze = (id) => { engine.openHistoryDraft(id); location.hash = '#/draft-room' }
+  const analyze = (id) => {
+    if (!engine.openHistoryDraft(id)) return
+    setInsightsSlot(engine.mySlot())
+    setAnalyzingId(id)
+  }
   const deleteEntry = (id) => { engine.deleteHistoryDraft(id); forceLocal() }
 
   return (
@@ -131,13 +155,32 @@ export default function DraftLocker({ onStartNew, problem, lobbySlot, onSetLobby
           onOpenSettings={onOpenSettings}
         />
         <div className="min-w-0 flex-1">
-          <TendenciesStrip stats={stats} />
+          <TendenciesStrip stats={stats} onOpenAllDrafts={() => setShowAllDrafts(true)} />
         </div>
       </div>
 
       <div className="min-h-0 flex-1">
         <LockerTable entries={completed} onAnalyze={analyze} onDeleteConfirmed={deleteEntry} />
       </div>
+
+      {analyzingId && (
+        <DraftInsightsDashboard
+          engine={engine}
+          league={league}
+          mySlot={engine.mySlot()}
+          viewSlot={insightsSlot}
+          onViewSlot={setInsightsSlot}
+          onClose={() => { engine.closeHistoryDraft(); setAnalyzingId(null) }}
+        />
+      )}
+
+      {showAllDrafts && (
+        <AllDraftsInsights
+          stats={stats}
+          scoringNames={engine.scoringNames() || {}}
+          onClose={() => setShowAllDrafts(false)}
+        />
+      )}
     </div>
   )
 }
