@@ -15,7 +15,18 @@ const STATUS_TEXT = {
 // from hasRoom()/the hash afterwards). A guest typing in a code is a
 // different action with no such case to protect — that path is left alone,
 // and still auto-enters exactly as it always has.
-export default function RoomPanel({ onCreated }) {
+//
+// onEnter: the seat-picker/live board is one call away (DraftRoom.jsx's own
+// enterDraftRoom), not required. Its only caller today is
+// DraftWithFriendsModal.jsx, where a host who just created a room otherwise
+// had no way forward from this exact screen except closing the modal by
+// hand and re-finding "Start mock draft" on the Lobby card underneath —
+// two clicks to do one thing, and the second one wasn't even visible from
+// here. suppressAutoEnterRef (DraftRoom.jsx) is what keeps this room from
+// entering itself the instant it exists; this button is the deliberate,
+// explicit version of the same action, for once the host has actually
+// copied the link below.
+export default function RoomPanel({ onCreated, onEnter }) {
   const engine = useEngine()
   useJukeTick(engine)
   const [joinCode, setJoinCode] = useState('')
@@ -167,6 +178,23 @@ export default function RoomPanel({ onCreated }) {
           {copied ? 'Copied' : 'Copy'}
         </button>
       </div>
+
+      {/* The one gradient CTA on this screen, same rule NewMockPanel.jsx's
+          own comment already states about its "Start mock draft"/"Draft
+          with friends" pair: exactly one thing shouting for attention.
+          Copy above stays an outline button rather than competing with
+          this — send the link first, enter whenever you're ready, in
+          either order. py-3 text-sm matches "Create a room" above,
+          measured at 44px (12+12 padding, 20px line-height), the primary-
+          CTA floor. */}
+      <button
+        type="button"
+        onClick={onEnter}
+        className="mt-4 w-full rounded-full bg-gradient-to-r from-[#00E5FF] to-[#7B1FA2] py-3 text-sm font-semibold text-white
+                   shadow-glass transition-all duration-200 hover:scale-[1.02] hover:animate-pulse-glow"
+      >
+        Enter draft room
+      </button>
 
       <div className="mt-6 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wide text-white/30">
         <Users className="h-3.5 w-3.5" />

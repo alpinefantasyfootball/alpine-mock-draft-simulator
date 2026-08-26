@@ -14,22 +14,33 @@ import RoomPanel from './RoomPanel.jsx'
 // that the instant createRoom() resolves would swap this modal for the
 // live Cockpit before the host ever saw the link RoomPanel just rendered
 // — "surfaces the invite link immediately" and "lands on the seat-picker
-// after" can't both be true of the same synchronous tick. Closing this
-// (or leaving it open) and pressing the card's own "Start mock draft" —
-// which already knows to route a room through the seat-picker rather
-// than skipping it — is what gets you there once the link is copied.
+// after" can't both be true of the same synchronous tick.
+//
+// That used to mean closing this by hand and pressing the card's own
+// "Start mock draft" underneath to get any further — which read as two
+// clicks to do one thing, and the second control wasn't even visible from
+// here. RoomPanel's own "Enter draft room" button (present once a room
+// exists) is the explicit version of that same next step, reachable
+// without leaving this screen: onEnter is enterDraftRoom (DraftRoom.jsx),
+// and closing this modal along with it is this component's own job, not
+// RoomPanel's — RoomPanel doesn't know it's inside a modal at all.
 //
 // onCreated is threaded straight through to RoomPanel rather than
 // duplicated here — see DraftRoom.jsx's own suppressAutoEnterRef comment
 // for what it's actually for (keeping the Lobby's own room-creation action
 // from tripping the same auto-enter effect a followed invite link relies
 // on).
-export default function DraftWithFriendsModal({ onClose, onCreated }) {
+export default function DraftWithFriendsModal({ onClose, onCreated, onEnter }) {
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
+
+  const handleEnter = () => {
+    onEnter()
+    onClose()
+  }
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 p-3 backdrop-blur-sm">
@@ -43,7 +54,7 @@ export default function DraftWithFriendsModal({ onClose, onCreated }) {
         >
           <X className="h-4 w-4" />
         </button>
-        <RoomPanel onCreated={onCreated} />
+        <RoomPanel onCreated={onCreated} onEnter={handleEnter} />
       </div>
     </div>
   )

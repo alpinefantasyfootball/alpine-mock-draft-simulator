@@ -614,6 +614,21 @@ function onDraftRoomRoute() {
   return path === "draft-room";
 }
 
+/* Split out of applyRoute() so the hashchange listener's bare-anchor guard
+   (below) can restore view-home/shellbar without running the rest of
+   applyRoute() — its scrollTo(0, 0) and its closeRooms()/stopSim()/
+   renderHome() teardown branch. Recomputes hideHome fresh off the hash
+   rather than the guard hardcoding "false": a bare fragment's legacyPath
+   can never be "drafts" or "draft-room", so it always resolves to false
+   here, but the point is not writing that fact down a second time next to
+   this one. */
+function syncHomeVisibility() {
+  const legacyPath = location.hash.replace(/^#\/?/, "").split("?")[0];
+  const hideHome = onDraftRoomRoute() || legacyPath === "drafts";
+  shellbar.hidden = hideHome;
+  $("view-home").hidden = hideHome;
+}
+
 function applyRoute() {
   /* #/draft is retired. Every Draft Room feature built since the React
      rewrite lives only on #/draft-room, so the old route was a second,
@@ -689,13 +704,9 @@ function applyRoute() {
      would silently undo that on every trip to the Locker. Two questions,
      two answers, even though today they overlap partway. */
   const onLegacyDraft = false;
-  const legacyPath = location.hash.replace(/^#\/?/, "").split("?")[0];
-  const hideHome = onDraftRoomRoute() || legacyPath === "drafts";
-
-  shellbar.hidden = hideHome;
-  appbar.hidden   = !onLegacyDraft;
-  $("view-home").hidden = hideHome;
-  $("view-app").hidden  = !onLegacyDraft;
+  syncHomeVisibility();
+  appbar.hidden  = !onLegacyDraft;
+  $("view-app").hidden = !onLegacyDraft;
   tabrow.hidden = !(onLegacyDraft && state.started);
 
   /* !onDraftRoomRoute() here, not the old `onDraft` (route() === "draft",
@@ -8313,21 +8324,53 @@ window.addEventListener("hashchange", function () {
   const now = typeof Live === "undefined" ? null : Live.state().code;
   if (code && code !== now) joinRoom(code, false);
 
-  /* Not called at all for a bare in-page anchor (#rooms, #proof, #scores —
-     anything not starting with "#/"; an empty hash still runs it). Every
-     real route in this app is "#/something"; applyRoute() ends in an
-     unconditional window.scrollTo(0, 0), which is correct for a real route
-     change (leaving the Draft Room, arriving at "#/") and wrong for
-     everything else — it fights the browser's own native scroll-to-anchor,
-     so the hash updates and the page snaps straight back to the top
+  /* applyRoute() itself is not called for a bare in-page anchor (#rooms,
+     #proof, #scores — anything not starting with "#/"; an empty hash still
+     runs it). Every real route in this app is "#/something"; applyRoute()
+     ends in an unconditional window.scrollTo(0, 0), which is correct for a
+     real route change (leaving the Draft Room, arriving at "#/") and wrong
+     for everything else — it fights the browser's own native scroll-to-
+     anchor, so the hash updates and the page snaps straight back to the top
      instead of landing on the section a click just asked for. This was
      already true of Hero.jsx's "Explore The Rooms" link before the
      homepage redesign added a full anchor nav that depends on it working —
      same bug, just newly load-bearing. The one caller that must still see
      a bare fragment (a fresh page load landing directly on #rooms from a
      bookmark or shared link) is the boot-time applyRoute() call below,
-     which isn't behind this hashchange guard at all. */
-  if (location.hash && location.hash.charAt(1) !== "/") return;
+     which isn't behind this hashchange guard at all.
+
+     syncHomeVisibility() still has to run, though. SiteNav.jsx's own
+     comment claims these same-page anchors "still work when clicked from
+     the Locker... following one of these un-mounts the fixed Locker
+     overlay and lets the browser's native anchor scroll land on the
+     homepage section underneath" — true of the React side (useHashActive
+     only matches "#/drafts", so the Locker overlay does unmount), false of
+     this file's own side: #/drafts leaves view-home/shellbar hidden
+     (applyRoute()'s hideHome, above), and skipping applyRoute() entirely
+     for the #proof hashchange that follows means nothing ever sets that
+     back. The Locker overlay unmounts on cue and reveals a #root that is
+     still sitting inside a hidden ancestor — the homepage renders
+     correctly and nobody can see any of it. Confirmed live: following "How
+     It Works" from the Lobby left document.body.innerText at four
+     characters ("JUKE") with #root's full markup intact underneath.
+
+     Un-hiding still isn't enough on its own to land on the named section,
+     only to stop the page being blank: the browser's own native
+     scroll-to-fragment runs as part of updating location.hash, which is
+     earlier than this listener — so on the very hashchange that reveals
+     #proof, the browser already tried and gave up scrolling to an element
+     that was still display:none at that instant, and it does not retry
+     once the element becomes visible a moment later. scrollIntoView() here
+     redoes that native attempt by hand, now that the target can actually
+     be scrolled to; scroll-behavior/scroll-padding-top (index.css) apply
+     to it exactly as they do to the native version, so it still eases in
+     under the fixed header rather than jumping straight to its top edge. */
+  if (location.hash && location.hash.charAt(1) !== "/") {
+    syncHomeVisibility();
+    const target = document.getElementById(location.hash.slice(1));
+    if (target) target.scrollIntoView();
+    return;
+  }
   applyRoute();
 });
 

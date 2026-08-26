@@ -620,6 +620,7 @@ export default function DraftRoom() {
           <DraftWithFriendsModal
             onClose={() => setFriendsModalOpen(false)}
             onCreated={handleRoomCreatedFromLobby}
+            onEnter={enterDraftRoom}
           />
         )}
 

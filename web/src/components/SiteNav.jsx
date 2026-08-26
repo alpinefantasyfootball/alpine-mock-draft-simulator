@@ -16,6 +16,21 @@
 // homepage section underneath — the same #root that never unmounts, per
 // main.jsx.
 //
+// That's only the React half of it. #root itself sits inside
+// app.js's #view-home, which applyRoute() hides whenever the hash is
+// "#/drafts" or "#/draft-room" (see hideHome there) — and the Locker is
+// reached at "#/drafts". A same-page anchor's hashchange deliberately
+// skips calling applyRoute() at all (its own comment explains why:
+// scrollTo(0, 0) fighting the native anchor scroll), which used to mean
+// nothing ever set view-home visible again — the Locker overlay un-mounts
+// exactly as this comment says, revealing a #root that renders correctly
+// and sits inside an ancestor still carrying `hidden`. Fixed by having
+// that hashchange guard call syncHomeVisibility() (app.js) before
+// returning, rather than nothing at all. If a future change moves what
+// hides #view-home, re-check this path specifically — it's the one case
+// that reaches applyRoute()'s hiding logic without ever reaching
+// applyRoute() itself.
+//
 // Header.jsx keeps its own literal copy of NAV_LINKS rather than importing
 // this one — the homepage is out of scope for the pass that added this
 // file, so nothing there was touched. The two lists are identical today;
