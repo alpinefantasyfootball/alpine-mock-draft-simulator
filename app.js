@@ -2171,6 +2171,17 @@ function goHome() {
   // board is rebuilt rather than just redrawn.
   refreshSetup();
   window.scrollTo(0, 0);
+  // DraftRoom.jsx's own "have I clicked past the Locker" flag has no other
+  // way to hear about this — it is local, UI-only React state, set true by
+  // three separate places and, until this, never set back. goHome() is
+  // vanilla JS with no reference to that component, so it says so the same
+  // way headerInfo() already tells React something changed: an event on
+  // window. Without this, "Discard draft" and "Leave the room" — the two
+  // real callers of restart(), reachable from the header kebab on every
+  // draft — left that flag stuck true, and the very next Lobby visit fell
+  // through past its own "nothing entered yet" guard into a stale,
+  // nothing-going-on seat-picker instead of back to the Locker.
+  window.dispatchEvent(new Event("juke:home"));
 }
 
 // The destructive one. Clear first, so the resume bar has nothing to offer.

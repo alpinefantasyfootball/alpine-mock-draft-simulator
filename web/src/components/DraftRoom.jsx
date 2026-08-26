@@ -291,6 +291,24 @@ export default function DraftRoom() {
   // by definition — there's no state where started should be true and
   // this should still be showing Settings & Locker.
   useEffect(() => { if (started) setEnteredRoom(true) }, [started])
+  // The other half of the effect above: enteredRoom had three ways to
+  // become true and, until this, none to become false again. goHome()
+  // (app.js — the real function behind restart(), which is both "Discard
+  // draft" and "Leave the room" in the header kebab) is vanilla JS with no
+  // reference to this component's state, so it says so on window the same
+  // way headerInfo() already does for "juke:header". Without this, discard
+  // or leave cleared state.started and disconnected the room exactly as
+  // they should, but enteredRoom stayed stuck true from whatever had set
+  // it earlier — and the next Lobby visit fell straight through its own
+  // draftsActive || !enteredRoom guard into a stale, nothing-going-on
+  // seat-picker instead of back to the Locker. A page load never needs
+  // this — enteredRoom starts false — so there is nothing to reconcile on
+  // mount, only on the way out.
+  useEffect(() => {
+    const onHome = () => setEnteredRoom(false)
+    window.addEventListener('juke:home', onHome)
+    return () => window.removeEventListener('juke:home', onHome)
+  }, [])
   // Polls the engine directly on rAF rather than waiting on another
   // "juke:header" tick: app.js's deferred-data retry (see the boot at its
   // foot) only re-runs refreshSetup() while state.started is still false,
