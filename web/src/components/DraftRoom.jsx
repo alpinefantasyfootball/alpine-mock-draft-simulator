@@ -4,6 +4,7 @@ import DraftLocker from './DraftLocker.jsx'
 import DraftLogDock from './DraftLogDock.jsx'
 import DraftCockpitHeader from './DraftCockpitHeader.jsx'
 import DraftMenuOverlay from './DraftMenuOverlay.jsx'
+import DraftWithFriendsModal from './DraftWithFriendsModal.jsx'
 import DraftBoardGrid from './DraftBoardGrid.jsx'
 import { SORT_DEFAULT_DIR } from './PlayerQueueSidebar.jsx'
 import PlayerHub from './PlayerHub.jsx'
@@ -132,6 +133,11 @@ export default function DraftRoom() {
   const TRAY = ['hidden', 'default', 'raised']
   const [tray, setTray] = useState('default')
   const [settingsOpen, setSettingsOpen] = useState(false)
+  // The Lobby's direct "Draft with friends" popover — see
+  // DraftWithFriendsModal.jsx. Separate from settingsOpen: the two used to
+  // be the same modal (Edit setup -> Invite tab), and collapsing them back
+  // into one flag would silently re-bury this behind Edit setup again.
+  const [friendsModalOpen, setFriendsModalOpen] = useState(false)
   // The seat, shared between the form's dropdown and the lobby board.
   const [lobbySlot, setLobbySlot] = useState(0)
   // Three screens, not two: Settings & Locker (league config, nothing
@@ -457,6 +463,46 @@ export default function DraftRoom() {
     setEnteredRoom(true)
   }
 
+  // Homepage v4 pass 0's lobby -> draft room sonar placement. Pressing
+  // Start flips `starting` true; the poll effect below drops it once the
+  // engine both reports started AND has real data loaded, held to a
+  // floor — see `starting`'s own declaration for the full reasoning.
+  // Factored out rather than left inline on the preDraft header's
+  // onStartDraft, because the solo-skip path below needs the identical
+  // sequence and a second copy of "start the sonar, then start the
+  // engine" is exactly the kind of duplication that drifts.
+  const beginDraft = () => {
+    startingSinceRef.current = performance.now()
+    setStarting(true)
+    /* The clock comes from state, which is where it lives — the New Mock
+       card and the settings modal both write it through setClockLength().
+       Reading it here rather than holding a second copy is what stopped
+       either control being decorative. */
+    engine.startDraft({ mySlot: lobbySlot, clockLength: engine.clockLength() })
+  }
+
+  // The Lobby's "Start mock draft" button. A room still has to go through
+  // the seat-picker — somebody has to actually claim a chair before
+  // "Start for everyone" means anything — but solo has nobody else to wait
+  // on, and the seat/clock it would ask for on that screen are exactly the
+  // ones already chosen on the New Mock card a moment ago. Making somebody
+  // confirm a choice they just made is the "unnecessary second step" this
+  // was built to remove.
+  const handleStartNew = () => {
+    if (roomActive) { enterDraftRoom(); return }
+    location.hash = '#/draft-room'
+    setEnteredRoom(true)
+    beginDraft()
+  }
+
+  // The Lobby's direct multiplayer action — createRoom() is the exact call
+  // RoomPanel.jsx's own "Create a room" button already makes; this just
+  // reaches it without an Edit setup -> Invite detour first. Deliberately
+  // doesn't also flip enteredRoom: see DraftWithFriendsModal.jsx's own
+  // comment on why the link has to be seen before the screen holding it
+  // is swapped out from under the host.
+  const handleDraftWithFriends = () => setFriendsModalOpen(true)
+
   // Before a draft exists, this is the exact same real form the setup
   // page uses — league size, scoring, pick clock, draft position, and its
   // own Resume/Discard for a save in progress — rather than this page
@@ -505,6 +551,10 @@ export default function DraftRoom() {
           />
         )}
 
+        {friendsModalOpen && (
+          <DraftWithFriendsModal onClose={() => setFriendsModalOpen(false)} />
+        )}
+
         {/* pb-[calc(58px+env(safe-area-inset-bottom))]: MobileAppTabBar's own
             fixed footprint, reserved on the scroll container the same way
             PlayerHub's mobile sheet already reserves its own clearance
@@ -519,11 +569,13 @@ export default function DraftRoom() {
               the launcher's own CTA from working, same rule LobbyBar used to
               enforce before this screen owned the action itself. */}
           <DraftLocker
-            onStartNew={enterDraftRoom}
+            onStartNew={handleStartNew}
             problem={problem}
             lobbySlot={lobbySlot}
+            roomActive={roomActive}
             onSetLobbySlot={setLobbySlot}
             onOpenSettings={() => setSettingsOpen(true)}
+            onDraftWithFriends={handleDraftWithFriends}
           />
         </div>
         <MobileAppTabBar />
@@ -554,6 +606,19 @@ export default function DraftRoom() {
     const startLabel = roomActive
       ? (engine.isHost() ? 'Start for everyone' : 'Waiting for the host')
       : 'Start draft'
+    // "Start for everyone" alone is 163px at 375px width — before the sound
+    // icon joined this row it was already a single pixel from clipping past
+    // the edge (measured), and the icon's own 34px+gap pushed the room-host
+    // case to a 43px overflow and even solo's shorter "Start draft" to 20px.
+    // Same lever this bar already pulls everywhere else it's run out of
+    // room (Round N ·, your turn): shorten the text rather than drop a
+    // control. Computed beside startLabel because this is the one place
+    // that already knows which of the three meanings is live — pattern-
+    // matching the string back apart inside the header would be a second,
+    // fragile copy of this same branch.
+    const startLabelShort = roomActive
+      ? (engine.isHost() ? 'Start' : 'Waiting…')
+      : 'Start'
 
     return (
       <div className="fixed inset-0 z-[60] flex flex-col bg-slate text-white">
@@ -561,24 +626,14 @@ export default function DraftRoom() {
           preDraft
           problem={problem}
           startLabel={startLabel}
+          startLabelShort={startLabelShort}
           startDisabled={!!problem || (roomActive && !engine.isHost())}
-          onStartDraft={() => {
-            // Homepage v4 pass 0's lobby -> draft room loader — see the
-            // starting state and its poll effect above. Timestamp before
-            // the engine call, not after: startDraft() is synchronous, but
-            // the 400ms floor is measured from the moment the reader acted,
-            // not from whenever this closure happens to finish running.
-            startingSinceRef.current = performance.now()
-            setStarting(true)
-            /* The clock comes from state, which is where it lives — the
-               settings modal writes it through setClockLength(). Reading it
-               here rather than holding a second copy is what stopped the
-               modal's control being decorative. */
-            engine.startDraft({ mySlot: lobbySlot, clockLength: engine.clockLength() })
-          }}
+          onStartDraft={beginDraft}
           autopick={soloAutopick}
           onToggleAutopick={handleToggleAutopick}
           onOpenMenu={() => setSettingsOpen(true)}
+          soundOn={soundOn}
+          onToggleSound={handleToggleSound}
         />
 
         {settingsOpen && (
@@ -846,6 +901,8 @@ export default function DraftRoom() {
         autopick={autopick}
         onToggleAutopick={handleToggleAutopick}
         onOpenMenu={() => setMenuOpen(true)}
+        soundOn={soundOn}
+        onToggleSound={handleToggleSound}
       />
       {menuOpen && (
         <DraftMenuOverlay
@@ -853,8 +910,6 @@ export default function DraftRoom() {
           onClose={() => setMenuOpen(false)}
           onOpenSettings={() => setSettingsOpen(true)}
           inRoom={roomActive}
-          soundOn={soundOn}
-          onToggleSound={handleToggleSound}
           discardLabel={hasRoomVal ? 'Leave the room' : 'Discard draft'}
           discardDanger={!hasRoomVal}
           onDiscard={handleDiscard}

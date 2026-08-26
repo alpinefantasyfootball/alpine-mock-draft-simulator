@@ -26,13 +26,17 @@ import { Check, Copy } from 'lucide-react'
 // that mid-draft would silently discard whatever's been picked so far —
 // exactly the kind of destructive action this file's own Discard control
 // already puts behind a confirm. Needs real engine work, not a button.
+// Draft sounds used to have a line here too ("Turn draft sounds on/off"),
+// removed the moment DraftCockpitHeader.jsx grew a real, always-visible
+// icon for it in both its preDraft and live modes. Keeping both would be
+// the same control reachable two ways showing two different affordances
+// for one boolean — exactly the kind of duplicate this file's own comment
+// above already argues against for Pause and Undo.
 export default function DraftMenuOverlay({
   engine,
   onClose,
   onOpenSettings,
   inRoom,
-  soundOn,
-  onToggleSound,
   discardLabel,
   discardDanger,
   onDiscard,
@@ -93,10 +97,6 @@ export default function DraftMenuOverlay({
             {copied ? <Check className="h-3.5 w-3.5 text-teal-300" /> : <Copy className="h-3.5 w-3.5 text-white/50" />}
           </button>
         )}
-
-        <Rule />
-
-        <Item label={soundOn ? 'Turn draft sounds off' : 'Turn draft sounds on'} onClick={act(onToggleSound)} />
 
         <Rule />
 

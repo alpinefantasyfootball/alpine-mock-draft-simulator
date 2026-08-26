@@ -1,6 +1,6 @@
 import { Fragment } from 'react'
 import { motion } from 'framer-motion'
-import { ChevronLeft, MoreHorizontal, Settings } from 'lucide-react'
+import { ChevronLeft, MoreHorizontal, Settings, Volume2, VolumeX } from 'lucide-react'
 import JukeLogo from './juke-logo/JukeLogo.jsx'
 
 const TABS = [
@@ -36,6 +36,7 @@ export default function DraftCockpitHeader({
   preDraft,
   problem,
   startLabel,
+  startLabelShort,
   startDisabled,
   onStartDraft,
   cockpitTab,
@@ -51,6 +52,8 @@ export default function DraftCockpitHeader({
   autopick,
   onToggleAutopick,
   onOpenMenu,
+  soundOn,
+  onToggleSound,
 }) {
   const pct = clockLength ? Math.max(0, Math.min(100, (timeLeft / clockLength) * 100)) : 0
 
@@ -278,6 +281,29 @@ export default function DraftCockpitHeader({
             </span>
           </button>
 
+          {/* Was a pill-switch buried on the settings modal's General tab,
+              reachable only after a draft already existed to open settings
+              on. A preference toggled mid-pick needs to be a tap away, not
+              two screens deep — same reasoning Autopick already gets a
+              header spot instead of living in a menu. Present in both
+              modes, unlike the controls on either side of it: this is the
+              one thing on this bar that isn't specific to before-the-draft
+              or during-the-draft. Sized and styled identically to the
+              gear/kebab buttons it now sits beside — one more 34px control
+              plus its gap is the newest claim on this bar's already-tight
+              budget (see the header's own comment above), so re-measure
+              375/390/430px if anything here ever gets wider. */}
+          <button
+            type="button"
+            onClick={onToggleSound}
+            aria-pressed={soundOn}
+            title={soundOn ? 'Turn draft sounds off' : 'Turn draft sounds on'}
+            aria-label={soundOn ? 'Turn draft sounds off' : 'Turn draft sounds on'}
+            className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full bg-white/5 text-white/70 transition-colors duration-150 hover:bg-white/[0.09] hover:text-white"
+          >
+            {soundOn ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+          </button>
+
           {preDraft ? (
             <>
               {/* A separate control from Start — league shape is still
@@ -307,7 +333,18 @@ export default function DraftCockpitHeader({
                     : 'bg-gradient-to-r from-[#00E5FF] to-[#7B1FA2] text-white shadow-glass transition-all duration-200 hover:scale-105 hover:shadow-[0_0_15px_rgba(0,229,255,0.4)]')
                 }
               >
-                {startLabel}
+                {/* Same lever as "Round N ·" and "your turn" elsewhere on
+                    this bar: shorten the text below the width it stops
+                    fitting, rather than touch the control itself. See
+                    startLabelShort's own comment in DraftRoom.jsx.
+                    lg, not sm: measured with the sound icon in place, "Start
+                    for everyone" plus Autopick's returning text overflows by
+                    43px at both 640 and 768 and only clears at 1024, because
+                    nothing else in this row concedes width until lg either
+                    (the logo, the tab nav, the wider gaps all wait for the
+                    same breakpoint) — sm just swaps which overflow you'd see. */}
+                <span className="hidden lg:inline">{startLabel}</span>
+                <span className="lg:hidden">{startLabelShort}</span>
               </button>
             </>
           ) : (

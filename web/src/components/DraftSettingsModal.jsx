@@ -1,7 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { motion } from 'framer-motion'
 import { X } from 'lucide-react'
-import RoomPanel from './RoomPanel.jsx'
 import { POS_BADGE } from './draftRoomPositions.js'
 
 /* Everything a league is, in one place, reachable from the Draft Room.
@@ -17,9 +15,22 @@ import { POS_BADGE } from './draftRoomPositions.js'
    — all of it the same single source app.js already owns. A second idea of
    what a league is, living in web/src, is the exact failure CLAUDE.md's
    "nothing about the league shape may be written down twice" is about, and
-   the superflex grading bug is what it looks like when it happens. */
+   the superflex grading bug is what it looks like when it happens.
 
-const TABS = ['General', 'Roster', 'Scoring', 'Order', 'Invite']
+   General and Invite used to sit here too, and don't any more — not deleted,
+   moved. Teams, Scoring and the pick clock are now live dropdowns on the New
+   Mock Draft card itself (NewMockPanel.jsx), Rounds still just follows the
+   roster below, Draft sounds is a header icon now (DraftCockpitHeader.jsx,
+   both its preDraft and live modes), and creating or joining a room is a
+   direct "Draft with friends" action on the Lobby (DraftWithFriendsModal.jsx)
+   rather than a tab three clicks deep. What's left here is what genuinely
+   needed a modal: a roster's worth of steppers, 44 scoring rules, and a
+   room's seat order — none of which fit a card or a header icon. Order is
+   renamed Seats for the same reason it was ever confusing: "order" reads as
+   the snake itself (there is only one), when what this tab actually does is
+   let a host swap which person sits in which chair. */
+
+const TABS = ['Roster', 'Scoring', 'Seats']
 
 /* The lineup as an ordered list of slots, the way a roster actually reads,
    built from the counts league.starters already holds. Sleeper shows a list;
@@ -51,21 +62,6 @@ function Row({ label, children, hint }) {
       </span>
       <span className="shrink-0">{children}</span>
     </label>
-  )
-}
-
-function Select({ value, onChange, disabled, children }) {
-  return (
-    <select
-      value={value}
-      onChange={onChange}
-      disabled={disabled}
-      /* 16px on a touch screen or iOS zooms the page in and does not zoom
-         back out — CLAUDE.md's floor, which the type scale already meets. */
-      className="rounded-lg border border-slate-rule bg-slate-sunk px-2 py-1.5 text-base text-white disabled:cursor-not-allowed disabled:text-white/30 lg:text-sm"
-    >
-      {children}
-    </select>
   )
 }
 
@@ -126,7 +122,7 @@ function DivisorInput({ rule, disabled, onCommit }) {
 }
 
 export default function DraftSettingsModal({ engine, onClose, started, inRoom, mySlot }) {
-  const [tab, setTab] = useState('General')
+  const [tab, setTab] = useState('Roster')
   /* Pick a seat up, then put it down on another - the same two taps the
      legacy order list used, and the reason is touch: a drag needs a pointer
      that can hover and a target that does not scroll under it, and this list
@@ -250,82 +246,6 @@ export default function DraftSettingsModal({ engine, onClose, started, inRoom, m
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto p-4">
-            {tab === 'General' && (
-              <div className="flex flex-col">
-                <Row label="Teams">
-                  <Select
-                    value={league.teams} disabled={locked}
-                    onChange={(e) => { engine.setLeague({ teams: Number(e.target.value) }); redraw() }}
-                  >
-                    {engine.teamCounts().map((n) => <option key={n} value={n}>{n}</option>)}
-                  </Select>
-                </Row>
-                <Row label="Scoring" hint="Sets receptions. Every other rule stays as you left it — see the Scoring tab.">
-                  <Select
-                    value={league.scoring} disabled={locked}
-                    onChange={(e) => { engine.setLeague({ scoring: e.target.value }); redraw() }}
-                  >
-                    {Object.entries(engine.scoringNames()).map(([k, v]) => (
-                      <option key={k} value={k}>{v}</option>
-                    ))}
-                  </Select>
-                </Row>
-                {/* state.clockLength, not league.clock. There is no
-                    league.clock and there never was - this read undefined and
-                    wrote a field nothing consumes, so the control moved and
-                    did nothing for two commits. The pick clock is per-drafter
-                    rather than part of the board's shape, which is also why a
-                    room broadcasts it separately from the league. */}
-                <Row label="Seconds per pick">
-                  <Select
-                    value={engine.clockLength()} disabled={locked}
-                    onChange={(e) => { engine.setClockLength(e.target.value); redraw() }}
-                  >
-                    {[30, 60, 90, 120, 180].map((n) => <option key={n} value={n}>{n}</option>)}
-                  </Select>
-                </Row>
-                {/* A preference rather than a setting the room agrees on, so
-                    it is not locked with the rest — and it is here because the
-                    status bar ran out of room for it on a phone. Four icon
-                    buttons plus the autopick pill overflowed a 375px bar by
-                    27px once the settings gear joined them, and sound is the
-                    one of the five that is set once rather than reached for
-                    mid-pick. */}
-                <Row label="Draft sounds" hint="A cue when your turn starts, and when the clock runs down.">
-                  {/* Same switch DraftCockpitHeader.jsx's Autopick control
-                      uses — a pill track with a spring-animated knob —
-                      rather than the On/Off text pill this used to be, so
-                      the two toggles in the product read as the same kind
-                      of control. */}
-                  <button
-                    type="button"
-                    onClick={() => { engine.toggleSound(); redraw() }}
-                    aria-pressed={engine.soundWanted()}
-                    aria-label="Draft sounds"
-                    className="rounded-full p-0.5 transition-colors duration-150"
-                  >
-                    <span
-                      className={
-                        'relative block h-[18px] w-[34px] rounded-full transition-colors duration-200 ' +
-                        (engine.soundWanted() ? 'bg-teal-500/70' : 'bg-white/[0.16]')
-                      }
-                    >
-                      <motion.span
-                        layout
-                        transition={{ type: 'spring', stiffness: 500, damping: 32 }}
-                        className="absolute top-0.5 h-3.5 w-3.5 rounded-full bg-white"
-                        style={{ left: engine.soundWanted() ? 18 : 2 }}
-                      />
-                    </span>
-                  </button>
-                </Row>
-
-                <Row label="Rounds" hint="Follows the roster — add or remove a slot on the Roster tab.">
-                  <span className="text-sm font-semibold tabular-nums text-white/70">{league.rounds}</span>
-                </Row>
-              </div>
-            )}
-
             {tab === 'Roster' && (
               <div>
                 <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
@@ -430,7 +350,7 @@ export default function DraftSettingsModal({ engine, onClose, started, inRoom, m
               </div>
             )}
 
-            {tab === 'Order' && (() => {
+            {tab === 'Seats' && (() => {
               const room = engine.room()
               const seats = room && room.seats ? room.seats : null
               const isHost = !!engine.isHost()
@@ -569,8 +489,6 @@ export default function DraftSettingsModal({ engine, onClose, started, inRoom, m
                 </div>
               )
             })()}
-
-            {tab === 'Invite' && <RoomPanel />}
           </div>
         </div>
       </div>

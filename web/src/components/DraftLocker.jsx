@@ -67,14 +67,24 @@ const MIN_MOCKS_FOR_ANALYTICS = 5
 // and the heatmap's 3-column span (13 cell-units of content into 12 cells)
 // and had to invent a fourth row to make the arithmetic work. It didn't
 // need to: the spec was describing a visual proportion, not a grid mechanic.
-function AnalyticsGrid({ engine, league, stats, problem, lobbySlot, onSetLobbySlot, onStartNew, onOpenSettings }) {
+function AnalyticsGrid({ engine, league, stats, problem, lobbySlot, roomActive, onSetLobbySlot, onStartNew, onOpenSettings, onDraftWithFriends }) {
   const totalMocks = stats.total || 0
   const thin = totalMocks < MIN_MOCKS_FOR_ANALYTICS
 
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
       <div className="sm:col-span-2 lg:col-span-1 lg:col-start-1 lg:row-start-1">
-        <NewMockPanel engine={engine} league={league} problem={problem} lobbySlot={lobbySlot} onStartNew={onStartNew} onOpenSettings={onOpenSettings} />
+        <NewMockPanel
+          engine={engine}
+          league={league}
+          problem={problem}
+          lobbySlot={lobbySlot}
+          roomActive={roomActive}
+          onSetLobbySlot={onSetLobbySlot}
+          onStartNew={onStartNew}
+          onOpenSettings={onOpenSettings}
+          onDraftWithFriends={onDraftWithFriends}
+        />
       </div>
 
       {thin ? (
@@ -128,7 +138,7 @@ function AnalyticsGrid({ engine, league, stats, problem, lobbySlot, onSetLobbySl
 // child here is presentational — this component owns the one thing that
 // has to live above all of them, which is knowing whether an in-progress
 // draft or history entry changed and needs a re-render.
-export default function DraftLocker({ onStartNew, problem, lobbySlot, onSetLobbySlot, onOpenSettings }) {
+export default function DraftLocker({ onStartNew, problem, lobbySlot, roomActive, onSetLobbySlot, onOpenSettings, onDraftWithFriends }) {
   const engine = useEngine()
   useJukeTick(engine)
   // clearSave()/deleteHistoryDraft() are plain localStorage writes with no
@@ -282,9 +292,11 @@ export default function DraftLocker({ onStartNew, problem, lobbySlot, onSetLobby
           stats={stats}
           problem={problem}
           lobbySlot={lobbySlot}
+          roomActive={roomActive}
           onSetLobbySlot={onSetLobbySlot}
           onStartNew={onStartNew}
           onOpenSettings={onOpenSettings}
+          onDraftWithFriends={onDraftWithFriends}
         />
       </div>
 
