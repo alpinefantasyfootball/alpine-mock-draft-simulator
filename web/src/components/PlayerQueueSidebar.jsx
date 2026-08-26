@@ -1,3 +1,4 @@
+import { useLayoutEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Bookmark, ChevronDown, ChevronUp, Plus, Search, Star } from 'lucide-react'
 import { POS_BADGE, POS_LIST, INJURY_META } from './draftRoomPositions.js'
@@ -13,15 +14,13 @@ const COL_BY_KEY = Object.fromEntries(STAT_COLUMNS.map((c) => [c.key, c]))
    headshot/initials circle and about 146px of name — measured against
    "Jaxon Smith-Njigba", the Players tab's own longest real name.
 
-   `mobile` (below) is the phone/app variant: 208px, no *pill* — a 44px
-   pill plus a 44px star plus a headshot left the name 82px on a 402px row,
-   clipping three of the first six real names, measured. It still gets a
-   Draft affordance next to the star, just a narrow icon rather than the
-   pill: 26px wide, the exact width the star's own tap target already
-   costs, so the pair together barely spends more than the star alone did.
-   Measured against this same file's own "Jaxon Smith-Njigba" reference —
-   the identity block's own longest real name — with the icon in place: no
-   clipping, `scrollWidth === clientWidth` on every row. The POS badge
+   `mobile` (below) is the phone/app variant: 208px as a floor, not a
+   fixed width — see the mobileNameW effect further down (where nameW is
+   read) for why it has to grow past that rather than stay fixed. It
+   still gets a Draft affordance next to the star, just a narrow icon
+   rather than the desktop pill: 26px wide, the exact width the star's
+   own tap target already costs, so the pair together barely spends more
+   than the star alone did. The POS badge
    still moves back onto the avatar instead of its own scrolling column,
    and the row's own tap still opens the player sheet (PlayerProfileModal)
    as a second way to reach the same action — see that component's own
@@ -29,7 +28,25 @@ const COL_BY_KEY = Object.fromEntries(STAT_COLUMNS.map((c) => [c.key, c]))
 const NAME_W = 296
 const MOBILE_NAME_W = 208
 const POS_W = 44
-const STICKY_CELL = 'sticky left-0 z-20 flex shrink-0 items-center px-2'
+// STICKY_CELL's own children — the two 26px icon buttons, the 32px avatar,
+// three 8px gaps between the four of them, and px-2's own 16px — every
+// one of them fixed-width and shrink-0. This is what's left over for the
+// name once those are paid for; the mobileNameW effect below adds a real
+// measurement of the longest name on top of it, rather than a guess.
+const MOBILE_IDENTITY_CHROME_W = 26 + 26 + 32 + 8 * 3 + 16
+// min-w-0: without it, a flex item's *default* min-width is auto, which
+// resolves to its own content's min-content size rather than 0 — and that
+// floor wins over an explicit flex-basis when the two disagree. Every
+// other fixed-width child here already opts out with its own shrink-0,
+// and the name block itself already carries min-w-0 — but the cell that
+// wraps all four of them never did, so its own automatic floor was
+// whichever row's content happened to be widest at that moment. Reported
+// directly: "Jaxon Smith-Njigba" measured at a 237px cell against every
+// other row's 208, which is a column that silently disagrees with itself
+// from row to row, not merely a name that runs long. flex: 0 0 208px says
+// "never grow, never shrink" and was already being overridden by content
+// it was never told to ignore.
+const STICKY_CELL = 'sticky left-0 z-20 flex shrink-0 items-center px-2 min-w-0'
 
 // FLEX sits after the four skill positions and before K/DST, matching
 // SLOT_ORDER in app.js — the same ordering a roster fills them in.
@@ -128,7 +145,50 @@ export default function PlayerQueueSidebar({
      Juke score, and the raw counting stats come off the projection block. */
   const statCtx = { pointsFor, vorpFor, valueFor, survivalFor, projOf }
 
-  const nameW = mobile ? MOBILE_NAME_W : NAME_W
+  // Widens the mobile identity column to fit the longest name actually on
+  // the board, rather than truncating names past a fixed guess. A canvas
+  // measurement would need to know the name line's real font to build a
+  // matching font string for ctx.font — and that line carries no
+  // font-family class of its own, inheriting whatever the page's default
+  // is (index.css sets no font-family on body at all; Tailwind's own
+  // preflight default is the only thing supplying one), so a hand-built
+  // string would be a guess this file has no way to keep honest if that
+  // default ever changes. A real, hidden DOM node styled with the exact
+  // same classes the name line renders with can't drift from it the same
+  // way — it *is* the thing being measured, not a description of it.
+  //
+  // Held to a monotonic max rather than reset on every measurement: players
+  // leave `players` as they're drafted, so the true longest name on the
+  // board can only ever get shorter as a draft goes on, and a column that
+  // shrinks mid-draft would read as the layout jittering rather than
+  // adapting. useLayoutEffect, not useEffect, so the corrected width is
+  // committed before the browser paints the frame after players loads or
+  // changes — the alternative is one visible frame at the old width first.
+  const [mobileNameW, setMobileNameW] = useState(MOBILE_NAME_W)
+  useLayoutEffect(() => {
+    if (!mobile || !players.length) return
+    const probe = document.createElement('span')
+    probe.className = 'truncate text-xs font-medium'
+    probe.style.cssText = 'position:absolute; visibility:hidden; white-space:pre; top:-9999px; left:-9999px;'
+    document.body.appendChild(probe)
+    let maxNameW = 0
+    for (const p of players) {
+      probe.textContent = p.name
+      const w = probe.getBoundingClientRect().width
+      if (w > maxNameW) maxNameW = w
+    }
+    document.body.removeChild(probe)
+    // +2: the probe and the real name both render text-xs font-medium, so
+    // this isn't covering a font mismatch — it's covering the fact that a
+    // fractional-pixel measurement rounded up by getBoundingClientRect can
+    // still land one pixel short of what text-overflow:ellipsis decides is
+    // "doesn't fit" on the real, rendered element, and losing that pixel
+    // means the exact clip this column exists to prevent.
+    const needed = MOBILE_IDENTITY_CHROME_W + Math.ceil(maxNameW) + 2
+    setMobileNameW((prev) => Math.max(prev, needed))
+  }, [mobile, players])
+
+  const nameW = mobile ? mobileNameW : NAME_W
   const colWidth = (col) => (mobile ? MOBILE_COL_WIDTH : col.width)
 
   // A single position filter narrows the stat groups to the ones that
