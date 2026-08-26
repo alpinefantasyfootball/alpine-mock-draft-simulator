@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { Bookmark, ChevronDown, ChevronUp, Search, Star } from 'lucide-react'
+import { Bookmark, ChevronDown, ChevronUp, Plus, Search, Star } from 'lucide-react'
 import { POS_BADGE, POS_LIST, INJURY_META } from './draftRoomPositions.js'
 import JukeValueAssistant from './JukeValueAssistant.jsx'
 import { MOBILE_COL_WIDTH, MOBILE_GROUPS, MOBILE_SORTS, STAT_COLUMNS, STAT_GROUPS, statValue, lastsTone } from './playerColumns.js'
@@ -13,13 +13,19 @@ const COL_BY_KEY = Object.fromEntries(STAT_COLUMNS.map((c) => [c.key, c]))
    headshot/initials circle and about 146px of name — measured against
    "Jaxon Smith-Njigba", the Players tab's own longest real name.
 
-   `mobile` (below) is the phone/app variant: 208px, no Draft pill (there is
-   nowhere on a 402px row for a 44px pill, a 44px star and a headshot to
-   leave the name more than 82px — three of the first six real names
-   clipped, measured), the POS badge moves back onto the avatar instead of
-   its own scrolling column, and the row's own tap opens the player sheet
-   (PlayerProfileModal) rather than drafting inline — see that component's
-   own comment for the Draft/Queue actions living there instead. */
+   `mobile` (below) is the phone/app variant: 208px, no *pill* — a 44px
+   pill plus a 44px star plus a headshot left the name 82px on a 402px row,
+   clipping three of the first six real names, measured. It still gets a
+   Draft affordance next to the star, just a narrow icon rather than the
+   pill: 26px wide, the exact width the star's own tap target already
+   costs, so the pair together barely spends more than the star alone did.
+   Measured against this same file's own "Jaxon Smith-Njigba" reference —
+   the identity block's own longest real name — with the icon in place: no
+   clipping, `scrollWidth === clientWidth` on every row. The POS badge
+   still moves back onto the avatar instead of its own scrolling column,
+   and the row's own tap still opens the player sheet (PlayerProfileModal)
+   as a second way to reach the same action — see that component's own
+   comment for the Draft/Queue actions living there too. */
 const NAME_W = 296
 const MOBILE_NAME_W = 208
 const POS_W = 44
@@ -621,14 +627,38 @@ export default function PlayerQueueSidebar({
                       </button>
                     )}
 
-                    {/* No Draft pill on mobile at all — a 44px pill plus a
-                        44px star plus the avatar left the name 82px on a
-                        402px screen, clipping three of the first six real
-                        names, and `title` is not an affordance a phone has.
-                        The row's own tap (below) opens the sheet instead,
-                        where Draft is a real 48px action — see
-                        PlayerProfileModal.jsx. */}
-                    {!mobile && (draftedBy ? (
+                    {/* Mobile gets its own narrow icon, not the desktop
+                        pill: a 58px text pill plus a 44px star plus the
+                        avatar left the name 82px on a 402px screen,
+                        clipping three of the first six real names — the
+                        original reason this slot drew nothing at all on
+                        mobile. Reported back as a real regression rather
+                        than an acceptable trade: the row's own tap still
+                        opens the sheet (PlayerProfileModal.jsx has the full
+                        48px Draft action), but that is a second, slower
+                        path to the same thing a phone drafter reaches for
+                        constantly. Narrow rather than gone: 26px, matching
+                        the queue star's own tap width immediately to its
+                        left, so the pair costs barely more than the star
+                        alone did — measured live against "Jaxon
+                        Smith-Njigba" (this file's own longest real name,
+                        NAME_W's comment above), no clipping. */}
+                    {mobile ? (
+                      !player.drafted && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); onDraft(player) }}
+                          disabled={!myTurn}
+                          title={myTurn ? 'Draft' : 'Not your turn'}
+                          className={
+                            'flex h-11 w-[26px] shrink-0 items-center justify-center transition-colors duration-150 ' +
+                            (myTurn ? 'text-white/50 hover:text-teal-300 active:scale-95' : 'cursor-not-allowed text-white/15')
+                          }
+                        >
+                          <Plus className="h-4 w-4" strokeWidth={3} />
+                        </button>
+                      )
+                    ) : (draftedBy ? (
                       <span className="w-[58px] shrink-0 truncate text-center text-[9px] font-semibold uppercase tracking-wide text-ink-muted">
                         {draftedBy}
                       </span>

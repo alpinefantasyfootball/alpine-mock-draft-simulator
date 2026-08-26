@@ -76,33 +76,26 @@ export default function Hero() {
             <span className="text-mint">Dominate the season.</span>
           </h1>
 
-          {/* One paragraph at both widths, and it is the phone's.
+          {/* One paragraph at both widths.
 
-              These were two entirely different sentences — the phone said
-              "Draft against a room of CPU opponents…", desktop said "Free,
-              unlimited mock drafts against a board that reruns live…" — which
-              is a different message about the product depending on the width
-              of the window it is read in. Reported from the live site as
-              exactly that.
+              These were two entirely different sentences at one point —
+              phone and desktop each had their own — which is a different
+              message about the product depending on the width of the window
+              it is read in. Reported from the live site as exactly that, and
+              unified to one sentence, read at every width, for that reason.
 
-              Desktop's is the one that goes, for the same reason the eyebrow
-              and the CTAs already changed: it opens on the price. After that
-              pass, desktop's own hero was arguing with itself — a brand
-              eyebrow and headline, "Enter the Draft Room" underneath, and a
-              paragraph between them leading with "Free, unlimited mock
-              drafts". The revised handoff says to keep this sentence verbatim
-              on the phone and explicitly not to promote desktop's; making it
-              the only one is the same instruction with the divergence removed.
-
-              It is also the better sentence on its own terms, which is worth
-              recording so nobody swaps it back. It names no seat count — the
-              app's default is 10 and the room is configurable 4-24 wide, so
-              any number here is wrong for most rooms drafted — and it says
-              what the product does rather than what it costs. Price now lives
-              in the mono line under the CTA pair, once, on both widths. */}
+              The sentence itself changed again on direct instruction: "Draft
+              against a room of CPU opponents that react to your picks, then
+              get a graded report that shows its working" named the Draft
+              Room specifically, which was right while the Draft Room was the
+              whole product. It reads narrow next to a page that now frames
+              Juke as a season-long platform (see ROOMS in app.js and the
+              rooms-grid section below) rather than a single draft-day tool —
+              "pre-season scouting" and "a championship push" are two of the
+              other five rooms on the same roadmap, not the one that's live.
+              Price still lives only in the mono line under the CTA pair. */}
           <p className="mt-4 max-w-[480px] text-pretty text-base leading-[1.55] text-white/55 lg:mt-6 lg:max-w-[530px] lg:text-[17.5px] lg:leading-[1.6]">
-            Draft against a room of CPU opponents that react to your picks, then get a graded
-            report that shows its working. Change your scoring rules and every number reruns.
+            From pre-season scouting to a championship push, dominate every phase of the fantasy calendar.
           </p>
 
           {/* Two stacked 54px CTAs, mobile only. The secondary is "Explore

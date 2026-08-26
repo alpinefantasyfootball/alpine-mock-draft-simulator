@@ -322,6 +322,51 @@
        the mark's own travel (down to 190px below rest, up to 118px above
        it), not something the width change needed to touch — nothing was
        ever asked to overflow a stretched box, only a 480px one. */
+    /* Reported directly against the live site, next to the other splash
+       that shows this same lockup (SonarLoader.jsx's tier="screen", used
+       for the Lobby -> Draft Room transition): that one holds the mark and
+       the wordmark 30px apart in one flex column, no third element between
+       them, so JUKE sits right under the mark. This one held the wordmark
+       roughly 260px below the shark, because the flex column holding the
+       wordmark measures from breach-scene's own bottom edge, and
+       breach-scene is a full 520px (604 on phone) tall to give the water
+       animation room - most of which is not "the water animation" by the
+       time it plays out. breach-underwater's own comment already states
+       where its gradient finishes fading to the container's flat
+       background colour: 58% of breach-scene's height (the waterline) plus
+       130px (90 on phone). Past that point the box is pixel-identical to
+       its own background for the rest of its height, on purpose, which is
+       what makes it safe to crop there - cropping a solid colour to itself
+       changes nothing you can see. Checked against every keyframe that
+       moves inside breach-scene, not just the gradient: the ripple
+       (breachRipple) is a 240px circle centred at 46%, scaling to 2x while
+       fading to opacity 0 in the same stretch, so its own faint tail
+       reaches this line at the same moment it is already indistinguishable
+       from off; the droplets (breachDroplet) translate upward, away from
+       this line, never past the waterline they start at.
+
+       breach-crop is that crop: a plain height in pixels, not a percentage
+       - a % height resolves against breach-crop's own containing block
+       (#boot-sonar, the full viewport), not against breach-scene sitting
+       inside it, so it cannot read the 58% the way this comment does.
+       432px is 520 * 0.58 + 130, rounded; 440px (below) is 604 * 0.58 + 90.
+       Retime either card's own height or gradient distance and this needs
+       the same arithmetic re-run - it is not derived live because nothing
+       here shares a custom property with breach-underwater's own
+       hard-coded gradient to derive it from, the same reason the mark's
+       own 150px top has never been a calc() off anything either.
+
+       breach-scene keeps its declared height and everything inside it
+       keeps the same top:58%/46%/etc. it always had, unchanged and
+       unmoved - overflow:hidden on the wrapper only stops the now-
+       invisible remainder from claiming layout space the wordmark is
+       waiting on, exactly the way overflow:hidden on breach-scene itself
+       already stops the mark's own entrance travel from doing the same
+       thing one level in. */
+    #boot-sonar .breach-crop {
+      overflow: hidden;
+      height: 432px;
+    }
     #boot-sonar .breach-scene {
       position: relative; overflow: hidden; height: 520px;
     }
@@ -466,6 +511,7 @@
        desktop viewport in that same suite (1440px), so it cannot land inside
        either. */
     @media (max-width: 600px) {
+      #boot-sonar .breach-crop { height: 440px; } /* 604 * 0.58 + 90, see breach-crop's own comment */
       #boot-sonar .breach-scene { height: 604px; }
       #boot-sonar .breach-mark { top: 220px; margin-left: -95px; width: 190px; height: 118px; }
       #boot-sonar .breach-underwater { background: linear-gradient(180deg, #0e2b33, #0B0E14 90px); }
@@ -630,19 +676,21 @@
        be waiting past --total. -->
   <div id="boot-sonar" aria-hidden="true">
     <i></i><i></i><i></i>
-    <div class="breach-scene">
-      <img class="breach-mark" src="/juke-mark-v2.svg" alt="">
-      <div class="breach-underwater"></div>
-      <span class="breach-water"></span>
-      <div class="breach-drops">
-        <span class="breach-drop"><span class="breach-drop-dot"></span></span>
-        <span class="breach-drop"><span class="breach-drop-dot"></span></span>
-        <span class="breach-drop"><span class="breach-drop-dot"></span></span>
-        <span class="breach-drop"><span class="breach-drop-dot"></span></span>
-        <span class="breach-drop"><span class="breach-drop-dot"></span></span>
-        <span class="breach-drop"><span class="breach-drop-dot"></span></span>
+    <div class="breach-crop">
+      <div class="breach-scene">
+        <img class="breach-mark" src="/juke-mark-v2.svg" alt="">
+        <div class="breach-underwater"></div>
+        <span class="breach-water"></span>
+        <div class="breach-drops">
+          <span class="breach-drop"><span class="breach-drop-dot"></span></span>
+          <span class="breach-drop"><span class="breach-drop-dot"></span></span>
+          <span class="breach-drop"><span class="breach-drop-dot"></span></span>
+          <span class="breach-drop"><span class="breach-drop-dot"></span></span>
+          <span class="breach-drop"><span class="breach-drop-dot"></span></span>
+          <span class="breach-drop"><span class="breach-drop-dot"></span></span>
+        </div>
+        <span class="breach-ripple"></span>
       </div>
-      <span class="breach-ripple"></span>
     </div>
     <b>Juke</b>
   </div>
