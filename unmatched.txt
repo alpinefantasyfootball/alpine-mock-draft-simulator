@@ -1,5 +1,5 @@
 FFC rows that did not join to a Sleeper player
-Generated 2026-08-25 11:59 UTC
+Generated 2026-08-26 12:00 UTC
 Across every scoring format, each name listed once.
 Add an entry to MANUAL_MATCHES in build_players.py to fix one.
 
@@ -21,15 +21,15 @@ Vikings | DEF | MIN | no Tank01 id
 Lions | DEF | DET | no Tank01 id
 Patriots | DEF | NE | no Tank01 id
 Steelers | DEF | PIT | no Tank01 id
+49ers | DEF | SF | no Tank01 id
 Eagles | DEF | PHI | no Tank01 id
 Chargers | DEF | LAC | no Tank01 id
-49ers | DEF | SF | no Tank01 id
-Packers | DEF | GB | no Tank01 id
 Buccaneers | DEF | TB | no Tank01 id
-Jaguars | DEF | JAX | no Tank01 id
-Browns | DEF | CLE | no Tank01 id
-Saints | DEF | NO | no Tank01 id
 Cowboys | DEF | DAL | no Tank01 id
+Browns | DEF | CLE | no Tank01 id
+Packers | DEF | GB | no Tank01 id
+Jaguars | DEF | JAX | no Tank01 id
+Saints | DEF | NO | no Tank01 id
 Bills | DEF | BUF | no Tank01 id
 Ravens | DEF | BAL | no Tank01 id
 Titans | DEF | TEN | no Tank01 id
