@@ -28,7 +28,14 @@ function RowSelect({ value, onChange, disabled, options }) {
          applies even though lg desktops don't need it. */
       className="w-auto flex-none rounded-md border border-transparent bg-transparent py-0.5 text-right font-body text-base font-semibold tabular-nums text-white outline-none transition-colors hover:border-white/10 focus:border-teal-400/50 disabled:cursor-not-allowed disabled:text-white/30 lg:text-sm"
     >
-      {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+      {/* bg-slate-panel on every option, not just the select: the open
+         popup is native chrome the select's own background doesn't reach,
+         and defaults to a light surface regardless of what's set here —
+         with no background of its own, this row's white text landed on
+         that light default and read as blank. TeamTab.jsx's own compact
+         seat picker already carries the identical fix for the identical
+         reason. */}
+      {options.map((o) => <option key={o.value} value={o.value} className="bg-slate-panel">{o.label}</option>)}
     </select>
   )
 }
@@ -59,7 +66,9 @@ function ChipSelect({ value, onChange, disabled, options }) {
          flex-grow/flex-basis still pulling from the tag rule. */
       className="w-auto flex-none rounded-lg border border-white/10 bg-white/[0.03] px-3 py-[7px] font-plex text-base text-white/80 outline-none transition-colors focus:border-teal-400/50 disabled:cursor-not-allowed disabled:text-white/30"
     >
-      {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+      {/* bg-slate-panel — see RowSelect's own comment. The open popup is
+         native chrome this select's own background never reaches. */}
+      {options.map((o) => <option key={o.value} value={o.value} className="bg-slate-panel">{o.label}</option>)}
     </select>
   )
 }
