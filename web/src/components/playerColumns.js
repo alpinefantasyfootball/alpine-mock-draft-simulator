@@ -19,7 +19,7 @@
    points and VORP keep their existing readers. */
 
 // `positions`, where present, is which posFilter values keep this group —
-// undefined means "every position", for the two groups every player has an
+// undefined means "every position", for the groups every player has an
 // opinion on. A design review caught the gap this exists to close: with a
 // WR filter active the Passing group was still three columns of em-dashes,
 // which reads as a broken table rather than an irrelevant one. Filtered by
@@ -27,7 +27,7 @@
 // Sleeper-style boards already promise, per its own header comment; "ALL"
 // still renders every group exactly as before.
 export const STAT_GROUPS = [
-  { label: '', keys: ['adp', 'bye'] },
+  { label: '', keys: ['bye', 'adp'] },
   { label: 'Projected', keys: ['pts', 'vorp'] },
   { label: 'Passing', keys: ['py', 'pt', 'pi'], positions: ['QB'] },
   { label: 'Rushing', keys: ['ra', 'ry', 'rt'], positions: ['QB', 'RB'] },
@@ -37,16 +37,59 @@ export const STAT_GROUPS = [
      it is exactly this case — copy the layout, not the gap in it — so the
      column that would be a dash for everybody is simply not drawn. */
   { label: 'Receiving', keys: ['rc', 'cy', 'ct'], positions: ['RB', 'WR', 'TE'] },
+  /* The model's own group, teal-labelled to mark it apart from the plain
+     projection above — see JUKE/TIER/LASTS in statValue() below. Shown for
+     every position on purpose: an unranked K/DST prints an em dash rather
+     than the group disappearing, the same withholding rule
+     overallScore()/survivalProbability() already apply themselves. */
+  { label: 'Juke', keys: ['juke', 'tier', 'lasts'], teal: true },
 ]
+
+/* The phone pool leads with the numbers a pick is actually made on — PTS,
+   VORP, JUKE, LASTS — before a swipe reaches anything else, where desktop
+   leads with BYE/ADP because it has the width to show everything at once.
+   Same six groups as STAT_GROUPS, reordered and re-split rather than a
+   second column list: Juke's own three (JUKE/LASTS/TIER, in that order —
+   the two decision numbers before the reference one) come right after
+   Projected, and BYE/ADP move into their own trailing blank group. Every
+   key still resolves through STAT_COLUMNS/statValue() — this only changes
+   which order the same columns are read in. */
+export const MOBILE_GROUPS = [
+  { label: 'Projected', keys: ['pts', 'vorp'] },
+  { label: 'Juke', keys: ['juke', 'lasts', 'tier'], teal: true },
+  { label: '', keys: ['adp', 'bye'] },
+  { label: 'Passing', keys: ['py', 'pt', 'pi'], positions: ['QB'] },
+  { label: 'Rushing', keys: ['ra', 'ry', 'rt'], positions: ['QB', 'RB'] },
+  { label: 'Receiving', keys: ['rc', 'cy', 'ct'], positions: ['RB', 'WR', 'TE'] },
+]
+
+// Every mobile numeric column is this one flat width regardless of its own
+// desktop width (40-50px, varying per column) — the handoff's own number,
+// chosen so identity(208) + the first four columns(4x48=192) sums to
+// exactly 400px, fitting a 402px screen with nothing to swipe for the four
+// numbers a pick actually turns on.
+export const MOBILE_COL_WIDTH = 48
 
 /* `dir` is which way reads as "best first" on the very first click of a
    column that was not already active — ascending for ADP, where pick 1 is
    the best, descending for everything else, where more is better. Same
-   convention a spreadsheet uses. */
+   convention a spreadsheet uses.
+
+   TIER and LASTS are not sortable: DraftRoom's sort reader has no branch
+   for either (tier is a rank within a position, not a cross-position
+   ordering; lasts depends on nextOverall, which most of the board is
+   nowhere near), and a header that looks like a sort button but silently
+   reorders nothing is the dead-control trap CLAUDE.md warns about — see
+   its own note on the identical choice for the Board tab's dock. */
 export const STAT_COLUMNS = [
-  { key: 'adp', label: 'ADP', width: 46, sortable: true, dir: 'asc' },
   { key: 'bye', label: 'BYE', width: 40 },
+  { key: 'adp', label: 'ADP', width: 44, sortable: true, dir: 'asc' },
   { key: 'pts', label: 'PTS', width: 50, sortable: true, dir: 'desc', tone: 'strong' },
+  /* Value over replacement — the raw, un-clamped points-above-replacement
+     figure (engine.replacementGap()), not overallScore()'s 0-100 share.
+     Those are two different numbers about the same idea, and JUKE below is
+     the share; a column called VORP showing the share too would just be
+     JUKE printed twice. */
   { key: 'vorp', label: 'VORP', width: 50, sortable: true, dir: 'desc', tone: 'teal' },
   { key: 'py', label: 'YDS', width: 50, stat: true, sortable: true, dir: 'desc' },
   { key: 'pt', label: 'TD', width: 40, stat: true, sortable: true, dir: 'desc' },
@@ -57,6 +100,13 @@ export const STAT_COLUMNS = [
   { key: 'rc', label: 'REC', width: 44, stat: true, sortable: true, dir: 'desc' },
   { key: 'cy', label: 'YDS', width: 50, stat: true, sortable: true, dir: 'desc' },
   { key: 'ct', label: 'TD', width: 40, stat: true, sortable: true, dir: 'desc' },
+  // overallScore() — the same "Juke score" used everywhere else on the
+  // site, as a share of the best figure on the board. Sortable: this is
+  // the one DraftRoom's reader already had a branch for (it used to be
+  // what 'vorp' sorted by), so 'juke' just takes over that same reader.
+  { key: 'juke', label: 'JUKE', width: 44, sortable: true, dir: 'desc', tone: 'teal' },
+  { key: 'tier', label: 'TIER', width: 44 },
+  { key: 'lasts', label: 'LASTS', width: 50 },
 ]
 
 /* Derived rather than a second hand-written copy, so the header, the
@@ -74,13 +124,20 @@ export const MOBILE_SORTS = [
   { key: 'board', label: 'Board' },
   { key: 'adp', label: 'ADP' },
   { key: 'pts', label: 'Pts' },
-  { key: 'vorp', label: 'VORP' },
+  { key: 'juke', label: 'Juke' },
 ]
 
-// Raw counting stats live on the projection block; the four derived ones
-// come from readers the list already has. Returns null for "this player
-// has no such stat", which renders as a dash rather than a zero — the
-// same rule the rest of the app follows about absent versus nought.
+// Raw counting stats live on the projection block; the derived ones come
+// from readers the list already has. Returns null for "this player has no
+// such stat", which renders as a dash rather than a zero — the same rule
+// the rest of the app follows about absent versus nought.
+//
+// ctx: { pointsFor, vorpFor, valueFor, survivalFor, projOf } — season
+// toggles (the Players tab's "2025 Season" mode) live entirely in which
+// functions the caller passes as pointsFor/vorpFor, never here: PTS/VORP
+// read whatever ctx hands them, so a caller with no season concept (the
+// mobile sheet, the Board tab's dock) just passes the plain projected
+// readers and gets the plain projected behaviour, unchanged.
 export function statValue(col, player, ctx) {
   if (col.key === 'adp') {
     return typeof player.adp === 'number' && Number.isFinite(player.adp) ? player.adp.toFixed(1) : null
@@ -91,8 +148,20 @@ export function statValue(col, player, ctx) {
     return v == null ? null : Math.round(v)
   }
   if (col.key === 'vorp') {
+    const v = ctx.vorpFor(player)
+    return v == null ? null : Math.round(v)
+  }
+  if (col.key === 'juke') {
     const v = ctx.valueFor(player)
     return v == null ? null : Math.round(v)
+  }
+  if (col.key === 'tier') return player.tier != null ? 'T' + player.tier : null
+  // A rounded percentage — the % suffix and the three-band colour
+  // (rose/amber/ink-soft) are display concerns, applied where the cell is
+  // actually painted (see lastsTone() below), not baked in here.
+  if (col.key === 'lasts') {
+    const v = ctx.survivalFor(player)
+    return v == null ? null : Math.round(v * 100)
   }
   const proj = ctx.projOf(player)
   const raw = proj ? proj[col.key] : undefined
@@ -100,4 +169,16 @@ export function statValue(col, player, ctx) {
   // feed also zero-fills, so an absent key and a zero both read as
   // nothing worth a column cell.
   return raw ? Math.round(raw) : null
+}
+
+// LASTS is the one column whose colour depends on its own value rather
+// than being fixed for the whole column (every other column's colour is
+// `col.tone`, read as-is). Thresholds match the design handoff and the
+// Decide tab's own survival cards: under 25% is a real risk (rose), 25-59%
+// is a coin flip worth queuing for (amber), 60%+ reads as safe to wait on
+// (ink-soft, the same quiet tone an unremarkable number gets everywhere
+// else in this table).
+export function lastsTone(pct) {
+  if (pct == null) return null
+  return pct < 25 ? 'rose' : pct < 60 ? 'amber' : 'soft'
 }

@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { ChevronRight } from 'lucide-react'
+import { ChevronDown, ChevronUp } from 'lucide-react'
 import { POS_BADGE, POS_SOLID, INJURY_META } from './draftRoomPositions.js'
 
 // A team has no photo, so its header avatar is initials in a solid
@@ -188,7 +188,32 @@ function mineEdge(isMine, isFirstRound, isLastRound) {
 // "your column" and "the live pick" stay two readable facts instead of one
 // cell trying to carry both.
 
-export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLabelOf, onTeamClick, shortNameOf, onClaimSeat, seats, onOpenLog, onSelectPlayer }) {
+// The dock-raise/lower chevron pair, on the board's own bottom-right corner
+// rather than in DraftRoom.jsx as a sibling overlay — the board is the
+// thing whose corner this sits on, and DraftLobby.jsx mounts this same
+// component with no dock beneath it at all (trayPos/onTrayUp/onTrayDown all
+// undefined there), so the pair only renders when a real dock is passed in.
+function RaiseLowerButton({ onClick, disabled, title, children }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      aria-label={title}
+      className={
+        'flex h-6 w-6 items-center justify-center rounded-full border transition-colors duration-150 ' +
+        (disabled
+          ? 'cursor-not-allowed border-slate-rule bg-slate-sunk/70 text-white/15'
+          : 'border-slate-rule bg-slate-sunk/80 text-white/60 hover:border-teal-400/50 hover:text-teal-300')
+      }
+    >
+      {children}
+    </button>
+  )
+}
+
+export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLabelOf, onTeamClick, shortNameOf, onClaimSeat, seats, onSelectPlayer, trayPos, onTrayUp, onTrayDown }) {
   const byCell = new Map()
   picks.forEach((p) => byCell.set(p.round + '-' + p.slot, p))
 
@@ -207,35 +232,37 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
      benchmarked against — scrolls rather than compresses. 120px is under
      what a long name wants at the widest league sizes, which is exactly
      why the horizontal scroll stays: this is a floor, not a fit. */
-  /* 30px gutter below lg, not 64. A round number is one or two digits and
-     the rail is sticky, so it is permanently on screen — 64px of a 390px
-     phone is 16% of the width spent on "12", and the 34px it gives back is
-     most of a column's worth of name. The floor rises to 120 with it, which
-     is the width the handoff measured a hyphenated name against
-     ("J. Smith-Njigba" wants 81px once the pick code's own reserve is out of
-     the way); the grid scrolls either way, so a wider column costs nothing
-     but scroll distance. Desktop keeps its own pair below.
+  /* 36px gutter below lg, not 64 and not the 30px this used to be either.
+     A round number is one or two digits and the rail is sticky, so it is
+     permanently on screen. 36+108 is the mobile board pass's own pair
+     (see the seat column note below) — both moved together so a ten-team
+     board lands on exactly 1116px, the acceptance check's own number,
+     rather than the two floors being tuned independently and drifting
+     apart. Desktop keeps its own pair below, untouched.
 
-     Fixed 120px below lg, not minmax(120px, 1fr). The floor is the right
-     shape for desktop — see the note above — but combined with this grid's
-     own min-w-max it resolves to max-content, and a board of real player
-     names came out at 179px a column: 1819px of scroll on a 390px phone,
-     4.7 screens wide, against the 1230px (30 + 10 x 120) a fixed track
-     gives. On a width where you can see three columns at once, how far the
-     board runs is the cost that matters, and 120px is already measured
-     against the longest name it has to hold. */
-  const cols = `30px repeat(${teams}, 120px)`
+     Fixed 108px below lg, not minmax(108px, 1fr). The floor is the right
+     shape for desktop — see the note on colsWide below — but combined
+     with this grid's own min-w-max it resolves to max-content, and a
+     board of real player names came out well past what a fixed track
+     gives. On a width where you can see three columns at once, how far
+     the board runs is the cost that matters, and 108px is the mobile
+     board pass's own measured floor for the longest name it has to hold
+     at this row height. */
+  const cols = `36px repeat(${teams}, 108px)`
   const colsWide = `56px repeat(${teams}, minmax(120px, 1fr))`
   /* Explicit rows, not another auto-rows floor: the header keeps its own
      natural (avatar + name) height, and every round after it is exactly
-     50px — a fixed size, never a minimum. The old
+     46px below lg, 50px at lg+ — a fixed size, never a minimum. The old
      auto-rows-[minmax(34px,auto)] let a round's height come from its
      tallest cell's own content, which is exactly the thing a fixed-height
      design needs to stop being possible; naming every track here removes
-     the question rather than narrowing it. */
-  const rowsTemplate = `auto repeat(${rounds}, 56px)`
+     the question rather than narrowing it. 46, not the 56 this used to
+     be: the mobile board pass's own row height, paired with the smaller
+     108px column and 24px seat avatar below so the whole header/row
+     stack shrinks together rather than the columns narrowing under rows
+     still sized for the wider ones. */
+  const rowsTemplate = `auto repeat(${rounds}, 46px)`
   const rowsWide = `auto repeat(${rounds}, 50px)`
-  const totalPicks = teams * rounds
 
   return (
     // w-full h-full, not a flex-basis of its own: DraftRoom.jsx now wraps
@@ -247,34 +274,7 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
     // column at its real width, never squashed), so on a phone it's always
     // wider than the viewport — this box is what scrolls, both directions,
     // with touch.
-    <div className="flex h-full min-h-[240px] w-full flex-1 flex-col overflow-hidden border-b border-slate-rule bg-slate lg:border-b-0 lg:border-r">
-      {/* Title, the real picks-made count, and the Log link — mobile only.
-          Desktop draws none of this row: it already has DraftLogDock as a
-          permanent side panel, and that panel's own "Log" tab content
-          inside PlayerHub is itself lg:hidden — wiring this same button in
-          at lg+ would open a sheet with nothing visible inside it, the
-          dead-control failure CLAUDE.md names outright. The count is real,
-          not a placeholder: picks.length and totalPicks are the same
-          numbers the rest of the room already reads off picks/league. */}
-      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-rule px-3 py-2 lg:hidden">
-        <h2 className="text-lg font-bold text-white">The board</h2>
-        <div className="flex items-center gap-3">
-          <span className="font-plex text-xs text-white/60">
-            {picks.length} of {totalPicks}
-          </span>
-          {onOpenLog && (
-            <button
-              type="button"
-              onClick={onOpenLog}
-              className="flex items-center gap-0.5 text-xs font-semibold text-teal-300 transition-colors duration-150 hover:text-teal-200"
-            >
-              Log
-              <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
-            </button>
-          )}
-        </div>
-      </div>
-
+    <div className="relative flex h-full min-h-[240px] w-full flex-1 flex-col overflow-hidden border-b border-slate-rule bg-slate lg:border-b-0 lg:border-r">
       {/* The legend, above the grid rather than below it — a reader meets
           it before the first cell, not after scrolling past however many
           rounds are already on the board. Position leads now: it's the
@@ -323,7 +323,7 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
           one scrollbar on this screen rather than a nested one fighting an
           outer page scroll. flex-1 min-h-0 is what makes it claim exactly
           the remaining height rather than growing to its content. */}
-      <div className="min-h-0 w-full flex-1 overflow-x-auto overflow-y-auto">
+      <div className="no-scrollbar-below-lg min-h-0 w-full flex-1 overflow-x-auto overflow-y-auto">
       {/* pb-[7rem+tab bar] below lg: PlayerHub's sheet is fixed over the
           bottom edge there and would otherwise cover the last couple of
           rounds when scrolled all the way down. The 7rem (112px, pb-28's own
@@ -417,19 +417,23 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
             </div>
           )
         }) : Array.from({ length: teams }, (_, s) => {
-          // A 30px avatar (initials, no photo — a team has none) plus a
-          // centred name, replacing the roster-count strip: a design
-          // review read that strip as an unlabelled row of coloured
-          // digits, and the handoff this room was built from says the
-          // header should carry a name, "not a name crushed over four
-          // count chips" in the first place — so the fix is to not print
-          // the chips here at all, not to caption them.
+          // A 24px avatar below lg (30px at lg+, unchanged), initials, no
+          // photo — a team has none — plus a centred name, replacing the
+          // roster-count strip: a design review read that strip as an
+          // unlabelled row of coloured digits, and the handoff this room
+          // was built from says the header should carry a name, "not a
+          // name crushed over four count chips" in the first place — so
+          // the fix is to not print the chips here at all, not to caption
+          // them. 24, not 30, below lg: the mobile board pass's own seat
+          // header size, shrinking with the 108px column and 46px row it
+          // sits above rather than staying the desktop circle in a
+          // narrower box.
           const label = s === mySlot ? 'YOU' : teamLabelOf(s)
           const content = (
             <>
               <span
                 className={
-                  'flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full text-[11px] font-bold ' +
+                  'flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold lg:h-[30px] lg:w-[30px] ' +
                   (s === mySlot ? 'bg-[#FFD166] text-obsidian' : 'bg-white/10 text-white/60')
                 }
                 aria-hidden="true"
@@ -500,7 +504,7 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
                 return (
                   <div
                     key={round + '-' + s}
-                    className={'h-[56px] lg:h-[50px] box-border border-b border-r border-slate-rule/70 p-0.5 ' + mineEdge(isMine, round === 1, round === rounds)}
+                    className={'h-[46px] lg:h-[50px] box-border border-b border-r border-slate-rule/70 p-0.5 ' + mineEdge(isMine, round === 1, round === rounds)}
                   >
                     {pick ? (
                       // layoutId matches the same player's row in
@@ -665,6 +669,32 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
         })}
       </div>
       </div>
+
+      {/* right-[14px] bottom-[12px], matching the handoff exactly — this
+          sits over the board's own scroll container, not the dock, so it
+          stays reachable however tall the dock currently is. Each end
+          disables and dims rather than disappearing, which is what tells a
+          reader the range has an end at all (CLAUDE.md's own two-button
+          precedent for this exact control, one per direction rather than a
+          single button that wraps around). */}
+      {trayPos && (onTrayUp || onTrayDown) && (
+        <div className="absolute bottom-3 right-3.5 z-40 hidden flex-col gap-1 lg:flex">
+          <RaiseLowerButton
+            onClick={onTrayUp}
+            disabled={trayPos === 'raised'}
+            title={trayPos === 'raised' ? 'The pool is already raised' : 'Raise the pool'}
+          >
+            <ChevronUp className="h-3.5 w-3.5" />
+          </RaiseLowerButton>
+          <RaiseLowerButton
+            onClick={onTrayDown}
+            disabled={trayPos === 'hidden'}
+            title={trayPos === 'hidden' ? 'The pool is already closed' : 'Lower the pool'}
+          >
+            <ChevronDown className="h-3.5 w-3.5" />
+          </RaiseLowerButton>
+        </div>
+      )}
     </div>
   )
 }

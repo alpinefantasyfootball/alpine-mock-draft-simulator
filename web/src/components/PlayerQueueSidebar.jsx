@@ -2,27 +2,27 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { Bookmark, ChevronDown, ChevronUp, Search, Star } from 'lucide-react'
 import { POS_BADGE, POS_LIST, INJURY_META } from './draftRoomPositions.js'
 import JukeValueAssistant from './JukeValueAssistant.jsx'
-import { MOBILE_SORTS, STAT_COLUMNS, STAT_GROUPS, statValue } from './playerColumns.js'
+import { MOBILE_COL_WIDTH, MOBILE_GROUPS, MOBILE_SORTS, STAT_COLUMNS, STAT_GROUPS, statValue, lastsTone } from './playerColumns.js'
 
 // Keyed lookup so the group header can total its own columns' widths
 // rather than carrying a second copy of them.
 const COL_BY_KEY = Object.fromEntries(STAT_COLUMNS.map((c) => [c.key, c]))
 
-/* The identity column's width, and the shape every cell in it shares.
-   168px holds a star, a 28px headshot and two lines of name/team at the
-   sizes below — measured against the longest real name on the board
-   ("Bone-Thugs-N-Montgomery" is a team, but "Jaxon Smith-Njigba" is a
-   player) — and leaves a 375px phone about 200px of scrollable stats,
-   which is four columns before a swipe. */
-/* Two widths, not one. A bigger headshot on desktop has to come out of
-   somewhere, and taking it out of the player's name would trade one
-   legibility problem for another - so the whole identity column grows with
-   it at lg+. It reaches CSS as a custom property because a `style` prop
-   cannot hold a media query, and every consumer (the header spacer, the
-   column header, the row) reads the same property, which is what keeps the
-   sticky column aligned against the cells scrolling underneath it. */
-const NAME_W_VAR = 'var(--name-w)'
-const ACTION_W = 68
+/* The identity block's width on desktop, and the shape every cell in it
+   shares there. 296px holds the queue star, a 58px Draft pill, a 32px
+   headshot/initials circle and about 146px of name — measured against
+   "Jaxon Smith-Njigba", the Players tab's own longest real name.
+
+   `mobile` (below) is the phone/app variant: 208px, no Draft pill (there is
+   nowhere on a 402px row for a 44px pill, a 44px star and a headshot to
+   leave the name more than 82px — three of the first six real names
+   clipped, measured), the POS badge moves back onto the avatar instead of
+   its own scrolling column, and the row's own tap opens the player sheet
+   (PlayerProfileModal) rather than drafting inline — see that component's
+   own comment for the Draft/Queue actions living there instead. */
+const NAME_W = 296
+const MOBILE_NAME_W = 208
+const POS_W = 44
 const STICKY_CELL = 'sticky left-0 z-20 flex shrink-0 items-center px-2'
 
 // FLEX sits after the four skill positions and before K/DST, matching
@@ -36,7 +36,7 @@ const FILTERS = ['ALL', ...POS_LIST, 'FLEX', 'K', 'DST']
 function countTitle(pos, c) {
   const left = c.need - c.have
   if (pos === 'ALL') {
-    return c.short ? `${left} roster ${left === 1 ? 'spot' : 'spots'} still to fill` : 'Your roster is full'
+    return c.short ? `${left} more roster ${left === 1 ? 'spot' : 'spots'} still to fill` : 'Your roster is full'
   }
   if (c.short) return `${left} more ${pos} to fill your starting lineup`
   if (c.full) return `You are holding as many ${pos} as this draft will suggest`
@@ -45,12 +45,20 @@ function countTitle(pos, c) {
 
 /* The sort keys, the column widths and the cell readers all live in
    playerColumns.js now — one definition serving the table header, the
-   mobile chips and DraftRoom's sort. The old GRID_COLS template is gone
-   with the two-layout split it described (a desktop grid over a mobile
-   card); one scrollable table serves both breakpoints. SORT_DEFAULT_DIR
-   is re-exported rather than redefined so DraftRoom's existing import
-   keeps working against that same single source. */
+   mobile chips and DraftRoom's sort. SORT_DEFAULT_DIR is re-exported rather
+   than redefined so DraftRoom's existing import keeps working against that
+   same single source. */
 export { SORT_DEFAULT_DIR } from './playerColumns.js'
+
+/* rose/amber/soft -> real classes, kept out of playerColumns.js: that file
+   computes the *value* a cell should show (lastsTone()'s three-way split),
+   never a class name — the same separation every other column already
+   keeps between statValue() and the tone the table paints it in. */
+const LASTS_CLASS = {
+  rose: 'text-rose-300',
+  amber: 'text-amber-300',
+  soft: 'text-ink-soft',
+}
 
 // Real, undrafted board players only — this is `board()` filtered/sorted at
 // the UI layer, not a second suggestions engine. Ranking (ADP, need, risk,
@@ -71,7 +79,9 @@ export default function PlayerQueueSidebar({
   showDrafted,
   onShowDrafted,
   pointsFor,
+  vorpFor,
   valueFor,
+  survivalFor,
   photoFor,
   initialsFor,
   onDraft,
@@ -89,21 +99,47 @@ export default function PlayerQueueSidebar({
   recommendedTierLeft,
   projOf,
   tierAvgByPos,
+  // The Players tab mounts just this table — its own filter bar and
+  // Autopick ribbon replace the recommendation card, search box, position
+  // chips and toggles below, so none of that header renders here. The
+  // mobile sheet (PlayerHub.jsx) and the Board tab's dock both leave this
+  // false and get the header exactly as before.
+  bareTable,
+  // "Projected" everywhere except the Players tab's "2025 Season" mode,
+  // where it's the actual year ("2025 Actual") — a caller-supplied label
+  // rather than a second copy of the season names playerColumns.js has no
+  // reason to know about.
+  projectedGroupLabel,
+  // The phone/app pool (PlayersTab.jsx's mobile Pool pane): a narrower
+  // identity block, MOBILE_GROUPS' own order (the decision numbers first),
+  // a flat per-column width instead of each column's own desktop width,
+  // no separate POS column, and no Draft pill in the row.
+  mobile,
 }) {
-  /* What statValue() reads a cell from: the two derived columns keep the
+  /* What statValue() reads a cell from: the derived columns keep the
      readers this list already had, so the table can never disagree with
-     the recommendation card or the sort about a player's points or VORP,
-     and the raw counting stats come off the projection block. */
-  const statCtx = { pointsFor, valueFor, projOf }
+     the recommendation card or the sort about a player's points, VORP or
+     Juke score, and the raw counting stats come off the projection block. */
+  const statCtx = { pointsFor, vorpFor, valueFor, survivalFor, projOf }
+
+  const nameW = mobile ? MOBILE_NAME_W : NAME_W
+  const colWidth = (col) => (mobile ? MOBILE_COL_WIDTH : col.width)
 
   // A single position filter narrows the stat groups to the ones that
   // position actually has — "ALL" keeps every group, the union-across-
   // positions shape playerColumns.js's own header comment documents.
   // Filtering here, not there: STAT_GROUPS/STAT_COLUMNS stay the one list
-  // every consumer of this file shares.
-  const visibleGroups = STAT_GROUPS.filter((g) => !g.positions || posFilter === 'ALL' || g.positions.includes(posFilter))
-  const visibleKeys = new Set(visibleGroups.flatMap((g) => g.keys))
-  const visibleColumns = STAT_COLUMNS.filter((c) => visibleKeys.has(c.key))
+  // every consumer of this file shares. The Juke group is never filtered
+  // out — an unranked K/DST prints an em dash in it rather than losing the
+  // group, same as overallScore()/survivalProbability() withhold a number
+  // rather than a column. MOBILE_GROUPS reorders the same six groups
+  // (decision numbers first); it is never a different set of columns.
+  const groupSource = mobile ? MOBILE_GROUPS : STAT_GROUPS
+  const visibleGroups = groupSource.filter((g) => !g.positions || posFilter === 'ALL' || g.positions.includes(posFilter))
+  // Columns in whichever order visibleGroups is already in — desktop's own
+  // STAT_GROUPS order or MOBILE_GROUPS' reordered one — rather than a
+  // separate filter-then-sort pass that could disagree with it.
+  const visibleColumns = visibleGroups.flatMap((g) => g.keys.map((k) => COL_BY_KEY[k]))
 
   /* Tier-cliff dividers, interleaved into the row list rather than drawn
      per-row — a divider belongs *between* two players, so it has to be
@@ -173,10 +209,7 @@ export default function PlayerQueueSidebar({
     // 6867px tall inside a 518px parent, which handed flex-1 below an
     // unbounded height to divide and left the list unable to scroll at all.
     <div className="flex w-full flex-col overflow-hidden bg-slate-bar/40">
-      {/* Tighter chrome at lg+ (p-2.5, space-y-2 rather than p-4/space-y-3):
-          on the desktop panel row this header competes with the list for
-          about 470px, and every pixel it gives back is another player
-          visible. Below lg the sheet is 75vh and can afford the room. */}
+      {!bareTable && (
       <div className="shrink-0 space-y-3 border-b border-slate-rule p-4 lg:space-y-2 lg:p-2.5">
         {/* Replaces the old plain "Juke AI Draft Assistant" label — this
             is that framing with an actual real recommendation behind it
@@ -365,6 +398,7 @@ export default function PlayerQueueSidebar({
           </p>
         )}
       </div>
+      )}
 
 
       {/* One horizontally scrollable table, both breakpoints. The stats a
@@ -392,37 +426,74 @@ export default function PlayerQueueSidebar({
           reach it. Same class as the entry screen's stacking bug, mirrored:
           there min-h-0 was present where it had to be absent, here it was
           absent where it has to be present. */}
-      <div className="min-h-0 flex-1 overflow-auto pb-28 lg:pb-6 [--name-w:168px] lg:[--name-w:208px]">
+      {/* pb-28 clears PlayerHub's own floating sheet (Board/Analysis's
+          mobile fallback) — the one context this padding was written for.
+          The new mobile Pool pane sits in normal flow above the bottom bar
+          instead of floating over anything, so it only needs a small
+          breathing gap, not 112px of it. */}
+      <div className={'min-h-0 flex-1 overflow-auto ' + (mobile ? 'no-scrollbar pb-4' : 'pb-28 lg:pb-6')}>
         <div className="min-w-max">
           {/* Group header — the spanning row saying which family of stats
               the columns beneath belong to, so "YDS" three times over is
-              never ambiguous. */}
+              never ambiguous.
+
+              flex: n 0 (sum of its columns' widths)px, n being the column
+              count — this has to be the *grow factor* the columns beneath
+              it collectively add up to (each grows by 1), not just a
+              starting width, or the group's own edge stops lining up with
+              its last column's edge the moment there's leftover width to
+              share out (see the numeric columns' own comment below). */}
           <div className="sticky top-0 z-30 flex border-b border-slate-rule bg-slate-panel">
-            <div className={STICKY_CELL + ' bg-slate-panel'} style={{ width: NAME_W_VAR }} />
-            {visibleGroups.map((g) => {
-              const w = g.keys.reduce((sum, k) => sum + COL_BY_KEY[k].width, 0)
+            <div className={STICKY_CELL + ' bg-slate-panel'} style={{ flex: `0 0 ${nameW}px` }} />
+            {visibleGroups.map((g, gi) => {
+              // POS has no entry in STAT_GROUPS (it isn't a statValue()
+              // column, it's the hand-coded badge column below) but the
+              // handoff's own desktop group row still spans it under the
+              // same blank label as BYE/ADP — one group cell over the
+              // three, not POS getting a second, redundant "POS" header of
+              // its own next to the column row's real "Pos" label. Mobile
+              // has no separate POS column at all (the badge sits on the
+              // avatar instead), so this merge is desktop-only.
+              const cols = g.keys.map((k) => COL_BY_KEY[k])
+              const posSpan = !mobile && gi === 0 ? 1 : 0
+              const w = cols.reduce((sum, c) => sum + colWidth(c), 0) + posSpan * POS_W
               return (
                 <div
                   key={g.label || 'core'}
-                  style={{ width: w }}
-                  className="shrink-0 border-l border-slate-rule/60 px-1 pt-1 text-center text-[9px] font-semibold uppercase tracking-wide text-ink-muted"
+                  style={{ flex: `${cols.length + posSpan} 0 ${w}px` }}
+                  className={
+                    'shrink-0 border-l border-slate-rule/60 pt-1 text-center text-[9px] font-semibold uppercase tracking-wide ' +
+                    (g.teal ? 'text-teal-300' : 'text-ink-muted')
+                  }
                 >
-                  {g.label}
+                  {g.label === 'Projected' && projectedGroupLabel ? projectedGroupLabel : g.label}
                 </div>
               )
             })}
-            <div style={{ width: ACTION_W }} className="shrink-0" />
           </div>
 
           {/* Column header — sortable where the sort reader can order by
-              it. Sticky under the group row, hence the offset top. */}
+              it. Sticky under the group row, hence the offset top.
+
+              Every numeric column is flex 1 0 {width}px — grow:1, shrink:0,
+              its own width as the starting basis — so the columns share out
+              any leftover width evenly instead of leaving a gutter between
+              the identity block and PTS. A fixed, non-growing width (what
+              this table used before) is what left that gutter: the columns
+              summed to less than the container's real width the moment the
+              container was wider than ~900px, and nothing claimed the rest. */}
           <div className="sticky top-[18px] z-30 flex border-b border-slate-rule bg-slate-panel">
             <div
               className={STICKY_CELL + ' bg-slate-panel text-[10px] font-semibold uppercase tracking-wide text-ink-muted'}
-              style={{ width: NAME_W_VAR }}
+              style={{ flex: `0 0 ${nameW}px` }}
             >
               Player
             </div>
+            {!mobile && (
+              <div style={{ flex: `1 0 ${POS_W}px` }} className="flex shrink-0 items-center justify-center border-l border-slate-rule/60 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
+                Pos
+              </div>
+            )}
             {visibleColumns.map((col) => {
               const active = sortBy === col.key
               const content = (
@@ -438,7 +509,7 @@ export default function PlayerQueueSidebar({
                   key={col.key}
                   type="button"
                   onClick={() => onSort(col.key)}
-                  style={{ width: col.width }}
+                  style={{ flex: `1 0 ${colWidth(col)}px` }}
                   className={
                     'flex shrink-0 items-center justify-end gap-0.5 border-l border-slate-rule/60 px-1.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide transition-colors duration-150 ' +
                     (active ? 'text-teal-300' : 'text-ink-muted hover:text-white/60')
@@ -449,14 +520,13 @@ export default function PlayerQueueSidebar({
               ) : (
                 <div
                   key={col.key}
-                  style={{ width: col.width }}
+                  style={{ flex: `1 0 ${colWidth(col)}px` }}
                   className="flex shrink-0 items-center justify-end border-l border-slate-rule/60 px-1.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-ink-muted"
                 >
                   {content}
                 </div>
               )
             })}
-            <div style={{ width: ACTION_W }} className="shrink-0 border-l border-slate-rule/60" />
           </div>
 
           <AnimatePresence initial={false}>
@@ -524,96 +594,42 @@ export default function PlayerQueueSidebar({
                   {/* Sticky identity cell — who the row is about stays put
                       while the numbers scroll. Opaque on purpose: a
                       transparent sticky cell lets the scrolling cells
-                      slide visibly beneath it. */}
-                  <div className={STICKY_CELL + ' gap-2 bg-slate-sunk'} style={{ width: NAME_W_VAR }}>
+                      slide visibly beneath it.
+
+                      Order: queue star, Draft pill, headshot, name over
+                      team — the Draft button lives here now rather than at
+                      the row's far end, so a thumb (or, here, a mouse
+                      that's already reading the name) never has to cross
+                      the entire scrollable width to reach it. */}
+                  <div className={STICKY_CELL + ' gap-2 bg-slate-sunk'} style={{ flex: `0 0 ${nameW}px` }}>
                     {player.drafted ? (
-                      <Star className="h-4 w-4 shrink-0 text-white/10" />
+                      <Star className={'shrink-0 text-white/10 ' + (mobile ? 'h-[15px] w-[15px]' : 'h-4 w-4')} />
                     ) : (
+                      // 26px wide, 44px tall tap area on mobile — the
+                      // handoff's own floor for anything tappable, on a
+                      // control that's visually much smaller than that.
                       <button
                         type="button"
                         onClick={(e) => { e.stopPropagation(); onToggleQueue(player.name) }}
                         title={queued ? 'Remove from your queue' : 'Add to your queue'}
-                        className="shrink-0 text-ink-muted transition-colors duration-150 hover:text-amber-300"
+                        className={
+                          'flex shrink-0 items-center justify-center text-ink-muted transition-colors duration-150 hover:text-amber-300 ' +
+                          (mobile ? 'h-11 w-[26px]' : '')
+                        }
                       >
                         <Star className={'h-4 w-4 ' + (queued ? 'fill-amber-300 text-amber-300' : '')} />
                       </button>
                     )}
 
-                    <div className="relative shrink-0">
-                      {/* 28px on a phone, 40px at lg+. Measured before it was
-                          changed: the source is 250 to 350px wide and sharp,
-                          so nothing here was ever upscaled - at 28px the face
-                          is simply too small to identify, which reads as
-                          "grainy" without being a resolution problem at all.
-                          40px at dpr 2 asks for 80 device pixels, still a
-                          third of the smallest source. */}
-                      <div className="relative flex h-7 w-7 lg:h-10 lg:w-10 items-center justify-center overflow-hidden rounded-full bg-slate-sunk text-[8px] lg:text-[10px] font-bold text-ink-soft">
-                        {initialsFor(player)}
-                        {photo && (
-                          <img
-                            src={photo}
-                            alt=""
-                            loading="lazy"
-                            onError={(e) => e.currentTarget.remove()}
-                            className={'absolute inset-0 h-full w-full ' + (player.pos === 'DST' ? 'object-contain p-1' : 'object-cover')}
-                          />
-                        )}
-                      </div>
-                      <span
-                        className={
-                          'absolute -bottom-1 -right-1 rounded px-1 py-px text-[7px] font-bold leading-tight ring-2 ring-slate-sunk ' +
-                          (POS_BADGE[player.pos] || 'bg-white/10 text-white/50')
-                        }
-                      >
-                        {player.pos}
-                      </span>
-                    </div>
-
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-xs font-medium text-white/90">{player.name}</p>
-                      <p className="flex items-center gap-1 truncate text-[10px] text-ink-muted">
-                        {player.team}
-                        {INJURY_META[player.inj] && (
-                          <span className={'rounded px-1 py-px text-[8px] font-bold uppercase leading-tight ' + INJURY_META[player.inj].cls}>
-                            {player.inj}
-                          </span>
-                        )}
-                      </p>
-                    </div>
-                  </div>
-
-                  {visibleColumns.map((col) => {
-                    const v = statValue(col, player, statCtx)
-                    return (
-                      <div
-                        key={col.key}
-                        style={{ width: col.width }}
-                        className={
-                          'flex shrink-0 items-center justify-end border-l border-slate-rule/40 px-1.5 py-2 text-xs tabular-nums ' +
-                          (v == null
-                            ? 'text-white/15'
-                            : col.tone === 'teal'
-                              ? 'font-semibold text-teal-400/90'
-                              : col.tone === 'strong'
-                                ? 'font-medium text-white/80'
-                                : 'text-white/55')
-                        }
-                      >
-                        {v == null ? '—' : v}
-                      </div>
-                    )
-                  })}
-
-                  {/* The action sits at the row's end rather than in the
-                      sticky cell: sticking it would cost the identity
-                      block another 70px, which on a phone is most of what
-                      is left for the stats this change exists to show. */}
-                  <div
-                    style={{ width: ACTION_W }}
-                    className="flex shrink-0 items-center justify-center border-l border-slate-rule/40 px-1.5"
-                  >
-                    {draftedBy ? (
-                      <span className="truncate text-[9px] font-semibold uppercase tracking-wide text-ink-muted">
+                    {/* No Draft pill on mobile at all — a 44px pill plus a
+                        44px star plus the avatar left the name 82px on a
+                        402px screen, clipping three of the first six real
+                        names, and `title` is not an affordance a phone has.
+                        The row's own tap (below) opens the sheet instead,
+                        where Draft is a real 48px action — see
+                        PlayerProfileModal.jsx. */}
+                    {!mobile && (draftedBy ? (
+                      <span className="w-[58px] shrink-0 truncate text-center text-[9px] font-semibold uppercase tracking-wide text-ink-muted">
                         {draftedBy}
                       </span>
                     ) : (
@@ -632,7 +648,7 @@ export default function PlayerQueueSidebar({
                         disabled={!myTurn}
                         title={myTurn ? undefined : 'Not your turn'}
                         className={
-                          'w-full rounded-full border px-2 py-1.5 text-[11px] font-bold transition-colors duration-150 ' +
+                          'w-[58px] shrink-0 rounded-full border py-1.5 text-[11px] font-bold transition-colors duration-150 ' +
                           (myTurn
                             ? 'border-white/15 text-white/70 hover:border-teal-400/50 hover:bg-teal-400/[0.06] hover:text-teal-300 active:scale-95'
                             : 'cursor-not-allowed border-white/5 text-white/20')
@@ -640,8 +656,84 @@ export default function PlayerQueueSidebar({
                       >
                         Draft
                       </button>
-                    )}
+                    ))}
+
+                    {/* 32px flat, not the old 28/40px mobile/desktop split
+                        that came with the identity block's own two widths —
+                        see NAME_W's comment. Desktop pins no badge here: POS
+                        is its own scrolling column instead (right after this
+                        block). Mobile has no such column, so the badge sits
+                        back on the avatar, the same overlay treatment the
+                        board's own board-card face and the Picks rail
+                        already use for a face with no room beside it. */}
+                    <div className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-sunk text-[9px] font-bold text-ink-soft">
+                      {initialsFor(player)}
+                      {photo && (
+                        <img
+                          src={photo}
+                          alt=""
+                          loading="lazy"
+                          onError={(e) => e.currentTarget.remove()}
+                          className={'absolute inset-0 h-full w-full ' + (player.pos === 'DST' ? 'object-contain p-1' : 'object-cover')}
+                        />
+                      )}
+                      {mobile && (
+                        <span
+                          className={
+                            'absolute -bottom-1 -right-1 rounded px-1 py-px text-[7px] font-bold leading-tight ring-2 ring-slate-sunk ' +
+                            (POS_BADGE[player.pos] || 'bg-white/10 text-white/50')
+                          }
+                        >
+                          {player.pos}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-xs font-medium text-white/90">{player.name}</p>
+                      <p className="flex items-center gap-1 truncate text-[10px] text-ink-muted">
+                        {player.team}
+                        {INJURY_META[player.inj] && (
+                          <span className={'rounded px-1 py-px text-[8px] font-bold uppercase leading-tight ' + INJURY_META[player.inj].cls}>
+                            {player.inj}
+                          </span>
+                        )}
+                      </p>
+                    </div>
                   </div>
+
+                  {!mobile && (
+                    <div style={{ flex: `1 0 ${POS_W}px` }} className="flex shrink-0 items-center justify-center border-l border-slate-rule/40">
+                      <span className={'rounded px-1.5 py-0.5 text-[9px] font-bold ' + (POS_BADGE[player.pos] || 'bg-white/10 text-white/60')}>
+                        {player.pos}
+                      </span>
+                    </div>
+                  )}
+
+                  {visibleColumns.map((col) => {
+                    const v = statValue(col, player, statCtx)
+                    const tone = col.key === 'lasts' ? lastsTone(v) : null
+                    return (
+                      <div
+                        key={col.key}
+                        style={{ flex: `1 0 ${colWidth(col)}px` }}
+                        className={
+                          'flex shrink-0 items-center justify-end border-l border-slate-rule/40 px-1.5 py-2 text-xs tabular-nums ' +
+                          (v == null
+                            ? 'text-white/15'
+                            : tone
+                              ? LASTS_CLASS[tone] + ' font-medium'
+                              : col.tone === 'teal'
+                                ? 'font-semibold text-teal-400/90'
+                                : col.tone === 'strong'
+                                  ? 'font-medium text-white/80'
+                                  : 'text-white/55')
+                        }
+                      >
+                        {v == null ? '—' : col.key === 'lasts' ? v + '%' : v}
+                      </div>
+                    )
+                  })}
                 </motion.div>
               )
             })}

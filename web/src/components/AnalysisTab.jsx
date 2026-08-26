@@ -409,7 +409,7 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
               only, per the handoff's own instruction not to invent new
               behavior here. */}
           <details className="group mt-5 rounded-xl border border-slate-rule bg-slate-panel/40 p-4">
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
+            <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3">
               <span>
                 <span className="block text-[14px] font-bold text-white">How this grade is calculated</span>
                 <span className="mt-0.5 block text-[13.5px] text-ink-muted">The full method, in plain English</span>
@@ -449,7 +449,7 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
             <button
               type="button"
               onClick={() => setShowAllTeams((v) => !v)}
-              className="mt-2.5 inline-block py-1.5 text-[13.5px] font-semibold text-ink-muted transition-colors duration-150 hover:text-teal-300"
+              className="mt-1 flex h-11 items-center text-[13.5px] font-semibold text-ink-muted transition-colors duration-150 hover:text-teal-300"
             >
               {showAllTeams ? 'Show fewer ‹' : 'Show all ' + teams + ' ›'}
             </button>

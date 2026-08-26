@@ -10,11 +10,34 @@ import ActivityLog from './ActivityLog.jsx'
 /* Five tabs, not four: the desktop row carries a Draft Log beside Chat
    and the sheet did not, which meant a phone was the one place you could
    not see what the room had just done. Everything desktop shows, mobile
-   shows — that is the rule these tabs are keeping. */
-const TABS = [
+   shows — that is the rule these tabs are keeping.
+
+   This is the default list, still used wherever this component mounts
+   without its own `tabs` prop — Analysis's own panel row, unchanged by
+   the Players screen pass, including its own reachability: tapping this
+   sheet's collapse header (below, `lg:hidden`) opens it independently of
+   MobileDraftTabBar entirely, so Players and Team are still real
+   destinations there. Reworking Analysis's own mobile panel is a later
+   pass, not this one. */
+const DEFAULT_TABS = [
   { key: 'players', label: 'Players' },
   { key: 'queue', label: 'Queue' },
   { key: 'team', label: 'Team' },
+  { key: 'chat', label: 'Chat' },
+  { key: 'log', label: 'Log' },
+]
+
+/* Players now has its own full screen (PlayersTab.jsx) and Roster is a
+   pane inside it, and MobileDraftTabBar.jsx dropped the Roster/Players
+   buttons that used to call openHub('team')/openHub('players') for this
+   mount specifically — the Board tab's own mobile sheet. Leaving those
+   two chips in here would be exactly the dead-entry trap CLAUDE.md warns
+   about: reachable only by a user who happens to expand the sheet and
+   tap a chip nothing points them toward, opening a stale, narrower copy
+   of a screen that now exists properly elsewhere. Analysis's mount below
+   keeps DEFAULT_TABS — see its own comment for why that one is different. */
+export const BOARD_TABS = [
+  { key: 'queue', label: 'Queue' },
   { key: 'chat', label: 'Chat' },
   { key: 'log', label: 'Log' },
 ]
@@ -69,6 +92,8 @@ export default function PlayerHub({
   onShowDrafted,
   pointsFor,
   valueFor,
+  vorpFor,
+  survivalFor,
   photoFor,
   initialsFor,
   onDraft,
@@ -94,9 +119,21 @@ export default function PlayerHub({
   league,
   mySlot,
   teamLabelOf,
+  // BOARD_TABS for the Board view's own mount; every other caller leaves
+  // this at the classic five so Analysis's existing behaviour (both
+  // breakpoints) is untouched by this pass.
+  tabs = DEFAULT_TABS,
 }) {
   const setOpen = onOpenChange
   const setTab = onTabChange
+  // Belt and suspenders on top of the tab strip itself only drawing chips
+  // from `tabs`: nothing sets hubTab to 'players' or 'team' for a mount
+  // that never offered those chips, but hubTab is lifted, shared state
+  // (DraftRoom.jsx), not local to this component — a value left over from
+  // a different mount switching the view is exactly the kind of stale
+  // cross-talk a content block gated only on `tab === X` cannot see coming.
+  const showPlayersTab = tabs.some((t) => t.key === 'players')
+  const showTeamTab = tabs.some((t) => t.key === 'team')
   const [viewSlot, setViewSlot] = useState(mySlot)
   // mySlot is 0 until a real draft actually assigns a seat (solo start,
   // or a room's seat claim/swap landing later), and this captured
@@ -144,7 +181,7 @@ export default function PlayerHub({
         className="flex w-full shrink-0 items-center justify-between px-4 py-1 text-left lg:hidden"
       >
         <span className="text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
-          {TABS.find((t) => t.key === tab)?.label}
+          {tabs.find((t) => t.key === tab)?.label}
         </span>
         {open ? <ChevronDown className="h-3.5 w-3.5 text-ink-muted" /> : <ChevronUp className="h-3.5 w-3.5 text-ink-muted" />}
       </button>
@@ -170,7 +207,7 @@ export default function PlayerHub({
           phone. The 12px comes out of the sheet's content, which is the right
           side of that trade for a control you hit with a thumb. */}
       <div className="flex shrink-0 gap-1 border-b border-slate-rule px-2 py-1.5 lg:hidden">
-        {TABS.map((t) => (
+        {tabs.map((t) => (
           <button
             key={t.key}
             type="button"
@@ -185,47 +222,56 @@ export default function PlayerHub({
         ))}
       </div>
 
-      {/* Unconditionally at lg+, only while Players is the active tab and
-          the sheet is open below it. The profile used to slide over this
-          box (PlayerProfileDrawer, absolutely positioned against it); it's
-          a top-level modal now — see PlayerProfileModal.jsx's own comment
-          on why a drawer scoped to one panel couldn't be reached from any
+      {/* Unconditionally at lg+ — but only for a mount whose tabs actually
+          include 'players' (Analysis; Board's own tabs prop is BOARD_TABS
+          and never reaches this branch, so its lg:hidden ancestor wrapper
+          is the only thing standing between the desktop override and a
+          tab it doesn't offer, and this guard makes that not matter).
+          Below lg, only while Players is the active tab and the sheet is
+          open. The profile used to slide over this box
+          (PlayerProfileDrawer, absolutely positioned against it); it's a
+          top-level modal now — see PlayerProfileModal.jsx's own comment on
+          why a drawer scoped to one panel couldn't be reached from any
           other tab. */}
-      <div className={'min-h-0 flex-1 ' + (open && tab === 'players' ? 'flex' : 'hidden') + ' lg:flex'}>
-        <PlayerQueueSidebar
-          counts={counts}
-          players={players}
-          search={search}
-          onSearch={onSearch}
-          posFilter={posFilter}
-          onPosFilter={onPosFilter}
-          expBand={expBand}
-          onExpBand={onExpBand}
-          watchlistOnly={watchlistOnly}
-          onWatchlistOnly={onWatchlistOnly}
-          showDrafted={showDrafted}
-          onShowDrafted={onShowDrafted}
-          pointsFor={pointsFor}
-          valueFor={valueFor}
-          photoFor={photoFor}
-          initialsFor={initialsFor}
-          onDraft={onDraft}
-          myTurn={myTurn}
-          draftOver={draftOver}
-          queuedNames={queuedNames}
-          onToggleQueue={onToggleQueue}
-          draftedByFor={draftedByFor}
-          onSelectPlayer={onSelectPlayer}
-          sortBy={sortBy}
-          sortDir={sortDir}
-          onSort={onSort}
-          recommended={recommended}
-          recommendedVorp={recommendedVorp}
-          recommendedTierLeft={recommendedTierLeft}
-          projOf={projOf}
-          tierAvgByPos={tierAvgByPos}
-        />
-      </div>
+      {showPlayersTab && (
+        <div className={'min-h-0 flex-1 ' + (open && tab === 'players' ? 'flex' : 'hidden') + ' lg:flex'}>
+          <PlayerQueueSidebar
+            counts={counts}
+            players={players}
+            search={search}
+            onSearch={onSearch}
+            posFilter={posFilter}
+            onPosFilter={onPosFilter}
+            expBand={expBand}
+            onExpBand={onExpBand}
+            watchlistOnly={watchlistOnly}
+            onWatchlistOnly={onWatchlistOnly}
+            showDrafted={showDrafted}
+            onShowDrafted={onShowDrafted}
+            pointsFor={pointsFor}
+            valueFor={valueFor}
+            vorpFor={vorpFor}
+            survivalFor={survivalFor}
+            photoFor={photoFor}
+            initialsFor={initialsFor}
+            onDraft={onDraft}
+            myTurn={myTurn}
+            draftOver={draftOver}
+            queuedNames={queuedNames}
+            onToggleQueue={onToggleQueue}
+            draftedByFor={draftedByFor}
+            onSelectPlayer={onSelectPlayer}
+            sortBy={sortBy}
+            sortDir={sortDir}
+            onSort={onSort}
+            recommended={recommended}
+            recommendedVorp={recommendedVorp}
+            recommendedTierLeft={recommendedTierLeft}
+            projOf={projOf}
+            tierAvgByPos={tierAvgByPos}
+          />
+        </div>
+      )}
 
       {open && tab === 'queue' && (
         <div className="min-h-0 flex-1 overflow-y-auto p-2 lg:hidden">
@@ -233,7 +279,7 @@ export default function PlayerHub({
         </div>
       )}
 
-      {open && tab === 'team' && (
+      {showTeamTab && open && tab === 'team' && (
         <div className="min-h-0 flex-1 lg:hidden">
           <TeamTab engine={engine} league={league} mySlot={mySlot} viewSlot={viewSlot} onViewSlot={setViewSlot} teamLabelOf={teamLabelOf} />
         </div>

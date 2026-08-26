@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Bookmark, X } from 'lucide-react'
+import { Bookmark, Star, X } from 'lucide-react'
 import { POS_BADGE, INJURY_META } from './draftRoomPositions.js'
 import { useEngine } from '../hooks/useJukeEngine.js'
+import { STAT_COLUMNS, statValue, lastsTone } from './playerColumns.js'
 import OurReadTab from './OurReadTab.jsx'
 import ProjectionsTab from './ProjectionsTab.jsx'
 import GameLogsTab from './GameLogsTab.jsx'
@@ -11,6 +12,15 @@ import DepthChartTab from './DepthChartTab.jsx'
 import DraftFitTab from './DraftFitTab.jsx'
 
 const BASE_TABS = ['Our Read', 'Projections', 'Game Logs', 'Latest News', 'Depth Chart']
+
+const COL_BY_KEY = Object.fromEntries(STAT_COLUMNS.map((c) => [c.key, c]))
+// The mobile sheet's own stat grid, in the handoff's own reading order —
+// row-major over a 3-column grid, not the table's column order. Every
+// value still comes from statValue()/lastsTone(), the exact readers the
+// desktop table and PlayerHub's list already use, so a number here can
+// never disagree with the identical player's row anywhere else on screen.
+const MOBILE_STAT_KEYS = ['pts', 'vorp', 'juke', 'lasts', 'adp', 'bye']
+const MOBILE_STAT_LABELS = { pts: 'PTS', vorp: 'VORP', juke: 'JUKE', lasts: 'LASTS', adp: 'ADP', bye: 'BYE' }
 
 // Replaces PlayerProfileDrawer — a slide-in panel that only ever covered
 // the Player Queue, and only existed inside PlayerHub, which unmounts on
@@ -23,7 +33,19 @@ const BASE_TABS = ['Our Read', 'Projections', 'Game Logs', 'Latest News', 'Depth
 // drawer sized to a panel that may not even be on screen: an overlay that
 // only has to cover *something specific* doesn't exist here any more, so
 // there's no "specific" left for it to be scoped to.
-export default function PlayerProfileModal({ player, onClose, photoFor, initialsFor }) {
+export default function PlayerProfileModal({
+  player, onClose, photoFor, initialsFor,
+  // Mobile sheet only (see the lg:hidden block below) — the desktop card
+  // above needs none of these, it already has engine access of its own via
+  // useEngine() plus the six research tabs. pointsFor/vorpFor/valueFor/
+  // survivalFor are the identical functions DraftRoom.jsx already hands
+  // every other surface (PlayerQueueSidebar, PlayerHub, PlayersTab), passed
+  // through rather than recomputed here — the plain projected readers, not
+  // the Players tab's own season-toggled versions, since this modal has no
+  // season concept of its own and mounts from screens that don't either.
+  nextOverall, queuedNames, onToggleQueue, onDraft, myTurn, autopick,
+  pointsFor, vorpFor, valueFor, survivalFor,
+}) {
   const engine = useEngine()
   const [tab, setTab] = useState('Our Read')
 
@@ -47,6 +69,40 @@ export default function PlayerProfileModal({ player, onClose, photoFor, initials
 
   const inj = player ? INJURY_META[player.inj] : null
 
+  // Mobile-only derived values — guarded on `player` the same way `inj` is
+  // above, computed unconditionally rather than inside the JSX below since
+  // JSX can't hold a `const`. Cheap even when unused (desktop-only opens
+  // never read them), and keeping them beside `inj`/`fit` rather than
+  // inlined in the sheet's own markup is what let the sheet below stay a
+  // single readable return.
+  const queued = player && queuedNames ? queuedNames.has(player.name) : false
+  const survival = player && survivalFor ? survivalFor(player) : null
+  const risky = survival != null && survival < 0.4
+  // Reuses Card()'s own one-line phrasing from DraftDecideScreen.jsx
+  // (the "gone before / still there" sentence, same 40% threshold) rather
+  // than writing a second version of the same read — see that file's own
+  // comment on why 0.4 is the line between a real risk and a safe wait.
+  const marketSentence = survival == null || nextOverall == null
+    ? null
+    : risky
+      ? `Gone before pick ${nextOverall} in ${Math.round((1 - survival) * 100)}% of boards.`
+      : `Still there at ${nextOverall} in ${Math.round(survival * 100)}% of boards.`
+  const canDraft = !!myTurn && !autopick
+  const draftTitle = !myTurn ? 'Not your turn' : autopick ? 'Disable Autopick to draft' : undefined
+  const statCtx = { pointsFor, vorpFor, valueFor, survivalFor, projOf: () => null }
+  const mobileStats = player
+    ? MOBILE_STAT_KEYS.map((key) => {
+        const raw = statValue(COL_BY_KEY[key], player, statCtx)
+        if (key === 'lasts') {
+          const t = lastsTone(raw)
+          const tone = t === 'rose' ? 'text-rose-300' : t === 'amber' ? 'text-amber-300' : 'text-ink-soft'
+          return { key, label: MOBILE_STAT_LABELS[key], display: raw == null ? '—' : raw + '%', tone }
+        }
+        const tone = key === 'vorp' || key === 'juke' ? 'text-teal-300' : 'text-white'
+        return { key, label: MOBILE_STAT_LABELS[key], display: raw == null ? '—' : String(raw), tone }
+      })
+    : []
+
   return (
     <AnimatePresence>
       {player && (
@@ -65,8 +121,13 @@ export default function PlayerProfileModal({ player, onClose, photoFor, initials
               board header click, once the draft's over) shouldn't land on
               two different ideas of what an overlay in this app looks
               like. stopPropagation keeps a click inside the card from
-              bubbling to the backdrop's own onClose. */}
-          <div className="flex min-h-full items-start justify-center px-4 py-8 sm:px-6">
+              bubbling to the backdrop's own onClose.
+
+              hidden lg:flex: below lg this six-tab research card gives way
+              to the simpler action sheet underneath — see its own comment
+              for why that's a different design rather than a squeezed copy
+              of this one. */}
+          <div className="hidden min-h-full items-start justify-center px-4 py-8 sm:px-6 lg:flex">
             <motion.div
               initial={{ y: 16, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
@@ -175,6 +236,109 @@ export default function PlayerProfileModal({ player, onClose, photoFor, initials
               </div>
             </motion.div>
           </div>
+
+          {/* Mobile: a bottom sheet, not this card squeezed to fit — the
+              six research tabs above are a desk-side deep dive; a phone
+              mid-draft needs the numbers a pick turns on and the two
+              actions that follow from them, in one glance with nothing to
+              tap through first. drag="y" + the 24px threshold mirrors
+              PlayerHub's own sheet; onClick stopPropagation keeps a tap
+              inside the sheet from bubbling to the backdrop's onClose,
+              exactly like the desktop card beside it. */}
+          <motion.div
+            drag="y"
+            dragConstraints={{ top: 0, bottom: 0 }}
+            dragElastic={0.3}
+            onDragEnd={(_, info) => { if (info.offset.y > 24) onClose() }}
+            onClick={(e) => e.stopPropagation()}
+            initial={{ y: '100%' }}
+            animate={{ y: 0 }}
+            exit={{ y: '100%' }}
+            transition={{ type: 'spring', stiffness: 380, damping: 38 }}
+            className="fixed inset-x-0 bottom-0 z-[70] flex max-h-[85vh] touch-none flex-col overflow-hidden rounded-t-xl border-t border-slate-rule bg-slate-panel shadow-2xl lg:hidden"
+          >
+            <div className="flex shrink-0 cursor-grab justify-center pt-2 active:cursor-grabbing">
+              <span className="h-1 w-9 rounded-full bg-slate-rule" />
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-2" style={{ paddingBottom: 'calc(16px + env(safe-area-inset-bottom))' }}>
+              <div className="flex items-center gap-3 border-b border-slate-rule pb-4">
+                <div className="relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-sunk text-xs font-bold text-ink-soft">
+                  {initialsFor(player)}
+                  {photoFor(player) && (
+                    <img
+                      src={photoFor(player)}
+                      alt=""
+                      loading="lazy"
+                      onError={(e) => e.currentTarget.remove()}
+                      className={'absolute inset-0 h-full w-full ' + (player.pos === 'DST' ? 'object-contain p-1' : 'object-cover')}
+                    />
+                  )}
+                  <span className={'absolute -bottom-1 -right-1 rounded px-1 py-px text-[8px] font-bold leading-tight ring-2 ring-slate-panel ' + (POS_BADGE[player.pos] || 'bg-white/10 text-white/50')}>
+                    {player.pos}
+                  </span>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-display text-2xl font-bold leading-tight text-white">{player.name}</p>
+                  <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-ink-muted">
+                    <span>
+                      {[player.team, player.bye ? `Bye ${player.bye}` : null, player.tier != null ? `Tier ${player.tier}` : null]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </span>
+                    {inj && (
+                      <span className={'rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ' + inj.cls} title={inj.label}>
+                        {player.inj}
+                      </span>
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2 py-4">
+                {mobileStats.map((s) => (
+                  <div key={s.key} className="rounded-lg bg-white/[0.03] px-2 py-2.5 text-center">
+                    <p className="font-plex text-[9.5px] font-bold uppercase tracking-[0.08em] text-ink-muted">{s.label}</p>
+                    <p className={'mt-1 font-display text-lg font-bold ' + s.tone}>{s.display}</p>
+                  </div>
+                ))}
+              </div>
+
+              {marketSentence && (
+                <p className={'mb-4 rounded-lg bg-white/[0.04] p-3 text-[13px] leading-[1.45] ' + (risky ? 'text-rose-200' : 'text-emerald-200')}>
+                  {marketSentence}
+                </p>
+              )}
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => onToggleQueue(player.name)}
+                  className={
+                    'flex h-12 flex-1 items-center justify-center gap-1.5 rounded-lg border text-sm font-semibold transition-colors duration-150 ' +
+                    (queued ? 'border-amber-400/40 bg-amber-400/10 text-amber-300' : 'border-slate-rule bg-white/[0.03] text-white/80')
+                  }
+                >
+                  <Star className={'h-4 w-4 ' + (queued ? 'fill-amber-300' : '')} />
+                  {queued ? 'In your queue' : 'Add to queue'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { onDraft(player); onClose() }}
+                  disabled={!canDraft}
+                  title={draftTitle}
+                  className={
+                    'h-12 flex-1 rounded-lg text-sm font-bold transition-all duration-200 ' +
+                    (!canDraft
+                      ? 'cursor-not-allowed bg-white/5 text-white/25'
+                      : 'bg-gradient-to-r from-[#00E5FF] to-[#7B1FA2] text-white shadow-glass hover:scale-[1.02]')
+                  }
+                >
+                  Draft
+                </button>
+              </div>
+            </div>
+          </motion.div>
         </motion.div>
       )}
     </AnimatePresence>

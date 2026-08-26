@@ -1,13 +1,15 @@
 import { useEffect, useReducer, useRef, useState } from 'react'
-import { ChevronDown, ChevronUp } from 'lucide-react'
+import { ChevronDown, ChevronUp, Search } from 'lucide-react'
 import DraftLocker from './DraftLocker.jsx'
 import DraftLogDock from './DraftLogDock.jsx'
 import DraftCockpitHeader from './DraftCockpitHeader.jsx'
 import DraftMenuOverlay from './DraftMenuOverlay.jsx'
 import DraftWithFriendsModal from './DraftWithFriendsModal.jsx'
 import DraftBoardGrid from './DraftBoardGrid.jsx'
-import { SORT_DEFAULT_DIR } from './PlayerQueueSidebar.jsx'
-import PlayerHub from './PlayerHub.jsx'
+import PickTicker from './PickTicker.jsx'
+import PlayerQueueSidebar, { SORT_DEFAULT_DIR } from './PlayerQueueSidebar.jsx'
+import PlayersTab from './PlayersTab.jsx'
+import PicksRail from './PicksRail.jsx'
 import SidePanel from './SidePanel.jsx'
 import QueueList from './QueueList.jsx'
 import TeamTab from './TeamTab.jsx'
@@ -24,6 +26,24 @@ import MobileAppTabBar from './MobileAppTabBar.jsx'
 import MobileDraftTabBar from './MobileDraftTabBar.jsx'
 import PickClockBand from './PickClockBand.jsx'
 import { POS_LIST } from './draftRoomPositions.js'
+import { useMinWidth } from '../hooks/useBreakpoint.js'
+
+// The Board tab's own dock height per tray position — fixed pixels, not the
+// percentage-of-remaining-space split the graph area above it still uses
+// for Analysis (see the `tray === 'hidden' ? 'lg:flex-1' : ...` className
+// below). `tray` is the same three-value state either tab reads: 'raised'
+// means "give the bottom panel more room" in both, just expressed as a
+// bigger dock here versus a bigger graph share there — sharing one flag
+// keeps that meaning consistent switching between the two rather than
+// resetting one tab's layout preference when you look at the other.
+const DOCK_H = { hidden: 37, default: 296, raised: 460 }
+
+// The Board tab's own mobile segmented control.
+const BOARD_PANES = [
+  { key: 'board', label: 'Board' },
+  { key: 'pool', label: 'Pool' },
+  { key: 'picks', label: 'Picks' },
+]
 
 function useEngine() {
   const [ready, setReady] = useState(false)
@@ -101,6 +121,10 @@ function TrayButton({ onClick, disabled, title, children }) {
 export default function DraftRoom() {
   const engine = useEngine()
   useJukeTick(engine)
+  // 1024px matches Tailwind's own `lg` — see useBreakpoint.js's own comment
+  // for why the Board tab's dock needs a real answer to "is this desktop"
+  // rather than trusting its own `hidden ... lg:flex` CSS to imply it.
+  const isDesktop = useMinWidth(1024)
   const active = useHashActive('#/draft-room')
   // A direct, bookmarkable link to the locker — previously there was none:
   // the locker only ever showed as #/draft-room's own not-yet-entered
@@ -117,8 +141,15 @@ export default function DraftRoom() {
   // watching" is a real combination someone would want, and a single-select
   // list can't hold three things that all have to be true at once.
   const [expBand, setExpBand] = useState('all') // 'all' | 'rookie' | 'veteran'
-  const [watchlistOnly, setWatchlistOnly] = useState(false)
   const [showDrafted, setShowDrafted] = useState(false)
+  // The Players tab's own two filters, alongside the shared ones above
+  // rather than a second copy of filter state local to that tab — every
+  // other surface reading `availablePlayers` (the Board tab's dock,
+  // PlayerHub's mobile sheet) just never exposes a control for these, the
+  // same way none of them expose a "season" or "NFL team" idea of their
+  // own either.
+  const [season, setSeason] = useState('projected') // 'projected' | 'prior'
+  const [nflTeamFilter, setNflTeamFilter] = useState('ALL')
   const [selectedPlayer, setSelectedPlayer] = useState(null)
   /* The tray under the board has three positions, not two, and the middle
      one is the default — the same shape Sleeper's chevrons drive. `hidden`
@@ -214,17 +245,19 @@ export default function DraftRoom() {
       setSortDir(SORT_DEFAULT_DIR[column])
     }
   }
-  /* Decide / Board / Analysis — the Cockpit's own three tabs, driven by
-     DraftCockpitHeader's tab nav now rather than a second strip inside
-     the body (there was one, redundant with the header the moment the
-     header grew tab buttons of its own). Decide is the default: for
-     almost all of a draft you're either waiting or choosing, and the
-     board is reference — see DraftDecideScreen.jsx and the handoff's own
-     thesis. Board and Analysis keep the existing panels-below-the-fold
-     layout (Queue/Roster/Chat/Log) unchanged; Decide owns its own full
-     3-column layout instead, with nothing below it — its own roster rail
-     and room-live rail already cover what those panels show. */
-  const [view, setView] = useState('decide')
+  /* Players / Board / Decide / Analysis — the Cockpit's own four tabs,
+     driven by DraftCockpitHeader's tab nav rather than a second strip
+     inside the body (there was one, redundant with the header the moment
+     the header grew tab buttons of its own). Players is the default now:
+     the ESPN-style queue/roster/pool/picks screen most of a draft is
+     actually spent on, per the Players tab handoff. Decide stays the
+     fallback the finished-draft redirect below uses — it still answers
+     "what should I do right now," just no longer the first thing a
+     manager sees. Board and Analysis keep the existing panels-below-the-
+     fold layout (Queue/Roster/Chat/Log for Analysis; Board grew its own
+     ribbon/dock in the Board tab pass); Decide and Players each own a full
+     content-area layout instead, with nothing below either of them. */
+  const [view, setView] = useState('players')
   const [menuOpen, setMenuOpen] = useState(false)
   /* Mirrors AppHeader.jsx's own soundOn state — engine.soundWanted() is
      not covered by the "juke:header" tick, since toggling it never
@@ -390,57 +423,41 @@ export default function DraftRoom() {
   // Which of the combined Queue/Roster panel's two tabs is showing. Queue
   // first: it is the one that changes as the draft runs.
   const [sideTab, setSideTab] = useState('queue')
-  // PlayerHub's own sheet state, lifted here — see that file's own comment
-  // on why. hubTab still defaults to 'players', the same reason PlayerHub's
-  // local version used to: it's the tab that answers "what's available right
-  // now" without picking a specific one of the five first. hubOpen does NOT
-  // keep PlayerHub's old true default, though — that default only ever ran
-  // on desktop, where lg:static means "open" is meaningless (the column is
-  // just always there); mobile had no other view to default to instead, so
-  // "open" cost nothing to leave true. Now Decide is that other view, and
-  // defaulting the sheet open over top of it on every fresh entry would
-  // bury the one tab the mobile handoff calls "the only tab needed to
-  // actually draft" under the one that answers a different question.
-  const [hubOpen, setHubOpen] = useState(false)
-  const [hubTab, setHubTab] = useState('players')
-  // The mobile draft-room tab bar's Roster/Players buttons open the sheet
-  // pre-selected to a specific internal tab — 'team'/'players' map onto
-  // PlayerHub's own TABS keys, not new vocabulary.
-  //
-  // Also steps view off 'decide', which is not a mobile-only add-on to what
-  // desktop already does — it is what desktop already does. Decide owns the
-  // whole content area on every width ("nothing renders underneath it," a
-  // few lines below), so PlayerHub is only ever mounted inside the
-  // view !== 'decide' branch there too; a wide window just makes that branch
-  // easy to reach by clicking Board once. Below lg there was no way back
-  // into that branch at all until this tab bar existed, which is exactly
-  // why opening the sheet has to carry the same view change a Board click
-  // already implies, not a new mobile-only rule.
-  const openHub = (t) => { setHubTab(t); setHubOpen(true); setView((v) => (v === 'decide' ? 'board' : v)) }
-  // Decide/Board also close the sheet, or tapping one while the other is
-  // open leaves both true — the tab bar shows the new view as active while
-  // the sheet is still visually sitting over the top of it, which reads as
-  // the tap having done nothing.
-  const selectMobileView = (v) => { setHubOpen(false); setView(v) }
-  // Whether the sheet is actually on screen, which is not the same question
-  // as whether hubOpen is true — PlayerHub only mounts in the view !== 'decide'
-  // branch, so hubOpen alone can outlive the thing it describes.
-  //
-  // It gets there through DraftCockpitHeader's own tab nav, which is handed
-  // the raw setView (openHub and selectMobileView are the two setters that
-  // keep the pair in step; that is a third that doesn't). Its nav is
-  // `md:flex` and MobileDraftTabBar is `lg:hidden`, so between 768px and
-  // 1023px both are on screen at once: tap Roster in the bottom bar, then
-  // Decide in the header, and the sheet unmounts while the bottom bar goes
-  // on drawing Roster as the selected tab. CLAUDE.md's goToTab() note names
-  // exactly this — "the app is then on a tab its own nav says it is not".
-  //
-  // Derived rather than a third flag, because two flags that must agree is
-  // one flag with a second copy. Both consumers take this one: inside the
-  // branch where PlayerHub mounts it is identical to hubOpen, so the sheet's
-  // own behaviour is unchanged and desktop keeps its remembered tab across a
-  // trip through Decide.
-  const hubShowing = hubOpen && view !== 'decide'
+  // PickClockBand's own swipe-to-collapse state, lifted here rather than
+  // owned there — collapsing the band also has to hand its height back to
+  // PlayersTab.jsx's autopick ribbon directly beneath it (see that band's
+  // own comment), which is a sibling component PickClockBand has no reach
+  // into on its own.
+  const [bandCollapsed, setBandCollapsed] = useState(false)
+  // Which pane PlayersTab.jsx's own mobile segmented control is showing —
+  // Pool/Queue/Roster/Picks — lifted here for the same reason hubTab is:
+  // DraftDecideScreen's Roster link and "Browse all N players" button both
+  // reach across from the Decide tab into a different screen entirely, and
+  // a control cannot open a specific pane of a screen that owns its pane as
+  // unreachable local state.
+  const [mobilePane, setMobilePane] = useState('pool')
+  // The Board tab's own mobile segmented control — Board/Pool/Picks, a
+  // different vocabulary than Players' own mobilePane above (Pool/Queue/
+  // Roster/Picks), so a separate piece of state rather than one shared
+  // value two different pane sets would have to agree on.
+  const [boardPane, setBoardPane] = useState('board')
+  // DraftDecideScreen's "Browse all N players" button calls this with
+  // 'players' — the only value anything in the app still passes. It used
+  // to also take 'team' for a "Roster ›" link that opened PlayerHub's
+  // sheet; that link is gone from DraftDecideScreen's own mobile pass too
+  // now (prompt 06 folded roster info into Decide's own Team pane instead
+  // of routing away from the screen for it), so 'players' → the Pool pane
+  // is the only real destination left. Was named openHub() while a
+  // 'queue'/'chat'/'log' branch still routed into PlayerHub's sheet
+  // instead; keeping that name once nothing calls it that way any more
+  // would be exactly the stale-name-after-the-behaviour-moved bug CLAUDE.md
+  // already documents elsewhere in this app (Discard/pause/etc) — the same
+  // reason this dropped its now-dead 'team' branch rather than keeping an
+  // argument nothing passes.
+  const openPlayersScreen = () => {
+    setMobilePane('pool')
+    setView('players')
+  }
   useEffect(() => {
     if (draftIsOver) {
       setInsightsSlot(mySlot)
@@ -785,6 +802,25 @@ export default function DraftRoom() {
   // site — points above replacement at the player's position, as a share
   // of the best such figure on the board. Not a second value metric.
   const valueFor = (player) => engine.overallScore(player)
+  // playerColumns.js's VORP/JUKE split: VORP is replacementGap() — the raw,
+  // un-clamped points-above-replacement figure overallScore() divides down
+  // to a 0-100 share — not a second value metric either, just the
+  // un-shared form of the one above. survivalProbability() is asked
+  // against nextOverall (below), the same "if I wait" pick the rail and
+  // PickClockBand already compute, not a second guess at when I pick again.
+  const vorpFor = (player) => engine.replacementGap(player)
+  const survivalFor = (player) => engine.survivalProbability(player, nextOverall)
+  // The Players tab's season toggle. p.priorPts/p.priorGames are already
+  // real fields on every board player (buildPriorSeason() in app.js scores
+  // them under these same rules), so "last season" is just a different
+  // reader passed into the identical table rather than a second code path
+  // — PlayerQueueSidebar never learns a season exists. VORP has no prior-
+  // season equivalent (it's a projection concept — replacementGap() only
+  // means something against a *forecast* replacement line), so that mode
+  // withholds it rather than inventing one.
+  const priorSeasonYear = engine.priorSeason ? engine.priorSeason() : null
+  const pointsForActive = season === 'prior' ? (player) => player.priorPts : pointsFor
+  const vorpForActive = season === 'prior' ? () => null : vorpFor
   /* The projection block a player's raw counting stats live on — the same
      `s.p` logColumns() reads in app.js. Handed to the list so its stat
      columns and its sort read one source. */
@@ -841,7 +877,6 @@ export default function DraftRoom() {
   // SLOT_ELIGIBLE.FLEX from app.js, bridged rather than hand-copied — see
   // the bridge comment on photoUrl/initials/flexPositions.
   const flexPositions = engine.flexPositions()
-  const watchlistedNames = new Set(engine.watchlist() || [])
   // Who took a drafted player, for the showDrafted view — picks() rather
   // than a second copy of "who has who": teamLabel() is the exact name the
   // board's own header row already uses for that seat.
@@ -856,12 +891,14 @@ export default function DraftRoom() {
       if (posFilter === 'FLEX') return flexPositions.includes(p.pos)
       return p.pos === posFilter
     })
-    .filter((p) => !watchlistOnly || watchlistedNames.has(p.name))
     .filter((p) => {
       if (expBand === 'all') return true
       const exp = engine.statOf(p)?.exp
       return expBand === 'rookie' ? exp === 0 : exp !== undefined && exp > 0
     })
+    // The Players tab's own filter — 'ALL' keeps everyone, same convention
+    // as posFilter above rather than a separate sentinel.
+    .filter((p) => nflTeamFilter === 'ALL' || p.team === nflTeamFilter)
     .filter((p) => !search || p.name.toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => {
       if (sortBy === 'board') return a.overall - b.overall
@@ -873,8 +910,14 @@ export default function DraftRoom() {
       const reader =
         sortBy === 'adp' ? (p) => p.adp
           : sortBy === 'pts' ? pointsFor
-            : sortBy === 'vorp' || sortBy === 'value' ? valueFor
-              : (p) => { const proj = projOf(p); const v = proj ? proj[sortBy] : null; return v || null }
+            // 'vorp' is replacementGap() (the raw figure); 'juke' (and the
+            // old 'value' alias PlayerProfileModal-era callers may still
+            // pass) is overallScore() — two different columns since the
+            // Players tab pass split what used to be one, see
+            // playerColumns.js's own comment on the two keys.
+            : sortBy === 'vorp' ? vorpFor
+              : sortBy === 'juke' || sortBy === 'value' ? valueFor
+                : (p) => { const proj = projOf(p); const v = proj ? proj[sortBy] : null; return v || null }
       const av = reader(a)
       const bv = reader(b)
       // "A missing number is not a small number" — Value is null for K/DST
@@ -966,6 +1009,7 @@ export default function DraftRoom() {
         onOpenMenu={() => setMenuOpen(true)}
         soundOn={soundOn}
         onToggleSound={handleToggleSound}
+        hidePill={(view === 'board' || view === 'players') && !draftIsOver}
       />
       {menuOpen && (
         <DraftMenuOverlay
@@ -978,16 +1022,40 @@ export default function DraftRoom() {
           onDiscard={handleDiscard}
         />
       )}
-      {/* pt-[62px] matches DraftCockpitHeader's own height — the ticker strip
-          that used to add an md: step-up here is gone, removed from the
-          Draft Room entirely per a design review (it fought the pick
-          clock directly beneath it). No bottom
-          padding here: PlayerHub's mobile sheet is `fixed` and so occupies
-          no space in this flow — clearance for it is reserved inside the
-          scrollable panels themselves (the board's and the player list's
-          own pb-28), and reserving it here too would shrink the row for
-          no reason. */}
-      <div className="flex flex-1 flex-col overflow-hidden pt-[62px]">
+      {/* pt-[46px]/lg:pt-[62px] matches DraftCockpitHeader's own height at
+          each breakpoint — 46px below lg now that a live draft renders the
+          compact mobile header there instead of the 62px bar (see that
+          component's own comment). The ticker strip that used to add an
+          md: step-up here is gone, removed from the Draft Room entirely
+          per a design review (it fought the pick clock directly beneath
+          it). No bottom padding here: PlayerHub's mobile sheet is `fixed`
+          and so occupies no space in this flow — clearance for it is
+          reserved inside the scrollable panels themselves (the board's and
+          the player list's own pb-28), and reserving it here too would
+          shrink the row for no reason.
+
+          Analysis is the one exception, still flat pt-[62px]: its own
+          mobile top bar (AnalysisTab.jsx) is a `fixed`, 62px, z-[55]
+          replacement for this bar's mobile rendering, not a consumer of
+          it, and that content div has no top-clearance of its own — it
+          relies entirely on this wrapper's padding to clear whichever
+          fixed header is actually floating above it. Shrinking this to
+          46px for Analysis too without also shrinking that header would
+          uncover 16px of its own fixed bar over the report's own content.
+          AnalysisTab's mobile header is still 62px because reworking it is
+          a later prompt's job, not this padding line's. */}
+      <div className={'flex flex-1 flex-col overflow-hidden ' + (view === 'analysis' ? 'pt-[62px]' : 'pt-[46px] lg:pt-[62px]')}>
+        {/* Same "!draftIsOver" gate PickTicker already uses a few lines
+            down, extended to this band too — there is no live pick left
+            to describe once the draft ends, and without this guard the
+            band kept rendering "ON THE CLOCK · " with nothing after the
+            dot (onClock is null once picks.length reaches totalPicks) and
+            a clock that had stopped meaning anything. Real everywhere,
+            not only on Analysis: any tab reachable after the draft ends
+            shared the same stale band, this just happens to be the pass
+            that noticed it while giving Analysis's own report the "while
+            the draft is live" treatment prompt 08 asks for. */}
+        {!draftIsOver && (
         <PickClockBand
           code={code}
           myTurn={myTurn}
@@ -999,7 +1067,11 @@ export default function DraftRoom() {
           overall={overall}
           teams={league.teams}
           onClock={onClock}
+          teamLabelOf={(slot) => engine.teamLabel(slot)}
+          collapsed={bandCollapsed}
+          onSetCollapsed={setBandCollapsed}
         />
+        )}
         {view === 'decide' ? (
           /* Decide owns the whole content area, not half of it — its own
              roster rail and room-live rail already cover what the panels
@@ -1018,20 +1090,351 @@ export default function DraftRoom() {
             queuedNames={queuedNames}
             nextOverall={nextOverall}
             nextPicks={nextPicks}
-            /* The same openHub MobileDraftTabBar's Roster and Players
-               buttons call. Decide's mobile roster strip and its "Browse
-               all N players" button are two more ways into the one
-               PlayerHub sheet, not a second player surface — passing the
-               opener rather than letting that screen mount its own is what
-               keeps that true. */
-            onOpenHub={openHub}
+            /* Decide's own "Browse all N players" button reaches into the
+               Players screen rather than mounting a player surface of its
+               own — see openPlayersScreen()'s own comment for why this
+               used to mean PlayerHub's sheet and now means PlayersTab.jsx
+               directly. */
+            onOpenHub={openPlayersScreen}
           />
+        ) : view === 'players' ? (
+          <>
+            {/* PickTicker gates itself to lg+ internally (its own root
+                className), same as the Board tab's identical call below —
+                no external hidden/lg:flex wrapper needed. PlayersTab now
+                does the same for its own two renderings (see its own file
+                comment), so this branch is just its two real children,
+                same shape as the Board branch a few lines down. */}
+            {!draftIsOver && (
+              <PickTicker
+                league={league}
+                onClock={onClock}
+                overall={overall}
+                mySlot={mySlot}
+                myTurn={myTurn}
+                urgent={urgent}
+                code={code}
+                timeLeft={engine.timeLeft()}
+                clockLength={engine.clockLength()}
+                teamLabelOf={(slot) => engine.teamLabel(slot)}
+                autopick={autopick}
+                roomSeats={roomSeats}
+              />
+            )}
+            <PlayersTab
+              engine={engine}
+              league={league}
+              mySlot={mySlot}
+              myTurn={myTurn}
+              teamLabelOf={(slot) => engine.teamLabel(slot)}
+              autopick={autopick}
+              onToggleAutopick={handleToggleAutopick}
+              queuePlayers={queuePlayers}
+              onToggleQueue={handleToggleQueue}
+              rosterSlot={rosterSlot}
+              onRosterSlot={setRosterSlot}
+              filterCounts={filterCounts}
+              picks={picks}
+              board={board}
+              players={availablePlayers}
+              search={search}
+              onSearch={setSearch}
+              posFilter={posFilter}
+              onPosFilter={setPosFilter}
+              expBand={expBand}
+              onExpBand={setExpBand}
+              showDrafted={showDrafted}
+              onShowDrafted={setShowDrafted}
+              season={season}
+              onSeason={setSeason}
+              priorSeasonYear={priorSeasonYear}
+              nflTeamFilter={nflTeamFilter}
+              onNflTeamFilter={setNflTeamFilter}
+              pointsFor={pointsForActive}
+              vorpFor={vorpForActive}
+              valueFor={valueFor}
+              survivalFor={survivalFor}
+              photoFor={photoFor}
+              initialsFor={initialsFor}
+              onDraft={handleDraft}
+              draftOver={draftIsOver}
+              queuedNames={queuedNames}
+              draftedByFor={draftedByFor}
+              onSelectPlayer={setSelectedPlayer}
+              sortBy={sortBy}
+              sortDir={sortDir}
+              onSort={handleSort}
+              projOf={projOf}
+              tierAvgByPos={tierAvgByPos}
+              mobilePane={mobilePane}
+              onMobilePane={setMobilePane}
+              bandCollapsed={bandCollapsed}
+            />
+          </>
+        ) : view === 'board' ? (
+          <>
+            {/* The ribbon takes over the header's own centre pill on this
+                tab (hidePill, above) — the same round/pick/clock, now beside
+                a full-draft ticker rather than squeezed alone into the
+                header. Hidden once the draft is over: there is no live pick
+                left for it to describe, and the header's "Draft complete"
+                pill takes the centre track back at that point — see
+                DraftCockpitHeader's own hidePill comment for why the two
+                never both want the centre track at once. */}
+            {!draftIsOver && (
+              <PickTicker
+                league={league}
+                onClock={onClock}
+                overall={overall}
+                mySlot={mySlot}
+                myTurn={myTurn}
+                urgent={urgent}
+                code={code}
+                timeLeft={engine.timeLeft()}
+                clockLength={engine.clockLength()}
+                teamLabelOf={(slot) => engine.teamLabel(slot)}
+                autopick={autopick}
+                roomSeats={roomSeats}
+              />
+            )}
+            <div className="relative flex flex-1 flex-col overflow-hidden">
+              {/* Board/Pool/Picks — mobile only. Below lg this tab has no
+                  side dock and no PlayerHub sheet any more (see the retired
+                  mount's own former comment, replaced by this one): the
+                  three things the desktop dock plus that sheet used to
+                  split across two mechanisms are one segmented control
+                  instead, matching the Players tab's own precedent (a
+                  dedicated screen beats a sheet floating over the board).
+                  Chat and the activity Log lose their Board-tab access
+                  point with it — Analysis's own mobile sheet still carries
+                  both (its tabs prop stays the full default set), so
+                  neither is gone, just no longer reachable from here,
+                  the same trade Players' own mobile pass already made. */}
+              <div className="flex shrink-0 gap-1.5 border-b border-slate-rule bg-slate-panel/40 px-2.5 py-2 lg:hidden">
+                {BOARD_PANES.map((p) => (
+                  <button
+                    key={p.key}
+                    type="button"
+                    onClick={() => setBoardPane(p.key)}
+                    aria-pressed={boardPane === p.key}
+                    className={
+                      'h-11 flex-1 rounded-full px-2 text-center text-xs font-semibold transition-colors duration-150 ' +
+                      (boardPane === p.key ? 'bg-teal-400/[0.14] text-teal-300' : 'text-ink-muted hover:text-white/60')
+                    }
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* DraftBoardGrid's own flex-1 + min-h-[240px] (its root
+                  className, unchanged) is the board's floor here — already
+                  well past the 120px this tab's own acceptance check asks
+                  for, so nothing about that component needed loosening for
+                  this tab specifically. trayPos/onTrayUp/onTrayDown are new:
+                  DraftLobby.jsx's own claimable-board mount never passes
+                  them, so its chevrons stay unrendered there (see
+                  DraftBoardGrid's own comment on that pair).
+
+                  hidden/flex by boardPane below lg, always flex at lg+ —
+                  the segmented control above is itself lg:hidden, so
+                  boardPane is meaningless at desktop width and the grid
+                  must never hide because of it there. */}
+              <div className={(boardPane === 'board' ? 'flex' : 'hidden') + ' min-h-0 flex-1 flex-col lg:flex'}>
+                <DraftBoardGrid
+                  shortNameOf={engine.shortName}
+                  league={league}
+                  picks={picks}
+                  mySlot={mySlot}
+                  onClock={onClock}
+                  teamLabelOf={(slot) => engine.teamLabel(slot)}
+                  onSelectPlayer={setSelectedPlayer}
+                  onTeamClick={
+                    draftIsOver
+                      ? (slot) => { setInsightsSlot(slot); setShowInsights(true) }
+                      : undefined
+                  }
+                  trayPos={tray}
+                  onTrayUp={() => moveTray(1)}
+                  onTrayDown={() => moveTray(-1)}
+                />
+              </div>
+
+              {/* The dock: the pool left, Chat/Log/Picks right, at a fixed
+                  pixel height per tray position (DOCK_H, above) rather than
+                  the graph's own percentage split the Analysis branch below
+                  still uses. flex-shrink (not shrink-0) plus min-h-[37px] is
+                  what lets a short window (924x540 is the acceptance check's
+                  own number) take height back from the dock rather than
+                  clip it or the board — the board's own 240px floor and this
+                  37px floor both fit well inside 540px alongside the header,
+                  ribbon and legend above them. lg:flex only: below lg this
+                  tab's player access is still PlayerHub's mobile sheet,
+                  mounted just below. */}
+              <div
+                style={{ flexBasis: DOCK_H[tray] }}
+                className="hidden min-h-[37px] flex-shrink flex-grow-0 items-stretch overflow-hidden border-t border-slate-rule bg-slate-bar lg:flex"
+              >
+                {/* PlayerQueueSidebar, not a second pool table — the
+                    Players tab pass folded this dock's own search/chips/
+                    count/chevron header in front of the same shared table
+                    every other surface uses, in bareTable mode so its own
+                    built-in header (the recommendation card, its own
+                    search box) doesn't render twice. */}
+                <div className="flex min-w-0 flex-1 flex-col border-r border-slate-rule">
+                  <div className="flex shrink-0 items-center gap-2.5 border-b border-slate-rule px-3 py-2">
+                    <span className="relative block w-[180px] shrink-0">
+                      <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-muted" />
+                      <input
+                        type="text"
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        placeholder="Search players"
+                        className="h-7 w-full rounded-md border border-slate-rule bg-slate-sunk/60 pl-7 pr-2 text-xs text-white placeholder:text-white/30 focus:border-teal-400/60 focus:outline-none"
+                      />
+                    </span>
+                    <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto">
+                      {['ALL', ...POS_LIST, 'FLEX', 'K', 'DST'].map((pos) => (
+                        <button
+                          key={pos}
+                          type="button"
+                          onClick={() => setPosFilter(pos)}
+                          className={
+                            'h-[26px] shrink-0 rounded-full px-2.5 text-[11px] font-semibold transition-colors duration-150 ' +
+                            (posFilter === pos ? 'bg-teal-500 text-obsidian' : 'bg-white/5 text-white/55 hover:bg-white/10 hover:text-white')
+                          }
+                        >
+                          {pos === 'ALL' ? 'All' : pos === 'DST' ? 'D/ST' : pos}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span className="whitespace-nowrap font-plex text-[10px] text-ink-muted">{availablePlayers.length} available</span>
+                      <button
+                        type="button"
+                        onClick={() => setTray((t) => (t === 'hidden' ? 'default' : 'hidden'))}
+                        title={tray === 'hidden' ? 'Open the pool' : 'Collapse the pool'}
+                        className="flex h-6 w-6 items-center justify-center rounded-md bg-white/5 text-ink-soft transition-colors duration-150 hover:bg-white/10 hover:text-white"
+                      >
+                        {tray === 'hidden' ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="min-h-0 flex-1">
+                    {/* isDesktop, not this dock's own `hidden ... lg:flex`
+                        ancestor — that class is CSS-only, so the dock's
+                        PlayerQueueSidebar stayed React-mounted (just
+                        invisible) below lg the whole time boardPane's own
+                        `{boardPane === 'pool' && ...}` Pool pane further
+                        down was truly mounting a second one, colliding on
+                        shared layoutIds. See useBreakpoint.js's own
+                        comment and PlayersTab.jsx's identical fix for the
+                        same mistake made the same way there. */}
+                    {isDesktop && (
+                    <PlayerQueueSidebar
+                      bareTable
+                      players={availablePlayers}
+                      posFilter={posFilter}
+                      pointsFor={pointsFor}
+                      valueFor={valueFor}
+                      vorpFor={vorpFor}
+                      survivalFor={survivalFor}
+                      projOf={projOf}
+                      photoFor={photoFor}
+                      initialsFor={initialsFor}
+                      onDraft={handleDraft}
+                      myTurn={myTurn}
+                      queuedNames={queuedNames}
+                      onToggleQueue={handleToggleQueue}
+                      draftedByFor={draftedByFor}
+                      onSelectPlayer={setSelectedPlayer}
+                      sortBy={sortBy}
+                      sortDir={sortDir}
+                      onSort={handleSort}
+                      tierAvgByPos={tierAvgByPos}
+                    />
+                    )}
+                  </div>
+                </div>
+                {/* 360px fixed, matching the handoff exactly. Chat/Log/Picks
+                    — DraftLogDock.jsx already has exactly these three tabs
+                    and needed no change for this tab to reuse it. */}
+                <div className="hidden w-[360px] shrink-0 lg:flex">
+                  <DraftLogDock recentOthers={recentOthers} />
+                </div>
+              </div>
+
+              {/* Pool pane — mobile only. A quick position-filtered look at
+                  the same pool table Players owns in full (search, season,
+                  NFL team, tenure, Show drafted) — this one carries only
+                  the position chips the desktop dock's own filter row
+                  already has, matching the design handoff exactly: a
+                  glance from the board, not a second copy of the Players
+                  screen's own filter chrome. */}
+              {boardPane === 'pool' && (
+                <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:hidden">
+                  <div className="no-scrollbar flex shrink-0 gap-1.5 overflow-x-auto border-b border-slate-rule px-2.5 py-2">
+                    {['ALL', ...POS_LIST, 'FLEX', 'K', 'DST'].map((pos) => (
+                      <button
+                        key={pos}
+                        type="button"
+                        onClick={() => setPosFilter(pos)}
+                        aria-pressed={posFilter === pos}
+                        className={
+                          'h-11 shrink-0 rounded-full px-3.5 text-xs font-semibold transition-colors duration-150 ' +
+                          (posFilter === pos ? 'bg-teal-500 text-obsidian' : 'bg-white/5 text-white/55 hover:bg-white/10 hover:text-white')
+                        }
+                      >
+                        {pos === 'ALL' ? 'All' : pos === 'DST' ? 'D/ST' : pos}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="min-h-0 flex-1">
+                    <PlayerQueueSidebar
+                      bareTable
+                      mobile
+                      players={availablePlayers}
+                      posFilter={posFilter}
+                      pointsFor={pointsFor}
+                      valueFor={valueFor}
+                      vorpFor={vorpFor}
+                      survivalFor={survivalFor}
+                      projOf={projOf}
+                      photoFor={photoFor}
+                      initialsFor={initialsFor}
+                      onDraft={handleDraft}
+                      myTurn={myTurn}
+                      queuedNames={queuedNames}
+                      onToggleQueue={handleToggleQueue}
+                      draftedByFor={draftedByFor}
+                      onSelectPlayer={setSelectedPlayer}
+                      sortBy={sortBy}
+                      sortDir={sortDir}
+                      onSort={handleSort}
+                      tierAvgByPos={tierAvgByPos}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Picks pane — mobile only, the same avatar-card list as the
+                  desktop right rail. */}
+              {boardPane === 'picks' && (
+                <div className="flex min-h-0 flex-1 flex-col lg:hidden">
+                  <PicksRail mobile picks={picks} league={league} mySlot={mySlot} teamLabelOf={(slot) => engine.teamLabel(slot)} initialsFor={initialsFor} />
+                </div>
+              )}
+            </div>
+          </>
         ) : (
         <>
-        {/* The board stays visible on every width now — see PlayerHub.jsx's
-            file comment for what replaced the old Draft Hub/Full Board
-            toggle below lg (a bottom sheet over the board, not a view that
-            swaps it out). */}
+        {/* Analysis keeps the board-plus-panels layout this file used to
+            share with Board — AnalysisTab in place of the grid, the same
+            tray split, the same panel row underneath. Unlike Board, it
+            still goes through PlayerHub/SidePanel rather than the new dock:
+            reworking Analysis's own bottom panel is a later pass, not this
+            one (the plan removes the pool from Analysis entirely, which is
+            a bigger change than swapping in a new dock). */}
         {/* Desktop is a horizontal split — board across the full window
             width on top, panels in a row beneath — not the vertical split
             this used to be. Measured against Sleeper's own desktop room,
@@ -1094,34 +1497,14 @@ export default function DraftRoom() {
                   : 'lg:flex-none lg:h-[55%]')
             }
           >
-            {view === 'analysis' ? (
-              // onClose: the report's own "Close" exit action. Analysis is a
-              // tab, not a modal, so dismissing it means switching tabs —
-              // Board is the obvious landing spot, the same content this
-              // strip shows for every other tab.
-              <AnalysisTab engine={engine} league={league} picks={picks} mySlot={mySlot} onClose={() => setView('board')} />
-            ) : (
-            <DraftBoardGrid
-              shortNameOf={engine.shortName}
-              league={league}
-              picks={picks}
-              mySlot={mySlot}
-              onClock={onClock}
-              teamLabelOf={(slot) => engine.teamLabel(slot)}
-              onSelectPlayer={setSelectedPlayer}
-              onTeamClick={
-                draftIsOver
-                  ? (slot) => { setInsightsSlot(slot); setShowInsights(true) }
-                  : undefined
-              }
-              // Mobile only (DraftBoardGrid gates the button itself with
-              // lg:hidden) — opens the same PlayerHub sheet the bottom tab
-              // bar's Roster/Players buttons already reach into, just
-              // pre-selected to its Log tab instead of building a second,
-              // one-off sheet for the same content.
-              onOpenLog={() => openHub('log')}
-            />
-            )}
+            {/* DraftBoardGrid moved to the view === 'board' branch above,
+                alongside its new ribbon/dock — this branch only ever renders
+                for Analysis now, so there's nothing left here to switch on.
+                onClose: the report's own "Close" exit action. Analysis is a
+                tab, not a modal, so dismissing it means switching tabs —
+                Board is the obvious landing spot, the same content this
+                strip shows for every other tab. */}
+            <AnalysisTab engine={engine} league={league} picks={picks} mySlot={mySlot} onClose={() => setView('board')} />
 
             {/* The tray control, on the board rather than in the header,
                 because the board is the thing it moves. Desktop only: below
@@ -1151,80 +1534,51 @@ export default function DraftRoom() {
             </div>
           </div>
 
-          {/* The panel row. flex-none below lg with no in-flow children —
-              PlayerHub is `fixed` there — so it collapses to nothing and
-              the board keeps the whole column; lg:flex-1 gives it the
-              other half of the screen at desktop width. It cannot be
-              `hidden` below lg: display:none on the parent would hide
-              PlayerHub's fixed sheet too, which is the whole mobile UI. */}
+          {/* The panel row — Queue/Roster and Chat/Log/Picks only now.
+              PlayerHub (the pool, and below lg the whole Queue/Team/Chat/
+              Log sheet) is gone from this view entirely: the pool belongs
+              to Players and Board, where a pick is actually made, and
+              Analysis is the read on what already happened, not another
+              place to draft from. PlayerHub's own non-"players" tabs were
+              already `lg:hidden` internally, so removing it costs desktop
+              nothing beyond the pool column itself — SidePanel and
+              DraftLogDock below are separate mounts, untouched.
+
+              Below lg this view now shows no player surface at all — see
+              prompt 08 for AnalysisTab.jsx's own mobile report, which
+              replaces what PlayerHub's sheet used to add here rather than
+              leaving a gap prompt 07 opened and prompt 08 closes.
+
+              flex-none below lg with no in-flow children now that nothing
+              fixed lives here either — both remaining panels carry their
+              own `hidden ... lg:flex`, so the row collapses to nothing
+              below lg the ordinary way, not because something inside it
+              is position:fixed. lg:flex-1 still gives it the other half
+              of the screen at desktop width. */}
           <div
             className={
               'flex min-h-0 flex-none border-slate-rule ' +
               (isolate ? 'lg:hidden' : 'lg:flex-1 lg:border-t')
             }
           >
-            {/* Players — the widest panel, as it is on Sleeper: it carries
-                the search, the filter chips, the sortable grid and the
-                profile drawer that slides over it. */}
-            <div className="relative flex min-h-0 flex-1 lg:flex-[5] lg:min-w-0">
-            <PlayerHub
-              open={hubShowing}
-              onOpenChange={setHubOpen}
-              tab={hubTab}
-              onTabChange={setHubTab}
-          counts={filterCounts}
-              players={availablePlayers}
-              search={search}
-              onSearch={setSearch}
-              posFilter={posFilter}
-              onPosFilter={setPosFilter}
-              expBand={expBand}
-              onExpBand={setExpBand}
-              watchlistOnly={watchlistOnly}
-              onWatchlistOnly={setWatchlistOnly}
-              showDrafted={showDrafted}
-              onShowDrafted={setShowDrafted}
-              pointsFor={pointsFor}
-              valueFor={valueFor}
-              photoFor={photoFor}
-              initialsFor={initialsFor}
-              onDraft={handleDraft}
-              myTurn={myTurn}
-              draftOver={draftIsOver}
-              queuedNames={queuedNames}
-              onToggleQueue={handleToggleQueue}
-              draftedByFor={draftedByFor}
-              selectedPlayer={selectedPlayer}
-              onSelectPlayer={setSelectedPlayer}
-              sortBy={sortBy}
-              sortDir={sortDir}
-              onSort={handleSort}
-              recommended={recommended}
-              recommendedVorp={recommendedVorp}
-              recommendedTierLeft={recommendedTierLeft}
-              projOf={projOf}
-              tierAvgByPos={tierAvgByPos}
-              queuePlayers={queuePlayers}
-              recentOthers={recentOthers}
-              engine={engine}
-              league={league}
-              mySlot={mySlot}
-              teamLabelOf={(slot) => engine.teamLabel(slot)}
-            />
-            </div>
 
-            {/* The other panels are lg+ only — below lg these same views
-                are tabs inside PlayerHub's sheet (Queue, Team, Chat),
-                which is why nothing here needs a mobile branch.
+            {/* The remaining panels are lg+ only, each carrying its own
+                `hidden ... lg:flex` — below lg this view shows no player
+                surface at all now that PlayerHub is gone (see the panel
+                row's own comment above; prompt 08 gives this screen its
+                own mobile report instead).
 
                 Queue and Roster share one tabbed panel rather than taking
-                a column each. Four columns was one too many: at 1600px it
+                a column each. Four columns was one too many when a third,
+                wider Players column also shared this row: at 1600px it
                 gave each side panel 320px, and neither of these two needs
                 that constantly — a queue is usually a handful of names and
-                a roster is read in glances, while the player grid it was
-                taking width from is the surface the whole screen exists
-                for. Combined, Players goes 640px -> 800px at that width,
-                and the pair still gets 480px between them. */}
+                a roster is read in glances. With Players gone entirely,
+                Queue/Roster and Chat/Log/Picks now split this row's full
+                width 3:2 between themselves rather than splitting what a
+                5-unit Players column left over — wider than before, which
+                is the natural result of removing a sibling from the same
+                flex row, not a width chosen separately from that. */}
             <div className="hidden lg:flex lg:min-h-0 lg:flex-[3] lg:min-w-0">
               <SidePanel
                 tabs={[
@@ -1268,10 +1622,7 @@ export default function DraftRoom() {
 
       <MobileDraftTabBar
         view={view}
-        onSelectView={selectMobileView}
-        hubOpen={hubShowing}
-        hubTab={hubTab}
-        onOpenHub={openHub}
+        onSelectView={setView}
         draftIsOver={draftIsOver}
       />
 
@@ -1302,6 +1653,16 @@ export default function DraftRoom() {
         onClose={() => setSelectedPlayer(null)}
         photoFor={photoFor}
         initialsFor={initialsFor}
+        nextOverall={nextOverall}
+        queuedNames={queuedNames}
+        onToggleQueue={handleToggleQueue}
+        onDraft={handleDraft}
+        myTurn={myTurn}
+        autopick={autopick}
+        pointsFor={pointsFor}
+        vorpFor={vorpFor}
+        valueFor={valueFor}
+        survivalFor={survivalFor}
       />
 
       {draftIsOver && showInsights && (

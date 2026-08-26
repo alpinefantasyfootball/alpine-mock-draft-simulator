@@ -86,7 +86,14 @@ export default function DraftMenuOverlay({
     <div className="fixed inset-0 z-[70]" onClick={onClose}>
       <div
         onClick={(e) => e.stopPropagation()}
-        className="absolute right-4 top-[68px] w-[292px] rounded-xl border border-white/10 bg-slate-panel p-2 shadow-[0_24px_60px_-12px_rgba(0,0,0,0.85)] sm:right-6"
+        /* top-[52px]/lg:top-[68px]: DraftCockpitHeader's own live-draft
+           header is 46px below lg now (its own mobile branch) and 62px at
+           lg+, and this menu only ever opens from that header's kebab —
+           52/68 is that height plus the same 6px gap the desktop value
+           always used. Never opens from Analysis's mobile view: that
+           screen's own fixed header covers DraftCockpitHeader's entirely
+           at a higher z-index, so its kebab is not reachable there. */
+        className="absolute right-4 top-[52px] w-[292px] rounded-xl border border-white/10 bg-slate-panel p-2 shadow-[0_24px_60px_-12px_rgba(0,0,0,0.85)] sm:right-6 lg:top-[68px]"
       >
         <Item label="Draft settings" onClick={act(onOpenSettings)} />
         {inRoom && (

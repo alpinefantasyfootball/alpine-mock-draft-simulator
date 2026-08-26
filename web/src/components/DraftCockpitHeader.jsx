@@ -3,9 +3,14 @@ import { motion } from 'framer-motion'
 import { ChevronLeft, Clock, MoreHorizontal, Settings, Volume2, VolumeX } from 'lucide-react'
 import JukeLogo from './juke-logo/JukeLogo.jsx'
 
+// Players first — it's the default live-draft view now (DraftRoom.jsx),
+// the ESPN-style screen most of a draft is actually spent on. Decide moved
+// third rather than dropping to last: it still answers "what should I do
+// right now," just no longer the first thing a manager sees.
 const TABS = [
-  { key: 'decide', label: 'Decide' },
+  { key: 'players', label: 'Players' },
   { key: 'board', label: 'Board' },
+  { key: 'decide', label: 'Decide' },
   { key: 'analysis', label: 'Analysis' },
 ]
 
@@ -55,6 +60,14 @@ export default function DraftCockpitHeader({
   onOpenMenu,
   soundOn,
   onToggleSound,
+  // Set by the Board tab (and, later, Players): both mount PickTicker.jsx
+  // directly under this bar, which repeats the round/pick/clock the centre
+  // pill already shows. Only suppresses the live round/pick pill itself —
+  // preDraft's own label and the "Draft complete" pill still need to show
+  // somewhere, and neither tab that sets this ever mounts while either of
+  // those two is the active state (the ribbon needs a live onClock/code to
+  // draw at all).
+  hidePill,
 }) {
   const pct = clockLength ? Math.max(0, Math.min(100, (timeLeft / clockLength) * 100)) : 0
 
@@ -114,7 +127,22 @@ export default function DraftCockpitHeader({
           it is the one that has to fit. At 14px this cleared 768 and missed 375
           by a single pixel, which is the kind of margin that is not a margin -
           12 takes the phone to 368 against 375 and 768 to 746. */}
-      <header className="fixed inset-x-0 top-0 z-50 grid h-[62px] shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 border-b border-white/[0.06] bg-slate-bar/90 px-4 backdrop-blur-md lg:gap-[22px] lg:px-6">
+      <header
+        className={
+          'fixed inset-x-0 top-0 z-50 ' +
+          /* This 62px bar is unconditional (every breakpoint) while
+             preDraft — the seat-picker/entry screen is outside every one of
+             the mobile redesign prompts, so its mobile header stays exactly
+             what it already was rather than gaining a half-finished second
+             treatment. Once a draft is live, this bar is lg+ only: the
+             46px header just below takes over below lg, built for the
+             ribbon+band stack those prompts add underneath it rather than
+             this bar's own pick pill, which the ribbon replaces on Board
+             and Players anyway (hidePill, above). */
+          (preDraft ? 'grid ' : 'hidden lg:grid ') +
+          'h-[62px] shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 border-b border-white/[0.06] bg-slate-bar/90 px-4 backdrop-blur-md lg:gap-[22px] lg:px-6'
+        }
+      >
         <div className="flex min-w-0 items-center gap-3 lg:gap-[22px]">
         <a
           href="#/drafts"
@@ -204,6 +232,8 @@ export default function DraftCockpitHeader({
           <span className="inline-flex items-center gap-2 justify-self-center rounded-full bg-emerald-500/10 px-4 py-1.5 text-xs font-bold uppercase tracking-wide text-emerald-300">
             Draft complete
           </span>
+        ) : hidePill ? (
+          <span className="justify-self-center" />
         ) : (
           <div
             className={
@@ -415,6 +445,108 @@ export default function DraftCockpitHeader({
           )}
         </div>
       </header>
+
+      {/* The live-draft mobile header — chevron, lockup, Auto toggle, kebab
+          — replacing the 62px bar's tab nav, pick pill and Autopick/Sound/
+          kebab cluster with the four things that still have a job once the
+          ribbon (PickTicker), the band (PickClockBand) and the bottom tab
+          bar (MobileDraftTabBar) exist below it. !preDraft only — see the
+          comment on the 62px header above for why the entry screen keeps
+          its own unconditional bar rather than sharing this one.
+
+          Not on Analysis: that view keeps its own mobile top bar
+          (AnalysisTab.jsx), so DraftRoom.jsx never reaches this file for
+          it below lg — see that component's own comment.
+
+          Sound is here and the mockup's own header does not carry it. The
+          desktop bar deliberately promoted Sound out of the kebab menu to
+          an always-visible icon — DraftMenuOverlay.jsx's own comment says
+          so, and says why: "a preference toggled mid-pick needs to be a
+          tap away, not two screens deep." That reasoning is not specific
+          to a wide screen, and the menu has had no Sound entry to fall
+          back on since the icon replaced it — dropping the icon here too
+          would make Sound unreachable on a phone entirely rather than
+          moved. 46px has the width for a fifth control at this size, so
+          kept rather than reintroducing a menu entry the desktop version
+          already retired for a reason that still holds. */}
+      {/* Every control below is a 44px hit box around a visibly smaller
+          pill — the shared context's own floor ("Minimum tap target 44px
+          on any layout below lg") applies here same as everywhere else in
+          this redesign, and a 46px bar has no room to grow the chevron/
+          sound/kebab circles themselves to 44px without the header reading
+          as three oversized coins. This is the identical trick
+          PlayerQueueSidebar.jsx's own queue star already uses — "26px
+          wide, 44px tall tap area... on a control that's visually much
+          smaller than that" — just applied on both axes here since these
+          are circles rather than a narrow column's star. The Auto toggle
+          is the one exception: it is not a circle, so growing its own
+          height to 44px is just taller padding inside the same pill, not
+          a visual size change worth hiding behind an inner span. */}
+      {!preDraft && (
+        <header className="fixed inset-x-0 top-0 z-50 flex h-[46px] shrink-0 items-center gap-1 border-b border-white/[0.06] bg-slate-bar px-1.5 lg:hidden">
+          <a
+            href="#/drafts"
+            aria-label="Back to your draft locker"
+            title="Back to your draft locker"
+            className="flex h-11 w-11 shrink-0 items-center justify-center"
+          >
+            <span className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-rule bg-slate-sunk/60 text-white/50">
+              <ChevronLeft className="h-4 w-4" />
+            </span>
+          </a>
+
+          <a href="#/" aria-label="Juke home" className="flex h-11 min-w-0 flex-1 items-center">
+            <JukeLogo size={19} surface="appbar" />
+          </a>
+
+          <button
+            type="button"
+            onClick={onToggleAutopick}
+            disabled={over}
+            aria-pressed={autopick}
+            title={over ? 'Draft complete' : undefined}
+            className={
+              'flex h-11 shrink-0 items-center gap-1.5 rounded-full bg-white/5 pl-2.5 pr-1.5 ' +
+              (over ? 'cursor-not-allowed opacity-40' : '')
+            }
+          >
+            <span className="text-[11px] font-semibold text-white/70">Auto</span>
+            <span className={'relative block h-4 w-[30px] rounded-full transition-colors duration-200 ' + (autopick && !over ? 'bg-teal-500/70' : 'bg-white/[0.16]')}>
+              <motion.span
+                layout
+                transition={{ type: 'spring', stiffness: 500, damping: 32 }}
+                className="absolute top-0.5 h-3 w-3 rounded-full bg-white"
+                style={{ left: autopick ? 16 : 2 }}
+              />
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={onToggleSound}
+            aria-pressed={soundOn}
+            title={soundOn ? 'Turn draft sounds off' : 'Turn draft sounds on'}
+            aria-label={soundOn ? 'Turn draft sounds off' : 'Turn draft sounds on'}
+            className="flex h-11 w-11 shrink-0 items-center justify-center"
+          >
+            <span className="flex h-[30px] w-[30px] items-center justify-center rounded-full bg-white/5 text-white/70">
+              {soundOn ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={onOpenMenu}
+            title="Draft options"
+            aria-label="Draft options"
+            className="flex h-11 w-11 shrink-0 items-center justify-center"
+          >
+            <span className="flex h-[30px] w-[30px] items-center justify-center rounded-full bg-white/5 text-white/70">
+              <MoreHorizontal className="h-3.5 w-3.5" />
+            </span>
+          </button>
+        </header>
+      )}
     </Fragment>
   )
 }

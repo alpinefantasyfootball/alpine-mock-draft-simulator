@@ -9059,6 +9059,14 @@ window.JukeEngine = {
   // one thing that wasn't on the bridge yet because nothing needed the
   // unformatted number before there was a bar to fill.
   timeLeft: () => state.timeLeft,
+  // The year buildPriorSeason() actually found (latestStatSeason()), for the
+  // Players tab's season toggle — p.priorPts/p.priorGames are already real
+  // fields on every board player (set inside buildPriorSeason(), scored
+  // under the current rules exactly like the projection), so the only thing
+  // missing a bridge was the label itself. Null if the stats feed had
+  // nothing to find a prior season in, which the tab reads as "hide the
+  // selector" rather than showing it against empty columns.
+  priorSeason: () => PRIOR_SEASON,
   /* The pick clock is state, not league - it is per-drafter rather than part
      of the board's shape, which is why a room broadcasts it separately. The
      settings modal wrote league.clock for two commits and read it back as
