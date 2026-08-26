@@ -221,13 +221,30 @@ export default function PlayerQueueSidebar({
      cliff; showing a divider there would label a coincidence as a cliff,
      so it simply doesn't fire outside 'board'.
 
+     And only when posFilter has narrowed the list to one of those tiered
+     positions. A tier is a within-position idea — "the next WR" — and
+     board order across every position at once (ALL, or FLEX's RB+WR+TE)
+     interleaves them by true ADP, so a WR tier's own divider can end up
+     with an RB or a DST sitting directly under it purely because that
+     player's ADP happened to fall between two WRs. Nothing about the
+     player is wrong and nothing about the divider's own numbers is wrong
+     — a defense really was that many picks away from the next WR tier —
+     but a row that isn't the position the ribbon just named reads as
+     though it belongs to that tier, which is a false claim regardless of
+     how the text above it is worded. Reported directly: a defense sitting
+     between "WR Tier 8 ends here" and "WR Tier 9 ends here." The one
+     condition that actually fixes it is the list containing only one
+     tiered position at a time, which is also exactly the moment a cliff
+     is worth signposting — nobody scanning DST while wondering about a
+     WR run needs to be told about it.
+
      tierCounts is a first pass — how many undrafted players this position
      has left at each tier in the list currently on screen — computed
      before the second pass needs it, since "how many left before the
      drop" has to count every remaining player in the ending tier, not
      just the ones already walked past. */
   const rows = []
-  if (sortBy === 'board' && tierAvgByPos) {
+  if (sortBy === 'board' && tierAvgByPos && POS_LIST.includes(posFilter)) {
     const tierCounts = {}
     players.forEach((p) => {
       if (p.drafted || !POS_LIST.includes(p.pos) || p.tier == null) return
