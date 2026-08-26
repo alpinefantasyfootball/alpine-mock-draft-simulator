@@ -670,6 +670,17 @@ export default function DraftRoom() {
     const startLabelShort = roomActive
       ? (engine.isHost() ? 'Start' : 'Waiting…')
       : 'Start'
+    // A guest can never press this button — only the host can start the
+    // room — so below lg it collapses to a plain status icon instead of a
+    // second CTA-shaped pill. Measured: even "Waiting…" alone, at this
+    // button's normal padding, still overflowed the header by 74px once
+    // Autopick+Sound+Settings were also accounted for — there wasn't a
+    // shorter string that fit, because the real problem wasn't the text.
+    // A control nobody in this seat can ever activate doesn't need CTA
+    // weight at any width; see DraftCockpitHeader.jsx's own comment on
+    // this exact prop for why a disabled-but-CTA-styled pill is its own,
+    // separate problem from the overflow that surfaced it.
+    const waitingForHost = roomActive && !engine.isHost()
 
     return (
       <div className="fixed inset-0 z-[60] flex flex-col bg-slate text-white">
@@ -678,6 +689,7 @@ export default function DraftRoom() {
           problem={problem}
           startLabel={startLabel}
           startLabelShort={startLabelShort}
+          waitingForHost={waitingForHost}
           startDisabled={!!problem || (roomActive && !engine.isHost())}
           onStartDraft={beginDraft}
           autopick={soloAutopick}

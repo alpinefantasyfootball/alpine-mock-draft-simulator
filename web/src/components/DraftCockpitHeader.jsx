@@ -1,6 +1,6 @@
 import { Fragment } from 'react'
 import { motion } from 'framer-motion'
-import { ChevronLeft, MoreHorizontal, Settings, Volume2, VolumeX } from 'lucide-react'
+import { ChevronLeft, Clock, MoreHorizontal, Settings, Volume2, VolumeX } from 'lucide-react'
 import JukeLogo from './juke-logo/JukeLogo.jsx'
 
 const TABS = [
@@ -37,6 +37,7 @@ export default function DraftCockpitHeader({
   problem,
   startLabel,
   startLabelShort,
+  waitingForHost,
   startDisabled,
   onStartDraft,
   cockpitTab,
@@ -183,7 +184,20 @@ export default function DraftCockpitHeader({
             centering the box itself at its natural width is what actually
             lands the content on the bar's true centre. */}
         {preDraft ? (
-          <span className="justify-self-center truncate font-plex text-xs text-white/60" title={problem || undefined}>
+          /* max-w + truncate, not truncate alone: justify-self-center sizes
+             this box to its own content's natural width, so without a cap
+             "truncate" never had anything to actually truncate — the span
+             was always exactly as wide as "Nobody has picked yet" wanted to
+             be, full stop. At 375px in a room, that's wide enough on its
+             own to force the right-hand controls (Autopick+Sound+Gear+the
+             Start/Waiting button, none of them shrinkable) out past their
+             own track and visually over this text. The cap gives truncate
+             something to bite against below lg, where the room for both
+             sides is tightest. */
+          <span
+            className="min-w-0 max-w-6 justify-self-center truncate font-plex text-xs text-white/60 sm:max-w-[100px] lg:max-w-none"
+            title={problem || undefined}
+          >
             {problem || 'Nobody has picked yet'}
           </span>
         ) : over ? (
@@ -193,7 +207,7 @@ export default function DraftCockpitHeader({
         ) : (
           <div
             className={
-              'flex items-center gap-3.5 justify-self-center rounded-full px-3.5 py-1.5 transition-colors duration-300 ' +
+              'flex items-center gap-1.5 justify-self-center rounded-full px-2 py-1.5 transition-colors duration-300 sm:gap-3.5 sm:px-3.5 ' +
               (myTurn
                 ? urgent
                   ? 'bg-rose-500/20 shadow-[inset_0_0_0_1.5px_rgba(251,113,133,0.55)]'
@@ -232,9 +246,14 @@ export default function DraftCockpitHeader({
                   pick code, not a countdown - so it cannot go, but its width is
                   a proportion and carries nothing, and at 150px it was the
                   widest thing in this column and therefore the real floor under
-                  the pill. 64px below sm. */}
+                  the pill. 64px below sm was still that floor, and still too
+                  wide: at 375px in a room, this pill (Autopick+Sound+Kebab
+                  competing for the same row) measured a 22px overlap into the
+                  right-hand controls even at 64px — a bug this comment's own
+                  "the real floor" language had assumed away rather than
+                  measured against the row it actually shares. 40px below sm. */}
               {myTurn && (
-                <div className="h-[3px] w-16 overflow-hidden rounded-full bg-white/[0.12] sm:w-[150px]">
+                <div className="h-[3px] w-8 overflow-hidden rounded-full bg-white/[0.12] sm:w-24 lg:w-[150px]">
                   <div
                     className={'h-full rounded-full ' + (urgent ? 'bg-rose-400' : 'bg-teal-400')}
                     style={{ width: pct + '%' }}
@@ -244,9 +263,13 @@ export default function DraftCockpitHeader({
             </div>
             <span
               className={
-                /* 26px below lg. Last and smallest of the four, 13px, and the
-                   one to undo first if this bar ever gets room back. */
-                'font-display text-[26px] font-bold leading-none tabular-nums lg:text-[32px] ' +
+                /* 22px below sm, 26px below lg. Last and smallest of the four
+                   steps, 4px this time, and the one to undo first if this bar
+                   ever gets room back — it's the only lever left once the
+                   progress bar and the pill's own padding had already given
+                   up what they safely could, and this pill was still 10px
+                   into Autopick/Sound/Kebab's own space at 375px. */
+                'font-display text-[22px] font-bold leading-none tabular-nums sm:text-[26px] lg:text-[32px] ' +
                 (myTurn ? (urgent ? 'text-rose-300' : 'text-teal-300') : 'text-white/70 text-base')
               }
             >
@@ -255,10 +278,15 @@ export default function DraftCockpitHeader({
           </div>
         )}
 
-        <div className="flex shrink-0 items-center gap-2 justify-self-end">
+        <div className="flex shrink-0 items-center gap-0.5 justify-self-end sm:gap-2">
           {/* Nothing left to autopick once the draft is over — the toggle
               stayed fully lit and clickable on a finished board, which reads
-              as a live control for a decision that no longer exists. */}
+              as a live control for a decision that no longer exists.
+              pl-1.5 below sm, not the sm+ pl-3.5: that larger value exists
+              to clear the "Autopick" label, which is itself hidden below
+              sm — paying for a label's clearance with no label there was
+              free width nobody was using, on the one bar where every pixel
+              on the right side is already spoken for. */}
           <button
             type="button"
             onClick={onToggleAutopick}
@@ -266,7 +294,7 @@ export default function DraftCockpitHeader({
             aria-pressed={autopick}
             title={over ? 'Draft complete' : undefined}
             className={
-              'flex items-center gap-2.5 rounded-full bg-white/5 py-1.5 pl-3.5 pr-1.5 transition-colors duration-150 ' +
+              'flex items-center gap-2.5 rounded-full bg-white/5 py-1.5 pl-1.5 pr-1.5 transition-colors duration-150 sm:pl-3.5 ' +
               (over ? 'cursor-not-allowed opacity-40' : 'hover:bg-white/[0.09]')
             }
           >
@@ -321,31 +349,58 @@ export default function DraftCockpitHeader({
               >
                 <Settings className="h-4 w-4" />
               </button>
-              <button
-                type="button"
-                onClick={onStartDraft}
-                disabled={startDisabled}
-                title={problem || undefined}
-                className={
-                  'shrink-0 rounded-full px-5 py-2 text-sm font-semibold ' +
-                  (startDisabled
-                    ? 'cursor-not-allowed bg-white/5 text-white/25'
-                    : 'bg-gradient-to-r from-[#00E5FF] to-[#7B1FA2] text-white shadow-glass transition-all duration-200 hover:scale-105 hover:shadow-[0_0_15px_rgba(0,229,255,0.4)]')
-                }
-              >
-                {/* Same lever as "Round N ·" and "your turn" elsewhere on
-                    this bar: shorten the text below the width it stops
-                    fitting, rather than touch the control itself. See
-                    startLabelShort's own comment in DraftRoom.jsx.
-                    lg, not sm: measured with the sound icon in place, "Start
-                    for everyone" plus Autopick's returning text overflows by
-                    43px at both 640 and 768 and only clears at 1024, because
-                    nothing else in this row concedes width until lg either
-                    (the logo, the tab nav, the wider gaps all wait for the
-                    same breakpoint) — sm just swaps which overflow you'd see. */}
-                <span className="hidden lg:inline">{startLabel}</span>
-                <span className="lg:hidden">{startLabelShort}</span>
-              </button>
+              {waitingForHost ? (
+                /* A guest can never press this — only the host starts the
+                   room — so it never wore CTA styling honestly in the first
+                   place; "Waiting for the host" in a gradient pill looks
+                   exactly like a button you just haven't been allowed to
+                   press yet, not one that isn't yours to press at all. That
+                   was also the actual overflow fix: shortening the text
+                   alone (down to "Waiting…") still left this row 74px over
+                   budget at 375px once Autopick+Sound+Settings were
+                   counted, because none of those three can shrink further
+                   and the real cost was the pill's own padding, not its
+                   words. A 34px status icon, matching Sound and Settings
+                   exactly, both reads honestly and actually fits — at every
+                   width, not just below lg, since the "can't press this"
+                   fact doesn't change on a wider screen either. */
+                <span
+                  title="Waiting for the host to start"
+                  aria-label="Waiting for the host to start"
+                  className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full bg-white/5 text-white/40"
+                >
+                  <Clock className="h-4 w-4" />
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={onStartDraft}
+                  disabled={startDisabled}
+                  title={problem || undefined}
+                  className={
+                    'shrink-0 rounded-full px-1 py-2 text-xs font-semibold lg:px-5 lg:text-sm ' +
+                    (startDisabled
+                      ? 'cursor-not-allowed bg-white/5 text-white/25'
+                      : 'bg-gradient-to-r from-[#00E5FF] to-[#7B1FA2] text-white shadow-glass transition-all duration-200 hover:scale-105 hover:shadow-[0_0_15px_rgba(0,229,255,0.4)]')
+                  }
+                >
+                  {/* Same lever as "Round N ·" and "your turn" elsewhere on
+                      this bar: shorten the text below the width it stops
+                      fitting, rather than touch the control itself. See
+                      startLabelShort's own comment in DraftRoom.jsx.
+                      lg, not sm: measured with the sound icon in place,
+                      "Start for everyone" plus Autopick's returning text
+                      overflows by 43px at both 640 and 768 and only clears
+                      at 1024, because nothing else in this row concedes
+                      width until lg either (the logo, the tab nav, the
+                      wider gaps all wait for the same breakpoint) — sm just
+                      swaps which overflow you'd see. Only reached for solo
+                      and the host now; waitingForHost above takes the
+                      guest case out of this button entirely. */}
+                  <span className="hidden lg:inline">{startLabel}</span>
+                  <span className="lg:hidden">{startLabelShort}</span>
+                </button>
+              )}
             </>
           ) : (
             <button
