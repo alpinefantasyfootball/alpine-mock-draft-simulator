@@ -162,10 +162,19 @@
 
   /* The link a manager copies. Built from the page it is on, so it is right
      on jukeff.com, on localhost and in the installed app without being told
-     which. */
+     which. Reads live.code directly rather than re-parsing location.hash
+     (see codeInUrl() below) — the two answer different questions. codeInUrl()
+     is "did the address bar just hand me a room to join", which is only ever
+     true on #/draft-room?room=... itself. This is "what room am I in", which
+     stays true wherever the app's own navigation takes the tab afterwards —
+     the Lobby included, which is where the Draft Room's own invite popover
+     shows it. Built off #/draft-room directly now, not the retired #/draft
+     — applyRoute() still redirects the old route, so an old copied link
+     keeps working, but a link generated today has no reason to take that
+     hop. */
   function link() {
     if (!live.code) return null;
-    return location.origin + location.pathname + "#/draft?room=" + live.code;
+    return location.origin + location.pathname + "#/draft-room?room=" + live.code;
   }
 
   function codeInUrl() {

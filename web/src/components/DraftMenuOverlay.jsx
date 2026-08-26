@@ -44,11 +44,13 @@ export default function DraftMenuOverlay({
   const [copied, setCopied] = useState(false)
   const [confirmingDiscard, setConfirmingDiscard] = useState(false)
 
-  // Same construction RoomPanel.jsx already uses for its own Copy button
-  // — codeInUrl() is the bridged read of Live.codeInUrl(), not a second
-  // hash parser.
-  const code = inRoom ? engine.codeInUrl() : null
-  const link = code && typeof window !== 'undefined' ? `${location.origin}${location.pathname}#/draft-room?room=${code}` : ''
+  // engine.link() — see RoomPanel.jsx's own comment on why this can't be
+  // codeInUrl() plus a hand-built template: codeInUrl() reads the current
+  // hash's query string, which happens to carry the room code on this
+  // particular route (#/draft-room?room=...) but is the wrong source in
+  // general, and was the reason this exact construction went blank the
+  // moment it was reused somewhere that isn't this route.
+  const link = inRoom ? engine.link() || '' : ''
 
   const copyLink = () => {
     if (!link || !navigator.clipboard) return

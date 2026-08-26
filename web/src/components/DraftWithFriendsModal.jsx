@@ -4,11 +4,11 @@ import RoomPanel from './RoomPanel.jsx'
 
 // The Lobby's direct route to multiplayer — one click from "New mock
 // draft" instead of Edit setup -> Invite, two levels down in a tabbed
-// modal nobody would guess holds it. RoomPanel itself is untouched and
-// carries all of the real logic (create, join by code, the link once one
-// exists, the seat list) — this is only the standalone chrome around it,
-// the same job DraftSettingsModal.jsx's own outer shell does for its
-// tabs, sized for one card instead of a whole tabbed dialog.
+// modal nobody would guess holds it. RoomPanel carries all of the real
+// logic (create, join by code, the link once one exists, the seat list);
+// this is the standalone chrome around it, the same job
+// DraftSettingsModal.jsx's own outer shell does for its tabs, sized for
+// one card instead of a whole tabbed dialog.
 //
 // Deliberately doesn't auto-advance to the seat-picker on creation. Doing
 // that the instant createRoom() resolves would swap this modal for the
@@ -18,7 +18,13 @@ import RoomPanel from './RoomPanel.jsx'
 // (or leaving it open) and pressing the card's own "Start mock draft" —
 // which already knows to route a room through the seat-picker rather
 // than skipping it — is what gets you there once the link is copied.
-export default function DraftWithFriendsModal({ onClose }) {
+//
+// onCreated is threaded straight through to RoomPanel rather than
+// duplicated here — see DraftRoom.jsx's own suppressAutoEnterRef comment
+// for what it's actually for (keeping the Lobby's own room-creation action
+// from tripping the same auto-enter effect a followed invite link relies
+// on).
+export default function DraftWithFriendsModal({ onClose, onCreated }) {
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', onKey)
@@ -37,7 +43,7 @@ export default function DraftWithFriendsModal({ onClose }) {
         >
           <X className="h-4 w-4" />
         </button>
-        <RoomPanel />
+        <RoomPanel onCreated={onCreated} />
       </div>
     </div>
   )

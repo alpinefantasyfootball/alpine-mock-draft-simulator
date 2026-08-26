@@ -9099,6 +9099,14 @@ window.JukeEngine = {
   liveStatus: () => Live.status(),
   liveReason: () => Live.reason(),
   codeInUrl: () => Live.codeInUrl(),
+  // The shareable link, wherever the tab is — Live.link() reads live.code
+  // directly rather than the current hash, which is what makes this safe to
+  // call from the Lobby (#/drafts) and not only from #/draft-room?room=...
+  // itself. RoomPanel.jsx and DraftMenuOverlay.jsx both used to build this
+  // string by hand off codeInUrl(), which is the wrong source for it and
+  // reads empty everywhere but the one route that happens to carry the
+  // code in its own query string.
+  link: () => Live.link(),
   memberId: () => Live.memberId(),
   myName: () => Live.name(),
   setMyName: (name) => Live.setName(name),

@@ -8,7 +8,14 @@ const STATUS_TEXT = {
   closed: 'Disconnected.',
 }
 
-export default function RoomPanel() {
+// onCreated: optional, fired the instant createRoom() itself succeeds — not
+// on join. DraftRoom.jsx uses it to keep a host who creates a room from the
+// Lobby on the Lobby (see its own suppressAutoEnterRef comment for why this
+// has to be an explicit signal from here rather than something inferred
+// from hasRoom()/the hash afterwards). A guest typing in a code is a
+// different action with no such case to protect — that path is left alone,
+// and still auto-enters exactly as it always has.
+export default function RoomPanel({ onCreated }) {
   const engine = useEngine()
   useJukeTick(engine)
   const [joinCode, setJoinCode] = useState('')
@@ -49,7 +56,7 @@ export default function RoomPanel() {
 
         <button
           type="button"
-          onClick={() => { if (!started) engine.createRoom() }}
+          onClick={() => { if (!started && engine.createRoom() && onCreated) onCreated() }}
           disabled={started}
           title={started ? "Can't create a room mid-draft" : undefined}
           className="mt-6 w-full rounded-full bg-gradient-to-r from-[#00E5FF] to-[#7B1FA2] py-3 text-sm font-semibold text-white
@@ -100,8 +107,13 @@ export default function RoomPanel() {
   }
 
   const room = engine.room()
-  const code = engine.codeInUrl()
-  const link = code && typeof window !== 'undefined' ? `${location.origin}${location.pathname}#/draft-room?room=${code}` : ''
+  // engine.link() (Live.link() underneath), not codeInUrl() — the latter
+  // reads the current hash's own query string, which is empty everywhere
+  // except #/draft-room?room=... itself. This panel renders on the Lobby
+  // too now (DraftWithFriendsModal.jsx), where the hash is bare #/drafts —
+  // codeInUrl() here always returned null and this box was always blank
+  // the moment a manager clicked back to the Lobby to see it again.
+  const link = engine.link() || ''
 
   const copyLink = () => {
     if (!link) return

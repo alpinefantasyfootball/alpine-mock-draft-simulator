@@ -319,7 +319,31 @@ export default function DraftRoom() {
   // seats they were just invited to, and had to notice and press "Enter
   // Draft Room" themselves to see them. Joining a room is never a fresh
   // start, so it should never show the locker a fresh start shows.
-  useEffect(() => { if (hasRoomVal) setEnteredRoom(true) }, [hasRoomVal])
+  //
+  // suppressAutoEnterRef is what keeps this from also firing on the host's
+  // own "Draft with friends" action (DraftWithFriendsModal.jsx). Gating on
+  // draftsActive (the Lobby route) was the first fix tried and doesn't
+  // hold up: createRoom() writes location.hash = "#/draft-room?room=..."
+  // itself, as part of creating the room, and that hash change flips
+  // draftsActive to false immediately — well before hasRoomVal actually
+  // turns true, since that one waits on the socket rather than just the
+  // hash write. By the time this effect's condition is actually checked,
+  // draftsActive already reads false regardless of which action caused
+  // hasRoomVal to flip, because createRoom() is what moved it there in the
+  // first place. Snapshotting the hash once at mount doesn't hold up
+  // either: DraftRoom mounts unconditionally on every page load — home,
+  // Lobby, wherever — so a session that starts on the homepage and only
+  // later navigates client-side to the Lobby would freeze the wrong
+  // answer. handleDraftWithFriends() below is the one place that actually
+  // knows "this specific hasRoomVal transition is about to be the Lobby's
+  // own doing" — RoomPanel.jsx's onCreated prop reports that fact directly
+  // the instant createRoom() succeeds, rather than it being inferred after
+  // the fact from state that's already moved on. Without this, the host
+  // saw the seat-picker before they'd had a chance to see the invite link
+  // DraftWithFriendsModal.jsx had just rendered — pulled out from under
+  // the exact screen whose whole job was to show it to them.
+  const suppressAutoEnterRef = useRef(false)
+  useEffect(() => { if (hasRoomVal && !suppressAutoEnterRef.current) setEnteredRoom(true) }, [hasRoomVal])
   // Computed up here, with the other pre-early-return fallbacks, so the
   // insights effect below can watch it — the later render code reuses this
   // same value rather than asking engine.draftOver() a second time.
@@ -503,6 +527,12 @@ export default function DraftRoom() {
   // is swapped out from under the host.
   const handleDraftWithFriends = () => setFriendsModalOpen(true)
 
+  // Fired by RoomPanel.jsx's own onCreated the instant createRoom()
+  // succeeds — see suppressAutoEnterRef's own comment above for why this
+  // has to be an explicit report from the action itself rather than
+  // something inferred afterwards from hasRoomVal or the route.
+  const handleRoomCreatedFromLobby = () => { suppressAutoEnterRef.current = true }
+
   // Before a draft exists, this is the exact same real form the setup
   // page uses — league size, scoring, pick clock, draft position, and its
   // own Resume/Discard for a save in progress — rather than this page
@@ -552,7 +582,10 @@ export default function DraftRoom() {
         )}
 
         {friendsModalOpen && (
-          <DraftWithFriendsModal onClose={() => setFriendsModalOpen(false)} />
+          <DraftWithFriendsModal
+            onClose={() => setFriendsModalOpen(false)}
+            onCreated={handleRoomCreatedFromLobby}
+          />
         )}
 
         {/* pb-[calc(58px+env(safe-area-inset-bottom))]: MobileAppTabBar's own
