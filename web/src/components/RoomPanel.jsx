@@ -49,8 +49,19 @@ export default function RoomPanel({ onCreated, onEnter }) {
        is a shape decided before a draft starts, not something an existing
        one can be converted into. Gating here is the only fix that doesn't
        need a confirmation dialog defending against a scenario nothing else
-       in the room model supports. */
-    const started = !!engine.headerInfo().started
+       in the room model supports.
+
+       started alone used to gate this, and state.started never goes back
+       to false on its own once a draft finishes — so a completed draft
+       stayed just as blocked as one mid-round, and the copy below promising
+       "finish... this draft first" was never actually true: finishing did
+       nothing to this flag, only discarding did. headerInfo().over is the
+       same "is there still a live pick to protect" fact DraftCockpitHeader
+       already reads to retire its own pick pill once a draft ends; folding
+       it in here is what makes "finish" a real way out rather than a
+       promise the gate couldn't keep. */
+    const info = engine.headerInfo()
+    const started = !!info.started && !info.over
     const handleJoin = () => {
       if (started) return
       const code = joinCode.trim().toUpperCase()

@@ -1677,10 +1677,23 @@ export default function DraftRoom() {
         />
       )}
       {draftIsOver && !showInsights && (
+        // top-16 used to assume PickClockBand/PickTicker were still
+        // occupying the space between the header and this pill — true
+        // right up until the pick that ends the draft, which is exactly
+        // when both unmount (their own !draftIsOver gates a few screens
+        // up). With nothing left above it, whichever mobile pane strip or
+        // desktop toolbar sits at the top of the active view shifts up
+        // into that fixed 64px and this pill landed on top of it —
+        // Pool/Queue/Roster/Picks on Players, Board/Pool/Picks on Board,
+        // the filter row on desktop. Bottom-anchored instead, clearing
+        // MobileDraftTabBar's own fixed 58px + safe-area footprint below
+        // lg, the same convention LockerTable.jsx's undo toast already
+        // uses for the identical reason — nothing else is fixed to the
+        // bottom edge on any of the views this button can appear on.
         <button
           type="button"
           onClick={() => { setInsightsSlot(mySlot); setShowInsights(true) }}
-          className="fixed left-1/2 top-16 z-[65] -translate-x-1/2 rounded-full border border-teal-400/40 bg-slate-sunk px-4 py-1.5 text-xs font-semibold text-teal-300 backdrop-blur transition-colors duration-200 hover:border-teal-400 hover:bg-teal-400/10"
+          className="fixed bottom-[calc(58px+env(safe-area-inset-bottom)+16px)] left-1/2 z-[65] -translate-x-1/2 rounded-full border border-teal-400/40 bg-slate-sunk px-4 py-1.5 text-xs font-semibold text-teal-300 backdrop-blur transition-colors duration-200 hover:border-teal-400 hover:bg-teal-400/10 lg:bottom-6"
         >
           Draft Insights
         </button>

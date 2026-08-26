@@ -68,6 +68,19 @@ function slotCount(slot) {
 // arrived, rather than throwing and taking the rest of the boot sequence
 // down with it.
 function totalPicks()   { return typeof DraftEngine === "undefined" ? 0 : DraftEngine.totalPicks(league); }
+
+// The one place "are the three deferred files here yet" gets answered —
+// window.JukeEngine.dataReady() (near the foot of this file) hands this
+// straight out rather than keeping its own second copy, and onRoomChange()
+// below reads it directly, which is the reason this needs a name instead of
+// staying an inline arrow function on the bridge object: the bridge is
+// declared hundreds of lines after onRoomChange() runs for the first time,
+// but a function declaration is hoisted and callable from anywhere in this
+// file regardless of where onRoomChange() itself sits in the source.
+function dataReady() {
+  return typeof DraftEngine !== "undefined" && typeof PLAYERS !== "undefined" &&
+         typeof STAT_KEYS !== "undefined";
+}
 function starterCount() { return POSITIONS.reduce((n, pos) => n + league.starters[pos], 0); }
 function flexCount()    { return league.flex + league.superflex; }
 function rosterSize()   { return starterCount() + flexCount() + league.bench; }
@@ -1167,7 +1180,27 @@ function makePick(player) {
 const CPU_DELAY = 350;
 
 // Deterministic pseudo-random offset of roughly -3 to +3 ADP places.
+//
+// Four of this function's five callers fire in response to a click (Start,
+// Resume, a history entry), by which point draft-engine.js's deferred boot
+// has always already landed — the same reasoning that lets nextPicksFor()/
+// inProgressSummary() go unguarded on window.JukeEngine's own bridge,
+// documented at length elsewhere in this file. adoptRoom()'s call is not
+// one of the four: it runs from onRoomChange(), off the room's own "state"
+// broadcast, which reaches a client the instant its socket is open — live.js
+// connects at boot, ahead of the requestIdleCallback that loads
+// draft-engine.js at all. Confirmed live: a reload of an already-known room
+// reached this function before DraftEngine existed and threw a
+// ReferenceError out of onRoomChange(), which aborted that call before it
+// reached render()/driveRoomCPUs()/resetClock() a few lines later — the
+// board stuck at zero players and the clock at 0:00 until some later
+// broadcast happened to arrive and get a clean run. Guarded here rather
+// than at that one call site, same rule as everywhere else in this file:
+// the guard belongs on the function, not on each caller. Jitter simply
+// stays at buildBoard()'s own zero-fill until the next call succeeds,
+// which is a quieter CPU wobble for a moment, not a crash.
 function applyJitter() {
+  if (typeof DraftEngine === "undefined") return;
   board.forEach(function (p) {
     p.jitter = DraftEngine.jitter(p.overall, state.seed);
   });
@@ -1722,8 +1755,28 @@ function checkDraftFinished() {
 /* Off the setup screen and into the draft. Its own function because two
    things reach it: pressing Start in a solo draft, and — in a room — the
    broadcast saying the host has begun, which is the only signal a guest
-   ever gets. */
+   ever gets.
+
+   The second caller is not unreachable the way the first one is. #/draft
+   redirects to the React lobby, so nothing in the UI can press a solo
+   Start button that still calls this — but a room's "host has begun"
+   broadcast is real traffic every guest's client still receives today,
+   React draft room included, and it was still calling straight through to
+   this function's legacy DOM work on every one of them. Confirmed live:
+   starting a real room draft left #tabrow with hidden=false, display:flex,
+   sized 375x105 at the very top of the page — invisible only because
+   DraftRoom.jsx's own `fixed inset-0 z-[60]` overlay happens to paint over
+   exactly that region. A coincidence of stacking order is not the same
+   claim as "unreachable", which is the whole rule the rest of this file
+   applies to #view-app/#tabrow/#appbar — so this stops being one instead
+   of relying on it looking like one. Same two routes syncHomeVisibility()
+   already treats as "the React draft room owns this screen": #/draft-room
+   itself and #/drafts, the pre-draft Locker/seat-picker this same
+   broadcast can also land on. */
 function enterDraftUI() {
+  const legacyPath = location.hash.replace(/^#\/?/, "").split("?")[0];
+  if (onDraftRoomRoute() || legacyPath === "drafts") return;
+
   tabrow.hidden = false;
   showPanel("tab-suggest");
   document.querySelectorAll(".tabs button").forEach(function (b) { b.classList.remove("on"); });
@@ -1895,6 +1948,31 @@ function placeChat() {
 }
 
 function onRoomChange() {
+  /* live.js connects the instant its socket is open, ahead of the
+     requestIdleCallback that loads draft-engine.js/players.js/stats.js at
+     all — so the room's very first "state" broadcast can land, and this
+     function fire, before any of the three exist. Everything below reaches
+     DraftEngine sooner or later (adoptRoom()'s applyJitter() first, then
+     render() many times over), most of it unguarded, because none of it
+     was ever meant to run before a draft — of any kind — is on screen, and
+     every other way of getting here (pressing Start, resuming a save,
+     opening a history entry) already waits for a click, by which point the
+     deferred boot has always finished. A room's own broadcast is the one
+     path that doesn't wait for anything.
+
+     Confirmed live: reloading a tab already in a room threw
+     "ReferenceError: DraftEngine is not defined" out of this function on
+     the very first broadcast, which aborted the call before it reached
+     render()/driveRoomCPUs()/resetClock() below — the board stuck empty
+     and the clock at 0:00 until something else happened to call this
+     again. live.js already stores the raw broadcast in live.room the
+     moment it arrives (see announce()'s own caller), regardless of whether
+     anything downstream can use it yet, so skipping the processing here
+     costs nothing: the juke:data-loaded listener near the foot of this
+     file re-runs this exact function once dataReady() is finally true,
+     against whatever live.room already holds. */
+  if (!dataReady()) return;
+
   const room = Live.room();
 
   /* Whether the draft has begun, asked before and after, because the answer
@@ -8568,8 +8646,7 @@ $("playerFilter").addEventListener("click", function (e) {
    this reason), and app.js's whole dependency on them being plain
    shared-scope globals would break under import()'s module namespace. */
 function loadDeferredData() {
-  if (typeof DraftEngine !== "undefined" && typeof PLAYERS !== "undefined" &&
-      typeof STAT_KEYS !== "undefined") return;
+  if (dataReady()) return;
   let remaining = 3;
   const done = function () {
     remaining--;
@@ -8605,6 +8682,20 @@ window.addEventListener("juke:data-loaded", function onDeferredData() {
   // moment the deferred data lands. refreshSetup() rebuilds the board and
   // re-renders without touching scroll position.
   refreshSetup();
+
+  /* refreshSetup() bails outright once state.started is true (its own
+     first line), which a room's own broadcast can set before this event
+     ever fires — so on a cold load of an already-started room, the branch
+     above is a no-op and the board this file just spent a whole boot
+     sequence keeping empty-but-honest stays empty. onRoomChange() is the
+     one function that both rebuilds it correctly (adoptRoom()'s league
+     compare/rebuild) and re-applies the room's own picks on top of it, and
+     live.js kept the room's last broadcast in live.room this whole time —
+     onRoomChange() re-reads it itself rather than this listener trying to
+     hand it back in. Guarded on Live existing at all: this listener fires
+     on every page load, not only the ones that also loaded live.js, and a
+     solo boot has no room to re-sync. */
+  if (typeof Live !== "undefined" && Live.room()) onRoomChange();
 });
 
 // Everything above this line is a definition. This reads the setup screen,
@@ -8629,9 +8720,7 @@ window.JukeEngine = {
   // DraftEngine/PLAYERS/STAT_KEYS directly, the same way it reads board()
   // and league() instead of the bare module-scope bindings: one bridge,
   // not a second copy of what "ready" means creeping into web/src.
-  dataReady:    () => typeof DraftEngine !== "undefined" &&
-                       typeof PLAYERS !== "undefined" &&
-                       typeof STAT_KEYS !== "undefined",
+  dataReady,
   board:        () => board,
   league:       () => league,
   rooms:        () => ROOMS,

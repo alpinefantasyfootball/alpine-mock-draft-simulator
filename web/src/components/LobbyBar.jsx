@@ -40,6 +40,20 @@ export default function LobbyBar({ onOpenSettings }) {
   const [navOpen, setNavOpen] = useState(false)
 
   return (
+    // A Fragment, not a single <header> return — MobileNavSheet has to be a
+    // true sibling of it, not a descendant. backdrop-blur-md on <header> is
+    // a CSS filter, and any filter/backdrop-filter on an ancestor becomes
+    // the containing block for a position:fixed descendant, the same rule
+    // transform follows (Header.jsx's own comment on its bottom action bar
+    // documents the identical mechanism). Nested inside this header the
+    // sheet's `fixed inset-0` resolved against the *header's own* short
+    // h-14 box instead of the viewport — measured live at exactly 56px
+    // tall, with its nav links and Sign Up/Log in buttons overflowing that
+    // box uncontained and reading as pasted directly over the Lobby
+    // underneath rather than a slide-in drawer. ComingSoonModal stays
+    // inside <header>: a native <dialog> promotes to the browser's own top
+    // layer on showModal(), above this containing-block question entirely.
+    <>
     <header className="sticky top-0 z-30 border-b border-white/[0.06] bg-slate-bar/95 backdrop-blur-md">
       <div className="mx-auto flex h-14 max-w-[1600px] items-center gap-4 px-4 md:px-8">
         {/* Two instances behind a wrapper's hidden/block, matching
@@ -102,8 +116,10 @@ export default function LobbyBar({ onOpenSettings }) {
         </div>
       </div>
 
-      <MobileNavSheet open={navOpen} onClose={() => setNavOpen(false)} modalRef={modalRef} />
       <ComingSoonModal ref={modalRef} />
     </header>
+
+    <MobileNavSheet open={navOpen} onClose={() => setNavOpen(false)} modalRef={modalRef} />
+    </>
   )
 }

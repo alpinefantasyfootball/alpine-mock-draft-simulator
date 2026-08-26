@@ -213,9 +213,24 @@ export default function Header() {
           scroll-padding-top both had to shrink with it — see the comments
           on both. */}
 
-      <MobileNavSheet open={navOpen} onClose={() => setNavOpen(false)} modalRef={modalRef} />
       <ComingSoonModal ref={modalRef} />
     </header>
+
+    {/* A true sibling of <header>, not a descendant, for the identical
+        reason the bottom action bar below is one: MobileNavSheet's own
+        panel is `fixed inset-0`, and backdrop-blur-md on <header> is a CSS
+        filter — any filter/backdrop-filter on an ancestor becomes the
+        containing block for a position:fixed descendant, the same rule
+        transform follows. Nested inside <header> this resolved the sheet's
+        `inset-0` against the *header's own* short box (h-14/h-16) instead
+        of the viewport: measured live, the panel's rendered height was
+        exactly 56px, with its nav links and account buttons overflowing
+        that box uncontained and reading as pasted over the hero underneath
+        rather than a slide-in drawer. ComingSoonModal stays inside
+        <header> — a native <dialog> promotes to the browser's own top
+        layer on showModal(), which sits above this containing-block
+        question entirely, so it was never the same bug. */}
+    <MobileNavSheet open={navOpen} onClose={() => setNavOpen(false)} modalRef={modalRef} />
 
     {/* Sticky bottom action bar — the marketing shell's other half, and a
         true sibling of <header> above rather than a descendant of it.
