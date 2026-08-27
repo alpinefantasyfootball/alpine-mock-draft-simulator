@@ -3766,6 +3766,25 @@ not:
   `@font-face` in `index.css`); the test only ever parsed `index.html`'s
   Google Fonts `family=` query. It reads both sources now.
 
+**And `PANEL` claimed a third one, months later, in the same file.** The
+keyless test asserted the panel says "no recent headlines" and reported the
+message missing. `LatestNewsTab.jsx` was rendering it the whole time: `PANEL`
+resolves to the full-screen sheet, as above, and the assertion read
+`.slice(0, 60)` of it — sixty characters of that sheet is
+**"JUKE · PLAYERS · BOARD · DECIDE · ANALYSIS · Autopick · RND 1 OF 14"**,
+chrome rather than content. It now reads the message off the sheet where the
+component puts it. The scope did not change, because `PANEL` was resolving to
+that element anyway; only the truncation went.
+
+**Two lessons, and the second is the one that keeps costing.** A shared helper
+that silently widened its scope broke three assertions across two sittings, so
+when a selector in this file surprises you, check what it *resolves to* before
+believing what it *reports* — one `console.log` of `panel.innerText` would have
+ended each of the three in a minute. And **a `.slice()` inside an assertion is
+a filter nobody reads as one**: it turned a correct check into one that could
+only ever see the header. Assert on the whole string and let `toContain` do the
+narrowing.
+
 **Both were settled by asking the live page, not by reasoning.** Dumping the
 two images showed `sleepercdn.../9221.jpg` twice; running `shareCard.js`'s own
 `usable()` probe in a real browser returned true for Archivo. Neither needed
