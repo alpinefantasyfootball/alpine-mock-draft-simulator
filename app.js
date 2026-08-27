@@ -3525,10 +3525,53 @@ const WEIGHTS = { starters: 0.50, value: 0.25, build: 0.15, byes: 0.10 };
 const GRADE_SCALE = ["A+", "A", "A−", "B+", "B", "B−", "C+", "C", "C−",
                      "D+", "D", "D−", "F+", "F"];
 
-// How much better than a replacement-level starter this player is,
-// measured in places up the positional board.
+/* How much better than a replacement-level starter this player is, in
+   projected points.
+
+   It used to return *places up the positional board* — `replacementRank(pos)
+   - player.posRank` — and that is a different quantity in two ways, both of
+   which flattered and punished the wrong rosters.
+
+   First, `posRank` is ADP rank. `buildBoard()` sorts the board by `adp` and
+   numbers each position off that order, so the old expression asked "how
+   early does the market take him within his position", never "how good is he".
+   The projection's own within-position rank has existed all along, on every
+   player, as `projPosRank`, and the grade never read it. Measured on the
+   26 August board: Sam LaPorta is TE12 by ADP and TE5 by projection, so the
+   grade credited him 0 for a player it privately rates seven places inside
+   the starting cut.
+
+   Second, and worse, places are not points. Replacement rank is
+   `teams x slots + 1`, so the *ceiling* on this quantity is set by how deep a
+   position is drafted, not by how much a player is worth: measured on the
+   same board, QB tops out at 10 places and TE at 11, against 24 for RB and 26
+   for WR. Josh Allen at +60.2 projected points over replacement therefore
+   scored 10, while Drake London at +18.0 scored 22. Half the grade rated
+   London at better than twice Allen, on a board that privately rates Allen at
+   over three times London.
+
+   That is the same "a within-position measure cannot answer a between-position
+   question" mistake bestLineup() below already records — one level deeper,
+   because it is not merely the wrong ordering but the wrong unit. Points are
+   the unit the rest of the app already reports to the user: replacementGap()
+   on the player sheet, the Juke score, the VORP column. Grading in one
+   currency while showing another is why a roster could hold the room's best
+   projected starters and read as the room's worst draft.
+
+   Deliberately not replacementGap() itself, which refuses K and DST. That
+   refusal is about *ranking* them — see UNRANKED_POSITIONS, where the
+   measured correlation between projected and finishing order collapses — and
+   the note there already says the grade is untouched by it on purpose,
+   because a kicker really did score those points. This is the same
+   arithmetic without the ranking refusal, so a kicker still counts here and
+   still gets a dash everywhere a rank is claimed.
+
+   A player with no projection scores 0 rather than falling back to his ADP
+   rank: "we don't know" may not quietly become "he is worth his draft slot",
+   which is the same rule the pipeline already applies to a missing season. */
 function aboveReplacement(player) {
-  return Math.max(0, replacementRank(player.pos) - player.posRank);
+  if (!player || player.projPts === null || player.projPts === undefined) return 0;
+  return Math.max(0, player.projPts - (REPLACEMENT_PTS[player.pos] || 0));
 }
 
 // The best legal starting lineup a roster can field.
@@ -3541,16 +3584,18 @@ function aboveReplacement(player) {
    asked to fill a FLEX from TE19, RB25 and WR28 it takes the tight end,
    because 19 is a smaller number than 25.
 
-   Measured on a real roster, that put Juwan Johnson (TE19, and TE
-   replacement is 14, so he is *below* a startable tight end and worth 0) in
-   the FLEX ahead of David Montgomery (RB25 against an RB replacement of 30,
-   so worth 5). Five points of starter strength left on the bench, in the
-   component that is half the grade, on a team that came last in its room.
+   Measured on a real roster, that put Juwan Johnson (below a startable tight
+   end, and so worth nothing) in the FLEX ahead of David Montgomery, who was
+   comfortably inside the running-back cut. Starter strength read off a lineup
+   nobody would field, in the component that is half the grade, on a team that
+   came last in its room.
 
-   `aboveReplacement` is the currency the rest of the grade already counts in
-   and it knows how deep each position runs, which is the whole reason it
-   exists. Inside a single-position slot the two orderings are identical, so
-   nothing else moves.
+   `aboveReplacement` is the currency the rest of the grade already counts in,
+   and since it became projected points over replacement it is also the
+   currency the player sheet and the Juke score report — so the FLEX is now
+   filled by who is actually worth more, not by whose position happens to run
+   deeper. Inside a single-position slot the two orderings are near enough
+   identical that nothing else moves.
 
    This is the same mistake the suggestions had, in a different function: a
    within-position measure cannot answer a between-position question. */
@@ -3631,6 +3676,107 @@ function byeSummary(badWeeks) {
   return `${first}, and ${badWeeks.length - 1} more bad weeks`;
 }
 
+/* ---- par: what each chair was worth before anybody drafted from it ----
+
+   Starter strength in points exposed something the old rank-places unit was
+   too coarse to see: a snake seat is worth a great deal on its own. Measured
+   with every seat running the identical CPU rule, so no seat out-drafted any
+   other, raw starter strength spanned 191 points — seat 1 fielded 362 and
+   seat 5 fielded 171 — and correlated with seat at r -0.6. A grade meant to
+   judge drafting was handing out most of a letter for where somebody sat.
+
+   Both halves of that are real, which is why the answer is not to shrink the
+   number. An early seat's lineup genuinely is worth ~190 more projected
+   points; the grade simply should not credit the manager for it. So starter
+   strength is scored against par — what a straight consensus drafter would
+   have got from that same chair — exactly the way golf scores a hole or WAR
+   scores a player, and the component becomes "how much did you beat your own
+   seat by".
+
+   Par is simulated the way generateThirdRoundScenario() and shotPicks()
+   already simulate a room: a local `taken`/`have` pair, never board[].drafted
+   or state.picks, so this can run during a live draft without touching it.
+   `bestAvailable()` is asked for each pick rather than a second opinion of
+   what a seat would take.
+
+   Three things about it that matter:
+
+   - **No jitter.** Par has to be a property of the board, not of a draft.
+     With the wobble in, the same roster would score differently because a
+     reference draft it was never in happened to wobble differently.
+   - **It is a table, not a number.** A team three rounds in has three picks,
+     and par for three picks is not par for fourteen — comparing a partial
+     roster against a finished par is the "a component written for a finished
+     roster behaves least like itself mid-draft" trap this file already
+     records. `table[slot][k]` is par after that seat's (k+1)th pick.
+   - **It is cached on the board, and it has to be.** bestUpgrade() calls
+     analyseTeam() once per available player, so an uncached simulation here
+     would run a full draft a hundred times for one panel. The key carries
+     everything that can move par, BEST_VOR included — that one is the tell
+     for a rescoring, since editing the scoring table rewrites every projPts
+     and therefore every par. */
+let PAR_CACHE = null;
+
+function parKey() {
+  return [board.length, league.teams, league.rounds, league.scoring, league.flex,
+          league.superflex, POSITIONS.map((p) => league.starters[p]).join(","),
+          Math.round((BEST_VOR || 0) * 100)].join("|");
+}
+
+function seatParTable() {
+  // Same guard every other DraftEngine caller carries. A bridge entry is only
+  // as safe as its own guard: analyseTeam() is reached from React on mount,
+  // and draft-engine.js is deferred.
+  if (typeof DraftEngine === "undefined" || !board.length) return null;
+
+  const key = parKey();
+  if (PAR_CACHE && PAR_CACHE.key === key) return PAR_CACHE.table;
+
+  const teams = league.teams;
+  const taken = {}, have = [], rosters = [], table = [];
+  for (let s = 0; s < teams; s++) { have.push({}); rosters.push([]); table.push([]); }
+
+  const total = teams * league.rounds;
+  for (let n = 1; n <= total; n++) {
+    const c = DraftEngine.pickInfo(n, teams);
+    const pool = board.filter((p) => !taken[p.name] && !isRuledOut(p));
+    if (!pool.length) break;
+    const best = bestAvailable(pool, have, c.slot, c.round, false);
+    if (!best) break;
+
+    taken[best.name] = true;
+    have[c.slot][best.pos] = (have[c.slot][best.pos] || 0) + 1;
+    rosters[c.slot].push(best);
+    table[c.slot].push(lineupStrength(rosters[c.slot]));
+  }
+
+  PAR_CACHE = { key: key, table: table };
+  return table;
+}
+
+/* The caption under the starter-strength bar, in one place because both the
+   legacy panel and AnalysisTab.jsx draw it and a bar whose caption describes a
+   different quantity from the bar is this file's own "right value, wrong
+   column" bug. It reports the number the grade scores — points against par —
+   with the raw total kept alongside, since that is the figure the VORP matrix
+   adds up to. */
+function parText(t) {
+  const raw = Math.round(t.starters) + " pts above replacement";
+  if (!t.par) return raw;
+  const d = Math.round(t.startersVsPar);
+  return `${d >= 0 ? "+" : "−"}${Math.abs(d)} vs par for this seat · ${raw}`;
+}
+
+// Par for this seat at this many picks, or 0 when the engine has not landed
+// yet — an unscored seat is the same for everybody, so it cannot bias a room.
+function seatPar(slot, picksMade) {
+  if (picksMade <= 0) return 0;
+  const table = seatParTable();
+  const row = table && table[slot];
+  if (!row || !row.length) return 0;
+  return row[Math.min(picksMade, row.length) - 1];
+}
+
 function analyseTeam(slot, extra) {
   // extra: an optional hypothetical additional player, for simulating "what
   // would this component become if I drafted him" (see bestUpgrade() below)
@@ -3646,9 +3792,16 @@ function analyseTeam(slot, extra) {
   const judged = picks.filter((p) => freelyChosen(p) && reachableRank(p, lastPick));
   const lineup = bestLineup(roster);
 
-  // 1. starter strength
+  /* 1. starter strength, and the same figure against par for this chair.
+
+     `starters` stays the raw sum, because that is what the Insights VORP
+     matrix prints per player and a reader has to be able to add that panel up.
+     `startersVsPar` is what the grade actually scores — see seatParTable()
+     for why the raw number is most of a letter's worth of draft position. */
   let starters = 0;
   lineup.forEach(function (s) { if (s.player) starters += aboveReplacement(s.player); });
+  // extra is a hypothetical additional pick, so it costs a pick of par too.
+  const par = seatPar(slot, picks.length + (extra ? 1 : 0));
 
   /* 2. draft value: taken later than the board said = a bargain.
 
@@ -3709,11 +3862,18 @@ function analyseTeam(slot, extra) {
   });
   ["RB", "WR"].forEach(function (pos) {
     if (!league.starters[pos]) return;      // a league that starts none needs none
+    /* Ranked by projection, not by ADP, for the same reason aboveReplacement()
+       is: `posRank` is where the market takes him and `projPosRank` is what we
+       think he is worth, and this asks the second question. A bench receiver
+       the room drafts late and the projection likes is exactly the cover a
+       manager wants and the ADP ordering could not see. Players with no
+       projection sort last rather than being read at their draft slot. */
+    const rankOf = (p) => p.projPosRank || Infinity;
     const best = benched
       .filter(function (p) { return p.pos === pos; })
-      .sort(function (a, b) { return a.posRank - b.posRank; })[0];
+      .sort(function (a, b) { return rankOf(a) - rankOf(b); })[0];
     // Nobody behind them is the same as cover that could never play.
-    const past = best ? best.posRank - replacementRank(pos) : COVER_NONE;
+    const past = best ? rankOf(best) - replacementRank(pos) : COVER_NONE;
     build -= COVER_COST * Math.min(1, Math.max(0, past) / COVER_NONE);
   });
   /* Floored, because it is printed as "x / 100" and a negative score out of
@@ -3778,7 +3938,8 @@ function analyseTeam(slot, extra) {
   if (reach && reach.gap >= 0) reach = null;
 
   return { slot: slot, roster: roster, lineup: lineup, byes: byes,
-           starters: starters, value: value, build: build,
+           starters: starters, par: par, startersVsPar: starters - par,
+           value: value, build: build,
            byePenalty: -byeCost * 20,
            worstBye: worstBye, worstWeek: worstWeek, badWeeks: badWeeks,
            bargain: bargain, reach: reach };
@@ -3829,7 +3990,46 @@ function analyseTeam(slot, extra) {
    somebody still finishes first and the standings still rank the room. What
    stops is manufacturing an elite grade out of a one-point edge — a close room
    now reads as a close room. */
-const MIN_SPAN = { starters: 20, build: 20 };
+/* Every component gets a floor, in its own units, or the printed weights are
+   not the weights that run.
+
+   Only starters and build had one, and the two that did not are the two with
+   the widest natural spread — so `value` and `byes` were stretched across the
+   full 0-100 on every draft while `starters` was compressed into whatever
+   fraction of it a floored denominator allowed. Measured across two rooms
+   before this change, the share of the finishing order each component
+   actually explained came out:
+
+       starters   ~35%   against a stated 50%
+       value      ~36%   against a stated 25%
+       build      ~13%   against a stated 15%
+       byes       ~15%   against a stated 10%
+
+   Draft value decided the grade more than starter strength did, in a grade
+   that says on its own face that starters are worth double. A floor on one
+   component is not a local adjustment: it silently reweights every other one,
+   because scaling is what converts a raw spread into the 0-100 the weights
+   are then applied to.
+
+   Each number below is that component's own resolution, not a taste:
+
+   - starters: the projection runs at MAE 6.8 a player, so a nine-man lineup
+     total carries 6.8 x sqrt(9) = 20 points of error. This is the same
+     arithmetic the old comment gave — it was simply being applied to a count
+     of ADP rank places, which is not measured in points and never was. Now
+     that aboveReplacement() returns points, 20 is a floor in the unit it was
+     derived for. It rarely binds: a real room spans 150-odd points.
+   - value: MISS_FLOOR already refuses to call a single-digit ADP delta a
+     reach, and a team's value is the sum over the dozen-odd picks it was free
+     to time, so 10 x sqrt(12) = 35.
+   - byes: byePenalty is -20 per squared starter beyond the second, so 20 is
+     one starter, in one week — the smallest difference the component can
+     express. Below that two rosters are the same roster.
+   - build: unchanged, and its justification is still the weaker one. It is
+     derived from replacement-relative rank distances rather than from an
+     independent error model, and it is calibrated from observed spans. If
+     build ever gets a real error model, this is the number to revisit. */
+const MIN_SPAN = { startersVsPar: 20, value: 35, build: 20, byePenalty: 20 };
 
 function scaleAcross(all, key) {
   const values = all.map((t) => t[key]);
@@ -3854,7 +4054,15 @@ function analyseDraft() {
   const all = [];
   for (let i = 0; i < league.teams; i++) all.push(analyseTeam(i));
 
-  ["starters", "value", "build", "byePenalty"].forEach((k) => scaleAcross(all, k));
+  /* startersVsPar, not starters — the seat is priced out before the room is
+     ranked. `startersScaled` is then aliased to it rather than computed
+     separately, because every consumer (the share card, both dashboards, the
+     specs' own reconciliation) reads that name and there must not be two
+     scaled starter figures on one object for somebody to pick the wrong one
+     out of. The raw `starters` and `par` are both still on there for anything
+     that wants to show the working. */
+  ["startersVsPar", "value", "build", "byePenalty"].forEach((k) => scaleAcross(all, k));
+  all.forEach(function (t) { t.startersScaled = t.startersVsParScaled; });
 
   all.forEach(function (t) {
     t.total = t.startersScaled  * WEIGHTS.starters
@@ -3912,7 +4120,13 @@ function analyseDraft() {
    he produces — not a second copy of the same "before" figure. */
 function bestUpgrade(slot, componentKey) {
   if (componentKey !== "starters" && componentKey !== "build") return null;
-  const scaledKey = componentKey + "Scaled";
+  /* The caller names the component the way the panel labels it, and starter
+     strength is scored against par rather than raw — so the simulation has to
+     scale the same quantity analyseDraft() scales, or "draft this player, get
+     this score" would quote a number the grade never uses. Adding a player
+     costs a pick of par, which analyseTeam() already charges via `extra`. */
+  const rawKey = componentKey === "starters" ? "startersVsPar" : componentKey;
+  const scaledKey = rawKey + "Scaled";
 
   const baseline = [];
   for (let i = 0; i < league.teams; i++) baseline.push(analyseTeam(i));
@@ -3928,13 +4142,80 @@ function bestUpgrade(slot, componentKey) {
   pool.forEach(function (candidate) {
     const withHim = analyseTeam(slot, candidate);
     const trial = baseline.map((t, i) => (i === slot ? withHim : t));
-    scaleAcross(trial, componentKey);
+    scaleAcross(trial, rawKey);
     const after = trial[slot][scaledKey];
     if (!best || after > best.after) best = { player: candidate, after: after };
   });
 
   if (!best) return null;
   return { player: best.player, after: Math.round(best.after) };
+}
+
+/* The one that got away: at each of this team's turns, the player somebody
+   else took before their next turn who would have improved this roster most.
+
+   The measure is what he would have done to *this lineup*, not what he is
+   worth in the abstract. It lived in DraftInsightsDashboard.jsx and compared
+   two bare replacementGap() figures — his against the pick actually made —
+   which is a fact about the player pool with no reference to the roster it is
+   being recommended to.
+
+   That reads as nonsense the moment a manager has a position covered. Reported
+   from a real draft: a team holding two elite tight ends was told it had missed
+   Sam LaPorta. The arithmetic was right and the advice was absurd — a third
+   tight end cannot start, so his points over replacement were never available
+   to that roster at any price. Naming him is the same failure as naming a
+   kicker the biggest reach: a correct number that no reader can arrive at the
+   right conclusion from.
+
+   So the delta is a substitution run through bestLineup(): the roster as
+   drafted, against the roster with his pick swapped for theirs. A player who
+   would not crack the lineup scores 0 and cannot be named, however gaudy his
+   projection, and one who displaces a starter scores exactly what he adds.
+   That also makes the panel's own number honest — "points forgone" is now
+   points this team would actually have started.
+
+   It reuses aboveReplacement() and bestLineup() rather than restating either,
+   which is the same reason bestUpgrade() simulates through analyseTeam()
+   instead of carrying its own formula for "how much would this help".
+
+   MISS_FLOOR lives in the component and still gates the result there: both
+   sides of this subtraction are projected points, the unit that floor was
+   always written in. */
+function lineupStrength(roster) {
+  let total = 0;
+  bestLineup(roster).forEach(function (s) { if (s.player) total += aboveReplacement(s.player); });
+  return total;
+}
+
+function oneThatGotAway(slot) {
+  if (!state.started) return null;
+
+  const mine = state.picks.filter((p) => p.slot === slot)
+    .slice().sort((a, b) => a.overall - b.overall);
+  if (mine.length < 2) return null;
+
+  const roster = rosterOf(slot);
+  const base = lineupStrength(roster);
+  let best = null;
+
+  mine.forEach(function (teamPick, i) {
+    const next = mine[i + 1];
+    if (!next) return;                    // the last pick has no window after it
+    state.picks.forEach(function (p) {
+      if (p.slot === slot) return;
+      if (p.overall <= teamPick.overall || p.overall >= next.overall) return;
+      /* Swap, not add. He would have cost this pick, so a roster carrying
+         both of them is a team that never existed — and adding rather than
+         substituting is what would let a third tight end look like a gain
+         by quietly occupying a bench spot nobody was choosing between. */
+      const swapped = roster.filter((r) => r !== teamPick.player).concat([p.player]);
+      const delta = lineupStrength(swapped) - base;
+      if (delta > (best ? best.delta : 0)) best = { theirs: p, mine: teamPick, delta: delta };
+    });
+  });
+
+  return best;
 }
 
 /* ---- Take a pick: homepage v4 pass 2's three real, seeded scenarios ---
@@ -3983,11 +4264,18 @@ function bestUpgrade(slot, componentKey) {
 
 // The exact scoring shotPicks() uses for its own simulated draft, factored
 // out so both can call it rather than one drifting from the other.
-function bestAvailable(pool, have, slot, round) {
+/* `wobble` is opt-out for one caller: seatParTable(), which needs par to be a
+   property of the board rather than of a particular draft. Jitter is
+   deterministic from state.seed and shared across a room, so including it
+   would still be consistent between clients — it would just mean the same
+   roster grading differently depending on the wobble in a reference draft it
+   was never part of. Everyone else keeps the wobble, which is what stops ten
+   CPU seats drafting one identical board. */
+function bestAvailable(pool, have, slot, round, wobble) {
   const modelMultiplier = modelMultipliers(pool);
   let best = null, bestScore = Infinity;
   pool.forEach(function (p) {
-    const score = (p.adp + p.jitter)
+    const score = (p.adp + (wobble === false ? 0 : p.jitter))
       * needFromCount(have[slot][p.pos] || 0, p.pos, round)
       * (isRisky(p) ? 1.35 : 1)
       * modelMultiplier(p);
@@ -5239,7 +5527,7 @@ function renderGrades() {
     </div>
 
     <div class="bars">
-      ${bar("Starter strength", Math.round(me.starters) + " pts above replacement",
+      ${bar("Starter strength", parText(me),
             me.startersScaled, tone(me.startersScaled))}
       ${bar("Draft value", (me.value >= 0 ? "+" : "") + me.value + " picks, K and D/ST aside",
             me.valueScaled, tone(me.valueScaled))}
@@ -9459,11 +9747,24 @@ window.JukeEngine = {
   // renderGrades()'s bye label and method note already use verbatim —
   // bridged so that prose is never re-derived in React.
   analyseDraft: analyseDraft,
+  // The starter-strength caption. Bridged rather than reimplemented in
+  // AnalysisTab.jsx for the reason parText() itself gives: two captions for
+  // one bar drift, and the bar is scored against par while the raw sum is
+  // what the VORP matrix prints.
+  parText: parText,
   // Added for the Analysis tab's "Fix this first" card — see bestUpgrade()'s
   // own comment for why only starters/build are simulated and why "before"
   // isn't part of what this returns (the caller already has it, off the
   // same analyseDraft() call the four bars already read).
   bestUpgrade: bestUpgrade,
+  // The Insights dashboard's "One that got away" panel. It used to do this
+  // scan itself off two bare replacementGap() readings, which is a comparison
+  // between two players with no reference to the roster being advised — see
+  // oneThatGotAway()'s own comment for the two-tight-ends case that exposed
+  // it. The verdict is computed here, beside bestLineup(), for the same
+  // reason usageFor() and projectionSummary() are: a component renders what
+  // the engine decided, and never decides it a second way.
+  oneThatGotAway: oneThatGotAway,
   byeSummary: byeSummary,
   replacementText: replacementText,
   lineupText: lineupText,

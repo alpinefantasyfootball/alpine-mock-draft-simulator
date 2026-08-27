@@ -149,18 +149,33 @@ test.describe("latest news", () => {
       await openSheet(page, "Gibbs");
       await openNewsTab(page);
 
-      const r = await page.evaluate((src) => {
-        const panel = eval(src);
+      /* Read off the sheet itself rather than through PANEL, which is the one
+         thing in this file that was actually broken.
+
+         PANEL takes the first .overflow-y-auto holding a link, and since the
+         drawer became a full-screen player sheet that *is* the sheet — the
+         same drift CLAUDE.md already records for the hostile-payload test
+         below, which was fixed by scoping its counts to the headline cards.
+         Here it was the `.slice(0, 60)` that finished the job: sixty
+         characters of the sheet is its header and tab strip, so this asserted
+         against "jg · jahmyr gibbs · rb · det · our read · draft fit …" and
+         reported a missing message that LatestNewsTab.jsx was rendering
+         perfectly well a little further down.
+
+         The scope is unchanged — PANEL resolved to this element anyway — so
+         the link count means exactly what it did. What changes is that the
+         message is looked for where the component puts it. */
+      const r = await page.evaluate(() => {
         const root = document.getElementById("draftroom-root");
         return {
-          links: panel ? panel.querySelectorAll("a[target=_blank]").length : 0,
-          says: panel ? panel.innerText.trim().slice(0, 60) : "",
+          links: root.querySelectorAll("a[target=_blank]").length,
+          says: root.innerText,
           // The rest of the sheet is untouched: this is a section that fails
           // by having nothing to say, not by taking the page with it.
           ourReadStillThere: [...root.querySelectorAll("button")]
             .some((b) => b.textContent.trim() === "Our Read"),
         };
-      }, PANEL);
+      });
 
       expect(r.links, "no headlines without a key").toBe(0);
       expect(r.says.toLowerCase(), "and it says so rather than showing an empty frame")
