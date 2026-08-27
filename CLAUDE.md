@@ -3271,6 +3271,30 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   - **`update-players.yml` is unproven by any pull request.** It runs on
     `schedule` and `workflow_dispatch` only, so a change to it is not
     exercised until 11:00 UTC or until somebody presses the button.
+  - **And the browser suite rots, because nothing runs it on a schedule.**
+    `phone.spec.mjs` was found four-red on 27 August, and every one of the
+    four was a spec describing a screen the product had since changed —
+    "Start mock draft" no longer stopping at a second "Start draft"
+    (deliberately: the confirm step was removed), the entry screen becoming
+    room-only, `Roster` leaving the tab bar for a pane inside Players, the
+    still-to-fill block moving to Decide's own Team pane, and a `<span>`
+    becoming a `<div>`. **Not one of them was an app bug.** They had been red
+    for days and nobody was told, which is the failure — a suite that is only
+    run by hand is a suite that reports last week's product.
+
+    **The tell is the shape of the failure.** A stale spec fails by not
+    finding something ("no button reading Start draft", "Cannot read
+    properties of undefined") or by asserting an arrangement that has been
+    deliberately improved. A real regression fails on a number that moved
+    while the thing it measures still exists. Check which before changing
+    anything, and check the app in a browser rather than reading the diff:
+    three of these four looked like layout regressions in the output.
+
+    **Anchor on behaviour, not on class strings.** The rewrites match the
+    scroller by its computed `overflow-y`, the selected tab by either teal
+    marker the two navs use, and a row by a name off the live board — every
+    one of the four broke on a selector that described markup rather than
+    the property under test.
   - **Pressing that button is not free.** The job rebuilds `players.js` and
     `stats.js`, commits if the feeds moved, rewrites every `?v=` and triggers
     a Pages deploy. It is a real data commit, so run it to answer a question
