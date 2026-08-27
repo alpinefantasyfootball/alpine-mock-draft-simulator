@@ -1,5 +1,5 @@
 FFC rows that did not join to a Sleeper player
-Generated 2026-08-26 12:00 UTC
+Generated 2026-08-27 14:24 UTC
 Across every scoring format, each name listed once.
 Add an entry to MANUAL_MATCHES in build_players.py to fix one.
 
@@ -18,22 +18,21 @@ Broncos | DEF | DEN | no Tank01 id
 Texans | DEF | HOU | no Tank01 id
 Rams | DEF | LAR | no Tank01 id
 Vikings | DEF | MIN | no Tank01 id
+49ers | DEF | SF | no Tank01 id
 Lions | DEF | DET | no Tank01 id
 Patriots | DEF | NE | no Tank01 id
 Steelers | DEF | PIT | no Tank01 id
-49ers | DEF | SF | no Tank01 id
 Eagles | DEF | PHI | no Tank01 id
 Chargers | DEF | LAC | no Tank01 id
-Buccaneers | DEF | TB | no Tank01 id
 Cowboys | DEF | DAL | no Tank01 id
-Browns | DEF | CLE | no Tank01 id
-Packers | DEF | GB | no Tank01 id
 Jaguars | DEF | JAX | no Tank01 id
-Saints | DEF | NO | no Tank01 id
+Packers | DEF | GB | no Tank01 id
+Browns | DEF | CLE | no Tank01 id
 Bills | DEF | BUF | no Tank01 id
 Ravens | DEF | BAL | no Tank01 id
 Titans | DEF | TEN | no Tank01 id
 Giants | DEF | NYG | no Tank01 id
+Saints | DEF | NO | no Tank01 id
 Bears | DEF | CHI | no Tank01 id
 Falcons | DEF | ATL | no Tank01 id
 Bengals | DEF | CIN | no Tank01 id
@@ -45,6 +44,9 @@ The browser can only score what this pipeline records, so anything
 here is a scoring rule the app could never support. If a league
 counts it, add it to STAT_FIELDS and SCOREABLE in build_players.py
 and give it a default in app.js.
+
+Read this section before adding a feed. It is the pipeline's own
+answer to what is missing, and everything in it is already arriving.
 
 adp_2qb
 adp_dynasty
@@ -89,18 +91,10 @@ fan_pts_allow_te
 fan_pts_allow_wr
 ff
 ff_misc
-fg_blkd
 fg_ret_yd
-fga
-fgm_lng
 fgm_pct
 fgm_yds
 fgm_yds_over_30
-fgmiss_20_29
-fgmiss_30_39
-fgmiss_40_49
-fgmiss_50_59
-fgmiss_60p
 first_td
 fum
 fum_rec_ez_tds
@@ -121,6 +115,7 @@ kr_lng
 kr_ypa
 misc_ret_yd
 misc_td
+off_snp
 pa
 pass_air_yd
 pass_cmp_40p
@@ -189,9 +184,8 @@ tkl_ast_misc
 tkl_loss
 tkl_solo
 tkl_solo_misc
+tm_off_snp
 tm_snp
-xp_blkd
-xpa
 yds_allow_0_100
 yds_allow_100_199
 yds_allow_200_299
@@ -201,3 +195,197 @@ yds_allow_400_449
 yds_allow_450_499
 yds_allow_500_549
 yds_allow_550p
+
+
+Sleeper against nflverse
+Two feeds built from different sources, compared stat by stat over
+every season we store. Sleeper stays authoritative: this changes no
+stored number and never should. It is here so that when the two
+start disagreeing, somebody finds out from this file.
+
+243 of 267 players joined to an nflverse record.
+
+No nflverse record for:
+Seahawks | DEF | SEA | no nflverse id
+Broncos | DEF | DEN | no nflverse id
+Texans | DEF | HOU | no nflverse id
+Rams | DEF | LAR | no nflverse id
+Vikings | DEF | MIN | no nflverse id
+49ers | DEF | SF | no nflverse id
+Lions | DEF | DET | no nflverse id
+Patriots | DEF | NE | no nflverse id
+Steelers | DEF | PIT | no nflverse id
+Eagles | DEF | PHI | no nflverse id
+Chargers | DEF | LAC | no nflverse id
+Cowboys | DEF | DAL | no nflverse id
+Jaguars | DEF | JAX | no nflverse id
+Packers | DEF | GB | no nflverse id
+Browns | DEF | CLE | no nflverse id
+Bills | DEF | BUF | no nflverse id
+Ravens | DEF | BAL | no nflverse id
+Titans | DEF | TEN | no nflverse id
+Giants | DEF | NYG | no nflverse id
+Saints | DEF | NO | no nflverse id
+Bears | DEF | CHI | no nflverse id
+Falcons | DEF | ATL | no nflverse id
+Bengals | DEF | CIN | no nflverse id
+Commanders | DEF | WAS | no nflverse id
+
+Two differences are known, applied rather than reported, and
+must not be `fixed' by taking their column:
+  * nflverse counts a touchdown as a first down; Sleeper does not.
+  * Sleeper counts a blocked kick as a miss; nflverse does not.
+
+Sleeper's first-down definition changed between 2018 and 2020. In 2018,
+42 of 55 first-down lines match nflverse RAW (touchdown counted); from
+2020 on, 91-99% match nflverse MINUS touchdowns, which is what this
+audit applies. 2019 is the changeover and matches neither cleanly. So
+pfd, rfd or cfd disagreeing on an old season is expected; on 2024 or
+2025 it is not. (Measured 27 August 2026.)
+
+A 60-yard field goal sat in Sleeper's 50-59 band before 2024 and in
+nflverse's 60+ band. Six kicker seasons across 2021-2023, every one a
+single kick, and the made-total always agrees. A league paying extra
+for 60+ is slightly under-paying on those seasons. (Same date.)
+
+season    compared  disagree    rate
+2018           322        51   15.8%
+2019           466        45    9.7%
+2020           574        13    2.3%
+2021           703        14    2.0%
+2022           935        38    4.1%
+2023          1187        10    0.8%
+2024          1463         7    0.5%
+2025          1673         5    0.3%
+
+stat  compared   agree   agree%
+cfd       652     603    92.5%
+ct        550     550   100.0%
+cy        680     677    99.6%
+f19        17      17   100.0%
+f29       110     107    97.3%
+f39       111     111   100.0%
+f49       111     110    99.1%
+f59       108     100    92.6%
+f60        18      10    55.6%
+fg        111     110    99.1%
+fgx       109     109   100.0%
+pa        216     212    98.1%
+pc        188     185    98.4%
+pfd       171     145    84.8%
+pi        149     149   100.0%
+pt        163     162    99.4%
+py        188     185    98.4%
+ra        614     609    99.2%
+rc        677     675    99.7%
+rfd       516     469    90.9%
+rt        382     382   100.0%
+ry        605     598    98.8%
+tg        686     675    98.4%
+xp        111     110    99.1%
+xpx        80      80   100.0%
+
+183 disagreements beyond 0.5, largest first:
+  2022 | py   | Joe Burrow | ours 4527 | theirs 4475
+  2018 | pfd  | Patrick Mahomes | ours 235 | theirs 187
+  2022 | py   | Josh Allen | ours 4316 | theirs 4283
+  2018 | pfd  | Jared Goff | ours 233 | theirs 201
+  2018 | py   | Josh Allen | ours 2074 | theirs 2044
+  2018 | pfd  | Baker Mayfield | ours 171 | theirs 144
+  2022 | cy   | Stefon Diggs | ours 1455 | theirs 1429
+  2018 | pfd  | Aaron Rodgers | ours 200 | theirs 175
+  2018 | pfd  | Dak Prescott | ours 184 | theirs 162
+  2018 | pfd  | Matthew Stafford | ours 197 | theirs 177
+  2022 | ry   | James Cook | ours 525 | theirs 507
+  2018 | pfd  | Sam Darnold | ours 130 | theirs 113
+  2022 | ry   | Josh Allen | ours 776 | theirs 762
+  2018 | rfd  | Alvin Kamara | ours 57 | theirs 43
+  2022 | cy   | Tee Higgins | ours 1042 | theirs 1029
+  2018 | cfd  | Davante Adams | ours 64 | theirs 51
+  2018 | rfd  | James Conner | ours 56 | theirs 44
+  2018 | rfd  | Derrick Henry | ours 51 | theirs 39
+  2018 | rfd  | Saquon Barkley | ours 50 | theirs 39
+  2019 | pfd  | Lamar Jackson | ours 136 | theirs 125
+  2018 | pfd  | Josh Allen | ours 89 | theirs 78
+  2019 | pfd  | Jared Goff | ours 207 | theirs 198
+  2018 | cfd  | Travis Kelce | ours 67 | theirs 58
+  2018 | cfd  | Stefon Diggs | ours 49 | theirs 40
+  2018 | cfd  | Calvin Ridley | ours 38 | theirs 29
+  2018 | rfd  | Josh Allen | ours 41 | theirs 33
+  2018 | rfd  | Aaron Jones | ours 41 | theirs 33
+  2019 | pfd  | Baker Mayfield | ours 165 | theirs 157
+  2019 | pfd  | Aaron Rodgers | ours 171 | theirs 163
+  2018 | rfd  | Christian McCaffrey | ours 53 | theirs 46
+  2019 | pfd  | Patrick Mahomes | ours 157 | theirs 150
+  2019 | pfd  | Daniel Jones | ours 123 | theirs 116
+  2019 | pfd  | Dak Prescott | ours 206 | theirs 199
+  2018 | cfd  | Mike Evans | ours 68 | theirs 61
+  2019 | pfd  | Kyler Murray | ours 159 | theirs 153
+  2018 | pfd  | Lamar Jackson | ours 60 | theirs 54
+  2022 | pa   | Josh Allen | ours 573 | theirs 567
+  2018 | cfd  | Cooper Kupp | ours 25 | theirs 19
+  2025 | ry   | Caleb Williams | ours 383 | theirs 388
+  2019 | rfd  | Lamar Jackson | ours 60 | theirs 65
+  2019 | rfd  | Derrick Henry | ours 62 | theirs 57
+  2019 | rfd  | Aaron Jones | ours 44 | theirs 39
+  2018 | rfd  | Lamar Jackson | ours 45 | theirs 40
+  2019 | pfd  | Sam Darnold | ours 133 | theirs 128
+  2018 | cfd  | Keenan Allen | ours 61 | theirs 56
+  2018 | cfd  | George Kittle | ours 60 | theirs 55
+  2018 | cfd  | Christian McCaffrey | ours 40 | theirs 35
+  2022 | ry   | Najee Harris | ours 1038 | theirs 1034
+  2019 | rfd  | Saquon Barkley | ours 43 | theirs 39
+  2019 | pfd  | Josh Allen | ours 130 | theirs 126
+  2022 | pc   | Joe Burrow | ours 418 | theirs 414
+  2022 | pa   | Joe Burrow | ours 610 | theirs 606
+  2018 | cfd  | Saquon Barkley | ours 30 | theirs 26
+  2018 | cfd  | David Njoku | ours 27 | theirs 23
+  2018 | cfd  | Dallas Goedert | ours 15 | theirs 11
+  2018 | cfd  | Chris Godwin Jr. | ours 45 | theirs 41
+  2018 | cfd  | Alvin Kamara | ours 31 | theirs 27
+  2020 | ry   | Jalen Hurts | ours 357 | theirs 354
+  2018 | ry   | Sam Darnold | ours 138 | theirs 135
+  2019 | rfd  | Alvin Kamara | ours 30 | theirs 27
+  ... and 123 more, not listed
+
+
+
+Sleeper against itself: field goals by distance
+Every made and missed kick should sit in exactly one distance band,
+because app.js scores the made bands and now offers the missed ones.
+This is where that is checked, in both directions.
+
+Sleeper's own totals against Sleeper's own distance bands. The
+totals are trustworthy either way -- fga == fgm + fgmiss for every
+kicker season -- so a shortfall here is a band that was never
+populated, not a kick that did not happen.
+
+season    fgm  in bands   short      fgmiss  in bands   short
+2018      175       177   -1.1%          29        18   37.9%
+2019      244       245   -0.4%          49        30   38.8%
+2020      249       249    0.0%          35        18   48.6%
+2021      287       287    0.0%          44        28   36.4%
+2022      358       358    0.0%          60        42   30.0%
+2023      468       468    0.0%          54        26   51.9%
+2024      526       526    0.0%          82        82    0.0%
+2025      621       621    0.0%          95        95    0.0%
+
+Bands are complete from 2024 on and lossy before it,
+and the two halves are lossy to very different degrees in this pool.
+The made bands very nearly reconcile throughout; the miss bands do not,
+leaving a third to a half of every pre-2024 miss in no band at all. So a
+league that scales a miss by distance gets a penalty that fires on about
+half the misses on an old season, while fgmiss itself stays whole. That
+is the reason the bands are an extra on fgmiss rather than a
+replacement for it, and it is visible on the Seasons tab.
+
+3 seasons where the bands EXCEED the total they
+decompose. A part cannot be larger than its whole, so this is a
+miscount at source rather than the sparse history above -- and it
+nets against a shortfall in a season total, which is why it is
+counted on its own:
+  2019 | 2747 | fgm 23 | bands 24 | +1
+  2018 | 3451 | fgm 37 | bands 38 | +1
+  2018 | 3678 | fgm 28 | bands 29 | +1
+
+Every season from 2024 on reconciles exactly, both directions.
