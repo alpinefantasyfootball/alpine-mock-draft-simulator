@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The source-id crosswalk, tested without the network.
+"""The two crosswalks and the nflverse audit, tested without the network.
 
 Why this file exists when the rest of the pipeline is tested by running it:
 a bad join does not look like a failure. Every count still prints, both
@@ -181,6 +181,166 @@ for label, rows in [
     check(f"{label}: the headline count is what was stored", head, stored)
     check(f"{label}: the breakdown adds up to it", parts, stored)
 
+
+# ---- 11. the nflverse join -----------------------------------------------
+#
+# A different source, a different join, and the same failure mode: a wrong
+# match does not look wrong. Their file carries no Sleeper id at all, so
+# unlike Tank01 there is no shared-identifier tier to fall back from -- the
+# name match IS the join, and every case below is one it has to get right.
+#
+# Its own pool, because these cases need a two-way player and a Rams player
+# and the pool above is asserted on exactly as it stands.
+NFL_SLEEPER = {
+    "1001": {"full_name": "Puka Nacua",     "position": "WR", "team": "LAR"},
+    "1002": {"full_name": "Travis Hunter",  "position": "WR", "team": "JAX"},
+    "1003": {"full_name": "Jahmyr Gibbs",   "position": "RB", "team": "DET"},
+    "1004": {"full_name": "Ja'Marr Chase",  "position": "WR", "team": "CIN"},
+}
+NFL_STATS = {pid: {"age": 25} for pid in NFL_SLEEPER}
+NFL_INDEXES = bp.index_sleeper(NFL_SLEEPER)
+
+
+def nfl(gsis, name, pos, team, last=2025):
+    return {"gsis_id": gsis, "display_name": name, "position": pos,
+            "latest_team": team, "last_season": str(last)}
+
+
+linked, report = bp.link_nflverse(NFL_STATS, NFL_SLEEPER, NFL_INDEXES, [
+    nfl("00-01", "Jahmyr Gibbs", "RB", "DET"),
+    nfl("00-02", "Ja'Marr Chase", "WR", "CIN"),
+])
+check("nflverse joins on name, position and team",
+      linked, {"1003": "00-01", "1004": "00-02"})
+check("and reports everyone it could not reach",
+      sorted(l.split(" | ")[0] for l in report if "no nflverse id" in l),
+      ["Puka Nacua", "Travis Hunter"])
+
+
+# ---- 12. nflverse calls the Rams LA and we call them LAR ------------------
+#
+# TEAM_ALIASES already knows. The point of the test is that link_nflverse
+# actually asks it: a raw team code compared straight across drops every Ram
+# to the looser tier, and this is how a defence once reconciled to zero.
+linked, _ = bp.link_nflverse(NFL_STATS, NFL_SLEEPER, NFL_INDEXES, [
+    nfl("00-03", "Puka Nacua", "WR", "LA"),
+])
+check("an nflverse LA row joins our LAR player on the strict tier",
+      linked, {"1001": "00-03"})
+
+
+# ---- 13. a two-way player carries the wrong position ----------------------
+#
+# nflverse lists Travis Hunter as a DB because that is what he mostly is.
+# His receiving is perfectly present under his gsis_id; the position tier
+# simply cannot see him, and no amount of name matching will fix that. So
+# the join has to fail here rather than guess, and NFLVERSE_MATCHES is what
+# rescues him.
+linked, _ = bp.link_nflverse(NFL_STATS, NFL_SLEEPER, NFL_INDEXES, [
+    nfl("00-04", "Travis Hunter", "DB", "JAX"),
+])
+check("a position nobody drafts does not join by itself", linked.get("1002"), None)
+
+saved_matches = bp.NFLVERSE_MATCHES
+bp.NFLVERSE_MATCHES = {"1002": "00-04"}
+linked, report = bp.link_nflverse(NFL_STATS, NFL_SLEEPER, NFL_INDEXES, [
+    nfl("00-04", "Travis Hunter", "DB", "JAX"),
+])
+check("NFLVERSE_MATCHES is what reaches him", linked.get("1002"), "00-04")
+check("and he stops being reported as missing",
+      any("Travis Hunter" in l for l in report), False)
+bp.NFLVERSE_MATCHES = saved_matches
+
+
+# ---- 14. two of theirs claiming one of ours ------------------------------
+linked, report = bp.link_nflverse(NFL_STATS, NFL_SLEEPER, NFL_INDEXES, [
+    nfl("00-05", "Jahmyr Gibbs", "RB", "DET"),
+    nfl("00-06", "Jahmyr Gibbs", "RB", "DET"),
+])
+check("an nflverse collision stores neither id", linked.get("1003"), None)
+check("and says so loudly",
+      any(l.startswith("COLLISION") and "00-05" in l and "00-06" in l for l in report),
+      True)
+
+
+# ---- 15. the outage path -------------------------------------------------
+#
+# nflverse being down, or a season not played yet, both arrive here as no
+# rows. The board must be unaffected and the report must say so, because a
+# pipeline that needs a third party to be up in order to produce a board is
+# not a pipeline this project wants.
+linked, report = bp.link_nflverse(NFL_STATS, NFL_SLEEPER, NFL_INDEXES, [])
+check("no rows links nothing", linked, {})
+check("and reports every player we hold", len(report), len(NFL_STATS))
+
+lines, flagged = bp.audit_against_nflverse(NFL_STATS, {}, {})
+check("an audit with nothing to compare flags nothing", flagged, 0)
+check("and says why rather than printing an empty table",
+      any("nothing compared" in l for l in lines), True)
+
+
+# ---- 16. the audit applies the two known definitions ---------------------
+#
+# These are the two differences that would look like data if they were
+# reported, and like a bug if they were fixed by taking nflverse's column.
+# A touchdown is a first down to them and is not to us; a blocked kick is a
+# miss to us and is not to them.
+def audited(ours, theirs):
+    stats = {"1003": {"s": {"2025": ours}}}
+    seasons = {2025: {"00-01": dict(theirs, player_display_name="Test Player")}}
+    return bp.audit_against_nflverse(stats, {"1003": "00-01"}, seasons)[1]
+
+
+check("a first-down line that differs by exactly the touchdowns is not flagged",
+      audited({"cfd": 40, "ct": 9},
+              {"receiving_first_downs": "49", "receiving_tds": "9"}), 0)
+check("and one that differs by anything else is",
+      audited({"cfd": 40, "ct": 9},
+              {"receiving_first_downs": "52", "receiving_tds": "9"}), 1)
+check("a miss total that differs by exactly the blocked kicks is not flagged",
+      audited({"fgx": 6}, {"fg_missed": "4", "fg_blocked": "2"}), 0)
+check("and one that differs by anything else is",
+      audited({"fgx": 6}, {"fg_missed": "4", "fg_blocked": "0"}), 1)
+check("a stat both feeds agree on is not flagged",
+      audited({"cy": 1200}, {"receiving_yards": "1200"}), 0)
+
+
+# ---- 17. the audit never changes a stored number -------------------------
+#
+# The whole design. Sleeper is the feed every season block, every weekly log
+# and every archived projection was built from, so a value quietly replaced
+# from somewhere else would make `pp` a comparison between two feeds instead
+# of between a forecast and an outcome.
+import copy as _copy
+before = {"1003": {"s": {"2025": {"cy": 1200, "ct": 9, "cfd": 40}}}}
+after = _copy.deepcopy(before)
+bp.audit_against_nflverse(after, {"1003": "00-01"}, {2025: {"00-01": {
+    "receiving_yards": "999", "receiving_tds": "1", "receiving_first_downs": "2",
+    "player_display_name": "Test Player"}}})
+check("the audit leaves every stored value exactly as it found it", after, before)
+
+
+# ---- 17. app.js has the other half of every scoring rule -----------------
+#
+# The build already refuses to write when a SCOREABLE stat has no home in
+# STAT_FIELDS. This is the other direction, and it is just as silent:
+# pointsUnder() walks the rules object, so a stat with no default in app.js
+# is summed as zero and nothing says a word.
+#
+# It runs against the real app.js rather than a fixture, because a fixture
+# would prove the parser works and not that the two files agree.
+_here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_cwd = os.getcwd()
+os.chdir(_here)
+try:
+    bp.check_app_rules()
+    check("every scoreable stat has a default, a group and a label in app.js",
+          True, True)
+except SystemExit as error:
+    check("every scoreable stat has a default, a group and a label in app.js",
+          str(error), "no problems")
+finally:
+    os.chdir(_cwd)
 
 print()
 if FAILURES:

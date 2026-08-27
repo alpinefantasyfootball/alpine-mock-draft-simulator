@@ -131,16 +131,18 @@ the Stack section above, not a one-time migration hiccup.
 | `og-image.png` | 1200x630 link-preview card. **A designed asset now, not a generated one** — it arrived with the shark handoff. `scripts/build_og.html` still draws a plainer fallback from the same mark; running it replaces the designed card with a generated one. The copy that is actually served is `web/public/og-image.png`; see the note on the repo root below. |
 | `favicon.ico`, `favicon-16.png`, `favicon-32.png` | The root favicons, named by `404.html` and all three `docs/` pages. The PNGs are rendered exports; the `.ico` is assembled from them by `scripts/build_favicon_ico.py`. Duplicated into `web/public/`, which is the copy a browser reaches. |
 | `scripts/build_favicon_ico.py` | Wraps `favicon-{16,32,48}.png` in an `.ico` container, payloads unmodified. Stdlib only, no encoder, and it re-traces nothing — if the mark changes, re-render the PNGs and run it again. |
-| `unmatched.txt` | **GENERATED.** Feed rows that failed to join, plus unscored stat keys. |
+| `unmatched.txt` | **GENERATED.** Five sections: FFC rows that failed to join, players with no id at another source, **Sleeper stats we are not storing** (read this before adding a feed), Sleeper against nflverse, and the missed-field-goal reconciliation. |
 
 ## Data
 
-Two free feeds, no keys: **Sleeper** (players, injuries, stats back to 2018,
-weekly logs, projections, depth charts) and **Fantasy Football Calculator**
-(ADP, one set per scoring format, written to `players.js` as `ADP_SETS`).
+Three free feeds, no keys: **Sleeper** (players, injuries, stats back to 2018,
+weekly logs, projections, depth charts), **Fantasy Football Calculator**
+(ADP, one set per scoring format, written to `players.js` as `ADP_SETS`), and
+**nflverse** (nflfastR's play-by-play derivatives, used to check Sleeper and
+never to replace it — see "The second feed" below).
 
 **The pipeline stores raw components and no points total at all.** Scoring
-lives in `app.js` (`DEFAULT_RULES` and `fantasyPoints()`), so all 38 rules are
+lives in `app.js` (`DEFAULT_RULES` and `fantasyPoints()`), so all 49 rules are
 editable on the setup screen and everything rescores with no rebuild.
 Sleeper's own `pts_half_ppr` is discarded, as it always was, because it bakes
 in assumptions we do not share.
@@ -153,6 +155,238 @@ field to read any more, so a direct read silently scores zero.
 drift. Anything scoreable must be in `STAT_FIELDS` — a stat that was never
 stored can never be rescored, and `build_players.py` fails loudly if a
 `SCOREABLE` entry has nowhere to live.
+
+**And it fails the other way too now, which it did not for a long time.**
+`pointsUnder()` walks the rules object rather than the stat list, so a stat in
+`SCOREABLE` with no entry in `DEFAULT_RULES` is never summed, and one missing
+from `RULE_GROUPS` or `RULE_LABELS` never appears in the editor. Neither shows
+up as an error — the total is simply lower than it should be.
+`check_app_rules()` reads the three tables out of `app.js` and refuses to run
+without all three, before any network. `unmatched.txt` has said "and give it a
+default in app.js" at the head of its unstored-keys list all along; nothing
+enforced it.
+
+## The list nobody was reading
+
+**`unmatched.txt`'s third section is the pipeline's own answer to "what is
+missing", and it went unread for the entire life of the project.** It lists
+every key Sleeper sends that `STAT_FIELDS` has no home for — **155 of them,
+143 once the twelve `adp_*` entries are set aside** — under a heading that says
+exactly what it means: anything here is a scoring rule the app could never
+support.
+
+It was found while scoping the nflverse integration below, by an audit of the
+spec rather than by the spec itself. Most of what nflverse was wanted for was
+already arriving from Sleeper and being thrown away: **missed field goals by distance, blocked kicks, longest kick, attempts,
+red-zone targets and carries, air yards, yards after catch, drops, broken
+tackles and snap counts.** All of it free — no join, no second source of truth,
+no third party that can be down.
+
+**So read that section before adding a feed.** A new source is only justified
+for what is *not* on it.
+
+**Free of a join is not free of a cost, and the second half of that sentence
+had to be measured too.** All fourteen role, red-zone and snap keys were added,
+the pipeline was run, and `stats.js` went from 101 KB gzipped to 183 — an 80%
+increase on a plain classic `<script src>` that blocks the first paint. Broken
+down by key: those fourteen are **70 KB of it**, `off_snp` and `tm_off_snp`
+alone are 20.5, and **nothing in the app renders any of them.** The five
+`fgmiss_*` bands that are the actual new scoring capability cost **0.7 KB**, and
+the whole kicking line 3.2.
+
+So the kicking keys ship and the fourteen do not, yet. They come back in the
+change that draws them, next to the nflverse share and EPA figures they are
+meant to sit beside — which is where the spec's own build order already put
+them. **A stat costs a phone bytes on every load whether or not a pixel ever
+shows it**, which is the same argument `WEEKLY_SEASONS` settles for weekly logs
+and it lands the same way. Being already in the building is an argument about
+the join, not about the payload.
+
+### The second feed, and the three things it does add
+
+**nflverse adds what Sleeper cannot, and it is a short list.** A statistic that
+needs a denominator or a model bigger than one player's box score (share of a
+team's targets or air yards, EPA, completion percentage over expected); an
+independent second opinion on the numbers Sleeper already sends; and a handful
+of plain box-score facts Sleeper has no key for — rushes of 20+ yards,
+game-winning field goal attempts, misses from inside twenty. Only the second of
+those is built today.
+
+**The join is a name join, and that is not a compromise.** nflverse's
+`players.csv` carries no Sleeper id at all, so there is no shared-identifier
+tier to prefer. Measured 27 August 2026 against the 26 August board: **240 of
+241 skill players match on normalised name, position and team alone**, every
+one of them carrying a `gsis_id`. `link_nflverse()` reuses `index_sleeper()`
+and `normalise()` for the same reason `link_source_ids()` does.
+
+**A two-way player carries one position and it is not the fantasy one.** Travis
+Hunter is `DB`/`CB` to nflverse and `WR` to us. His receiving is perfectly
+present under his `gsis_id`; the position tier simply cannot see him. So the
+nflverse master is filtered by *recency* and never by position, and he is the
+one entry in `NFLVERSE_MATCHES`. **That table is not `MANUAL_MATCHES`** — that
+one maps an FFC name to a Sleeper id and is read by `join_rows()`. Two
+different joins between two different pairs of sources, and an entry in the
+wrong one is a silent no-op.
+
+**nflverse calls the Rams `LA`.** `TEAM_ALIASES` already knows, and
+`clean_team()` is how you ask it. Found by a defence reconciling to zero.
+
+### The audit never changes a stored number
+
+Sleeper stays authoritative for everything in `STAT_FIELDS`. `pp` — the archive
+of what we forecast for seasons already played — was built against it, so a
+value quietly replaced from somewhere else would turn `projectionRecord()` into
+a comparison between two feeds rather than between a forecast and an outcome.
+The audit reports, into `unmatched.txt`, and that is all it does.
+
+**Two definitional differences are applied rather than reported, and neither
+may be "fixed" by taking nflverse's column.**
+
+- **nflverse counts a touchdown as a first down; Sleeper does not.** Over 2025
+  this explained 311 of 313 disagreements exactly — 32 of 32 passers, 161 of
+  161 receivers, 118 of 120 rushers. Dropping their column into `cfd`, `rfd` or
+  `pfd` would pay every league that scores first downs for every touchdown
+  twice, and a receiver's total would rise by single digits and stay entirely
+  plausible.
+- **Sleeper counts a blocked kick as a miss; nflverse does not.** Eleven of the
+  twenty board kickers agreed outright in 2025 (they had none) and the other
+  nine matched exactly once `fg_blocked` was added back. Swapping their column
+  in would silently forgive every block — and it would make kickers look
+  *better*, which is the direction nobody checks.
+
+**The rest agrees, and that is what makes the check worth running.** Measured
+over 2025: 100% exact on passing yards, touchdowns, interceptions, attempts and
+completions; carries and rushing touchdowns; receptions, receiving yards and
+receiving touchdowns; every field goal made in all six distance bands; and
+extra points made.
+
+**Two feeds agreeing today is the baseline; the audit exists for the day they
+stop.** It found two disagreements on its very first run, both of them Sleeper
+changing its own mind years ago:
+
+- **Sleeper's first-down definition changed between 2018 and 2020.** In 2018,
+  42 of 55 first-down lines match nflverse *raw* — touchdown counted — and from
+  2020 on, 91–99% match nflverse *minus* touchdowns. 2019 is the changeover and
+  matches neither cleanly. So `pfd`, `rfd` or `cfd` disagreeing on an old season
+  is expected; on 2024 or 2025 it is not.
+- **A 60-yard field goal sat in Sleeper's 50–59 band before 2024** and in
+  nflverse's 60+ band. Six kicker seasons across 2021–2023, every one a single
+  kick, and the made-total always agrees.
+
+**The disagreement rate falls steeply with recency** — 16.2% of comparisons in
+2018, 4.1% in 2022, **0.3% in 2025**. Neither of the two above is fixable from
+here: the history is what it is. What matters is that both are written down, so
+the next thing that moves is visibly new. `AUDIT_NOTES` carries them, dated,
+into the report itself.
+
+### A season that has not started is a 404, not a fault
+
+Every in-season nflverse file for a season not yet played returns 404 —
+`stats_player`, `stats_team`, `snap_counts`, `injuries`, `pfr_advstats` and
+`ftn_charting` all did for 2026 as of 27 August. Every fetch is optional and
+prints its count, exactly as `PROJECTION_HISTORY` already does, so the pipeline
+picks a new season up on its own the first morning after week one and nobody
+edits a list. **A total nflverse outage produces a byte-identical `stats.js`**
+and one loud line in the log — the same rule the module docstring already
+states about Tank01.
+
+### Missed field goals are charged once, and the bands are an extra
+
+`fgmiss` is the rule that charges a miss, it defaults to −1, and **it counts a
+blocked kick** — checked against nflverse, whose `fg_missed` excludes blocks
+and reconciles with ours for every kicker season once `fg_blocked` is added
+back. The five `fgmiss_*` bands are an *extra* on top of it, default zero: a
+missed 45-yarder increments `fgmiss` and `fgmiss_40_49` both, so a league
+scaling a miss by distance sets the base on one and the increment on the
+other. There is no `fgmiss_0_19` because Sleeper sends none — nobody missed
+from inside twenty all last season.
+
+**The bands count blocks too, and the first version of this section said they
+did not.** That claim came from the nflverse comparison and was true of
+*nflverse's* `fg_missed`, not of Sleeper's bands — a fact about one feed
+written down about the other. It is checkable and was checked: `fga == fgm +
+fgmiss` reconciles for all 310 kicker seasons without exception, so a block is
+structurally inside `fgmiss`, and in the seasons where the bands are complete
+they equal `fgmiss` exactly, so a block is inside a band as well. Adding
+`fg_blkd` back on top of the bands overshoots, and the check that did it
+reported 145 healthy seasons as broken on its first run.
+
+**The symmetry with `fgm` is false and following it would break three things
+silently.** Makes are stored as `fgm` and deliberately *not* scoreable, so a
+made kick can only ever be charged through its band. Demoting `fgmiss` the same
+way looks right and is not:
+
+- it defaults to −1, so the change rescores **every** league rather than the few
+  that opted in — `fgm` was never a rule at all, which is what makes the
+  symmetry false;
+- Sleeper forecasts misses only as `fgmiss_50p`, so no band would ever reach
+  `PROJECTED_KEYS` and `fgmiss` would leave it — the 2026 board would charge
+  nothing at all for a missed kick, which is the `fgm_50p` bug at the other end
+  of the same stat;
+- **the bands do not cover the history and `fgmiss` does.** They account for
+  every miss from 2024 on and for 52–63% of them before that. A total that is
+  whole in every season cannot be replaced by a decomposition that is whole in
+  two of eight.
+
+Every one of those is silent: `pointsUnder()` falls through to zero.
+
+### The miss bands are lossy before 2024, and the sharp edge is the date
+
+Measured 27 August 2026, over the kicker seasons Juke actually stores. The five
+`fgmiss_*` bands account for **100.0%** of `fgmiss` in 2024 and 2025 and for
+**48–70%** before — 2023 is the worst, with 28 of 54 misses in no band at all.
+The boundary is sharp: no season is partly one and partly the other, so it is
+Sleeper having filled in its own history rather than a definition anybody
+disagrees about.
+
+**Which is precisely why the bands are an extra on `fgmiss` and not a
+replacement for it.** A league that scales a miss by distance gets a penalty
+that fires on about half the misses of a pre-2024 season while `fgmiss` itself
+stays whole — so the base charge is right on every season and only the
+increment is short. Demote `fgmiss` and there is no whole number left anywhere.
+The argument above was made before this was measured and the measurement is
+what confirms it; it would have been the deciding reason on its own.
+
+**Measure this on the pool you score, not on the league.** Across *every*
+kicker Sleeper has, the six `fgm_*` bands are 9–17% short before 2024 — Daniel
+Carlson's 2022 is 34 made and 23 banded. Across the pool Juke stores they are
+short by **one kick, in three seasons, ever**, and in the other direction: the
+bands *exceed* `fgm` by one for Jason Myers 2019, Ka'imi Fairbairn 2018 and Wil
+Lutz 2018. Two honest measurements, an order of magnitude apart, because the
+board carries the kickers whose history Sleeper kept best. The board-pool figure
+is the one that describes what gets scored today; the league-wide one is the
+warning about a kicker who joins the board tomorrow and brings a lossier history
+with him.
+
+**It hid because the totals are perfect.** `fga == fgm + fgmiss` reconciles for
+all 310 kicker seasons without exception, so every number the pipeline could
+reconcile *did* reconcile, and nothing had ever compared a band to the total it
+decomposes. The same shape as roster construction sitting at 100 for all ten
+teams: right arithmetic on a question nobody was asking. Adding the miss bands
+is what made anybody aim a check at it.
+
+**A part exceeding its whole is counted on its own, because it nets.** Three
+seasons over by one against a season total that is otherwise short reads as a
+−1.1% shortfall and looks like more sparse history. It is not the same fault and
+cannot be repaired the same way, so `check_miss_bands()` lists it separately.
+
+Nothing is repaired, because there is nothing here to repair it from: the kicks
+Sleeper did not band are not recoverable from Sleeper, and nflverse's own bands
+carry the `f60` boundary problem the audit notes already record. It is written
+down, dated, and printed every run instead.
+
+**The bands sit in their own group, and the group title is what says they are
+additional.** Under "Kicking" beside "Field goal missed" they read as a
+replacement for it, and a manager typing −1 into one would be charging −2 a
+miss — which looks harsh rather than wrong.
+
+**`check_miss_bands()` prints the split every run, in both directions**, and
+counts a failure **only** for a season at or after `BAND_COMPLETE_FROM`. The
+first version counted every lossy old season and reported 145 failures on a
+pipeline that was working — which is the permanent-known-failure trap the
+testing section already records: a check carrying a standing red stops being
+read by the end of the week. What is expected is reported as a rate; what is
+new is reported as a failure.
 
 ## The draft grade
 
@@ -2741,7 +2975,14 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   passed a broken file twice.
 - Crosswalk: `python scripts/test_crosswalk.py` — the source-id join against a
   handful of players, including two Josh Allens, a collision and a player
-  neither side shares. Needs nothing but the standard library.
+  neither side shares; the nflverse join with its two-way player and its
+  `LA`/`LAR` case; the audit applying both known definitions and mutating
+  nothing; and `check_app_rules()` against the real `app.js`.
+  Needs nothing but the standard library. **It cannot reach `app.js`'s rule
+  tables except through `check_app_rules()`** — `test_engine.py` is the only
+  suite with a JavaScript host and it loads `draft-engine.js` and `room.js`,
+  never `app.js` — which is why that guard lives in the build rather than
+  here.
 - Pipeline: `python scripts/build_players.py` — prints counts and writes the
   generated files. Check `unmatched.txt` afterwards. **`TANK01_KEY` in the
   environment is optional**: without it the crosswalk is skipped, the build is

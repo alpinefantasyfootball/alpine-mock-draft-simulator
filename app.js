@@ -2889,6 +2889,34 @@ const DEFAULT_RULES = {
   rec: 0.5, rec_yd: 0.1, rec_td: 6, rec_2pt: 2, rec_fd: 0, rec_40p: 0,
   fum_lost: -2, kr_td: 6, pr_td: 6,
   xpm: 1, xpmiss: -1, fgmiss: -1,
+  // The five bands are an EXTRA on top of fgmiss, not a replacement for it,
+  // and the counts overlap completely: a missed 45-yarder increments fgmiss
+  // AND fgmiss_40_49. So they start at zero — nothing double-charges until
+  // somebody asks it to — and a league that scales a miss by distance sets
+  // the base on fgmiss and the increment here.
+  //
+  // This is the opposite of fgm, which is stored but deliberately not
+  // scoreable so that a made kick can only ever be charged through its band.
+  // fgmiss cannot be demoted the same way: it defaults to -1, so removing it
+  // would silently rescore every league rather than the few that opted in,
+  // and it would take the miss penalty out of the projection entirely —
+  // Sleeper forecasts misses only as fgmiss_50p, so no band ever reaches
+  // PROJECTED_KEYS.
+  //
+  // And a band is not a complete substitute for the total on the history
+  // either, which is the reason that matters most. Measured over every
+  // season we store: the bands account for every miss from 2024 on and for
+  // only 52-63% of them before that, because Sleeper populated them
+  // sparsely in its older seasons. fgmiss is whole in every season —
+  // fga == fgm + fgmiss reconciles without exception — so it is the number
+  // that can be trusted on an old line, blocked kicks included. See
+  // check_miss_bands() in build_players.py, which prints the split every
+  // run.
+  //
+  // There is no fgmiss_0_19 because Sleeper sends none. Nobody missed from
+  // inside twenty yards last season.
+  fgmiss_20_29: 0, fgmiss_30_39: 0, fgmiss_40_49: 0,
+  fgmiss_50_59: 0, fgmiss_60p: 0,
   fgm_0_19: 3, fgm_20_29: 3, fgm_30_39: 3,
   fgm_40_49: 4, fgm_50_59: 5, fgm_60p: 6,
   sack: 1, int: 2, fum_rec: 2, safe: 2,
@@ -7386,6 +7414,13 @@ const RULE_GROUPS = [
   ["Turnovers and returns", ["fum_lost", "kr_td", "pr_td"]],
   ["Kicking",  ["xpm", "xpmiss", "fgmiss", "fgm_0_19", "fgm_20_29",
                 "fgm_30_39", "fgm_40_49", "fgm_50_59", "fgm_60p"]],
+  // Its own group, and the group title is what says these are additional.
+  // Sitting under "Kicking" beside "Field goal missed" they would read as a
+  // replacement for it, and a manager typing -1 into one would be charging
+  // -2 a miss — which would look harsh rather than wrong.
+  ["Extra for a missed field goal, by distance",
+               ["fgmiss_20_29", "fgmiss_30_39", "fgmiss_40_49",
+                "fgmiss_50_59", "fgmiss_60p"]],
   ["Defense and special teams",
                ["sack", "int", "fum_rec", "safe", "def_td", "def_st_td",
                 "blk_kick", "def_2pt"]],
@@ -7407,6 +7442,9 @@ const RULE_LABELS = {
   rec_fd: "Receiving first down", rec_40p: "Catch of 40+ yards",
   fum_lost: "Fumble lost", kr_td: "Kick return TD", pr_td: "Punt return TD",
   xpm: "Extra point", xpmiss: "Extra point missed", fgmiss: "Field goal missed",
+  fgmiss_20_29: "Missed 20–29", fgmiss_30_39: "Missed 30–39",
+  fgmiss_40_49: "Missed 40–49", fgmiss_50_59: "Missed 50–59",
+  fgmiss_60p: "Missed 60+",
   fgm_0_19: "FG 0–19", fgm_20_29: "FG 20–29", fgm_30_39: "FG 30–39",
   fgm_40_49: "FG 40–49", fgm_50_59: "FG 50–59", fgm_60p: "FG 60+",
   sack: "Sack", int: "Interception", fum_rec: "Fumble recovered",
