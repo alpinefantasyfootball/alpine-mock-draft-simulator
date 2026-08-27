@@ -682,7 +682,7 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
           </div>
 
           <p className="mt-5 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Room standings</p>
-          <table className="mt-1.5 w-full text-xs">
+          <table className="mt-1.5 w-full bg-slate-panel text-xs">
             <tbody>
               {standings.map((t) => (
                 <tr key={t.slot} className={t.slot === mySlot ? 'bg-[#FFD166]/10' : ''}>

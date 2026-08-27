@@ -21,8 +21,15 @@ export default function UsageTab({ usage }) {
         <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
           How he was used
         </p>
+        {/* bg-slate-panel is not decoration. style.css carries a bare
+            `table { background: var(--card) }` and it is loaded on this same
+            page, so every React <table> inherits a background that flips to
+            white under data-theme="light" while the text stays white — this
+            table and Projections' both measured 1.0:1 in light before the
+            class went on. An explicit surface is what stops a legacy element
+            selector reaching in. */}
         <div className="overflow-x-auto rounded-lg border border-slate-rule">
-          <table className="w-full text-xs">
+          <table className="w-full bg-slate-panel text-xs">
             <thead>
               <tr className="border-b border-slate-rule bg-slate-sunk/60 text-[10px] uppercase tracking-wide text-ink-muted">
                 <th className="px-2 py-1.5 text-left font-medium">Year</th>

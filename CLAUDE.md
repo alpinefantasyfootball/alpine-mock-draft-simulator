@@ -1597,6 +1597,29 @@ way, not reasoned about.
   chat avatar was first called `.avatar`, which is the player photo and is
   hidden outright inside the rail.
 
+- **And a bare element selector in `style.css` reaches into React, where no
+  class name collides at all.** `style.css:1323` is
+  `table { background: var(--card) }`, and that sheet is a plain `<link>` on
+  the same document `#draftroom-root` mounts into — so every `<table>` in
+  `web/src` inherited it, and `--card` is white under
+  `:root[data-theme="light"]` while the cells stayed `text-white/70`.
+  **Measured at 1.0:1, white on white, on four tabs** — Analysis, Game Logs,
+  Projections and Usage — reachable through the app's own theme control.
+
+  Tailwind's classes are fixed hex and the legacy tokens are theme-swapped
+  variables, so the two systems disagree only in the theme nobody building the
+  React room is looking at. The `thead` survived because it carries its own
+  `bg-slate-sunk/60`, which is what made it read as a table with its data
+  missing rather than as an obviously broken panel.
+
+  Fixed by giving each table an explicit `bg-slate-panel`, **not** by scoping
+  the legacy rule: `404.html` and the three `docs/` pages are styled by that
+  same sheet, so narrowing the selector to fix React risks the pages nobody
+  visits on purpose. An explicit surface is also what stops the next bare
+  element selector reaching in. **A React component is not isolated from
+  `style.css` — grep it for the tag before trusting a Tailwind background**,
+  and check the theme you are not developing in.
+
 - **The same goes for function names, and it fails more quietly.** `app.js`
   is one scope, so a second `function initials()` does not shadow the first —
   it replaces it, whichever is declared last, with no warning anywhere. The
