@@ -5958,6 +5958,85 @@ function depthChartFor(player) {
   });
 }
 
+/* Usage, from the `u` block nflverse writes. This is the only data on the
+   sheet that does not come from Sleeper, and the only thing on it that
+   answers "why did he score that" rather than "how much is he worth".
+
+   It is never scored. `u` is not in STAT_FIELDS or SCOREABLE, pointsUnder()
+   never sees it, and nothing here feeds overallScore(), suggestions() or
+   cpuChoice() — measured at the time it was added, no usage metric beat
+   points per game as a predictor of next season's points, and the best any
+   of them managed on top of points per game was +0.008 r. So it explains a
+   number the app already shows and does not become one.
+
+   Which columns are meaningful is a football question, so it is answered
+   here beside logColumns() rather than in a component. A quarterback has no
+   target share; a kicker has nothing but his game-winners. */
+const USAGE_COLUMNS = {
+  QB:  ["pep", "cpo", "rep", "r20"],
+  RB:  ["ts", "rep", "ep", "r20"],
+  WR:  ["ts", "ays", "wo", "ep"],
+  TE:  ["ts", "ays", "wo", "ep"],
+  K:   ["gwa", "gwm"]
+};
+
+const USAGE_LABELS = {
+  ts: "TGT%", ays: "AY%", wo: "WOPR", ep: "REC EPA", rep: "RUSH EPA",
+  pep: "PASS EPA", cpo: "CPOE", r20: "20+ RUN", gwa: "GW ATT", gwm: "GW MADE"
+};
+
+// A share is a proportion and reads as a percentage; EPA is a points figure
+// and carries its sign, because a negative one is the whole point of it.
+// WOPR is a conventional index and is left as the number everyone quotes.
+const USAGE_SHARES = { ts: true, ays: true };
+
+function usageCell(key, value) {
+  if (value === undefined || value === null) return null;
+  if (USAGE_SHARES[key]) return (value * 100).toFixed(1) + "%";
+  if (key === "cpo") return (value > 0 ? "+" : "") + value.toFixed(1);
+  if (key === "ep" || key === "rep" || key === "pep") {
+    return (value > 0 ? "+" : "") + value.toFixed(1);
+  }
+  return String(value);
+}
+
+function usageFor(player) {
+  // Guarded here rather than at the call site, the same way draftFit() is:
+  // statOf() already answers null before PLAYER_STATS has landed, so the
+  // only thing left to refuse is having no player at all.
+  if (!player) return null;
+  const s = statOf(player);
+  const u = s && s.u;
+  const keys = USAGE_COLUMNS[player.pos];
+  if (!u || !keys) return null;
+
+  const rows = Object.keys(u).sort().reverse().map(function (year) {
+    const block = u[year];
+    const cells = keys.map((k) => usageCell(k, block[k]));
+    if (!cells.some((c) => c !== null)) return null;
+    const season = (s.s || {})[year];
+    return {
+      year: year,
+      // The denominator honesty. A share is over the team's whole season,
+      // never over the games he played, so a player who missed six weeks
+      // shows a depressed share that is arithmetically right and answers a
+      // different question from the one being asked. Same rule as
+      // projectionRecord()'s own games column, and a DST never gets here.
+      games: season && season.gp ? season.gp : null,
+      cells: cells
+    };
+  }).filter(Boolean);
+
+  if (!rows.length) return null;
+  return {
+    head: keys.map((k) => USAGE_LABELS[k]),
+    rows: rows,
+    // So the component knows whether the denominator caveat is worth saying:
+    // a quarterback's row carries no share and the note would be noise.
+    hasShare: keys.some((k) => USAGE_SHARES[k])
+  };
+}
+
 function openSheet(player) {
   sheetPlayer = player;
   const s = statOf(player);
@@ -8917,6 +8996,10 @@ window.JukeEngine = {
   projectionSummary: projectionSummary,
   gameLogFor:        gameLogFor,
   depthChartFor:     depthChartFor,
+  // Returns null when nflverse never wrote a `u` block — a defence, an
+  // unjoined player, or a run where nflverse was down. The tab is hidden on
+  // null rather than drawn empty, the same way the news tab is.
+  usageFor:          usageFor,
   sourceId:          sourceId,
   newsItemView:      newsItemView,
   /* Added for the player card's "Our Read" tab — the model explaining

@@ -342,6 +342,73 @@ except SystemExit as error:
 finally:
     os.chdir(_cwd)
 
+# ---- 18. the usage block ------------------------------------------------
+#
+# The one thing nflverse writes into a record. Everything else it does is a
+# report, so this is the only place a third party can put a number into
+# stats.js at all -- which is why the outage case below matters as much as
+# the happy one.
+def usage_row(**kw):
+    row = {"target_share": "", "air_yards_share": "", "wopr": "",
+           "receiving_epa": "", "rushing_epa": "", "passing_epa": "",
+           "passing_cpoe": "", "rushing_20": "", "gwfg_att": "", "gwfg_made": ""}
+    row.update(kw)
+    return row
+
+
+records = {"1003": {"s": {"2025": {"cy": 1200}}}}
+written = bp.build_usage(records, {"1003": "00-01"}, {2025: {"00-01": usage_row(
+    target_share="0.30412", air_yards_share="0.3341", wopr="0.6903",
+    receiving_epa="41.44", rushing_20="3")}})
+check("a usage block is written under `u`, keyed by season like `s`",
+      records["1003"].get("u"),
+      {"2025": {"ts": 0.304, "ays": 0.334, "wo": 0.69, "ep": 41.4, "r20": 3}})
+check("and it is counted", written, 1)
+check("the season block beside it is untouched",
+      records["1003"]["s"], {"2025": {"cy": 1200}})
+
+# A zero and a missing value read identically on a sheet, and this file is a
+# plain <script src> in front of every first paint. Both are dropped.
+records = {"1003": {}}
+bp.build_usage(records, {"1003": "00-01"},
+               {2025: {"00-01": usage_row(target_share="0", receiving_epa="12.5")}})
+check("a zero is dropped rather than stored",
+      records["1003"]["u"], {"2025": {"ep": 12.5}})
+
+records = {"1003": {}}
+bp.build_usage(records, {"1003": "00-01"}, {2025: {"00-01": usage_row()}})
+check("a row with nothing in it writes no `u` at all", "u" in records["1003"], False)
+
+# Air yards go negative -- a screen pass is caught behind the line -- so the
+# sign is meaningful rather than dirty, and it must survive being stored.
+records = {"1003": {}}
+bp.build_usage(records, {"1003": "00-01"},
+               {2025: {"00-01": usage_row(air_yards_share="-0.003")}})
+check("a negative air-yards share is kept, not clamped or dropped",
+      records["1003"]["u"], {"2025": {"ays": -0.003}})
+
+# The outage path. nflverse down, or a season not played yet, both arrive
+# as no rows -- and the board must be identical either way.
+records = {"1003": {"s": {"2025": {"cy": 1200}}}}
+before = _copy.deepcopy(records)
+check("no nflverse rows writes no usage", bp.build_usage(records, {}, {}), 0)
+check("and leaves every record exactly as it found it", records, before)
+
+records = {"1003": {"s": {"2025": {"cy": 1200}}}}
+bp.build_usage(records, {"1003": "00-01"}, {2025: {}})
+check("a linked player with no row that season gets no `u`",
+      "u" in records["1003"], False)
+
+# USAGE_FIELDS may not name a Sleeper key. compact() resolves STAT_FIELDS
+# source names against the raw Sleeper row, so a collision would quietly
+# store Sleeper's number under an nflverse label and stay plausible.
+check("no usage short key collides with a stored stat short key",
+      sorted(set(s for s, _, _ in bp.USAGE_FIELDS) & set(bp.STAT_FIELDS.values())),
+      [])
+check("no usage source column is a Sleeper key name",
+      sorted(set(c for _, c, _ in bp.USAGE_FIELDS) & set(bp.STAT_FIELDS)), [])
+
+
 print()
 if FAILURES:
     print(f"{len(FAILURES)} FAILED: " + ", ".join(FAILURES))

@@ -1097,6 +1097,94 @@ def audit_against_nflverse(stats, linked, nfl_seasons):
     return lines, len(flagged)
 
 
+# The usage block: what nflverse adds that no box score can produce.
+#
+# Every one of these needs either the rest of the offence (a share needs the
+# team's whole season in the denominator) or a play-by-play model (EPA, CPOE).
+# That is the entire justification for a second feed -- everything else on the
+# original wish list turned out to be arriving from Sleeper already, which is
+# what the note above STAT_FIELDS is about.
+#
+# Rounded on the way in, because the raw values carry fifteen decimals and
+# this file is a plain <script src> in front of every first paint. Rounding
+# and dropping zeros is what takes all eight seasons to 12 KB gzipped rather
+# than the 30 a naive write costs.
+#
+# Deliberately NOT here:
+#   racr, pacr -- unstable, and negatively correlated with next season's
+#     points. Measured, in the spec this came from, at r -0.113 for WR/TE.
+#   receiving_air_yards, receiving_yards_after_catch, receiving_20 -- Sleeper
+#     sends all three. A second copy under an nflverse name is the trap the
+#     "do not give an nflverse field a Sleeper key name" rule exists for.
+#   *_first_downs -- a different definition; see AUDIT_FIRST_DOWNS.
+#   games -- `gp` is already in every season block. nflverse's own `games`
+#     counts games in which the player recorded a stat and Sleeper's counts
+#     games played, so they differ on 12.9% of seasons (Keenan Allen 2018:
+#     16 against 15). Storing both would be one fact written down twice and
+#     the wrong one would get read; the sheet wants "how much of the season
+#     was he here for", which is Sleeper's.
+USAGE_FIELDS = [
+    ("ts",  "target_share",    3),
+    ("ays", "air_yards_share", 3),
+    ("wo",  "wopr",            3),
+    ("ep",  "receiving_epa",   1),
+    ("rep", "rushing_epa",     1),
+    ("pep", "passing_epa",     1),
+    ("cpo", "passing_cpoe",    1),
+    ("r20", "rushing_20",      0),
+    ("gwa", "gwfg_att",        0),
+    ("gwm", "gwfg_made",       0),
+]
+
+
+def build_usage(stats, linked, nfl_seasons):
+    """Write record["u"], the one thing here that is not a check on Sleeper.
+
+    Runs AFTER the records are built, and it has to: compact() returns a fresh
+    dict assembled only from STAT_FIELDS, so anything merged into a record
+    before it runs is discarded without a word.
+
+    Keyed by season exactly as `s` is, and tied to the same NFL_SEASONS, so a
+    usage row always has a season block beside it to be read against. A `u`
+    year with no `s` year is a row the sheet cannot place.
+
+    Returns a count rather than a report: an unjoined player is already named
+    in link_nflverse()'s report, and saying it twice in one file is how a
+    reader learns to skim both.
+    """
+    written = 0
+    for our_id, record in stats.items():
+        their_id = linked.get(our_id)
+        if not their_id:
+            continue
+        block = {}
+        for season, rows in nfl_seasons.items():
+            row = rows.get(their_id)
+            if not row:
+                continue
+            one = {}
+            for short, column, places in USAGE_FIELDS:
+                raw = (row.get(column) or "").strip()
+                if not raw:
+                    continue
+                try:
+                    value = round(float(raw), places)
+                except ValueError:
+                    continue
+                # compact() drops zeros from a season block for the same
+                # reason: a zero and a missing value read identically here,
+                # and the file is served to a phone.
+                if value == 0:
+                    continue
+                one[short] = int(value) if places == 0 else value
+            if one:
+                block[str(season)] = one
+        if block:
+            record["u"] = block
+            written += 1
+    return written
+
+
 def player_line(player):
     """One line of the PLAYERS array, as it appears in players.js."""
     return ('  {{ id: "{id}", name: "{name}", pos: "{pos}", team: "{team}", '
@@ -1320,11 +1408,11 @@ def main():
     # is: the join is against the pool we actually carry rather than against
     # everybody either source has heard of.
     #
-    # Nothing below writes a stored value, so stats.js is byte-identical
-    # whether this runs, half-runs or does not run at all. If nflverse is
-    # down the audit says so and the board is unaffected -- a pipeline that
-    # needs a third party to be up in order to produce a board is not a
-    # pipeline this project wants.
+    # The audit writes no stored value. build_usage() writes exactly one key,
+    # `u`, and nothing else in the file reads it -- so if nflverse is down,
+    # every board number is identical and the usage panel is absent rather
+    # than wrong. A pipeline that needs a third party to be up in order to
+    # produce a board is not a pipeline this project wants.
     nfl_players = fetch_nflverse_players()
     nfl_linked, nfl_report, nfl_seasons = {}, [], {}
     if nfl_players:
@@ -1336,6 +1424,10 @@ def main():
                 nfl_seasons[season] = {row["player_id"]: row for row in rows}
     else:
         print("  nflverse returned nothing, so there is no audit this run")
+
+    # After the records are built, because compact() rebuilds each one from
+    # STAT_FIELDS alone and would discard this without a word.
+    usage_written = build_usage(stats, nfl_linked, nfl_seasons)
 
     audit_lines, audit_flagged = audit_against_nflverse(stats, nfl_linked, nfl_seasons)
     band_lines, band_off = check_miss_bands(stats)
@@ -1427,7 +1519,14 @@ def main():
             "                  keyed by year to line up with s\n"
             "     x            this player's id at other sources, so nothing\n"
             "                  has to match on a name at request time\n"
-            "     w            week by week logs, keyed by season\n\n"
+            "     w            week by week logs, keyed by season\n"
+            "     u            usage from nflverse, keyed by season like s:\n"
+            "                  ts/ays/wo share and WOPR, ep/rep/pep EPA,\n"
+            "                  cpo CPOE, r20 20-yard rushes, gwa/gwm\n"
+            "                  game-winning field goals. Never scored, and\n"
+            "                  absent entirely if nflverse was unreachable.\n"
+            "                  A share is over the team's whole season, so\n"
+            "                  read it beside s[year].gp and not alone.\n\n"
             "   Raw components only. There is no points total in here: app.js\n"
             "   applies the scoring rules, so a league can change them without\n"
             "   this file being rebuilt.\n\n"
@@ -1534,6 +1633,8 @@ def main():
     else:
         print(f"  nflverse: {len(nfl_linked)} of {len(stats)} joined, "
               f"{audit_flagged} stat lines disagree beyond the two known definitions")
+        print(f"  usage: a `u` block on {usage_written} players "
+              f"({len(NFL_SEASONS)} seasons of share, EPA and CPOE)")
     print(f"  field goal bands: "
           + (f"every season from {BAND_COMPLETE_FROM} decomposes exactly "
              f"(earlier ones are lossy at source -- see {UNMATCHED_FILE})"

@@ -10,8 +10,28 @@ import GameLogsTab from './GameLogsTab.jsx'
 import LatestNewsTab from './LatestNewsTab.jsx'
 import DepthChartTab from './DepthChartTab.jsx'
 import DraftFitTab from './DraftFitTab.jsx'
+import UsageTab from './UsageTab.jsx'
 
-const BASE_TABS = ['Our Read', 'Projections', 'Game Logs', 'Latest News', 'Depth Chart']
+// Two of these are conditional, so the list is built from a single ordered
+// literal and filtered rather than spliced by index — the previous version
+// reached into BASE_TABS[0] and BASE_TABS.slice(1) to get Draft Fit into
+// second place, which silently means something different the moment another
+// optional tab joins it.
+const tabList = ({ fit, usage }) => [
+  'Our Read',
+  fit && 'Draft Fit',
+  'Projections',
+  // Sits after Projections on purpose: Projections says how much he is
+  // worth, Usage says why he scored what he scored. Hidden entirely when
+  // usageFor() returns null — a defence, an unjoined player, or a run where
+  // nflverse was unreachable — because a section nobody asked to wait for is
+  // worse as a permanently empty panel than as no panel, which is the rule
+  // the news tab already follows.
+  usage && 'Usage',
+  'Game Logs',
+  'Latest News',
+  'Depth Chart',
+].filter(Boolean)
 
 const COL_BY_KEY = Object.fromEntries(STAT_COLUMNS.map((c) => [c.key, c]))
 // The mobile sheet's own stat grid, in the handoff's own reading order —
@@ -50,7 +70,8 @@ export default function PlayerProfileModal({
   const [tab, setTab] = useState('Our Read')
 
   const fit = engine && player ? engine.draftFit(player) : null
-  const TABS = fit ? [BASE_TABS[0], 'Draft Fit', ...BASE_TABS.slice(1)] : BASE_TABS
+  const usage = engine && engine.usageFor ? engine.usageFor(player) : null
+  const TABS = tabList({ fit, usage })
 
   useEffect(() => {
     if (!TABS.includes(tab)) setTab(TABS[0])
@@ -226,6 +247,8 @@ export default function PlayerProfileModal({
                     summary={engine.projectionSummary(player)}
                     record={engine.projectionRecord(player)}
                   />
+                ) : tab === 'Usage' ? (
+                  <UsageTab usage={usage} />
                 ) : tab === 'Game Logs' ? (
                   <GameLogsTab engine={engine} player={player} />
                 ) : tab === 'Latest News' ? (

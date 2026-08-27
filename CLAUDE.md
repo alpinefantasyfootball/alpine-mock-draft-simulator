@@ -286,9 +286,99 @@ Every in-season nflverse file for a season not yet played returns 404 —
 `ftn_charting` all did for 2026 as of 27 August. Every fetch is optional and
 prints its count, exactly as `PROJECTION_HISTORY` already does, so the pipeline
 picks a new season up on its own the first morning after week one and nobody
-edits a list. **A total nflverse outage produces a byte-identical `stats.js`**
-and one loud line in the log — the same rule the module docstring already
-states about Tank01.
+edits a list. **A total nflverse outage now produces a `stats.js` identical
+but for the absence of `u`** — every board number, every grade and every
+projection is untouched, and the usage panel is simply not drawn. One loud
+line in the log says so. Same rule the module docstring already states about
+Tank01.
+
+### The `u` block: the only thing nflverse writes
+
+Everything else nflverse does here is a report. `build_usage()` writes exactly
+one key, `u`, keyed by season the same way `s` is, and **nothing scores it** —
+it is not in `STAT_FIELDS`, not in `SCOREABLE`, and `pointsUnder()` never sees
+it. Ten fields: `ts`/`ays`/`wo` for target share, air-yards share and WOPR;
+`ep`/`rep`/`pep` for receiving, rushing and passing EPA; `cpo` for CPOE; `r20`
+for 20-yard rushes; `gwa`/`gwm` for game-winning field goals.
+
+**It runs after the records are built and it has to.** `compact()` returns a
+fresh dict assembled only from `STAT_FIELDS`, so anything merged into a record
+before it runs is discarded without a word.
+
+**All eight seasons cost 14 KB gzipped**, measured, which is why there is no
+`USAGE_SEASONS` cut the way `WEEKLY_SEASONS` cuts weekly logs. Rounding on the
+way in and dropping zeros is what does it — the raw values carry fifteen
+decimals, and written naively the same block is over 30 KB. The marginal
+season is about 1.5 KB, so trimming to three years would save four and cost
+the sheet five seasons of history. `NFL_SEASONS` is `STAT_SEASONS` for the
+usual reason: a `u` year with no `s` year beside it is a row the sheet cannot
+place.
+
+**Five things are deliberately not in it**, and four of them are the same
+mistake in different clothes. `racr` and `pacr` are unstable and correlate
+*negatively* with next season's points. `receiving_air_yards`,
+`receiving_yards_after_catch` and `receiving_20` are all sent by Sleeper
+already — storing nflverse's copy under an nflverse name is the trap the "do
+not give an nflverse field a Sleeper key name" rule exists for, reached from
+the other direction. `*_first_downs` is a different definition; see
+`AUDIT_FIRST_DOWNS`. And **`games` is left out because `gp` is already in
+every season block** — nflverse counts games in which the player recorded a
+stat and Sleeper counts games played, so they differ on **12.9%** of seasons
+(Keenan Allen 2018 is 16 against 15). Two plausible numbers for one fact, and
+the sheet wants Sleeper's: *how much of the season was he here for*.
+
+**A share is over the team's whole season, not over his own games**, verified
+against nflverse's own aggregation. So a player who missed six games shows a
+depressed share that is arithmetically correct and answers a different
+question from the one the reader is asking — 68 stored player-seasons have
+nine games or fewer and a share. It is never drawn without `gp` beside it, the
+same rule `projectionRecord()` already follows and for the same reason.
+
+**Air-yards share goes negative and that is real.** A screen pass is caught
+behind the line, so the season total is signed: 126 stored values are below
+zero. Anything drawing a proportion bar has to survive it, and a test pins it,
+because clamping it to zero is the obvious and wrong repair.
+
+### The Usage tab
+
+`usageFor()` in `app.js` and `web/src/components/UsageTab.jsx`, sitting after
+Projections in `PlayerProfileModal.jsx` — **Projections says how much he is
+worth, Usage says why he scored what he scored**, which is the question the
+sheet is actually opened for and the one the app could not answer at all.
+
+**Which columns are meaningful is a football question and is answered in
+`app.js`**, beside `logColumns()`, not in the component: a quarterback has no
+target share, a kicker has nothing but his game-winners. `USAGE_COLUMNS` is
+per position, and `usageFor()` formats every cell before React sees it — the
+same contract `projectionSummary()` already has with `ProjectionsTab`.
+
+**The tab is absent, not empty, when there is nothing to show.** `usageFor()`
+returns null for a defence, an unjoined player, or a run where nflverse was
+unreachable, and the tab is filtered out of the strip entirely. Same rule the
+news tab already follows: a section nobody asked to wait for is worse as a
+permanently empty panel than as no panel.
+
+**The tab list is a filtered literal now, not an index splice.** It was
+`fit ? [BASE_TABS[0], 'Draft Fit', ...BASE_TABS.slice(1)] : BASE_TABS`, which
+means something different the moment a second optional tab joins the first —
+and Usage is that second one. It is one ordered array with `fit && …` and
+`usage && …` in place and a `.filter(Boolean)`, so the reading order is the
+source order and adding a third optional tab is one line.
+
+**Bowers is the case that justifies the GP column.** He reads 17.4% target
+share in 2025 and 25.8% in 2024, which looks like a role collapsing — until
+the 12 beside it says he missed five games and the share is over his team's
+whole season either way. Without that column the table states a fact and
+invites the wrong conclusion, which is the same failure as a kicker being
+named the biggest reach.
+
+**And the panel says out loud that it does not rank anybody.** Usage was very
+nearly not built at all: measured against next season's points, no usage
+metric beat points per game, and the best any of them managed *on top of*
+points per game was +0.008 r. So it is on the sheet and nowhere near
+`overallScore()`, `suggestions()` or `cpuChoice()`, and the tab's own footer
+says so — because the next person to find these numbers will want to rank with
+them.
 
 ### Missed field goals are charged once, and the bands are an extra
 
