@@ -2,7 +2,7 @@
    Alpine Draft Room - player data
    GENERATED FILE. Edit scripts/build_players.py instead.
 
-   Generated : 2026-08-27 14:24 UTC
+   Generated : 2026-08-27 14:48 UTC
    Players   : standard 218 · half 225 · ppr 267
    Seasons   : 2018-2025
    Matched   : 225 of the half set carry a Sleeper id
@@ -15,7 +15,7 @@
    Player, injury and stat data: Sleeper.
    ========================================================== */
 
-const PLAYERS_META = { generated: "2026-08-27 14:24 UTC", count: 225, matched: 225, flagged: 43, projected: 267, unmatched: 0 };
+const PLAYERS_META = { generated: "2026-08-27 14:48 UTC", count: 225, matched: 225, flagged: 43, projected: 267, unmatched: 0 };
 
 /* One ordered list per scoring format. app.js picks the set that
    matches league.scoring when a draft starts, and works out every
@@ -78,7 +78,7 @@ const ADP_SETS = {
   { id: "5892", name: "David Montgomery", pos: "RB", team: "HOU", bye: 8, adp: 51.7, sd: 7.0, td: 287, inj: "" },
   { id: "2216", name: "Mike Evans", pos: "WR", team: "SF", bye: 8, adp: 53.2, sd: 7.0, td: 128, inj: "Q" },
   { id: "7526", name: "Jaylen Waddle", pos: "WR", team: "DEN", bye: 10, adp: 53.5, sd: 6.7, td: 354, inj: "" },
-  { id: "8142", name: "Alec Pierce", pos: "WR", team: "IND", bye: 13, adp: 55.0, sd: 5.8, td: 60, inj: "PUP" },
+  { id: "8142", name: "Alec Pierce", pos: "WR", team: "IND", bye: 13, adp: 55.0, sd: 5.8, td: 60, inj: "Q" },
   { id: "4881", name: "Lamar Jackson", pos: "QB", team: "BAL", bye: 13, adp: 55.8, sd: 9.7, td: 114, inj: "" },
   { id: "6770", name: "Joe Burrow", pos: "QB", team: "CIN", bye: 6, adp: 56.4, sd: 8.3, td: 121, inj: "" },
   { id: "12529", name: "TreVeyon Henderson", pos: "RB", team: "NE", bye: 11, adp: 58.7, sd: 5.9, td: 123, inj: "Q" },
@@ -305,7 +305,7 @@ const ADP_SETS = {
   { id: "5045", name: "Courtland Sutton", pos: "WR", team: "DEN", bye: 10, adp: 59.6, sd: 6.2, td: 180, inj: "" },
   { id: "8228", name: "Jaylen Warren", pos: "RB", team: "PIT", bye: 9, adp: 61.4, sd: 3.5, td: 73, inj: "" },
   { id: "12517", name: "Colston Loveland", pos: "TE", team: "CHI", bye: 10, adp: 61.6, sd: 8.3, td: 484, inj: "" },
-  { id: "8142", name: "Alec Pierce", pos: "WR", team: "IND", bye: 13, adp: 62.1, sd: 7.1, td: 118, inj: "PUP" },
+  { id: "8142", name: "Alec Pierce", pos: "WR", team: "IND", bye: 13, adp: 62.1, sd: 7.1, td: 118, inj: "Q" },
   { id: "7611", name: "Rhamondre Stevenson", pos: "RB", team: "NE", bye: 11, adp: 63.2, sd: 5.5, td: 97, inj: "" },
   { id: "12529", name: "TreVeyon Henderson", pos: "RB", team: "NE", bye: 11, adp: 63.7, sd: 6.0, td: 161, inj: "Q" },
   { id: "5846", name: "DK Metcalf", pos: "WR", team: "PIT", bye: 9, adp: 64.9, sd: 6.5, td: 270, inj: "Q" },
@@ -540,7 +540,7 @@ const ADP_SETS = {
   { id: "3294", name: "Dak Prescott", pos: "QB", team: "DAL", bye: 14, adp: 65.1, sd: 8.4, td: 620, inj: "" },
   { id: "12518", name: "Tyler Warren", pos: "TE", team: "IND", bye: 13, adp: 65.2, sd: 8.9, td: 1713, inj: "Q" },
   { id: "11628", name: "Marvin Harrison Jr.", pos: "WR", team: "ARI", bye: 14, adp: 65.3, sd: 7.5, td: 1244, inj: "" },
-  { id: "8142", name: "Alec Pierce", pos: "WR", team: "IND", bye: 13, adp: 68.7, sd: 7.4, td: 568, inj: "PUP" },
+  { id: "8142", name: "Alec Pierce", pos: "WR", team: "IND", bye: 13, adp: 68.7, sd: 7.4, td: 568, inj: "Q" },
   { id: "5967", name: "Tony Pollard", pos: "RB", team: "TEN", bye: 9, adp: 70.3, sd: 6.6, td: 448, inj: "" },
   { id: "11566", name: "Jayden Daniels", pos: "QB", team: "WAS", bye: 7, adp: 71.9, sd: 11.0, td: 672, inj: "" },
   { id: "11631", name: "Brian Thomas Jr.", pos: "WR", team: "JAX", bye: 7, adp: 72.7, sd: 7.4, td: 1161, inj: "Q" },
