@@ -57,7 +57,24 @@ const MOBILE_IDENTITY_CHROME_W = 26 + 26 + 32 + 8 * 3 + 16
 // which is exactly what a compositing-layer paint-order race during
 // active scrolling looks like from a static check: gone by the time
 // anything can measure it. Same mechanism, same remedy, one cell over.
-const STICKY_CELL = 'sticky left-0 z-20 flex shrink-0 items-center px-2 min-w-0 [will-change:transform]'
+//
+// Reported a third time after that fix, on a filtered view (posFilter
+// narrowed, tier dividers active) rather than the unfiltered scroll the
+// first two reports were on — a different trigger, same symptom. Could
+// not be reproduced or measured in this project's own tooling even
+// simulating the filter-change row-animation burst that's the one real
+// difference between this report and the prior two (every visible
+// motion.div row re-enters at once on a filter change, same as it would
+// mid-scroll) — Chromium's own compositor is not mobile WebKit's, and
+// nothing here claims otherwise. [-webkit-transform:translateZ(0)] and
+// backface-visibility:hidden are added alongside will-change: the older,
+// more forceful GPU-layer-promotion pair that some WebKit versions honour
+// more reliably than will-change alone for exactly this "sticky element
+// briefly loses to a transformed sibling" failure mode — a known class of
+// bug, not a guess specific to this file. Belt-and-suspenders over a fix
+// that cannot be confirmed from here: verify on the real device before
+// reaching for a fourth attempt.
+const STICKY_CELL = 'sticky left-0 z-20 flex shrink-0 items-center px-2 min-w-0 [will-change:transform] [-webkit-transform:translateZ(0)] [backface-visibility:hidden]'
 
 // FLEX sits after the four skill positions and before K/DST, matching
 // SLOT_ORDER in app.js — the same ordering a roster fills them in.
@@ -549,8 +566,13 @@ export default function PlayerQueueSidebar({
               magic number along with it. will-change:transform is the
               standard nudge onto its own compositing layer, which is what
               keeps that one unit's repaint from lagging the content
-              scrolling under it in the first place. */}
-          <div className="sticky top-0 z-30 bg-slate-panel [will-change:transform]">
+              scrolling under it in the first place.
+
+              Reported again after that, and again after STICKY_CELL got
+              the identical fix (see that constant's own comment for the
+              full history) — translateZ(0) and backface-visibility:hidden
+              added here too, same reasoning, same pairing. */}
+          <div className="sticky top-0 z-30 bg-slate-panel [will-change:transform] [-webkit-transform:translateZ(0)] [backface-visibility:hidden]">
           <div className="flex border-b border-slate-rule">
             <div className={STICKY_CELL + ' bg-slate-panel'} style={{ flex: `0 0 ${nameW}px` }} />
             {visibleGroups.map((g, gi) => {
