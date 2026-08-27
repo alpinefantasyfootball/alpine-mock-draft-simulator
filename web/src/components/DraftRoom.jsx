@@ -53,8 +53,16 @@ function useEngine() {
 // "something changed, re-read the bridge" signal so the whole page
 // re-renders together off board()/picks()/league() rather than each panel
 // polling on its own timer.
+//
+// Returns the counter itself, not just a forced re-render, because it's
+// also the one thing keyedMemo() below can key on. board()/league()/
+// picks() all read a plain `() => board` closure in app.js — the array is
+// mutated in place (a pick sets p.drafted on an existing object; nothing
+// ever replaces the reference) — so `board` itself never changes identity
+// and is useless as a memo key. This counter is the only signal that
+// actually flips when the bridge might have.
 function useJukeTick(engine) {
-  const [, force] = useReducer((x) => x + 1, 0)
+  const [tick, force] = useReducer((x) => x + 1, 0)
   useEffect(() => {
     if (!engine) return
     window.addEventListener('juke:header', force)
@@ -68,6 +76,44 @@ function useJukeTick(engine) {
     force()
     return () => window.removeEventListener('juke:header', force)
   }, [engine])
+  return tick
+}
+
+// A plain cache, deliberately not useMemo. DraftRoom has four sequential
+// early returns before the code that wants this (no engine yet, the
+// starting transition, the pre-draft Locker, the entry screen not yet
+// started) — none of the ~700 lines between useJukeTick and the point
+// this is called from is a hook today, all of it plain consts and
+// closures, because a hook positioned past a conditional return is a
+// Rules-of-Hooks violation: it runs on some renders and not others, and
+// React does not tolerate that even when the two branches never coexist
+// in the same tree. Tried first as useMemo exactly where the plain
+// `const tierAvgByPos = {}` used to sit — the moment `starting` flips
+// false to true to false across three renders of the *same* mounted
+// instance, that showed up immediately as "Rendered more hooks than
+// during the previous render" and a blank #draftroom-root, not a lint
+// warning. Moving the memoization above all four gates would mean
+// duplicating or null-guarding everything between them and here (rules,
+// lineup, nextOverall's own dependency chain), which is a far larger and
+// riskier change than the memoization itself. A plain function has no
+// such rule and can be called from anywhere, conditionally or not — this
+// is the same caching useMemo would give, without being a hook.
+//
+// One instance per value below (module scope, not per-render), which is
+// safe the same way the rest of this app's bridge already assumes one
+// live draft at a time — there is never more than one DraftRoom mounted
+// together to share a cache across.
+function keyedMemo() {
+  let key
+  let value
+  return (nextKey, compute) => {
+    if (key !== undefined && key.length === nextKey.length && key.every((v, i) => v === nextKey[i])) {
+      return value
+    }
+    key = nextKey
+    value = compute()
+    return value
+  }
 }
 
 // A route of its own, deliberately outside applyRoute()'s home/draft
@@ -85,9 +131,14 @@ function useHashActive(prefix) {
   return active
 }
 
+// tierAvgByPos and availablePlayers below — see keyedMemo's own comment
+// for why each gets its own instance rather than a hook.
+const tierAvgMemo = keyedMemo()
+const availablePlayersMemo = keyedMemo()
+
 export default function DraftRoom() {
   const engine = useEngine()
-  useJukeTick(engine)
+  const tick = useJukeTick(engine)
   // 1024px matches Tailwind's own `lg` — see useBreakpoint.js's own comment
   // for why the Board tab's dock needs a real answer to "is this desktop"
   // rather than trusting its own `hidden ... lg:flex` CSS to imply it.
@@ -804,32 +855,35 @@ export default function DraftRoom() {
      from tiering-adjacent measures everywhere else in this app (their
      projections are the ones CLAUDE.md documents as unranked), and
      Decide's own tierLadder makes the identical exclusion. */
-  const tierAvgByPos = {}
-  POS_LIST.forEach((pos) => {
-    const byTier = {}
-    board.filter((p) => p.pos === pos).forEach((p) => {
-      if (p.tier == null) return
-      const pts = pointsFor(p)
-      if (pts == null) return
-      if (!byTier[p.tier]) byTier[p.tier] = { sum: 0, n: 0 }
-      byTier[p.tier].sum += pts
-      byTier[p.tier].n += 1
+  // Keyed on tick alone (see keyedMemo's own comment for why this isn't
+  // useMemo): this is a full per-position, per-tier scan of the whole
+  // board, and nothing about it depends on any of the Players tab's own
+  // filter/sort/season state — only on whether the bridge itself might
+  // have moved. pointsFor (not pointsForActive) and board don't need to be
+  // in the key: both are fully determined by `engine`, whose only "this
+  // changed" signal is tick — keying on them directly would either do
+  // nothing (board never changes identity) or invalidate every render
+  // (pointsFor is a fresh closure every render, same as every other reader
+  // here).
+  const tierAvgByPos = tierAvgMemo([tick], () => {
+    const out = {}
+    POS_LIST.forEach((pos) => {
+      const byTier = {}
+      board.filter((p) => p.pos === pos).forEach((p) => {
+        if (p.tier == null) return
+        const pts = pointsFor(p)
+        if (pts == null) return
+        if (!byTier[p.tier]) byTier[p.tier] = { sum: 0, n: 0 }
+        byTier[p.tier].sum += pts
+        byTier[p.tier].n += 1
+      })
+      out[pos] = Object.fromEntries(
+        Object.entries(byTier).map(([t, { sum, n }]) => [t, sum / n])
+      )
     })
-    tierAvgByPos[pos] = Object.fromEntries(
-      Object.entries(byTier).map(([t, { sum, n }]) => [t, sum / n])
-    )
+    return out
   })
 
-  // The Value Assistant card's one recommendation — suggestions('ALL')[0],
-  // the exact real ranking (adp+jitter) x need x risk x model that already
-  // drives the legacy Suggestions tab, not a fresh computation. Not gated
-  // on myTurn: my team's needs don't change depending on whose turn it is
-  // right now, only whether the button can act on them does (see the card
-  // itself). Recomputed every render off the live board/roster, same as
-  // everything else here.
-  const recommended = engine.suggestions('ALL')[0] || null
-  const recommendedVorp = recommended ? engine.replacementGap(recommended) : null
-  const recommendedTierLeft = recommended ? engine.tierRemaining(recommended) : null
   const photoFor = (player) => engine.photoUrl(player)
   const initialsFor = (player) => engine.initials(player.name)
 
@@ -845,7 +899,22 @@ export default function DraftRoom() {
     const pick = picks.find((p) => p.player.name === player.name)
     return pick ? engine.teamLabel(pick.slot) : null
   }
-  const availablePlayers = board
+  // Keyed so switching tabs, or anything else that re-renders DraftRoom
+  // without touching a filter, doesn't re-run five filters and a sort over
+  // ~260 players for a list nobody asked to see recalculated. tick stands
+  // in for board/engine for the same reason tierAvgByPos's memo above does,
+  // and the season-aware readers (pointsForActive and friends) are the
+  // same story as pointsFor there: fresh closures every render, fully
+  // determined by engine + season, so keying on them would either change
+  // nothing or invalidate the cache every time. flexPositions is
+  // engine-derived too and isn't in the key for the same reason, but it's
+  // still read correctly: the callback below is a new closure every render
+  // same as always, keyedMemo just decides whether to call this render's
+  // copy or keep the previous result, so whichever invocation actually
+  // runs sees its own render's values regardless of what's in the key.
+  const availablePlayers = availablePlayersMemo([
+    tick, showDrafted, posFilter, expBand, nflTeamFilter, search, sortBy, sortDir, season,
+  ], () => board
     .filter((p) => showDrafted || !p.drafted)
     .filter((p) => {
       if (posFilter === 'ALL') return true
@@ -865,20 +934,42 @@ export default function DraftRoom() {
       if (sortBy === 'board') return a.overall - b.overall
       /* Reuse the exact same readers the cells render from, so a sort can
          never disagree with what is on screen. Anything that is not one
-         of the three derived columns is a raw projection key (rushing
-         yards, targets, and the rest of the scrollable stats), read off
-         the same block those cells draw from. */
+         of the derived columns is a raw projection key (rushing yards,
+         targets, and the rest of the scrollable stats), read off the same
+         block those cells draw from.
+
+         pointsFor/vorpFor here — not pointsForActive/vorpForActive — was
+         the bug: PTS and VORP display through the season-aware readers
+         (passed to PlayerQueueSidebar as pointsFor/vorpFor a few props
+         down), so the table already showed 2025 numbers correctly with
+         the season toggle set to prior — while a click on either header
+         kept sorting by the plain, always-2026-projected reader. Reported
+         directly as "sorting on metrics... sorts based on 2026 projects
+         instead of 2025" — the two are meant to be the same rule this
+         comment already states, and weren't. */
       const reader =
         sortBy === 'adp' ? (p) => p.adp
-          : sortBy === 'pts' ? pointsFor
+          : sortBy === 'pts' ? pointsForActive
             // 'vorp' is replacementGap() (the raw figure); 'juke' (and the
             // old 'value' alias PlayerProfileModal-era callers may still
             // pass) is overallScore() — two different columns since the
             // Players tab pass split what used to be one, see
             // playerColumns.js's own comment on the two keys.
-            : sortBy === 'vorp' ? vorpFor
+            : sortBy === 'vorp' ? vorpForActive
               : sortBy === 'juke' || sortBy === 'value' ? valueFor
-                : (p) => { const proj = projOf(p); const v = proj ? proj[sortBy] : null; return v || null }
+                // Tier is a rank within a position (T1 best), read straight
+                // off the board rather than through statValue()'s 'T'+n
+                // display string. Lasts is the same survivalFor() the LASTS
+                // cell renders from (as a raw 0-1 probability rather than
+                // the rounded percentage — sort order is identical either
+                // way, so there's no reason to scale it up first). Both
+                // used to have no branch here at all: playerColumns.js
+                // marked them un-sortable for exactly that reason, until a
+                // direct ask to sort by them made the case for adding one
+                // instead of leaving the gap.
+                : sortBy === 'tier' ? (p) => p.tier
+                  : sortBy === 'lasts' ? survivalFor
+                    : (p) => { const proj = projOf(p); const v = proj ? proj[sortBy] : null; return v || null }
       const av = reader(a)
       const bv = reader(b)
       // "A missing number is not a small number" — Value is null for K/DST
@@ -892,7 +983,7 @@ export default function DraftRoom() {
       if (aMissing) return 1
       if (bMissing) return -1
       return sortDir === 'asc' ? av - bv : bv - av
-    })
+    }))
 
   // Real submission: engine.draftPlayer() is draftAndAdvance() underneath
   // (see the bridge comment in app.js), so this mutates the same

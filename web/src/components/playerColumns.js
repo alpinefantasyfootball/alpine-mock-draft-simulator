@@ -75,12 +75,23 @@ export const MOBILE_COL_WIDTH = 48
    the best, descending for everything else, where more is better. Same
    convention a spreadsheet uses.
 
-   TIER and LASTS are not sortable: DraftRoom's sort reader has no branch
-   for either (tier is a rank within a position, not a cross-position
-   ordering; lasts depends on nextOverall, which most of the board is
-   nowhere near), and a header that looks like a sort button but silently
-   reorders nothing is the dead-control trap CLAUDE.md warns about — see
-   its own note on the identical choice for the Board tab's dock. */
+   TIER is ascending for the same reason as ADP: T1 is the best tier, so a
+   smaller number sorts first. It's a rank within a position rather than a
+   cross-position ordering — sorted with posFilter at ALL, a T1 kicker and
+   a T1 receiver land next to each other with nothing in common but the
+   label — but that's the same trade-off raw rushing yards already makes
+   under a WR filter, not a reason to withhold the control from someone
+   who has narrowed the list to one position first.
+
+   LASTS is ascending too, on purpose: the lowest survival odds are the
+   players actually worth acting on, so sorting to see them first matches
+   how the column's own colour-coding already reads (lastsTone() calls
+   anything under 25% a real risk). It's most informative near the top of
+   a real draft, since survivalProbability() weighs against nextOverall —
+   a player five rounds of picks away from being reachable again reads
+   close to 100% either way, so a lot of the board ties there and just
+   keeps whatever order it already had. That's a narrower usefulness, not
+   a broken sort. */
 export const STAT_COLUMNS = [
   { key: 'bye', label: 'BYE', width: 40 },
   { key: 'adp', label: 'ADP', width: 44, sortable: true, dir: 'asc' },
@@ -105,8 +116,8 @@ export const STAT_COLUMNS = [
   // the one DraftRoom's reader already had a branch for (it used to be
   // what 'vorp' sorted by), so 'juke' just takes over that same reader.
   { key: 'juke', label: 'JUKE', width: 44, sortable: true, dir: 'desc', tone: 'teal' },
-  { key: 'tier', label: 'TIER', width: 44 },
-  { key: 'lasts', label: 'LASTS', width: 50 },
+  { key: 'tier', label: 'TIER', width: 44, sortable: true, dir: 'asc' },
+  { key: 'lasts', label: 'LASTS', width: 50, sortable: true, dir: 'asc' },
 ]
 
 /* Derived rather than a second hand-written copy, so the header, the
