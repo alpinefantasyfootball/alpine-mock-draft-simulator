@@ -380,6 +380,28 @@ points per game was +0.008 r. So it is on the sheet and nowhere near
 says so — because the next person to find these numbers will want to rank with
 them.
 
+**On a phone it is inline and below the actions, and both halves of that are
+the point.** The bottom sheet has no tab strip on purpose — its own comment is
+the reason, *"the numbers a pick turns on and the two actions that follow from
+them, in one glance with nothing to tap through first"* — so adding a strip for
+one panel would trade that whole contract for a tab. And it sits *after* Add to
+queue and Draft rather than before them, because anything inserted between the
+stat grid and the buttons pushes the actions off the first screenful, which is
+the same cost the tab strip was being avoided for. Measured on a 375×667
+phone: the sheet caps at 85vh, the Draft button lands at 465px — inside the
+glance — and usage is a short scroll under it.
+
+**It is the same `UsageTab` both times, not a phone-shaped second copy.** A
+second table of the same numbers is the "written down twice" rule in markup,
+and it would drift the first time a column changed.
+
+**Six columns fit 341px, and the scroller is there for when they do not.**
+Measured at 375px for the widest set a position can produce — a quarterback's
+`PASS EPA / CPOE / RUSH EPA / 20+ RUN` — the table comes out exactly 341
+against a 341 scroller, with `overflow-x: auto` behind it and no sideways page
+scroll. That is the rule this file already states about truncation: an element
+wider than its box is only a bug when it can neither scroll nor ellipsise.
+
 ### Missed field goals are charged once, and the bands are an extra
 
 `fgmiss` is the rule that charges a miss, it defaults to −1, and **it counts a

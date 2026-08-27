@@ -360,6 +360,27 @@ export default function PlayerProfileModal({
                   Draft
                 </button>
               </div>
+
+              {/* Usage, inline rather than behind a tab, and deliberately
+                  BELOW the two actions.
+
+                  The phone gets no tab strip on purpose — the comment above
+                  this sheet is the reason, and adding one for a single tab
+                  would trade the whole "nothing to tap through first"
+                  contract for one panel. Inline keeps that promise.
+
+                  Below the buttons rather than above them because the glance
+                  this sheet exists for is the stat grid plus Add-to-queue and
+                  Draft; anything inserted between them pushes the actions off
+                  the first screenful, which is the same cost the tab strip
+                  was avoided for. Usage is depth for whoever scrolls, and it
+                  is the same UsageTab the desktop card renders rather than a
+                  phone-shaped second copy of the same table. */}
+              {usage && (
+                <div className="mt-5 border-t border-slate-rule pt-4">
+                  <UsageTab usage={usage} />
+                </div>
+              )}
             </div>
           </motion.div>
         </motion.div>
