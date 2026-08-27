@@ -208,7 +208,17 @@ export default function PlayersTab({
           <span className="shrink-0 font-plex text-[10.5px] text-ink-muted">{players.length} available</span>
         </div>
 
-        <div className="min-h-0 flex-1">
+        {/* flex, not bare min-h-0 flex-1 — PlayerQueueSidebar's own root
+            comment is explicit that its parent has to be a flex row for
+            align-items:stretch to size it; a div with no display utility
+            at all is still display:block regardless of min-h-0/flex-1
+            sitting on it, so the child never received a height to stretch
+            into and grew to its own content size instead — measured at
+            1853px of table inside a 796px slot, with nothing left over for
+            the inner list to scroll. Reported as a phone that wouldn't
+            swipe the Pool list at all, here and on the mobile pane below,
+            which shares the identical miss. */}
+        <div className="flex min-h-0 flex-1">
           {/* isDesktop, not just this wrapper's own `hidden lg:flex`
               ancestor — that ancestor is CSS-only, so its child stays
               React-mounted (just invisible) below lg, and the mobile Pool
@@ -363,7 +373,10 @@ export default function PlayersTab({
             </div>
           </div>
 
-          <div className="min-h-0 flex-1">
+          {/* flex, for the identical reason the desktop wrapper above
+              needs it — see that comment. Same class, same missing
+              display utility, same fix. */}
+          <div className="flex min-h-0 flex-1">
             <PlayerQueueSidebar
               bareTable
               mobile

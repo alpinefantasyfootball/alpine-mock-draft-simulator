@@ -1321,7 +1321,17 @@ export default function DraftRoom() {
                       </button>
                     </div>
                   </div>
-                  <div className="min-h-0 flex-1">
+                  {/* flex, not bare min-h-0 flex-1 — PlayerQueueSidebar's
+                      own root comment requires its parent to be a flex row
+                      so align-items:stretch can size it; without a display
+                      utility this div is still block regardless of
+                      min-h-0/flex-1, so the child never got a height to
+                      stretch into and grew to its full content size
+                      instead, leaving nothing for the inner list to
+                      scroll. Same miss as PlayersTab.jsx's identical
+                      wrapper, and the mobile Pool pane below shares it
+                      too. */}
+                  <div className="flex min-h-0 flex-1">
                     {/* isDesktop, not this dock's own `hidden ... lg:flex`
                         ancestor — that class is CSS-only, so the dock's
                         PlayerQueueSidebar stayed React-mounted (just
@@ -1390,7 +1400,12 @@ export default function DraftRoom() {
                       </button>
                     ))}
                   </div>
-                  <div className="min-h-0 flex-1">
+                  {/* flex, for the identical reason the desktop dock above
+                      needs it — see that comment. Same class, same missing
+                      display utility, same fix; this is the Board tab's own
+                      Pool pane, the second of the two places this was
+                      reported unable to swipe. */}
+                  <div className="flex min-h-0 flex-1">
                     <PlayerQueueSidebar
                       bareTable
                       mobile
