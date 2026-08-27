@@ -526,7 +526,21 @@ export default function PlayerQueueSidebar({
               starting width, or the group's own edge stops lining up with
               its last column's edge the moment there's leftover width to
               share out (see the numeric columns' own comment below). */}
-          <div className="sticky top-0 z-30 flex border-b border-slate-rule bg-slate-panel">
+          {/* Group and column header used to be two independently sticky
+              rows (top-0 and top-[18px]), which meant two separate scroll-
+              driven positioning contexts that only had to agree by
+              arithmetic. On a phone under real momentum scrolling they
+              could repaint a frame apart, and the row beneath — genuinely
+              still moving — showed through the seam for that frame: the
+              "column headers bleed into the stats below them" report.
+              One sticky wrapper around both rows makes them a single paint
+              unit with nothing left to desync, and removes the top-[18px]
+              magic number along with it. will-change:transform is the
+              standard nudge onto its own compositing layer, which is what
+              keeps that one unit's repaint from lagging the content
+              scrolling under it in the first place. */}
+          <div className="sticky top-0 z-30 bg-slate-panel [will-change:transform]">
+          <div className="flex border-b border-slate-rule">
             <div className={STICKY_CELL + ' bg-slate-panel'} style={{ flex: `0 0 ${nameW}px` }} />
             {visibleGroups.map((g, gi) => {
               // POS has no entry in STAT_GROUPS (it isn't a statValue()
@@ -556,7 +570,8 @@ export default function PlayerQueueSidebar({
           </div>
 
           {/* Column header — sortable where the sort reader can order by
-              it. Sticky under the group row, hence the offset top.
+              it. Stacks under the group row inside the shared sticky
+              wrapper above, so it needs no top offset of its own.
 
               Every numeric column is flex 1 0 {width}px — grow:1, shrink:0,
               its own width as the starting basis — so the columns share out
@@ -565,7 +580,7 @@ export default function PlayerQueueSidebar({
               this table used before) is what left that gutter: the columns
               summed to less than the container's real width the moment the
               container was wider than ~900px, and nothing claimed the rest. */}
-          <div className="sticky top-[18px] z-30 flex border-b border-slate-rule bg-slate-panel">
+          <div className="flex border-b border-slate-rule bg-slate-panel">
             <div
               className={STICKY_CELL + ' bg-slate-panel text-[10px] font-semibold uppercase tracking-wide text-ink-muted'}
               style={{ flex: `0 0 ${nameW}px` }}
@@ -610,6 +625,7 @@ export default function PlayerQueueSidebar({
                 </div>
               )
             })}
+          </div>
           </div>
 
           <AnimatePresence initial={false}>
