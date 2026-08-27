@@ -46,7 +46,18 @@ const MOBILE_IDENTITY_CHROME_W = 26 + 26 + 32 + 8 * 3 + 16
 // from row to row, not merely a name that runs long. flex: 0 0 208px says
 // "never grow, never shrink" and was already being overridden by content
 // it was never told to ignore.
-const STICKY_CELL = 'sticky left-0 z-20 flex shrink-0 items-center px-2 min-w-0'
+// [will-change:transform] for the same reason the header wrapper carries
+// it (see the group/column header comment below): this cell is its own
+// independently `position: sticky` element, sitting beside plain-flow
+// stat-column siblings within the same row. Reported directly, with a
+// screenshot: a row's name/team/badge (this cell) rendering apart from
+// its own PTS/VORP/rushing/receiving numbers, split by the sticky header
+// in between, on a fast scroll — the row measured perfectly aligned once
+// settled (identity and row bounding boxes both landed at the same y),
+// which is exactly what a compositing-layer paint-order race during
+// active scrolling looks like from a static check: gone by the time
+// anything can measure it. Same mechanism, same remedy, one cell over.
+const STICKY_CELL = 'sticky left-0 z-20 flex shrink-0 items-center px-2 min-w-0 [will-change:transform]'
 
 // FLEX sits after the four skill positions and before K/DST, matching
 // SLOT_ORDER in app.js — the same ordering a roster fills them in.
