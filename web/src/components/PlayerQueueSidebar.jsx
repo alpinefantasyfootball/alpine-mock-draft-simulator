@@ -685,8 +685,26 @@ export default function PlayerQueueSidebar({
                   // action column swapping a Draft button for a team name —
                   // easy to miss at a glance, which is what "greyed out" was
                   // actually asking for.
+                  //
+                  // bg-slate-sunk is new here, matching the identity cell a
+                  // few lines down that's carried it all along. Without it
+                  // only that one cell was opaque — the stat columns (PTS,
+                  // VORP, everything "at the far right") had no background
+                  // of their own, so this whole motion.div showed through
+                  // to a translucent bg-slate-bar/40 four ancestors up. That
+                  // made no visible difference on its own, but it meant a
+                  // row had nothing solid behind its text if it ever
+                  // rendered a frame out of stacking order against the
+                  // sticky header above (a Framer Motion row gets its own
+                  // compositing layer from the opacity/transform in its own
+                  // animate prop, and mobile WebKit doesn't always resolve
+                  // layer paint order against z-index the way the spec
+                  // says it should) — reported as the header "bleeding into
+                  // the stats below." An opaque row can't produce that: at
+                  // worst a wrongly-ordered frame shows a solid row instead
+                  // of the header for an instant, never overlapping text.
                   className={
-                    'flex cursor-pointer border-b border-slate-rule/50 transition-colors duration-150 hover:bg-white/[0.03] ' +
+                    'flex cursor-pointer border-b border-slate-rule/50 bg-slate-sunk transition-colors duration-150 hover:bg-white/[0.03] ' +
                     (player.drafted ? 'opacity-50' : '')
                   }
                 >
