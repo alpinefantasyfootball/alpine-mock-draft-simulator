@@ -204,7 +204,23 @@ test("leaving the draft leaves the room, and the link brings you back", async ({
   await guest.evaluate(() => window.__playAsHuman());
   await startRoomDraft(host);
   await host.waitForFunction(() => Live.room().status === "drafting");
-  await host.waitForFunction(() => Live.room().picks.length > 0);
+  /* 90s, explicitly, because this wait is longer than any default and always
+     was - it just never said so and inherited whatever the global happened
+     to be.
+
+     The host is seat 0 (the guest asserts seat 1 above), the guest is playing
+     as a human, and this test never turns the host's autopick on. So nobody
+     picks first: the opening pick of the room only lands when the host's own
+     60s clock (clockLength, app.js) runs out and the room takes the seat. A
+     30s wait cannot reach that, and 30s is Playwright's own default - so this
+     was a coin flip on timing rather than a wait sized for what it waits for,
+     and it failed twice in three runs once anything nudged it.
+
+     The test does not care *which* pick exists, only that one does before
+     goHome() - so waiting out the clock is the honest cost, not something to
+     engineer around by giving the host autopick, which would quietly change
+     the scenario being tested. */
+  await host.waitForFunction(() => Live.room().picks.length > 0, null, { timeout: 90000 });
 
   await host.evaluate(() => goHome());
 

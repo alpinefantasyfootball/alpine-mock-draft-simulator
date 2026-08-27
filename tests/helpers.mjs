@@ -189,11 +189,38 @@ export async function openApp(context, path = "#/draft-room") {
    under test. engine.createRoom() is what that button calls.
 
    Polled rather than slept on: a room is created when the worker answers, and
-   how long that takes is the network's business. */
+   how long that takes is the network's business.
+
+   It waits for the host to be *seated*, not just for the code to exist, and
+   that second condition is the whole point of this comment.
+
+   codeInUrl() goes true the moment the worker answers with a code, because
+   createRoom() writes the hash itself at that instant. The host's own seat
+   arrives later, on the broadcast that follows their join. Between those two
+   moments the room is real, reachable by its link, and seat 0 is still empty
+   - and join() hands a new member the first free chair (freeSeat(), room.js).
+   So a guest who got in during that window took the host's seat, and
+   room.spec.mjs's "the guest is seat 1" failed with 0.
+
+   Intermittent, and it read as a flake in the room rather than as a fixture
+   handing out the code before it was safe to use. In life the window is
+   unreachable: a person has to copy the link and send it, which is seconds,
+   and the host is seated long before anyone clicks. A test hands the code
+   straight to a second browser, so it hits the one race a human cannot.
+
+   Returning "a room you are in" rather than "a code that exists" is what the
+   callers all assumed they were getting anyway. */
 export function createRoom(page) {
   return page.evaluate(async () => {
     window.JukeEngine.createRoom();
     for (let i = 0; i < 120 && !window.JukeEngine.codeInUrl(); i++) {
+      await new Promise((r) => setTimeout(r, 250));
+    }
+    const seated = () => {
+      const room = typeof Live !== "undefined" && Live.room();
+      return !!room && room.yourSeat >= 0;
+    };
+    for (let i = 0; i < 120 && !seated(); i++) {
       await new Promise((r) => setTimeout(r, 250));
     }
     return window.JukeEngine.codeInUrl();
