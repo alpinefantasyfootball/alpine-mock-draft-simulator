@@ -1,4 +1,5 @@
-/* Every typeface the share card draws with is one web/index.html requests.
+/* Every typeface the share card draws with is one the page actually makes
+   available — which is two files now, not one.
 
    shareCard.js draws to a canvas, and a canvas falls back silently: ask for a
    family the document never requested and you get the browser's default sans,
@@ -54,29 +55,64 @@ function familiesDrawnWith(src) {
 /* Families in the Google Fonts href. `family=Archivo:wght@400..900` and
    `&family=Inter:wght@400;500` — the name runs to the colon or the ampersand,
    and `+` is the space it encodes. */
-function familiesRequested(html) {
+function familiesFromFontLink(html) {
   const found = new Set();
   for (const m of html.matchAll(/[?&]family=([^:&"]+)/g)) found.add(m[1].replace(/\+/g, " "));
   return [...found].sort();
 }
 
+/* Families the page serves itself, declared as @font-face in index.css.
+
+   This half did not exist when the file was written, and its absence is
+   what made the test go red on a page that was working perfectly. The
+   "homepage v4 pass 1" change moved Archivo and IBM Plex Mono off Google
+   Fonts and onto this origin — preloaded in index.html, given their
+   @font-face rules in index.css — precisely so the two faces that matter
+   above the fold stop costing a third-party round trip. index.css's own
+   comment names the share card as one of the reasons.
+
+   So Archivo went on being available and stopped being *requested* in the
+   one place this test knew to look. Checked on the live page before
+   changing anything here: shareCard.js's own usable() probe returns true
+   for Archivo, Inter and Barlow Condensed alike. The card was never
+   drawing in a fallback.
+
+   The lesson is the one the header already states from the other side —
+   a list written down goes stale in the direction that caused the bug.
+   This test held no list, and still went stale, because it hard-coded
+   *where* fonts come from rather than which ones. */
+function familiesFromFontFace(css) {
+  const found = new Set();
+  for (const m of css.matchAll(/@font-face\s*\{[^}]*?font-family:\s*['"]([^'"]+)['"]/g)) {
+    found.add(m[1]);
+  }
+  return [...found].sort();
+}
+
 test("the share card only draws in faces the page requests", () => {
   const drawn = familiesDrawnWith(read("../web/src/shareCard.js"));
-  const requested = familiesRequested(read("../web/index.html"));
+  const linked = familiesFromFontLink(read("../web/index.html"));
+  const selfHosted = familiesFromFontFace(read("../web/src/index.css"));
+  const available = [...new Set([...linked, ...selfHosted])].sort();
 
-  /* Both parsers have to be shown to have found something. If either silently
-     stops matching — a quote style changes, the font link is restructured — the
+  /* Every parser has to be shown to have found something. If any of them
+     silently stops matching — a quote style changes, the font link is
+     restructured, the @font-face rules move to another stylesheet — the
      comparison below passes against nothing at all, which is the failure mode
-     this whole file exists because of. */
+     this whole file exists because of. Three now, because a face can arrive
+     by either route and missing one route is what went wrong here. */
   expect(drawn, "no ctx.font families parsed out of shareCard.js").not.toEqual([]);
-  expect(requested, "no families parsed out of index.html's font link").not.toEqual([]);
+  expect(linked, "no families parsed out of index.html's font link").not.toEqual([]);
+  expect(selfHosted, "no @font-face families parsed out of index.css").not.toEqual([]);
 
   for (const family of drawn) {
     expect(
-      requested,
+      available,
       family +
-        " is drawn by shareCard.js but web/index.html never requests it, so the " +
-        "card renders in the browser's default sans and says nothing about it",
+        " is drawn by shareCard.js but the page neither links it from Google " +
+        "Fonts (web/index.html) nor serves it itself (@font-face in " +
+        "web/src/index.css), so the card renders in the browser's default " +
+        "sans and says nothing about it",
     ).toContain(family);
   }
 });

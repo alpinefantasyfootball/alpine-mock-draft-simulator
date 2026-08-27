@@ -189,11 +189,38 @@ export async function openApp(context, path = "#/draft-room") {
    under test. engine.createRoom() is what that button calls.
 
    Polled rather than slept on: a room is created when the worker answers, and
-   how long that takes is the network's business. */
+   how long that takes is the network's business.
+
+   It waits for the host to be *seated*, not just for the code to exist, and
+   that second condition is the whole point of this comment.
+
+   codeInUrl() goes true the moment the worker answers with a code, because
+   createRoom() writes the hash itself at that instant. The host's own seat
+   arrives later, on the broadcast that follows their join. Between those two
+   moments the room is real, reachable by its link, and seat 0 is still empty
+   - and join() hands a new member the first free chair (freeSeat(), room.js).
+   So a guest who got in during that window took the host's seat, and
+   room.spec.mjs's "the guest is seat 1" failed with 0.
+
+   Intermittent, and it read as a flake in the room rather than as a fixture
+   handing out the code before it was safe to use. In life the window is
+   unreachable: a person has to copy the link and send it, which is seconds,
+   and the host is seated long before anyone clicks. A test hands the code
+   straight to a second browser, so it hits the one race a human cannot.
+
+   Returning "a room you are in" rather than "a code that exists" is what the
+   callers all assumed they were getting anyway. */
 export function createRoom(page) {
   return page.evaluate(async () => {
     window.JukeEngine.createRoom();
     for (let i = 0; i < 120 && !window.JukeEngine.codeInUrl(); i++) {
+      await new Promise((r) => setTimeout(r, 250));
+    }
+    const seated = () => {
+      const room = typeof Live !== "undefined" && Live.room();
+      return !!room && room.yourSeat >= 0;
+    };
+    for (let i = 0; i < 120 && !seated(); i++) {
       await new Promise((r) => setTimeout(r, 250));
     }
     return window.JukeEngine.codeInUrl();
@@ -226,9 +253,6 @@ export async function startSoloDraft(page) {
   const enter = page.locator('#draftroom-root button:text-is("Enter Draft Room")');
   if (await enter.count()) await enter.click();
 
-  const startMock = page.locator('#draftroom-root button:text-is("Start mock draft")');
-  if (await startMock.count()) await startMock.click();
-
   // Checked before clicking, not inferred from the click failing to start
   // a draft afterward — a disabled button and a missing one are different
   // facts, and only one of them is "this league configuration is invalid".
@@ -236,9 +260,35 @@ export async function startSoloDraft(page) {
   // comment is what the tests need from a page, not what they assert, and
   // waitForRoom() below already sets the precedent for surfacing "the
   // condition was never satisfied" this way instead.
+  //
+  // This check used to live on the Start button below, and had to move up
+  // here with the behaviour: the Lobby's "Start mock draft" now starts the
+  // draft outright, so it is the control that refuses an illegal league
+  // (15 rounds against a 14-slot roster, say) and there is no second
+  // button left to ask.
+  const startMock = page.locator('#draftroom-root button:text-is("Start mock draft")');
+  if (await startMock.count()) {
+    if (!(await startMock.isEnabled())) throw new Error("the Start button refused this league");
+    await startMock.click();
+  }
+
+  // Optional, like every step above it, and it did not use to be. A room
+  // still has a real second Start ("Start for everyone", host-only), so
+  // this stays rather than being deleted — but a solo draft is already
+  // started by the time it gets here, and the locator then matches
+  // nothing.
+  //
+  // count() rather than isEnabled() is the whole fix. No actionTimeout is
+  // set in playwright.config.mjs, so isEnabled() on a locator matching
+  // nothing waits for ever instead of returning false, and every spec
+  // that drives a draft — grade, journey, solo — sat here until the
+  // 6-minute test timeout killed it. A hang, not an assertion: nothing in
+  // the output named this line, and the app was fine throughout.
   const startBtn = page.locator('#draftroom-root >> text=/Start for everyone|Start draft/');
-  if (!(await startBtn.isEnabled())) throw new Error("the Start button refused this league");
-  await startBtn.click();
+  if (await startBtn.count()) {
+    if (!(await startBtn.isEnabled())) throw new Error("the Start button refused this league");
+    await startBtn.click();
+  }
   await page.waitForFunction(() => state.started, null, { timeout: 15000 });
 }
 

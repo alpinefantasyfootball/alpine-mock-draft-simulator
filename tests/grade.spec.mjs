@@ -101,7 +101,14 @@ async function readAnalysisScreen(page) {
      harmless today, load-bearing the moment one exists. */
   const alreadyOpen = await page.locator('#draftroom-root [class*="z-[70]"]').count();
   if (!alreadyOpen) {
-    const analysisTab = page.locator('#draftroom-root button:text-is("Analysis")');
+    /* :visible, because there are two of these now and both are mounted.
+       MobileDraftTabBar.jsx carries its own Analysis button and is
+       lg:hidden - which is CSS-hidden, not absent, exactly the thing
+       CLAUDE.md's note on useMinWidth is about - so a bare text match
+       resolves to two elements and Playwright refuses it under strict
+       mode. At this viewport the bottom bar is the hidden one, so this
+       picks the header tab a person at a desk would actually press. */
+    const analysisTab = page.locator('#draftroom-root button:text-is("Analysis"):visible');
     await analysisTab.click();
   }
   const text = await page.locator("#draftroom-root").innerText();
@@ -149,9 +156,24 @@ test("the Analysis screen's own numbers match what analyseDraft() computed for t
   const { mine } = await readGrade(page);
   const screen = await readAnalysisScreen(page);
 
+  /* Whitespace-collapsed before matching, because both facts are split
+     across two elements: AnalysisTab.jsx renders the rank as
+     `{ordinal(rank)} <span>of {teams}</span>` and the score as
+     `{total.toFixed(1)} <span>/ 100</span>`, so innerText puts a newline
+     inside each of the two phrases below. Matching the joined phrase is
+     the point - "2nd" and "of 10" each appear elsewhere on this screen,
+     and asserting them separately would pass on a screen that never put
+     them together. */
+  const flat = screen.replace(/\s+/g, " ");
+
   expect(screen, "the printed grade letter").toContain(mine.grade);
-  expect(screen, "the printed rank").toContain(`${mine.rank}${mine.rank === 1 ? "st" : mine.rank === 2 ? "nd" : mine.rank === 3 ? "rd" : "th"} of`);
-  expect(screen, "the printed weighted score").toContain(`${Math.round(mine.total)} / 100`);
+  expect(flat, "the printed rank").toContain(`${mine.rank}${mine.rank === 1 ? "st" : mine.rank === 2 ? "nd" : mine.rank === 3 ? "rd" : "th"} of`);
+  /* toFixed(1), not Math.round: the screen carries the decimal, and
+     rounding here asked for "60 / 100" against a screen reading
+     "60.3 / 100" - which is the same number and a failing substring. The
+     value still has to be the weighted total rather than a component,
+     which is the historical bug this assertion exists for. */
+  expect(flat, "the printed weighted score").toContain(`${mine.total.toFixed(1)} / 100`);
 
   await context.close();
 });

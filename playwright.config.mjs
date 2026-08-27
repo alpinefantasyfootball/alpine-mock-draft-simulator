@@ -38,6 +38,45 @@ export default defineConfig({
 
   use: {
     baseURL: SITE,
+
+    /* A ceiling on a single action, because the default is no ceiling at all.
+
+       Without it a locator action against an element that never appears waits
+       for ever and the *test* timeout is what eventually fires - six minutes
+       later, blaming the whole test rather than the line, with nothing in the
+       output naming what was being waited for. That is how a "Start draft"
+       button that had been removed from the app took down grade, journey and
+       solo at once, and it read as three broken tests rather than one stale
+       locator. isEnabled() on a locator matching nothing is the sharpest form
+       of it: the question has an answer (false) and the default behaviour is
+       to wait for a different one instead.
+
+       30s, and the number is not free choice: this option is not scoped to
+       actions the way its name suggests. Playwright applies it through
+       setDefaultTimeout(), which is the default for *every* method taking a
+       timeout - page.waitForFunction() included. So a value below Playwright's
+       own 30s default does not merely bound what was unbounded, it quietly
+       shortens every wait in the suite that never asked for a timeout.
+
+       This was set to 15s first, and room.spec.mjs said so within one run:
+       "leaving the draft leaves the room" waits for the first pick of a real
+       two-manager draft against the deployed worker, has no explicit timeout,
+       and had been passing in 1.3 minutes. It failed at 15s - a wait that was
+       always going to take longer than that, cut in half by a change that
+       claimed in this very comment not to touch waits. Eleven of that file's
+       sixteen waitForFunction calls have no timeout of their own.
+
+       At 30s nothing that already worked is shortened, because 30s is what
+       those calls were getting anyway, and the unbounded case still collapses
+       from six minutes to thirty seconds while naming the action that failed.
+       That is the whole win; buying another fifteen seconds off it is not
+       worth being wrong about the rest of the suite.
+
+       Anything that genuinely needs longer passes its own timeout at the call
+       site - lobby.spec.mjs and journey.spec.mjs both do, for controls that
+       render a beat after the socket answers - and an explicit timeout there
+       overrides this. */
+    actionTimeout: 30 * 1000,
     // Nothing here is a visual test, and a trace on a two-minute draft is
     // large. Kept for failures only, where it is the whole point.
     trace: "retain-on-failure",
