@@ -3309,10 +3309,16 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   bump, v6 moved the credentials, v7 blocked fork checkouts for
   `pull_request_target` and `workflow_run`, which this repository does not use.
 
-- **End to end: `npm install` once, then `npx playwright test`.** Ninety
-  tests across fifteen spec files, measured at about five minutes against
-  production, and it starts the static server and `wrangler dev` itself when
-  it is pointed at localhost.
+- **End to end: `npm install` once, then `npx playwright test`.** Ninety tests
+  across nineteen spec files, and it starts the static server and
+  `wrangler dev` itself when it is pointed at localhost.
+
+  Measured 27 August 2026 against production: **89 passed, 1 skipped, 0
+  failed, in 16.4 minutes** on one worker. The skip is the news test that
+  asserts an absence and correctly stands down against a keyed worker. This
+  used to say "about five minutes", which was true of a smaller suite and is
+  the kind of figure that drifts silently — hence the date, the same rule the
+  Juke score section states about any number written down here.
 
   It drives the real pages in a real browser — a solo draft at both shapes, a
   full two-manager room draft to completion, a dropped socket reconnecting,
@@ -3498,6 +3504,146 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   Any league setting that changes what a roster is allowed to hold deserves
   the same treatment. A grade that rewards a worse roster is worse than no
   grade, and it will not show up in a spread or a reconciliation.
+
+### The suite goes stale, and it fails exactly like a broken app
+
+Measured 27 August 2026: **nine tests across seven spec files failing against
+production, and not one had a bug behind it.** Every single failure was a UI
+change nobody had updated the tests for. The app was fine throughout.
+
+That is the thing worth keeping, because it is the opposite of what a red
+suite is supposed to mean. This project's whole testing argument is that a
+failing test is evidence about the product — and for one afternoon it was
+evidence about its own age instead. A suite in that state is worse than no
+suite, for the reason the permanent-known-failure note above already gives:
+what nobody believes, nobody reads.
+
+**Most of it traced to one collapse.** The two-step "entry screen, then claim
+a chair on the seat board" is gone — the Lobby's "Start mock draft" starts the
+draft outright, and the seat and scoring are selects on that same panel. Four
+separate things in the suite were still walking the old path: a second "Start
+draft" button, a claim-chip seat board, a `"Order"` tab that is `"Seats"` now,
+and an "Auto-draft the rest" menu item that a product review cut along with
+Pause and Undo. None of those announced themselves as removals; they
+announced themselves as tests that hung or read `undefined`.
+
+**A test can measure the wrong thing rather than the wrong value, and that
+looks far more alarming.** Two of the nine looked like real defects and were
+not:
+
+- `news.spec.mjs` counts elements built from a deliberately hostile payload
+  and reported **two `<img>`**. They were the player's own headshot: `PANEL`
+  finds the first `.overflow-y-auto` holding a link, which is the full-screen
+  player sheet now rather than the news list. Zero images inside the news
+  items, and the hostile markup arrived as text and stayed text. The check is
+  scoped to the headline cards now — where an element built from the payload
+  would actually land — and `<script>` stays panel-wide on purpose.
+- `share-card.spec.mjs` said Archivo was drawn but never requested. Archivo
+  moved to self-hosting (`/fonts/archivo-variable-latin.woff2`, preloaded,
+  `@font-face` in `index.css`); the test only ever parsed `index.html`'s
+  Google Fonts `family=` query. It reads both sources now.
+
+**Both were settled by asking the live page, not by reasoning.** Dumping the
+two images showed `sleepercdn.../9221.jpg` twice; running `shareCard.js`'s own
+`usable()` probe in a real browser returned true for Archivo. Neither needed
+a code change. **A test asserting an absence has to be re-checked against the
+running app before it is believed**, which is the same instruction the
+`?cb=` note gives about deployment and the `LOCAL_WORKER` skip gives about
+news.
+
+### `actionTimeout` was unset, and that is why a stale locator cost six minutes
+
+`playwright.config.mjs` set none, so the default was **no ceiling at all**. A
+locator action against an element that never appears waits for ever, and the
+*test* timeout is what eventually fires — six minutes later, blaming the whole
+test rather than the line, with nothing in the output naming what was waited
+for. `isEnabled()` is the sharpest form: the question has an answer, `false`,
+and the default behaviour is to wait for a different one instead. One removed
+button took down `grade`, `journey` and `solo` that way and read as three
+broken tests.
+
+**It is `30 * 1000`, and the number is not free choice.** The option is not
+scoped to actions the way its name suggests: Playwright applies it through
+`setDefaultTimeout()`, the default for *every* method taking a timeout,
+`page.waitForFunction()` included. It was set to 15s first, which did not
+merely bound what was unbounded — it quietly halved every wait in the suite
+that never asked for one, and `room.spec.mjs` went red within one run. 30s is
+Playwright's own default, so nothing that already worked is shortened while
+the unbounded case still collapses to thirty seconds and names the action.
+
+**Guard an optional control with `count()`, never with `isEnabled()`.** The
+first is a fact about this screen; the second is a question that hangs.
+
+### Two waits that had been passing on luck
+
+Tightening the default exposed both. Neither was caused by it — both were
+waits that never said what they were waiting for and inherited whatever the
+global happened to be.
+
+**A wait has to be sized for the thing it waits on.** `"leaving the draft
+leaves the room"` waits for the opening pick of a real two-manager draft, and
+nobody picks first there: the guest is playing as a human, the host's autopick
+is never turned on, so the first pick only lands when a 60s `clockLength` runs
+out and the room takes the seat. No default could reach that. It carries 90s
+explicitly now — **not** "fixed" by giving the host autopick, which would make
+it fast by quietly changing the scenario under test.
+
+**`createRoom()` returned a code, and the callers all wanted a seat.**
+`codeInUrl()` goes true the instant the worker answers, because `createRoom()`
+writes the hash itself then. The host's own seat arrives later, on the
+broadcast after their join — so there is a window where the room is real,
+reachable by its link, and **seat 0 is still empty**, and `join()` hands a new
+member the first free chair (`freeSeat()`, `room.js`). A guest arriving inside
+it took the host's seat and `"the guest is seat 1"` failed with `0`,
+intermittently, reading as a flake in the room rather than as a fixture
+handing out the code before it was safe to use.
+
+**That window is unreachable in life**, which is why it had never been seen: a
+person copies the link and sends it, which is seconds, and the host is seated
+long before anyone clicks. A test hands the code straight to a second browser,
+so it hits the one race a human cannot. The helper waits for a seat now. When
+a room test flakes, suspect the fixture's definition of "ready" before
+suspecting the room.
+
+### Desktop and mobile both mount, so a label matches twice
+
+`Analysis`, `Draft options` and the lobby gear each render in a desktop bar
+and again in a `lg:hidden` mobile one. Both are in the DOM — **CSS-hidden is
+still mounted**, the rule `useMinWidth` already exists for — so matching on
+the label alone is a Playwright strict-mode violation rather than a missing
+control. `:visible` is the fix, and it says what the test means: the one a
+person can see at this width.
+
+**And `page.evaluate(...).find(...).click()` is the wrong shape for anything
+that renders on a socket.** It runs once, so an element a beat away is
+`undefined` and the failure reads `Cannot read properties of undefined
+(reading 'click')` — a control that does not exist, rather than one that is
+not there *yet*. A locator auto-waits. The guest reaches the lobby bar as soon
+as `Live.room()` reports a seat, which is the socket answering and not the bar
+having rendered.
+
+### An AI test agent matches text case-insensitively unless told not to
+
+Worth writing down beside the `Monangai` note above, because a second tool
+found the same trap from a new direction. A TestSprite assertion reading "no
+`NaN` is visible" failed on a perfectly healthy player sheet: **six matches,
+every one of them a surname** — Kyle Mo**nan**gai and Kee**nan** Allen. A real
+browser found **zero** case-sensitive `NaN` on the same page.
+
+So an assertion handed to a language model has to say *case-sensitive* and
+name the expected near-misses, or it reports the sport's own spelling as a
+bug. The same instruction that keeps `/nan/i` out of a console sweep applies
+to prose.
+
+### Finding out whether a commit is really gone
+
+`git branch --contains` answers "which refs hold this SHA", which is not the
+question when a branch has been rebased on its way to the remote. A commit
+here looked unique and unpushed by that test, and the identical change was
+already on `origin` under a different SHA and already merged into `main`.
+**`git patch-id --stable` compares content, and `git cherry main <branch>`
+marks with `-` anything already upstream by content.** Ask those before
+calling work at risk — and before force-pushing anything on top of it.
 
 ## Don't
 
