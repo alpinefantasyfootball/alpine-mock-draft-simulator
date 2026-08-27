@@ -212,9 +212,27 @@ test.describe("latest news", () => {
         // check for "Wire Service" fails against a perfectly correct
         // "WIRE SERVICE". Same trap as reading a colour off a transition.
         text: items.map((a) => a.textContent),
-        injected: { img: panel.querySelectorAll("img").length,
+        /* Counted inside the headline cards, not across the whole panel.
+
+           Every hostile field - the title, the summary, the source - renders
+           inside its own item, so the items are where an element built from
+           the payload would appear, and scoping there is what makes a count
+           of 0 mean "nothing was constructed" rather than "nothing is on
+           screen at all".
+
+           Panel-wide was right when the panel was the news list. It is the
+           full-screen player sheet now ("fixed inset-0 z-[70] overflow-y-auto",
+           matched by PANEL's .overflow-y-auto), so it also contains the
+           player's own headshot - two layers of one <img> off sleepercdn -
+           and the check failed reporting img: 2 on a page where nothing had
+           been injected at all. A security test that cries wolf is worse
+           than most, because the next red is the one nobody reads.
+
+           script stays panel-wide deliberately: a <script> anywhere in this
+           sheet is worth failing on whoever built it. */
+        injected: { img: items.reduce((n, a) => n + a.querySelectorAll("img").length, 0),
                     script: panel.querySelectorAll("script").length,
-                    b: panel.querySelectorAll("b").length },
+                    b: items.reduce((n, a) => n + a.querySelectorAll("b").length, 0) },
         pwned: [window.__pwned, window.__pwned2, window.__pwned3, window.__pwned4]
       };
     }, PANEL);

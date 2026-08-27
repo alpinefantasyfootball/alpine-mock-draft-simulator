@@ -83,7 +83,13 @@ const PHONE_ONLY = [
   // deliberately different from desktop's: its own eyebrow, the reversed
   // format order, five rows sliced off six, no points column, and a generated
   // closing line. "Each of those differs from desktop on purpose."
-  "CHANGE THE RULES, WATCH IT RERUN",
+  // The eyebrow was "CHANGE THE RULES, WATCH IT RERUN" when this list was
+  // written and is this now (ScoringDemoCard.jsx, the lg:hidden branch).
+  // Replaced rather than added to: the sanctioned difference is "its own
+  // eyebrow", which has not changed — only the words in it — and keeping
+  // the old string here would have left the list permitting a line the
+  // page no longer contains.
+  "BOARD · SORTED BY VORP",
   "Every ranking on Juke moves with your rules.",
   // Its format pills are short here and spelled out on desktop — "Half"
   // against "Half PPR" — because three of them have to fit 358px.
@@ -116,6 +122,18 @@ const DESKTOP_ONLY = [
   "Half PPR",
   "Full PPR",
   /^Projected season points · /,
+  // Desktop's own panel title, the counterpart to the phone eyebrow listed
+  // in PHONE_ONLY above. Both branches have always had one; only the phone's
+  // was written down here.
+  "Board · sorted by value over replacement",
+
+  // RoomsGrid's desktop timeline groups the six rooms by season under a
+  // heading and a count. The phone collapses all five coming-soon rooms to
+  // the single row named in PHONE_ONLY, so it has no groups to head.
+  "Pre-season",
+  "In-season",
+  "Post-season",
+  /^\d+ rooms?$/,
 
   // PROMPT 2 item 4 — the five coming-soon cards and their lead lines, plus
   // RoomCard's own "Mock smarter." lead, which the phone card omits by name.
@@ -125,19 +143,22 @@ const DESKTOP_ONLY = [
   "The Waiver Room",
   "Win the wire.",
   "The Trade Room",
-  "Deal with confidence.",
+  // ROOMS gained a `lead` field and had these rewritten in the homepage
+  // redesign; "Deal with confidence." and "See the big picture." are the
+  // strings this list was written against and no longer exist in app.js.
+  "Price the deal.",
   "The Strategy Room",
   "Optimize every week.",
   "The League Room",
-  "See the big picture.",
+  "See the whole table.",
   "Coming soon",
   // …and each card's blurb, which only the desktop grid renders. The phone's
   // one live card keeps its own blurb, so these five are the coming-soon ones.
   /^Analyze the college production/,
   /^Connect your live league/,
-  /^Model complex trade proposals/,
+  /^Both rosters valued against replacement/,
   /^Set your lineup using predictive/,
-  /^Track season-long trends/,
+  /^Playoff odds, strength of schedule/,
 ];
 
 /* Live data, not copy. These are real numbers off the board and they change
@@ -145,8 +166,17 @@ const DESKTOP_ONLY = [
    data-timing artefact of two page loads, not a content divergence. */
 const DATA_SHAPED = [
   /^\d+(\.\d+)?$/,                       // rank cells, projected points
+  /^[+\-−]\d+(\.\d+)?$/,                 // signed VORP deltas, e.g. "+91"
+  /^\d+%$/,                              // TakeAPick's survival odds, e.g. "99%"
   /^(QB|RB|WR|TE|K|DST)$/,               // position badges
   /^—$/,                                 // the demo's empty delta cell
+  /* TakeAPick.jsx steps through PHASE_TAGS on a timer, so which tag is on
+     screen depends on how long the capture took — two page loads land on
+     different ones and the diff reports whichever pair happened to differ.
+     A phase tag is neither copy that can drift nor data off the board, but
+     it is the same kind of two-loads artefact this list exists for, and
+     pinning one by name would just make the test fail on the clock. */
+  /^(On the clock|Your pick|The room reacts|Grade rerun)$/,
   /is the (top overall pick|first)/,     // ticker facts
   /^(Kickers|Defenses) stay undrafted/,  // ticker facts
   /^\d+ players · refreshed/,            // the shared freshness line
@@ -193,7 +223,20 @@ test("the hero and the closing band carry the agreed copy at both widths", async
     "AGILITY THROUGH ANALYTICS",
     "Master the draft.",
     "Dominate the season.",
-    "Draft against a room of CPU opponents that react to your picks, then get a graded report that shows its working. Change your scoring rules and every number reruns.",
+    /* The hero paragraph. It used to be "Draft against a room of CPU
+       opponents that react to your picks, then get a graded report that
+       shows its working. Change your scoring rules and every number
+       reruns." — replaced on direct instruction, and Hero.jsx's own
+       comment records why: that sentence named the Draft Room
+       specifically, which was right while the Draft Room was the whole
+       product and reads narrow next to a page that now frames Juke as a
+       season-long platform.
+
+       The list is still asserted by value on purpose (see above): the
+       point is that one sentence is read at every width, not which
+       sentence it is. Both widths carry this one — checked before
+       changing it here. */
+    "From pre-season scouting to a championship push, dominate every phase of the fantasy calendar.",
     "FREE · UNLIMITED · NO ACCOUNT",
     "Open the Draft Room.",
     "No setup, no league import. Pick your scoring and start.",

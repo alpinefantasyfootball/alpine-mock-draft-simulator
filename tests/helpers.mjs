@@ -226,9 +226,6 @@ export async function startSoloDraft(page) {
   const enter = page.locator('#draftroom-root button:text-is("Enter Draft Room")');
   if (await enter.count()) await enter.click();
 
-  const startMock = page.locator('#draftroom-root button:text-is("Start mock draft")');
-  if (await startMock.count()) await startMock.click();
-
   // Checked before clicking, not inferred from the click failing to start
   // a draft afterward — a disabled button and a missing one are different
   // facts, and only one of them is "this league configuration is invalid".
@@ -236,9 +233,35 @@ export async function startSoloDraft(page) {
   // comment is what the tests need from a page, not what they assert, and
   // waitForRoom() below already sets the precedent for surfacing "the
   // condition was never satisfied" this way instead.
+  //
+  // This check used to live on the Start button below, and had to move up
+  // here with the behaviour: the Lobby's "Start mock draft" now starts the
+  // draft outright, so it is the control that refuses an illegal league
+  // (15 rounds against a 14-slot roster, say) and there is no second
+  // button left to ask.
+  const startMock = page.locator('#draftroom-root button:text-is("Start mock draft")');
+  if (await startMock.count()) {
+    if (!(await startMock.isEnabled())) throw new Error("the Start button refused this league");
+    await startMock.click();
+  }
+
+  // Optional, like every step above it, and it did not use to be. A room
+  // still has a real second Start ("Start for everyone", host-only), so
+  // this stays rather than being deleted — but a solo draft is already
+  // started by the time it gets here, and the locator then matches
+  // nothing.
+  //
+  // count() rather than isEnabled() is the whole fix. No actionTimeout is
+  // set in playwright.config.mjs, so isEnabled() on a locator matching
+  // nothing waits for ever instead of returning false, and every spec
+  // that drives a draft — grade, journey, solo — sat here until the
+  // 6-minute test timeout killed it. A hang, not an assertion: nothing in
+  // the output named this line, and the app was fine throughout.
   const startBtn = page.locator('#draftroom-root >> text=/Start for everyone|Start draft/');
-  if (!(await startBtn.isEnabled())) throw new Error("the Start button refused this league");
-  await startBtn.click();
+  if (await startBtn.count()) {
+    if (!(await startBtn.isEnabled())) throw new Error("the Start button refused this league");
+    await startBtn.click();
+  }
   await page.waitForFunction(() => state.started, null, { timeout: 15000 });
 }
 

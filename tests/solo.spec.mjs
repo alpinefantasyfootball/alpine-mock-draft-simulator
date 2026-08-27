@@ -129,18 +129,25 @@ for (const pos of ["ALL", "QB", "RB", "WR", "TE", "K", "DST"]) {
     const page = await openApp(context, "#/draft-room");
 
     await configure(page, { teams: 12 });
-    // The claimable seat board is the choose-your-seat screen now, one
-    // click past the Locker — not visible until this fires. "Start mock
-    // draft" (NewMockPanel.jsx), not the retired "Enter Draft Room" —
-    // see startSoloDraft()'s own comment in helpers.mjs.
-    await page.locator('#draftroom-root button:text-is("Start mock draft")').click();
-    await page.evaluate(() => {
-      // The eleventh seat, which is where the real report came from.
-      const root = document.getElementById("draftroom-root");
-      const chips = [...root.querySelectorAll("button")]
-        .filter((b) => /^(Claim|You|Taken)$/.test(b.textContent.trim()));
-      chips[10].click();
-    });
+    /* The eleventh seat, which is where the real report came from.
+
+       It is the Lobby's own "Your seat" select now. There used to be a
+       claimable seat board one click past the Locker, and this reached it
+       by clicking "Start mock draft" and then a Claim chip — but that
+       button starts the draft outright today, so there is no screen left
+       in between and the chip filter matched nothing. `chips[10]` was
+       therefore undefined, and the failure read as "Cannot read
+       properties of undefined (reading 'click')" rather than as a screen
+       that no longer exists.
+
+       Selected by the row its own label names, not by index: NewMockPanel
+       renders a second, lg:hidden ChipSelect bound to this same value, so
+       "the seat control" is two controls and only one of them is a
+       <select>. The seat has to be set before the draft starts either
+       way — startDraft() takes it once, as lobbySlot. */
+    await page
+      .locator('#draftroom-root div:has(> span:text-is("Your seat")) > select')
+      .selectOption("11");
     await startSoloDraft(page);
 
     // Set the panel's filter through the chip a person would press.
@@ -336,15 +343,25 @@ test("a filled starting slot is not a cap, and does not claim to be", async ({ b
   await context.close();
 });
 
-/* The control the migration found missing, and what it must not promise.
+/* What autoDraftRest() must produce, and the button that no longer starts it.
 
-   Solo it finishes the board, and the label is the truth: every remaining
-   pick, mine from my queue first and everybody else's from the CPU's own
-   choice. In a room the same engine function is an autopilot on one chair,
-   because drafting nine other managers' teams locally is a bug this codebase
-   has already had — so the button is not offered there at all, and the
-   Autopick switch beside it is what a room gets instead. */
-test("auto-draft the rest finishes the board, and is not offered in a room",
+   Solo it finishes the board: every remaining pick, mine from my queue
+   first and everybody else's from the CPU's own choice. In a room the same
+   engine function is an autopilot on one chair, because drafting nine other
+   managers' teams locally is a bug this codebase has already had.
+
+   This used to drive it through a menu item and assert the label, and that
+   button is gone — a product review cut Pause, Undo and "Auto-draft the
+   rest" together, on the reasoning written out at the head of
+   DraftMenuOverlay.jsx. The engine function is explicitly untouched by that
+   decision ("still how a finished-draft test harness fills a board"), which
+   is exactly what this test is, so it calls it directly now.
+
+   Both facts are still pinned, because losing either would be a silent gap:
+   the menu really does not offer it any more, and the thing it used to
+   start still lays down a legal board. The half that changed is only how
+   the draft gets kicked off. */
+test("auto-drafting the rest finishes the board, and the menu no longer offers it",
   async ({ browser }) => {
     const context = await browser.newContext();
     const page = await openApp(context, "#/draft-room");
@@ -361,14 +378,27 @@ test("auto-draft the rest finishes the board, and is not offered in a room",
       render();
     });
 
-    // Behind the kebab now (DraftMenuOverlay.jsx), not a direct header
-    // button, and its own visible text rather than an aria-label nothing
-    // sets any more.
-    const menuBtn = page.locator('#draftroom-root button[aria-label="Draft options"]');
+    /* Open the kebab and check the item is not in it, mid-draft, with a
+       board still left to fill — which is the one moment it would have
+       been offered, so it is the only moment its absence means anything.
+
+       :visible for the same reason readAnalysisScreen() needs it in
+       grade.spec.mjs - DraftCockpitHeader.jsx renders this control twice,
+       a 34px round one and a 44px bare one, and only ever shows the one
+       its width calls for. Both are in the DOM, so matching on the label
+       alone is a strict-mode violation rather than a missing button. */
+    const menuBtn = page.locator('#draftroom-root button[aria-label="Draft options"]:visible');
     const finish = page.locator('#draftroom-root button').filter({ hasText: /^Auto-draft the rest/ });
     await menuBtn.click();
-    await expect(finish, "offered while there is a board left to draft").toBeVisible();
-    await finish.click();
+    await expect(finish, "the cut menu item stays cut").toHaveCount(0);
+    await page.keyboard.press("Escape");
+
+    /* Unqualified, like autoPickForMe() and cpuChoice() above it — app.js
+       is a classic script, so its top-level functions are globals here.
+       Asynchronous, as the button always was: it animates the remaining
+       picks rather than laying them down in one turn, which is why this
+       polls draftOver() instead of reading it once. */
+    await page.evaluate(() => autoDraftRest());
 
     await expect.poll(() => page.evaluate(() => draftOver()), { timeout: 30000 }).toBe(true);
 
@@ -383,23 +413,22 @@ test("auto-draft the rest finishes the board, and is not offered in a room",
       };
     });
 
-    expect(out.picks, "the button finishes the draft or the board is empty").toBe(140);
+    expect(out.picks, "it finishes the draft or the board is empty").toBe(140);
     expect(out.distinct, "and no player twice").toBe(140);
     expect(out.sizes, "fourteen a team").toEqual([14]);
     // The fallback must not reach for a kicker to keep the loop moving.
     expect(out.kickerRounds.length ? Math.min(...out.kickerRounds) : 99).toBeGreaterThanOrEqual(13);
 
-    /* Nothing left to draft, so nothing to offer - and by the time the board
-       is full there is no menu left to reopen and check it in anyway.
-       draftOver() opens the same full-screen report grade.spec.mjs's
-       readAnalysisScreen() had to learn to step around, over the whole
-       header including this kebab - covering it rather than hiding it, so
-       toBeVisible() alone can't see that, and a click meant to reopen the
-       menu would hang against that overlay forever rather than ever finding
-       an empty one. The menu already closed on its own last use above, and
-       finish re-queries the live DOM on every check rather than trusting a
-       stale handle, so simply asking again is both correct and enough. */
-    await expect(finish, "and it goes away when the board is full").toHaveCount(0);
+    /* Still absent with the board full, which is a weaker claim than the
+       one above and kept anyway: draftOver() opens the same full-screen
+       report grade.spec.mjs's readAnalysisScreen() had to learn to step
+       around, over the whole header including this kebab - covering it
+       rather than hiding it, so a click meant to reopen the menu would
+       hang against that overlay forever rather than ever finding an empty
+       one. finish re-queries the live DOM on every check rather than
+       trusting a stale handle, so simply asking again is both correct and
+       enough. */
+    await expect(finish, "and it is still not there when the board is full").toHaveCount(0);
 
     await context.close();
   });
