@@ -314,10 +314,25 @@ test("a room of identical drafters does not produce a full-scale grade spread", 
   });
   await context.close();
 
-  // The premise: these rosters really are near-identical, so the grade has
-  // nothing real to spread. If this ever stops being true the assertion below
-  // is measuring something else and should be re-derived.
-  expect(room.rawStarterSpread, "identical drafters produce near-identical starter strength").toBeLessThan(25);
+  /* The premise, re-derived when aboveReplacement() stopped counting ADP rank
+     places and started counting projected points.
+
+     This line used to read `toBeLessThan(25)` and the comment beside it said
+     identical drafters produce near-identical starter strength. That was true
+     of the old unit and false about the rosters: rank places are capped by how
+     deep a position is drafted, so the metric compressed every room into a
+     10-to-12 point band whatever the seats actually held. In points the same
+     identically-drafted room spans ~190 — seat 1 fields 362 and seat 5 fields
+     171 — because snake position really is worth that much, and the old number
+     was hiding it rather than measuring it absent.
+
+     So the premise is no longer "nothing to spread". It is "the spread that
+     exists is seat, not drafting", and the assertion below is what matters:
+     the composite must stay well short of full scale even when one component
+     underneath it is spread wide. Bounded generously — this is a guard against
+     the metric blowing up, not a pin on today's board. */
+  expect(room.rawStarterSpread, "a seat-driven starter spread, in points").toBeGreaterThan(25);
+  expect(room.rawStarterSpread, "but not an unbounded one").toBeLessThan(320);
 
   expect(room.spread, `composite spread across a room of identical drafters (was 100 unfloored)`).toBeLessThan(60);
 
@@ -325,4 +340,74 @@ test("a room of identical drafters does not produce a full-scale grade spread", 
   // compresses the scores, it does not flatten the standings.
   expect(room.ranks[0], "somebody is still ranked first").toBe(1);
   expect(new Set(room.ranks).size, "and the room is still ranked, not tied flat").toBeGreaterThan(3);
+});
+
+/* Where a manager sits must not decide their grade.
+
+   Starter strength counting projected points rather than ADP rank places made
+   this measurable for the first time: in a room where every seat runs the
+   identical CPU rule, so no seat out-drafts any other, raw starter strength
+   spans ~190 points and correlates with the chair at about r -0.6. That is a
+   true fact about snake position and an indefensible input to a grade meant to
+   judge drafting.
+
+   analyseDraft() scores `startersVsPar` — the seat's own par, simulated by
+   seatParTable() — so the correlation between chair and finishing rank goes to
+   roughly zero while the raw figure stays exactly as seat-dependent as it
+   really is. Both are asserted, because only checking the composite would pass
+   just as happily if par had quietly flattened the underlying number instead
+   of re-centring it.
+
+   Confirmed against the bug: scaling `starters` instead of `startersVsPar` in
+   analyseDraft() puts seat-vs-rank at +0.50 and fails the first assertion. */
+test("the chair a manager drafts from does not decide their grade", async ({ browser }) => {
+  const context = await browser.newContext();
+  const page = await openApp(context, "#/draft-room");
+  await startSoloDraft(page);
+
+  const out = await page.evaluate(() => {
+    state.seed = 24757;
+    applyJitter();
+    let guard = 0;
+    while (!draftOver() && guard++ < 900) {
+      const c = onTheClock();
+      if (!c) break;
+      // Every seat on the identical rule, so any seat-shaped signal left in
+      // the result is the metric rather than the drafting.
+      const choice = cpuChoice(c.slot, c.round);
+      if (!choice) break;
+      makePick(choice);
+    }
+    const all = analyseDraft().slice().sort((a, b) => a.slot - b.slot);
+    const corr = (a, b) => {
+      const mean = (x) => x.reduce((p, q) => p + q, 0) / x.length;
+      const ma = mean(a), mb = mean(b);
+      let n = 0, da = 0, db = 0;
+      for (let i = 0; i < a.length; i++) {
+        n += (a[i] - ma) * (b[i] - mb);
+        da += (a[i] - ma) ** 2;
+        db += (b[i] - mb) ** 2;
+      }
+      return n / Math.sqrt(da * db);
+    };
+    const seats = all.map((t) => t.slot + 1);
+    return {
+      seatVsRank: corr(seats, all.map((t) => t.rank)),
+      seatVsRawStarters: corr(seats, all.map((t) => t.starters)),
+      parIsReal: all.every((t) => t.par > 0),
+      // par has to re-centre the number, not flatten it
+      vsParSpread: Math.max(...all.map((t) => t.startersVsPar))
+                 - Math.min(...all.map((t) => t.startersVsPar)),
+    };
+  });
+  await context.close();
+
+  expect(Math.abs(out.seatVsRank), "the chair does not predict finishing rank").toBeLessThan(0.35);
+
+  /* The premise. If identically-drafted seats ever stop differing this much in
+     raw terms there is no seat bias left to correct and the assertion above is
+     measuring nothing. */
+  expect(Math.abs(out.seatVsRawStarters), "while the raw figure is still seat-driven").toBeGreaterThan(0.4);
+  expect(out.parIsReal, "every seat got a par, so none was silently ungraded").toBe(true);
+  expect(out.vsParSpread, "par re-centres the component rather than flattening it").toBeGreaterThan(20);
 });

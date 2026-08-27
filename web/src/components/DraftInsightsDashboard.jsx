@@ -277,26 +277,21 @@ export default function DraftInsightsDashboard({ engine, league, mySlot, viewSlo
     .map((p) => ({ pick: p, gap: p.overall - p.player.overall }))
   const tlMax = Math.max(1, ...timeline.map((t) => Math.abs(t.gap)))
 
-  /* The one that got away: at each of this team's turns, every player
-     somebody else took before their next turn was a player they could
-     have had and then couldn't — the biggest replacementGap() upgrade
-     among them is the sliding-doors pick. The last pick has no next turn,
-     so it has no window. K/DST and no-projection players fall out
-     naturally: their gap is null on either side of the comparison. */
-  let missed = null
-  teamPicks.forEach((teamPick, i) => {
-    const next = teamPicks[i + 1]
-    if (!next) return
-    const ownGap = engine.replacementGap(teamPick.player)
-    if (ownGap === null) return
-    picks.forEach((p) => {
-      if (p.slot === viewSlot || p.overall <= teamPick.overall || p.overall >= next.overall) return
-      const theirGap = engine.replacementGap(p.player)
-      if (theirGap === null) return
-      const delta = theirGap - ownGap
-      if (delta > (missed ? missed.delta : 0)) missed = { theirs: p, mine: teamPick, delta }
-    })
-  })
+  /* The one that got away: at each of this team's turns, the player somebody
+     else took before their next turn who would have improved this lineup most.
+
+     The scan used to live here and compared two bare replacementGap()
+     readings — his against the pick actually made — which is a claim about
+     the player pool with no reference to the roster it is advising. A team
+     holding two elite tight ends was told it had missed a third; the
+     subtraction was right and the advice was unusable, because he could never
+     have started. engine.oneThatGotAway() runs the same window scan as a
+     substitution through bestLineup(), beside the grade it belongs to, so a
+     player who would not crack this lineup scores 0 and cannot be named.
+
+     Still gated on MISS_FLOOR here: the delta is projected points on both
+     sides of the change, which is the unit that floor was always written in. */
+  const missed = engine.oneThatGotAway ? engine.oneThatGotAway(viewSlot) : null
   const realMiss = missed && missed.delta >= MISS_FLOOR ? missed : null
 
   const standings = analysis.slice().sort((a, b) => a.rank - b.rank)
@@ -457,13 +452,13 @@ export default function DraftInsightsDashboard({ engine, league, mySlot, viewSlo
                   {realMiss.theirs.overall - realMiss.mine.overall === 1
                     ? 'with the very next pick'
                     : `${realMiss.theirs.overall - realMiss.mine.overall} picks later`}
-                  , and he projects more points over a replacement starter than {poss} pick does.
+                  , and swapping him in would have made {poss} starting lineup this much stronger.
                 </p>
               ) : (
                 <p className="mt-2 text-sm leading-relaxed text-white/60">
-                  Nothing got away. At every turn, nobody taken before {poss} next pick out-valued {poss}{' '}
-                  choice by more than the projection can honestly measure — that is the mark of a draft
-                  with no real regrets in it.
+                  Nothing got away. At every turn, nobody taken before {poss} next pick would have improved{' '}
+                  {poss} starting lineup by more than the projection can honestly measure — that is the mark
+                  of a draft with no real regrets in it.
                 </p>
               )}
             </div>
@@ -473,7 +468,7 @@ export default function DraftInsightsDashboard({ engine, league, mySlot, viewSlo
                   +{Math.round(realMiss.delta)}
                 </div>
                 <div className="mt-1.5 font-plex text-[9.5px] font-semibold uppercase tracking-wide text-ink-muted">
-                  points forgone
+                  lineup points forgone
                 </div>
               </div>
             )}
@@ -507,9 +502,20 @@ export default function DraftInsightsDashboard({ engine, league, mySlot, viewSlo
                 <VorpRow key={i} seat={seat} gap={gaps[i]} maxAbs={maxAbs} />
               ))}
             </div>
+            {/* The last clause is not decoration. Starter strength is a sum of
+                the same points these rows print, so a reader can now add this
+                panel up and check it — which they could not while the grade
+                counted ADP rank places and this counted points. The two
+                positions dashed here still go into that sum (5 to 29 points a
+                team, measured across a room), and a footnote that stopped at
+                "no bar is drawn" would leave the panel implying they were
+                excluded. Dashing them is a refusal to *rank* them, which is
+                what the backtest actually condemned; it was never a claim that
+                their points did not happen. */}
             <p className="mt-3 text-[10px] leading-relaxed text-ink-muted">
               Kickers and defenses show a dash: measured against three seasons of archived forecasts the
-              projection ranks them no better than chance, so no bar is drawn from it.
+              projection ranks them no better than chance, so no bar is drawn from it. Their points still
+              count toward starter strength — the rows above will add up to a little less than the grade uses.
             </p>
           </motion.section>
 

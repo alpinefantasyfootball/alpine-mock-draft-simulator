@@ -528,17 +528,32 @@ construction, bye week safety. Each is computed for every team, scaled 0–100
 against the rest of the room by `scaleAcross()`, then weighted. The grade is
 a ranking inside the room, which is why somebody always gets an A+.
 
+**Starter strength is projected points over replacement, scored against par for
+the seat** — not ADP rank places, and not the raw total. Both of those were
+wrong and both are written up below ("Starter strength was counting the wrong
+thing", "Starter strength is scored against par for the chair"). The bars on
+screen are positions within *one* room, not scores: comparing a component
+across two drafts compares two different populations and means nothing.
+
 Three of the four were wrong at once, found in one sitting in August 2026,
 and they were wrong in the same direction: they all flattered picks nobody
-chose to make. Starter strength was correct throughout. What follows is why
-each was wrong, because none of them announced themselves.
+chose to make. What follows is why each was wrong, because none of them
+announced themselves.
+
+**This section used to say "starter strength was correct throughout", and it
+was the one that was wrong for longest.** See "Starter strength was counting
+the wrong thing" below — it is corrected in place rather than left standing,
+the same rule the rebrand section follows about orange.
 
 **`bestLineup()` sorts by `aboveReplacement`, never by `posRank`.** A rank
 inside a position cannot choose between positions, and the FLEX is a slot that
 has to. Sorting by `posRank` filled it from TE19, RB25 and WR28 by taking the
 tight end — 19 is a smaller number than 25 — when TE replacement is 14, so
 that tight end was *below* startable and worth 0, while the running back was
-five places above his own replacement and sat on the bench.
+five places above his own replacement and sat on the bench. (The raw figures
+in this paragraph are in the rank-places unit `aboveReplacement()` used at the
+time; it returns projected points now, and the ordering argument is unchanged
+and stronger for it.)
 
 Half the grade is starter strength, and it was being read off a lineup nobody
 would ever field. Measured on one real roster it cost five raw points against
@@ -550,6 +565,197 @@ This is the suggestions bug in a different function, and the lesson is the same
 one: **a within-position measure cannot answer a between-position question.**
 Inside a single-position slot the two orderings are identical, which is exactly
 why it hid — every slot but the FLEX looked right.
+
+### Starter strength was counting the wrong thing, in the wrong unit
+
+Reported by the owner, 27 August 2026, as a D+ on the highest-VORP roster of
+four mocks. Nothing in the grade was arithmetically wrong and every check in
+this section passed. `aboveReplacement()` was:
+
+```js
+Math.max(0, replacementRank(player.pos) - player.posRank)
+```
+
+**`posRank` is ADP rank.** `buildBoard()` sorts the board by `adp` and numbers
+each position off that order, so half the grade was asking "how early does the
+market take him within his position", never "how good is he". The projection's
+own within-position rank has been on every player all along as `projPosRank`,
+and the grade never read it. Measured on the 26 August board: **Sam LaPorta is
+TE12 by ADP and TE5 by projection**, so he scored 0 for a player the app
+privately rates seven places inside the starting cut.
+
+**And places are not points.** Replacement rank is `teams × slots + 1`, so the
+*ceiling* is set by how deep a position is drafted rather than by what a player
+is worth — measured, QB tops out at **10** places and TE at **11**, against
+**24** for RB and **26** for WR. So Josh Allen at **+60.2** projected points
+over replacement scored 10, and Drake London at **+18.0** scored 22: half the
+grade rating London at better than twice Allen on a board that privately rates
+Allen at over three times London.
+
+**The user-visible consequence is that the app graded in one currency and
+reported in another.** `replacementGap()` — points — is what the player sheet,
+the Juke score and the Insights VORP matrix all show. A roster can hold the
+room's best projected starters and read as the room's worst draft, and no
+reader can get from one to the other. That is the same class as the standings
+printing starter strength under a column of totals: a right number in the
+wrong place.
+
+It is points now, floored at 0, computed as `projPts - REPLACEMENT_PTS[pos]`.
+**Deliberately not `replacementGap()` itself**, which refuses K and DST — that
+refusal is about *ranking* them and the note under `UNRANKED_POSITIONS`
+already says the grade is untouched by it on purpose, because a kicker really
+did score those points.
+
+**Which creates one thing to watch, and it is newly reachable rather than
+new.** The VORP matrix dashes K and DST while starter strength counts them —
+5 to 29 points a team, measured across a room. That contradiction existed
+before and nobody could catch it, because the two were in different units and
+nothing invited adding them up. Now they are the same unit, so a reader *can*
+add the panel up, and the footnote has to say so. **Unifying two units makes
+every previously-invisible disagreement between them checkable at once** —
+budget for that, rather than being surprised by it.
+
+**The cover term in `build` had the same defect** and moved with it: it ranked
+bench receivers and backs by `posRank` too, so the cover a manager actually
+wants — the player the room drafts late and the projection likes — was
+invisible to it. Fixing one and not the other leaves the grade half-converted.
+
+**Do not re-derive the old expression from the fact that replacement level is
+a rank.** `replacementRank()` is still a rank and still the right way to find
+*which* player sets the baseline; what may not happen again is measuring a
+player's worth in distance from it.
+
+### The printed weights were not the weights that ran
+
+Found in the same sitting, by measuring rather than reading. `MIN_SPAN` floored
+`starters` and `build` and left `value` and `byes` unfloored — so the two
+components with the widest natural spread stretched across the full 0-100 on
+every draft while starter strength was compressed into whatever a floored
+denominator allowed. Measured as each component's share of the variance in
+finishing order, across two rooms:
+
+```
+             stated   actually explained
+starters      50%           ~35%
+value         25%           ~36%
+build         15%           ~13%
+byes          10%           ~15%
+```
+
+**Draft value decided the grade more than starter strength did**, in a grade
+that says on its own face that starters are worth double. A floor on one
+component is never a local adjustment: scaling is what turns a raw spread into
+the 0-100 the weights are applied to, so flooring one silently reweights all
+four.
+
+Every component has a floor now, in its own units and derived from its own
+resolution — `{ starters: 20, value: 35, build: 20, byePenalty: 20 }`. After
+the change, on the same board: **starters 55.7%, value 27.4%, build 6.5%,
+byes 10.4%.** Build now under-influences, and that is the floor working rather
+than failing — its raw span across a CPU-drafted room is 7, well inside its own
+error, and a component that is not discriminating should not be handed 15% of
+the answer.
+
+**`MIN_SPAN.starters = 20` did not change value and its justification did.**
+The old comment derived it as MAE 6.8 a player × √9 ≈ 20 *points* — correct
+arithmetic, attached to a quantity that was counted in ADP rank places. The
+number was right for a unit the code was not using. **A justification can be
+sound and still be about something else; check the unit before trusting the
+derivation.**
+
+### Starter strength is scored against par for the chair
+
+The points unit exposed this; it did not create it. In a room where every seat
+runs the identical CPU rule — so no seat out-drafts any other — raw starter
+strength spans **191 points** (seat 1 fields 362, seat 5 fields 171) and
+correlates with the chair at **r −0.6**. Seat predicted finishing rank at
+**+0.50**. In rank places the same room spanned 10 to 12, which read as
+"identical drafters produce identical rosters" and was really "this metric
+cannot see a 190-point difference".
+
+Both facts are true at once, which is why the answer is not to shrink the
+number: an early seat's lineup genuinely is worth that much more, and a grade
+meant to judge *drafting* must not hand out most of a letter for where somebody
+sat. So the component is **`startersVsPar`** — the seat's raw strength minus
+what a straight consensus drafter would have got from that same chair. Golf's
+par, or WAR's replacement, applied to a draft slot. Measured after: seat versus
+finishing rank **−0.06**, and the printed weights land almost exactly
+(**50.3 / 27.7 / 11.2 / 10.8** against 50/25/15/10).
+
+**`seatParTable()` simulates par the way `shotPicks()` and
+`generateThirdRoundScenario()` already simulate a room** — a local
+`taken`/`have` pair, never `board[].drafted` or `state.picks` — so it runs
+during a live draft without touching it, and asks `bestAvailable()` rather
+than carrying a second opinion of what a seat would take. Three things about it
+that are load-bearing:
+
+- **No jitter.** `bestAvailable()` grew a `wobble` parameter for this one
+  caller. Par has to be a property of the board, not of a draft: with the
+  wobble in, the same roster scores differently because a reference draft it
+  was never part of happened to wobble differently. Everyone else keeps it.
+- **It is a table, not a number.** Par after three picks is not par after
+  fourteen, and comparing a partial roster against a finished par is the
+  "a component written for a finished roster behaves least like itself
+  mid-draft" trap this file already records.
+- **It is cached on the board, and it must be.** `bestUpgrade()` calls
+  `analyseTeam()` once per available player, so an uncached simulation would
+  run a full draft a hundred times to draw one panel. The key carries
+  `BEST_VOR`, which is the tell for a rescoring — editing the scoring table
+  rewrites every `projPts` and therefore every par.
+
+**`starters` stays on the object as the raw sum** because that is what the
+Insights VORP matrix prints per player and a reader has to be able to add that
+panel up. `startersScaled` is *aliased* to `startersVsParScaled` rather than
+computed separately, so no consumer sees two scaled starter figures and picks
+the wrong one. The caption under the bar comes from `parText()` through the
+bridge — a bar whose caption describes a different quantity from the bar is
+this file's own "right value, wrong column" bug, and there were two call sites
+ready to drift.
+
+**What par does not remove is wobble.** In that same identical-drafter room
+`startersVsPar` still spans −108 to +89, because the CPU drafts with jitter and
+par does not. That is noise about luck rather than bias about seating, it is
+the same noise the raw figure always carried, and the floors bound what it can
+do to the composite (spread **44**, against the `< 60` the test asserts).
+
+`tests/grade.spec.mjs` gained "the chair a manager drafts from does not decide
+their grade", which asserts both halves — chair-versus-rank near zero *and* the
+raw figure still seat-driven, since a par that flattened the component instead
+of re-centring it would pass a one-sided check. **Confirmed against the bug**:
+scaling `starters` again puts chair-versus-rank at **+0.47** and fails it.
+
+Its older premise line asserted `rawStarterSpread < 25` and now asserts a
+bounded seat-driven spread instead. **That failure was a stale threshold in a
+retired unit, not a regression** — the assertion the test exists for passed
+throughout, which is exactly the tell the testing section describes.
+
+### The one that got away had no roster in it
+
+`DraftInsightsDashboard.jsx` scanned each gap between a team's picks and named
+the biggest `replacementGap()` upgrade somebody else took — a comparison
+between two players with no reference to the roster being advised. Reported
+from a real draft: a team holding **two elite tight ends was told it had missed
+Sam LaPorta.** The subtraction was right and the advice was unusable, because a
+third tight end cannot start, so those points were never available to that
+roster at any price. Same failure as naming a kicker the biggest reach.
+
+`oneThatGotAway()` lives in `app.js` now, beside the grade, and the delta is a
+**substitution run through `bestLineup()`**: the roster as drafted against the
+roster with that pick swapped for theirs. Swap, not add — a roster carrying
+both is a team that never existed, and adding is what lets a spare tight end
+look like a gain by occupying a bench spot nobody was choosing between.
+
+Verified both directions on one board: a team holding Bowers (TE1) and McBride
+(TE2) scores **+0.0** for LaPorta and **+0.0** for the next-best tight end, so
+neither can be named; a team holding Loveland (TE3) and Kincaid (**TE12, worth
+0**) scores **+27.9** for LaPorta, who really does displace Kincaid into the
+lineup. A better tight end who beats a starter still counts, and should — the
+rule is about the lineup, not about the position.
+
+**A component may not decide this for itself.** It rendered a verdict it also
+computed, which is the "written down twice" rule in React; the engine decides
+and the component draws, the same contract `usageFor()` and
+`projectionSummary()` already have.
 
 **A component that is the same for every team is not in the grade.** This is
 the check to run first on anything in here. `scaleAcross()` hands every team
@@ -868,6 +1074,15 @@ the number it replaced.
 kicker really did score those points. How a finished roster performed and how
 well a forecast ranks are different questions, and only the second one failed.
 
+**This survived `aboveReplacement()` becoming points, and it had to be kept
+deliberately.** The obvious move once both are measured in points is to call
+`replacementGap()` from the grade and delete the duplicated arithmetic — and
+that would silently drop K and DST out of starter strength, because
+`replacementGap()` honours `UNRANKED_POSITIONS` and this must not. The grade
+computes `projPts - REPLACEMENT_PTS[pos]` itself for exactly that reason. Two
+functions doing the same arithmetic on purpose, with the refusal in one of
+them, is the point rather than an oversight.
+
 ## Team colour
 
 One mark per club, in `TEAM_ACCENT`, used in exactly two places on the player
@@ -1009,6 +1224,14 @@ perfectly good pick.
 The same number being right in the grade and wrong here is not a
 contradiction. The grade is scoring who *starts*. This is choosing who to
 *hold*. **Do not reach for `aboveReplacement` again without re-reading this.**
+
+**The unit changed underneath this and the conclusion did not.** It returned
+ADP rank places when the experiment above was run and returns projected points
+now (see "Starter strength was counting the wrong thing"), so the `> 0` test in
+that snippet still means the same thing — startable today or not — and every
+reason it failed is about *what question is being asked of a bench pick*, not
+about how the answer is scaled. The measurement was not re-run and does not
+need to be. If anyone does re-run it, the eleven pinned seeds are the bar.
 
 **Whether it helps is a measurable question, so measure it.** Same seed, same
 computer teams, your seat drafting each way, across pinned seeds. A suggestion
