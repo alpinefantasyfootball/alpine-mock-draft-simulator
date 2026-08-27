@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { Bookmark, ChevronDown, ChevronUp, Plus, Search, Star } from 'lucide-react'
 import { POS_BADGE, POS_LIST, INJURY_META } from './draftRoomPositions.js'
 import JukeValueAssistant from './JukeValueAssistant.jsx'
-import { MOBILE_COL_WIDTH, MOBILE_GROUPS, MOBILE_SORTS, STAT_COLUMNS, STAT_GROUPS, statValue, lastsTone } from './playerColumns.js'
+import { MOBILE_COL_WIDTH, MOBILE_SORTS, STAT_COLUMNS, STAT_GROUPS, statValue, lastsTone } from './playerColumns.js'
 
 // Keyed lookup so the group header can total its own columns' widths
 // rather than carrying a second copy of them.
@@ -162,9 +162,10 @@ export default function PlayerQueueSidebar({
   // reason to know about.
   projectedGroupLabel,
   // The phone/app pool (PlayersTab.jsx's mobile Pool pane): a narrower
-  // identity block, MOBILE_GROUPS' own order (the decision numbers first),
-  // a flat per-column width instead of each column's own desktop width,
-  // no separate POS column, and no Draft pill in the row.
+  // identity block, a flat per-column width instead of each column's own
+  // desktop width, no separate POS column, and no Draft pill in the row.
+  // The column *order* is no longer part of this list — mobile reads
+  // STAT_GROUPS the same as desktop now, see that export's own comment.
   mobile,
 }) {
   /* What statValue() reads a cell from: the derived columns keep the
@@ -223,15 +224,14 @@ export default function PlayerQueueSidebar({
   // position actually has — "ALL" keeps every group, the union-across-
   // positions shape playerColumns.js's own header comment documents.
   // Filtering here, not there: STAT_GROUPS/STAT_COLUMNS stay the one list
-  // every consumer of this file shares. The Juke group is never filtered
-  // out — an unranked K/DST prints an em dash in it rather than losing the
-  // group, same as overallScore()/survivalProbability() withhold a number
-  // rather than a column. MOBILE_GROUPS reorders the same six groups
-  // (decision numbers first); it is never a different set of columns.
-  const groupSource = mobile ? MOBILE_GROUPS : STAT_GROUPS
-  const visibleGroups = groupSource.filter((g) => !g.positions || posFilter === 'ALL' || g.positions.includes(posFilter))
-  // Columns in whichever order visibleGroups is already in — desktop's own
-  // STAT_GROUPS order or MOBILE_GROUPS' reordered one — rather than a
+  // every consumer of this file shares, mobile included now — see that
+  // export's own comment for why the mobile-only reordering this used to
+  // read from a separate MOBILE_GROUPS is gone. The Juke group is never
+  // filtered out — an unranked K/DST prints an em dash in it rather than
+  // losing the group, same as overallScore()/survivalProbability()
+  // withhold a number rather than a column.
+  const visibleGroups = STAT_GROUPS.filter((g) => !g.positions || posFilter === 'ALL' || g.positions.includes(posFilter))
+  // Columns in whichever order visibleGroups is already in, rather than a
   // separate filter-then-sort pass that could disagree with it.
   const visibleColumns = visibleGroups.flatMap((g) => g.keys.map((k) => COL_BY_KEY[k]))
 

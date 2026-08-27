@@ -26,6 +26,19 @@
 // PlayerQueueSidebar.jsx, never here — this file stays the one union list
 // Sleeper-style boards already promise, per its own header comment; "ALL"
 // still renders every group exactly as before.
+//
+// The one list mobile reads too, now. Mobile used to read PTS/VORP/JUKE/
+// LASTS first and BYE/ADP last, via a separate MOBILE_GROUPS reordering
+// of these same six groups — the decision numbers before a swipe reaches
+// anything else, versus desktop's own BYE/ADP-first order, which is free
+// to lead with reference columns because the whole row is visible at
+// once. Reported directly as a mismatch worth removing: mobile reads this
+// exact order now, keys included (JUKE, TIER, LASTS, not JUKE, LASTS,
+// TIER). MOBILE_GROUPS was a second list that could only ever drift from
+// this one — collapsed rather than kept in lockstep by hand. The real
+// cost: BYE and ADP are the first four columns after PTS/VORP now, not
+// JUKE and LASTS, so the two numbers unique to this app's own model sit a
+// swipe further from the identity column on a phone than they did before.
 export const STAT_GROUPS = [
   { label: '', keys: ['bye', 'adp'] },
   { label: 'Projected', keys: ['pts', 'vorp'] },
@@ -45,29 +58,11 @@ export const STAT_GROUPS = [
   { label: 'Juke', keys: ['juke', 'tier', 'lasts'], teal: true },
 ]
 
-/* The phone pool leads with the numbers a pick is actually made on — PTS,
-   VORP, JUKE, LASTS — before a swipe reaches anything else, where desktop
-   leads with BYE/ADP because it has the width to show everything at once.
-   Same six groups as STAT_GROUPS, reordered and re-split rather than a
-   second column list: Juke's own three (JUKE/LASTS/TIER, in that order —
-   the two decision numbers before the reference one) come right after
-   Projected, and BYE/ADP move into their own trailing blank group. Every
-   key still resolves through STAT_COLUMNS/statValue() — this only changes
-   which order the same columns are read in. */
-export const MOBILE_GROUPS = [
-  { label: 'Projected', keys: ['pts', 'vorp'] },
-  { label: 'Juke', keys: ['juke', 'lasts', 'tier'], teal: true },
-  { label: '', keys: ['adp', 'bye'] },
-  { label: 'Passing', keys: ['py', 'pt', 'pi'], positions: ['QB'] },
-  { label: 'Rushing', keys: ['ra', 'ry', 'rt'], positions: ['QB', 'RB'] },
-  { label: 'Receiving', keys: ['rc', 'cy', 'ct'], positions: ['RB', 'WR', 'TE'] },
-]
-
 // Every mobile numeric column is this one flat width regardless of its own
 // desktop width (40-50px, varying per column) — the handoff's own number,
-// chosen so identity(208) + the first four columns(4x48=192) sums to
-// exactly 400px, fitting a 402px screen with nothing to swipe for the four
-// numbers a pick actually turns on.
+// chosen so identity(208) plus four of these columns sums to exactly
+// 400px, fitting a 402px screen with nothing to swipe for the first four
+// numeric columns.
 export const MOBILE_COL_WIDTH = 48
 
 /* `dir` is which way reads as "best first" on the very first click of a
