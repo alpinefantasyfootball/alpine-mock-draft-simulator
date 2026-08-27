@@ -343,6 +343,30 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
             </div>
           </div>
 
+          {/* Promoted up from the bottom of the screen, where "run another
+              mock or go back to the lobby" — the two things a manager who
+              just finished a draft is likeliest to want — sat below the
+              full breakdown, the standings and the methodology disclosure,
+              reachable only after scrolling past all of it. These are the
+              same two handlers the row at the foot of this screen already
+              used; only the position moved; Close/Discard stay down there
+              as the lower-frequency pair. */}
+          <div className="mt-5 space-y-2.5">
+            <button
+              type="button"
+              onClick={handleRunAnother}
+              className="flex h-[52px] w-full items-center justify-center rounded-full bg-gradient-to-r from-[#00E5FF] to-[#7B1FA2] text-[15px] font-bold text-white shadow-glass transition-transform duration-150 active:scale-[0.98]"
+            >
+              Run another mock
+            </button>
+            <a
+              href="#/drafts"
+              className="flex h-[50px] w-full items-center justify-center rounded-full border border-white/15 text-[14px] font-semibold text-white/75 transition-colors duration-150 active:bg-white/[0.06]"
+            >
+              Back to the locker
+            </a>
+          </div>
+
           <h3 className="mt-8 font-display text-lg font-extrabold text-white">How the grade is built</h3>
           <div className="mt-4 space-y-5">
             {bars.map((b) => {
@@ -455,26 +479,15 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
             </button>
           ) : null}
 
-          {/* Four exits — Prompt 6's own review note: these were missing
-              entirely before this pass. Only Discard confirms (the state and
-              handler above, shared with the desktop buttons below), because
-              nothing else here can lose a finished draft — it is already in
-              history the moment the draft ended (see the comment above
+          {/* Two exits now, not four — Run another mock/Back to the locker
+              moved up to sit right under the grade itself (see that
+              comment); Close and Discard are the lower-frequency pair and
+              stay put. Only Discard confirms (the state and handler above,
+              shared with the desktop buttons below), because nothing else
+              here can lose a finished draft — it is already in history the
+              moment the draft ended (see the comment above
               handleRunAnother). */}
-          <div className="mt-8 space-y-2.5 border-t border-white/10 pt-6">
-            <button
-              type="button"
-              onClick={handleRunAnother}
-              className="flex h-[52px] w-full items-center justify-center rounded-full bg-gradient-to-r from-[#00E5FF] to-[#7B1FA2] text-[15px] font-bold text-white shadow-glass transition-transform duration-150 active:scale-[0.98]"
-            >
-              Run another mock
-            </button>
-            <a
-              href="#/drafts"
-              className="flex h-[50px] w-full items-center justify-center rounded-full border border-white/15 text-[14px] font-semibold text-white/75 transition-colors duration-150 active:bg-white/[0.06]"
-            >
-              Back to the locker
-            </a>
+          <div className="mt-8 border-t border-white/10 pt-6">
             <div className="flex gap-2.5">
               <button
                 type="button"
@@ -537,6 +550,27 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
               </p>
               <p className="mt-1 font-display text-lg font-bold text-white/50">{me.grade}</p>
             </div>
+          </div>
+
+          {/* Promoted up from the exit row at the foot of the screen — see
+              the mobile header's identical addition for why. Solid gradient
+              for Run another mock rather than the outline pill the bottom
+              row still uses for it: this is the one suggested action, not
+              one of four equally-weighted exits. */}
+          <div className="mt-4 flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={handleRunAnother}
+              className="rounded-full bg-gradient-to-r from-[#00E5FF] to-[#7B1FA2] px-4 py-2 text-xs font-bold text-white shadow-glass transition-transform duration-150 hover:scale-[1.02]"
+            >
+              Run another mock
+            </button>
+            <a
+              href="#/drafts"
+              className="rounded-full border border-white/15 px-4 py-2 text-xs font-semibold text-white/60 transition-colors duration-150 hover:border-teal-400/60 hover:text-teal-300"
+            >
+              Back to the locker
+            </a>
           </div>
 
           <div className="mt-4 space-y-2.5">
@@ -668,20 +702,10 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
             <p className="mt-2 max-w-[70ch] text-[11px] leading-relaxed text-ink-muted">{methodologyText}</p>
           </details>
 
+          {/* Run another mock/Back to the locker moved up to sit under the
+              summary bar (see that comment) — Close and Discard are the
+              lower-frequency pair and stay here. */}
           <div className="mt-6 flex flex-wrap items-center justify-center gap-2.5 border-t border-slate-rule/80 pt-5">
-            <a
-              href="#/drafts"
-              className="rounded-full border border-white/15 px-4 py-2 text-xs font-semibold text-white/60 transition-colors duration-150 hover:border-teal-400/60 hover:text-teal-300"
-            >
-              Back to the locker
-            </a>
-            <button
-              type="button"
-              onClick={handleRunAnother}
-              className="rounded-full border border-teal-400/40 px-4 py-2 text-xs font-semibold text-teal-300 transition-colors duration-150 hover:border-teal-400 hover:bg-teal-400/10"
-            >
-              Run another mock
-            </button>
             <button
               type="button"
               onClick={onClose}

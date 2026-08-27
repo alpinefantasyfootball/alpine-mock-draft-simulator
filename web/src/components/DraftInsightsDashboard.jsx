@@ -1,5 +1,4 @@
 import { motion } from 'framer-motion'
-import { X } from 'lucide-react'
 import { POS_BADGE } from './draftRoomPositions.js'
 import ShareBar from './ShareBar.jsx'
 
@@ -179,21 +178,37 @@ function TimelineRow({ pick, gap, maxAbs, shortName }) {
   )
 }
 
-// Shown the moment a draft concludes (DraftRoom.jsx flips it on off the
-// draftOver() edge) and reopenable from the pill it leaves behind. All of
-// it is real: the grade is engine.draftAnalysis() — the identical
-// analyseDraft() the legacy standings print — and every bar is
-// replacementGap() over the real seated lineup.
+// The "Draft Insights" tab — DraftRoom.jsx switches the view here itself
+// the moment a draft concludes (see its draftIsOver effect) rather than
+// waiting for a click, same reasoning as before: this is the most
+// valuable screen in the app, so it must never be more than one press
+// away from a finished board. Was a `fixed inset-0` modal reached only
+// through a floating reopen pill; both are gone; a real tab on the same
+// bar as Players/Board/Analysis needs neither. All of it is real: the
+// grade is engine.draftAnalysis() — the identical analyseDraft() the
+// legacy standings print — and every bar is replacementGap() over the
+// real seated lineup.
 //
 // viewSlot is whose report this is — yours by default, any team's via the
 // standings rows below or a board header click (DraftRoom owns the state
-// so a header click can pick the team and open the overlay in one
+// so a header click can pick the team and switch to this tab in one
 // gesture). Every figure derives from viewSlot; mySlot is only for
 // telling "you" apart from a team that needs naming.
 export default function DraftInsightsDashboard({ engine, league, mySlot, viewSlot, onViewSlot, onClose }) {
   const analysis = engine.draftAnalysis()
   const mine = analysis && analysis[viewSlot]
   if (!mine) return null
+
+  // The same two actions AnalysisTab.jsx promotes to the top of its own
+  // screen, for the identical reason: DraftRoom.jsx lands here first the
+  // moment a draft ends, so whichever report a manager sees first has to
+  // be the one that offers "what next" rather than making them go find
+  // the other tab for it. engine.restart() is the exact bridge
+  // AnalysisTab.jsx and DraftMenuOverlay's own kebab menu already share —
+  // never a second reset. Close/Discard are not repeated here: there is
+  // no modal left to close, and the kebab menu already reaches Discard/
+  // Leave the room from every tab, this one included.
+  const handleRunAnother = () => engine.restart()
 
   // Net ADP value is mine.value itself — analyseTeam()'s own unclamped
   // pick-number-minus-board-rank sum, never a second computation of the
@@ -305,7 +320,7 @@ export default function DraftInsightsDashboard({ engine, league, mySlot, viewSlo
   }
 
   return (
-    <div className="fixed inset-0 z-[70] overflow-y-auto bg-slate/97 backdrop-blur-md">
+    <div className="flex-1 overflow-y-auto bg-slate pb-64">
       <div className="mx-auto flex min-h-full w-full max-w-4xl flex-col gap-5 px-4 py-8 sm:px-6">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -315,26 +330,20 @@ export default function DraftInsightsDashboard({ engine, league, mySlot, viewSlo
               <span className={isMe ? 'text-teal-300' : 'text-[#B784E0]'}>{teamName}</span>
             </h1>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
-            {!isMe && (
-              <button
-                type="button"
-                onClick={() => onViewSlot(mySlot)}
-                className="rounded-full border border-teal-400/40 px-3 py-1.5 text-xs font-semibold text-teal-300 transition-colors duration-150 hover:border-teal-400 hover:bg-teal-400/10"
-              >
-                Back to your team
-              </button>
-            )}
+          {/* No close/X any more — this is a tab, not a modal, so there is
+              nothing to dismiss. "Back to your team" stays: it's real
+              navigation (this report can be showing someone else's team,
+              via a board header click or a standings row below), not an
+              exit action. */}
+          {!isMe && (
             <button
               type="button"
-              onClick={onClose}
-              title="View the board"
-              aria-label="Close insights and view the board"
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-rule bg-slate-sunk/60 text-white/60 transition-colors duration-150 hover:border-teal-400/50 hover:text-white"
+              onClick={() => onViewSlot(mySlot)}
+              className="shrink-0 rounded-full border border-teal-400/40 px-3 py-1.5 text-xs font-semibold text-teal-300 transition-colors duration-150 hover:border-teal-400 hover:bg-teal-400/10"
             >
-              <X className="h-4 w-4" />
+              Back to your team
             </button>
-          </div>
+          )}
         </div>
 
         {/* Summary card — the grade, large and glowing, in the two brand
@@ -395,6 +404,27 @@ export default function DraftInsightsDashboard({ engine, league, mySlot, viewSlo
 
           <ShareBar shareData={shareData} />
         </motion.div>
+
+        {/* The same two actions AnalysisTab.jsx promotes to the top of its
+            own screen, and for the same reason — DraftRoom.jsx lands on
+            this tab first the moment a draft ends, so this is the report
+            most likely to be the only one somebody sees before deciding
+            what's next. */}
+        <div className="flex items-center gap-2.5">
+          <button
+            type="button"
+            onClick={handleRunAnother}
+            className="rounded-full bg-gradient-to-r from-[#00E5FF] to-[#7B1FA2] px-4 py-2 text-xs font-bold text-white shadow-glass transition-transform duration-150 hover:scale-[1.02]"
+          >
+            Run another mock
+          </button>
+          <a
+            href="#/drafts"
+            className="rounded-full border border-white/15 px-4 py-2 text-xs font-semibold text-white/60 transition-colors duration-150 hover:border-teal-400/60 hover:text-teal-300"
+          >
+            Back to the locker
+          </a>
+        </div>
 
         {/* Sliding doors — the single biggest value upgrade that left the
             board between two of your turns. It is the strongest analytic in

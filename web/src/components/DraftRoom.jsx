@@ -10,9 +10,6 @@ import PickTicker from './PickTicker.jsx'
 import PlayerQueueSidebar, { SORT_DEFAULT_DIR } from './PlayerQueueSidebar.jsx'
 import PlayersTab from './PlayersTab.jsx'
 import PicksRail from './PicksRail.jsx'
-import SidePanel from './SidePanel.jsx'
-import QueueList from './QueueList.jsx'
-import TeamTab from './TeamTab.jsx'
 import AnalysisTab from './AnalysisTab.jsx'
 import DraftDecideScreen from './DraftDecideScreen.jsx'
 import DraftInsightsDashboard from './DraftInsightsDashboard.jsx'
@@ -28,14 +25,12 @@ import PickClockBand from './PickClockBand.jsx'
 import { POS_LIST } from './draftRoomPositions.js'
 import { useMinWidth } from '../hooks/useBreakpoint.js'
 
-// The Board tab's own dock height per tray position — fixed pixels, not the
-// percentage-of-remaining-space split the graph area above it still uses
-// for Analysis (see the `tray === 'hidden' ? 'lg:flex-1' : ...` className
-// below). `tray` is the same three-value state either tab reads: 'raised'
-// means "give the bottom panel more room" in both, just expressed as a
-// bigger dock here versus a bigger graph share there — sharing one flag
-// keeps that meaning consistent switching between the two rather than
-// resetting one tab's layout preference when you look at the other.
+// The Board tab's own dock height per tray position — fixed pixels. This
+// used to also size a percentage-of-remaining-space split on the Analysis
+// tab, back when Analysis shared the board-plus-panels layout with Board
+// (the same `tray` state moved a dock here and a graph share there); full
+// width for Analysis (and Insights) retired that second reading, so `tray`
+// is Board's own state now, not a value two tabs have to agree on.
 const DOCK_H = { hidden: 37, default: 296, raised: 460 }
 
 // The Board tab's own mobile segmented control.
@@ -88,34 +83,6 @@ function useHashActive(prefix) {
     return () => window.removeEventListener('hashchange', onHash)
   }, [prefix])
   return active
-}
-
-/* Small enough to live here rather than in its own file. This used to be
-   rounded-md on purpose ("deliberately not IconButton from the status bar")
-   — reported back as reading like a mismatched control against every other
-   round icon button in this view (the back chevron, the settings gear, the
-   kebab menu, all rounded-full border-slate-rule bg-slate-sunk/60-80). The
-   distinct border/background treatment was the right call and stays; the
-   corner radius disagreeing with the rest of the family wasn't earning
-   anything, so it's rounded-full now like the others. */
-function TrayButton({ onClick, disabled, title, children }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      title={title}
-      aria-label={title}
-      className={
-        'flex h-6 w-6 items-center justify-center rounded-full border transition-colors duration-150 ' +
-        (disabled
-          ? 'cursor-not-allowed border-slate-rule bg-slate-sunk/70 text-white/15'
-          : 'border-slate-rule bg-slate-sunk/80 text-white/60 hover:border-teal-400/50 hover:text-teal-300')
-      }
-    >
-      {children}
-    </button>
-  )
 }
 
 export default function DraftRoom() {
@@ -230,7 +197,6 @@ export default function DraftRoom() {
       return TRAY[Math.min(TRAY.length - 1, Math.max(0, i + dir))]
     })
   }
-  const isolate = tray === 'hidden'
   // 'board' is the default — the board's own ADP-rank order, same as
   // sortBy === 'adp' asc for undrafted players, but it's its own case so
   // clicking away from a column and never toggling anything back to it
@@ -400,29 +366,16 @@ export default function DraftRoom() {
   // same value rather than asking engine.draftOver() a second time.
   const draftIsOver = engine && started ? !!engine.draftOver() : false
 
-  // The Insights dashboard opens itself on the edge — "the draft just
-  // became over", not "the draft is over" — same reasoning as
-  // checkDraftFinished()/revealAnalysis() in app.js: acting on the state
-  // would drag the overlay back over the board on every re-render after
-  // the user closed it to look around. The effect's dep array IS the edge
-  // detector: it only re-fires when draftIsOver actually changes. A draft
-  // reopened from the Locker mounts with draftIsOver already true, so the
-  // first run fires too — which is right, since "Analyze Draft" is exactly
-  // a request for this screen.
-  const [showInsights, setShowInsights] = useState(false)
-  // Which team's report the dashboard is showing. Yours on the auto-open
-  // and from the reopen pill; a board header click opens that column's
-  // team instead. State lives here rather than inside the dashboard so a
-  // header click can pick the team and open the overlay in one gesture.
+  // Which team's report the Insights tab is showing. Yours on the
+  // auto-navigate below; a board header click opens that column's team
+  // instead. State lives here rather than inside the tab's own component
+  // so a header click can pick the team and switch to it in one gesture.
   const [insightsSlot, setInsightsSlot] = useState(0)
   // Which seat the desktop Roster panel is showing. Separate from
   // insightsSlot: reading a rival's roster mid-draft and reading a
   // finished team's report are different questions, and one resetting
   // the other would be a surprise.
   const [rosterSlot, setRosterSlot] = useState(0)
-  // Which of the combined Queue/Roster panel's two tabs is showing. Queue
-  // first: it is the one that changes as the draft runs.
-  const [sideTab, setSideTab] = useState('queue')
   // PickClockBand's own swipe-to-collapse state, lifted here rather than
   // owned there — collapsing the band also has to hand its height back to
   // PlayersTab.jsx's autopick ribbon directly beneath it (see that band's
@@ -458,19 +411,26 @@ export default function DraftRoom() {
     setMobilePane('pool')
     setView('players')
   }
+  // The Insights tab opens itself on the edge — "the draft just became
+  // over", not "the draft is over" — same reasoning as
+  // checkDraftFinished()/revealAnalysis() in app.js: acting on the state
+  // would drag the view back to Insights on every re-render after
+  // somebody had navigated away from it to look around. The effect's dep
+  // array IS the edge detector: it only re-fires when draftIsOver actually
+  // changes. A draft reopened from the Locker mounts with draftIsOver
+  // already true, so the first run fires too — which is right, since
+  // opening a finished draft is exactly a request for this screen. This
+  // used to open a separate modal over whichever tab was active and
+  // separately nudge that tab off of Decide (which has nothing left to
+  // decide once the draft is over); now that Insights is a real tab
+  // rather than an overlay, switching straight to it is both of those at
+  // once — Decide is hidden from the tab bar the same edge this fires on
+  // (see DraftCockpitHeader.jsx/MobileDraftTabBar.jsx), so there's nowhere
+  // stale left to nudge away from.
   useEffect(() => {
     if (draftIsOver) {
       setInsightsSlot(mySlot)
-      setShowInsights(true)
-      // A design review caught the fallback underneath this overlay: the
-      // Decide tab has nothing left to decide once the draft is over, and
-      // was left selected showing a one-line dead end ("see the Board or
-      // Analysis tab"). Whoever closes the overlay — or, in a room, a
-      // guest who never got the auto-open because they were mid-navigation
-      // when it fired — lands on Analysis instead, which has something to
-      // show. The tab itself is hidden below once draftIsOver is true, so
-      // this only matters as the one-time redirect off of Decide.
-      setView((v) => (v === 'decide' ? 'analysis' : v))
+      setView('insights')
     }
   }, [draftIsOver, mySlot])
 
@@ -1252,7 +1212,7 @@ export default function DraftRoom() {
                   onSelectPlayer={setSelectedPlayer}
                   onTeamClick={
                     draftIsOver
-                      ? (slot) => { setInsightsSlot(slot); setShowInsights(true) }
+                      ? (slot) => { setInsightsSlot(slot); setView('insights') }
                       : undefined
                   }
                   trayPos={tray}
@@ -1442,198 +1402,40 @@ export default function DraftRoom() {
               )}
             </div>
           </>
-        ) : (
-        <>
-        {/* Analysis keeps the board-plus-panels layout this file used to
-            share with Board — AnalysisTab in place of the grid, the same
-            tray split, the same panel row underneath. Unlike Board, it
-            still goes through PlayerHub/SidePanel rather than the new dock:
-            reworking Analysis's own bottom panel is a later pass, not this
-            one (the plan removes the pool from Analysis entirely, which is
-            a bigger change than swapping in a new dock). */}
-        {/* Desktop is a horizontal split — board across the full window
-            width on top, panels in a row beneath — not the vertical split
-            this used to be. Measured against Sleeper's own desktop room,
-            which is arranged the same way and for the same reason: a
-            10-team board needs the whole width to show ten columns, and
-            sharing width with side panels is what forced ours to scroll
-            sideways at every window size. Below lg this is unchanged: one
-            column, board filling it, PlayerHub's sheet fixed over the
-            bottom (see its own file comment). */}
-        <div className="relative flex flex-1 flex-col overflow-hidden">
-          {/* min-w-0 is load-bearing: DraftBoardGrid's own content is
-              min-w-max (every column at its real width, deliberately
-              wider than any viewport so it can scroll) and a flex item's
-              automatic minimum size is content-based unless the item
-              itself sets overflow — the grid does, this wrapper doesn't.
-              Without it the wrapper refuses to shrink to the window.
-
-              Height, not width, is what the two breakpoints now argue
-              over: flex-1 below lg (the board owns the column, the sheet
-              floats above it), a fixed share at lg+ so the panel row
-              beneath keeps a real share too. isolate hands the whole
-              height back to the board.
-
-              default is 55%, not the 45% this used to be. Every round on
-              the grid is a fixed 50px (rowsWide) and the header row above
-              them is ~65px, so ten full rounds — the brief's own number —
-              would need ~565px, and 45% gave the board about 345px at a
-              typical 900px-tall window: five and a half rounds above a
-              player list and queue occupying the rest, which is the
-              "panel occupying half the viewport" the brief is describing.
-
-              72% was tried first, measured to land exactly on ten rounds
-              at 900px, and produced a 24px sliver for the player list
-              underneath it — under one row. The pool's own header (the
-              recommended-pick card, search, the two filter-pill rows) is
-              a real, mostly-fixed ~235px on its own; past a certain board
-              share every pixel taken from the panel row comes out of the
-              list itself, not the chrome around it, because the chrome
-              doesn't shrink. Ten full rounds and a usable list do not
-              both fit a 900px window at once — measured, not assumed,
-              after the first number produced a pool nobody could read.
-
-              55% is the trade: seven rounds (429px, up from ~345px) and
-              roughly three real player rows (141px) below the
-              recommendation card and filters, rather than a technically-
-              satisfied round count sitting over an unusable list. raised
-              stays at 30% — that state is a deliberate trade the other
-              way, more list and less board, and shrinking it isn't what
-              "give the board more room" is asking for. */}
-          {/* Board / Analysis tab switching moved to DraftCockpitHeader's
-              own tab nav — this used to be a second, redundant strip right
-              here, doing the same job the header now does above it. */}
-          <div
-            className={
-              'relative flex min-h-0 min-w-0 flex-1 ' +
-              (tray === 'hidden'
-                ? 'lg:flex-1'
-                : tray === 'raised'
-                  ? 'lg:flex-none lg:h-[30%]'
-                  : 'lg:flex-none lg:h-[55%]')
-            }
-          >
-            {/* DraftBoardGrid moved to the view === 'board' branch above,
-                alongside its new ribbon/dock — this branch only ever renders
-                for Analysis now, so there's nothing left here to switch on.
-                onClose: the report's own "Close" exit action. Analysis is a
-                tab, not a modal, so dismissing it means switching tabs —
-                Board is the obvious landing spot, the same content this
-                strip shows for every other tab. */}
-            <AnalysisTab engine={engine} league={league} picks={picks} mySlot={mySlot} onClose={() => setView('board')} />
-
-            {/* The tray control, on the board rather than in the header,
-                because the board is the thing it moves. Desktop only: below
-                lg the panels are a fixed bottom sheet with its own tab bar,
-                so there is no tray here to raise or hide.
-
-                Two buttons rather than one cycling button — a single control
-                that wraps around from hidden back to raised is the kind of
-                thing you have to press three times to learn. Each is disabled
-                at its own end of the range, which is also what tells you the
-                range exists. */}
-            <div className="absolute bottom-3 right-3 z-10 hidden flex-col gap-1 lg:flex">
-              <TrayButton
-                onClick={() => moveTray(1)}
-                disabled={tray === 'raised'}
-                title="Show more of the list"
-              >
-                <ChevronUp className="h-3.5 w-3.5" />
-              </TrayButton>
-              <TrayButton
-                onClick={() => moveTray(-1)}
-                disabled={tray === 'hidden'}
-                title={tray === 'default' ? 'Hide the list' : 'Show less of the list'}
-              >
-                <ChevronDown className="h-3.5 w-3.5" />
-              </TrayButton>
-            </div>
-          </div>
-
-          {/* The panel row — Queue/Roster and Chat/Log/Picks only now.
-              PlayerHub (the pool, and below lg the whole Queue/Team/Chat/
-              Log sheet) is gone from this view entirely: the pool belongs
-              to Players and Board, where a pick is actually made, and
-              Analysis is the read on what already happened, not another
-              place to draft from. PlayerHub's own non-"players" tabs were
-              already `lg:hidden` internally, so removing it costs desktop
-              nothing beyond the pool column itself — SidePanel and
-              DraftLogDock below are separate mounts, untouched.
-
-              Below lg this view now shows no player surface at all — see
-              prompt 08 for AnalysisTab.jsx's own mobile report, which
-              replaces what PlayerHub's sheet used to add here rather than
-              leaving a gap prompt 07 opened and prompt 08 closes.
-
-              flex-none below lg with no in-flow children now that nothing
-              fixed lives here either — both remaining panels carry their
-              own `hidden ... lg:flex`, so the row collapses to nothing
-              below lg the ordinary way, not because something inside it
-              is position:fixed. lg:flex-1 still gives it the other half
-              of the screen at desktop width. */}
-          <div
-            className={
-              'flex min-h-0 flex-none border-slate-rule ' +
-              (isolate ? 'lg:hidden' : 'lg:flex-1 lg:border-t')
-            }
-          >
-
-            {/* The remaining panels are lg+ only, each carrying its own
-                `hidden ... lg:flex` — below lg this view shows no player
-                surface at all now that PlayerHub is gone (see the panel
-                row's own comment above; prompt 08 gives this screen its
-                own mobile report instead).
-
-                Queue and Roster share one tabbed panel rather than taking
-                a column each. Four columns was one too many when a third,
-                wider Players column also shared this row: at 1600px it
-                gave each side panel 320px, and neither of these two needs
-                that constantly — a queue is usually a handful of names and
-                a roster is read in glances. With Players gone entirely,
-                Queue/Roster and Chat/Log/Picks now split this row's full
-                width 3:2 between themselves rather than splitting what a
-                5-unit Players column left over — wider than before, which
-                is the natural result of removing a sibling from the same
-                flex row, not a width chosen separately from that. */}
-            <div className="hidden lg:flex lg:min-h-0 lg:flex-[3] lg:min-w-0">
-              <SidePanel
-                tabs={[
-                  { key: 'queue', label: 'Queue', count: queuePlayers.length },
-                  { key: 'roster', label: 'Roster' },
-                ]}
-                active={sideTab}
-                onTab={setSideTab}
-              >
-                {sideTab === 'queue' ? (
-                  <div className="p-2">
-                    <QueueList players={queuePlayers} myTurn={myTurn} engine={engine} />
-                  </div>
-                ) : (
-                  /* Roster, not the old bottom strip: the strip could only
-                     show a surname per slot across the full width, where a
-                     real panel shows the whole lineup and can carry any
-                     seat — the same any-team switcher the Insights
-                     dashboard has. */
-                  <TeamTab
-                    compact
-                    engine={engine}
-                    league={league}
-                    mySlot={mySlot}
-                    viewSlot={rosterSlot}
-                    onViewSlot={setRosterSlot}
-                    teamLabelOf={(slot) => engine.teamLabel(slot)}
-                  />
-                )}
-              </SidePanel>
-            </div>
-
-            <div className="hidden lg:flex lg:min-h-0 lg:flex-[2] lg:min-w-0">
-              <DraftLogDock recentOthers={recentOthers} />
-            </div>
-          </div>
-        </div>
-        </>
-        )}
+        ) : view === 'analysis' ? (
+          /* Full width, no dock — Analysis and Insights (below) are both a
+             read on a draft that's either finished or almost there, not a
+             place to draft from, so neither one gives up half its width to
+             the Queue/Roster/Chat/Log panels Players and Board still need.
+             That dock used to sit under this exact branch (PlayerHub's pool
+             column had already been dropped from it; SidePanel/DraftLogDock
+             were the last of it) — full width for the report itself is the
+             rest of that same cleanup, not a new decision. onClose: the
+             report's own "Close" exit action. Analysis is a tab, not a
+             modal, so dismissing it means switching tabs — Board is the
+             obvious landing spot, the same content this strip shows for
+             every other tab. */
+          <AnalysisTab engine={engine} league={league} picks={picks} mySlot={mySlot} onClose={() => setView('board')} />
+        ) : view === 'insights' ? (
+          /* Also full width, same reasoning as Analysis above — and this
+             one used to be a `fixed inset-0` modal over whichever tab was
+             active, reached only by a floating pill once you'd closed it.
+             A real tab, always one press away on the same bar as every
+             other screen, needs neither: onClose here is exactly the
+             modal's old exit action, still real (a header click can be
+             viewing someone else's report, and this is how you leave it
+             open on the board instead), just landing on Board like every
+             other tab's Close does rather than on whatever was behind an
+             overlay. */
+          <DraftInsightsDashboard
+            engine={engine}
+            league={league}
+            mySlot={mySlot}
+            viewSlot={insightsSlot}
+            onViewSlot={setInsightsSlot}
+            onClose={() => setView('board')}
+          />
+        ) : null}
       </div>
 
       <MobileDraftTabBar
@@ -1642,13 +1444,6 @@ export default function DraftRoom() {
         draftIsOver={draftIsOver}
       />
 
-      {/* Opens itself on the draft-over edge (see the effect near the top)
-          and closes to the board, leaving a pill to reopen — the analysis
-          is the most valuable screen in the app (CLAUDE.md: the last pick
-          lands and it opens itself), so it must never be more than one
-          press away from a finished board. z-[65] for the pill keeps it
-          above the fixed status bar (z-50); the dashboard itself is z-[70],
-          over everything in this view. */}
       {settingsOpen && (
         <DraftSettingsModal
           engine={engine}
@@ -1681,38 +1476,6 @@ export default function DraftRoom() {
         survivalFor={survivalFor}
       />
 
-      {draftIsOver && showInsights && (
-        <DraftInsightsDashboard
-          engine={engine}
-          league={league}
-          mySlot={mySlot}
-          viewSlot={insightsSlot}
-          onViewSlot={setInsightsSlot}
-          onClose={() => setShowInsights(false)}
-        />
-      )}
-      {draftIsOver && !showInsights && (
-        // top-16 used to assume PickClockBand/PickTicker were still
-        // occupying the space between the header and this pill — true
-        // right up until the pick that ends the draft, which is exactly
-        // when both unmount (their own !draftIsOver gates a few screens
-        // up). With nothing left above it, whichever mobile pane strip or
-        // desktop toolbar sits at the top of the active view shifts up
-        // into that fixed 64px and this pill landed on top of it —
-        // Pool/Queue/Roster/Picks on Players, Board/Pool/Picks on Board,
-        // the filter row on desktop. Bottom-anchored instead, clearing
-        // MobileDraftTabBar's own fixed 58px + safe-area footprint below
-        // lg, the same convention LockerTable.jsx's undo toast already
-        // uses for the identical reason — nothing else is fixed to the
-        // bottom edge on any of the views this button can appear on.
-        <button
-          type="button"
-          onClick={() => { setInsightsSlot(mySlot); setShowInsights(true) }}
-          className="fixed bottom-[calc(58px+env(safe-area-inset-bottom)+16px)] left-1/2 z-[65] -translate-x-1/2 rounded-full border border-teal-400/40 bg-slate-sunk px-4 py-1.5 text-xs font-semibold text-teal-300 backdrop-blur transition-colors duration-200 hover:border-teal-400 hover:bg-teal-400/10 lg:bottom-6"
-        >
-          Draft Insights
-        </button>
-      )}
     </div>
   )
 }

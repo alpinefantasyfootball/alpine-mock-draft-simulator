@@ -7,11 +7,28 @@ import JukeLogo from './juke-logo/JukeLogo.jsx'
 // the ESPN-style screen most of a draft is actually spent on. Decide moved
 // third rather than dropping to last: it still answers "what should I do
 // right now," just no longer the first thing a manager sees.
+//
+// Insights, after Analysis: the two swap places with Decide across the
+// draftIsOver edge below, so the tab count never changes, only which
+// fourth tab occupies the slot Decide leaves behind. It used to be a
+// `fixed inset-0` modal reached only through a floating pill over
+// whichever tab was active — a real destination on this same bar needs
+// neither, and DraftRoom.jsx already switches straight to it the moment a
+// draft ends (see that file's draftIsOver effect).
+//
+// Labelled "Insights" here, not "Draft Insights" — every other label in
+// this row is already one word, and "Draft" is the one piece of context
+// this whole bar already supplies just by existing. The tab's own content
+// still says "Draft Insights" in full, once, as its actual heading; this
+// is the nav label, not the title, and the header's own width budget (see
+// the file-level comment on the 62px bar) has never had room to spend on
+// a word the bar itself already means.
 const TABS = [
   { key: 'players', label: 'Players' },
   { key: 'board', label: 'Board' },
   { key: 'decide', label: 'Decide' },
   { key: 'analysis', label: 'Analysis' },
+  { key: 'insights', label: 'Insights' },
 ]
 
 // Replaces DraftRoomStatusBar's role at both its call sites in
@@ -184,8 +201,11 @@ export default function DraftCockpitHeader({
             {/* Decide has nothing left to decide once the draft is over —
                 DraftRoom.jsx already redirects off it on that edge, and a
                 design review asked for the tab itself to disappear too
-                rather than stay selectable onto a dead end. */}
-            {TABS.filter((t) => !(over && t.key === 'decide')).map((t) => (
+                rather than stay selectable onto a dead end. Insights is
+                the mirror image: nothing to show before a draft is over
+                (there is no report yet), so it stays out of the row until
+                the same edge that retires Decide. */}
+            {TABS.filter((t) => (over ? t.key !== 'decide' : t.key !== 'insights')).map((t) => (
               <button
                 key={t.key}
                 type="button"

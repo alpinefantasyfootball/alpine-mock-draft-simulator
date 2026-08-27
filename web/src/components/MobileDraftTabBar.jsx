@@ -1,25 +1,35 @@
-import { ChartColumn, LayoutGrid, List, Sparkle } from 'lucide-react'
+import { Award, ChartColumn, LayoutGrid, List, Sparkle } from 'lucide-react'
 
-// The draft room's own bottom tab bar — Players / Board / Decide / Analysis,
-// the same order and the same four screens DraftCockpitHeader's desktop nav
-// carries — mounted only inside a live draft (DraftRoom.jsx's started
+// The draft room's own bottom tab bar — Players / Board / Decide / Analysis
+// pre-draft, Players / Board / Analysis / Insights once it's over — the same
+// screens and the same swap DraftCockpitHeader's desktop nav carries, in the
+// same order, so a tab never reads as a different position depending which
+// width you're on. Mounted only inside a live draft (DraftRoom.jsx's started
 // branch), lg:hidden. A different bar at a different navigation depth than
 // MobileAppTabBar.jsx; see that file's own comment for why they're two
 // components, not one.
 //
-// Four items now, not five. Roster used to be its own bar slot that opened
-// PlayerHub's sheet pre-selected to its Team tab; it has no slot of its own
-// any more because it is a pane *inside* Players (PlayersTab.jsx's own
-// segmented control), the same way Players itself used to be a sheet and is
-// now a real screen. PlayerHub keeps Queue/Chat/Log for the Board view only
-// — see its own file comment on the `tabs` prop this bar no longer needs to
-// reach into.
+// Four items showing at once, not five — Roster used to be its own bar slot
+// that opened PlayerHub's sheet pre-selected to its Team tab; it has no slot
+// of its own any more because it is a pane *inside* Players (PlayersTab.jsx's
+// own segmented control), the same way Players itself used to be a sheet and
+// is now a real screen. PlayerHub keeps Queue/Chat/Log for the Board view
+// only — see its own file comment on the `tabs` prop this bar no longer
+// needs to reach into. Insights is the fifth possible item, appended after
+// Analysis once draftIsOver flips — Decide drops off the row at the same
+// edge, so the count itself never changes, only which of the two joins the
+// other three and where. It used to be a floating pill reached only after
+// closing a modal that opened itself; DraftRoom.jsx now switches the view
+// straight here on the same edge (see that file's own draftIsOver effect),
+// so there is nothing left for a pill to do.
 //
-// The four glyphs differ in shape, not corner radius — the set this
+// The five glyphs differ in shape, not corner radius — the set this
 // replaced was two grid variants distinguished mostly by rounding, and read
 // as the same icon at 20px. Three stacked bars (List) for Players, a 2x2
 // grid (LayoutGrid) for Board, a diamond (Sparkle reads close enough at this
-// size) for Decide, three ascending bars (ChartColumn) for Analysis.
+// size) for Decide, three ascending bars (ChartColumn) for Analysis, a
+// ribbon (Award) for Insights — the one screen here that's actually handing
+// out a grade.
 export default function MobileDraftTabBar({ view, onSelectView, draftIsOver }) {
   const items = [
     { key: 'players', label: 'Players', icon: List },
@@ -30,6 +40,14 @@ export default function MobileDraftTabBar({ view, onSelectView, draftIsOver }) {
     // lands somewhere else.
     ...(draftIsOver ? [] : [{ key: 'decide', label: 'Decide', icon: Sparkle }]),
     { key: 'analysis', label: 'Analysis', icon: ChartColumn },
+    // Insights after Analysis, not swapped into Decide's old slot — the
+    // desktop nav (DraftCockpitHeader.jsx) puts it there too, and the two
+    // bars have to agree on order or the same tab reads as a different
+    // position depending which width you're on. There's nothing to show
+    // here before draftIsOver either (no report exists yet), the same
+    // trade Decide makes in the other direction, just appended instead of
+    // substituted.
+    ...(draftIsOver ? [{ key: 'insights', label: 'Insights', icon: Award }] : []),
   ]
 
   return (
