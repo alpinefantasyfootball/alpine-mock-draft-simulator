@@ -175,7 +175,21 @@ export default function DraftLocker({ onStartNew, problem, lobbySlot, roomActive
   const hasWinTrend = stats.winPctHistory && stats.winPctHistory.length >= 2
 
   const resume = () => { engine.resumeSavedDraft(); location.hash = '#/draft-room' }
-  const discard = () => { engine.clearSave(); forceLocal() }
+  // engine.restart() — clearSave() plus goHome() — not clearSave() alone.
+  // Reported directly: discard here, then start a new mock, and the new
+  // board opened already holding the old draft's picks. clearSave() only
+  // drops the localStorage save; it never touches the live state.picks or
+  // board[i].drafted that a draft actually left behind on the page (the
+  // chevron back to this screen doesn't clear them either — leaving a
+  // draft mid-round is meant to be resumable, so nothing here resets that
+  // state on its own). startDraft() -> buildBoard() does rebuild `board`
+  // from scratch on the next mock, but it has never cleared state.picks
+  // itself — it relies on whatever ended the previous draft having already
+  // done that, which goHome() does and clearSave() alone does not. This is
+  // the exact same "Discard draft" action the in-draft kebab menu already
+  // gets right (DraftRoom.jsx's handleDiscard); this screen just hadn't
+  // been calling it.
+  const discard = () => { engine.restart(); forceLocal() }
   const analyze = (id) => {
     if (!engine.openHistoryDraft(id)) return
     setInsightsSlot(engine.mySlot())
