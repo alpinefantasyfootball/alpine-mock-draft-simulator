@@ -380,20 +380,41 @@ points per game was +0.008 r. So it is on the sheet and nowhere near
 says so — because the next person to find these numbers will want to rank with
 them.
 
-**On a phone it is inline and below the actions, and both halves of that are
-the point.** The bottom sheet has no tab strip on purpose — its own comment is
-the reason, *"the numbers a pick turns on and the two actions that follow from
-them, in one glance with nothing to tap through first"* — so adding a strip for
-one panel would trade that whole contract for a tab. And it sits *after* Add to
-queue and Draft rather than before them, because anything inserted between the
-stat grid and the buttons pushes the actions off the first screenful, which is
-the same cost the tab strip was being avoided for. Measured on a 375×667
-phone: the sheet caps at 85vh, the Draft button lands at 465px — inside the
-glance — and usage is a short scroll under it.
+**On a phone every research tab lives below the two actions**, strip included.
+The sheet's contract is *"the numbers a pick turns on and the two actions that
+follow from them, in one glance with nothing to tap through first"*, and what
+that forbids is a strip placed *above* the content — which is what the desktop
+card does, correctly, because a desk-side reader is not mid-pick. Below the
+buttons the glance is untouched and the tabs are depth for whoever scrolls.
+Measured on a 375×667 phone: the sheet caps at 85vh, Draft lands at **465px**,
+and the strip is under it. Before this the phone could not reach Our Read,
+Projections, Game Logs, News or the depth chart at all.
 
-**It is the same `UsageTab` both times, not a phone-shaped second copy.** A
-second table of the same numbers is the "written down twice" rule in markup,
-and it would drift the first time a column changed.
+**One tab at a time rather than six panels inlined.** Inlining would put a
+week-by-week log and a news request under every open, and Latest News spends
+against a thousand-call monthly allowance. Our Read is selected by default:
+the shortest, and the only one that is a verdict rather than a table.
+
+**It is one strip and one set of bodies, rendered in whichever half is
+alive.** A second phone-shaped copy of the same tables is the "written down
+twice" rule in markup, and it drifts the first time a column changes.
+
+**And that is what `useMinWidth` is for here.** `lg:hidden` and its opposite
+are CSS, and **CSS-hidden is still mounted** — the exact thing that hook was
+written for. Rendered in both halves, `LatestNewsTab` would mount twice for a
+single open and ask the worker for the same player's headlines twice. Checked
+by counting `<table>` elements inside `#draftroom-root`: exactly one.
+
+**The resize path across 1024px cannot be tested in the embedded browser and
+was not.** Changing the emulated viewport there fires **neither** `resize` nor
+`matchMedia` `change` — verified by arming both listeners and watching the log
+stay empty while the width went 375 → 1200 — so React keeps the width it
+mounted with and one half renders blank. That is the harness, not the app:
+both events are ordinary browser behaviour and the hook already relies on them
+elsewhere. **Do not "fix" the hook against this symptom** — it is the same
+shape as the wrangler crash-loop and the "network connection lost" flood, a
+diagnosis about the tooling wearing a bug's clothes. Verify each width by
+mounting fresh at it, which is what was done.
 
 **Six columns fit 341px, and the scroller is there for when they do not.**
 Measured at 375px for the widest set a position can produce — a quarterback's

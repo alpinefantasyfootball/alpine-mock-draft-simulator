@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useMinWidth } from '../hooks/useBreakpoint.js'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Bookmark, Star, X } from 'lucide-react'
 import { POS_BADGE, INJURY_META } from './draftRoomPositions.js'
@@ -72,6 +73,54 @@ export default function PlayerProfileModal({
   const fit = engine && player ? engine.draftFit(player) : null
   const usage = engine && engine.usageFor ? engine.usageFor(player) : null
   const TABS = tabList({ fit, usage })
+
+  // Which half of this component is actually alive. `lg:hidden` and its
+  // opposite are CSS, and CSS-hidden is still mounted — the exact thing
+  // useMinWidth was written for. It matters here because the research tabs
+  // now exist on both halves: rendered in both, LatestNewsTab would mount
+  // twice for one open and ask the worker for the same player's headlines
+  // twice, against a thousand-call monthly allowance. 1024 is Tailwind's
+  // `lg`, the breakpoint the two halves already split on.
+  const isDesktop = useMinWidth(1024)
+
+  // Built once and rendered in exactly one place. Creating the element is
+  // free; mounting it is not, which is the whole point of isDesktop above.
+  const tabStrip = (
+    <div className="flex shrink-0 overflow-x-auto border-b border-slate-rule">
+      {TABS.map((t) => (
+        <button
+          key={t}
+          type="button"
+          onClick={() => setTab(t)}
+          className={
+            'shrink-0 whitespace-nowrap border-b-2 px-3 py-2.5 text-center text-[11px] font-semibold transition-colors duration-150 ' +
+            (tab === t ? 'border-teal-400 text-teal-300' : 'border-transparent text-ink-muted hover:text-white/60')
+          }
+        >
+          {t}
+        </button>
+      ))}
+    </div>
+  )
+
+  const tabBody = !engine ? null : tab === 'Our Read' ? (
+    <OurReadTab engine={engine} player={player} />
+  ) : tab === 'Draft Fit' ? (
+    <DraftFitTab fit={fit} player={player} />
+  ) : tab === 'Projections' ? (
+    <ProjectionsTab
+      summary={engine.projectionSummary(player)}
+      record={engine.projectionRecord(player)}
+    />
+  ) : tab === 'Usage' ? (
+    <UsageTab usage={usage} />
+  ) : tab === 'Game Logs' ? (
+    <GameLogsTab engine={engine} player={player} />
+  ) : tab === 'Latest News' ? (
+    <LatestNewsTab engine={engine} player={player} />
+  ) : (
+    <DepthChartTab engine={engine} player={player} />
+  )
 
   useEffect(() => {
     if (!TABS.includes(tab)) setTab(TABS[0])
@@ -221,41 +270,10 @@ export default function PlayerProfileModal({
                 </div>
               </div>
 
-              <div className="flex shrink-0 overflow-x-auto border-b border-slate-rule">
-                {TABS.map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => setTab(t)}
-                    className={
-                      'shrink-0 whitespace-nowrap border-b-2 px-3 py-2.5 text-center text-[11px] font-semibold transition-colors duration-150 ' +
-                      (tab === t ? 'border-teal-400 text-teal-300' : 'border-transparent text-ink-muted hover:text-white/60')
-                    }
-                  >
-                    {t}
-                  </button>
-                ))}
-              </div>
+              {tabStrip}
 
               <div className="max-h-[65vh] flex-1 overflow-y-auto p-4 sm:p-5">
-                {!engine ? null : tab === 'Our Read' ? (
-                  <OurReadTab engine={engine} player={player} />
-                ) : tab === 'Draft Fit' ? (
-                  <DraftFitTab fit={fit} player={player} />
-                ) : tab === 'Projections' ? (
-                  <ProjectionsTab
-                    summary={engine.projectionSummary(player)}
-                    record={engine.projectionRecord(player)}
-                  />
-                ) : tab === 'Usage' ? (
-                  <UsageTab usage={usage} />
-                ) : tab === 'Game Logs' ? (
-                  <GameLogsTab engine={engine} player={player} />
-                ) : tab === 'Latest News' ? (
-                  <LatestNewsTab engine={engine} player={player} />
-                ) : (
-                  <DepthChartTab engine={engine} player={player} />
-                )}
+                {isDesktop && tabBody}
               </div>
             </motion.div>
           </div>
@@ -361,26 +379,32 @@ export default function PlayerProfileModal({
                 </button>
               </div>
 
-              {/* Usage, inline rather than behind a tab, and deliberately
-                  BELOW the two actions.
+              {/* The research tabs, BELOW the two actions.
 
-                  The phone gets no tab strip on purpose — the comment above
-                  this sheet is the reason, and adding one for a single tab
-                  would trade the whole "nothing to tap through first"
-                  contract for one panel. Inline keeps that promise.
+                  The sheet's own contract, in the comment above it, is the
+                  numbers a pick turns on and the two actions that follow,
+                  "in one glance with nothing to tap through first". A tab
+                  strip placed *above* that content would break it — which is
+                  what the desktop card does, correctly, because a desk-side
+                  reader is not mid-pick. Placed below, the glance is intact
+                  and the tabs are depth for whoever scrolls, so the phone
+                  stops being the surface that simply cannot reach Our Read,
+                  Projections, Game Logs, News or the depth chart at all.
 
-                  Below the buttons rather than above them because the glance
-                  this sheet exists for is the stat grid plus Add-to-queue and
-                  Draft; anything inserted between them pushes the actions off
-                  the first screenful, which is the same cost the tab strip
-                  was avoided for. Usage is depth for whoever scrolls, and it
-                  is the same UsageTab the desktop card renders rather than a
-                  phone-shaped second copy of the same table. */}
-              {usage && (
-                <div className="mt-5 border-t border-slate-rule pt-4">
-                  <UsageTab usage={usage} />
-                </div>
-              )}
+                  One tab at a time rather than six inlined: inlining them
+                  all would put a week-by-week log and a news fetch under
+                  every open, and Latest News costs a request against a
+                  thousand-a-month allowance. Selected-by-default is Our
+                  Read, the shortest and the one thing here that is a verdict
+                  rather than a table.
+
+                  Same strip, same bodies, same `tab` state as the desktop
+                  card — rendered here only when this half is the live one.
+                  See isDesktop. */}
+              <div className="-mx-4 mt-5 border-t border-slate-rule">
+                {tabStrip}
+                <div className="px-4 pt-4">{!isDesktop && tabBody}</div>
+              </div>
             </div>
           </motion.div>
         </motion.div>
