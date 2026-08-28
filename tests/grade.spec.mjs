@@ -156,24 +156,43 @@ test("the Analysis screen's own numbers match what analyseDraft() computed for t
   const { mine } = await readGrade(page);
   const screen = await readAnalysisScreen(page);
 
-  /* Whitespace-collapsed before matching, because both facts are split
-     across two elements: AnalysisTab.jsx renders the rank as
-     `{ordinal(rank)} <span>of {teams}</span>` and the score as
-     `{total.toFixed(1)} <span>/ 100</span>`, so innerText puts a newline
-     inside each of the two phrases below. Matching the joined phrase is
-     the point - "2nd" and "of 10" each appear elsewhere on this screen,
-     and asserting them separately would pass on a screen that never put
-     them together. */
+  /* Whitespace-collapsed before matching, because the rank is split across
+     two elements - AnalysisTab.jsx renders it as
+     `{ordinal(rank)} <span>of {teams}</span>` - so innerText puts a newline
+     inside the phrase. Matching the joined phrase is the point: "2nd" and
+     "of 10" each appear elsewhere on this screen, and asserting them
+     separately would pass on a screen that never put them together. */
   const flat = screen.replace(/\s+/g, " ");
 
   expect(screen, "the printed grade letter").toContain(mine.grade);
   expect(flat, "the printed rank").toContain(`${mine.rank}${mine.rank === 1 ? "st" : mine.rank === 2 ? "nd" : mine.rank === 3 ? "rd" : "th"} of`);
-  /* toFixed(1), not Math.round: the screen carries the decimal, and
-     rounding here asked for "60 / 100" against a screen reading
-     "60.3 / 100" - which is the same number and a failing substring. The
-     value still has to be the weighted total rather than a component,
-     which is the historical bug this assertion exists for. */
-  expect(flat, "the printed weighted score").toContain(`${mine.total.toFixed(1)} / 100`);
+
+  /* And the composite is NOT printed as a score out of a hundred.
+
+     This assertion used to be its opposite - it required "60.3 / 100" on the
+     screen - and it was guarding a real bug: the standings column once showed
+     starter strength under a header reading the weighted total. That guard is
+     kept by the two lines above, which still read what the screen prints and
+     compare it to what analyseDraft() computed.
+
+     What replaces it is the defect that removal fixed. The letter is finishing
+     position and the composite is a room-relative min-max score, so an "A" one
+     line above a "69 / 100" contradicts twelve years of schooling every time -
+     measured across a room, the letter agreed with the school reading of the
+     number beside it on 0 of 10 teams. Curving the letter off an absolute
+     quantity was measured and rejected (a normal room came out 37 of 40 A+),
+     so the number went.
+
+     Scoped to the pairing rather than to the number. The total is still on
+     this screen, in the component bars' own "Weighted sum = 55.9" line, where
+     four bars visibly add up to it and nothing calls it a percentage - and
+     "Roster construction 90 / 100" is a genuine component out of a hundred
+     with no letter beside it. Asserting the total were absent would fail on
+     the first and asserting "/ 100" were absent would fail on the second. */
+  expect(flat, "the composite is not dressed as a percentage")
+    .not.toContain(`${mine.total.toFixed(1)} / 100`);
+  expect(flat, "nor as a rounded one")
+    .not.toContain(`${Math.round(mine.total)} / 100 weighted`);
 
   await context.close();
 });
