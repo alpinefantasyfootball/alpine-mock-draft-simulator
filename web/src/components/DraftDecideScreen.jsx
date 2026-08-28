@@ -50,8 +50,15 @@ function reasonFor(rankLabel, candidate, engine) {
   }
   if (rankLabel === 'Safest wait') return 'Deepest tier of the three — the least urgent pick here.'
   // 'Also available' — a candidate too far below replacement for
-  // "scarce"/"safe" to mean anything (see BAD_VORP below).
-  if (rankLabel === 'Also available') return "Nobody's rushing for him — pure bench depth at this point."
+  // "scarce"/"safe" to mean anything (see BAD_VORP below). Was "Nobody's
+  // rushing for him — pure bench depth at this point," which read as a
+  // verdict on the player rather than a fact about the market — "pure"
+  // and "nobody's rushing" both frame him as barely worth having, when
+  // the actual reason he's in this slot is timing, not quality: nothing
+  // else here scored him low, the market just isn't pricing urgency into
+  // him. Same "no rush" fact Safest wait states, in the same neutral
+  // register.
+  if (rankLabel === 'Also available') return 'No urgency behind him — steady bench value whenever you need it.'
   const fit = engine.draftFit(candidate.player)
   return fit && fit.startsNow ? 'Best value for a slot you still need to fill.' : 'Best value still on the board.'
 }

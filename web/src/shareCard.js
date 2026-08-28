@@ -486,7 +486,17 @@ export async function drawShareCard(data) {
     vorpRows.forEach((row) => {
       const rowY = y + VORP_ROW_H / 2
       posBadge(ctx, row.pos, CONTENT_X, rowY - 15, ROW_LABEL_W, 30)
-      ctx.fillStyle = row.name ? 'rgba(255,255,255,0.88)' : 'rgba(255,255,255,0.35)'
+      /* '#FFFFFF', not an alpha-blended white — the VORP figure beside
+         this name (gapValueText, below) already draws in solid TEAL/
+         ROSE_B, opaque from the start. An alpha-blended near-white looks
+         identical on screen but isn't the same pixel data: platforms
+         that re-encode a shared PNG as JPEG quantize the blended-toward-
+         background RGB a name at 0.88 alpha actually holds, while a
+         fully opaque white has nothing to drift toward. Matches the
+         header's own team name and section titles, which were already
+         solid white — this row was the one place a player's own name
+         was drawn dimmer than the number beside it. */
+      ctx.fillStyle = row.name ? '#FFFFFF' : 'rgba(255,255,255,0.35)'
       ctx.font = '600 19px "Inter", sans-serif'
       const nameX = CONTENT_X + ROW_LABEL_W + ROW_GAP_PAD
       let label = row.name || 'Empty'
@@ -509,7 +519,11 @@ export async function drawShareCard(data) {
       ctx.font = '700 14px "Archivo", sans-serif'
       ctx.fillText(`R${row.round}`, CONTENT_X, rowY + 5)
       posBadge(ctx, row.pos, CONTENT_X + 34, rowY - 13, 44, 26)
-      ctx.fillStyle = 'rgba(255,255,255,0.82)'
+      // Same fix as the VORP Matrix row above, for the same reason — solid
+      // white rather than a 0.82-alpha near-white, so this name compresses
+      // as crisply as the VORP figure beside it once a platform re-encodes
+      // the exported PNG.
+      ctx.fillStyle = '#FFFFFF'
       ctx.font = '600 18px "Inter", sans-serif'
       const nameX = CONTENT_X + ROW_LABEL_W + ROW_GAP_PAD
       let label = row.name

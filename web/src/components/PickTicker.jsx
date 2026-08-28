@@ -122,10 +122,20 @@ export default function PickTicker({ league, onClock, overall, mySlot, myTurn, u
       </div>
 
       <div className={'flex shrink-0 items-center gap-3.5 border-r border-slate-rule px-[18px] ' + (myTurn ? 'bg-teal-400/[0.07]' : 'bg-white/[0.02]')}>
+        {/* A glow, not just the opacity pulse animate-pulse already gave
+            it — the dot and label were the correct color the whole time
+            but sat flat next to everything else on this bar competing for
+            attention (the countdown clock, the urgent-round pick code).
+            The glow only fires for myTurn; the off-turn dot stays exactly
+            as understated as it should. */}
         <span
           className={
             'h-2 w-2 shrink-0 animate-pulse rounded-full ' +
-            (myTurn ? (urgent ? 'bg-rose-400' : 'bg-teal-300') : 'bg-white/30')
+            (myTurn
+              ? urgent
+                ? 'bg-rose-400 shadow-[0_0_9px_2px_rgba(251,113,133,0.7)]'
+                : 'bg-teal-300 shadow-[0_0_9px_2px_rgba(51,234,255,0.7)]'
+              : 'bg-white/30')
           }
         />
         <div className="flex flex-col gap-[3px]">
@@ -133,6 +143,11 @@ export default function PickTicker({ league, onClock, overall, mySlot, myTurn, u
             className={
               'whitespace-nowrap font-plex text-[10px] font-bold tracking-[0.1em] ' +
               (myTurn ? (urgent ? 'text-rose-300' : 'text-teal-300') : 'text-white/55')
+            }
+            style={
+              myTurn
+                ? { textShadow: urgent ? '0 0 10px rgba(251,113,133,0.5)' : '0 0 10px rgba(51,234,255,0.5)' }
+                : undefined
             }
           >
             {myTurn ? 'ON THE CLOCK · YOUR PICK' : 'ON THE CLOCK · ' + (onClock ? teamLabelOf(onClock.slot).toUpperCase() : '')}
