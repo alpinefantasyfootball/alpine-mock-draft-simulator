@@ -1051,6 +1051,53 @@ rank width and nothing else, so 210 produced a 6px near-miss on a 24-team card.
 from 208px to 262. **A constant derived from a string is wrong the moment that
 string changes** — and it fails as a collision, not as an error.
 
+### A weight is not a share of the outcome, and build is where they part
+
+Asked, reasonably, to "fix build's weight" once its share of the finishing
+order came out **5.1% against a printed 15%**. The measurement says the
+expectation is wrong rather than the number, and the weights were deliberately
+left alone.
+
+**Influence is weight times spread, and only three of the four components have
+a spread that is fixed by construction.** Measured over twelve rooms with a
+human in each:
+
+```
+startersScaled  29.9      valueScaled    28.8
+byePenaltyScaled 33.1     buildScaled     9.0
+```
+
+The first three go through `scaleAcross()`, which is min-max — it *stretches*
+them to fill 0-100 whatever the room actually did, so their spread lands near
+30 every time. `build` is its own raw score now (see the section below), so it
+spreads as much as rosters genuinely differ, which is not much: most teams are
+built alike.
+
+**So equal weights cannot buy equal influence once one component stops being
+stretched.** That is not a defect that appeared; it is a property that was
+hidden while build was scaled like the rest. The printed-weights rule this file
+already records — that 50/25/15/10 has to be what runs — was true of four
+components normalised the same way, and stopped being achievable the moment one
+of them was deliberately not.
+
+**Every alternative is worse, and they were costed rather than dismissed:**
+
+- **Raise build to 0.37**, which is what delivers 15% of the outcome. It makes
+  roster construction the joint-largest weight in a grade whose entire premise
+  is that starters are worth double, and it manufactures separation the data
+  does not contain — the thing `MIN_SPAN` exists to prevent, reached from the
+  other side.
+- **Lower build to 0.05** to match the influence. It does not even do that:
+  weight and influence move together, so 0.05 yields about **1.7%**, and
+  chasing it converges toward zero.
+- **Scale it again.** That is the 0 the owner reported, restored.
+
+**Build's small spread is information.** A component that rarely separates
+people should rarely separate people. What was actually wrong is the label: a
+bar reading `wt 15%` invites being read as "15% of your grade", and for this
+one it is not. The panel says so in a line under the weighted sum now, which is
+the cheapest honest fix and changes no grade.
+
 ### Roster construction is the one component that is not scaled
 
 Reported by the owner: *why is roster construction 0 on a mock I got a B and

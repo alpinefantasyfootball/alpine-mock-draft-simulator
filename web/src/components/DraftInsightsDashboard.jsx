@@ -68,6 +68,29 @@ function ComponentBars({ mine, weights }) {
         <span className="flex-1 font-numeral text-ink-muted">{bars.map((b) => (b.pct * b.weight).toFixed(1)).join(' + ')}</span>
         <span className="font-numeral text-sm font-bold text-teal-300">= {mine.total.toFixed(1)}</span>
       </div>
+      {/* A weight is not a share of the outcome, and the two are far enough
+          apart on roster construction to be worth saying once.
+
+          A component moves your placing in proportion to its weight AND to how
+          much it varies across the room. Three of these are scaled against the
+          room, so they are stretched to fill 0-100 whatever happened and their
+          spread sits near 30 by construction. Roster construction is its own
+          raw score and spreads about 9, because most rosters really are built
+          alike — so at the same 15% weight it decides less of the order than
+          the label alone suggests. Measured: 5.1% of the finishing order
+          against a printed 15%.
+
+          The weight is not wrong and was deliberately left at 0.15. Raising it
+          to the 0.37 that would buy 15% of the outcome makes roster
+          construction the joint-largest weight in a grade whose whole premise
+          is that starters are worth double, and it would manufacture
+          separation the data does not contain — which is the thing MIN_SPAN
+          exists to prevent, reached from the other side. See CLAUDE.md. */}
+      <p className="mt-2 text-[10px] leading-relaxed text-ink-muted">
+        A weight is how much a component counts, not how much it separates the room. Roster
+        construction is scored on its own scale rather than against the other teams, so it varies
+        less and shifts the order less than its weight alone suggests.
+      </p>
     </div>
   )
 }
