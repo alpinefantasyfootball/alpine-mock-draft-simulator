@@ -34,25 +34,22 @@ export default function Hero() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
         >
-          {/* One eyebrow at every width now, and it is desktop's mint pill.
-              The phone used to get its own teal mono line reading
-              "FREE · UNLIMITED MOCKS" — the revised mobile handoff retires
-              it on brand-architecture grounds rather than typographic ones:
-              price was the first thing a visitor read, and naming the
-              category pinned the brand to one room while the Rooms section
-              four rows below says five more are coming. "Free" is still
-              said, in its own mono line under the CTA pair.
-
-              The paragraph and CTAs below stay split by breakpoint — those
-              really are phone-specific — so this is one element leaving that
-              arrangement, not the arrangement being abandoned. */}
-          <span className="inline-flex items-center gap-[9px] rounded-full border border-mint/30 bg-mint/[0.06] px-[15px] py-[7px] text-[11.5px] font-bold tracking-[0.13em] text-mint">
-            <span className="relative flex h-1.5 w-1.5">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-mint opacity-75" />
-              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-mint" />
+          {/* Homepage cosmetic revision §11 — was a mint pill with a
+              pulsing dot, the same visual language as the "Live" status
+              badge elsewhere on the page, so it read as a status
+              indicator ("this is live/on") rather than a tagline. Now a
+              typographic slogan: a short rule, then the words in
+              Barlow Condensed (the handoff's own allowance — "if
+              production already ships a condensed italic display face,
+              keep it") rather than a pill. No pill, no dot, and margin-
+              bottom on this element (not margin-top on the h1 below it)
+              is what now owns the gap between the two. */}
+          <div className="flex items-center gap-[14px] mb-[22px]">
+            <span className="h-px w-8 shrink-0" style={{ background: '#3E9886' }} />
+            <span className="font-display text-[19px] font-extrabold italic uppercase tracking-[0.03em] text-mint">
+              Agility Through Analytics
             </span>
-            AGILITY THROUGH ANALYTICS
-          </span>
+          </div>
 
           {/* One headline at every width, in font-display (Barlow Condensed).
               The phone used to get its own 39px Archivo 900 sentence; the
@@ -71,7 +68,7 @@ export default function Hero() {
               A condensed face is what makes 46px fit 390px at all: "Master
               the draft." at 39px Archivo was already close to the padding,
               and this is seven points larger. */}
-          <h1 className="mt-5 text-balance font-display text-[clamp(42px,5.4vw,76px)] font-extrabold italic leading-[0.94] tracking-[-0.005em] sm:mt-7">
+          <h1 className="text-balance font-display text-[clamp(42px,5.4vw,76px)] font-extrabold italic leading-[0.94] tracking-[-0.005em]">
             <span className="text-white">Master the draft.</span>
             <br />
             <span className="text-mint">Dominate the season.</span>

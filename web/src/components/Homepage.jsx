@@ -160,7 +160,17 @@ function FooterColumn({ title, children }) {
 function FooterBrandStack({ onSocialClick, onAppClick }) {
   return (
     <div className="flex flex-col items-start gap-5">
-      <JukeLogo size={18} />
+      {/* §11's footer repeat of the slogan — wrapped with the logo in its
+          own div rather than joining the outer gap-5 flex column directly,
+          since the spec's own 8px gap is specific to logo-to-slogan and
+          would otherwise apply uniformly to every child in this stack
+          (i.e. also pushing the socials row and the app badges apart). */}
+      <div>
+        <JukeLogo size={18} />
+        <div className="mt-2 font-display text-[14px] font-extrabold italic uppercase tracking-[0.05em] text-[#7A808D]">
+          Agility Through Analytics
+        </div>
+      </div>
 
       <div className="flex gap-2">
         {SOCIAL_LINKS.map((social) => (
