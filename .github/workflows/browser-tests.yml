@@ -1,0 +1,114 @@
+name: Browser tests
+
+# The Playwright suite, on a schedule, against the deployed site.
+#
+# tests.yml deliberately does not run this: it is ninety-one tests and about
+# seventeen minutes, and that is too heavy to sit in front of every push. But
+# "run it by hand before a deploy" turned out to mean "nobody runs it", and the
+# failure mode is specific and was measured on 27 August 2026: nine tests
+# across seven spec files red against production, and not one of them had a bug
+# behind it. Every single failure was a UI change nobody had updated the tests
+# for -- a suite reporting last month's product, red for days, with nobody
+# told. A suite in that state is worse than no suite, because what nobody
+# believes, nobody reads.
+#
+# So this exists to notice spec rot within a day of it starting, not to gate
+# anything. A scheduled run that fails emails the repository owner, which is
+# the part that was missing.
+#
+# It runs against jukeff.com rather than a local build, deliberately:
+#
+#   - It is what a person actually gets. CLAUDE.md's own rule is that local is
+#     where a bug is found and live is where it is confirmed gone, and the room
+#     deadlock at pick 86 was a rate limit localhost was too fast to reach.
+#   - playwright.config.mjs skips its whole webServer block when the site is
+#     not local, so this job needs node and a browser and nothing else -- no
+#     web/ build, no python static server, no wrangler beside it. Three fewer
+#     things to break in a job whose entire job is to be believed when it goes
+#     red.
+#   - It covers the deploy as well as the code. A promoted build that 404s its
+#     own bundle is exactly the shape of failure this catches and a local run
+#     cannot.
+#
+# The cost is one test that cannot run here: news.spec.mjs asserts the keyless
+# path, and the deployed worker has a provider key, so it skips itself. That is
+# by design -- see the note in that file. Expect "1 skipped" in every run and
+# treat its absence as the thing worth investigating.
+
+on:
+  schedule:
+    # 12:30 UTC, ninety minutes after update-players.yml commits new data at
+    # 11:00 and triggers a Pages build. Late enough that this tests the day's
+    # deployed data rather than racing the deploy that produces it.
+    - cron: "30 12 * * *"
+  workflow_dispatch:
+    inputs:
+      site:
+        # A deployed origin only -- a Pages preview URL, say. Not localhost:
+        # this job installs neither python nor web/'s build, so the webServer
+        # block playwright.config.mjs would start for a local site has nothing
+        # to run. A local run is `npx playwright test` on a laptop.
+        description: "Deployed site to test (e.g. a Pages preview URL). Not localhost -- see the note in this file."
+        required: false
+        default: "https://jukeff.com"
+      worker:
+        # Moves with the site. live.js picks its worker off the address bar, so
+        # pointing the page at one origin while the assertions watch another
+        # tests two rooms and reconciles neither.
+        description: "Worker origin. Move it with the site."
+        required: false
+        default: "https://juke-draft-room.jukeff.workers.dev"
+
+# One run at a time. These drive real rooms through the real Durable Object,
+# and two suites creating rooms and drafting through them concurrently is a
+# test of the worker's rate limiter rather than of the app.
+concurrency:
+  group: browser-tests
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  playwright:
+    runs-on: ubuntu-latest
+    # The suite measured 16.6 minutes against production on one worker. This is
+    # a backstop against a hang, not a target -- actionTimeout already bounds
+    # individual actions at 30s.
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+
+      # The repo-root package.json is Playwright and nothing else, which is
+      # what makes this install small. web/'s own dependencies are not needed:
+      # nothing here builds the site, it asks the deployed one.
+      - run: npm ci
+
+      # Chromium only. The suite has no cross-browser projects and pulling
+      # three engines would triple the slowest step in the job.
+      - run: npx playwright install --with-deps chromium
+
+      - name: Run the suite
+        env:
+          JUKE_SITE: ${{ inputs.site || 'https://jukeff.com' }}
+          JUKE_WORKER_HTTP: ${{ inputs.worker || 'https://juke-draft-room.jukeff.workers.dev' }}
+        # Not piped into anything. A pipeline's exit status is the last
+        # command's, so `playwright test | tee log` reports 0 on a red run --
+        # which has already happened once here, and an exit code that lies is
+        # worse in verification tooling than anywhere else.
+        run: npx playwright test --reporter=list,github
+
+      - name: Keep the traces from a red run
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: test-results/
+          retention-days: 14
+          if-no-files-found: ignore

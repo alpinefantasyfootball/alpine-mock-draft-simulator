@@ -3546,10 +3546,13 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   committed blob was correct throughout and so was the deployed card;
   `git checkout --` on the path was the whole repair.
 
-- **CI is `tests.yml` and it is a floor, not a gate — and it does not cover
-  itself.** It runs the two Python suites on `pull_request` and on `push` to
-  main; the browser suite is deliberately not in it. Three things follow that
-  have each cost something:
+- **CI is two workflows, and neither is a gate.** `tests.yml` runs the two
+  Python suites on `pull_request` and on `push` to main — a floor, and it does
+  not cover itself. `browser-tests.yml` runs the Playwright suite daily at
+  12:30 UTC against the deployed site, which is a smoke alarm rather than a
+  gate: it tells you the morning after something rots, and blocks nothing. The
+  browser suite is still deliberately out of `tests.yml`. Three things follow
+  that have each cost something:
 
   - **A pull request opened after its last push has no checks at all.** The
     workflow fires on the `pull_request` event, so a branch pushed first and
@@ -3559,9 +3562,28 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   - **`update-players.yml` is unproven by any pull request.** It runs on
     `schedule` and `workflow_dispatch` only, so a change to it is not
     exercised until 11:00 UTC or until somebody presses the button.
-  - **And the browser suite rots, because nothing runs it on a schedule.**
-    `phone.spec.mjs` was found four-red on 27 August, and every one of the
-    four was a spec describing a screen the product had since changed —
+  - **The browser suite used to rot, because nothing ran it on a schedule.**
+    `browser-tests.yml` does now — 12:30 UTC daily, against `jukeff.com`,
+    ninety minutes after the nightly commits new data and triggers its Pages
+    build, so it tests the day's deployed site rather than racing the deploy
+    that produces it. It is not a gate and is not in `tests.yml`: seventeen
+    minutes is too heavy for every push, and the thing that was missing was
+    never a gate but a *notification* — a scheduled failure emails the owner,
+    which is what "red for days and nobody was told" needed.
+
+    **It runs against the deployed site, not a local build**, which is what
+    keeps the job to node and a browser: `playwright.config.mjs` skips its
+    whole `webServer` block when the site is not local, so there is no web/
+    build, no python static server and no wrangler beside it to break. It also
+    covers the deploy — a promoted build that 404s its own content-hashed
+    bundle is exactly this file's inverse caching trap, and no local run can
+    see it. The cost is the one keyless news test, which skips itself against a
+    keyed worker: **expect "1 skipped" every run and investigate its absence,
+    not its presence.**
+
+    The rot it exists to catch: `phone.spec.mjs` was found four-red on 27
+    August, and every one of the four was a spec describing a screen the
+    product had since changed —
     "Start mock draft" no longer stopping at a second "Start draft"
     (deliberately: the confirm step was removed), the entry screen becoming
     room-only, `Roster` leaving the tab bar for a pane inside Players, the
