@@ -220,7 +220,11 @@ test("the homepage says the same things on a phone as on a desktop", async ({ br
    fails here instead of passing the diff above by symmetry. */
 test("the hero and the closing band carry the agreed copy at both widths", async ({ browser }) => {
   const REQUIRED = [
-    "AGILITY THROUGH ANALYTICS",
+    /* The slogan reads all-caps on screen, but the caps come from CSS
+       text-transform since df2bb85 ("slogan treatment") — the DOM text this
+       walker collects is title case. Asserting the rendered casing here is
+       what left this test red for a day with no bug behind it. */
+    "Agility Through Analytics",
     "Master the draft.",
     "Dominate the season.",
     /* The hero paragraph. It used to be "Draft against a room of CPU
