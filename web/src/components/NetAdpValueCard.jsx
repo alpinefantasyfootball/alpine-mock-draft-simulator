@@ -34,7 +34,7 @@ function Bar({ entry, index, maxAbs }) {
   return (
     <div
       className="relative h-full min-w-[6px] flex-1"
-      title={`Mock ${index + 1}: ${entry.value >= 0 ? '+' : ''}${Math.round(entry.value)} picks vs. board rank`}
+      title={`Mock ${index + 1}: ${entry.value >= 0 ? '+' : ''}${Math.round(entry.value)} picks ${entry.vsPar ? 'vs. par for your seat' : 'vs. board rank'}`}
     >
       <div
         className="absolute left-0 right-0 rounded-[1px]"
@@ -47,17 +47,41 @@ function Bar({ entry, index, maxAbs }) {
   )
 }
 
-// Row 3, col 1 — one bar per mock, historyStats()'s netAdpValueHistory in
-// app.js, itself entry.netAdpValue (analyseTeam()'s own unclamped `value`)
-// stored the moment each draft finished. Positive means picks fell to you
-// against the board's own rank; negative means you reached — the same
-// signed convention CLAUDE.md documents at length for the single-draft
-// grade's own callouts, kept here rather than inverted for this chart.
+/* Row 3, col 1 — one bar per mock, historyStats()'s netAdpValueHistory.
+
+   Measured against par for the seat, not raw. Raw, this chart could not come
+   out positive for most people and then reported that as a record: an owner
+   drafting from seat 1 read "you beat ADP in 0 of 10 mocks". Three measured
+   reasons, none of them about drafting — the first pick is capped at zero
+   because nothing ranks below 1, need-based drafting reaches by construction
+   (the app schedules those reaches itself), and the room does not sum to zero,
+   coming out −41 to −44 across ten rooms. Seat is most of the rest: mean raw
+   value by chair ran −28 … +15, a 43-point spread on where you sat, against
+   +2 … +5 once par is subtracted. See historyStats() in app.js.
+
+   Positive now means you beat what a consensus drafter would have got from
+   your chair; negative means you fell short of it. `vsPar` on each entry says
+   whether par was actually available, so an entry too old to carry its own
+   league shape still draws — labelled as the raw figure it is rather than
+   silently mixed in as though it were comparable.
+
+   **The "you beat ADP in N of M mocks" line is gone rather than re-pointed at
+   par, and that is deliberate.** Par is unbiased — measured, the gap between
+   par and the mean raw figure is −1 at ten teams and +1 at twelve — but the
+   distribution around it is bimodal, not symmetric, so a count against zero
+   still under-reads. Twelve seat-1 mocks came out −14, −14, −13, −13, −13,
+   −13, −10, −6, −3, +25, +26, +31: mean −1, median −11.5, and only 3 of 12
+   above the line. The split is whether that seat's *final* pick landed on a
+   skill player near the rank cutoff, which counts and is worth twenty-odd, or
+   on a kicker or defence, which FORCED_LATE drops entirely. That is an
+   accounting artefact of the metric, not a fact about the drafting, and a
+   count against zero reports it as one. The average is the honest summary of
+   a distribution shaped like that; the bars show the spread it came from. */
 export default function NetAdpValueCard({ stats }) {
   const entries = stats.netAdpValueHistory
   if (!entries || !entries.length) {
     return (
-      <AnalyticsCard title="Net ADP Value" sub="Sum of (actual pick − ADP), per mock">
+      <AnalyticsCard title="Net ADP Value" sub="Against par for your seat, per mock">
         <p className="flex h-full items-center text-xs text-ink-muted">Not enough mocks yet.</p>
       </AnalyticsCard>
     )
@@ -66,12 +90,15 @@ export default function NetAdpValueCard({ stats }) {
   const maxAbs = Math.max(1, ...entries.map((e) => Math.abs(e.value)))
   const agg = stats.avgNetAdpValue
   const slots = Array.from({ length: SLOT_COUNT }, (_, i) => entries[i] || null)
-  const beat = entries.filter((e) => e.value > 0).length
+  // Any entry old enough to predate a stored league shape has no par, so the
+  // card says what it is actually showing rather than claiming par for a
+  // mixture. Every entry written since carries one.
+  const anyRaw = entries.some((e) => !e.vsPar)
 
   return (
     <AnalyticsCard
       title="Net ADP Value"
-      sub="Sum of (actual pick − ADP), per mock"
+      sub={anyRaw ? 'Sum of (actual pick − ADP), per mock' : 'Against par for your seat, per mock'}
       right={
         typeof agg === 'number' ? (
           <span
@@ -89,7 +116,9 @@ export default function NetAdpValueCard({ stats }) {
           {slots.map((e, i) => <Bar key={e ? e.id : 'ghost' + i} entry={e} index={i} maxAbs={maxAbs} />)}
         </div>
         <p className="mt-1.5 shrink-0 text-[10px] text-ink-muted">
-          You beat ADP in {beat} of {entries.length} mock{entries.length === 1 ? '' : 's'}.
+          {anyRaw
+            ? 'Against the board’s own rank. Older mocks predate the par baseline.'
+            : 'Par is what a consensus drafter gets from your chair. Zero is on pace.'}
         </p>
       </div>
     </AnalyticsCard>

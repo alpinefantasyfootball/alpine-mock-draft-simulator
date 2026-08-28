@@ -108,13 +108,24 @@ const RISKY = ["D", "PUP"];
 // on TE, K and DST are what stop a team hoarding them.
 const DEPTH_ALLOWANCE = { QB: 3, RB: 5, WR: 5, TE: 2, K: 2, DST: 2 };
 
-function maxAt(pos) {
-  const flexShare = (pos === "RB" || pos === "WR") ? league.flex : 0;
+/* `lg` is an explicit league for the one caller that has to ask about a shape
+   that is not the one on screen: the Locker reconstructs a mock played at 12
+   teams while you are sitting in a 10-team league, and par for that mock has
+   to be par for *its* shape. Defaults to the live league, so every other
+   caller is unchanged.
+
+   Threaded rather than swapped. Assigning to the global `league` around a
+   computation and restoring it afterwards is the shape gradeAndRosterAt()
+   already documents as dangerous — one shared object, many readers, and a
+   restore that is only correct if nothing ran in between. */
+function maxAt(pos, lg) {
+  const L = lg || league;
+  const flexShare = (pos === "RB" || pos === "WR") ? L.flex : 0;
   // A superflex is a second startable quarterback, so it lifts the ceiling on
   // how many a team will hold. Without this a CPU stops at one and a
   // superflex league drafts like a normal one.
-  const superShare = pos === "QB" ? league.superflex : 0;
-  return league.starters[pos] + flexShare + superShare + DEPTH_ALLOWANCE[pos];
+  const superShare = pos === "QB" ? L.superflex : 0;
+  return L.starters[pos] + flexShare + superShare + DEPTH_ALLOWANCE[pos];
 }
 
 // Replacement level: the last player at a position who would realistically
@@ -1105,21 +1116,24 @@ function countAt(slot, pos) {
    which has no slots to look up and must not touch the real draft. Every
    league-shape decision stays here rather than being restated by the caller,
    which is the point — the superflex bug was this rule written down twice. */
-function needFromCount(have, pos, round) {
-  if (have >= maxAt(pos)) return 999;              // roster limit
+// `lg` as in maxAt() above — an explicit shape for the Locker's par, the live
+// league for everybody else.
+function needFromCount(have, pos, round, lg) {
+  const L = lg || league;
+  if (have >= maxAt(pos, L)) return 999;           // roster limit
 
   // Kickers and defenses go at the very end of any draft, so the cutoffs are
   // measured back from the last round rather than written down as 13 and 12.
-  if (pos === "K"   && round < league.rounds - 1) return 999;
-  if (pos === "DST" && round < league.rounds - 2) return 999;
+  if (pos === "K"   && round < L.rounds - 1) return 999;
+  if (pos === "DST" && round < L.rounds - 2) return 999;
 
   // One of each is enough, whatever "enough" is set to. A superflex league
   // that starts two quarterbacks gets two.
-  if (pos === "QB"  && have >= league.starters.QB + league.superflex) return 999;
-  if (pos === "K"   && have >= league.starters.K)   return 999;
-  if (pos === "DST" && have >= league.starters.DST) return 999;
+  if (pos === "QB"  && have >= L.starters.QB + L.superflex) return 999;
+  if (pos === "K"   && have >= L.starters.K)   return 999;
+  if (pos === "DST" && have >= L.starters.DST) return 999;
 
-  const need = league.starters[pos] || 0;
+  const need = L.starters[pos] || 0;
   if (have < need)       return 0.80;   // still filling a starting slot
   if (have < need + 2)   return 1.00;   // sensible depth
   return 1.45;                          // hoarding
@@ -3715,11 +3729,18 @@ function byeSummary(badWeeks) {
      everything that can move par, BEST_VOR included — that one is the tell
      for a rescoring, since editing the scoring table rewrites every projPts
      and therefore every par. */
-let PAR_CACHE = null;
+/* Keyed by shape, not a single slot. The Locker asks for par for every league
+   shape in its window — a 10-team half-PPR mock and a 12-team one are two
+   different pars off the same board — so a one-entry cache would thrash
+   between them and pay 30ms per entry per render. Bounded because the number
+   of distinct shapes a person actually drafts is small; cleared wholesale when
+   the board moves, which is what BEST_VOR in the key detects. */
+const PAR_CACHE = new Map();
 
-function parKey() {
-  return [board.length, league.teams, league.rounds, league.scoring, league.flex,
-          league.superflex, POSITIONS.map((p) => league.starters[p]).join(","),
+function parKey(lg) {
+  const L = lg || league;
+  return [board.length, L.teams, L.rounds, L.scoring, L.flex,
+          L.superflex, POSITIONS.map((p) => L.starters[p]).join(","),
           Math.round((BEST_VOR || 0) * 100)].join("|");
 }
 
@@ -3759,14 +3780,32 @@ const PAR_SEEDS = [1, 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31];
    summing value, so a par that counted a different set of picks would not be
    comparable to it — and the two drifting apart is the sort of thing that
    reads as a working grade for months. */
-function parRun(jitterOf) {
-  const teams = league.teams;
+/* `lg` is an explicit shape; `strength` is only computed for the live league.
+
+   The value table needs nothing but the board, the snake and the roster rules,
+   so it is computable for any shape. The strength table is not: it runs
+   through bestLineup() and aboveReplacement(), which read lineupSlots() and
+   REPLACEMENT_PTS — and REPLACEMENT_PTS is a module-level table
+   buildProjections() derives from the *live* league's replacement ranks.
+   Computing it for a foreign shape would mean rebuilding that table, which is
+   the board-wide recompute this whole function exists to avoid triggering
+   while a draft is on screen.
+
+   So a foreign shape gets `strength: null` rather than a table of numbers
+   quietly derived from the wrong league. seatPar() returns null for it too,
+   which is a guard rather than a behaviour: the only caller that passes a
+   foreign shape (the Locker's net ADP chart) asks for value and never
+   strength. */
+function parRun(jitterOf, lg) {
+  const L = lg || league;
+  const liveShape = !lg || lg === league;
+  const teams = L.teams;
   const taken = {}, have = [], rosters = [], strength = [], value = [];
   for (let s = 0; s < teams; s++) {
     have.push({}); rosters.push([]); strength.push([]); value.push([]);
   }
 
-  const total = teams * league.rounds;
+  const total = teams * L.rounds;
   const lastPick = total;
   const running = new Array(teams).fill(0);
 
@@ -3774,13 +3813,13 @@ function parRun(jitterOf) {
     const c = DraftEngine.pickInfo(n, teams);
     const pool = board.filter((p) => !taken[p.name] && !isRuledOut(p));
     if (!pool.length) break;
-    const best = bestAvailable(pool, have, c.slot, c.round, { jitterOf: jitterOf, model: false });
+    const best = bestAvailable(pool, have, c.slot, c.round, { jitterOf: jitterOf, model: false, league: L });
     if (!best) break;
 
     taken[best.name] = true;
     have[c.slot][best.pos] = (have[c.slot][best.pos] || 0) + 1;
     rosters[c.slot].push(best);
-    strength[c.slot].push(lineupStrength(rosters[c.slot]));
+    if (liveShape) strength[c.slot].push(lineupStrength(rosters[c.slot]));
 
     const pick = { player: best, overall: n, slot: c.slot, round: c.round };
     if (freelyChosen(pick) && reachableRank(pick, lastPick)) {
@@ -3788,20 +3827,23 @@ function parRun(jitterOf) {
     }
     value[c.slot].push(running[c.slot]);
   }
-  return { strength: strength, value: value };
+  return { strength: liveShape ? strength : null, value: value };
 }
 
-function seatParTable() {
+function seatParTable(lg) {
   // Same guard every other DraftEngine caller carries. A bridge entry is only
   // as safe as its own guard: analyseTeam() is reached from React on mount,
   // and draft-engine.js is deferred.
   if (typeof DraftEngine === "undefined" || !board.length) return null;
 
-  const key = parKey();
-  if (PAR_CACHE && PAR_CACHE.key === key) return PAR_CACHE.table;
+  const L = lg || league;
+  if (!L || !L.teams || !L.rounds || !L.starters) return null;
+
+  const key = parKey(L);
+  if (PAR_CACHE.has(key)) return PAR_CACHE.get(key);
 
   const runs = PAR_SEEDS.map(function (seed) {
-    return parRun(function (p) { return DraftEngine.jitter(p.overall, seed); });
+    return parRun(function (p) { return DraftEngine.jitter(p.overall, seed); }, L);
   });
 
   /* Averaged pick by pick. The runs can differ in length — a pool that runs
@@ -3810,8 +3852,9 @@ function seatParTable() {
      drag the tail of the table toward zero and make the closing rounds look
      like a bargain against par. */
   function averaged(which) {
+    if (!runs[0] || !runs[0][which]) return null;
     const table = [];
-    for (let s = 0; s < league.teams; s++) {
+    for (let s = 0; s < L.teams; s++) {
       const rows = runs.map((r) => (r[which][s] || []));
       const row = [], longest = Math.max.apply(null, rows.map((r) => r.length));
       for (let k = 0; k < longest; k++) {
@@ -3827,7 +3870,7 @@ function seatParTable() {
   }
 
   const table = { strength: averaged("strength"), value: averaged("value") };
-  PAR_CACHE = { key: key, table: table };
+  PAR_CACHE.set(key, table);
   return table;
 }
 
@@ -3862,10 +3905,16 @@ function parValueText(t) {
 
 // Par for this seat at this many picks, or 0 when the engine has not landed
 // yet — an unscored seat is the same for everybody, so it cannot bias a room.
-function seatPar(slot, picksMade, which) {
+function seatPar(slot, picksMade, which, lg) {
   if (picksMade <= 0) return 0;
-  const table = seatParTable();
-  const row = table && table[which || "strength"] && table[which || "strength"][slot];
+  const table = seatParTable(lg);
+  const wanted = which || "strength";
+  if (!table) return 0;
+  /* null, not 0, when the table genuinely has nothing to say — a foreign
+     shape has no strength side (see parRun). Zero would read as "par is
+     zero here" and quietly turn a vsPar figure back into a raw one. */
+  if (!table[wanted]) return null;
+  const row = table[wanted][slot];
   if (!row || !row.length) return 0;
   return row[Math.min(picksMade, row.length) - 1];
 }
@@ -4405,7 +4454,7 @@ function bestAvailable(pool, have, slot, round, opts) {
   let best = null, bestScore = Infinity;
   pool.forEach(function (p) {
     const score = (p.adp + jitterOf(p))
-      * needFromCount(have[slot][p.pos] || 0, p.pos, round)
+      * needFromCount(have[slot][p.pos] || 0, p.pos, round, opts && opts.league)
       * (isRisky(p) ? 1.35 : 1)
       * (modelMultiplier ? modelMultiplier(p) : 1);
     if (score < bestScore) { bestScore = score; best = p; }
@@ -7480,7 +7529,52 @@ function historyStats() {
         }
       }
 
-      if (netAdpAny) netAdpEntries.push({ id: entry.id, value: netAdpSum, completedAt: entry.completedAt });
+      /* Against par for that seat, not raw.
+
+         Raw net ADP value cannot come out positive for most people, and the
+         card was reporting that as a record: "you beat ADP in 0 of 10 mocks".
+         Three things stack up, all measured. Your first pick is capped at zero,
+         because the gap is pick number minus board rank and nothing ranks below
+         1. Need-based drafting reaches by construction — needFromCount()
+         returns 0.80 for a position still filling a starting slot, so the app
+         itself schedules the reaches it then marks you down for; on a real
+         seat-1 mock the quarterback and the last two starting slots were −14,
+         −26 and −28 against positives that never exceeded +5. And the room does
+         not sum to zero: measured across ten rooms it came out −41 to −44 every
+         time, so the average team loses at this too.
+
+         Seat is most of the rest. Mean raw value by chair over ten mocks ran
+         −28, −19, −14, −3, +15, +6, −3, −11, +13, +2 — a 43-point spread on
+         where you sat. Against par it is +2, +3, −1, −3, −3, +5, +3, −3, −1,
+         −2, which is noise, and that is the same correction the grade's own
+         value component already applies.
+
+         Par is asked for with `entry.league` rather than the live one: a
+         12-team mock read while you sit in a 10-team league needs par for the
+         shape it was played at. If par is unavailable — no engine yet, or an
+         entry too old to carry its league — the raw figure is kept rather than
+         a silently unadjusted zero-subtraction, and `vsPar` says which it is so
+         the card can label itself honestly. */
+      if (netAdpAny) {
+        const shape = entry.league && entry.league.starters ? entry.league : null;
+        /* Indexed by picks *made*, not picks judged. parRun() pushes a value
+           row on every pick and only adds to the running total on the ones
+           freelyChosen()/reachableRank() let through, so the row index is the
+           seat's pick count — and using the judged count here would read par
+           two or three picks early, which is exactly where the late reaches
+           this metric is dominated by actually land. Resolved picks, because a
+           name no longer on today's board is skipped above and contributes to
+           neither side. */
+        const par = shape
+          ? seatPar(entry.mySlot, rosters[entry.mySlot].length, "value", shape)
+          : null;
+        netAdpEntries.push({
+          id: entry.id,
+          value: typeof par === "number" ? netAdpSum - par : netAdpSum,
+          vsPar: typeof par === "number",
+          completedAt: entry.completedAt
+        });
+      }
 
       const myRoster = rosters[entry.mySlot];
       if (myRoster.length) {
