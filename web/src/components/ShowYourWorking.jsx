@@ -391,8 +391,16 @@ export default function ShowYourWorking() {
 
       {/* Two equal charted cards side by side, the static grade card below
           them as a full-width row (§4.4) — not squeezed into a third
-          column, since it isn't a third chart. */}
-      <div className="mt-[28px] grid gap-[14px] lg:grid-cols-2">
+          column, since it isn't a third chart.
+
+          items-stretch (§7): CSS Grid's own default, so this row already
+          measured equal-height in both cards before this class was added
+          — confirmed 381.6px/381.6px via computed getBoundingClientRect().
+          Written explicitly anyway, since the handoff calls it out by
+          name and a later change could otherwise override the default
+          without anyone noticing why cards started hugging their own
+          content again. */}
+      <div className="mt-[28px] grid items-stretch gap-[14px] lg:grid-cols-2">
         <div className="flex h-full flex-col rounded-[14px] border border-line-hairline bg-surface-card px-[26px] py-6 transition-colors duration-200 hover:border-teal-400/70">
           <div className="flex items-start justify-between gap-3">
             <p className="font-voidNumeral text-[10.5px] font-semibold tracking-[0.13em] text-[#4DDAE9]">
@@ -443,9 +451,11 @@ export default function ShowYourWorking() {
       {/* 03 paired with 04 rather than stacked full-width: neither is a
           chart, so pairing them keeps the chart row (01/02) visually
           distinct from the two card-only rows below it — the same reason
-          03 was never squeezed into a three-up row with the charts. */}
-      <div className="mt-[14px] grid gap-[14px] lg:grid-cols-2">
-        <div className="rounded-[14px] border border-line-hairline bg-surface-card px-[26px] py-6 transition-colors duration-200 hover:border-teal-400/70">
+          03 was never squeezed into a three-up row with the charts.
+          items-stretch: see the row above's own comment on §7 — same
+          already-the-default, made explicit for the same reason. */}
+      <div className="mt-[14px] grid items-stretch gap-[14px] lg:grid-cols-2">
+        <div className="flex h-full flex-col rounded-[14px] border border-line-hairline bg-surface-card px-[26px] py-6 transition-colors duration-200 hover:border-teal-400/70">
           <p className="font-voidNumeral text-[10.5px] font-semibold tracking-[0.13em] text-[#4DDAE9]">03 &middot; THE GRADE</p>
           <h3 className="mt-[9px] font-voidBody text-base font-bold text-voidInk-primary">Four parts, each shown</h3>
           <p className="mt-[9px] max-w-[640px] text-[15px] leading-[1.55] text-voidInk-body">{GRADE_BODY}</p>
