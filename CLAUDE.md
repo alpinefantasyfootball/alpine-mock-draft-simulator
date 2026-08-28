@@ -712,11 +712,76 @@ bridge — a bar whose caption describes a different quantity from the bar is
 this file's own "right value, wrong column" bug, and there were two call sites
 ready to drift.
 
-**What par does not remove is wobble.** In that same identical-drafter room
-`startersVsPar` still spans −108 to +89, because the CPU drafts with jitter and
-par does not. That is noise about luck rather than bias about seating, it is
-the same noise the raw figure always carried, and the floors bound what it can
-do to the composite (spread **44**, against the `< 60` the test asserts).
+**Par may not apply the model multiplier, and the first version did.**
+`bestAvailable()` applies `modelMultipliers()` unconditionally and
+`cpuChoice()` never has, so par was benchmarking every seat against a
+*Juke-advised* draft rather than a consensus one — a better drafter than
+anybody in the room actually is. That is not a rounding error and it is not
+evenly distributed: measured over ten seeds, mean `startersVsPar` ran **+80 at
+seat 1 and −83 at seat 5**, a 163-point systematic residue in the one component
+whose entire job is removing seat bias. `seatParTable()` passes
+`{ wobble: false, model: false }` now, which makes par exactly `cpuChoice()`
+unwobbled. After: the correlation between chair and mean `startersVsPar` is
+**+0.05** and the residue is 79.
+
+**The model stays on for every other caller**, `shotPicks()` especially — see
+the note on why the hero shot is not an ADP slice. Par is the one place that
+wants the market's opinion rather than ours.
+
+**What par does not remove is wobble, and that was measured rather than
+assumed.** Across ten seeds, a seat's `startersVsPar` moves with a standard
+deviation of **18.3 points**; drafting well rather than badly from the same
+chair is worth **196**. So the luck is real and it is about a tenth of the
+signal — which is why `MIN_SPAN.startersVsPar` stays at 20 rather than being
+raised to cover it.
+
+**Raising that floor was tried against the measurement and is wrong.** It looks
+like the obvious way to suppress wobble luck, and it makes every number that
+matters worse: at floors of 20 / 100 / 130 / 200 the worst per-room chair
+correlation goes **0.37 → 0.38 → 0.41 → 0.50** and starter strength's share of
+the grade falls **0.544 → 0.524 → 0.479 → 0.376**, away from the 50% it is
+supposed to carry. The deliberately unbuilt roster finishes last in 6 of 6
+seeded rooms at *every* floor, so nothing is bought for it either.
+
+### `startDraft()` does not clear `state.picks`, and a loop over seeds is a lie
+
+The single most expensive thing in this whole pass, and it produced two
+confident, precise, wrong answers before anything caught it.
+
+`JukeEngine.startDraft()` calls `buildBoard()`, sets the seed and applies the
+jitter — and never touches `state.picks`. So the *second* iteration of any
+"run a draft per seed" loop finds 140 picks already sitting there,
+`draftOver()` is true immediately, the while loop never executes, and the
+"new" draft is byte-identical to the old one because **it is the old one**.
+
+What that produced, both stated as measured facts:
+
+- "changing the seed changes nothing about the draft" — six seeds, six
+  identical drafts
+- "jitter is inert: 0 of 140 picks differ with it zeroed"
+
+Both false. With `state.picks.length = 0` and `board.forEach(p => p.drafted =
+false)` before each run, six seeds give **six distinct drafts differing in 60
+to 73 of 140 picks**, and zeroing the jitter changes **90 of 140**. The wobble
+works exactly as designed.
+
+**The tell was available and went unread for three measurements.** A no-op run
+returns a draft of the right length with plausible numbers — there is nothing
+malformed to notice. What gives it away is a *zero* standard deviation:
+per-seat `startersVsPar` came back identical to the point across ten seeds,
+which is not what any real stochastic process does. **A variance of exactly
+zero across samples means the samples are the same sample**, and that is worth
+checking before it means anything about the thing being measured.
+
+It also very nearly justified deleting a working feature. The conclusion on the
+table was "`DraftEngine.jitter()` is inert, the CPU wobble does not wobble" —
+an interesting, plausible, well-evidenced claim about `jitter()`'s sawtooth
+arithmetic, and entirely an artifact of the harness. Same shape as the wrangler
+crash-loop and the "network connection lost" flood: **a diagnosis about the
+tooling wearing a bug's clothes.**
+
+Anything driving repeated drafts from the console resets both, or measures
+nothing.
 
 `tests/grade.spec.mjs` gained "the chair a manager drafts from does not decide
 their grade", which asserts both halves — chair-versus-rank near zero *and* the

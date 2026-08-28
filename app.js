@@ -3741,7 +3741,7 @@ function seatParTable() {
     const c = DraftEngine.pickInfo(n, teams);
     const pool = board.filter((p) => !taken[p.name] && !isRuledOut(p));
     if (!pool.length) break;
-    const best = bestAvailable(pool, have, c.slot, c.round, false);
+    const best = bestAvailable(pool, have, c.slot, c.round, { wobble: false, model: false });
     if (!best) break;
 
     taken[best.name] = true;
@@ -4264,21 +4264,37 @@ function oneThatGotAway(slot) {
 
 // The exact scoring shotPicks() uses for its own simulated draft, factored
 // out so both can call it rather than one drifting from the other.
-/* `wobble` is opt-out for one caller: seatParTable(), which needs par to be a
-   property of the board rather than of a particular draft. Jitter is
-   deterministic from state.seed and shared across a room, so including it
-   would still be consistent between clients — it would just mean the same
-   roster grading differently depending on the wobble in a reference draft it
-   was never part of. Everyone else keeps the wobble, which is what stops ten
-   CPU seats drafting one identical board. */
-function bestAvailable(pool, have, slot, round, wobble) {
-  const modelMultiplier = modelMultipliers(pool);
+/* `opts` is opt-out for one caller: seatParTable(), which turns both of these
+   off to get the plain consensus drafter.
+
+   `wobble:false` because par has to be a property of the board rather than of
+   a particular draft — the jitter is deterministic and shared across a room,
+   so leaving it in would still agree between clients, it would just mean the
+   same roster grading differently because of a wobble in a reference draft it
+   was never part of.
+
+   `model:false` because the model multiplier is *Juke's own opinion*, and par
+   is supposed to be the market's. Leaving it in made par a better drafter than
+   anybody in the room actually is — `cpuChoice()` has never applied it — so
+   par was benchmarking every seat against an advised draft rather than a
+   consensus one, and it did that unevenly by seat. Measured over ten seeds
+   before the change, mean `startersVsPar` ran +80 at seat 1 and −83 at seat 5:
+   a 163-point systematic residue in the very component that exists to remove
+   seat bias.
+
+   Everyone else keeps both. shotPicks() in particular wants the model on
+   deliberately — see CLAUDE.md on why the hero shot is not an ADP slice. */
+function bestAvailable(pool, have, slot, round, opts) {
+  const wobble = !opts || opts.wobble !== false;
+  const modelMultiplier = (!opts || opts.model !== false)
+    ? modelMultipliers(pool)
+    : null;
   let best = null, bestScore = Infinity;
   pool.forEach(function (p) {
-    const score = (p.adp + (wobble === false ? 0 : p.jitter))
+    const score = (p.adp + (wobble ? p.jitter : 0))
       * needFromCount(have[slot][p.pos] || 0, p.pos, round)
       * (isRisky(p) ? 1.35 : 1)
-      * modelMultiplier(p);
+      * (modelMultiplier ? modelMultiplier(p) : 1);
     if (score < bestScore) { bestScore = score; best = p; }
   });
   return best;
