@@ -5698,19 +5698,25 @@ function renderGrades() {
   // standings
   html += `<p class="section-label" style="margin-top:20px">Room standings</p>
     <table class="standings"><tbody>`;
-  /* The number between the rank and the letter is the weighted total, which
-     is what the room is ordered by and what the letter is handed out for.
-     It used to print starter strength — one component of four — so the
-     column climbed and fell down a table that was strictly ranked, and four
+  /* No score column between the rank and the letter any more.
+
+     The rule it used to satisfy was that whatever sits there has to be the
+     weighted total: it once printed starter strength — one component of four
+     — so the column climbed and fell down a strictly ranked table, and four
      teams sharing a starter strength of 90 sat at ranks 1, 4, 5 and 7 with
-     four different grades. It read as a sorting bug. The other three
-     components are on the bars above; this column is the answer they add up
-     to. */
+     four different grades. It read as a sorting bug.
+
+     Removing the column satisfies that rule from the other end. A letter
+     grade beside an x/100 is read against the scale everybody was taught, and
+     the letter here is finishing position while the number was a
+     room-relative composite — so they disagreed by construction, on every row.
+     The row is ordered by rank and labelled by a letter that means rank, and
+     there is nothing left for a third number to contradict. The components
+     still add up in the bars above. */
   all.slice().sort((a, b) => a.rank - b.rank).forEach(function (t) {
     html += `<tr class="${t.slot === state.mySlot ? "me" : ""}">
         <td class="rk">${t.rank}</td>
         <td>${teamLabel(t.slot)}</td>
-        <td class="num">${Math.round(t.total)}</td>
         <td class="gr">${t.grade}</td>
       </tr>`;
   });

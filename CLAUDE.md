@@ -948,11 +948,16 @@ indexing that array by finishing position needs the same clamp. Stretching
 the scale to fit the room was the alternative and was rejected: it would
 quietly regrade every ten-team draft, which is a bigger change than the bug.
 
-**The number in the room standings is the weighted total, and it has to be.**
-The table is ordered by that total and the letter is handed out for finishing
-position, so a column sitting between the two that shows anything else makes
-the table look broken. It used to print starter strength — one component of
-four — which produced this:
+**The room standings have no score column at all now, and the rule that used
+to govern it is why.** Whatever sat between the rank and the letter had to be
+the weighted total, because the table is ordered by that total and a column
+showing anything else makes a strictly ranked table look broken. The reason it
+is gone is the section below on the letter and the hundred — the same
+requirement, followed one step further. What follows is the bug that
+established the rule, and it is still the reason nothing else may go there.
+
+It used to print starter strength — one component of four — which produced
+this:
 
 ```
 1  The Gibbs Ultimatum   90  A+
@@ -974,6 +979,77 @@ wrong column — and it only surfaced by reading what the analysis *renders*
 and comparing it to what the analysis *computes*. Do both. A grade can be
 correct and still be unbelievable, and an unbelievable grade is a broken
 feature: this is the same failure as a kicker being named the biggest reach.
+
+### A letter grade may not stand next to a score out of a hundred
+
+Reported by the owner: *why does an "A" sit above "69 / 100"?* Because the
+letter is finishing position and the number was a room-relative min-max
+composite — two different scales, printed an inch apart, and every reader
+arrives already fluent in a third one where A means 90 and F means below 60.
+
+**Measured on a real ten-team room: the letter agreed with the school reading
+of the number beside it on 0 of 10 teams.** The A+ scored 76, the A scored 69,
+and seven of the ten would have been an F by the scale the reader is actually
+using. Two further consequences of indexing a fourteen-step scale by rank:
+**nobody can score an F in a ten-team league** — the worst available letter is
+D+ — and **somebody always gets an A+**, including in a room where every seat
+drafted identically.
+
+**Curving the letter off something absolute was measured and rejected.** With
+par in place there is finally an absolute quantity to curve — `startersVsPar`
+is real projected points against what a consensus drafter would have got from
+that chair — so it was tried properly, against a ladder of drafters making
+deliberate mistakes on a known fraction of their picks:
+
+```
+mistakes    0%     10%    20%    30%    50%    70%   100%
+vsPar        0     -17    -29    -43    -65   -122   -193
+SD         7.8    23.4   28.7   27.9   41.1   47.7   46.5
+```
+
+It fails for two reasons that are worth keeping. **Par is a ceiling, not a
+midpoint** — `autoPickForMe()` and `cpuChoice()` return identical picks on a
+stock table, so the app's own advice *is* par and nothing systematically beats
+it; the best anything managed was +30, and that was wobble luck. And **the
+noise swamps the signal where users live**: at a 10% mistake rate the effect is
+−17 against an SD of 23. Built at 25-point bands, a normal room came out **A+
+×37, A ×3 of 40**, a drafter erring on half their picks still read A+ or A−
+about half the time, and one guessing on every pick never reached F. Less
+informative than the ranking it would have replaced.
+
+**Making both numbers rank-derived fails too, and the reason is structural.**
+Stretch the fourteen letters across the room and print a percentile instead:
+3 of 10 agree. School bands are wildly non-linear — A is the top ten points, F
+is the bottom sixty — and a percentile is linear in rank. No mapping of ten
+ranks onto letters satisfies both.
+
+So the number goes and the letter stays. `A · 2nd of 10` is internally
+consistent and needs no explaining, because the rank says exactly what the
+letter means. Removed from the share card, both Analysis headers, the Insights
+summary, the mobile `grade · score` chip, and all three standings tables.
+
+**What deliberately stays.** The component bars' own `Weighted sum = 55.9`
+line, where four bars visibly add up to it and nothing calls it a percentage —
+that is the reconciliation the grade section already requires. And
+`Roster construction 90 / 100`, which is a genuine component out of a hundred
+with no letter beside it. The rule is about the *pairing*, not about the
+number: a test asserting the total were absent would fail on the first, and one
+asserting `/ 100` were absent would fail on the second.
+
+**`shareData` no longer carries `total`.** A field left on the object that
+nothing draws is an invitation to put the line back without the reasoning that
+took it out.
+
+**And `RANK_COL_W` had to be re-derived, not just left.** The share card sizes
+the grade glyph to whatever the rank column leaves it, and that constant was
+307 because the widest line *was* `100 / 100 weighted score`. With that line
+gone the widest is `24th of 24` — measured at 206px with Archivo actually
+loaded. The constant is 230 rather than 206 because **it is the clearance**:
+the gap between the longest rank line and the panel is `RANK_COL_W` minus the
+rank width and nothing else, so 210 produced a 6px near-miss on a 24-team card.
+230 leaves 24px, the gutter the panel already keeps, and the grade still grows
+from 208px to 262. **A constant derived from a string is wrong the moment that
+string changes** — and it fails as a collision, not as an error.
 
 **`build` is floored at zero, because it is printed as "x / 100".** Three
 rounds in, with six starting slots still empty, the bar read
