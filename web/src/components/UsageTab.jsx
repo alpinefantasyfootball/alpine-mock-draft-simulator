@@ -72,6 +72,21 @@ export default function UsageTab({ usage }) {
             real: a screen pass is caught behind the line.
           </p>
         )}
+        {/* Every other number on the sheet rescores when the scoring editor
+            moves, and these two cannot: expectation lives in ffopportunity's
+            play-by-play model under its own scoring. Leaving that unsaid
+            would make xFP the one figure quietly describing a different
+            league — the exact failure the projection record's note exists
+            to prevent. */}
+        {usage.hasModel && (
+          <p className="mt-1.5 text-[11px] leading-snug text-ink-muted">
+            xFP is what an average player would have scored from the same
+            opportunities, per the ffverse expected-points model, and
+            &plusmn;xFP is how far he beat or trailed that. Both are under
+            the model&rsquo;s own scoring &mdash; the scoring editor does
+            not move them.
+          </p>
+        )}
       </div>
 
       {/* Said plainly, because the temptation to read these as a better

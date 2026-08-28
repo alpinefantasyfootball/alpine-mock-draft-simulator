@@ -3748,15 +3748,28 @@ function parKey() {
    work, which is not worth paying on a cache miss a person is waiting through. */
 const PAR_SEEDS = [1, 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31];
 
-// One full simulated draft under one wobble. Returns, per seat, the lineup
-// strength after each of that seat's picks — the same table shape par uses,
-// because par after three picks is not par after fourteen.
+/* One full simulated draft under one wobble. Returns, per seat, two running
+   tables: the lineup strength after each of that seat's picks, and the draft
+   value it had accrued by then. Both are tables rather than totals because par
+   after three picks is not par after fourteen.
+
+   **The value side applies `freelyChosen()` and `reachableRank()` by calling
+   them**, on a pick-shaped object, rather than repeating what they test.
+   analyseTeam() filters the real picks through exactly those two before
+   summing value, so a par that counted a different set of picks would not be
+   comparable to it — and the two drifting apart is the sort of thing that
+   reads as a working grade for months. */
 function parRun(jitterOf) {
   const teams = league.teams;
-  const taken = {}, have = [], rosters = [], table = [];
-  for (let s = 0; s < teams; s++) { have.push({}); rosters.push([]); table.push([]); }
+  const taken = {}, have = [], rosters = [], strength = [], value = [];
+  for (let s = 0; s < teams; s++) {
+    have.push({}); rosters.push([]); strength.push([]); value.push([]);
+  }
 
   const total = teams * league.rounds;
+  const lastPick = total;
+  const running = new Array(teams).fill(0);
+
   for (let n = 1; n <= total; n++) {
     const c = DraftEngine.pickInfo(n, teams);
     const pool = board.filter((p) => !taken[p.name] && !isRuledOut(p));
@@ -3767,9 +3780,15 @@ function parRun(jitterOf) {
     taken[best.name] = true;
     have[c.slot][best.pos] = (have[c.slot][best.pos] || 0) + 1;
     rosters[c.slot].push(best);
-    table[c.slot].push(lineupStrength(rosters[c.slot]));
+    strength[c.slot].push(lineupStrength(rosters[c.slot]));
+
+    const pick = { player: best, overall: n, slot: c.slot, round: c.round };
+    if (freelyChosen(pick) && reachableRank(pick, lastPick)) {
+      running[c.slot] += n - best.overall;
+    }
+    value[c.slot].push(running[c.slot]);
   }
-  return table;
+  return { strength: strength, value: value };
 }
 
 function seatParTable() {
@@ -3790,20 +3809,24 @@ function seatParTable() {
      actually reached it rather than by PAR_SEEDS.length, which would quietly
      drag the tail of the table toward zero and make the closing rounds look
      like a bargain against par. */
-  const table = [];
-  for (let s = 0; s < league.teams; s++) {
-    const row = [], longest = Math.max.apply(null, runs.map((r) => (r[s] || []).length));
-    for (let k = 0; k < longest; k++) {
-      let sum = 0, seen = 0;
-      runs.forEach(function (r) {
-        const v = r[s] && r[s][k];
-        if (typeof v === "number") { sum += v; seen++; }
-      });
-      row.push(seen ? sum / seen : 0);
+  function averaged(which) {
+    const table = [];
+    for (let s = 0; s < league.teams; s++) {
+      const rows = runs.map((r) => (r[which][s] || []));
+      const row = [], longest = Math.max.apply(null, rows.map((r) => r.length));
+      for (let k = 0; k < longest; k++) {
+        let sum = 0, seen = 0;
+        rows.forEach(function (r) {
+          if (typeof r[k] === "number") { sum += r[k]; seen++; }
+        });
+        row.push(seen ? sum / seen : 0);
+      }
+      table.push(row);
     }
-    table.push(row);
+    return table;
   }
 
+  const table = { strength: averaged("strength"), value: averaged("value") };
   PAR_CACHE = { key: key, table: table };
   return table;
 }
@@ -3823,10 +3846,10 @@ function parText(t) {
 
 // Par for this seat at this many picks, or 0 when the engine has not landed
 // yet — an unscored seat is the same for everybody, so it cannot bias a room.
-function seatPar(slot, picksMade) {
+function seatPar(slot, picksMade, which) {
   if (picksMade <= 0) return 0;
   const table = seatParTable();
-  const row = table && table[slot];
+  const row = table && table[which || "strength"] && table[which || "strength"][slot];
   if (!row || !row.length) return 0;
   return row[Math.min(picksMade, row.length) - 1];
 }
@@ -6339,17 +6362,25 @@ function depthChartFor(player) {
    Which columns are meaningful is a football question, so it is answered
    here beside logColumns() rather than in a component. A quarterback has no
    target share; a kicker has nothing but his game-winners. */
+/* xFP leads and its delta sits beside it, because together they are the
+   sentence the whole tab exists to say: what his role was worth, and how far
+   he beat or trailed it. The shares and EPA that follow are the explanation.
+   Backtested (2018-2025, ffopportunity data): an xFP composite is the best
+   backward-looking predictor at every position and still loses to the
+   projection the Juke score runs on, so these stay display-only like
+   everything else here. */
 const USAGE_COLUMNS = {
-  QB:  ["pep", "cpo", "rep", "r20"],
-  RB:  ["ts", "rep", "ep", "r20"],
-  WR:  ["ts", "ays", "wo", "ep"],
-  TE:  ["ts", "ays", "wo", "ep"],
+  QB:  ["xf", "xd", "pep", "cpo", "rep", "r20"],
+  RB:  ["xf", "xd", "ts", "rep", "ep", "r20"],
+  WR:  ["xf", "xd", "ts", "ays", "wo", "ep"],
+  TE:  ["xf", "xd", "ts", "ays", "wo", "ep"],
   K:   ["gwa", "gwm"]
 };
 
 const USAGE_LABELS = {
   ts: "TGT%", ays: "AY%", wo: "WOPR", ep: "REC EPA", rep: "RUSH EPA",
-  pep: "PASS EPA", cpo: "CPOE", r20: "20+ RUN", gwa: "GW ATT", gwm: "GW MADE"
+  pep: "PASS EPA", cpo: "CPOE", r20: "20+ RUN", gwa: "GW ATT", gwm: "GW MADE",
+  xf: "xFP", xd: "±xFP"
 };
 
 // A share is a proportion and reads as a percentage; EPA is a points figure
@@ -6357,13 +6388,21 @@ const USAGE_LABELS = {
 // WOPR is a conventional index and is left as the number everyone quotes.
 const USAGE_SHARES = { ts: true, ays: true };
 
+// The two expected-points figures, which carry a caveat the others do not:
+// they are the ffopportunity model's own scoring, so the scoring editor
+// cannot move them. usageFor() flags it so the tab can say so.
+const USAGE_MODEL = { xf: true, xd: true };
+
 function usageCell(key, value) {
   if (value === undefined || value === null) return null;
   if (USAGE_SHARES[key]) return (value * 100).toFixed(1) + "%";
   if (key === "cpo") return (value > 0 ? "+" : "") + value.toFixed(1);
-  if (key === "ep" || key === "rep" || key === "pep") {
+  // xd is actual minus expected, signed for the same reason EPA is: which
+  // side of his role's worth he landed on is the whole fact.
+  if (key === "ep" || key === "rep" || key === "pep" || key === "xd") {
     return (value > 0 ? "+" : "") + value.toFixed(1);
   }
+  if (key === "xf") return value.toFixed(1);
   return String(value);
 }
 
@@ -6374,8 +6413,20 @@ function usageFor(player) {
   if (!player) return null;
   const s = statOf(player);
   const u = s && s.u;
-  const keys = USAGE_COLUMNS[player.pos];
-  if (!u || !keys) return null;
+  const allKeys = USAGE_COLUMNS[player.pos];
+  if (!u || !allKeys) return null;
+
+  /* The model columns are absent, not dashes, until the data exists. This
+     app.js can deploy ahead of the stats.js the nightly regenerates, and an
+     unjoined player never gets `xf` at all -- either way a column of em
+     dashes under a header is a promise the data is not keeping, the same
+     rule that hides the whole tab rather than showing it empty. The other
+     columns keep their dashes: a missing single year inside a column that
+     exists is a fact about that year, not about the column. */
+  const years = Object.keys(u);
+  const keys = allKeys.filter(function (k) {
+    return !USAGE_MODEL[k] || years.some((y) => u[y][k] !== undefined);
+  });
 
   const rows = Object.keys(u).sort().reverse().map(function (year) {
     const block = u[year];
@@ -6400,7 +6451,11 @@ function usageFor(player) {
     rows: rows,
     // So the component knows whether the denominator caveat is worth saying:
     // a quarterback's row carries no share and the note would be noise.
-    hasShare: keys.some((k) => USAGE_SHARES[k])
+    hasShare: keys.some((k) => USAGE_SHARES[k]),
+    // And whether the scoring-editor caveat is: xFP is the ffopportunity
+    // model's own scoring, the one pair of figures on the sheet the editor
+    // cannot rescore, and that must be said where the number is.
+    hasModel: keys.some((k) => USAGE_MODEL[k])
   };
 }
 
