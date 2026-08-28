@@ -446,6 +446,19 @@ export default function DraftInsightsDashboard({
   // Everything the share card draws, assembled from the same values the
   // summary card above renders — the card can never say something the
   // screen does not.
+  // Plain-text twin of the styled "One That Got Away" paragraph rendered
+  // below — same convention as bestValue/biggestReach just above: the JSX
+  // carries bold spans a canvas can't draw, so the share card gets its own
+  // formatting of the identical facts (missed/subject/poss), not a second
+  // opinion about what happened.
+  const oneThatGotAwayText = missed
+    ? `${missed.theirsName} was still on the board when ${subject} took ${missed.mineName} in round ` +
+      `${missed.mineRound} — ${missed.theirsTeamName} got him ` +
+      `${missed.theirsOverall - missed.mineOverall === 1 ? 'with the very next pick' : `${missed.theirsOverall - missed.mineOverall} picks later`}` +
+      `, and swapping him in would have made ${poss} starting lineup this much stronger.`
+    : `Nothing got away. At every turn, nobody taken before ${poss} next pick would have improved ${poss} ` +
+      'starting lineup by more than the projection can honestly measure — that is the mark of a draft with no real regrets in it.'
+
   const shareData = {
     teamName,
     leagueText: engine.settingsText(league),
@@ -461,6 +474,20 @@ export default function DraftInsightsDashboard({
       ? `${bargain.name}${bargain.gap > 0 ? ` · ${bargain.gap} picks late` : ''}`
       : null,
     biggestReach: reach ? `${reach.name} · ${Math.abs(reach.gap)} picks early` : null,
+    // Everything below this line is what makes the card the whole report
+    // rather than the old fixed 630px teaser — see shareCard.js's own file
+    // comment on why Share/Copy/Download all drew that same short card and
+    // why that was reported as a bug rather than a feature.
+    oneThatGotAwayText,
+    oneThatGotAwayDelta: missed ? missed.delta : null,
+    vorpRows,
+    timeline,
+    standings: standings.map((t) => ({
+      rank: t.rank,
+      grade: t.grade,
+      teamName: t.teamName || engine.teamLabel(t.slot),
+      isMine: t.slot === effMySlot,
+    })),
   }
 
   return (

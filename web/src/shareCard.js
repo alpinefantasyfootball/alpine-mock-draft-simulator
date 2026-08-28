@@ -1,12 +1,20 @@
-/* The shareable grade card, drawn to a canvas — not screenshotted from the
+/* The shareable draft report, drawn to a canvas — not screenshotted from the
    DOM and not a template PNG. Same reasoning as the og-image and the hero
    product shot (see CLAUDE.md): a drawn card is generated from the exact
    figures on screen, so it can never drift from what the dashboard says,
    and it costs no dependency — html2canvas et al. exist to rasterise
    arbitrary DOM, and this card is not arbitrary.
 
-   1200x630 — the link-preview aspect the og-image already uses, which is
-   also what every chat app unfurls without cropping. */
+   Width is fixed at 1200 — the link-preview aspect the og-image already
+   uses. Height is not: this used to be a fixed 630px "social card" holding
+   only the grade, the four component bars and the two callouts, and Share/
+   Copy/Download all drew that same short card. Reported directly: those
+   three buttons all rendered "just the top portion" of the report. A
+   drafter wants the thing they can send to their league — the roster VORP
+   matrix, the value timeline, the room standings — not a teaser for it. So
+   the canvas grows to fit whatever the report actually has: a 24-team room
+   or an 18-round bench draws a taller image, a short 4-team league draws a
+   shorter one, and nothing here hardcodes a row count. */
 
 const W = 1200
 // The left text margin and where the component panel starts. The grade sizing
@@ -14,10 +22,15 @@ const W = 1200
 const TEXT_X = 64
 const PANEL_X = 760
 const GRADE_MAX_PX = 300
-const H = 630
+const HEADER_H = 630
+
+const CONTENT_X = TEXT_X
+const CONTENT_W = W - TEXT_X * 2
 
 const TEAL = '#00E5FF'
 const PURPLE = '#7B1FA2'
+const ROSE_A = '#F43F5E'
+const ROSE_B = '#FB7185'
 const BG = '#0B0E14'
 const PANEL = '#131A24'
 
@@ -28,6 +41,24 @@ const COMPONENTS = [
   { key: 'buildScaled', label: 'Build' },
   { key: 'byePenaltyScaled', label: 'Byes' },
 ]
+
+// Six hues, one per position — the exact values draftRoomPositions.js's
+// POS_BADGE names as Tailwind classes (orange/emerald/blue/fuchsia/yellow/
+// indigo), translated to hex because a canvas fillStyle can't read a
+// class name. Not re-derived from anywhere at runtime: this file has no
+// access to the Tailwind theme, and these six are load-bearing enough
+// (the one position reference for the whole site, per that file's own
+// comment) that a hardcoded, commented copy is the honest option rather
+// than pretending there's a shared source at draw time.
+const POS_COLORS = {
+  QB: { bg: 'rgba(249,115,22,0.16)', fg: '#FDBA74' },
+  RB: { bg: 'rgba(16,185,129,0.16)', fg: '#6EE7B7' },
+  WR: { bg: 'rgba(59,130,246,0.16)', fg: '#93C5FD' },
+  TE: { bg: 'rgba(217,70,239,0.16)', fg: '#F0ABFC' },
+  K: { bg: 'rgba(234,179,8,0.16)', fg: '#FDE047' },
+  DST: { bg: 'rgba(99,102,241,0.16)', fg: '#A5B4FC' },
+}
+const POS_NEUTRAL = { bg: 'rgba(255,255,255,0.06)', fg: 'rgba(255,255,255,0.4)' }
 
 /* document.fonts.check() cannot answer the question this guard is asking, and
    for months it answered it wrongly. It reports whether the faces that *would*
@@ -87,8 +118,128 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.closePath()
 }
 
+function posBadge(ctx, pos, x, y, w, h) {
+  const c = (pos && POS_COLORS[pos]) || POS_NEUTRAL
+  ctx.fillStyle = c.bg
+  roundRect(ctx, x, y, w, h, 6)
+  ctx.fill()
+  ctx.fillStyle = c.fg
+  ctx.font = '700 15px "Archivo", sans-serif'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillText(pos || '—', x + w / 2, y + h / 2 + 1)
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'alphabetic'
+}
+
+function sectionTitle(ctx, title, sub, x, y) {
+  ctx.fillStyle = '#FFFFFF'
+  ctx.font = '700 26px "Archivo", sans-serif'
+  ctx.fillText(title, x, y)
+  if (sub) {
+    ctx.fillStyle = 'rgba(255,255,255,0.4)'
+    ctx.font = '400 17px "Inter", sans-serif'
+    ctx.fillText(sub, x, y + 24)
+  }
+}
+
+// A centred-baseline bar, the same convention VorpRow/TimelineRow use on
+// screen: teal grows right of the midline, rose grows left. gap === null
+// draws the baseline with nothing on it — the K/DST dash on the live panel.
+function centerBar(ctx, x, y, w, gap, maxAbs) {
+  const midX = x + w / 2
+  const barH = 12
+  ctx.strokeStyle = 'rgba(255,255,255,0.18)'
+  ctx.lineWidth = 1
+  ctx.beginPath()
+  ctx.moveTo(midX, y - barH / 2 - 3)
+  ctx.lineTo(midX, y + barH / 2 + 3)
+  ctx.stroke()
+  if (gap === null || !maxAbs) return
+  const half = Math.max(6, Math.min(w / 2, (Math.abs(gap) / maxAbs) * (w / 2)))
+  const positive = gap >= 0
+  const barX = positive ? midX : midX - half
+  const grad = ctx.createLinearGradient(barX, 0, barX + half, 0)
+  if (positive) {
+    grad.addColorStop(0, TEAL)
+    grad.addColorStop(1, PURPLE)
+  } else {
+    grad.addColorStop(0, ROSE_B)
+    grad.addColorStop(1, ROSE_A)
+  }
+  ctx.fillStyle = grad
+  roundRect(ctx, barX, y - barH / 2, half, barH, barH / 2)
+  ctx.fill()
+}
+
+const ROW_LABEL_W = 68
+const ROW_NAME_W = 260
+const ROW_VALUE_W = 90
+const ROW_GAP_PAD = 20
+const ROW_BAR_X = CONTENT_X + ROW_LABEL_W + ROW_GAP_PAD + ROW_NAME_W + ROW_GAP_PAD
+const ROW_BAR_W = CONTENT_X + CONTENT_W - ROW_VALUE_W - ROW_GAP_PAD - ROW_BAR_X
+
+function gapValueText(ctx, gap, x, yBase) {
+  ctx.font = '700 18px "Archivo", sans-serif'
+  ctx.textAlign = 'right'
+  ctx.fillStyle = gap === null ? 'rgba(255,255,255,0.35)' : gap >= 0 ? TEAL : ROSE_B
+  ctx.fillText(gap === null ? '—' : (gap >= 0 ? '+' : '') + Math.round(gap), x, yBase)
+  ctx.textAlign = 'left'
+}
+
+// Word-wraps into `maxLines` at most, appending an ellipsis to the last
+// line if the text still doesn't fit — used only for the one-that-got-away
+// sentence, which is the single piece of freeform prose on this card.
+function wrapText(ctx, text, x, y, maxWidth, lineHeight, maxLines) {
+  const words = text.split(' ')
+  let line = ''
+  let lines = []
+  for (const word of words) {
+    const test = line ? line + ' ' + word : word
+    if (ctx.measureText(test).width > maxWidth && line) {
+      lines.push(line)
+      line = word
+    } else {
+      line = test
+    }
+  }
+  if (line) lines.push(line)
+  if (lines.length > maxLines) {
+    lines = lines.slice(0, maxLines)
+    let last = lines[maxLines - 1]
+    while (ctx.measureText(last + '…').width > maxWidth && last.length > 1) {
+      last = last.slice(0, -1)
+    }
+    lines[maxLines - 1] = last + '…'
+  }
+  lines.forEach((l, i) => ctx.fillText(l, x, y + i * lineHeight))
+  return lines.length * lineHeight
+}
+
 export async function drawShareCard(data) {
   await ensureFonts()
+
+  const vorpRows = data.vorpRows || []
+  const timeline = data.timeline || []
+  const standings = data.standings || []
+
+  const vorpMax = Math.max(1, ...vorpRows.filter((r) => r.gap !== null).map((r) => Math.abs(r.gap)))
+  const tlMax = Math.max(1, ...timeline.map((r) => Math.abs(r.gap)))
+
+  const SECTION_GAP = 40
+  const TITLE_H = 56
+  const VORP_ROW_H = 44
+  const TIMELINE_ROW_H = 42
+  const STANDINGS_ROW_H = 38
+  const AWAY_H = data.oneThatGotAwayText ? 190 : 0
+  const FOOTER_H = 64
+
+  let H = HEADER_H
+  if (AWAY_H) H += SECTION_GAP + AWAY_H
+  if (vorpRows.length) H += SECTION_GAP + TITLE_H + vorpRows.length * VORP_ROW_H
+  if (timeline.length) H += SECTION_GAP + TITLE_H + timeline.length * TIMELINE_ROW_H
+  if (standings.length) H += SECTION_GAP + TITLE_H + standings.length * STANDINGS_ROW_H
+  H += SECTION_GAP + FOOTER_H
 
   const canvas = document.createElement('canvas')
   canvas.width = W
@@ -99,17 +250,20 @@ export async function drawShareCard(data) {
   ctx.fillStyle = BG
   ctx.fillRect(0, 0, W, H)
 
-  // faint brand glows in the corners, echoing the dashboard's backdrop
+  // faint brand glows, top-right and bottom-left of the header only — the
+  // report body below reads better on a flat ground once it's several
+  // screens tall, the same reasoning the hero product shot's own fade
+  // uses for where it does and doesn't spend a gradient.
   const glow1 = ctx.createRadialGradient(W - 120, 80, 0, W - 120, 80, 420)
   glow1.addColorStop(0, 'rgba(123,31,162,0.22)')
   glow1.addColorStop(1, 'rgba(123,31,162,0)')
   ctx.fillStyle = glow1
-  ctx.fillRect(0, 0, W, H)
-  const glow2 = ctx.createRadialGradient(140, H - 60, 0, 140, H - 60, 420)
+  ctx.fillRect(0, 0, W, HEADER_H)
+  const glow2 = ctx.createRadialGradient(140, HEADER_H - 60, 0, 140, HEADER_H - 60, 420)
   glow2.addColorStop(0, 'rgba(0,229,255,0.10)')
   glow2.addColorStop(1, 'rgba(0,229,255,0)')
   ctx.fillStyle = glow2
-  ctx.fillRect(0, 0, W, H)
+  ctx.fillRect(0, 0, W, HEADER_H)
 
   // neon rule across the top — every stop earns its keep on the dark ground
   const rule = ctx.createLinearGradient(0, 0, W, 0)
@@ -249,15 +403,14 @@ export async function drawShareCard(data) {
     }
   })
 
-  // callouts along the bottom, when the draft produced them
+  // callouts along the bottom of the header, when the draft produced them
   ctx.font = '400 24px "Inter", sans-serif'
-  let footY = 572
+  const footY = 572
   if (data.bestValue) {
     ctx.fillStyle = TEAL
     ctx.fillText('BEST VALUE', 64, footY)
     ctx.fillStyle = 'rgba(255,255,255,0.75)'
     ctx.fillText(data.bestValue, 64 + 160, footY)
-    footY += 0
   }
   if (data.biggestReach) {
     ctx.fillStyle = '#FB7185'
@@ -266,12 +419,137 @@ export async function drawShareCard(data) {
     ctx.fillText(data.biggestReach, 620 + 200, footY)
   }
 
-  // the marketing line the whole card exists for
+  // watermark, top-right of the header
   ctx.fillStyle = 'rgba(255,255,255,0.45)'
   ctx.font = '600 24px "Archivo", sans-serif'
   ctx.textAlign = 'right'
   ctx.fillText('jukeff.com', W - 64, 84)
   ctx.textAlign = 'left'
+
+  // ---- everything below is the report itself, not the summary card ----
+  let y = HEADER_H
+
+  if (AWAY_H) {
+    y += SECTION_GAP
+    const bx = CONTENT_X
+    const bw = CONTENT_W
+    const by = y
+    const bh = AWAY_H
+    ctx.fillStyle = 'rgba(183,132,224,0.06)'
+    roundRect(ctx, bx, by, bw, bh, 16)
+    ctx.fill()
+    ctx.strokeStyle = 'rgba(183,132,224,0.4)'
+    ctx.lineWidth = 2
+    roundRect(ctx, bx + 1, by + 1, bw - 2, bh - 2, 16)
+    ctx.stroke()
+
+    ctx.fillStyle = '#B784E0'
+    ctx.font = '700 22px "Archivo", sans-serif'
+    ctx.fillText('THE ONE THAT GOT AWAY', bx + 28, by + 40)
+
+    ctx.fillStyle = 'rgba(255,255,255,0.65)'
+    ctx.font = '400 20px "Inter", sans-serif'
+    const textW = data.oneThatGotAwayDelta !== null && data.oneThatGotAwayDelta !== undefined ? bw - 280 : bw - 56
+    wrapText(ctx, data.oneThatGotAwayText, bx + 28, by + 76, textW, 28, 3)
+
+    if (data.oneThatGotAwayDelta !== null && data.oneThatGotAwayDelta !== undefined) {
+      ctx.textAlign = 'right'
+      ctx.fillStyle = '#B784E0'
+      ctx.font = '900 48px "Archivo", sans-serif'
+      ctx.fillText(`+${Math.round(data.oneThatGotAwayDelta)}`, bx + bw - 28, by + 78)
+      ctx.fillStyle = 'rgba(255,255,255,0.4)'
+      ctx.font = '600 14px "Archivo", sans-serif'
+      ctx.fillText('LINEUP PTS FORGONE', bx + bw - 28, by + 100)
+      ctx.textAlign = 'left'
+    }
+    y = by + bh
+  }
+
+  if (vorpRows.length) {
+    y += SECTION_GAP
+    sectionTitle(ctx, 'VORP Matrix', 'Each starter against a replacement-level player at his position', CONTENT_X, y + 20)
+    y += TITLE_H
+    vorpRows.forEach((row) => {
+      const rowY = y + VORP_ROW_H / 2
+      posBadge(ctx, row.pos, CONTENT_X, rowY - 15, ROW_LABEL_W, 30)
+      ctx.fillStyle = row.name ? 'rgba(255,255,255,0.88)' : 'rgba(255,255,255,0.35)'
+      ctx.font = '600 19px "Inter", sans-serif'
+      const nameX = CONTENT_X + ROW_LABEL_W + ROW_GAP_PAD
+      let label = row.name || 'Empty'
+      while (ctx.measureText(label).width > ROW_NAME_W && label.length > 1) label = label.slice(0, -1)
+      if (label !== (row.name || 'Empty')) label = label.slice(0, -1) + '…'
+      ctx.fillText(label, nameX, rowY + 6)
+      centerBar(ctx, ROW_BAR_X, rowY, ROW_BAR_W, row.gap, vorpMax)
+      gapValueText(ctx, row.gap, CONTENT_X + CONTENT_W, rowY + 6)
+      y += VORP_ROW_H
+    })
+  }
+
+  if (timeline.length) {
+    y += SECTION_GAP
+    sectionTitle(ctx, 'Draft Value Timeline', "Where each pick landed against the board's rank", CONTENT_X, y + 20)
+    y += TITLE_H
+    timeline.forEach((row) => {
+      const rowY = y + TIMELINE_ROW_H / 2
+      ctx.fillStyle = 'rgba(255,255,255,0.4)'
+      ctx.font = '700 14px "Archivo", sans-serif'
+      ctx.fillText(`R${row.round}`, CONTENT_X, rowY + 5)
+      posBadge(ctx, row.pos, CONTENT_X + 34, rowY - 13, 44, 26)
+      ctx.fillStyle = 'rgba(255,255,255,0.82)'
+      ctx.font = '600 18px "Inter", sans-serif'
+      const nameX = CONTENT_X + ROW_LABEL_W + ROW_GAP_PAD
+      let label = row.name
+      while (ctx.measureText(label).width > ROW_NAME_W && label.length > 1) label = label.slice(0, -1)
+      if (label !== row.name) label = label.slice(0, -1) + '…'
+      ctx.fillText(label, nameX, rowY + 6)
+      centerBar(ctx, ROW_BAR_X, rowY, ROW_BAR_W, row.gap, tlMax)
+      gapValueText(ctx, row.gap, CONTENT_X + CONTENT_W, rowY + 6)
+      y += TIMELINE_ROW_H
+    })
+  }
+
+  if (standings.length) {
+    y += SECTION_GAP
+    sectionTitle(ctx, 'Room Standings', 'Best to worst', CONTENT_X, y + 20)
+    y += TITLE_H
+    standings.forEach((t) => {
+      const rowY = y + STANDINGS_ROW_H / 2
+      if (t.isMine) {
+        ctx.fillStyle = 'rgba(0,229,255,0.08)'
+        roundRect(ctx, CONTENT_X - 12, rowY - STANDINGS_ROW_H / 2 + 3, CONTENT_W + 24, STANDINGS_ROW_H - 6, 8)
+        ctx.fill()
+      }
+      ctx.fillStyle = 'rgba(255,255,255,0.4)'
+      ctx.font = '700 17px "Archivo", sans-serif'
+      ctx.fillText(String(t.rank), CONTENT_X, rowY + 6)
+      ctx.fillStyle = t.isMine ? '#5EEAD4' : 'rgba(255,255,255,0.7)'
+      ctx.font = t.isMine ? '700 18px "Inter", sans-serif' : '400 18px "Inter", sans-serif'
+      let label = t.teamName
+      const nameX = CONTENT_X + 44
+      const nameMax = CONTENT_W - 44 - 60
+      while (ctx.measureText(label).width > nameMax && label.length > 1) label = label.slice(0, -1)
+      if (label !== t.teamName) label = label.slice(0, -1) + '…'
+      ctx.fillText(label, nameX, rowY + 6)
+      ctx.textAlign = 'right'
+      ctx.fillStyle = t.isMine ? TEAL : 'rgba(255,255,255,0.55)'
+      ctx.font = '700 18px "Archivo", sans-serif'
+      ctx.fillText(t.grade, CONTENT_X + CONTENT_W, rowY + 6)
+      ctx.textAlign = 'left'
+      y += STANDINGS_ROW_H
+    })
+  }
+
+  // footer
+  y += SECTION_GAP
+  ctx.strokeStyle = 'rgba(255,255,255,0.08)'
+  ctx.lineWidth = 1
+  ctx.beginPath()
+  ctx.moveTo(CONTENT_X, y)
+  ctx.lineTo(CONTENT_X + CONTENT_W, y)
+  ctx.stroke()
+  ctx.fillStyle = 'rgba(255,255,255,0.4)'
+  ctx.font = '400 18px "Inter", sans-serif'
+  ctx.fillText('Built with the real board, the real projections and the real scoring rules — jukeff.com', CONTENT_X, y + 40)
 
   return canvas
 }
