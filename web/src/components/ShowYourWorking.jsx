@@ -279,14 +279,14 @@ function ProofRow({ label, active, value, note }) {
     <div className="rounded-[10px] bg-surface-row px-3 py-[9px]">
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
         <span
-          className={`font-voidNumeral text-[10.5px] font-semibold uppercase tracking-[0.13em] ${active ? '' : 'text-voidInk-muted'}`}
+          className={`font-numeral text-[10.5px] font-semibold uppercase tracking-[0.13em] ${active ? '' : 'text-voidInk-muted'}`}
           style={active ? { color: '#C0ABE9' } : undefined}
         >
           {label}
         </span>
         <span className={`text-[13.5px] font-semibold ${active ? 'text-voidInk-primary' : 'text-voidInk-body'}`}>{value}</span>
       </div>
-      <p className="mt-[3px] font-voidNumeral tabular-nums text-[10.5px] font-medium text-voidInk-muted">{note}</p>
+      <p className="mt-[3px] font-numeral tabular-nums text-[10.5px] font-medium text-voidInk-muted">{note}</p>
     </div>
   )
 }
@@ -319,10 +319,10 @@ function SameEngineCard() {
       className="flex h-full flex-col rounded-[14px] border px-[26px] py-6 transition-colors duration-200"
       style={{ borderColor: '#31293F', background: 'linear-gradient(160deg, #1D1727, #13161C 55%)' }}
     >
-      <p className="font-voidNumeral text-[10.5px] font-semibold tracking-[0.13em]" style={{ color: '#C0ABE9' }}>
+      <p className="font-numeral text-[10.5px] font-semibold tracking-[0.13em]" style={{ color: '#C0ABE9' }}>
         04 &middot; SAME ENGINE, ALL SEASON
       </p>
-      <h3 className="mt-[9px] font-voidBody text-base font-bold text-voidInk-primary">
+      <h3 className="mt-[9px] font-body text-base font-bold text-voidInk-primary">
         Draft grades today. Waivers and trades once those rooms open.
       </h3>
       <p className="mt-[9px] text-[15px] leading-[1.55] text-voidInk-body">
@@ -333,7 +333,7 @@ function SameEngineCard() {
         <ProofRow
           label="Draft"
           active
-          value={<>Grade &middot; <span className="font-voidNumeral tabular-nums font-semibold">29/100</span> &middot; C</>}
+          value={<>Grade &middot; <span className="font-numeral tabular-nums font-semibold">29/100</span> &middot; C</>}
           note="4 weighted parts, computed tonight"
         />
         <ProofRow label="Waivers" active={waiverLive} value={waiverLive ? 'Live' : 'Not live yet'} note="same VORP baseline, once it ships" />
@@ -403,7 +403,7 @@ export default function ShowYourWorking() {
       <div className="mt-[28px] grid items-stretch gap-[14px] lg:grid-cols-2">
         <div className="flex h-full flex-col rounded-[14px] border border-line-hairline bg-surface-card px-[26px] py-6 transition-colors duration-200 hover:border-teal-400/70">
           <div className="flex items-start justify-between gap-3">
-            <p className="font-voidNumeral text-[10.5px] font-semibold tracking-[0.13em] text-[#4DDAE9]">
+            <p className="font-numeral text-[10.5px] font-semibold tracking-[0.13em] text-[#4DDAE9]">
               01 &middot; VORP
             </p>
             {/* h-11 (44px) below md — §9 names this exact control ("the
@@ -426,7 +426,7 @@ export default function ShowYourWorking() {
               ))}
             </div>
           </div>
-          <h3 className="mt-[9px] font-voidBody text-base font-bold text-voidInk-primary">Value over replacement</h3>
+          <h3 className="mt-[9px] font-body text-base font-bold text-voidInk-primary">Value over replacement</h3>
           <p className="mt-[9px] text-[15px] leading-[1.55] text-voidInk-body">
             Every player is scored against the last startable player at their position, not against each other.
           </p>
@@ -435,14 +435,14 @@ export default function ShowYourWorking() {
 
         <div className="flex h-full flex-col rounded-[14px] border border-line-hairline bg-surface-card px-[26px] py-6 transition-colors duration-200 hover:border-teal-400/70">
           <div className="flex items-start justify-between gap-3">
-            <p className="font-voidNumeral text-[10.5px] font-semibold tracking-[0.13em] text-[#4DDAE9]">
+            <p className="font-numeral text-[10.5px] font-semibold tracking-[0.13em] text-[#4DDAE9]">
               02 &middot; SURVIVAL
             </p>
             {survivalData && (
-              <span className="shrink-0 font-voidNumeral tabular-nums text-[11px] font-medium text-voidInk-muted">{survivalData.player.name}</span>
+              <span className="shrink-0 font-numeral tabular-nums text-[11px] font-medium text-voidInk-muted">{survivalData.player.name}</span>
             )}
           </div>
-          <h3 className="mt-[9px] font-voidBody text-base font-bold text-voidInk-primary">The odds they last</h3>
+          <h3 className="mt-[9px] font-body text-base font-bold text-voidInk-primary">The odds they last</h3>
           <p className="mt-[9px] text-[15px] leading-[1.55] text-voidInk-body">{SURVIVAL_BODY}</p>
           <SurvivalChart data={survivalData} />
         </div>
@@ -456,8 +456,8 @@ export default function ShowYourWorking() {
           already-the-default, made explicit for the same reason. */}
       <div className="mt-[14px] grid items-stretch gap-[14px] lg:grid-cols-2">
         <div className="flex h-full flex-col rounded-[14px] border border-line-hairline bg-surface-card px-[26px] py-6 transition-colors duration-200 hover:border-teal-400/70">
-          <p className="font-voidNumeral text-[10.5px] font-semibold tracking-[0.13em] text-[#4DDAE9]">03 &middot; THE GRADE</p>
-          <h3 className="mt-[9px] font-voidBody text-base font-bold text-voidInk-primary">Four parts, each shown</h3>
+          <p className="font-numeral text-[10.5px] font-semibold tracking-[0.13em] text-[#4DDAE9]">03 &middot; THE GRADE</p>
+          <h3 className="mt-[9px] font-body text-base font-bold text-voidInk-primary">Four parts, each shown</h3>
           <p className="mt-[9px] max-w-[640px] text-[15px] leading-[1.55] text-voidInk-body">{GRADE_BODY}</p>
           {/* §6 — this card used to be three lines of text in a box sized
               for a chart. Bar fill width equals the part's own weight
@@ -472,7 +472,7 @@ export default function ShowYourWorking() {
                 <span className="block h-[6px] overflow-hidden rounded-full bg-[#24262C]">
                   <span className="block h-full rounded-full bg-mint" style={{ width: `${c.weight}%` }} />
                 </span>
-                <span className="text-right font-voidNumeral tabular-nums text-[12px] font-semibold text-voidInk-muted">{c.weight}</span>
+                <span className="text-right font-numeral tabular-nums text-[12px] font-semibold text-voidInk-muted">{c.weight}</span>
               </div>
             ))}
           </div>

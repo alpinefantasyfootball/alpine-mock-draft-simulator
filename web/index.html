@@ -1190,8 +1190,22 @@
        legacy Draft button calls, so a pick here is a real pick. Nothing
        here links to it yet, and it is still missing real features
        (chat/GIF, a mobile layout, scouting chips, test coverage) — see
-       CLAUDE.md and the plan history for the current gap list. -->
-  <div id="draftroom-root"></div>
+       CLAUDE.md and the plan history for the current gap list.
+
+       font-body: the sitewide font-consistency pass that followed the
+       homepage cosmetic revision. This is the ONE real DOM container the
+       whole Cockpit mounts into — DraftRoom.jsx's four top-level screen
+       branches (the transition screen, the Locker/Lobby, the pre-draft
+       Entry screen, the live draft screen) are all descendants of it, and
+       none of them reset font-family on their own `fixed inset-0` wrapper
+       divs, so Hanken Grotesk cascades here once rather than needing a
+       class on each of the four. Verified none of the Cockpit's own body
+       prose already carries an explicit font-family override that this
+       would fight — the ~140 font-plex call sites across the Cockpit are
+       pick codes, team/position abbreviations and board/stat-table grid
+       cells, all more specific than this ancestor rule and therefore
+       unaffected by it. -->
+  <div id="draftroom-root" class="font-body"></div>
 
   <!-- ============ PLAYER DETAIL ============ -->
   <div class="sheet-backdrop" id="sheetBackdrop" hidden></div>

@@ -69,7 +69,7 @@ export default function RoomsGrid() {
             no background, unlike Hero.jsx's filled mint pill), confirmed
             against the reference rather than carried over from the old
             filled version this replaced. */}
-        <span className="inline-flex items-center rounded-full border border-[#1C5248] px-[14px] py-[6px] font-voidNumeral text-[11px] font-semibold tracking-[0.13em] text-mint">
+        <span className="inline-flex items-center rounded-full border border-[#1C5248] px-[14px] py-[6px] font-numeral text-[11px] font-semibold tracking-[0.13em] text-mint">
           THE SEASON-LONG SYSTEM
         </span>
         <h2 className="mt-4 font-display text-[clamp(32px,3.6vw,48px)] font-extrabold italic leading-none text-voidInk-primary">
@@ -109,7 +109,7 @@ export default function RoomsGrid() {
                 {LiveIcon && <LiveIcon className="h-[18px] w-[18px] text-mint" />}
               </div>
               <span className="font-display text-[26px] font-bold italic text-mint">{liveRoom.name}</span>
-              <span className="ml-auto inline-flex shrink-0 items-center gap-[6px] rounded-full bg-[#08362E] px-[11px] py-[5px] font-voidNumeral text-[11px] font-semibold text-[#90F4DE]">
+              <span className="ml-auto inline-flex shrink-0 items-center gap-[6px] rounded-full bg-[#08362E] px-[11px] py-[5px] font-numeral text-[11px] font-semibold text-[#90F4DE]">
                 <span className="h-[5px] w-[5px] shrink-0 rounded-full bg-[#7FE998]" />
                 Live
               </span>
@@ -131,7 +131,7 @@ export default function RoomsGrid() {
                 // silently bring back the double-CTA bug that marker exists
                 // to prevent, just from this section instead of Hero's.
                 data-hero-cta=""
-                className="mt-[22px] inline-flex w-fit items-center rounded-full border border-[#217263] px-6 py-3 font-voidBody text-[15px] font-bold text-[#7EF0D7] transition-colors duration-150 hover:border-[#3EA692] hover:bg-[#082A25]"
+                className="mt-[22px] inline-flex w-fit items-center rounded-full border border-[#217263] px-6 py-3 font-body text-[15px] font-bold text-[#7EF0D7] transition-colors duration-150 hover:border-[#3EA692] hover:bg-[#082A25]"
               >
                 Enter the Draft Room
               </a>
@@ -141,10 +141,10 @@ export default function RoomsGrid() {
           {/* Right — roadmap list. */}
           <div className="rounded-[14px] border border-line-hairline bg-surface-nav p-[22px]">
             <div className="flex items-baseline justify-between">
-              <span className="font-voidNumeral text-[10.5px] font-semibold tracking-[0.13em] text-[#7D8086]">
+              <span className="font-numeral text-[10.5px] font-semibold tracking-[0.13em] text-[#7D8086]">
                 ON THE ROADMAP
               </span>
-              <span className="font-voidNumeral tabular-nums text-[11.5px] font-semibold text-[#6F7278]">
+              <span className="font-numeral tabular-nums text-[11.5px] font-semibold text-[#6F7278]">
                 {roadmapRooms.length} rooms
               </span>
             </div>
@@ -169,7 +169,7 @@ export default function RoomsGrid() {
                         just not shown in this row. */}
                     <p className="mt-[2px] text-[14px] text-[#A2A5AA]">{room.lead}</p>
                   </div>
-                  <span className="whitespace-nowrap text-right font-voidNumeral text-[11px] tracking-[0.06em] text-[#7D8086]">
+                  <span className="whitespace-nowrap text-right font-numeral text-[11px] tracking-[0.06em] text-[#7D8086]">
                     {room.season.toUpperCase()}
                   </span>
                 </button>

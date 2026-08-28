@@ -52,13 +52,13 @@ export default function PhaseRail() {
                 style={{ background: isActive ? '#74E5CE' : '#3A3D44' }}
               />
               <span
-                className="font-voidNumeral text-[11px] font-semibold uppercase tracking-[0.14em]"
+                className="font-numeral text-[11px] font-semibold uppercase tracking-[0.14em]"
                 style={{ color: isActive ? '#7EF0D7' : '#9B9EA5' }}
               >
                 {phase.label}
               </span>
             </div>
-            <span className="mt-[6px] block font-voidNumeral tabular-nums text-[12px] font-medium text-voidInk-muted">
+            <span className="mt-[6px] block font-numeral tabular-nums text-[12px] font-medium text-voidInk-muted">
               {phase.window}
             </span>
           </div>

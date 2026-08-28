@@ -1361,7 +1361,7 @@ export default function DraftRoom() {
                       ))}
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
-                      <span className="whitespace-nowrap font-plex text-[10px] text-ink-muted">{availablePlayers.length} available</span>
+                      <span className="whitespace-nowrap font-numeral tabular-nums text-[10px] text-ink-muted">{availablePlayers.length} available</span>
                       <button
                         type="button"
                         onClick={() => setTray((t) => (t === 'hidden' ? 'default' : 'hidden'))}

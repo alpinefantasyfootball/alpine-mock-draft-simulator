@@ -163,17 +163,17 @@ function Card({ candidate, rankLabel, primary, onDraft, myTurn, engine, board, c
       <div className="mb-4 grid grid-cols-3 gap-2 rounded-lg bg-white/[0.03] px-3 py-2.5">
         <div>
           <div className="text-[9px] font-semibold uppercase tracking-[0.08em] text-ink-muted">VORP</div>
-          <div className="font-plex text-lg font-bold tabular-nums text-emerald-300">
+          <div className="font-numeral text-lg font-bold tabular-nums text-emerald-300">
             {vorp != null ? `${vorp >= 0 ? '+' : ''}${Math.round(vorp)}` : '—'}
           </div>
         </div>
         <div>
           <div className="text-[9px] font-semibold uppercase tracking-[0.08em] text-ink-muted">Juke score</div>
-          <div className="font-plex text-lg font-bold tabular-nums text-teal-300">{juke ?? '—'}</div>
+          <div className="font-numeral text-lg font-bold tabular-nums text-teal-300">{juke ?? '—'}</div>
         </div>
         <div>
           <div className="text-[9px] font-semibold uppercase tracking-[0.08em] text-ink-muted">Proj</div>
-          <div className="font-plex text-lg font-bold tabular-nums text-white">{proj ?? '—'}</div>
+          <div className="font-numeral text-lg font-bold tabular-nums text-white">{proj ?? '—'}</div>
         </div>
       </div>
 
@@ -287,8 +287,8 @@ function TierStripMobile({ tierLadder }) {
             </span>
             <span className="text-[9px] font-bold uppercase tracking-[0.06em] text-white/50">Tier 1</span>
           </div>
-          <div className="mt-1.5 font-plex text-[10.5px] text-white/50">{row.remaining} left</div>
-          <div className="mt-1 truncate font-plex text-[9.5px] text-white/50">{tierCaption(row)}</div>
+          <div className="mt-1.5 font-numeral tabular-nums text-[10.5px] text-white/50">{row.remaining} left</div>
+          <div className="mt-1 truncate font-numeral text-[9.5px] text-white/50">{tierCaption(row)}</div>
         </div>
       ))}
     </div>
@@ -684,7 +684,7 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, pick
         <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-4 lg:hidden">
           <div className="mb-2.5 flex items-baseline justify-between gap-3">
             <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-white/50">Everyone else</span>
-            <span className="font-plex text-[10px] text-ink-muted">VORP &middot; JUKE</span>
+            <span className="font-numeral text-[10px] text-ink-muted">VORP &middot; JUKE</span>
           </div>
           {others.length === 0 ? (
             <p className="py-6 text-center text-[13px] text-ink-muted">Nobody left off the top three right now.</p>
@@ -816,13 +816,13 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, pick
                 {projectedSurvivors.map(({ player, survival }) => (
                   <div key={player.name} className="flex items-center gap-2">
                     <span className="min-w-0 flex-1 truncate text-xs text-white/80">{player.name}</span>
-                    <span className={'font-plex text-[11px] font-semibold ' + survivalTextColor(survival)}>
+                    <span className={'font-numeral tabular-nums text-[11px] font-semibold ' + survivalTextColor(survival)}>
                       {survival != null ? `${Math.round(survival * 100)}%` : '—'}
                     </span>
                   </div>
                 ))}
               </div>
-              <div className="mt-2.5 font-plex text-[9px] leading-relaxed text-white/40">
+              <div className="mt-2.5 font-numeral text-[9px] leading-relaxed text-white/40">
                 The same survival model the cards use, run forward to your next pick.
               </div>
             </div>
@@ -921,13 +921,13 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, pick
               {projectedSurvivors.map(({ player, survival }) => (
                 <div key={player.name} className="flex items-center gap-2">
                   <span className="min-w-0 flex-1 truncate text-xs text-white/80">{player.name}</span>
-                  <span className={'font-plex text-[11px] font-semibold ' + survivalTextColor(survival)}>
+                  <span className={'font-numeral tabular-nums text-[11px] font-semibold ' + survivalTextColor(survival)}>
                     {survival != null ? `${Math.round(survival * 100)}%` : '—'}
                   </span>
                 </div>
               ))}
             </div>
-            <div className="mt-2.5 font-plex text-[9px] leading-relaxed text-white/40">
+            <div className="mt-2.5 font-numeral text-[9px] leading-relaxed text-white/40">
               The same survival model the cards use, run forward to your next pick.
             </div>
           </div>
@@ -982,7 +982,7 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, pick
                           </span>
                           <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-white/50">tier 1</span>
                         </span>
-                        <span className="font-plex text-[10.5px] text-white/50">{row.remaining} left</span>
+                        <span className="font-numeral tabular-nums text-[10.5px] text-white/50">{row.remaining} left</span>
                       </div>
                       <div className="mt-2 flex flex-wrap gap-[3px]">
                         {row.tier1.map((p) => (
@@ -994,7 +994,7 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, pick
                         ))}
                       </div>
                       <div
-                        className="mt-2 font-plex text-[10px] text-white/50"
+                        className="mt-2 font-numeral text-[10px] text-white/50"
                         title={row.drop != null ? `Next tier projects about ${row.drop} fewer points` : undefined}
                       >
                         {caption}
@@ -1049,7 +1049,7 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, pick
               <div>
                 <div className="mb-2.5 flex items-baseline justify-between gap-3">
                   <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-white/50">Everyone else</span>
-                  <span className="font-plex text-[10px] text-ink-muted lg:hidden">VORP &middot; JUKE</span>
+                  <span className="font-numeral text-[10px] text-ink-muted lg:hidden">VORP &middot; JUKE</span>
                 </div>
                 {/* Column heads — a design review caught "+64 · 38 · Draft"
                     with nothing saying which number was which. */}

@@ -165,7 +165,7 @@ function RowTag({ label, tone }) {
 function BoardPanel({ scenario, phase }) {
   return (
     <div className="flex h-full flex-col px-6 py-5">
-      <p className="font-voidNumeral text-[10.5px] font-semibold uppercase tracking-[0.13em] text-voidInk-muted">On the board</p>
+      <p className="font-numeral text-[10.5px] font-semibold uppercase tracking-[0.13em] text-voidInk-muted">On the board</p>
       <div className="mt-3 flex flex-col gap-[6px]">
         {scenario.boardRows.map((row) => {
           // Nothing is added or removed as the phase advances (§4.3) — the
@@ -215,7 +215,7 @@ function RosterPanel({ scenario, phase }) {
   const lineup = phase >= 1 ? scenario.after.lineup : scenario.before.lineup
   return (
     <div className="flex h-full flex-col border-x border-line-hairline px-6 py-5">
-      <p className="font-voidNumeral text-[10.5px] font-semibold uppercase tracking-[0.13em] text-voidInk-muted">
+      <p className="font-numeral text-[10.5px] font-semibold uppercase tracking-[0.13em] text-voidInk-muted">
         Your roster &middot; pick {scenario.pickCode}
       </p>
       <div className="mt-3 flex flex-col gap-[6px]">
@@ -245,7 +245,7 @@ function GradeBar({ label, weight, before, after, animate }) {
     <div>
       <div className="flex items-baseline justify-between gap-2">
         <span className="text-[12.5px] font-medium text-voidInk-body">{label}</span>
-        <span className="font-voidNumeral tabular-nums text-[10px] font-medium text-voidInk-muted">wt {weight}</span>
+        <span className="font-numeral tabular-nums text-[10px] font-medium text-voidInk-muted">wt {weight}</span>
       </div>
       <div className="mt-1 h-[6px] overflow-hidden rounded-full bg-white/[0.06]">
         <div
@@ -262,7 +262,7 @@ function GradePanel({ scenario, phase }) {
   const grade = animate ? scenario.after : scenario.before
   return (
     <div className="flex h-full flex-col px-6 py-5">
-      <p className="font-voidNumeral text-[10.5px] font-semibold uppercase tracking-[0.13em] text-voidInk-muted">Draft grade &middot; live</p>
+      <p className="font-numeral text-[10.5px] font-semibold uppercase tracking-[0.13em] text-voidInk-muted">Draft grade &middot; live</p>
       {/* §5's restructure — production used to render the number and the
           letter ~450px apart with the "/100 · after N picks" line sandwiched
           between them, which read as "29 C / 100" rather than one grade.
@@ -274,18 +274,18 @@ function GradePanel({ scenario, phase }) {
           would undercut the section's whole premise. */}
       <div className="mt-3 flex items-center justify-between gap-3">
         <div>
-          <div className="flex items-baseline gap-[2px] font-voidNumeral tabular-nums leading-none">
+          <div className="flex items-baseline gap-[2px] font-numeral tabular-nums leading-none">
             <span className="text-[52px] font-bold text-voidInk-primary transition-all duration-700">{grade.composite}</span>
             <span className="text-[26px] font-semibold text-[#7D8086]">/100</span>
           </div>
-          <p className="mt-2 font-voidNumeral tabular-nums text-[12.5px] font-medium text-[#83868C]">after {grade.picksMade} picks</p>
+          <p className="mt-2 font-numeral tabular-nums text-[12.5px] font-medium text-[#83868C]">after {grade.picksMade} picks</p>
         </div>
         <div
           className="flex flex-col items-center gap-[3px] rounded-xl border px-4 py-[9px]"
           style={{ background: '#0E2628', borderColor: '#155157' }}
         >
-          <span className="font-voidNumeral text-[30px] font-bold leading-none text-[#59E4F3] transition-all duration-700">{grade.letter}</span>
-          <span className="font-voidNumeral text-[9px] font-semibold tracking-[0.14em] text-[#82A6AA]">GRADE</span>
+          <span className="font-numeral text-[30px] font-bold leading-none text-[#59E4F3] transition-all duration-700">{grade.letter}</span>
+          <span className="font-numeral text-[9px] font-semibold tracking-[0.14em] text-[#82A6AA]">GRADE</span>
         </div>
       </div>
       <div className="mt-4 flex flex-col gap-3">
@@ -410,7 +410,7 @@ export default function TakeAPick() {
               aria-live="polite"
               className="flex min-h-[52px] items-center rounded-[10px] border border-line-hairline bg-surface-card px-4 py-[11px] text-[14.5px] leading-[1.5] text-voidInk-body"
             >
-              <span className="mr-3 shrink-0 font-voidNumeral text-[10.5px] font-semibold uppercase tracking-[0.12em] text-teal-400">{PHASE_TAGS[phase]}</span>
+              <span className="mr-3 shrink-0 font-numeral text-[10.5px] font-semibold uppercase tracking-[0.12em] text-teal-400">{PHASE_TAGS[phase]}</span>
               {caption}
             </div>
             <div className="flex shrink-0 items-center gap-3">

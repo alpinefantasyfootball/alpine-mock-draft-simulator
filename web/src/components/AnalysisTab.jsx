@@ -13,7 +13,7 @@ function ComponentBand({ item }) {
     <div className="mb-3.5 last:mb-0">
       <div className="flex items-baseline justify-between gap-2">
         <span className="text-[12.5px] font-medium text-white/80">{item.label}</span>
-        <span className={'font-plex text-[11px] font-semibold ' + (below ? 'text-rose-400' : 'text-teal-300')}>
+        <span className={'font-numeral text-[11px] font-semibold ' + (below ? 'text-rose-400' : 'text-teal-300')}>
           {item.pct >= item.median ? '+' : ''}
           {Math.round(item.pct - item.median)} vs room median
         </span>
@@ -42,7 +42,7 @@ function FixThisFirst({ item, upgrade, before, dense }) {
         'rounded-xl border border-teal-400/30 bg-teal-400/[0.05] ' + (dense ? 'p-4' : 'p-4 sm:p-5')
       }
     >
-      <p className="font-plex text-[10px] font-semibold uppercase tracking-wide text-teal-300">Fix this first</p>
+      <p className="font-numeral text-[10px] font-semibold uppercase tracking-wide text-teal-300">Fix this first</p>
       <p className={'mt-2 font-bold text-white ' + (dense ? 'text-[15px] leading-snug' : 'font-display text-lg')}>
         {item.label} — your weakest number, carrying the most weight
       </p>
@@ -59,7 +59,7 @@ function FixThisFirst({ item, upgrade, before, dense }) {
           {upgrade.player.team}
           {upgrade.player.bye ? ` · bye ${upgrade.player.bye}` : ''}
         </span>
-        <span className="ml-auto font-plex text-[13px] font-bold text-teal-300">
+        <span className="ml-auto font-numeral text-[13px] font-bold text-teal-300">
           {before} → {upgrade.after}
         </span>
       </div>
@@ -310,7 +310,7 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
         >
           <ChevronLeft className="h-5 w-5" />
         </button>
-        <span className="font-plex text-[11px] font-bold uppercase tracking-[0.14em] text-ink-muted">
+        <span className="font-numeral text-[11px] font-bold uppercase tracking-[0.14em] text-ink-muted">
           {done ? 'Draft complete' : 'Grade so far'}
         </span>
         <button
@@ -328,23 +328,30 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
         <div className="mx-auto max-w-xl p-4 pt-5 sm:p-6 lg:hidden">
           <div className="flex items-start gap-3.5">
             <div className="min-w-0 flex-1">
-              <p className="font-plex text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Where you stand</p>
+              <p className="font-numeral text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Where you stand</p>
               <h2 className="mt-1 font-display text-[38px] font-black leading-none text-white">
                 {ordinal(me.rank)} <span className="text-[16px] font-semibold text-white/50">of {teams}</span>
               </h2>
-              <p className="mt-2 flex items-baseline gap-1.5">
-                <span className="font-plex text-[20px] font-bold text-teal-300">{me.total.toFixed(1)}</span>
-                <span className="font-plex text-[11px] text-ink-muted">/ 100 weighted score</span>
-              </p>
               <p className="mt-2 text-[14px] leading-snug text-white/55">{summarySentence}</p>
             </div>
-            {/* The letter, demoted — a 68 is a B mid-draft and an A+ at the
-                end, because the letter is finishing position and the score
-                above it is a weighted composite (both room-relative, but
-                on different scales), so the two must never carry equal
-                visual weight. */}
+            {/* The letter, demoted, and no longer standing next to a score out
+                of a hundred.
+
+                It used to read "69.8 / 100" here with an "A" beside it, and
+                that is unreadable in the way only a familiar scale can be: the
+                letter is finishing position and the number was a room-relative
+                composite, so a reader applying the meaning they were taught in
+                school got a contradiction every single time — measured, the
+                letter agreed with the school reading of the number it sat
+                beside on 0 of 10 teams.
+
+                Curving the letter off something absolute was measured and
+                rejected (a normal room came out 37 of 40 A+), so the number
+                goes rather than the letter. It survives in the component bars
+                below, where the four parts visibly add up to it and nothing
+                claims it is a percentage. */}
             <div className="w-[74px] shrink-0 pt-1 text-right">
-              <p className="font-plex text-[9px] font-semibold uppercase leading-tight tracking-wide text-ink-muted">
+              <p className="font-numeral text-[9px] font-semibold uppercase leading-tight tracking-wide text-ink-muted">
                 Letter, for the share card
               </p>
               <p className="mt-1.5 font-display text-2xl font-bold text-white/50">{me.grade}</p>
@@ -385,14 +392,14 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
                 <div key={b.key}>
                   <div className="flex items-baseline justify-between gap-3">
                     <span className="text-[15px] font-bold text-white">{b.label}</span>
-                    <span className={'shrink-0 font-plex text-[15px] font-bold ' + (t === 'bad' ? 'text-rose-400' : 'text-teal-300')}>
+                    <span className={'shrink-0 font-numeral text-[15px] font-bold ' + (t === 'bad' ? 'text-rose-400' : 'text-teal-300')}>
                       {Math.round(b.pct)}
                     </span>
                   </div>
                   <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-white/[0.08]">
                     <div className={'h-1.5 rounded-full transition-all duration-300 ' + barFill[t]} style={{ width: width + '%' }} />
                   </div>
-                  <div className="mt-1.5 flex items-center justify-between font-plex text-[11px] text-ink-muted">
+                  <div className="mt-1.5 flex items-center justify-between font-numeral text-[11px] text-ink-muted">
                     <span>{Math.round(b.weight * 100)}% weight</span>
                     <span>contributes {contributes.toFixed(1)}</span>
                   </div>
@@ -403,7 +410,7 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
 
           <div className="mt-6 flex items-center justify-between border-t border-white/10 pt-5">
             <span className="text-[15px] font-bold text-white">Composite</span>
-            <span className="font-plex text-[17px] font-bold text-teal-300">
+            <span className="font-numeral text-[17px] font-bold text-teal-300">
               {me.total.toFixed(1)} <span className="text-ink-muted">&rarr;</span> {me.grade}
             </span>
           </div>
@@ -453,7 +460,7 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
 
           <div className="mt-7 flex items-center justify-between">
             <h3 className="font-display text-lg font-extrabold text-white">The room</h3>
-            <span className="font-plex text-[11px] text-ink-muted">{teams} teams</span>
+            <span className="font-numeral text-[11px] text-ink-muted">{teams} teams</span>
           </div>
           <div className="mt-3 space-y-2">
             {mobileStandings.map((t) => {
@@ -466,12 +473,17 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
                     (mine ? 'border-teal-400/40 bg-teal-400/[0.08]' : 'border-white/[0.06] bg-white/[0.02]')
                   }
                 >
-                  <span className="w-4 shrink-0 font-plex text-[12px] text-ink-muted">{t.rank}</span>
+                  <span className="w-4 shrink-0 font-numeral text-[12px] text-ink-muted">{t.rank}</span>
                   <span className={'min-w-0 flex-1 truncate text-[14px] font-bold ' + (mine ? 'text-teal-300' : 'text-white/85')}>
                     {mine ? 'You · seat ' + (t.slot + 1) : engine.teamLabel(t.slot)}
                   </span>
-                  <span className={'shrink-0 font-plex text-[13.5px] font-semibold ' + (mine ? 'text-teal-300' : 'text-white/70')}>
-                    {t.grade} &middot; {Math.round(t.total)}
+                  {/* The letter alone. This read "B− · 56", which is the
+                      grade-beside-a-score pairing in its most compressed form
+                      — and the rank is already the first thing in the row, so
+                      the number was restating the ordering in a scale that
+                      argues with the letter. */}
+                  <span className={'shrink-0 font-numeral text-[13.5px] font-semibold ' + (mine ? 'text-teal-300' : 'text-white/70')}>
+                    {t.grade}
                   </span>
                 </div>
               )
@@ -531,17 +543,10 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
         <div className="mx-auto hidden max-w-6xl p-6 lg:block">
           <div className="flex flex-wrap items-center gap-5 rounded-xl border border-slate-rule bg-slate-panel/60 p-4 sm:gap-6 sm:p-5">
             <div>
-              <p className="font-plex text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Where you stand</p>
+              <p className="font-numeral text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Where you stand</p>
               <p className="mt-1 flex items-baseline gap-2">
                 <span className="font-display text-4xl font-black text-white">{ordinal(me.rank)}</span>
                 <span className="text-sm text-white/50">of {teams}</span>
-              </p>
-            </div>
-            <div className="hidden h-10 w-px bg-slate-rule sm:block" />
-            <div>
-              <p className="font-plex text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Weighted score</p>
-              <p className="mt-1 font-plex text-2xl font-bold text-teal-300">
-                {me.total.toFixed(1)} <span className="text-sm font-normal text-ink-muted">/ 100</span>
               </p>
             </div>
             <div className="hidden h-10 w-px bg-slate-rule sm:block" />
@@ -549,11 +554,13 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
               {done ? 'Draft complete.' : 'Updates after every pick.'} Graded against the {teams - 1} teams in
               this room, not against the league at large.
             </p>
-            {/* The letter, demoted — see the mobile header's own comment on
-                why finishing position and the weighted composite can't
-                share top billing. */}
+            {/* The letter, demoted, and the "Weighted score / x / 100" block
+                that used to sit here is gone — see the mobile header's own
+                comment for why a letter cannot stand beside a score out of a
+                hundred. Its divider went with it, or the header would carry a
+                rule with nothing on either side of it. */}
             <div className="ml-auto shrink-0 text-right">
-              <p className="font-plex text-[9px] font-semibold uppercase tracking-wide text-ink-muted">
+              <p className="font-numeral text-[9px] font-semibold uppercase tracking-wide text-ink-muted">
                 Letter, for the share card
               </p>
               <p className="mt-1 font-display text-lg font-bold text-white/50">{me.grade}</p>
@@ -588,11 +595,11 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
               return (
                 <div key={b.key} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                   <b className="w-32 shrink-0 font-semibold text-white/80 sm:w-40">{b.label}</b>
-                  <span className="w-14 shrink-0 font-plex text-[10px] text-ink-muted">wt {Math.round(b.weight * 100)}%</span>
+                  <span className="w-14 shrink-0 font-numeral text-[10px] text-ink-muted">wt {Math.round(b.weight * 100)}%</span>
                   <div className="h-1.5 min-w-[100px] max-w-[420px] flex-1 rounded-full bg-slate-rule">
                     <div className={'h-1.5 rounded-full transition-all duration-300 ' + barFill[t]} style={{ width: width + '%' }} />
                   </div>
-                  <span className={'w-7 shrink-0 text-right font-plex text-sm font-bold ' + (t === 'bad' ? 'text-rose-400' : 'text-teal-300')}>
+                  <span className={'w-7 shrink-0 text-right font-numeral text-sm font-bold ' + (t === 'bad' ? 'text-rose-400' : 'text-teal-300')}>
                     {Math.round(b.pct)}
                   </span>
                   <span className="w-full shrink-0 text-ink-muted sm:w-auto sm:flex-1">{b.detail}</span>
@@ -603,8 +610,8 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
                 not just agree with it in principle. */}
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-slate-rule/70 pt-2.5 text-xs">
               <span className="w-32 shrink-0 font-semibold uppercase tracking-wide text-teal-300 sm:w-40">Weighted sum</span>
-              <span className="flex-1 font-plex text-ink-muted">{bars.map((b) => (b.pct * b.weight).toFixed(1)).join(' + ')}</span>
-              <span className="font-plex text-sm font-bold text-teal-300">= {me.total.toFixed(1)}</span>
+              <span className="flex-1 font-numeral text-ink-muted">{bars.map((b) => (b.pct * b.weight).toFixed(1)).join(' + ')}</span>
+              <span className="font-numeral text-sm font-bold text-teal-300">= {me.total.toFixed(1)}</span>
             </div>
           </div>
 
@@ -694,10 +701,14 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
             <tbody>
               {standings.map((t) => (
                 <tr key={t.slot} className={t.slot === mySlot ? 'bg-[#FFD166]/10' : ''}>
-                  <td className="py-1 pr-2 text-ink-muted">{t.rank}</td>
+                  {/* Rank, team, letter — no score column between the last
+                      two. See the legacy standings note in app.js: whatever
+                      sits there has to be the weighted total, and a weighted
+                      total next to a letter grade is the pairing that reads
+                      against everything a person was taught about letters. */}
+                  <td className="py-1 pr-2 font-numeral tabular-nums text-ink-muted">{t.rank}</td>
                   <td className="py-1 pr-2 font-medium text-white/80">{engine.teamLabel(t.slot)}</td>
-                  <td className="py-1 pr-2 text-right font-semibold text-white/90">{Math.round(t.total)}</td>
-                  <td className="py-1 text-right text-white/60">{t.grade}</td>
+                  <td className="py-1 text-right font-numeral text-white/60">{t.grade}</td>
                 </tr>
               ))}
             </tbody>

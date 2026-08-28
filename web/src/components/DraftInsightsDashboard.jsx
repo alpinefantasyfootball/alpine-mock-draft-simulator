@@ -41,7 +41,7 @@ function ComponentBars({ mine, weights }) {
             <div key={b.key}>
               <div className="flex items-baseline justify-between gap-2 text-xs">
                 <span className="font-semibold text-white/80">{b.label}</span>
-                <span className="font-plex text-ink-muted">wt {Math.round(b.weight * 100)}%</span>
+                <span className="font-numeral text-ink-muted">wt {Math.round(b.weight * 100)}%</span>
               </div>
               <div className="mt-1.5 flex items-center gap-2">
                 <div className="h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-white/[0.08]">
@@ -52,7 +52,7 @@ function ComponentBars({ mine, weights }) {
                     className={'h-full rounded-full ' + (isWeakest ? 'bg-rose-400' : 'bg-teal-400')}
                   />
                 </div>
-                <span className={'w-8 shrink-0 text-right font-plex text-sm font-bold ' + (isWeakest ? 'text-rose-400' : 'text-teal-300')}>
+                <span className={'w-8 shrink-0 text-right font-numeral text-sm font-bold ' + (isWeakest ? 'text-rose-400' : 'text-teal-300')}>
                   {Math.round(b.pct)}
                 </span>
               </div>
@@ -65,8 +65,8 @@ function ComponentBars({ mine, weights }) {
           so this can never drift a decimal from what that card shows. */}
       <div className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-slate-rule/70 pt-3 text-xs">
         <span className="font-semibold uppercase tracking-wide text-teal-300">Weighted sum</span>
-        <span className="flex-1 font-plex text-ink-muted">{bars.map((b) => (b.pct * b.weight).toFixed(1)).join(' + ')}</span>
-        <span className="font-plex text-sm font-bold text-teal-300">= {mine.total.toFixed(1)}</span>
+        <span className="flex-1 font-numeral text-ink-muted">{bars.map((b) => (b.pct * b.weight).toFixed(1)).join(' + ')}</span>
+        <span className="font-numeral text-sm font-bold text-teal-300">= {mine.total.toFixed(1)}</span>
       </div>
     </div>
   )
@@ -306,7 +306,9 @@ export default function DraftInsightsDashboard({ engine, league, mySlot, viewSlo
     grade: mine.grade,
     rankText: ordinal(mine.rank),
     teams: league.teams,
-    total: Math.round(mine.total),
+    // No `total`. The card drew it as "x / 100 weighted score" under the
+    // grade and no longer does; leaving the field here would be an invitation
+    // to put the line back without the reasoning that took it out.
     components: mine,
     bestValue: bargain
       ? `${bargain.pick.player.name}${bargain.gap > 0 ? ` · ${bargain.gap} picks late` : ''}`
@@ -342,10 +344,16 @@ export default function DraftInsightsDashboard({ engine, league, mySlot, viewSlo
         </div>
 
         {/* Summary card — the grade, large and glowing, in the two brand
-            accents. Rank and weighted total sit beside it because the
-            letter is handed out for finishing position (see CLAUDE.md's
-            standings note): a grade without its rank invites the reader
-            to take a room-relative ranking as an absolute verdict. */}
+            accents, with the rank beside it because the letter is handed out
+            for finishing position: a grade without its rank invites the reader
+            to take a room-relative ranking as an absolute verdict.
+
+            The weighted total used to sit under the rank and no longer does.
+            "A" over "69 / 100" asks a reader to hold two incompatible scales
+            at once, and the familiar one wins — measured across a room, the
+            letter agreed with the school reading of the number beneath it on
+            0 of 10 teams. The rank says the same thing the letter does, in
+            words nobody can misread. */}
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -361,9 +369,6 @@ export default function DraftInsightsDashboard({ engine, league, mySlot, viewSlo
             <div>
               <p className="font-display text-xl font-bold text-white">
                 {ordinal(mine.rank)} <span className="text-ink-muted">of {league.teams}</span>
-              </p>
-              <p className="mt-0.5 text-sm text-white/50">
-                {Math.round(mine.total)} <span className="text-ink-muted">/ 100 weighted score</span>
               </p>
               <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-white/50">
                 <span>
@@ -467,7 +472,7 @@ export default function DraftInsightsDashboard({ engine, league, mySlot, viewSlo
                 <div className="font-display text-4xl font-black leading-none text-[#B784E0] sm:text-5xl">
                   +{Math.round(realMiss.delta)}
                 </div>
-                <div className="mt-1.5 font-plex text-[9.5px] font-semibold uppercase tracking-wide text-ink-muted">
+                <div className="mt-1.5 font-numeral text-[9.5px] font-semibold uppercase tracking-wide text-ink-muted">
                   lineup points forgone
                 </div>
               </div>
@@ -532,7 +537,7 @@ export default function DraftInsightsDashboard({ engine, league, mySlot, viewSlo
                   Where each pick landed against the board's rank — right means he fell to {isMe ? 'you' : 'them'}
                 </p>
               </div>
-              <span className="shrink-0 font-plex text-[9.5px] font-semibold uppercase tracking-wide text-ink-muted">Unit: picks</span>
+              <span className="shrink-0 font-numeral text-[9.5px] font-semibold uppercase tracking-wide text-ink-muted">Unit: picks</span>
             </div>
             <div className="flex flex-col gap-1.5">
               {timeline.map((t) => (
@@ -558,12 +563,16 @@ export default function DraftInsightsDashboard({ engine, league, mySlot, viewSlo
             className={PANEL + ' p-5'}
           >
             <h2 className="font-display text-sm font-bold uppercase tracking-wide text-white/80">Room standings</h2>
-            {/* The number IS the weighted total the table is ordered by —
-                CLAUDE.md's standings rule: a column between the rank and
-                the letter showing anything else makes the table look
-                broken, and once did. */}
+            {/* The score column is gone from between the rank and the letter.
+                CLAUDE.md's standings rule was that whatever sits there has to
+                be the weighted total, because a column showing anything else
+                makes a strictly-ranked table look broken — and it once showed
+                starter strength and did exactly that. Removing the column
+                honours the same rule from the other side: the row is ordered
+                by rank and labelled by a letter that means rank, so there is
+                nothing left for a third number to disagree with. */}
             <p className="mb-3 mt-0.5 text-xs text-ink-muted">
-              Every team's weighted score, best to worst — click any team to view their report
+              Best to worst — click any team to view their report
             </p>
             <div className="flex flex-col gap-1">
               {/* Each row is the switcher for this whole dashboard: the
@@ -586,7 +595,6 @@ export default function DraftInsightsDashboard({ engine, league, mySlot, viewSlo
                   <span className={'min-w-0 flex-1 truncate ' + (t.slot === mySlot ? 'text-teal-300' : '')}>
                     {engine.teamLabel(t.slot)}
                   </span>
-                  <span className="w-8 shrink-0 text-right font-semibold tabular-nums">{Math.round(t.total)}</span>
                   <span
                     className={
                       'w-8 shrink-0 rounded px-1 py-0.5 text-center text-[10px] font-bold ' +

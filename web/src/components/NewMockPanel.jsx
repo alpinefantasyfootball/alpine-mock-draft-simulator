@@ -64,7 +64,7 @@ function ChipSelect({ value, onChange, disabled, options }) {
          "Seat 1", "60s clock". shrink-0 alone (the first fix tried) wasn't
          enough: it silenced the shrink half of the leak but left
          flex-grow/flex-basis still pulling from the tag rule. */
-      className="w-auto flex-none rounded-lg border border-white/10 bg-white/[0.03] px-3 py-[7px] font-plex text-base text-white/80 outline-none transition-colors focus:border-teal-400/50 disabled:cursor-not-allowed disabled:text-white/30"
+      className="w-auto flex-none rounded-lg border border-white/10 bg-white/[0.03] px-3 py-[7px] font-numeral tabular-nums text-base text-white/80 outline-none transition-colors focus:border-teal-400/50 disabled:cursor-not-allowed disabled:text-white/30"
     >
       {/* bg-slate-panel — see RowSelect's own comment. The open popup is
          native chrome this select's own background never reaches. */}
@@ -184,7 +184,7 @@ export default function NewMockPanel({
       <div className="flex flex-wrap gap-2 lg:hidden">
         <ChipSelect value={league.teams} onChange={setTeams} disabled={locked} options={chipTeamOptions} />
         <ChipSelect value={league.scoring} onChange={setScoring} disabled={locked} options={chipScoringOptions} />
-        <span className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-[7px] font-plex text-[12.5px] text-white/80">
+        <span className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-[7px] font-numeral tabular-nums text-[12.5px] text-white/80">
           {league.rounds} rounds
         </span>
         <ChipSelect value={lobbySlot + 1} onChange={setSeat} disabled={locked} options={chipSeatOptions} />

@@ -180,25 +180,33 @@ export default {
         // entire time. Barlow Condensed is already loaded; this costs no
         // extra network request, it just points at the font that's there.
         display: ['"Barlow Condensed"', '"Arial Narrow"', 'system-ui', 'sans-serif'],
-        body: ['"Inter"', 'system-ui', 'sans-serif'],
-        // ---- Homepage cosmetic revision (design_handoff_homepage_cosmetic) §3 ----
-        // Not a redefinition of `body` above: `font-body` (Inter) is real,
-        // shipped weight in three Draft Room Cockpit components
-        // (DraftEntryScreen.jsx, DraftCockpitHeader.jsx, NewMockPanel.jsx) —
-        // this handoff is homepage-only, and the homepage itself never
-        // actually applies `font-body` anywhere (checked: zero call sites),
-        // so it has been rendering in the bare browser/OS sans stack this
-        // whole time, not Inter. Redefining `body` in place would silently
-        // reskin the Cockpit and still do nothing for the homepage — two
-        // reasons at once to scope this to its own name instead, the same
-        // call already made for `voidInk` above.
-        voidBody: ['"Hanken Grotesk"', 'system-ui', 'sans-serif'],
-        // §4's replacement for `font-plex` (IBM Plex Mono) on every
-        // eyebrow label and numeral across the homepage's own components —
-        // applied there in that change, not this one. `plex` itself stays
-        // exactly as it is: the Draft Room Cockpit's pick codes and team
-        // abbreviations still read it.
-        voidNumeral: ['"Montserrat"', 'system-ui', 'sans-serif'],
+        // Hanken Grotesk as of the sitewide font-consistency pass that
+        // followed the homepage cosmetic revision — was Inter, and Inter
+        // was barely load-bearing when it was: the homepage never applied
+        // `font-body` anywhere (rendering in the bare browser/OS sans stack
+        // instead), and only three Draft Room Cockpit components
+        // (DraftEntryScreen.jsx, DraftCockpitHeader.jsx, NewMockPanel.jsx)
+        // used it for real. The homepage pass itself scoped its own face to
+        // `voidBody` rather than touch this token, specifically because
+        // redefining `body` in place would have silently reskinned those
+        // three Cockpit components while doing nothing for the homepage —
+        // a homepage-only handoff had no business changing shared,
+        // app-wide type. That constraint is gone now that the owner wants
+        // one consistent face across both the homepage and the Cockpit, so
+        // `voidBody` and `body` collapsed into this single token — every
+        // call site that said `font-voidBody` now says `font-body`.
+        body: ['"Hanken Grotesk"', 'system-ui', 'sans-serif'],
+        // Montserrat — was `voidNumeral`, homepage-only, for the same
+        // reason `body` above was scoped away from Inter: this token is now
+        // used by both the homepage and the Draft Room Cockpit's own
+        // prose/single-value numerals (report-card scores, stat-card
+        // figures, percentages in a sentence), so the homepage-specific
+        // name no longer fit. `plex` (IBM Plex Mono) is deliberately
+        // untouched and still the right choice wherever a numeral's own
+        // monospace WIDTH is load-bearing rather than just its face — pick
+        // codes, team/position abbreviations, and any board or stat-table
+        // grid whose columns depend on every cell measuring the same.
+        numeral: ['"Montserrat"', 'system-ui', 'sans-serif'],
         // A new, separate token — not `mono` itself, so a page still using
         // bare `font-mono` (Tailwind's own system-mono fallback) never gets
         // silently reskinned just because this file changed. That was the

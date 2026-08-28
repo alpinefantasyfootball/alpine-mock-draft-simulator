@@ -205,7 +205,7 @@ export default function PlayersTab({
               <span className="absolute top-0.5 h-2.5 w-2.5 rounded-full bg-white transition-all duration-200" style={{ left: showDrafted ? 14 : 2 }} />
             </span>
           </button>
-          <span className="shrink-0 font-plex text-[10.5px] text-ink-muted">{players.length} available</span>
+          <span className="shrink-0 font-numeral tabular-nums text-[10.5px] text-ink-muted">{players.length} available</span>
         </div>
 
         {/* flex, not bare min-h-0 flex-1 — PlayerQueueSidebar's own root
@@ -369,7 +369,7 @@ export default function PlayersTab({
                 </span>
               </button>
               <span className="flex-1" />
-              <span className="shrink-0 font-plex text-[10.5px] text-ink-muted">{players.length} available</span>
+              <span className="shrink-0 font-numeral tabular-nums text-[10.5px] text-ink-muted">{players.length} available</span>
             </div>
           </div>
 

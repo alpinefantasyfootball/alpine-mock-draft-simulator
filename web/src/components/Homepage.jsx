@@ -148,7 +148,7 @@ function FooterRoomLink({ room, onComingSoon, className }) {
 function FooterColumn({ title, children }) {
   return (
     <div className="flex flex-col gap-[11px]">
-      <span className="font-voidNumeral text-[10.5px] font-semibold tracking-[0.13em] text-voidInk-body">{title}</span>
+      <span className="font-numeral text-[10.5px] font-semibold tracking-[0.13em] text-voidInk-body">{title}</span>
       {children}
     </div>
   )
@@ -221,7 +221,7 @@ export default function Homepage() {
   const roomLinkClass = 'flex min-h-[44px] items-center text-sm text-voidInk-body transition-colors hover:text-white lg:min-h-0 lg:text-[13px]'
 
   return (
-    <div className="min-h-screen overflow-x-hidden bg-surface-page font-voidBody text-voidInk-primary">
+    <div className="min-h-screen overflow-x-hidden bg-surface-page font-body text-voidInk-primary">
       <Header />
 
       {/* The fixed header is just its nav row now — the status strip that
@@ -304,7 +304,7 @@ export default function Homepage() {
             A solo mock draft runs entirely in your browser — nothing you draft is sent anywhere.
             Drafting with your league uses a server, just for that room.
           </p>
-          <span className="font-voidNumeral tabular-nums text-xs font-medium text-voidInk-muted">&copy; 2026 Juke. All rights reserved.</span>
+          <span className="font-numeral tabular-nums text-xs font-medium text-voidInk-muted">&copy; 2026 Juke. All rights reserved.</span>
         </div>
 
         {/* The footer's one static closing line — see useDataFreshness()
@@ -314,7 +314,7 @@ export default function Homepage() {
             a placeholder that would flash a wrong count for one frame. */}
         {freshness && (
           <div className="mx-auto max-w-[1200px] px-10 pb-6 text-center">
-            <p className="font-voidNumeral tabular-nums text-xs font-medium text-voidInk-muted">{freshness}</p>
+            <p className="font-numeral tabular-nums text-xs font-medium text-voidInk-muted">{freshness}</p>
           </div>
         )}
       </footer>
