@@ -94,7 +94,7 @@ export default function Hero() {
               "pre-season scouting" and "a championship push" are two of the
               other five rooms on the same roadmap, not the one that's live.
               Price still lives only in the mono line under the CTA pair. */}
-          <p className="mt-4 max-w-[480px] text-pretty text-base leading-[1.55] text-white/55 lg:mt-6 lg:max-w-[530px] lg:text-[17.5px] lg:leading-[1.6]">
+          <p className="mt-4 max-w-[480px] text-pretty text-base leading-[1.55] text-voidInk-body lg:mt-6 lg:max-w-[530px] lg:text-[17.5px] lg:leading-[1.6]">
             From pre-season scouting to a championship push, dominate every phase of the fantasy calendar.
           </p>
 
@@ -179,7 +179,7 @@ export default function Hero() {
 
               Not a tap target, so exempt from the 44px floor; 11.5px is the
               handoff's own value and sits on the type floor for mono. */}
-          <p className="mt-3 text-center font-plex text-[11.5px] tracking-[0.1em] text-[#7C8A99] lg:mt-5 lg:text-left">
+          <p className="mt-3 text-center font-plex text-[11.5px] tracking-[0.1em] text-voidInk-muted lg:mt-5 lg:text-left">
             FREE &middot; UNLIMITED &middot; NO ACCOUNT
           </p>
 

@@ -302,17 +302,17 @@ function useRoomStatus() {
 
 function ProofRow({ label, active, value, note }) {
   return (
-    <div className="rounded-[10px] bg-white/[0.03] px-3 py-[9px]">
+    <div className="rounded-[10px] bg-surface-row px-3 py-[9px]">
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
         <span
-          className={`font-plex text-[9.5px] font-semibold uppercase tracking-[0.1em] ${active ? '' : 'text-white/40'}`}
-          style={active ? { color: '#a78bfa' } : undefined}
+          className={`font-plex text-[9.5px] font-semibold uppercase tracking-[0.1em] ${active ? '' : 'text-voidInk-muted'}`}
+          style={active ? { color: '#C0ABE9' } : undefined}
         >
           {label}
         </span>
-        <span className={`text-[13.5px] font-semibold ${active ? 'text-white/90' : 'text-white/55'}`}>{value}</span>
+        <span className={`text-[13.5px] font-semibold ${active ? 'text-voidInk-primary' : 'text-voidInk-body'}`}>{value}</span>
       </div>
-      <p className="mt-[3px] font-plex text-[10.5px] text-[#8e9aa1]">{note}</p>
+      <p className="mt-[3px] font-plex text-[10.5px] text-voidInk-muted">{note}</p>
     </div>
   )
 }
@@ -333,15 +333,15 @@ function SameEngineCard() {
   return (
     <div
       className="flex h-full flex-col rounded-[14px] border px-[26px] py-6 transition-colors duration-200"
-      style={{ borderColor: 'rgba(167,139,250,0.35)', background: 'linear-gradient(180deg, rgba(167,139,250,0.10), #0d1216 60%)' }}
+      style={{ borderColor: '#31293F', background: 'linear-gradient(160deg, #1D1727, #13161C 55%)' }}
     >
-      <p className="font-plex text-[11px] font-semibold tracking-[0.12em]" style={{ color: '#a78bfa' }}>
+      <p className="font-plex text-[11px] font-semibold tracking-[0.12em]" style={{ color: '#C0ABE9' }}>
         04 &middot; SAME ENGINE, ALL SEASON
       </p>
-      <h3 className="mt-[9px] font-display text-[17px] font-bold text-white">
+      <h3 className="mt-[9px] font-display text-[17px] font-bold text-voidInk-primary">
         Draft grades today. Waivers and trades once those rooms open.
       </h3>
-      <p className="mt-[9px] text-[15px] leading-[1.55] text-[#8e9aa1]">
+      <p className="mt-[9px] text-[15px] leading-[1.55] text-voidInk-body">
         The same VORP baseline and the same four weighted parts that grade tonight&rsquo;s draft will price a
         waiver claim and score both sides of a trade once those rooms are live. One engine, not three.
       </p>
@@ -396,11 +396,11 @@ export default function ShowYourWorking() {
           {/* text-white/25 measured 2.13:1 here — under even the 3:1 bar
               large bold text gets, pre-existing and found during homepage
               v4 pass 3's contrast audit rather than introduced by it.
-              #8e9aa1: same fix as everywhere else in this pass. */}
-          <span className="not-italic" style={{ color: '#8e9aa1' }}>—</span>
+              #808389 (voidInk.muted): same fix as everywhere else in this pass. */}
+          <span className="not-italic" style={{ color: '#808389' }}>—</span>
           <span className="text-white"> No Black Box</span>
         </h2>
-        <p className="mt-4 text-[17px] leading-[1.55] text-white/55">
+        <p className="mt-4 text-[17px] leading-[1.55] text-voidInk-body">
           Every number Juke prints is one you can follow. Re-calculated live off real market data.
         </p>
       </motion.div>
@@ -409,9 +409,9 @@ export default function ShowYourWorking() {
           them as a full-width row (§4.4) — not squeezed into a third
           column, since it isn't a third chart. */}
       <div className="mt-[42px] grid gap-[14px] lg:grid-cols-2">
-        <div className="flex h-full flex-col rounded-[14px] border border-white/[0.07] bg-[#0d1216] px-[26px] py-6 transition-colors duration-200 hover:border-teal-400/70">
+        <div className="flex h-full flex-col rounded-[14px] border border-line-hairline bg-surface-card px-[26px] py-6 transition-colors duration-200 hover:border-teal-400/70">
           <div className="flex items-start justify-between gap-3">
-            <p className="font-plex text-[11px] font-semibold tracking-[0.12em] text-teal-400">
+            <p className="font-plex text-[11px] font-semibold tracking-[0.12em] text-[#4DDAE9]">
               01 &middot; VORP
             </p>
             {/* h-11 (44px) below md — §9 names this exact control ("the
@@ -426,7 +426,7 @@ export default function ShowYourWorking() {
                   type="button"
                   onClick={() => setFormat(f.format)}
                   className={`inline-flex h-11 items-center justify-center rounded-full px-2 font-plex text-[10px] font-semibold transition-colors duration-200 md:h-7 ${
-                    format === f.format ? 'bg-teal-500 text-obsidian' : 'text-[#8e9aa1] hover:text-white'
+                    format === f.format ? 'bg-teal-500 text-obsidian' : 'text-voidInk-muted hover:text-white'
                   }`}
                 >
                   {f.label}
@@ -434,24 +434,24 @@ export default function ShowYourWorking() {
               ))}
             </div>
           </div>
-          <h3 className="mt-[9px] font-display text-[17px] font-bold text-white">Value over replacement</h3>
-          <p className="mt-[9px] text-[15px] leading-[1.55] text-[#8e9aa1]">
+          <h3 className="mt-[9px] font-display text-[17px] font-bold text-voidInk-primary">Value over replacement</h3>
+          <p className="mt-[9px] text-[15px] leading-[1.55] text-voidInk-body">
             Every player is scored against the last startable player at their position, not against each other.
           </p>
           <VorpChart format={format} />
         </div>
 
-        <div className="flex h-full flex-col rounded-[14px] border border-white/[0.07] bg-[#0d1216] px-[26px] py-6 transition-colors duration-200 hover:border-teal-400/70">
+        <div className="flex h-full flex-col rounded-[14px] border border-line-hairline bg-surface-card px-[26px] py-6 transition-colors duration-200 hover:border-teal-400/70">
           <div className="flex items-start justify-between gap-3">
-            <p className="font-plex text-[11px] font-semibold tracking-[0.12em] text-teal-400">
+            <p className="font-plex text-[11px] font-semibold tracking-[0.12em] text-[#4DDAE9]">
               02 &middot; SURVIVAL
             </p>
             {survivalData && (
-              <span className="shrink-0 font-plex text-[11px] font-semibold text-[#8e9aa1]">{survivalData.player.name}</span>
+              <span className="shrink-0 font-plex text-[11px] font-semibold text-voidInk-muted">{survivalData.player.name}</span>
             )}
           </div>
-          <h3 className="mt-[9px] font-display text-[17px] font-bold text-white">The odds they last</h3>
-          <p className="mt-[9px] text-[15px] leading-[1.55] text-[#8e9aa1]">{SURVIVAL_BODY}</p>
+          <h3 className="mt-[9px] font-display text-[17px] font-bold text-voidInk-primary">The odds they last</h3>
+          <p className="mt-[9px] text-[15px] leading-[1.55] text-voidInk-body">{SURVIVAL_BODY}</p>
           <SurvivalChart data={survivalData} />
         </div>
       </div>
@@ -461,10 +461,10 @@ export default function ShowYourWorking() {
           distinct from the two card-only rows below it — the same reason
           03 was never squeezed into a three-up row with the charts. */}
       <div className="mt-[14px] grid gap-[14px] lg:grid-cols-2">
-        <div className="rounded-[14px] border border-white/[0.07] bg-[#0d1216] px-[26px] py-6 transition-colors duration-200 hover:border-teal-400/70">
-          <p className="font-plex text-[11px] font-semibold tracking-[0.12em] text-teal-400">03 &middot; THE GRADE</p>
-          <h3 className="mt-[9px] font-display text-[17px] font-bold text-white">Four parts, each shown</h3>
-          <p className="mt-[9px] max-w-[640px] text-[15px] leading-[1.55] text-[#8e9aa1]">{GRADE_BODY}</p>
+        <div className="rounded-[14px] border border-line-hairline bg-surface-card px-[26px] py-6 transition-colors duration-200 hover:border-teal-400/70">
+          <p className="font-plex text-[11px] font-semibold tracking-[0.12em] text-[#4DDAE9]">03 &middot; THE GRADE</p>
+          <h3 className="mt-[9px] font-display text-[17px] font-bold text-voidInk-primary">Four parts, each shown</h3>
+          <p className="mt-[9px] max-w-[640px] text-[15px] leading-[1.55] text-voidInk-body">{GRADE_BODY}</p>
         </div>
         <SameEngineCard />
       </div>

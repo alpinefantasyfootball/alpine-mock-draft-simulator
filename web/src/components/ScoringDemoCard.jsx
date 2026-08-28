@@ -145,27 +145,23 @@ function RowCells({ row, grid, dense }) {
   // are relative to each other.
   const emphasized = rank <= 3
   return (
-    <div className={`grid ${grid} items-center gap-2 rounded-[11px] border border-white/[0.06] bg-[#0c1114] px-[14px] py-[12px]`}>
+    <div className={`grid ${grid} items-center gap-2 rounded-[11px] border border-line-hairline bg-surface-row px-[14px] py-[12px]`}>
       <span className={`shrink-0 rounded-md px-1.5 py-0.5 text-center text-[10px] font-bold ${POS_BADGE[player.pos] || 'bg-white/10 text-white/50'}`}>
         {player.pos}
       </span>
-      <span className={`min-w-0 truncate font-semibold text-white/90 ${dense ? 'text-[13px]' : 'text-[14.5px]'}`}>
+      <span className={`min-w-0 truncate font-semibold text-voidInk-primary ${dense ? 'text-[13px]' : 'text-[14.5px]'}`}>
         {player.name}
       </span>
-      <span className={`text-right font-plex tabular-nums text-white/60 ${dense ? 'text-[11px]' : 'text-[13px]'}`}>
+      <span className={`text-right font-plex tabular-nums text-voidInk-body ${dense ? 'text-[11px]' : 'text-[13px]'}`}>
         {projPts != null ? Math.round(projPts) : '—'}
       </span>
-      {/* text-white/45 measured 4.42:1 here (§9's bar is 4.5) — #8e9aa1 is
-          the same solid-colour fix applied throughout TakeAPick.jsx; see
-          that file's own comment on why opacity failed in the first place. */}
       <span
-        className={`text-right font-plex tabular-nums font-semibold ${dense ? 'text-[11px]' : 'text-[13px]'} ${emphasized ? 'text-teal-300' : ''}`}
-        style={emphasized ? undefined : { color: '#8e9aa1' }}
+        className={`text-right font-plex tabular-nums font-semibold ${dense ? 'text-[11px]' : 'text-[13px]'} ${emphasized ? 'text-teal-300' : 'text-voidInk-muted'}`}
       >
         {vorp >= 0 ? '+' : ''}
         {Math.round(vorp)}
       </span>
-      <span className={`text-right font-plex tabular-nums ${dense ? 'text-[11px]' : 'text-[13px]'}`} style={{ color: '#8e9aa1' }}>
+      <span className={`text-right font-plex tabular-nums text-voidInk-muted ${dense ? 'text-[11px]' : 'text-[13px]'}`}>
         {surv != null ? `${surv}%` : '—'}
       </span>
     </div>
@@ -200,12 +196,9 @@ export default function ScoringDemoCard() {
           differentiator, projection is the commodity") is a one-line
           change to MOBILE_ROW_GRID and RowCells' dense branch if a
           narrower target ever needs it. */}
-      <div
-        className="rounded-2xl border border-white/[0.09] p-5 lg:hidden"
-        style={{ background: 'linear-gradient(170deg, #111a1f, #0b1013)' }}
-      >
+      <div className="rounded-[14px] border border-line-hairline bg-surface-card p-5 lg:hidden">
         <div className="flex items-center justify-between gap-3">
-          <p className="font-plex text-[11px] font-semibold tracking-[0.12em] text-[#7C8A99]">
+          <p className="font-plex text-[11px] font-semibold tracking-[0.12em] text-voidInk-muted">
             BOARD · SORTED BY VORP
           </p>
         </div>
@@ -230,7 +223,7 @@ export default function ScoringDemoCard() {
           ))}
         </div>
 
-        <div className={`mt-4 grid ${MOBILE_ROW_GRID} gap-2 px-[14px] font-plex text-[9px] uppercase tracking-wide text-[#8e9aa1]`}>
+        <div className={`mt-4 grid ${MOBILE_ROW_GRID} gap-2 px-[14px] font-plex text-[9px] uppercase tracking-wide text-voidInk-muted`}>
           <span>Pos</span>
           <span>Player</span>
           <span className="text-right">Proj</span>
@@ -246,18 +239,15 @@ export default function ScoringDemoCard() {
           ))}
         </div>
 
-        <p className="mt-4 text-[13.5px] leading-[1.5] text-white/50">
+        <p className="mt-4 text-[13.5px] leading-[1.5] text-voidInk-body">
           {PPR_EXPLAIN[format]} Every ranking on Juke moves with your rules.
         </p>
       </div>
 
       {/* ---------- Desktop ---------- */}
-      <div
-        className="hidden rounded-2xl border border-white/[0.09] px-[22px] pb-[22px] pt-6 lg:block"
-        style={{ background: 'linear-gradient(170deg, #111a1f, #0b1013)' }}
-      >
+      <div className="hidden rounded-[14px] border border-line-hairline bg-surface-card px-[22px] pb-[22px] pt-6 lg:block">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <span className="text-base font-bold text-white">Board · sorted by value over replacement</span>
+          <span className="text-base font-bold text-voidInk-primary">Board · sorted by value over replacement</span>
           <div className="inline-flex gap-1 rounded-full bg-white/5 p-1">
             {PPR_OPTIONS.map((opt) => (
               <button
@@ -274,7 +264,7 @@ export default function ScoringDemoCard() {
           </div>
         </div>
 
-        <div className={`mt-4 grid ${ROW_GRID} gap-3 px-[14px] font-plex text-[10px] uppercase tracking-wide text-[#8e9aa1]`}>
+        <div className={`mt-4 grid ${ROW_GRID} gap-3 px-[14px] font-plex text-[10px] uppercase tracking-wide text-voidInk-muted`}>
           <span>Pos</span>
           <span>Player</span>
           <span className="text-right">Proj</span>
@@ -290,7 +280,7 @@ export default function ScoringDemoCard() {
           ))}
         </div>
 
-        <div className="mt-4 flex items-center gap-[7px] font-plex text-[11px] text-[#8e9aa1]">
+        <div className="mt-4 flex items-center gap-[7px] font-plex text-[11px] text-voidInk-muted">
           <RotateCw className="h-3 w-3 shrink-0" aria-hidden="true" />
           <span>
             Projected season points · {ppr === 1 ? '1.0' : ppr === 0.5 ? '0.5' : 'no reception bonus'}

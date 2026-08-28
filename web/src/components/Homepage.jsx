@@ -148,7 +148,7 @@ function FooterRoomLink({ room, onComingSoon, className }) {
 function FooterColumn({ title, children }) {
   return (
     <div className="flex flex-col gap-[11px]">
-      <span className="font-plex text-[11px] font-semibold tracking-[0.11em] text-white/80">{title}</span>
+      <span className="font-plex text-[11px] font-semibold tracking-[0.11em] text-voidInk-body">{title}</span>
       {children}
     </div>
   )
@@ -169,7 +169,7 @@ function FooterBrandStack({ onSocialClick, onAppClick }) {
             type="button"
             onClick={() => onSocialClick(social.label)}
             aria-label={social.label}
-            className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/[0.08] text-white/50 transition-colors hover:border-teal-400/40 hover:text-white"
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-line-hairline text-voidInk-muted transition-colors hover:border-teal-400/40 hover:text-white"
           >
             <SocialIcon path={social.path} />
           </button>
@@ -182,12 +182,12 @@ function FooterBrandStack({ onSocialClick, onAppClick }) {
             key={store}
             type="button"
             onClick={() => onAppClick(store, article)}
-            className="flex items-center gap-2 rounded-lg border border-white/[0.08] px-3 py-[7px] transition-colors hover:border-teal-400/40"
+            className="flex items-center gap-2 rounded-lg border border-line-hairline px-3 py-[7px] transition-colors hover:border-teal-400/40"
           >
-            <Icon className="h-5 w-5 text-white/70" />
+            <Icon className="h-5 w-5 text-voidInk-body" />
             <span className="flex flex-col items-start leading-tight">
-              <span className="text-[8.5px] uppercase tracking-[0.06em] text-white/45">{kicker}</span>
-              <span className="text-[12.5px] font-semibold text-white/85">{store}</span>
+              <span className="text-[8.5px] uppercase tracking-[0.06em] text-voidInk-muted">{kicker}</span>
+              <span className="text-[12.5px] font-semibold text-voidInk-primary">{store}</span>
             </span>
           </button>
         ))}
@@ -208,10 +208,10 @@ export default function Homepage() {
   const openRoom = (room) => openComingSoon(room.name, `${room.blurb} There's nothing to sign up for yet — check back once it's live.`)
   const openSupport = () => openComingSoon(SUPPORT_LINK, "There's no support channel yet — check back as Juke grows.")
 
-  const roomLinkClass = 'flex min-h-[44px] items-center text-sm text-white/60 transition-colors hover:text-white lg:min-h-0 lg:text-[13px]'
+  const roomLinkClass = 'flex min-h-[44px] items-center text-sm text-voidInk-body transition-colors hover:text-white lg:min-h-0 lg:text-[13px]'
 
   return (
-    <div className="min-h-screen overflow-x-hidden bg-void text-white">
+    <div className="min-h-screen overflow-x-hidden bg-surface-page text-voidInk-primary">
       <Header />
 
       {/* The fixed header is just its nav row now — the status strip that
@@ -243,7 +243,7 @@ export default function Homepage() {
           value per section, which is what "evenly spaced" actually means
           here: every gap between every pair of sections is the same
           number, not just visually close. */}
-      <footer className="border-t border-white/[0.07] bg-[#060909]">
+      <footer className="border-t border-line-hairline bg-surface-nav">
         <div className="mx-auto flex max-w-7xl flex-col gap-12 px-6 py-14 lg:grid lg:grid-cols-5 lg:gap-x-10 lg:gap-y-12">
           <FooterBrandStack onSocialClick={openSocial} onAppClick={openApp} />
 
@@ -289,12 +289,12 @@ export default function Homepage() {
             that has no equivalent in a reference built for a different
             product, kept because it's true and worth keeping rather than
             cut to match a shape that has no room for it. */}
-        <div className="mx-auto flex max-w-7xl flex-col items-center gap-3 border-t border-white/5 px-6 py-6 text-center">
-          <p className="max-w-[560px] text-[13px] text-[#8e9aa1]">
+        <div className="mx-auto flex max-w-7xl flex-col items-center gap-3 border-t border-line-divider px-6 py-6 text-center">
+          <p className="max-w-[560px] text-[13px] text-voidInk-muted">
             A solo mock draft runs entirely in your browser — nothing you draft is sent anywhere.
             Drafting with your league uses a server, just for that room.
           </p>
-          <span className="font-plex text-xs text-[#8e9aa1]">&copy; 2026 Juke. All rights reserved.</span>
+          <span className="font-plex text-xs text-voidInk-muted">&copy; 2026 Juke. All rights reserved.</span>
         </div>
 
         {/* The footer's one static closing line — see useDataFreshness()
@@ -304,7 +304,7 @@ export default function Homepage() {
             a placeholder that would flash a wrong count for one frame. */}
         {freshness && (
           <div className="mx-auto max-w-7xl px-6 pb-6 text-center">
-            <p className="font-plex text-xs text-[#8e9aa1]">{freshness}</p>
+            <p className="font-plex text-xs text-voidInk-muted">{freshness}</p>
           </div>
         )}
       </footer>

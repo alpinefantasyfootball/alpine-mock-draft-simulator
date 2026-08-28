@@ -134,11 +134,11 @@ function useAutoPlayLoop(scenarioCount) {
 // measured across this whole file (and ScoringDemoCard.jsx, and
 // ShowYourWorking.jsx) with transitions disabled: every one of /25 through
 // /45 came back under the bar against these cards' near-black
-// backgrounds, from 2.13 up to 4.45 at best. #8e9aa1 is not a new token —
-// it's ShowYourWorking.jsx's own existing secondary-body-text colour,
-// reused here rather than invented, and it clears ~6:1 against every
+// backgrounds, from 2.13 up to 4.45 at best. Homepage cosmetic revision:
+// now the same voidInk.muted the rest of the page's meta text uses
+// (tailwind.config.js), not a one-off hex — it clears ~6:1 against every
 // background any of these panels use.
-const MUTED = '#8e9aa1'
+const MUTED = '#808389'
 
 function RowTag({ label, tone }) {
   const toneClass =
@@ -160,7 +160,7 @@ function RowTag({ label, tone }) {
 function BoardPanel({ scenario, phase }) {
   return (
     <div className="flex h-full flex-col px-6 py-5">
-      <p className="font-plex text-[11px] font-semibold uppercase tracking-[0.1em] text-[#8e9aa1]">On the board</p>
+      <p className="font-plex text-[11px] font-semibold uppercase tracking-[0.1em] text-voidInk-muted">On the board</p>
       <div className="mt-3 flex flex-col gap-[6px]">
         {scenario.boardRows.map((row) => {
           // Nothing is added or removed as the phase advances (§4.3) — the
@@ -173,7 +173,7 @@ function BoardPanel({ scenario, phase }) {
               key={row.name}
               className="grid grid-cols-[34px_minmax(0,1fr)_auto] items-center gap-3 rounded-[10px] border px-3 py-[9px] transition-colors duration-500"
               style={{
-                borderColor: isMineNow && phase >= 1 ? 'rgba(94,234,212,0.4)' : 'rgba(255,255,255,0.06)',
+                borderColor: isMineNow && phase >= 1 ? 'rgba(94,234,212,0.4)' : '#252930',
                 backgroundColor: isMineNow && phase >= 1 ? 'rgba(94,234,212,0.06)' : 'transparent',
               }}
             >
@@ -191,8 +191,7 @@ function BoardPanel({ scenario, phase }) {
                 {row.pos}
               </span>
               <span
-                className={`min-w-0 truncate text-[13.5px] font-semibold transition-colors duration-500 ${isGoneNow ? 'line-through decoration-[#6b7680]' : 'text-white/90'}`}
-                style={isGoneNow ? { color: '#8a939b' } : undefined}
+                className={`min-w-0 truncate text-[13.5px] font-semibold transition-colors duration-500 ${isGoneNow ? 'line-through decoration-[#6b7680] text-voidInk-muted' : 'text-voidInk-primary'}`}
               >
                 {row.name}
               </span>
@@ -210,23 +209,23 @@ function BoardPanel({ scenario, phase }) {
 function RosterPanel({ scenario, phase }) {
   const lineup = phase >= 1 ? scenario.after.lineup : scenario.before.lineup
   return (
-    <div className="flex h-full flex-col border-x border-white/[0.06] px-6 py-5">
-      <p className="font-plex text-[11px] font-semibold uppercase tracking-[0.1em] text-[#8e9aa1]">
+    <div className="flex h-full flex-col border-x border-line-hairline px-6 py-5">
+      <p className="font-plex text-[11px] font-semibold uppercase tracking-[0.1em] text-voidInk-muted">
         Your roster &middot; pick {scenario.pickCode}
       </p>
       <div className="mt-3 flex flex-col gap-[6px]">
         {lineup.map((s, i) => (
-          <div key={`${s.slot}-${i}`} className="flex items-center justify-between gap-3 rounded-[10px] bg-white/[0.03] px-3 py-[7px] transition-colors duration-500">
-            <span className="font-plex text-[10px] font-semibold uppercase tracking-wide text-[#8e9aa1]">{s.slot}</span>
+          <div key={`${s.slot}-${i}`} className="flex items-center justify-between gap-3 rounded-[10px] bg-surface-row px-3 py-[7px] transition-colors duration-500">
+            <span className="font-plex text-[10px] font-semibold uppercase tracking-wide text-voidInk-muted">{s.slot}</span>
             {s.player ? (
               <span
-                className="truncate text-[13px] font-semibold text-white/85 transition-colors duration-500"
+                className="truncate text-[13px] font-semibold text-voidInk-primary transition-colors duration-500"
                 style={s.player.name === scenario.player.name && phase >= 1 ? { color: '#5EEAD4' } : undefined}
               >
                 {s.player.name}
               </span>
             ) : (
-              <span className="text-[13px] text-[#8e9aa1]">Empty</span>
+              <span className="text-[13px] text-voidInk-muted">Empty</span>
             )}
           </div>
         ))}
@@ -240,8 +239,8 @@ function GradeBar({ label, weight, before, after, animate }) {
   return (
     <div>
       <div className="flex items-baseline justify-between gap-2">
-        <span className="text-[12.5px] font-medium text-white/70">{label}</span>
-        <span className="font-plex text-[10px] text-[#8e9aa1]">wt {weight}</span>
+        <span className="text-[12.5px] font-medium text-voidInk-body">{label}</span>
+        <span className="font-plex text-[10px] text-voidInk-muted">wt {weight}</span>
       </div>
       <div className="mt-1 h-[6px] overflow-hidden rounded-full bg-white/[0.06]">
         <div
@@ -259,7 +258,7 @@ function GradePanel({ scenario, phase }) {
   return (
     <div className="flex h-full flex-col px-6 py-5">
       <div className="flex items-baseline justify-between gap-3">
-        <p className="font-plex text-[11px] font-semibold uppercase tracking-[0.1em] text-[#8e9aa1]">Draft grade &middot; live</p>
+        <p className="font-plex text-[11px] font-semibold uppercase tracking-[0.1em] text-voidInk-muted">Draft grade &middot; live</p>
       </div>
       <div className="mt-2 flex items-baseline gap-3">
         <span className="font-display text-[38px] font-extrabold leading-none tabular-nums text-white transition-all duration-700">{grade.composite}</span>
@@ -296,13 +295,13 @@ export default function TakeAPick() {
         <h2 className="text-balance font-display text-[30px] font-extrabold italic leading-[1.15] tracking-[-0.015em] sm:text-[38px] sm:leading-[1.1] lg:text-[46px] lg:leading-[1.08] lg:tracking-[-0.025em]">
           Take a pick. Watch it get graded.
         </h2>
-        <p className="mt-4 text-[17px] leading-[1.55] text-white/55">
+        <p className="mt-4 text-[17px] leading-[1.55] text-voidInk-body">
           Three third-round decisions, playing out. Nothing here is a marketing screenshot.
         </p>
       </div>
 
       {!scenario ? (
-        <div className="mt-[42px] h-[420px] animate-pulse rounded-2xl bg-white/[0.03]" />
+        <div className="mt-[42px] h-[420px] animate-pulse rounded-[14px] bg-surface-row" />
       ) : (
         <>
           {/* Dots + pause, right-aligned, above the container — desktop's
@@ -347,12 +346,12 @@ export default function TakeAPick() {
               height doesn't jump between phases. */}
           <div
             aria-live="polite"
-            className="mt-3 flex min-h-[52px] items-center rounded-xl border border-white/[0.07] bg-[#0d1216] px-4 py-3 text-[13.5px] leading-[1.5] text-white/70 lg:hidden"
+            className="mt-3 flex min-h-[52px] items-center rounded-[14px] border border-line-hairline bg-surface-card px-4 py-3 text-[13.5px] leading-[1.5] text-voidInk-body lg:hidden"
           >
             {caption}
           </div>
 
-          <div ref={containerRef} className="mt-3 grid overflow-hidden rounded-2xl border border-white/[0.09] bg-[#0d1216] lg:grid-cols-[410px_330px_1fr]">
+          <div ref={containerRef} className="mt-3 grid overflow-hidden rounded-[14px] border border-line-hairline bg-surface-card lg:grid-cols-[410px_330px_1fr]">
             <BoardPanel scenario={scenario} phase={phase} />
             <RosterPanel scenario={scenario} phase={phase} />
             <GradePanel scenario={scenario} phase={phase} />
@@ -360,7 +359,7 @@ export default function TakeAPick() {
 
           <div
             aria-live="polite"
-            className="mt-3 hidden min-h-[52px] items-center rounded-xl border border-white/[0.07] bg-[#0d1216] px-4 py-3 text-[13.5px] leading-[1.5] text-white/70 lg:flex"
+            className="mt-3 hidden min-h-[52px] items-center rounded-[14px] border border-line-hairline bg-surface-card px-4 py-3 text-[13.5px] leading-[1.5] text-voidInk-body lg:flex"
           >
             <span className="mr-3 shrink-0 font-plex text-[10px] font-semibold uppercase tracking-wide text-teal-400">{PHASE_TAGS[phase]}</span>
             {caption}

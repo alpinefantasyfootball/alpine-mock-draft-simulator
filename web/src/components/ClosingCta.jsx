@@ -5,7 +5,7 @@
 // offer they already passed on once, not a second, slightly different pitch.
 export default function ClosingCta() {
   return (
-    <section className="relative overflow-hidden border-t border-white/[0.06]">
+    <section className="relative overflow-hidden border-t border-line-hairline">
       {/* h-[420px] with the gradient centred in the middle of it (not at
           its bottom edge) rather than the 300px/"at 50% 100%" version this
           replaced — that put the glow's brightest point exactly on the
@@ -47,7 +47,7 @@ export default function ClosingCta() {
           <h2 className="font-display text-[26px] font-extrabold italic leading-[1.15] tracking-[-0.015em] text-white sm:text-[34px] sm:leading-[1.12] sm:tracking-[-0.025em]">
             Open the Draft Room.
           </h2>
-          <p className="mt-[10px] text-base text-white/55">No setup, no league import. Pick your scoring and start.</p>
+          <p className="mt-[10px] text-base text-voidInk-body">No setup, no league import. Pick your scoring and start.</p>
         </div>
 
         {/* data-hero-cta: same marker Hero.jsx's own CTAs carry. Header.jsx's
