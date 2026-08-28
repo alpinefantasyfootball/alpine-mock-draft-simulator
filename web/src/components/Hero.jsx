@@ -77,9 +77,9 @@ export default function Hero() {
               the draft." at 39px Archivo was already close to the padding,
               and this is seven points larger. */}
           <h1 className="text-balance font-display text-[clamp(42px,5.4vw,76px)] font-extrabold italic leading-[0.94] tracking-[-0.005em]">
-            <span className="text-white">Master the draft.</span>
+            <span className="text-white">Master the Draft.</span>
             <br />
-            <span className="text-mint">Dominate the season.</span>
+            <span className="text-mint">Dominate the Season.</span>
           </h1>
 
           {/* One paragraph at both widths.
@@ -90,18 +90,15 @@ export default function Hero() {
               it is read in. Reported from the live site as exactly that, and
               unified to one sentence, read at every width, for that reason.
 
-              The sentence itself changed again on direct instruction: "Draft
-              against a room of CPU opponents that react to your picks, then
-              get a graded report that shows its working" named the Draft
-              Room specifically, which was right while the Draft Room was the
-              whole product. It reads narrow next to a page that now frames
-              Juke as a season-long platform (see ROOMS in app.js and the
-              rooms-grid section below) rather than a single draft-day tool —
-              "pre-season scouting" and "a championship push" are two of the
-              other five rooms on the same roadmap, not the one that's live.
-              Price still lives only in the mono line under the CTA pair. */}
+              Changed again on direct instruction to name the tier split
+              directly: the Draft Room is free today, Juke Pro and Juke
+              All-Access are what waivers, trades and week-to-week strategy
+              sit behind once those rooms open (see ROOMS in app.js and the
+              rooms-grid section below for which room is which tier). Price
+              still lives only in the mono line under the CTA pair. */}
           <p className="mt-4 max-w-[520px] text-pretty text-[19px] leading-[1.5] text-voidInk-body lg:mt-6">
-            From pre-season scouting to a championship push, dominate every phase of the fantasy calendar.
+            Test your strategy in the Draft Room completely free. Unlock Juke Pro and Juke All-Access when you're
+            ready to master waivers, trades, and week-to-week strategy.
           </p>
 
           {/* Two stacked 54px CTAs, mobile only. The secondary is "Explore
@@ -194,7 +191,7 @@ export default function Hero() {
               Not a tap target, so exempt from the 44px floor; 11.5px is the
               handoff's own value and sits on the type floor for mono. */}
           <p className="mt-3 text-center font-plex text-[11.5px] tracking-[0.1em] text-voidInk-muted lg:mt-5 lg:text-left">
-            FREE &middot; UNLIMITED &middot; NO ACCOUNT
+            Free Draft Room &bull; No Account Needed
           </p>
         </motion.div>
 

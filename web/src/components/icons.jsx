@@ -1,3 +1,5 @@
+import { Zap, Crown } from 'lucide-react'
+
 const base = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.6, strokeLinecap: 'round', strokeLinejoin: 'round' }
 
 export function DraftIcon(props) {
@@ -66,4 +68,46 @@ export const ROOM_ICON_BY_NAME = {
   'The Trade Room': TradeIcon,
   'The Strategy Room': StrategyIcon,
   'The League Room': LeagueIcon,
+}
+
+// Which tier unlocks each room once it ships. The Draft Room carries no
+// tier here — it's the one room that's free today, badged "Free Access" at
+// each call site instead of looked up in this table. Shared by
+// RoomsGrid.jsx and RoomsNavMenu.jsx's RoomsList (also used by
+// MobileNavSheet.jsx) for the exact reason ROOM_ICON_BY_NAME above already
+// is: a second, independent tier list in the nav dropdown is how "Free
+// Access" on the homepage and "Live" in the header dropdown ended up
+// disagreeing about the identical room in the first place.
+export const ROOM_TIER = {
+  'The Prospect Room': 'pro',
+  'The Waiver Room': 'pro',
+  'The Trade Room': 'pro',
+  'The Strategy Room': 'allAccess',
+  'The League Room': 'allAccess',
+}
+
+export const TIER_META = {
+  pro: { label: 'Juke Pro', Icon: Zap, color: '#5EEAD4', bg: 'rgba(94,234,212,0.1)' },
+  allAccess: { label: 'Juke All-Access', Icon: Crown, color: '#FBBF77', bg: 'rgba(251,191,119,0.12)' },
+}
+
+// One badge component for both surfaces, sized for the compact roadmap
+// row/nav row it always renders in — a card-sized variant was tried and
+// rejected: the only two call sites (RoomsGrid.jsx's roadmap list,
+// RoomsNavMenu.jsx's dropdown rows) are both single-line rows in a
+// constrained width, so a second size would be a distinction nothing on
+// screen needs yet.
+export function TierBadge({ tier, className = '' }) {
+  const meta = TIER_META[tier]
+  if (!meta) return null
+  const { label, Icon, color, bg } = meta
+  return (
+    <span
+      className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-[9px] py-[3px] font-numeral text-[9.5px] font-semibold tracking-[0.04em] ${className}`}
+      style={{ color, background: bg }}
+    >
+      <Icon className="h-[10px] w-[10px] shrink-0" />
+      {label}
+    </span>
+  )
 }

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { useRooms } from '../hooks/useRooms.js'
-import { ROOM_ICON_BY_NAME } from './icons.jsx'
+import { ROOM_ICON_BY_NAME, ROOM_TIER, TierBadge } from './icons.jsx'
 
 // The room rows themselves, grouped by season — shared by RoomsNavMenu
 // below (the desktop dropdown) and MobileNavSheet.jsx's own accordion, so
@@ -62,9 +62,18 @@ export function RoomsList({ rooms, modalRef, onSelect }) {
                     className="flex items-center gap-2.5 rounded-lg px-3 py-2 transition-colors hover:bg-white/[0.06]"
                   >
                     {Icon && <Icon className="h-4 w-4 shrink-0 text-mint" />}
-                    <span className="flex-1 text-sm font-semibold text-ink">{room.name}</span>
+                    {/* truncate, not just flex-1 — see the non-live row's
+                        own comment below on why a room name needs an
+                        ellipsis floor next to a tier badge. */}
+                    <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">{room.name}</span>
+                    {/* "Free Access", not "Live" — RoomsGrid.jsx's featured
+                        card carries the identical wording for the identical
+                        room; this used to say "Live" and was the one place
+                        on the page still saying it after that change, which
+                        read as two different claims about the same room
+                        depending which surface you were looking at. */}
                     <span className="shrink-0 rounded-full bg-[#08362E] px-2 py-[3px] font-numeral text-[10px] font-semibold text-[#90F4DE]">
-                      Live
+                      Free Access
                     </span>
                   </a>
                 )
@@ -81,7 +90,25 @@ export function RoomsList({ rooms, modalRef, onSelect }) {
                   className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left transition-colors hover:bg-white/[0.06]"
                 >
                   {Icon && <Icon className="h-4 w-4 shrink-0 text-ink-muted" />}
-                  <span className="flex-1 text-sm font-medium text-ink-soft">{room.name}</span>
+                  {/* min-w-0 + truncate: "Juke All-Access" is wider than
+                      "Juke Pro", and at this row's actual width (measured
+                      262px inside the 280px desktop dropdown, tighter still
+                      in MobileNavSheet's 82vw/max-w-xs sheet) that was
+                      enough to wrap "The Strategy Room" and "The League
+                      Room" onto a second line while every Pro-tier row
+                      stayed on one — a flex-1 span shrinks in width but
+                      still wraps its text by default. Ellipsis over a
+                      two-line wrap in a fixed-height dropdown row, the same
+                      "scrollWidth > clientWidth is what correct truncation
+                      looks like" rule CLAUDE.md documents for the board
+                      card's own team-name cells. */}
+                  <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink-soft">{room.name}</span>
+                  {/* Same ROOM_TIER/TierBadge RoomsGrid.jsx's roadmap list
+                      uses — these rows had no tier tag at all until now,
+                      which meant a visitor never learned Prospect/Waiver/
+                      Trade/Strategy/League were paid tiers unless they
+                      scrolled all the way to the homepage's Rooms section. */}
+                  <TierBadge tier={ROOM_TIER[room.name]} />
                 </button>
               )
             })}
@@ -148,7 +175,13 @@ export default function RoomsNavMenu({ triggerClassName, modalRef }) {
       {open && (
         <div
           role="menu"
-          className="absolute left-0 top-full z-[80] mt-2 w-[280px] rounded-xl border border-white/10 bg-slate-panel p-2 shadow-[0_24px_60px_-12px_rgba(0,0,0,0.85)]"
+          // w-[320px], was 280px — 280 was sized before the tier badges
+          // existed. Measured: "The Strategy Room" + "Juke All-Access"
+          // needs ~295px of row content alone; 320px gives that room to
+          // breathe rather than relying on the truncate fallback for the
+          // common case. The fallback still matters for the narrower
+          // MobileNavSheet, which reuses this same RoomsList at 82vw.
+          className="absolute left-0 top-full z-[80] mt-2 w-[320px] rounded-xl border border-white/10 bg-slate-panel p-2 shadow-[0_24px_60px_-12px_rgba(0,0,0,0.85)]"
         >
           <RoomsList rooms={rooms} modalRef={modalRef} onSelect={() => setOpen(false)} />
         </div>

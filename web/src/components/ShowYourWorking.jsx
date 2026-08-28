@@ -274,17 +274,25 @@ function useRoomStatus() {
   return status
 }
 
+// The inactive (Waivers/Trades, "Not live yet") state used to read
+// text-voidInk-muted for the label and text-voidInk-body for the value —
+// one step dimmer each than the active Draft row's purple label and
+// -primary value. Reported as hard to read against this card's dark
+// gradient background; the label and value now step up to the same tones
+// the active row already clears (-body and -primary respectively), so all
+// three rows share one legibility floor. The label still isn't purple and
+// the value still says "Not live yet" — brightness moved, not meaning.
 function ProofRow({ label, active, value, note }) {
   return (
     <div className="rounded-[10px] bg-surface-row px-3 py-[9px]">
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
         <span
-          className={`font-numeral text-[10.5px] font-semibold uppercase tracking-[0.13em] ${active ? '' : 'text-voidInk-muted'}`}
+          className={`font-numeral text-[10.5px] font-semibold uppercase tracking-[0.13em] ${active ? '' : 'text-voidInk-body'}`}
           style={active ? { color: '#C0ABE9' } : undefined}
         >
           {label}
         </span>
-        <span className={`text-[13.5px] font-semibold ${active ? 'text-voidInk-primary' : 'text-voidInk-body'}`}>{value}</span>
+        <span className="text-[13.5px] font-semibold text-voidInk-primary">{value}</span>
       </div>
       <p className="mt-[3px] font-numeral tabular-nums text-[10.5px] font-medium text-voidInk-muted">{note}</p>
     </div>
@@ -481,7 +489,11 @@ export default function ShowYourWorking() {
                 <span className="block h-[6px] overflow-hidden rounded-full bg-[#24262C]">
                   <span className="block h-full rounded-full bg-mint" style={{ width: `${c.weight}%` }} />
                 </span>
-                <span className="text-right font-numeral tabular-nums text-[12px] font-semibold text-voidInk-muted">{c.weight}</span>
+                {/* text-voidInk-body — same brightness bump as TakeAPick.jsx's
+                    "wt {weight}" label, the same weight number shown in the
+                    live grade widget above this section; -muted read too dim
+                    next to the brighter label and bar beside it. */}
+                <span className="text-right font-numeral tabular-nums text-[12px] font-semibold text-voidInk-body">{c.weight}</span>
               </div>
             ))}
           </div>

@@ -249,7 +249,11 @@ function GradeBar({ label, weight, before, after, animate }) {
     <div>
       <div className="flex items-baseline justify-between gap-2">
         <span className="text-[12.5px] font-medium text-voidInk-body">{label}</span>
-        <span className="font-numeral tabular-nums text-[10px] font-medium text-voidInk-muted">wt {weight}</span>
+        {/* text-voidInk-body, not -muted — measured too dim against this
+            panel's own #0E2628-adjacent surroundings next to the brighter
+            label and letter beside it; body is the next step up the same
+            scale and still reads as secondary to the label. */}
+        <span className="font-numeral tabular-nums text-[10px] font-semibold text-voidInk-body">wt {weight}</span>
       </div>
       <div className="mt-1 h-[6px] overflow-hidden rounded-full bg-white/[0.06]">
         <div

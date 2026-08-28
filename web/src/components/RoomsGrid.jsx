@@ -1,7 +1,7 @@
 import { useRef } from 'react'
 import ComingSoonModal from './ComingSoonModal.jsx'
 import PhaseRail from './PhaseRail.jsx'
-import { ROOM_ICON_BY_NAME, DraftIcon } from './icons.jsx'
+import { ROOM_ICON_BY_NAME, DraftIcon, ROOM_TIER, TierBadge } from './icons.jsx'
 import { useRooms } from '../hooks/useRooms.js'
 
 // Room data (name, blurb, lead, live flag, season) comes from app.js's
@@ -90,9 +90,15 @@ export default function RoomsGrid() {
                 {LiveIcon && <LiveIcon className="h-[18px] w-[18px] text-mint" />}
               </div>
               <span className="font-display text-[26px] font-bold italic text-mint">{liveRoom.name}</span>
+              {/* "Free Access" replaces the old "Live" text — the badge
+                  otherwise unchanged (same green active-status pill, same
+                  dot) — now that the roadmap rooms carry their own paid-tier
+                  tags (see TIER_META above) and this card needs to say what
+                  actually distinguishes it from them: not merely that it's
+                  live, but that it's free. */}
               <span className="ml-auto inline-flex shrink-0 items-center gap-[6px] rounded-full bg-[#08362E] px-[11px] py-[5px] font-numeral text-[11px] font-semibold text-[#90F4DE]">
                 <span className="h-[5px] w-[5px] shrink-0 rounded-full bg-[#7FE998]" />
-                Live
+                Free Access
               </span>
             </div>
             <p className="mt-5 text-[20px] font-bold text-voidInk-primary">{liveRoom.lead}</p>
@@ -150,8 +156,16 @@ export default function RoomsGrid() {
                         just not shown in this row. */}
                     <p className="mt-[2px] text-[14px] text-[#A2A5AA]">{room.lead}</p>
                   </div>
-                  <span className="whitespace-nowrap text-right font-numeral text-[11px] tracking-[0.06em] text-[#7D8086]">
-                    {room.season.toUpperCase()}
+                  {/* Season abbreviation stacked above the tier tag rather
+                      than beside it — both are right-aligned in the same
+                      auto column, so a side-by-side pair would have widened
+                      the column at the expense of room.lead's own line,
+                      which already runs close to the card edge at 375px. */}
+                  <span className="flex flex-col items-end gap-[6px]">
+                    <span className="whitespace-nowrap font-numeral text-[11px] tracking-[0.06em] text-[#7D8086]">
+                      {room.season.toUpperCase()}
+                    </span>
+                    <TierBadge tier={ROOM_TIER[room.name]} />
                   </span>
                 </button>
               ))}
