@@ -130,10 +130,14 @@ function useRankedRows(pool, ready, format, count) {
     })
 }
 
-// 34px | minmax(0,1fr) | 66px | 68px | 56px — §4.2's own grid, Pos/Player/
-// Proj/VORP/Surv. Shared by the header row and every data row so the two
-// can never drift out of alignment with each other.
-const ROW_GRID = 'grid-cols-[34px_minmax(0,1fr)_66px_68px_56px]'
+// 34px | minmax(0,1fr) | 56px | 62px | 52px, 10px column gap only — the
+// design handoff's own board grid (§4), narrower on the three numeric
+// columns and with no row-gap eating into the shared column gutter than
+// the figure this replaced, which is what let "Christian McCaffrey"
+// truncate in the player column at this card's width. Shared by the
+// header row and every data row so the two can never drift out of
+// alignment with each other.
+const ROW_GRID = 'grid-cols-[34px_minmax(0,1fr)_56px_62px_52px]'
 const MOBILE_ROW_GRID = 'grid-cols-[28px_minmax(0,1fr)_46px_46px_40px]'
 
 function RowCells({ row, grid, dense }) {
@@ -145,23 +149,23 @@ function RowCells({ row, grid, dense }) {
   // are relative to each other.
   const emphasized = rank <= 3
   return (
-    <div className={`grid ${grid} items-center gap-2 rounded-[11px] border border-line-hairline bg-surface-row px-[14px] py-[12px]`}>
+    <div className={`grid ${grid} items-center ${dense ? 'gap-2 px-[14px]' : 'gap-x-[10px] gap-y-0 px-3'} rounded-[11px] border border-line-hairline bg-surface-row py-[12px]`}>
       <span className={`shrink-0 rounded-md px-1.5 py-0.5 text-center text-[10px] font-bold ${POS_BADGE[player.pos] || 'bg-white/10 text-white/50'}`}>
         {player.pos}
       </span>
       <span className={`min-w-0 truncate font-semibold text-voidInk-primary ${dense ? 'text-[13px]' : 'text-[14.5px]'}`}>
         {player.name}
       </span>
-      <span className={`text-right font-plex tabular-nums text-voidInk-body ${dense ? 'text-[11px]' : 'text-[13px]'}`}>
+      <span className={`text-right font-voidNumeral tabular-nums font-semibold text-voidInk-body ${dense ? 'text-[11px]' : 'text-[13px]'}`}>
         {projPts != null ? Math.round(projPts) : '—'}
       </span>
       <span
-        className={`text-right font-plex tabular-nums font-semibold ${dense ? 'text-[11px]' : 'text-[13px]'} ${emphasized ? 'text-teal-300' : 'text-voidInk-muted'}`}
+        className={`text-right font-voidNumeral tabular-nums font-semibold ${dense ? 'text-[11px]' : 'text-[13px]'} ${emphasized ? 'text-teal-300' : 'text-voidInk-muted'}`}
       >
         {vorp >= 0 ? '+' : ''}
         {Math.round(vorp)}
       </span>
-      <span className={`text-right font-plex tabular-nums text-voidInk-muted ${dense ? 'text-[11px]' : 'text-[13px]'}`}>
+      <span className={`text-right font-voidNumeral tabular-nums font-semibold text-voidInk-muted ${dense ? 'text-[11px]' : 'text-[13px]'}`}>
         {surv != null ? `${surv}%` : '—'}
       </span>
     </div>
@@ -198,7 +202,7 @@ export default function ScoringDemoCard() {
           narrower target ever needs it. */}
       <div className="rounded-[14px] border border-line-hairline bg-surface-card p-5 lg:hidden">
         <div className="flex items-center justify-between gap-3">
-          <p className="font-plex text-[11px] font-semibold tracking-[0.12em] text-voidInk-muted">
+          <p className="font-voidNumeral text-[10.5px] font-semibold tracking-[0.13em] text-voidInk-muted">
             BOARD · SORTED BY VORP
           </p>
         </div>
@@ -223,7 +227,7 @@ export default function ScoringDemoCard() {
           ))}
         </div>
 
-        <div className={`mt-4 grid ${MOBILE_ROW_GRID} gap-2 px-[14px] font-plex text-[9px] uppercase tracking-wide text-voidInk-muted`}>
+        <div className={`mt-4 grid ${MOBILE_ROW_GRID} gap-2 px-[14px] font-voidNumeral text-[10.5px] font-semibold uppercase tracking-[0.13em] text-voidInk-muted`}>
           <span>Pos</span>
           <span>Player</span>
           <span className="text-right">Proj</span>
@@ -264,7 +268,7 @@ export default function ScoringDemoCard() {
           </div>
         </div>
 
-        <div className={`mt-4 grid ${ROW_GRID} gap-3 px-[14px] font-plex text-[10px] uppercase tracking-wide text-voidInk-muted`}>
+        <div className={`mt-4 grid ${ROW_GRID} gap-x-[10px] gap-y-0 px-3 font-voidNumeral text-[10.5px] font-semibold uppercase tracking-[0.13em] text-voidInk-muted`}>
           <span>Pos</span>
           <span>Player</span>
           <span className="text-right">Proj</span>
@@ -280,7 +284,7 @@ export default function ScoringDemoCard() {
           ))}
         </div>
 
-        <div className="mt-4 flex items-center gap-[7px] font-plex text-[11px] text-voidInk-muted">
+        <div className="mt-4 flex items-center gap-[7px] font-voidNumeral tabular-nums text-[11px] font-medium text-voidInk-muted">
           <RotateCw className="h-3 w-3 shrink-0" aria-hidden="true" />
           <span>
             Projected season points · {ppr === 1 ? '1.0' : ppr === 0.5 ? '0.5' : 'no reception bonus'}

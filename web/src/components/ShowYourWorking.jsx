@@ -128,7 +128,7 @@ function VorpChart({ format }) {
         <path d={curveD} fill="none" stroke="#5EEAD4" strokeWidth="2" />
         <line x1={PAD_L} x2={CHART_W - PAD_R} y1={replY} y2={replY} stroke="#5EEAD4" strokeWidth="1" strokeDasharray="3 3" opacity="0.55" />
         <circle cx={cutX} cy={replY} r="3" fill="#5EEAD4" />
-        <text x={cutX} y={Math.min(CHART_H - 4, replY + 15)} textAnchor="middle" fontSize="9" fontFamily="var(--font-plex, monospace)" fill="rgba(255,255,255,0.55)">
+        <text x={cutX} y={Math.min(CHART_H - 4, replY + 15)} textAnchor="middle" fontSize="9" fontFamily="'Montserrat', sans-serif" fill="rgba(255,255,255,0.55)">
           {`replacement · WR${replacementRank}`}
         </text>
       </svg>
@@ -242,7 +242,7 @@ function SurvivalChart({ data }) {
           y={Math.max(PAD_T + 9, markY - 6)}
           textAnchor={markX > CHART_W - PAD_R - 110 ? 'end' : 'start'}
           fontSize="9"
-          fontFamily="var(--font-plex, monospace)"
+          fontFamily="'Montserrat', sans-serif"
           fill="rgba(255,255,255,0.55)"
         >
           {`${markedPct}% · your next turn`}
@@ -305,14 +305,14 @@ function ProofRow({ label, active, value, note }) {
     <div className="rounded-[10px] bg-surface-row px-3 py-[9px]">
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
         <span
-          className={`font-plex text-[9.5px] font-semibold uppercase tracking-[0.1em] ${active ? '' : 'text-voidInk-muted'}`}
+          className={`font-voidNumeral text-[10.5px] font-semibold uppercase tracking-[0.13em] ${active ? '' : 'text-voidInk-muted'}`}
           style={active ? { color: '#C0ABE9' } : undefined}
         >
           {label}
         </span>
         <span className={`text-[13.5px] font-semibold ${active ? 'text-voidInk-primary' : 'text-voidInk-body'}`}>{value}</span>
       </div>
-      <p className="mt-[3px] font-plex text-[10.5px] text-voidInk-muted">{note}</p>
+      <p className="mt-[3px] font-voidNumeral tabular-nums text-[10.5px] font-medium text-voidInk-muted">{note}</p>
     </div>
   )
 }
@@ -335,7 +335,7 @@ function SameEngineCard() {
       className="flex h-full flex-col rounded-[14px] border px-[26px] py-6 transition-colors duration-200"
       style={{ borderColor: '#31293F', background: 'linear-gradient(160deg, #1D1727, #13161C 55%)' }}
     >
-      <p className="font-plex text-[11px] font-semibold tracking-[0.12em]" style={{ color: '#C0ABE9' }}>
+      <p className="font-voidNumeral text-[10.5px] font-semibold tracking-[0.13em]" style={{ color: '#C0ABE9' }}>
         04 &middot; SAME ENGINE, ALL SEASON
       </p>
       <h3 className="mt-[9px] font-voidBody text-base font-bold text-voidInk-primary">
@@ -411,7 +411,7 @@ export default function ShowYourWorking() {
       <div className="mt-[28px] grid gap-[14px] lg:grid-cols-2">
         <div className="flex h-full flex-col rounded-[14px] border border-line-hairline bg-surface-card px-[26px] py-6 transition-colors duration-200 hover:border-teal-400/70">
           <div className="flex items-start justify-between gap-3">
-            <p className="font-plex text-[11px] font-semibold tracking-[0.12em] text-[#4DDAE9]">
+            <p className="font-voidNumeral text-[10.5px] font-semibold tracking-[0.13em] text-[#4DDAE9]">
               01 &middot; VORP
             </p>
             {/* h-11 (44px) below md — §9 names this exact control ("the
@@ -443,11 +443,11 @@ export default function ShowYourWorking() {
 
         <div className="flex h-full flex-col rounded-[14px] border border-line-hairline bg-surface-card px-[26px] py-6 transition-colors duration-200 hover:border-teal-400/70">
           <div className="flex items-start justify-between gap-3">
-            <p className="font-plex text-[11px] font-semibold tracking-[0.12em] text-[#4DDAE9]">
+            <p className="font-voidNumeral text-[10.5px] font-semibold tracking-[0.13em] text-[#4DDAE9]">
               02 &middot; SURVIVAL
             </p>
             {survivalData && (
-              <span className="shrink-0 font-plex text-[11px] font-semibold text-voidInk-muted">{survivalData.player.name}</span>
+              <span className="shrink-0 font-voidNumeral tabular-nums text-[11px] font-medium text-voidInk-muted">{survivalData.player.name}</span>
             )}
           </div>
           <h3 className="mt-[9px] font-voidBody text-base font-bold text-voidInk-primary">The odds they last</h3>
@@ -462,7 +462,7 @@ export default function ShowYourWorking() {
           03 was never squeezed into a three-up row with the charts. */}
       <div className="mt-[14px] grid gap-[14px] lg:grid-cols-2">
         <div className="rounded-[14px] border border-line-hairline bg-surface-card px-[26px] py-6 transition-colors duration-200 hover:border-teal-400/70">
-          <p className="font-plex text-[11px] font-semibold tracking-[0.12em] text-[#4DDAE9]">03 &middot; THE GRADE</p>
+          <p className="font-voidNumeral text-[10.5px] font-semibold tracking-[0.13em] text-[#4DDAE9]">03 &middot; THE GRADE</p>
           <h3 className="mt-[9px] font-voidBody text-base font-bold text-voidInk-primary">Four parts, each shown</h3>
           <p className="mt-[9px] max-w-[640px] text-[15px] leading-[1.55] text-voidInk-body">{GRADE_BODY}</p>
         </div>

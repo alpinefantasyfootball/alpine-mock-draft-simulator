@@ -160,7 +160,7 @@ function RowTag({ label, tone }) {
 function BoardPanel({ scenario, phase }) {
   return (
     <div className="flex h-full flex-col px-6 py-5">
-      <p className="font-plex text-[11px] font-semibold uppercase tracking-[0.1em] text-voidInk-muted">On the board</p>
+      <p className="font-voidNumeral text-[10.5px] font-semibold uppercase tracking-[0.13em] text-voidInk-muted">On the board</p>
       <div className="mt-3 flex flex-col gap-[6px]">
         {scenario.boardRows.map((row) => {
           // Nothing is added or removed as the phase advances (§4.3) — the
@@ -210,7 +210,7 @@ function RosterPanel({ scenario, phase }) {
   const lineup = phase >= 1 ? scenario.after.lineup : scenario.before.lineup
   return (
     <div className="flex h-full flex-col border-x border-line-hairline px-6 py-5">
-      <p className="font-plex text-[11px] font-semibold uppercase tracking-[0.1em] text-voidInk-muted">
+      <p className="font-voidNumeral text-[10.5px] font-semibold uppercase tracking-[0.13em] text-voidInk-muted">
         Your roster &middot; pick {scenario.pickCode}
       </p>
       <div className="mt-3 flex flex-col gap-[6px]">
@@ -240,7 +240,7 @@ function GradeBar({ label, weight, before, after, animate }) {
     <div>
       <div className="flex items-baseline justify-between gap-2">
         <span className="text-[12.5px] font-medium text-voidInk-body">{label}</span>
-        <span className="font-plex text-[10px] text-voidInk-muted">wt {weight}</span>
+        <span className="font-voidNumeral tabular-nums text-[10px] font-medium text-voidInk-muted">wt {weight}</span>
       </div>
       <div className="mt-1 h-[6px] overflow-hidden rounded-full bg-white/[0.06]">
         <div
@@ -258,7 +258,7 @@ function GradePanel({ scenario, phase }) {
   return (
     <div className="flex h-full flex-col px-6 py-5">
       <div className="flex items-baseline justify-between gap-3">
-        <p className="font-plex text-[11px] font-semibold uppercase tracking-[0.1em] text-voidInk-muted">Draft grade &middot; live</p>
+        <p className="font-voidNumeral text-[10.5px] font-semibold uppercase tracking-[0.13em] text-voidInk-muted">Draft grade &middot; live</p>
       </div>
       <div className="mt-2 flex items-baseline gap-3">
         <span className="font-display text-[38px] font-extrabold leading-none tabular-nums text-white transition-all duration-700">{grade.composite}</span>
@@ -361,7 +361,7 @@ export default function TakeAPick() {
             aria-live="polite"
             className="mt-3 hidden min-h-[52px] items-center rounded-[14px] border border-line-hairline bg-surface-card px-4 py-3 text-[13.5px] leading-[1.5] text-voidInk-body lg:flex"
           >
-            <span className="mr-3 shrink-0 font-plex text-[10px] font-semibold uppercase tracking-wide text-teal-400">{PHASE_TAGS[phase]}</span>
+            <span className="mr-3 shrink-0 font-voidNumeral text-[10.5px] font-semibold uppercase tracking-[0.12em] text-teal-400">{PHASE_TAGS[phase]}</span>
             {caption}
           </div>
         </>
