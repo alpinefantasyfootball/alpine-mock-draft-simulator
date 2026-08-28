@@ -290,25 +290,25 @@ export default function TakeAPick() {
   const caption = useMemo(() => (scenario ? captionFor(scenario, phase) : ''), [scenario, phase])
 
   return (
-    <section className="relative mx-auto max-w-7xl px-6 py-24">
+    <section className="relative mx-auto max-w-[1200px] px-10 pb-0 pt-[96px]">
       <div className="max-w-[720px]">
         <h2 className="text-balance font-display text-[30px] font-extrabold italic leading-[1.15] tracking-[-0.015em] sm:text-[38px] sm:leading-[1.1] lg:text-[46px] lg:leading-[1.08] lg:tracking-[-0.025em]">
           Take a pick. Watch it get graded.
         </h2>
-        <p className="mt-4 text-[17px] leading-[1.55] text-voidInk-body">
+        <p className="mt-3 text-[17px] leading-[1.55] text-voidInk-body">
           Three third-round decisions, playing out. Nothing here is a marketing screenshot.
         </p>
       </div>
 
       {!scenario ? (
-        <div className="mt-[42px] h-[420px] animate-pulse rounded-[14px] bg-surface-row" />
+        <div className="mt-[28px] h-[420px] animate-pulse rounded-[14px] bg-surface-row" />
       ) : (
         <>
           {/* Dots + pause, right-aligned, above the container — desktop's
               own order per §4.3. Same row hosts both on mobile too; only
               the caption bar's position (above vs. below the panels)
               differs by width. */}
-          <div className="mt-[42px] flex items-center justify-end gap-3 lg:mt-[42px]">
+          <div className="mt-[28px] flex items-center justify-end gap-3">
             {/* Each dot's visible size stays 8px (a carousel indicator, not
                 a button, should read small) — min-h/min-w-[44px] on the
                 button itself is the actual tap target, invisible padding

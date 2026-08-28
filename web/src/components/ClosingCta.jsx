@@ -5,24 +5,17 @@
 // offer they already passed on once, not a second, slightly different pitch.
 export default function ClosingCta() {
   return (
-    <section className="relative overflow-hidden border-t border-line-hairline">
-      {/* h-[420px] with the gradient centred in the middle of it (not at
-          its bottom edge) rather than the 300px/"at 50% 100%" version this
-          replaced — that put the glow's brightest point exactly on the
-          section's own bottom edge, so the fade's other half was never
-          drawn and the visible half read as cut off by a hard straight
-          line right where the footer starts (a design review flagged this
-          precisely). Centring it gives the falloff room to reach fully
-          transparent on every side before it can meet an edge, on a
-          section short enough that the box's own top can safely run past
-          the section's — by then the gradient has nothing left to clip. */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 bottom-0 mx-auto h-[420px] w-[900px]"
-        style={{
-          background: 'radial-gradient(ellipse 900px 170px at 50% 50%, rgba(123,31,162,0.12), transparent 70%)',
-        }}
-      />
+    // A standalone band now, not a full-bleed section: margin-top: 96px per
+    // §2 rather than the padding-top-on-the-following-element pattern every
+    // other section boundary uses — this one is its own bordered, radiused
+    // panel (Design Tokens' "16 (band)" radius), so it needs a real margin
+    // outside its own box rather than padding that would sit inside the
+    // border. The old radial purple glow is gone, replaced by the panel's
+    // own gradient fill — the same "one defined surface, not an ad-hoc
+    // decorative effect" argument §1 makes for the rest of the page.
+    <section className="relative mx-auto mt-[96px] max-w-[1200px] overflow-hidden rounded-[16px] border border-line-hairline px-10 py-10"
+      style={{ background: 'linear-gradient(110deg, #151A29, #13161C 60%)' }}
+    >
       {/* flex-col below lg, same as the row it becomes at lg: one <a>,
           rendered once — a size-only responsive change, unlike Hero.jsx's
           two full alternate trees, because nothing about this band's copy
@@ -38,16 +31,16 @@ export default function ClosingCta() {
           Hero.jsx and Header.jsx's sticky bar changed with it. Full width
           and 54px tall below lg to clear the handoff's own primary-CTA
           floor. */}
-      <div className="relative mx-auto flex max-w-7xl flex-col gap-8 px-6 py-[84px] lg:flex-row lg:flex-wrap lg:items-center lg:justify-between lg:gap-12">
+      <div className="relative flex flex-col gap-8 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between lg:gap-12">
         <div>
           {/* Italic to match RoomsGrid.jsx's and ShowYourWorking.jsx's own
               section headers — a design review found this one upright
               while those two were italic, one of four different heading
               treatments on a single page. */}
-          <h2 className="font-display text-[26px] font-extrabold italic leading-[1.15] tracking-[-0.015em] text-white sm:text-[34px] sm:leading-[1.12] sm:tracking-[-0.025em]">
+          <h2 className="font-display text-[26px] font-extrabold italic leading-[1.15] tracking-[-0.015em] text-voidInk-primary sm:text-[34px] sm:leading-[1.12] sm:tracking-[-0.025em]">
             Open the Draft Room.
           </h2>
-          <p className="mt-[10px] text-base text-voidInk-body">No setup, no league import. Pick your scoring and start.</p>
+          <p className="mt-3 text-base text-voidInk-body">No setup, no league import. Pick your scoring and start.</p>
         </div>
 
         {/* data-hero-cta: same marker Hero.jsx's own CTAs carry. Header.jsx's

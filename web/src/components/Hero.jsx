@@ -18,7 +18,7 @@ export default function Hero() {
         }}
       />
 
-      <div className="relative mx-auto grid max-w-7xl gap-[72px] px-6 pb-[76px] pt-9 lg:grid-cols-[1.05fr_1fr] lg:items-center lg:pt-[92px]">
+      <div className="relative mx-auto grid max-w-[1200px] gap-[72px] px-10 pb-0 pt-[72px] lg:grid-cols-[1.05fr_1fr] lg:items-center">
         {/* min-w-0: a CSS grid item's default min-width is auto, not 0, so
             without this a wide-enough descendant (PhaseRail's mobile chip
             row, at its natural 440px) visually spills past this column's

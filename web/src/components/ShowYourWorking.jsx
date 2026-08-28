@@ -376,7 +376,7 @@ export default function ShowYourWorking() {
   const survivalData = useFeaturedSurvival()
 
   return (
-    <section id="proof" className="relative isolate mx-auto max-w-7xl px-6 py-24">
+    <section id="proof" className="relative isolate mx-auto max-w-[1200px] px-10 pb-0 pt-[96px]">
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-x-0 top-0 -z-10 mx-auto h-[400px] w-[900px]"
@@ -400,7 +400,7 @@ export default function ShowYourWorking() {
           <span className="not-italic" style={{ color: '#808389' }}>—</span>
           <span className="text-white"> No Black Box</span>
         </h2>
-        <p className="mt-4 text-[17px] leading-[1.55] text-voidInk-body">
+        <p className="mt-3 text-[17px] leading-[1.55] text-voidInk-body">
           Every number Juke prints is one you can follow. Re-calculated live off real market data.
         </p>
       </motion.div>
@@ -408,7 +408,7 @@ export default function ShowYourWorking() {
       {/* Two equal charted cards side by side, the static grade card below
           them as a full-width row (§4.4) — not squeezed into a third
           column, since it isn't a third chart. */}
-      <div className="mt-[42px] grid gap-[14px] lg:grid-cols-2">
+      <div className="mt-[28px] grid gap-[14px] lg:grid-cols-2">
         <div className="flex h-full flex-col rounded-[14px] border border-line-hairline bg-surface-card px-[26px] py-6 transition-colors duration-200 hover:border-teal-400/70">
           <div className="flex items-start justify-between gap-3">
             <p className="font-plex text-[11px] font-semibold tracking-[0.12em] text-[#4DDAE9]">

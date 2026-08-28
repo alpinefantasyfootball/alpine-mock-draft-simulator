@@ -243,8 +243,8 @@ export default function Homepage() {
           value per section, which is what "evenly spaced" actually means
           here: every gap between every pair of sections is the same
           number, not just visually close. */}
-      <footer className="border-t border-line-hairline bg-surface-nav">
-        <div className="mx-auto flex max-w-7xl flex-col gap-12 px-6 py-14 lg:grid lg:grid-cols-5 lg:gap-x-10 lg:gap-y-12">
+      <footer className="mt-[72px] border-t border-line-hairline bg-surface-nav">
+        <div className="mx-auto flex max-w-[1200px] flex-col gap-12 px-10 py-14 lg:grid lg:grid-cols-5 lg:gap-x-10 lg:gap-y-12">
           <FooterBrandStack onSocialClick={openSocial} onAppClick={openApp} />
 
           <FooterColumn title="The Rooms">
@@ -289,7 +289,7 @@ export default function Homepage() {
             that has no equivalent in a reference built for a different
             product, kept because it's true and worth keeping rather than
             cut to match a shape that has no room for it. */}
-        <div className="mx-auto flex max-w-7xl flex-col items-center gap-3 border-t border-line-divider px-6 py-6 text-center">
+        <div className="mx-auto flex max-w-[1200px] flex-col items-center gap-3 border-t border-line-divider px-10 py-6 text-center">
           <p className="max-w-[560px] text-[13px] text-voidInk-muted">
             A solo mock draft runs entirely in your browser — nothing you draft is sent anywhere.
             Drafting with your league uses a server, just for that room.
@@ -303,7 +303,7 @@ export default function Homepage() {
             fails-by-disappearing contract as the score strip), rather than
             a placeholder that would flash a wrong count for one frame. */}
         {freshness && (
-          <div className="mx-auto max-w-7xl px-6 pb-6 text-center">
+          <div className="mx-auto max-w-[1200px] px-10 pb-6 text-center">
             <p className="font-plex text-xs text-voidInk-muted">{freshness}</p>
           </div>
         )}
