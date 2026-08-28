@@ -217,7 +217,30 @@ function TimelineRow({ pick, gap, maxAbs, shortName }) {
 // so a header click can pick the team and switch to this tab in one
 // gesture). Every figure derives from viewSlot; mySlot is only for
 // telling "you" apart from a team that needs naming.
-export default function DraftInsightsDashboard({ engine, league, mySlot, viewSlot, onViewSlot, onClose }) {
+//
+// onRunAnother/cameFromLocker: this component has two call sites with two
+// different "where am I" answers, and both used to be papered over with
+// one hardcoded behavior that was only ever right for one of them.
+//
+// - DraftRoom.jsx mounts this as a real tab (view === 'insights') the
+//   moment a live draft ends: engine.restart() there does exactly what
+//   "Run another mock" should — DraftRoom itself listens for the
+//   juke:home event restart() fires and swaps its own `started` flag back
+//   to the pre-draft screen. onRunAnother defaults to that bridge call
+//   unmodified, so this call site's behavior is unchanged.
+// - DraftLocker.jsx mounts this directly over the Lobby to review a saved
+//   history entry (no live DraftRoom view-state involved at all), so
+//   engine.restart() alone had nothing local to reset: the Locker's own
+//   analyzingId state stayed truthy, this component kept trying to render
+//   a report against the now-cleared board, mine came back falsy, and the
+//   whole panel silently disappeared into nothing — reported as "nothing
+//   happens." DraftLocker passes its own onRunAnother that also clears
+//   analyzingId, so the screen falls back to the launcher instead.
+//
+// cameFromLocker suppresses "Back to the locker": that pill's only job is
+// getting back to the Locker, which is meaningless (and was reported as
+// exactly that) when the Locker is already the screen underneath.
+export default function DraftInsightsDashboard({ engine, league, mySlot, viewSlot, onViewSlot, onClose, onRunAnother, cameFromLocker = false }) {
   const analysis = engine.draftAnalysis()
   const mine = analysis && analysis[viewSlot]
   if (!mine) return null
@@ -231,7 +254,7 @@ export default function DraftInsightsDashboard({ engine, league, mySlot, viewSlo
   // never a second reset. Close/Discard are not repeated here: there is
   // no modal left to close, and the kebab menu already reaches Discard/
   // Leave the room from every tab, this one included.
-  const handleRunAnother = () => engine.restart()
+  const handleRunAnother = onRunAnother || (() => engine.restart())
 
   // Net ADP value is mine.value itself — analyseTeam()'s own unclamped
   // pick-number-minus-board-rank sum, never a second computation of the
@@ -441,12 +464,14 @@ export default function DraftInsightsDashboard({ engine, league, mySlot, viewSlo
           >
             Run another mock
           </button>
-          <a
-            href="#/drafts"
-            className="rounded-full border border-white/15 px-4 py-2 text-xs font-semibold text-white/60 transition-colors duration-150 hover:border-teal-400/60 hover:text-teal-300"
-          >
-            Back to the locker
-          </a>
+          {!cameFromLocker && (
+            <a
+              href="#/drafts"
+              className="rounded-full border border-white/15 px-4 py-2 text-xs font-semibold text-white/60 transition-colors duration-150 hover:border-teal-400/60 hover:text-teal-300"
+            >
+              Back to the locker
+            </a>
+          )}
         </div>
 
         {/* Sliding doors — the single biggest value upgrade that left the

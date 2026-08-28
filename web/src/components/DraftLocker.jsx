@@ -197,6 +197,36 @@ export default function DraftLocker({ onStartNew, problem, lobbySlot, roomActive
   }
   const deleteEntry = (id) => { engine.deleteHistoryDraft(id); forceLocal() }
 
+  // A report replaces the Lobby screen while it's open, the same way
+  // DraftRoom.jsx's own `view === 'insights'` replaces the board tab
+  // instead of appending below it — this used to render *after* the KPI
+  // row, "Your Tendencies," and the full history table inside the same
+  // flex-1 scroll region, so opening a report from any row of a long
+  // table left it sitting below all of that, off the bottom of the
+  // screen. Reported directly: users had to scroll to find it.
+  //
+  // onRunAnother does the extra local reset DraftRoom.jsx's own default
+  // (bare engine.restart()) doesn't need: DraftRoom listens for the
+  // juke:home event restart() fires and swaps its own view state, but
+  // this screen has no equivalent listener, so without clearing
+  // analyzingId here the dashboard kept trying to render a report
+  // against the just-cleared board and silently returned null — see
+  // DraftInsightsDashboard.jsx's own comment on this prop.
+  if (analyzingId) {
+    return (
+      <DraftInsightsDashboard
+        engine={engine}
+        league={league}
+        mySlot={engine.mySlot()}
+        viewSlot={insightsSlot}
+        onViewSlot={setInsightsSlot}
+        onClose={() => { engine.closeHistoryDraft(); setAnalyzingId(null) }}
+        onRunAnother={() => { engine.closeHistoryDraft(); setAnalyzingId(null); engine.restart() }}
+        cameFromLocker
+      />
+    )
+  }
+
   return (
     // min-h-full + flex-col, with the Locker table wrapper below taking
     // flex-1: the table's own card stretches down to the bottom of the
@@ -317,17 +347,6 @@ export default function DraftLocker({ onStartNew, problem, lobbySlot, roomActive
       <div className="min-h-0 flex-1">
         <LockerTable entries={completed} onAnalyze={analyze} onDeleteConfirmed={deleteEntry} />
       </div>
-
-      {analyzingId && (
-        <DraftInsightsDashboard
-          engine={engine}
-          league={league}
-          mySlot={engine.mySlot()}
-          viewSlot={insightsSlot}
-          onViewSlot={setInsightsSlot}
-          onClose={() => { engine.closeHistoryDraft(); setAnalyzingId(null) }}
-        />
-      )}
     </div>
   )
 }
