@@ -3683,6 +3683,45 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   static server. Opening a file directly no longer works — see the Stack
   section on why `file://` broke once the legacy scripts became
   root-relative.
+- **This checkout is regularly open in more than one Claude session at once,
+  and every whole-tree git command is a hazard because of it.**
+
+  Four incidents in one night, none of which reached production and all of
+  which cost time:
+
+  - `git add -A` swept **41,379 lines** of another session's untracked
+    `src/data/ep_weekly_*.csv` into an unrelated commit. Caught on the stat
+    line before pushing.
+  - `git stash push -- web/src` took another session's in-flight edits with
+    it. The pop restored them, but that was luck: the same trick lost this
+    session's own `DraftInsightsDashboard.jsx` edits an hour later.
+  - Another session's `b057176` "Sitewide font consistency" **committed and
+    pushed this session's uncommitted React work**, because it staged the
+    whole tree too. The grade-visual change is now recorded under a commit
+    titled about fonts.
+  - A `vite dev` started before another session edited `tailwind.config.js`
+    served CSS generated from a config that no longer existed — see the
+    Tailwind note below.
+
+  **`.claude/hooks/block-whole-tree-git.py` now refuses `git add -A`,
+  `git add --all`, `git add .` and the writing forms of `git stash`**, wired
+  as a `PreToolUse` hook in `.claude/settings.json`. `git stash list` and
+  `git stash show` still work, because reading is how you find out what a
+  previous session left behind. Nothing else is blocked.
+
+  Two things about it worth knowing before changing it. **It is Python, not
+  the usual `jq` one-liner, because `jq` is not installed on this machine** —
+  a hook written against a missing binary does not fail loudly, it simply
+  never fires, which is the worst possible outcome for a guardrail. And it
+  **fails open**: unparseable input exits 0 with no output, because a guard
+  that blocks work when it cannot read its own input is worse than the hazard
+  it guards against.
+
+  **The hook is a backstop, not the fix.** The fix is that a second session
+  should work in a worktree — `.claude/worktrees/` already holds four, so the
+  machinery exists and simply was not used. Stage explicit paths, never the
+  tree, and restart any dev server after another session touches config.
+
 - **A long-lived `vite dev` does not reload `tailwind.config.js`, and the way
   it fails looks like a design regression rather than a stale server.**
 
