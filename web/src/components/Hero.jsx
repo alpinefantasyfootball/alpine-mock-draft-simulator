@@ -1,7 +1,6 @@
 import { motion } from 'framer-motion'
 import { ChevronRight } from 'lucide-react'
 import ScoringDemoCard from './ScoringDemoCard.jsx'
-import PhaseRail from './PhaseRail.jsx'
 
 export default function Hero() {
   return (
@@ -20,13 +19,15 @@ export default function Hero() {
 
       <div className="relative mx-auto grid max-w-[1200px] gap-[72px] px-10 pb-0 pt-[72px] lg:grid-cols-[1.05fr_1fr] lg:items-center">
         {/* min-w-0: a CSS grid item's default min-width is auto, not 0, so
-            without this a wide-enough descendant (PhaseRail's mobile chip
-            row, at its natural 440px) visually spills past this column's
-            actual ~375px track instead of being constrained to it — the
-            grid track itself still reports the right width, only this
-            item's rendered content ignores it. Caught only because
-            PhaseRail's own overflow-x-auto had nothing bounded to scroll
-            within; the fix belongs here; on the grid item, not on the row. */}
+            without this a wide-enough descendant visually spills past this
+            column's actual track instead of being constrained to it — the
+            grid track itself still reports the right width, only an
+            unbounded child's rendered content ignores it. Originally caught
+            via PhaseRail's own mobile scroll row (its overflow-x-auto had
+            nothing bounded to scroll within); that component moved to
+            RoomsGrid.jsx in the homepage cosmetic revision (§8), but the fix
+            belongs on the grid item regardless of what's inside it, so it
+            stays as a standing guard against the same failure recurring. */}
         <motion.div
           className="min-w-0"
           initial={{ opacity: 0, y: 16 }}
@@ -182,8 +183,6 @@ export default function Hero() {
           <p className="mt-3 text-center font-plex text-[11.5px] tracking-[0.1em] text-voidInk-muted lg:mt-5 lg:text-left">
             FREE &middot; UNLIMITED &middot; NO ACCOUNT
           </p>
-
-          <PhaseRail />
         </motion.div>
 
         {/* Not rotated, not floating — squared and aligned as a real second

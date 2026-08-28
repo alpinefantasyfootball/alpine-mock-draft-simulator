@@ -5,8 +5,8 @@ import { useMemo } from 'react'
 // this says which month it is, and they only have to agree at one point.
 // Draft is that point, which is also the one room that's actually live —
 // Scout/Trade/Manage are the calendar being honest about what's coming,
-// not a claim that those rooms are clickable today (RoomsGrid below is
-// where "live" vs "coming soon" actually gets said).
+// not a claim that those rooms are clickable today (RoomsGrid's own cards
+// below this strip are where "live" vs "coming soon" actually gets said).
 const PHASES = [
   { key: 'scout', label: 'Scout', window: 'Apr – Jul', months: [4, 5, 6, 7] },
   { key: 'draft', label: 'Draft', window: 'August', months: [8] },
@@ -22,6 +22,18 @@ function currentPhaseKey() {
   return PHASES.find((p) => p.months.includes(month))?.key ?? 'draft'
 }
 
+// Homepage cosmetic revision (design_handoff_homepage_cosmetic) §8: this
+// used to sit in the hero, under the CTA pair — "five competing ideas" in
+// one section, per the handoff's own complaint. Moved here, directly above
+// RoomsGrid.jsx's own cards, where the same content (what's live, what's
+// coming, and when) is already being explained. Hero.jsx's own comment on
+// its `min-w-0` fix records where this used to live and why that fix
+// stayed behind anyway.
+//
+// The 1px-gap-over-a-hairline-background trick: the container's own
+// background is the divider colour, and a 1px gap between cells lets a
+// sliver of it show through as a hairline — no per-cell border needed, and
+// no doubled-up 2px line where two cells meet.
 export default function PhaseRail() {
   // Computed once per mount from the reader's own clock rather than
   // hardcoded — a page kept open across a month boundary is not a case
@@ -29,73 +41,29 @@ export default function PhaseRail() {
   const active = useMemo(() => currentPhaseKey(), [])
 
   return (
-    <div className="mt-9 border-t border-white/[0.06] pt-6">
-      {/* Mobile: a horizontally-scrolling row of bordered chips, the same
-          shape v3's own mobile shell uses — there's no room to connect four
-          columns with a line at 375px, and the four chips are a clearer
-          answer than a rail with three of its segments squeezed flat. */}
-      {/* min-w-0: without it this row's own intrinsic width (four
-          min-w-[104px] chips plus gaps) wins over the flex/grid column it
-          sits in, and overflow-x-auto never gets a bounded box to scroll
-          within — the row just renders full width and whatever's past the
-          viewport gets silently cut off by a page-level overflow-x-hidden
-          instead of being reachable by scrolling. Measured: without this,
-          the row was 440px wide in a 375px viewport with nothing to show
-          for it. */}
-      <div className="flex min-w-0 gap-2 overflow-x-auto pb-1 lg:hidden">
-        {PHASES.map((phase) => {
-          const isActive = phase.key === active
-          return (
-            <div
-              key={phase.key}
-              className={`flex min-w-[104px] shrink-0 flex-col gap-2 rounded-xl border px-[13px] py-[11px] ${
-                isActive ? 'border-mint/40 bg-mint/[0.06]' : 'border-white/[0.07] bg-white/[0.02]'
-              }`}
-            >
-              <div className="flex items-center gap-[7px]">
-                <span className={`h-[7px] w-[7px] shrink-0 rounded-full ${isActive ? 'bg-mint' : 'bg-white/20'}`} />
-                <span
-                  className={`font-plex text-[10px] font-semibold uppercase tracking-[0.1em] ${
-                    isActive ? 'text-white' : 'text-white/50'
-                  }`}
-                >
-                  {phase.label}
-                </span>
-              </div>
-              <span className="font-plex text-[9.5px] text-white/35">{phase.window}</span>
-            </div>
-          )
-        })}
-      </div>
-
-      {/* Desktop: the connected rail — a dot and a line per column, the
-          line only drawn toward the next column so the last one doesn't
-          trail off into nothing. */}
-      <div className="hidden lg:flex">
-        {PHASES.map((phase, i) => {
-          const isActive = phase.key === active
-          return (
-            <div key={phase.key} className="flex flex-1 flex-col gap-[9px]">
-              <div className="flex items-center">
-                <span className={`h-[9px] w-[9px] shrink-0 rounded-full ${isActive ? 'bg-mint' : 'bg-white/15'}`} />
-                {i < PHASES.length - 1 && <span className={`h-px flex-1 ${isActive ? 'bg-mint/40' : 'bg-white/10'}`} />}
-              </div>
+    <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl bg-line-hairline lg:grid-cols-4">
+      {PHASES.map((phase) => {
+        const isActive = phase.key === active
+        return (
+          <div key={phase.key} className="px-[18px] py-4" style={{ background: isActive ? '#092120' : '#12151A' }}>
+            <div className="flex items-center gap-2">
               <span
-                className={`font-plex text-[10.5px] font-semibold uppercase tracking-[0.12em] ${
-                  isActive ? 'text-white' : 'text-white/45'
-                }`}
+                className="h-[7px] w-[7px] shrink-0 rounded-full"
+                style={{ background: isActive ? '#74E5CE' : '#3A3D44' }}
+              />
+              <span
+                className="font-voidNumeral text-[11px] font-semibold uppercase tracking-[0.14em]"
+                style={{ color: isActive ? '#7EF0D7' : '#9B9EA5' }}
               >
                 {phase.label}
               </span>
-              <span className="font-plex text-[10px] text-white/30">{phase.window}</span>
             </div>
-          )
-        })}
-      </div>
-
-      <p className="mt-[18px] max-w-[46ch] text-[14.5px] leading-[1.6] text-white/55">
-        Your complete front office &mdash; every phase of the fantasy calendar, in one place.
-      </p>
+            <span className="mt-[6px] block font-voidNumeral tabular-nums text-[12px] font-medium text-voidInk-muted">
+              {phase.window}
+            </span>
+          </div>
+        )
+      })}
     </div>
   )
 }

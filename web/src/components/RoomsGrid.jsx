@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { ChevronRight } from 'lucide-react'
 import RoomCard from './RoomCard.jsx'
 import ComingSoonModal from './ComingSoonModal.jsx'
+import PhaseRail from './PhaseRail.jsx'
 import { DraftIcon, ProspectIcon, WaiverIcon, TradeIcon, StrategyIcon, LeagueIcon } from './icons.jsx'
 
 // Icons are the only thing about a room this file gets to decide — the
@@ -115,6 +116,16 @@ export default function RoomsGrid() {
             The Draft Room is live today. Five more rooms — covering the rest of the fantasy
             calendar — are on the way.
           </p>
+        </div>
+
+        {/* §8 — the Scout/Draft/Trade/Manage timeline, moved here from
+            Hero.jsx. Directly above the room cards, where what's live and
+            what's coming next is already being explained, rather than
+            competing with the hero's own headline and CTA pair. mt-[28px]
+            matches the handoff's own spacing from the intro paragraph
+            above it (also §2's subhead-to-content-block figure). */}
+        <div className="mt-[28px]">
+          <PhaseRail />
         </div>
 
         {/* ---------- Mobile: design_handoff_mobile Prompt 2 ----------
