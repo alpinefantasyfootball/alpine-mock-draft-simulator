@@ -142,7 +142,7 @@ export default function RoomPanel({ onCreated, onEnter }) {
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(link).then(() => {
         setCopied(true)
-        setTimeout(() => setCopied(false), 1500)
+        setTimeout(() => setCopied(false), 2000)
       })
     }
   }
@@ -186,7 +186,7 @@ export default function RoomPanel({ onCreated, onEnter }) {
                      transition-colors duration-200 hover:border-teal-400/60 hover:text-teal-300"
         >
           {copied ? <Check className="h-3.5 w-3.5 text-teal-400" /> : <Copy className="h-3.5 w-3.5" />}
-          {copied ? 'Copied' : 'Copy'}
+          {copied ? 'Copied!' : 'Copy'}
         </button>
       </div>
 
@@ -223,7 +223,19 @@ export default function RoomPanel({ onCreated, onEnter }) {
               }
             >
               <span className="flex min-w-0 items-center gap-1.5 truncate">
-                {isHostSeat && <Crown className="h-3.5 w-3.5 shrink-0 text-amber-300" />}
+                {/* A pill, not a bare Crown icon — the icon alone read as
+                    decoration to anyone who didn't already know what it
+                    meant. isHostSeat matches on room.hostName, not on seat
+                    index, so this stays correct even in the (currently
+                    theoretical) case a host isn't sitting in seat 1 — the
+                    same "derive it, don't assume it" reasoning DraftEngine's
+                    own pick-code math is documented on elsewhere. */}
+                {isHostSeat && (
+                  <span className="flex shrink-0 items-center gap-1 rounded-full border border-amber-400/30 bg-amber-400/10 px-1.5 py-[1px] text-[9px] font-semibold uppercase tracking-wide text-amber-300">
+                    <Crown className="h-2.5 w-2.5" />
+                    Host
+                  </span>
+                )}
                 <span className={seat.taken ? 'truncate text-white/90' : 'text-white/30'}>
                   {seat.taken ? seat.name || `Seat ${seat.index + 1}` : 'Open seat'}
                 </span>

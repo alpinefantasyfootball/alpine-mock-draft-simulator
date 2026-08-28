@@ -214,14 +214,25 @@ export default function NewMockPanel({
       </button>
       {problem && <p className="mt-2 text-[11px] leading-relaxed text-rose-300/90">{problem}</p>}
 
+      {/* px-3 py-2.5, not a bare text link — the old version had no
+          padding of its own at all, so its clickable area was exactly the
+          text's own glyph box and its only hover feedback was a small
+          color shift. rounded-lg + hover:bg gives it the same "clearly a
+          control" affordance the Copy/Sit here/Leave buttons elsewhere on
+          this screen already have, at a visibly lighter weight than the
+          gradient CTA above it — the point isn't to compete with that
+          button, just to stop being invisible until the exact moment a
+          cursor already knows to click it. */}
       <button
         type="button"
         onClick={onDraftWithFriends}
         disabled={!!problem}
         title={problem || undefined}
         className={
-          'mt-3 text-sm font-semibold transition-colors ' +
-          (problem ? 'cursor-not-allowed text-white/20' : 'text-teal-300 hover:text-teal-200')
+          'mt-3 rounded-lg px-3 py-2.5 text-center text-sm font-semibold transition-colors duration-200 ' +
+          (problem
+            ? 'cursor-not-allowed text-white/20'
+            : 'text-teal-300 hover:bg-teal-400/10 hover:text-teal-200')
         }
       >
         Draft with friends instead →

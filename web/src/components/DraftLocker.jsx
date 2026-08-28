@@ -93,7 +93,28 @@ function AnalyticsGrid({ engine, league, stats, problem, lobbySlot, roomActive, 
             Run {MIN_MOCKS_FOR_ANALYTICS - totalMocks} more mock{MIN_MOCKS_FOR_ANALYTICS - totalMocks === 1 ? '' : 's'} and
             Juke will start showing your tendencies, your projected win rate, and where each draft left value on the board.
           </p>
-          <p className="mt-3 text-xs tabular-nums text-ink-muted">
+          {/* Five dots, one per mock still needed — the same fact the
+              caption below states in words, made visible at a glance before
+              anyone reads the number. totalMocks is always <
+              MIN_MOCKS_FOR_ANALYTICS in this branch (that's the gate this
+              branch renders under), so no clamping needed on the fill
+              count. */}
+          <div
+            className="mt-4 flex items-center gap-2"
+            role="img"
+            aria-label={`${totalMocks} of ${MIN_MOCKS_FOR_ANALYTICS} mocks logged`}
+          >
+            {Array.from({ length: MIN_MOCKS_FOR_ANALYTICS }, (_, i) => (
+              <span
+                key={i}
+                className={
+                  'h-2 w-2 rounded-full transition-colors duration-300 ' +
+                  (i < totalMocks ? 'bg-teal-400 shadow-[0_0_6px_rgba(0,229,255,0.6)]' : 'border border-white/15')
+                }
+              />
+            ))}
+          </div>
+          <p className="mt-2 text-xs tabular-nums text-ink-muted">
             {totalMocks} of {MIN_MOCKS_FOR_ANALYTICS} logged so far
           </p>
         </div>
