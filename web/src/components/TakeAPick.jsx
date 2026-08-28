@@ -304,6 +304,53 @@ function GradePanel({ scenario, phase }) {
   )
 }
 
+// §12's own dot spec: 26px×4px pill active, 7px circles inactive. Each
+// dot's visible size is what the spec gives — a carousel indicator, not a
+// button, should read small — min-h/min-w-[44px] on the button itself is
+// the actual tap target, invisible padding around a small dot rather than
+// a 44px dot. Shared by the mobile and desktop rows so the two can't drift
+// on what a dot looks like.
+function ScenarioDots({ scenarios, scenarioIndex, goToScenario }) {
+  return (
+    <div className="flex items-center">
+      {scenarios.map((s, i) => (
+        <button
+          key={i}
+          type="button"
+          onClick={() => goToScenario(i)}
+          aria-label={`Scenario ${i + 1}`}
+          aria-current={i === scenarioIndex}
+          className="flex min-h-[44px] min-w-[44px] items-center justify-center"
+        >
+          <span
+            className={`rounded-full transition-all duration-300 ${
+              i === scenarioIndex ? 'h-1 w-[26px] bg-[#4DDAE9]' : 'h-[7px] w-[7px] bg-[#35383E]'
+            }`}
+          />
+        </button>
+      ))}
+    </div>
+  )
+}
+
+// §12's pause control: a 26px circle with a 1px border, the same visible-
+// size-vs-tap-target split as the dots beside it.
+function PauseButton({ paused, running, setPaused }) {
+  return (
+    <button
+      type="button"
+      onClick={() => setPaused((p) => !p)}
+      aria-label={paused ? 'Play' : 'Pause'}
+      aria-pressed={paused}
+      className="flex min-h-[44px] min-w-[44px] items-center justify-center"
+    >
+      <span className="flex h-[26px] w-[26px] items-center justify-center rounded-full border border-[#424853] text-voidInk-body transition-colors hover:text-white">
+        {paused || !running ? <PlayCircle className="h-3.5 w-3.5" /> : <PauseCircle className="h-3.5 w-3.5" />}
+      </span>
+    </button>
+  )
+}
+
 export default function TakeAPick() {
   const scenarios = useThirdRoundScenarios()
   const count = scenarios ? scenarios.length : 0
@@ -327,49 +374,14 @@ export default function TakeAPick() {
         <div className="mt-[28px] h-[420px] animate-pulse rounded-[14px] bg-surface-row" />
       ) : (
         <>
-          {/* Dots + pause, right-aligned, above the container — desktop's
-              own order per §4.3. Same row hosts both on mobile too; only
-              the caption bar's position (above vs. below the panels)
-              differs by width. */}
-          <div className="mt-[28px] flex items-center justify-end gap-3">
-            {/* Each dot's visible size stays 8px (a carousel indicator, not
-                a button, should read small) — min-h/min-w-[44px] on the
-                button itself is the actual tap target, invisible padding
-                around a small dot rather than a 44px dot. Measured at 8x8
-                before this fix, during homepage v4 pass 3's tap-target
-                audit. */}
-            <div className="flex items-center">
-              {scenarios.map((s, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => goToScenario(i)}
-                  aria-label={`Scenario ${i + 1}`}
-                  aria-current={i === scenarioIndex}
-                  className="flex min-h-[44px] min-w-[44px] items-center justify-center"
-                >
-                  <span className={`h-2 rounded-full transition-all duration-300 ${i === scenarioIndex ? 'w-6 bg-teal-400' : 'w-2 bg-white/20'}`} />
-                </button>
-              ))}
-            </div>
-            <button
-              type="button"
-              onClick={() => setPaused((p) => !p)}
-              aria-label={paused ? 'Play' : 'Pause'}
-              aria-pressed={paused}
-              className="flex h-11 w-11 items-center justify-center rounded-full text-white/50 transition-colors hover:text-white"
-            >
-              {paused || !running ? <PlayCircle className="h-5 w-5" /> : <PauseCircle className="h-5 w-5" />}
-            </button>
-          </div>
-
           {/* Mobile: caption bar above the stacked panels (§4.3), so it's
-              visible without scrolling past them. min-h reserves room for
-              the longest of the four caption shapes so the bar's own
+              visible without scrolling past them — a deliberate, unrelated
+              mobile UX call this pass doesn't touch. min-h reserves room
+              for the longest of the four caption shapes so the bar's own
               height doesn't jump between phases. */}
           <div
             aria-live="polite"
-            className="mt-3 flex min-h-[52px] items-center rounded-[14px] border border-line-hairline bg-surface-card px-4 py-3 text-[13.5px] leading-[1.5] text-voidInk-body lg:hidden"
+            className="mt-[28px] flex min-h-[52px] items-center rounded-[14px] border border-line-hairline bg-surface-card px-4 py-3 text-[13.5px] leading-[1.5] text-voidInk-body lg:hidden"
           >
             {caption}
           </div>
@@ -380,12 +392,31 @@ export default function TakeAPick() {
             <GradePanel scenario={scenario} phase={phase} />
           </div>
 
-          <div
-            aria-live="polite"
-            className="mt-3 hidden min-h-[52px] items-center rounded-[14px] border border-line-hairline bg-surface-card px-4 py-3 text-[13.5px] leading-[1.5] text-voidInk-body lg:flex"
-          >
-            <span className="mr-3 shrink-0 font-voidNumeral text-[10.5px] font-semibold uppercase tracking-[0.12em] text-teal-400">{PHASE_TAGS[phase]}</span>
-            {caption}
+          {/* §12 — dots + pause move from above the container to its
+              bottom edge. Desktop puts them on the same row as the
+              caption chip (justify-between, matching the handoff's own
+              "YOUR PICK" row); mobile's caption chip already sits above
+              the grid in its own unrelated position (see that bar's own
+              comment), so there's no single shared row for it there —
+              it gets its own row underneath instead, keeping the
+              controls reachable at every width. */}
+          <div className="mt-3 flex items-center justify-end gap-3 lg:hidden">
+            <ScenarioDots scenarios={scenarios} scenarioIndex={scenarioIndex} goToScenario={goToScenario} />
+            <PauseButton paused={paused} running={running} setPaused={setPaused} />
+          </div>
+
+          <div className="mt-3 hidden items-center justify-between gap-3 lg:flex">
+            <div
+              aria-live="polite"
+              className="flex min-h-[52px] items-center rounded-[10px] border border-line-hairline bg-surface-card px-4 py-[11px] text-[14.5px] leading-[1.5] text-voidInk-body"
+            >
+              <span className="mr-3 shrink-0 font-voidNumeral text-[10.5px] font-semibold uppercase tracking-[0.12em] text-teal-400">{PHASE_TAGS[phase]}</span>
+              {caption}
+            </div>
+            <div className="flex shrink-0 items-center gap-3">
+              <ScenarioDots scenarios={scenarios} scenarioIndex={scenarioIndex} goToScenario={goToScenario} />
+              <PauseButton paused={paused} running={running} setPaused={setPaused} />
+            </div>
           </div>
         </>
       )}
