@@ -12,6 +12,10 @@ Sources (all free, no key, no account -- except the last, which is optional)
   github.com/nflverse/nflverse-data/releases/download/...   a second, independent record of
                                                             the same football, used to CHECK
                                                             Sleeper and never to replace it
+  github.com/ffverse/ffopportunity/releases/download/...    precomputed expected fantasy
+                                                            points (xFP), display-only in
+                                                            the usage panel like the rest
+                                                            of the `u` block
 
 TANK01_KEY is read from the environment and is optional. Without it the
 crosswalk step is skipped, the build is otherwise identical, and player news
@@ -922,6 +926,87 @@ def fetch_nflverse_season(season):
     return rows
 
 
+# Expected fantasy points, from ffverse/ffopportunity's precomputed model --
+# the "what should his role have scored" number no box score can produce.
+# Keyed by the same gsis_id link_nflverse() already resolves, so it rides the
+# existing join and needs no crosswalk of its own.
+FFOPP = ("https://github.com/ffverse/ffopportunity/releases/download/"
+         "latest-data/ep_weekly_{season}.csv")
+
+# scripts/fetch_ffopportunity.py writes here, and the Tuesday workflow keeps
+# the newest season current. A season on disk is read from disk; one that is
+# not is fetched off the release -- history never changes, so only the
+# current season ever actually moves between runs.
+EP_DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                           "..", "src", "data")
+
+
+def fetch_expected_points():
+    """{season: {gsis_id: {"xf": .., "xd": ..}}}, season totals from weekly rows.
+
+    xf is the model's expected fantasy points, xd is actual minus expected --
+    stored as sent rather than recomputed, because expectation lives in
+    ffopportunity's own play-by-play model and its own scoring assumptions.
+    That makes these the one pair of usage figures the scoring editor cannot
+    move, which the panel says out loud rather than hiding.
+
+    Optional at every step, like the rest of the nflverse section: a missing
+    season, a dead release or a malformed file is a smaller usage table, and
+    every board number is untouched.
+    """
+    print("Fetching ffopportunity expected points...")
+    out = {}
+    for season in NFL_SEASONS:
+        local = os.path.join(EP_DATA_DIR, f"ep_weekly_{season}.csv")
+        if os.path.exists(local):
+            with open(local, encoding="utf-8-sig") as handle:
+                rows = list(csv.DictReader(handle))
+            source = "local"
+        else:
+            request = urllib.request.Request(
+                FFOPP.format(season=season),
+                headers={"User-Agent": "alpine-draft-room/1.0"})
+            try:
+                with urllib.request.urlopen(request, timeout=120) as response:
+                    text = response.read().decode("utf-8-sig")
+            except (urllib.error.URLError, urllib.error.HTTPError,
+                    OSError, UnicodeDecodeError):
+                print(f"  {season}: unavailable, no xFP for this season")
+                continue
+            rows = list(csv.DictReader(io.StringIO(text)))
+            source = "release"
+
+        agg = {}
+        for row in rows:
+            gsis = (row.get("player_id") or "").strip()
+            if not gsis:
+                continue
+            totals = agg.setdefault(gsis, [0.0, 0.0])
+            for i, column in enumerate(("total_fantasy_points_exp",
+                                        "total_fantasy_points_diff")):
+                try:
+                    totals[i] += float(row.get(column) or 0)
+                except ValueError:
+                    pass
+        # Rounded to one decimal and zeros dropped, the same convention the
+        # rest of the `u` block and compact() already follow: this file is a
+        # plain <script src> in front of every first paint.
+        season_map = {}
+        for gsis, (xf, xd) in agg.items():
+            one = {}
+            if round(xf, 1):
+                one["xf"] = round(xf, 1)
+            if round(xd, 1):
+                one["xd"] = round(xd, 1)
+            if one:
+                season_map[gsis] = one
+        if season_map:
+            out[season] = season_map
+        print(f"  {season}: {len(rows)} weekly lines, "
+              f"{len(season_map)} players ({source})")
+    return out
+
+
 def link_nflverse(stats, sleeper, indexes, nfl_rows):
     """Attach an nflverse gsis_id to our records, and report anything that did not.
 
@@ -1137,7 +1222,7 @@ USAGE_FIELDS = [
 ]
 
 
-def build_usage(stats, linked, nfl_seasons):
+def build_usage(stats, linked, nfl_seasons, ep_seasons=None):
     """Write record["u"], the one thing here that is not a check on Sleeper.
 
     Runs AFTER the records are built, and it has to: compact() returns a fresh
@@ -1148,22 +1233,27 @@ def build_usage(stats, linked, nfl_seasons):
     usage row always has a season block beside it to be read against. A `u`
     year with no `s` year is a row the sheet cannot place.
 
+    ep_seasons is fetch_expected_points()'s output, merged into the same
+    per-season block under `xf`/`xd`. The seasons walked are the union of the
+    two feeds, so an nflverse outage costs the shares and EPA without also
+    silently dropping xFP -- and the other way round. Both ride the same
+    gsis_id, so an unjoined player is absent from both halves at once.
+
     Returns a count rather than a report: an unjoined player is already named
     in link_nflverse()'s report, and saying it twice in one file is how a
     reader learns to skim both.
     """
+    ep_seasons = ep_seasons or {}
     written = 0
     for our_id, record in stats.items():
         their_id = linked.get(our_id)
         if not their_id:
             continue
         block = {}
-        for season, rows in nfl_seasons.items():
-            row = rows.get(their_id)
-            if not row:
-                continue
+        for season in set(nfl_seasons) | set(ep_seasons):
+            row = nfl_seasons.get(season, {}).get(their_id)
             one = {}
-            for short, column, places in USAGE_FIELDS:
+            for short, column, places in USAGE_FIELDS if row else []:
                 raw = (row.get(column) or "").strip()
                 if not raw:
                     continue
@@ -1177,6 +1267,8 @@ def build_usage(stats, linked, nfl_seasons):
                 if value == 0:
                     continue
                 one[short] = int(value) if places == 0 else value
+            # Already rounded and zero-dropped by fetch_expected_points().
+            one.update(ep_seasons.get(season, {}).get(their_id, {}))
             if one:
                 block[str(season)] = one
         if block:
@@ -1426,8 +1518,10 @@ def main():
         print("  nflverse returned nothing, so there is no audit this run")
 
     # After the records are built, because compact() rebuilds each one from
-    # STAT_FIELDS alone and would discard this without a word.
-    usage_written = build_usage(stats, nfl_linked, nfl_seasons)
+    # STAT_FIELDS alone and would discard this without a word. Expected points
+    # are only worth fetching when the gsis join exists to attach them to.
+    ep_seasons = fetch_expected_points() if nfl_linked else {}
+    usage_written = build_usage(stats, nfl_linked, nfl_seasons, ep_seasons)
 
     audit_lines, audit_flagged = audit_against_nflverse(stats, nfl_linked, nfl_seasons)
     band_lines, band_off = check_miss_bands(stats)
@@ -1634,7 +1728,8 @@ def main():
         print(f"  nflverse: {len(nfl_linked)} of {len(stats)} joined, "
               f"{audit_flagged} stat lines disagree beyond the two known definitions")
         print(f"  usage: a `u` block on {usage_written} players "
-              f"({len(NFL_SEASONS)} seasons of share, EPA and CPOE)")
+              f"({len(NFL_SEASONS)} seasons of share, EPA and CPOE; "
+              f"xFP on {len(ep_seasons)} seasons)")
     print(f"  field goal bands: "
           + (f"every season from {BAND_COMPLETE_FROM} decomposes exactly "
              f"(earlier ones are lossy at source -- see {UNMATCHED_FILE})"

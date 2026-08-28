@@ -408,6 +408,36 @@ check("no usage short key collides with a stored stat short key",
 check("no usage source column is a Sleeper key name",
       sorted(set(c for _, c, _ in bp.USAGE_FIELDS) & set(bp.STAT_FIELDS)), [])
 
+# ---- 19. expected points ride the same block ----------------------------
+#
+# fetch_expected_points() output merges into the same per-season `u` block
+# under xf/xd, on the same gsis id. The seasons walked are the union of the
+# two feeds, so either one being down costs its own columns and nothing else.
+records = {"1003": {}}
+bp.build_usage(records, {"1003": "00-01"},
+               {2025: {"00-01": usage_row(receiving_epa="12.5")}},
+               {2025: {"00-01": {"xf": 180.3, "xd": -12.1}}})
+check("expected points merge into the same season block",
+      records["1003"]["u"], {"2025": {"ep": 12.5, "xf": 180.3, "xd": -12.1}})
+
+records = {"1003": {}}
+bp.build_usage(records, {"1003": "00-01"}, {},
+               {2024: {"00-01": {"xf": 95.0}}})
+check("an nflverse outage does not silently drop xFP with it",
+      records["1003"]["u"], {"2024": {"xf": 95.0}})
+
+records = {"1003": {}}
+bp.build_usage(records, {"1003": "00-01"},
+               {2025: {"00-01": usage_row(receiving_epa="12.5")}},
+               {2025: {}})
+check("no expected points leaves the block exactly as before",
+      records["1003"]["u"], {"2025": {"ep": 12.5}})
+
+check("xf/xd do not collide with a stored stat short key",
+      sorted({"xf", "xd"} & set(bp.STAT_FIELDS.values())), [])
+check("xf/xd do not collide with another usage short key",
+      sorted({"xf", "xd"} & set(s for s, _, _ in bp.USAGE_FIELDS)), [])
+
 
 print()
 if FAILURES:
