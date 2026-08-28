@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion'
+import { X } from 'lucide-react'
 import { POS_BADGE } from './draftRoomPositions.js'
 import ShareBar from './ShareBar.jsx'
 
@@ -473,21 +474,43 @@ export default function DraftInsightsDashboard({
               <span className={isMe ? 'text-teal-300' : 'text-[#B784E0]'}>{teamName}</span>
             </h1>
           </div>
-          {/* No close/X any more — this is a tab, not a modal, so there is
-              nothing to dismiss. "Back to your team" stays: it's real
-              navigation (this report can be showing someone else's team,
-              via a board header click or a standings row below), not an
-              exit action. Never renders in history mode: effViewSlot pins to
-              effMySlot there, so isMe is always true. */}
-          {!isMe && (
+          <div className="flex shrink-0 items-center gap-2">
+            {/* "Back to your team" is real navigation (this report can be
+                showing someone else's team, via a board header click or a
+                standings row below), not an exit action. Never renders in
+                history mode: effViewSlot pins to effMySlot there, so isMe
+                is always true. */}
+            {!isMe && (
+              <button
+                type="button"
+                onClick={() => onViewSlot(mySlot)}
+                className="rounded-full border border-teal-400/40 px-3 py-1.5 text-xs font-semibold text-teal-300 transition-colors duration-150 hover:border-teal-400 hover:bg-teal-400/10"
+              >
+                Back to your team
+              </button>
+            )}
+            {/* onClose is real dismissal, unlike "Back to your team" above.
+                Used to be reasoned away here as "this is a tab, not a
+                modal, so there is nothing to dismiss" — true only for
+                DraftRoom.jsx's live tab, which sits in a tab bar a reader
+                can click away from. DraftLocker.jsx replaces the whole
+                Lobby screen with this component instead, with no tab bar
+                underneath it, and "View the full board" (the only close
+                affordance) sits at the very bottom of a long, scrollable
+                report. Reported directly: reaching it meant a browser
+                back-button rather than anything in the app. Wired to the
+                same onClose both call sites already pass — DraftRoom.jsx's
+                own "View the full board" button lower down and this one
+                do the identical thing there too, just from the top. */}
             <button
               type="button"
-              onClick={() => onViewSlot(mySlot)}
-              className="shrink-0 rounded-full border border-teal-400/40 px-3 py-1.5 text-xs font-semibold text-teal-300 transition-colors duration-150 hover:border-teal-400 hover:bg-teal-400/10"
+              onClick={onClose}
+              aria-label="Close report"
+              className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 text-white/50 transition-colors duration-150 hover:border-white/30 hover:text-white"
             >
-              Back to your team
+              <X className="h-4 w-4" aria-hidden="true" />
             </button>
-          )}
+          </div>
         </div>
 
         {/* Summary card — the grade, large and glowing, in the two brand
