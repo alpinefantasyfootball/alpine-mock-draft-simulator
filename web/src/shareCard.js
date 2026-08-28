@@ -143,13 +143,37 @@ export async function drawShareCard(data) {
      beside it.
 
      Deriving the size means the next face change is a re-render rather than a
-     redraw. The budget: the column's widest line is the score
-     ("100 / 100 weighted score", 307px at 26px Inter), it has to clear the
-     panel with a margin, and everything left of it is the grade plus the gap.
-     Single-glyph grades keep the full 300px, since they were never the problem.
-     Swept across all thirteen grades: every one clears both the panel and the
-     grade beside it. */
-  const RANK_COL_W = 307
+     redraw. The budget: the column's widest line has to clear the panel with a
+     margin, and everything left of it is the grade plus the gap. Single-glyph
+     grades keep the full 300px, since they were never the problem. Swept
+     across all thirteen grades: every one clears both the panel and the grade
+     beside it.
+
+     The widest line used to be the weighted score ("100 / 100 weighted score",
+     307px at 26px Inter). That line is gone — a letter grade sitting beside an
+     x/100 reads against twelve years of schooling that says A means 90+, and
+     this card was printing "A" next to 69. The letter is finishing position
+     and always was; the number was a room-relative composite on a different
+     scale, and no arrangement of the two survives a reader applying the
+     meaning they already have. See the grade section in CLAUDE.md for the
+     measurements behind dropping it rather than recurving it.
+
+     So the widest line is now the rank, and the constant is re-derived rather
+     than left at a figure describing a line that no longer exists: measured
+     with Archivo actually loaded, "24th of 24" is 206px at 700 44px, the worst
+     of every realistic rank-and-size pair.
+
+     230 rather than 206, because this constant *is* the clearance — the grade
+     grows until the rank column starts at exactly `PANEL_X - 24 - RANK_COL_W`,
+     so the gap between the longest rank line and the panel is
+     `RANK_COL_W - rankWidth` and nothing else. At 210 that came out 6px on a
+     24-team card, which is not a margin, it is a near miss that the next face
+     change turns into an overlap. 230 leaves 24px, the same gutter the panel
+     already keeps.
+
+     The grade still gets most of the freed width: a two-glyph grade rendered
+     208px against the old 307-wide column and renders 262px against this one. */
+  const RANK_COL_W = 230
   const GRADE_GAP = 40
   const rankXMax = PANEL_X - 24 - RANK_COL_W
   ctx.font = `900 ${GRADE_MAX_PX}px "Archivo", sans-serif`
@@ -177,13 +201,14 @@ export async function drawShareCard(data) {
   ctx.fillText(data.grade, TEXT_X, 520)
   ctx.shadowBlur = 0
 
+  /* One line now, so it is centred on the grade rather than left where the
+     top half of a pair used to sit. The two lines were at 400 and 444, an
+     optical centre near 422; a single 44px line reaches the same centre with
+     its baseline at 430. */
   const rankX = TEXT_X + gradeWidth + GRADE_GAP
   ctx.fillStyle = '#FFFFFF'
   ctx.font = '700 44px "Archivo", sans-serif'
-  ctx.fillText(`${data.rankText} of ${data.teams}`, rankX, 400)
-  ctx.fillStyle = 'rgba(255,255,255,0.5)'
-  ctx.font = '400 26px "Inter", sans-serif'
-  ctx.fillText(`${data.total} / 100 weighted score`, rankX, 444)
+  ctx.fillText(`${data.rankText} of ${data.teams}`, rankX, 430)
 
   // component panel, right side
   const px = PANEL_X
