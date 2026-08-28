@@ -211,7 +211,7 @@ export default function Homepage() {
   const roomLinkClass = 'flex min-h-[44px] items-center text-sm text-voidInk-body transition-colors hover:text-white lg:min-h-0 lg:text-[13px]'
 
   return (
-    <div className="min-h-screen overflow-x-hidden bg-surface-page text-voidInk-primary">
+    <div className="min-h-screen overflow-x-hidden bg-surface-page font-voidBody text-voidInk-primary">
       <Header />
 
       {/* The fixed header is just its nav row now — the status strip that

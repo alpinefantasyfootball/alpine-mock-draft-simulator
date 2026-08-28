@@ -338,7 +338,7 @@ function SameEngineCard() {
       <p className="font-plex text-[11px] font-semibold tracking-[0.12em]" style={{ color: '#C0ABE9' }}>
         04 &middot; SAME ENGINE, ALL SEASON
       </p>
-      <h3 className="mt-[9px] font-display text-[17px] font-bold text-voidInk-primary">
+      <h3 className="mt-[9px] font-voidBody text-base font-bold text-voidInk-primary">
         Draft grades today. Waivers and trades once those rooms open.
       </h3>
       <p className="mt-[9px] text-[15px] leading-[1.55] text-voidInk-body">
@@ -391,7 +391,7 @@ export default function ShowYourWorking() {
         transition={{ duration: 0.6 }}
         className="max-w-[720px]"
       >
-        <h2 className="text-balance font-display text-[30px] font-extrabold italic leading-[1.15] tracking-[-0.015em] sm:text-[38px] sm:leading-[1.1] lg:text-[46px] lg:leading-[1.08] lg:tracking-[-0.025em]">
+        <h2 className="text-balance font-display text-[clamp(32px,3.6vw,48px)] font-extrabold italic leading-none">
           <span className="text-white">Show Your Working </span>
           {/* text-white/25 measured 2.13:1 here — under even the 3:1 bar
               large bold text gets, pre-existing and found during homepage
@@ -434,7 +434,7 @@ export default function ShowYourWorking() {
               ))}
             </div>
           </div>
-          <h3 className="mt-[9px] font-display text-[17px] font-bold text-voidInk-primary">Value over replacement</h3>
+          <h3 className="mt-[9px] font-voidBody text-base font-bold text-voidInk-primary">Value over replacement</h3>
           <p className="mt-[9px] text-[15px] leading-[1.55] text-voidInk-body">
             Every player is scored against the last startable player at their position, not against each other.
           </p>
@@ -450,7 +450,7 @@ export default function ShowYourWorking() {
               <span className="shrink-0 font-plex text-[11px] font-semibold text-voidInk-muted">{survivalData.player.name}</span>
             )}
           </div>
-          <h3 className="mt-[9px] font-display text-[17px] font-bold text-voidInk-primary">The odds they last</h3>
+          <h3 className="mt-[9px] font-voidBody text-base font-bold text-voidInk-primary">The odds they last</h3>
           <p className="mt-[9px] text-[15px] leading-[1.55] text-voidInk-body">{SURVIVAL_BODY}</p>
           <SurvivalChart data={survivalData} />
         </div>
@@ -463,7 +463,7 @@ export default function ShowYourWorking() {
       <div className="mt-[14px] grid gap-[14px] lg:grid-cols-2">
         <div className="rounded-[14px] border border-line-hairline bg-surface-card px-[26px] py-6 transition-colors duration-200 hover:border-teal-400/70">
           <p className="font-plex text-[11px] font-semibold tracking-[0.12em] text-[#4DDAE9]">03 &middot; THE GRADE</p>
-          <h3 className="mt-[9px] font-display text-[17px] font-bold text-voidInk-primary">Four parts, each shown</h3>
+          <h3 className="mt-[9px] font-voidBody text-base font-bold text-voidInk-primary">Four parts, each shown</h3>
           <p className="mt-[9px] max-w-[640px] text-[15px] leading-[1.55] text-voidInk-body">{GRADE_BODY}</p>
         </div>
         <SameEngineCard />

@@ -37,10 +37,10 @@ export default function ClosingCta() {
               section headers — a design review found this one upright
               while those two were italic, one of four different heading
               treatments on a single page. */}
-          <h2 className="font-display text-[26px] font-extrabold italic leading-[1.15] tracking-[-0.015em] text-voidInk-primary sm:text-[34px] sm:leading-[1.12] sm:tracking-[-0.025em]">
+          <h2 className="font-display text-[clamp(30px,3vw,40px)] font-extrabold italic leading-none text-voidInk-primary">
             Open the Draft Room.
           </h2>
-          <p className="mt-3 text-base text-voidInk-body">No setup, no league import. Pick your scoring and start.</p>
+          <p className="mt-3 text-[17px] text-voidInk-body">No setup, no league import. Pick your scoring and start.</p>
         </div>
 
         {/* data-hero-cta: same marker Hero.jsx's own CTAs carry. Header.jsx's

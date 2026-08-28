@@ -181,6 +181,24 @@ export default {
         // extra network request, it just points at the font that's there.
         display: ['"Barlow Condensed"', '"Arial Narrow"', 'system-ui', 'sans-serif'],
         body: ['"Inter"', 'system-ui', 'sans-serif'],
+        // ---- Homepage cosmetic revision (design_handoff_homepage_cosmetic) §3 ----
+        // Not a redefinition of `body` above: `font-body` (Inter) is real,
+        // shipped weight in three Draft Room Cockpit components
+        // (DraftEntryScreen.jsx, DraftCockpitHeader.jsx, NewMockPanel.jsx) —
+        // this handoff is homepage-only, and the homepage itself never
+        // actually applies `font-body` anywhere (checked: zero call sites),
+        // so it has been rendering in the bare browser/OS sans stack this
+        // whole time, not Inter. Redefining `body` in place would silently
+        // reskin the Cockpit and still do nothing for the homepage — two
+        // reasons at once to scope this to its own name instead, the same
+        // call already made for `voidInk` above.
+        voidBody: ['"Hanken Grotesk"', 'system-ui', 'sans-serif'],
+        // §4's replacement for `font-plex` (IBM Plex Mono) on every
+        // eyebrow label and numeral across the homepage's own components —
+        // applied there in that change, not this one. `plex` itself stays
+        // exactly as it is: the Draft Room Cockpit's pick codes and team
+        // abbreviations still read it.
+        voidNumeral: ['"Montserrat"', 'system-ui', 'sans-serif'],
         // A new, separate token — not `mono` itself, so a page still using
         // bare `font-mono` (Tailwind's own system-mono fallback) never gets
         // silently reskinned just because this file changed. That was the

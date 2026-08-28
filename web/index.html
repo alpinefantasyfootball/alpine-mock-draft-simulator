@@ -48,10 +48,22 @@
        font-display/font-body (tailwind.config.js), shared with the whole
        Draft Room, which this pass does not touch. Two families instead of
        four on this one request now, and the two preconnects below still
-       earn their keep for it. -->
+       earn their keep for it.
+
+       Homepage cosmetic revision (design_handoff_homepage_cosmetic) §3
+       added Hanken Grotesk and Montserrat to this same request —
+       voidBody/voidNumeral (tailwind.config.js), homepage-only. And it
+       widened Barlow Condensed's own weight list: every font-display
+       heading on this page (and several in the Draft Room) has always
+       been styled `italic`, but only upright 600/700 were ever actually
+       requested — so every one of them has been rendering a
+       browser-synthesized oblique this whole time, not Barlow Condensed's
+       real italic. `ital,wght@0,600;0,700;1,700;1,800` adds true italic at
+       the two weights actually used (700/800), without dropping the
+       existing upright 600/700 that everything else on the page reads. -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,600;0,700;1,700;1,800&family=Hanken+Grotesk:wght@400;500;600;700&family=Montserrat:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <!-- The two self-hosted faces actually on screen before anything else
        loads: the JUKE wordmark in the nav (Archivo, every weight in one
        variable file) and the header ticker's "N players" badge (IBM Plex

@@ -70,7 +70,7 @@ export default function Hero() {
               A condensed face is what makes 46px fit 390px at all: "Master
               the draft." at 39px Archivo was already close to the padding,
               and this is seven points larger. */}
-          <h1 className="mt-5 text-balance font-display text-[46px] font-extrabold italic leading-[1.04] tracking-[-0.02em] sm:mt-7 sm:text-[52px] sm:leading-[1.04] lg:text-[64px] lg:leading-[1.03] lg:tracking-[-0.032em]">
+          <h1 className="mt-5 text-balance font-display text-[clamp(42px,5.4vw,76px)] font-extrabold italic leading-[0.94] tracking-[-0.005em] sm:mt-7">
             <span className="text-white">Master the draft.</span>
             <br />
             <span className="text-mint">Dominate the season.</span>
@@ -94,7 +94,7 @@ export default function Hero() {
               "pre-season scouting" and "a championship push" are two of the
               other five rooms on the same roadmap, not the one that's live.
               Price still lives only in the mono line under the CTA pair. */}
-          <p className="mt-4 max-w-[480px] text-pretty text-base leading-[1.55] text-voidInk-body lg:mt-6 lg:max-w-[530px] lg:text-[17.5px] lg:leading-[1.6]">
+          <p className="mt-4 max-w-[520px] text-pretty text-[19px] leading-[1.5] text-voidInk-body lg:mt-6">
             From pre-season scouting to a championship push, dominate every phase of the fantasy calendar.
           </p>
 

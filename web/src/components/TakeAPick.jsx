@@ -292,7 +292,7 @@ export default function TakeAPick() {
   return (
     <section className="relative mx-auto max-w-[1200px] px-10 pb-0 pt-[96px]">
       <div className="max-w-[720px]">
-        <h2 className="text-balance font-display text-[30px] font-extrabold italic leading-[1.15] tracking-[-0.015em] sm:text-[38px] sm:leading-[1.1] lg:text-[46px] lg:leading-[1.08] lg:tracking-[-0.025em]">
+        <h2 className="text-balance font-display text-[clamp(32px,3.6vw,48px)] font-extrabold italic leading-none">
           Take a pick. Watch it get graded.
         </h2>
         <p className="mt-3 text-[17px] leading-[1.55] text-voidInk-body">

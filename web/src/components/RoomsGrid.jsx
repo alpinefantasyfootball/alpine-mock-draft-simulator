@@ -102,7 +102,7 @@ export default function RoomsGrid() {
           <span className="inline-flex items-center gap-[9px] rounded-full border border-mint/30 bg-mint/[0.06] px-[15px] py-[7px] text-[11.5px] font-bold tracking-[0.13em] text-mint">
             THE SEASON-LONG SYSTEM
           </span>
-          <h2 className="mt-4 font-display text-[30px] font-extrabold italic leading-[1.15] tracking-[-0.015em] text-white sm:text-[38px] sm:leading-[1.1] lg:text-[46px] lg:leading-[1.08] lg:tracking-[-0.025em]">
+          <h2 className="mt-4 font-display text-[clamp(32px,3.6vw,48px)] font-extrabold italic leading-none text-white">
             The Rooms
           </h2>
           {/* The forward-looking claim the hero used to open with, moved
