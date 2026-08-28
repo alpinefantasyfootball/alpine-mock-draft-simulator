@@ -257,13 +257,31 @@ function GradePanel({ scenario, phase }) {
   const grade = animate ? scenario.after : scenario.before
   return (
     <div className="flex h-full flex-col px-6 py-5">
-      <div className="flex items-baseline justify-between gap-3">
-        <p className="font-voidNumeral text-[10.5px] font-semibold uppercase tracking-[0.13em] text-voidInk-muted">Draft grade &middot; live</p>
-      </div>
-      <div className="mt-2 flex items-baseline gap-3">
-        <span className="font-display text-[38px] font-extrabold leading-none tabular-nums text-white transition-all duration-700">{grade.composite}</span>
-        <span className="font-plex text-[13px] text-[#8e9aa1]">/ 100 &middot; after {grade.picksMade} picks</span>
-        <span className="ml-auto font-display text-[22px] font-bold text-teal-300 transition-all duration-700">{grade.letter}</span>
+      <p className="font-voidNumeral text-[10.5px] font-semibold uppercase tracking-[0.13em] text-voidInk-muted">Draft grade &middot; live</p>
+      {/* §5's restructure — production used to render the number and the
+          letter ~450px apart with the "/100 · after N picks" line sandwiched
+          between them, which read as "29 C / 100" rather than one grade.
+          flex/justify-between puts the score on the left and the letter chip
+          on the right, the two halves of one fact rather than three loose
+          pieces in a row. Unlike ShowYourWorking.jsx's SameEngineCard (see
+          that file's own comment), this stays real, animating scenario data
+          — freezing the one live "watch it get graded" number on the page
+          would undercut the section's whole premise. */}
+      <div className="mt-3 flex items-center justify-between gap-3">
+        <div>
+          <div className="flex items-baseline gap-[2px] font-voidNumeral tabular-nums leading-none">
+            <span className="text-[52px] font-bold text-voidInk-primary transition-all duration-700">{grade.composite}</span>
+            <span className="text-[26px] font-semibold text-[#7D8086]">/100</span>
+          </div>
+          <p className="mt-2 font-voidNumeral tabular-nums text-[12.5px] font-medium text-[#83868C]">after {grade.picksMade} picks</p>
+        </div>
+        <div
+          className="flex flex-col items-center gap-[3px] rounded-xl border px-4 py-[9px]"
+          style={{ background: '#0E2628', borderColor: '#155157' }}
+        >
+          <span className="font-voidNumeral text-[30px] font-bold leading-none text-[#59E4F3] transition-all duration-700">{grade.letter}</span>
+          <span className="font-voidNumeral text-[9px] font-semibold tracking-[0.14em] text-[#82A6AA]">GRADE</span>
+        </div>
       </div>
       <div className="mt-4 flex flex-col gap-3">
         {COMPONENT_LABELS.map((c) => (

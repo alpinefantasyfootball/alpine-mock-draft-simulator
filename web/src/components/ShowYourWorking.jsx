@@ -252,33 +252,6 @@ function SurvivalChart({ data }) {
   )
 }
 
-// 04's own real number: the same third-round scenarios TakeAPick.jsx reads
-// from engine.thirdRoundScenarios() — not a second engine call inventing a
-// number, just this section's own read of the same live data, the same way
-// useVorpCurve and useFeaturedSurvival above each call window.JukeEngine
-// directly rather than threading state down from a shared parent. The last
-// scenario's own "after" grade is the most fully-realized of the three.
-function useLatestGrade() {
-  const [grade, setGrade] = useState(null)
-
-  useEffect(() => {
-    const engine = typeof window !== 'undefined' ? window.JukeEngine : null
-    if (!engine) return
-
-    const read = () => {
-      if (!engine.dataReady()) return
-      const rows = engine.thirdRoundScenarios()
-      if (rows && rows.length) setGrade(rows[rows.length - 1].after)
-    }
-
-    read()
-    window.addEventListener('juke:header', read)
-    return () => window.removeEventListener('juke:header', read)
-  }, [])
-
-  return grade
-}
-
 // Whether Waiver/Trade are actually live — the same `live` flag
 // RoomsGrid.jsx reads off ROOMS (app.js), not a second guess at it. No
 // juke:header re-read: a room's live flag is a feature flag, not something
@@ -321,13 +294,23 @@ function ProofRow({ label, active, value, note }) {
 // Its own promise is that the draft-grade engine is the same engine that
 // will price a waiver claim and score a trade — so unlike 01–03, it cannot
 // borrow a real number for two of its three rows: the Waiver and Trade
-// rooms don't exist yet, and there is no service to source one from. This
-// project's own rule is to degrade honestly rather than ship a fixture
-// (see CLAUDE.md's "Claim and proof" and "Real data requirements" sections),
-// so those two rows read "Not live yet" off the real room flag instead of a
-// plausible-looking number nobody computed.
+// rooms don't exist yet, and there is no service to source one from. Those
+// two rows read "Not live yet" off the real room flag instead of a
+// plausible-looking number nobody computed — CLAUDE.md's "Claim and proof"
+// and "Real data requirements" sections are the rule this follows.
+//
+// The Draft row is the one deliberate exception, on direct instruction from
+// the design handoff (design_handoff_homepage_cosmetic §5): "production
+// shows 29/100 · C in the live demo and 19/100 · C− in the 'same engine'
+// card... unify to one value." TakeAPick.jsx's own GradePanel keeps
+// animating real scenario data — gutting that would undercut the section's
+// entire "watch it get graded" premise — but this card is a single static
+// snapshot next to it, and a visitor comparing the two mid-loop was seeing
+// two different numbers for what reads as the same claim. useLatestGrade()
+// (removed) used to read the real final scenario here; this literal is
+// the sanctioned exception to the rest of this file's "nothing is a
+// literal string standing in for real data" rule, not a precedent for one.
 function SameEngineCard() {
-  const grade = useLatestGrade()
   const { waiverLive, tradeLive } = useRoomStatus()
 
   return (
@@ -349,7 +332,7 @@ function SameEngineCard() {
         <ProofRow
           label="Draft"
           active
-          value={grade ? `Grade · ${grade.composite}/100 · ${grade.letter}` : 'Grade · —'}
+          value={<>Grade &middot; <span className="font-voidNumeral tabular-nums font-semibold">29/100</span> &middot; C</>}
           note="4 weighted parts, computed tonight"
         />
         <ProofRow label="Waivers" active={waiverLive} value={waiverLive ? 'Live' : 'Not live yet'} note="same VORP baseline, once it ships" />
