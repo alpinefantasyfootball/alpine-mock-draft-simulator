@@ -1051,6 +1051,58 @@ rank width and nothing else, so 210 produced a 6px near-miss on a 24-team card.
 from 208px to 262. **A constant derived from a string is wrong the moment that
 string changes** — and it fails as a collision, not as an error.
 
+### Roster construction is the one component that is not scaled
+
+Reported by the owner: *why is roster construction 0 on a mock I got a B and
+finished 5th of 10 in?* Because `build` was going through `scaleAcross()`, and
+it is the one component that should never have.
+
+The other three are in their own units — points over par, picks over par,
+squared starters off in a week — so they have to be projected onto the 0-100
+the weights are applied to. **`build` is already that**: it starts at 100 and
+subtracts named penalties, so it is an absolute score, comparable across rooms,
+before scaling ever sees it. Putting it through a second transform is what
+produced the number.
+
+**And the second transform destroyed the information.** `scaleAcross()` is
+min-max, the nine CPU seats build to one rule and cluster at the top, so a
+human is the room's minimum almost every time — and the minimum is 0 by
+construction. Measured over ten rooms with one realistically imperfect human in
+each: **the human read 0 on eight of ten**, with raw builds of 44, 47, 54, 60,
+67, 73, 76 and 79. A roster worth 79 and one worth 44 printed the same 0. It
+was not a harsh number, it was an empty one. The owner's case reproduces
+exactly: raw 79, scaled 0, grade B, 5th of 10.
+
+The cliff was sharp and close to ordinary. In a typical room the raw values sit
+83–98, span 15, which is under the old `MIN_SPAN.build` of 20 — so the
+denominator was the floor, the midpoint sat at 90.5, and **anything at or below
+81 clamped to 0**: no RB cover read 38, no RB *or* WR cover read 0.
+
+**`buildScaled` is aliased to `build` now**, rather than the key being dropped,
+because every consumer reads that name — both dashboards' bars, the
+weighted-sum line that has to reconcile against them, the share card, the
+specs. One name, one number, and the panel still adds up.
+
+**The cost is real and is not hidden.** Build's share of the finishing order
+falls from **13.8% to 5.1%** against a stated 15%, measured on rooms with a
+human in them. That is the honest consequence of a component that varies less
+than the scaling made it appear to, and it is the trade this file's own rule
+asks for: a number nobody can act on is worth less than a number that moves the
+grade. **Whether 15% is still the right weight is a separate question and has
+not been answered.**
+
+`MIN_SPAN` has no `build` key any more — a floor for something nothing scales
+is a number nothing reads.
+
+**The caption had to change with it.** It was `me.build + " / 100"`, which
+under a raw headline is the same number twice. `buildText()` names what cost
+the points instead — "no RB cover", "2 spare QB", "1 empty starting slot" — and
+it lives in the engine beside the arithmetic that assigns them, the same
+contract `parText()` and `usageFor()` already have. **It has to name partial
+charges too**: cover is graded rather than a cliff, so naming only total
+absence printed "nothing missing" on a roster scoring 86 — a caption
+disagreeing with its own headline by fourteen points.
+
 **`build` is floored at zero, because it is printed as "x / 100".** Three
 rounds in, with six starting slots still empty, the bar read
 `Roster construction: -8 / 100` — nine holes at fourteen each and no cover at

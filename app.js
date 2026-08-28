@@ -3891,6 +3891,39 @@ function parText(t) {
    scored against par for the chair and the raw figure is what the timeline
    panel's own bars add up to, so one caption has to carry both or the two
    screens disagree about what "draft value" is. */
+/* The caption under the roster-construction bar. The headline is now the raw
+   score itself, so "76 / 100" underneath it was the same number twice; this
+   says what actually cost the points instead. Named in the engine, beside the
+   arithmetic that assigns them, for the same reason parText() is: a component
+   that composes its own explanation drifts from the number it explains. */
+function buildText(t) {
+  if (!t.lineup) return t.build + " / 100";
+  const gaps = [];
+  const holes = t.lineup.filter((s) => !s.player).length;
+  if (holes) gaps.push(holes + (holes === 1 ? " empty starting slot" : " empty starting slots"));
+  ["QB", "K", "DST"].forEach(function (pos) {
+    const allowed = league.starters[pos] + (pos === "QB" ? league.superflex : 0);
+    const over = Math.max(0, countAt(t.slot, pos) - allowed);
+    if (over) gaps.push(over + " spare " + posLabel(pos));
+  });
+  /* Cover is graded rather than a cliff — the penalty scales with how far past
+     replacement the best benched player is — so this has to name a partial
+     charge too. Naming only total absence produced "nothing missing" on a
+     roster scoring 86, which is the caption disagreeing with its own headline
+     by fourteen points. */
+  const benched = t.roster.filter((p) => !t.lineup.some((s) => s.player === p));
+  ["RB", "WR"].forEach(function (pos) {
+    if (!league.starters[pos]) return;
+    const rankOf = (p) => p.projPosRank || Infinity;
+    const best = benched.filter((p) => p.pos === pos)
+      .sort((a, b) => rankOf(a) - rankOf(b))[0];
+    const past = best ? rankOf(best) - replacementRank(pos) : 15;
+    if (past >= 15) gaps.push("no " + pos + " cover");
+    else if (past > 0) gaps.push("thin " + pos + " cover");
+  });
+  return gaps.length ? gaps.join(" · ") : "nothing missing";
+}
+
 function parValueText(t) {
   // One minus glyph in one string. Number#toString gives an ASCII hyphen and
   // the vs-par half is built with a real minus (U+2212, the same one
@@ -4179,7 +4212,12 @@ function analyseTeam(slot, extra) {
      derived from replacement-relative rank distances rather than from an
      independent error model, and it is calibrated from observed spans. If
      build ever gets a real error model, this is the number to revisit. */
-const MIN_SPAN = { startersVsPar: 20, valueVsPar: 35, build: 20, byePenalty: 20 };
+/* No `build` key any more: it is not scaled at all (see analyseDraft), so a
+   floor for it would be a number nothing reads. Its old entry was already the
+   weakest-justified of the four by this file's own admission — calibrated from
+   observed spans rather than an error model — and it was the mechanism behind
+   the roster-construction 0. */
+const MIN_SPAN = { startersVsPar: 20, valueVsPar: 35, byePenalty: 20 };
 
 function scaleAcross(all, key) {
   const values = all.map((t) => t[key]);
@@ -4211,10 +4249,41 @@ function analyseDraft() {
      scaled starter figures on one object for somebody to pick the wrong one
      out of. The raw `starters` and `par` are both still on there for anything
      that wants to show the working. */
-  ["startersVsPar", "valueVsPar", "build", "byePenalty"].forEach((k) => scaleAcross(all, k));
+  /* build is deliberately not scaled, and it is the one component that never
+     should have been.
+
+     The other three are in their own units — points over par, picks over par,
+     squared starters off in a week — so they have to be projected onto the
+     0-100 the weights are applied to. `build` is already that: it starts at
+     100 and subtracts named penalties, so it is an absolute score, comparable
+     across rooms, before scaleAcross() ever sees it. Putting it through a
+     second transform is what produced the number the owner reported.
+
+     What that second transform did, measured over ten rooms with one
+     realistically imperfect human in each: the human read **0 on eight of
+     ten**, with raw builds of 44, 47, 54, 60, 67, 73, 76 and 79. A roster
+     worth 79 and one worth 44 printed the same 0. That is not a harsh number,
+     it is an empty one — scaleAcross() is min-max, the nine CPU seats build to
+     one rule and cluster at the top, so the human is the minimum almost every
+     time and the minimum is 0 by construction. Reported as "roster
+     construction 0 on a mock I got a B and finished 5th in", which reproduces
+     exactly: raw 79, scaled 0, grade B, 5th of 10.
+
+     The cost is real and is not hidden: build's share of the finishing order
+     falls from 13.8% to 5.1%, against a stated 15%. That is the honest
+     consequence of a component that genuinely varies less than the scaling
+     was making it appear to, and it is the trade this file's own rule asks
+     for — a number nobody can act on is worth less than a number that moves
+     the grade. Whether 15% is still the right weight for it is a separate
+     question and has not been answered here. */
+  ["startersVsPar", "valueVsPar", "byePenalty"].forEach((k) => scaleAcross(all, k));
   all.forEach(function (t) {
     t.startersScaled = t.startersVsParScaled;
     t.valueScaled    = t.valueVsParScaled;
+    /* Aliased rather than left absent, because every consumer reads this name
+       — the bars, the weighted-sum line that has to reconcile against them,
+       the share card, the specs. One name, one number, and the panel adds up. */
+    t.buildScaled    = t.build;
   });
 
   all.forEach(function (t) {
@@ -5709,7 +5778,7 @@ function renderGrades() {
             me.startersScaled, tone(me.startersScaled))}
       ${bar("Draft value", parValueText(me),
             me.valueScaled, tone(me.valueScaled))}
-      ${bar("Roster construction", me.build + " / 100",
+      ${bar("Roster construction", buildText(me),
             me.buildScaled, tone(me.buildScaled))}
       ${bar("Bye week safety", byeSummary(me.badWeeks),
             me.byePenaltyScaled, tone(me.byePenaltyScaled))}
@@ -10014,6 +10083,7 @@ window.JukeEngine = {
   // what the VORP matrix prints.
   parText: parText,
   parValueText: parValueText,
+  buildText: buildText,
   // Added for the Analysis tab's "Fix this first" card — see bestUpgrade()'s
   // own comment for why only starters/build are simulated and why "before"
   // isn't part of what this returns (the caller already has it, off the

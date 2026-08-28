@@ -141,7 +141,11 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
     // value timeline's own bars sum to, so composing it here would describe a
     // different number from the bar it labels. See parValueText() in app.js.
     { key: 'value', label: 'Draft value', detail: engine.parValueText ? engine.parValueText(me) : (me.value >= 0 ? '+' : '') + me.value + ' picks, K and D/ST aside', pct: me.valueScaled, weight: weights.value },
-    { key: 'build', label: 'Roster construction', detail: me.build + ' / 100', pct: me.buildScaled, weight: weights.build },
+    /* The headline is the raw score now — buildScaled is aliased to it, so the
+       bar, its number and the weighted-sum line all read the same thing. The
+       caption used to be `me.build + ' / 100'`, which was that same number a
+       second time; engine.buildText() names what actually cost the points. */
+    { key: 'build', label: 'Roster construction', detail: engine.buildText ? engine.buildText(me) : me.build + ' / 100', pct: me.buildScaled, weight: weights.build },
     { key: 'byes', label: 'Bye week safety', detail: engine.byeSummary(me.badWeeks), pct: me.byePenaltyScaled, weight: weights.byes },
   ]
 
