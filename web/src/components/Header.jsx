@@ -133,9 +133,23 @@ export default function Header() {
         shrinking desktop to match a spec that never asked for it, the row
         takes two heights the same way LobbyBar.jsx's 56px already does at
         every width, just gated here since Header.jsx's desktop height predates
-        this pass. */}
-    <header className="fixed inset-x-0 top-0 z-50 border-b border-white/5 bg-void/90 backdrop-blur-md">
-      <div className="mx-auto flex h-14 max-w-7xl items-center gap-10 px-4 md:h-16 md:px-6">
+        this pass.
+
+        Homepage cosmetic revision §13 gives this bar its own exact surface
+        (page-bg at 88% alpha, a hairline border) and a padding value —
+        applied here as px-10 (horizontal only; matches every other
+        section's own 40px content-container padding from §2, so the nav's
+        content now lines up edge-to-edge with the rest of the page).
+        Deliberately NOT switched to vertical padding-driven sizing: h-14/
+        h-16 is read in two other places (Homepage.jsx's <main> padding,
+        index.css's scroll-padding-top) and style.css's own .to-top button
+        positioning depends on it too — CLAUDE.md documents this as a
+        three-way tracked value on purpose. Swapping the sizing mechanism
+        would be a real layout change chasing a cosmetic one, for a
+        difference (56/64px fixed vs. ~58/~66px padding-driven) too small
+        to be worth that risk. */}
+    <header className="fixed inset-x-0 top-0 z-50 border-b border-[#20242B] bg-[#0D0F15]/[0.88] backdrop-blur-md">
+      <div className="mx-auto flex h-14 max-w-7xl items-center gap-10 px-10 md:h-16">
         {/* Two instances behind a wrapper's hidden/block, not a className
             passed straight to JukeLogo: the component's own root <span>
             hardcodes display:inline-flex as an inline style so its mark and
@@ -161,7 +175,7 @@ export default function Header() {
             <a
               key={link.label}
               href={link.href}
-              className="text-sm font-medium text-white/60 transition-colors hover:text-white"
+              className="text-[15px] font-medium text-[#B5B7BD] transition-colors hover:text-white"
             >
               {link.label}
             </a>
