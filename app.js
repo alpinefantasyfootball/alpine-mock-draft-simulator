@@ -3723,15 +3723,35 @@ function parKey() {
           Math.round((BEST_VOR || 0) * 100)].join("|");
 }
 
-function seatParTable() {
-  // Same guard every other DraftEngine caller carries. A bridge entry is only
-  // as safe as its own guard: analyseTeam() is reached from React on mount,
-  // and draft-engine.js is deferred.
-  if (typeof DraftEngine === "undefined" || !board.length) return null;
+/* Par is an average over wobbles, not one draft.
 
-  const key = parKey();
-  if (PAR_CACHE && PAR_CACHE.key === key) return PAR_CACHE.table;
+   The first version ran a single unwobbled draft and used it as the
+   expectation, and a single draft is not an expectation — it is one sample
+   with its own luck in it. Measured: run par under twelve different wobbles
+   and a chair's own par moves with a standard deviation of **18.9 points**,
+   the same magnitude as the wobble noise the grade is trying to see through.
+   Freezing one of those samples bakes that chair's luck in permanently, so it
+   shows up as a fixed per-chair bias in every draft ever graded against it.
 
+   It was visible and was misread first as "chair-specific board interaction".
+   The single unwobbled realization sat −4, −37, +30, +19, +23, −28, −12, +24,
+   −18, −5 away from the twelve-wobble mean, and the residual `startersVsPar`
+   by chair came out +4, +40, −39, −9, −23, +32, +7, −31, +26, +7 — the same
+   numbers with the sign flipped, chair for chair. The residue was not a fact
+   about the chairs at all. It was the error in par.
+
+   `PAR_SEEDS` is fixed and hard-coded rather than drawn from `state.seed`, for
+   the reason par exists: it has to be a property of the board, identical for
+   every client in a room and for the same board tomorrow. Twelve puts the
+   standard error of each chair's par at 18.9/sqrt(12) = 5.5 points, comfortably
+   inside `MIN_SPAN.startersVsPar`; twenty-four would buy 3.9 for twice the
+   work, which is not worth paying on a cache miss a person is waiting through. */
+const PAR_SEEDS = [1, 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31];
+
+// One full simulated draft under one wobble. Returns, per seat, the lineup
+// strength after each of that seat's picks — the same table shape par uses,
+// because par after three picks is not par after fourteen.
+function parRun(jitterOf) {
   const teams = league.teams;
   const taken = {}, have = [], rosters = [], table = [];
   for (let s = 0; s < teams; s++) { have.push({}); rosters.push([]); table.push([]); }
@@ -3741,13 +3761,47 @@ function seatParTable() {
     const c = DraftEngine.pickInfo(n, teams);
     const pool = board.filter((p) => !taken[p.name] && !isRuledOut(p));
     if (!pool.length) break;
-    const best = bestAvailable(pool, have, c.slot, c.round, { wobble: false, model: false });
+    const best = bestAvailable(pool, have, c.slot, c.round, { jitterOf: jitterOf, model: false });
     if (!best) break;
 
     taken[best.name] = true;
     have[c.slot][best.pos] = (have[c.slot][best.pos] || 0) + 1;
     rosters[c.slot].push(best);
     table[c.slot].push(lineupStrength(rosters[c.slot]));
+  }
+  return table;
+}
+
+function seatParTable() {
+  // Same guard every other DraftEngine caller carries. A bridge entry is only
+  // as safe as its own guard: analyseTeam() is reached from React on mount,
+  // and draft-engine.js is deferred.
+  if (typeof DraftEngine === "undefined" || !board.length) return null;
+
+  const key = parKey();
+  if (PAR_CACHE && PAR_CACHE.key === key) return PAR_CACHE.table;
+
+  const runs = PAR_SEEDS.map(function (seed) {
+    return parRun(function (p) { return DraftEngine.jitter(p.overall, seed); });
+  });
+
+  /* Averaged pick by pick. The runs can differ in length — a pool that runs
+     dry stops that run early — so each cell is divided by how many runs
+     actually reached it rather than by PAR_SEEDS.length, which would quietly
+     drag the tail of the table toward zero and make the closing rounds look
+     like a bargain against par. */
+  const table = [];
+  for (let s = 0; s < league.teams; s++) {
+    const row = [], longest = Math.max.apply(null, runs.map((r) => (r[s] || []).length));
+    for (let k = 0; k < longest; k++) {
+      let sum = 0, seen = 0;
+      runs.forEach(function (r) {
+        const v = r[s] && r[s][k];
+        if (typeof v === "number") { sum += v; seen++; }
+      });
+      row.push(seen ? sum / seen : 0);
+    }
+    table.push(row);
   }
 
   PAR_CACHE = { key: key, table: table };
@@ -4285,13 +4339,22 @@ function oneThatGotAway(slot) {
    Everyone else keeps both. shotPicks() in particular wants the model on
    deliberately — see CLAUDE.md on why the hero shot is not an ADP slice. */
 function bestAvailable(pool, have, slot, round, opts) {
-  const wobble = !opts || opts.wobble !== false;
+  /* `jitterOf` lets seatParTable() run this under a wobble that is not the
+     live draft's, without writing to `board[].jitter` — which is shared state
+     that a real draft is reading from at the same time. Saving and restoring
+     it around the loop would work and is the trap gradeAndRosterAt() already
+     documents: one shared flag, several callers, and a restore that is only
+     correct if nothing else touched it in between. Passing the function is
+     simply not that shape. */
+  const jitterOf = opts && typeof opts.jitterOf === "function" ? opts.jitterOf
+    : (opts && opts.wobble === false) ? function () { return 0; }
+    : function (p) { return p.jitter; };
   const modelMultiplier = (!opts || opts.model !== false)
     ? modelMultipliers(pool)
     : null;
   let best = null, bestScore = Infinity;
   pool.forEach(function (p) {
-    const score = (p.adp + (wobble ? p.jitter : 0))
+    const score = (p.adp + jitterOf(p))
       * needFromCount(have[slot][p.pos] || 0, p.pos, round)
       * (isRisky(p) ? 1.35 : 1)
       * (modelMultiplier ? modelMultiplier(p) : 1);

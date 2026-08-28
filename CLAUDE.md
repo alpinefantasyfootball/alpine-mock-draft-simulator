@@ -728,12 +728,68 @@ unwobbled. After: the correlation between chair and mean `startersVsPar` is
 the note on why the hero shot is not an ADP slice. Par is the one place that
 wants the market's opinion rather than ours.
 
+**Par is an average over twelve wobbles, and the first version was one draft.**
+A single realization is not an expectation — it is one sample with its own luck
+in it. Measured: run par under twelve wobbles and a chair's own par moves with
+a standard deviation of **18.9 points**, the same magnitude as the noise the
+grade is trying to see through. Freezing one sample bakes that chair's luck in
+permanently, as a fixed per-chair bias in every draft graded against it.
+
+**It was visible for a while and was misread as a fact about the chairs.** The
+single unwobbled par sat −4, −37, +30, +19, +23, −28, −12, +24, −18, −5 from
+the twelve-wobble mean, and the residual `startersVsPar` by chair came out +4,
++40, −39, −9, −23, +32, +7, −31, +26, +7 — **the same numbers with the sign
+flipped, chair for chair.** It was never chair-specific board interaction. It
+was the error in par, and the tell was there to be read: a residue that is the
+negative of your own baseline's error is your baseline, not your subject.
+Residual spread went **79 → 20** on averaging, which is inside the standard
+error twelve samples buy.
+
+`PAR_SEEDS` is hard-coded and never `state.seed`, for the reason par exists at
+all: it has to be a property of the board, the same for every client in a room
+and the same tomorrow. Twelve puts the standard error of a chair's par at
+18.9/√12 = 5.5, well inside `MIN_SPAN.startersVsPar`; twenty-four would buy 3.9
+for twice the work. **The whole thing costs 30ms cold and 0ms warm**, measured,
+so the cache carries it comfortably.
+
+`bestAvailable()` grew `jitterOf` for this rather than the par run writing to
+`board[].jitter` and restoring it. That save-and-restore is exactly the shape
+`gradeAndRosterAt()` already documents as dangerous — one shared flag, several
+callers, a restore that is only right if nothing else touched it meanwhile —
+and a live draft is reading that field while this runs.
+
 **What par does not remove is wobble, and that was measured rather than
 assumed.** Across ten seeds, a seat's `startersVsPar` moves with a standard
 deviation of **18.3 points**; drafting well rather than badly from the same
 chair is worth **196**. So the luck is real and it is about a tenth of the
 signal — which is why `MIN_SPAN.startersVsPar` stays at 20 rather than being
 raised to cover it.
+
+### The seat bias that is left is all in draft value
+
+With starter strength neutralised, the chair correlates with the four
+components like this, measured over ten seeds on the raw figures:
+
+```
+startersVsPar   0.04        build   0.04
+byePenalty      0.04        value   0.69
+```
+
+**`value` is the whole of it now.** Mean draft value by chair runs −23, −16,
+−16, −10, +14, +4, −1, −7, +12, 0 — early seats read as reaching and late seats
+as finding bargains, and it is structural rather than behavioural: value is
+pick number minus board rank, and the first pick of the draft can only ever
+score zero or worse, because there is no player whose board rank is below 1.
+
+It does not dominate what a manager sees. Within a single room the chair
+predicts finishing rank at −0.03 to −0.30 across ten seeds, inside the 0.35
+the chair test asserts. It shows up clearly only in the mean over many rooms
+(−0.51), which is a statistic no user ever looks at.
+
+Fixing it is the same move again — par for the seat, applied to value — and it
+has not been made. Anyone doing it should note that value is already filtered
+by `freelyChosen()` and `reachableRank()`, so par has to apply the identical
+filters or the two are not comparable.
 
 **Raising that floor was tried against the measurement and is wrong.** It looks
 like the obvious way to suppress wobble luck, and it makes every number that
