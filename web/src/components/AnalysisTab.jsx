@@ -136,7 +136,11 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
     // locally-composed detail line would describe a different number from the
     // bar it sits under. See parText() in app.js.
     { key: 'starters', label: 'Starter strength', detail: engine.parText ? engine.parText(me) : Math.round(me.starters) + ' pts above replacement', pct: me.startersScaled, weight: weights.starters },
-    { key: 'value', label: 'Draft value', detail: (me.value >= 0 ? '+' : '') + me.value + ' picks, K and D/ST aside', pct: me.valueScaled, weight: weights.value },
+    // Caption from the engine, same contract as starter strength above: the
+    // bar is scored against par for this seat and the raw figure is what the
+    // value timeline's own bars sum to, so composing it here would describe a
+    // different number from the bar it labels. See parValueText() in app.js.
+    { key: 'value', label: 'Draft value', detail: engine.parValueText ? engine.parValueText(me) : (me.value >= 0 ? '+' : '') + me.value + ' picks, K and D/ST aside', pct: me.valueScaled, weight: weights.value },
     { key: 'build', label: 'Roster construction', detail: me.build + ' / 100', pct: me.buildScaled, weight: weights.build },
     { key: 'byes', label: 'Bye week safety', detail: engine.byeSummary(me.badWeeks), pct: me.byePenaltyScaled, weight: weights.byes },
   ]

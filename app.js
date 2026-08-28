@@ -3844,6 +3844,22 @@ function parText(t) {
   return `${d >= 0 ? "+" : "−"}${Math.abs(d)} vs par for this seat · ${raw}`;
 }
 
+/* The same, for draft value, and it exists for the same reason: the bar is
+   scored against par for the chair and the raw figure is what the timeline
+   panel's own bars add up to, so one caption has to carry both or the two
+   screens disagree about what "draft value" is. */
+function parValueText(t) {
+  // One minus glyph in one string. Number#toString gives an ASCII hyphen and
+  // the vs-par half is built with a real minus (U+2212, the same one
+  // GRADE_SCALE uses and for the same reason), so composing them naively read
+  // "−10 vs par for this seat · -35 picks" — two different characters for one
+  // idea, side by side.
+  const signed = (n) => (n >= 0 ? "+" : "−") + Math.abs(Math.round(n));
+  const raw = signed(t.value) + " picks, K and D/ST aside";
+  if (!t.parValue) return raw;
+  return `${signed(t.valueVsPar)} vs par for this seat · ${raw}`;
+}
+
 // Par for this seat at this many picks, or 0 when the engine has not landed
 // yet — an unscored seat is the same for everybody, so it cannot bias a room.
 function seatPar(slot, picksMade, which) {
@@ -3877,8 +3893,15 @@ function analyseTeam(slot, extra) {
      for why the raw number is most of a letter's worth of draft position. */
   let starters = 0;
   lineup.forEach(function (s) { if (s.player) starters += aboveReplacement(s.player); });
-  // extra is a hypothetical additional pick, so it costs a pick of par too.
+  /* extra is a hypothetical additional pick, so it costs a pick of par too —
+     for starter strength, which counts him, and deliberately *not* for value,
+     which does not. `judged` is built from state.picks and never sees him, so
+     advancing value's par by a pick he did not contribute to would charge a
+     simulated bargain against a roster that never took one. Nothing reads
+     valueVsPar for a hypothetical today (bestUpgrade only simulates starters
+     and build), which is exactly why it would go unnoticed. */
   const par = seatPar(slot, picks.length + (extra ? 1 : 0));
+  const parValue = seatPar(slot, picks.length, "value");
 
   /* 2. draft value: taken later than the board said = a bargain.
 
@@ -4016,7 +4039,8 @@ function analyseTeam(slot, extra) {
 
   return { slot: slot, roster: roster, lineup: lineup, byes: byes,
            starters: starters, par: par, startersVsPar: starters - par,
-           value: value, build: build,
+           value: value, parValue: parValue, valueVsPar: value - parValue,
+           build: build,
            byePenalty: -byeCost * 20,
            worstBye: worstBye, worstWeek: worstWeek, badWeeks: badWeeks,
            bargain: bargain, reach: reach };
@@ -4106,7 +4130,7 @@ function analyseTeam(slot, extra) {
      derived from replacement-relative rank distances rather than from an
      independent error model, and it is calibrated from observed spans. If
      build ever gets a real error model, this is the number to revisit. */
-const MIN_SPAN = { startersVsPar: 20, value: 35, build: 20, byePenalty: 20 };
+const MIN_SPAN = { startersVsPar: 20, valueVsPar: 35, build: 20, byePenalty: 20 };
 
 function scaleAcross(all, key) {
   const values = all.map((t) => t[key]);
@@ -4138,8 +4162,11 @@ function analyseDraft() {
      scaled starter figures on one object for somebody to pick the wrong one
      out of. The raw `starters` and `par` are both still on there for anything
      that wants to show the working. */
-  ["startersVsPar", "value", "build", "byePenalty"].forEach((k) => scaleAcross(all, k));
-  all.forEach(function (t) { t.startersScaled = t.startersVsParScaled; });
+  ["startersVsPar", "valueVsPar", "build", "byePenalty"].forEach((k) => scaleAcross(all, k));
+  all.forEach(function (t) {
+    t.startersScaled = t.startersVsParScaled;
+    t.valueScaled    = t.valueVsParScaled;
+  });
 
   all.forEach(function (t) {
     t.total = t.startersScaled  * WEIGHTS.starters
@@ -5631,7 +5658,7 @@ function renderGrades() {
     <div class="bars">
       ${bar("Starter strength", parText(me),
             me.startersScaled, tone(me.startersScaled))}
-      ${bar("Draft value", (me.value >= 0 ? "+" : "") + me.value + " picks, K and D/ST aside",
+      ${bar("Draft value", parValueText(me),
             me.valueScaled, tone(me.valueScaled))}
       ${bar("Roster construction", me.build + " / 100",
             me.buildScaled, tone(me.buildScaled))}
@@ -9886,6 +9913,7 @@ window.JukeEngine = {
   // one bar drift, and the bar is scored against par while the raw sum is
   // what the VORP matrix prints.
   parText: parText,
+  parValueText: parValueText,
   // Added for the Analysis tab's "Fix this first" card — see bestUpgrade()'s
   // own comment for why only starters/build are simulated and why "before"
   // isn't part of what this returns (the caller already has it, off the
