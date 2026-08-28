@@ -765,31 +765,45 @@ chair is worth **196**. So the luck is real and it is about a tenth of the
 signal — which is why `MIN_SPAN.startersVsPar` stays at 20 rather than being
 raised to cover it.
 
-### The seat bias that is left is all in draft value
+### Draft value is scored against par too, and it was the last of the seat bias
 
-With starter strength neutralised, the chair correlates with the four
-components like this, measured over ten seeds on the raw figures:
+With starter strength neutralised, the chair still correlated **0.69** with raw
+draft value while sitting at 0.04 against everything else — so value was the
+whole of what remained. Mean value by chair ran −23, −16, −16, −10, +14, +4,
+−1, −7, +12, 0: early seats reading as reaching, late seats as finding
+bargains.
+
+**It is structural, not behavioural, and that is what makes par the right
+answer rather than a fudge.** Value is pick number minus board rank, and the
+first pick of a draft can only ever score zero or worse because no player has a
+board rank below 1. Nobody drafting from seat 1 can avoid that; a par drafter
+in seat 1 cannot either, so subtracting it removes exactly the part nobody
+controls and keeps the part they do.
+
+`parRun()` accumulates value alongside lineup strength, and **it applies
+`freelyChosen()` and `reachableRank()` by calling them**, on a pick-shaped
+object, rather than restating what they test. analyseTeam() filters the real
+picks through those same two before summing, and a par counting a different set
+of picks would not be comparable to it — the sort of mismatch that reads as a
+working grade for months.
+
+Measured over ten seeds, chair against mean `valueVsPar` by chair: +2, +3, −1,
+−3, −3, +5, +3, −3, −1, −2, a spread of 8 against a `MIN_SPAN` of 35, so it
+contributes nothing to the scaling. And the composite finally follows:
 
 ```
-startersVsPar   0.04        build   0.04
-byePenalty      0.04        value   0.69
+chair vs mean finishing rank    −0.51  ->  −0.11
+worst per-room chair vs rank     0.30  ->   0.17
+influence (S/V/B/Y)      54/25/9/11, against a stated 50/25/15/10
 ```
 
-**`value` is the whole of it now.** Mean draft value by chair runs −23, −16,
-−16, −10, +14, +4, −1, −7, +12, 0 — early seats read as reaching and late seats
-as finding bargains, and it is structural rather than behavioural: value is
-pick number minus board rank, and the first pick of the draft can only ever
-score zero or worse, because there is no player whose board rank is below 1.
-
-It does not dominate what a manager sees. Within a single room the chair
-predicts finishing rank at −0.03 to −0.30 across ten seeds, inside the 0.35
-the chair test asserts. It shows up clearly only in the mean over many rooms
-(−0.51), which is a statistic no user ever looks at.
-
-Fixing it is the same move again — par for the seat, applied to value — and it
-has not been made. Anyone doing it should note that value is already filtered
-by `freelyChosen()` and `reachableRank()`, so par has to apply the identical
-filters or the two are not comparable.
+**`extra` advances par for starters and deliberately not for value.** A
+hypothetical additional player is counted by `bestLineup()` and so by starter
+strength, but `judged` is built from `state.picks` and never sees him — so
+advancing value's par by a pick he did not contribute to would charge a
+simulated bargain against a roster that never took one. Nothing reads
+`valueVsPar` for a hypothetical today, since `bestUpgrade()` only simulates
+starters and build, which is precisely why it would have gone unnoticed.
 
 **Raising that floor was tried against the measurement and is wrong.** It looks
 like the obvious way to suppress wobble luck, and it makes every number that
