@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
+import { COMPONENT_LABELS } from './TakeAPick.jsx'
 
 // standard/half/full — same three keys ScoringDemoCard.jsx's own
 // PPR_OPTIONS already uses; kept as a second, small array rather than an
@@ -448,6 +449,23 @@ export default function ShowYourWorking() {
           <p className="font-voidNumeral text-[10.5px] font-semibold tracking-[0.13em] text-[#4DDAE9]">03 &middot; THE GRADE</p>
           <h3 className="mt-[9px] font-voidBody text-base font-bold text-voidInk-primary">Four parts, each shown</h3>
           <p className="mt-[9px] max-w-[640px] text-[15px] leading-[1.55] text-voidInk-body">{GRADE_BODY}</p>
+          {/* §6 — this card used to be three lines of text in a box sized
+              for a chart. Bar fill width equals the part's own weight
+              (50/25/15/10, COMPONENT_LABELS — TakeAPick.jsx's real table,
+              imported rather than restated) so the graphic states what
+              GRADE_BODY's copy claims instead of just repeating it in
+              prose a second time. */}
+          <div className="mt-[18px] flex flex-col gap-[9px]">
+            {COMPONENT_LABELS.map((c) => (
+              <div key={c.key} className="grid grid-cols-[150px_minmax(0,1fr)_42px] items-center gap-3">
+                <span className="text-[14px] font-semibold text-voidInk-primary">{c.label}</span>
+                <span className="block h-[6px] overflow-hidden rounded-full bg-[#24262C]">
+                  <span className="block h-full rounded-full bg-mint" style={{ width: `${c.weight}%` }} />
+                </span>
+                <span className="text-right font-voidNumeral tabular-nums text-[12px] font-semibold text-voidInk-muted">{c.weight}</span>
+              </div>
+            ))}
+          </div>
         </div>
         <SameEngineCard />
       </div>

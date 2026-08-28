@@ -13,7 +13,12 @@ import { POS_BADGE } from './draftRoomPositions.js'
 const PHASE_MS = [3000, 2600, 2600, 3400, 3600]
 const PHASE_TAGS = ['On the clock', 'Your pick', 'The room reacts', 'Grade rerun', 'Grade rerun']
 
-const COMPONENT_LABELS = [
+// Exported for ShowYourWorking.jsx's own card 03 weight-bar chart (design
+// handoff §6) — analyseDraft()'s real 50/25/15/10 weighting either way, so
+// a second copy of this table would be the same "league shape written down
+// twice" failure CLAUDE.md already has a rule about, just for a weight
+// instead of a roster rule.
+export const COMPONENT_LABELS = [
   { key: 'starters', label: 'Starter strength', weight: 50 },
   { key: 'value', label: 'Draft value', weight: 25 },
   { key: 'build', label: 'Roster construction', weight: 15 },
