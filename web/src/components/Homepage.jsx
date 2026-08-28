@@ -125,11 +125,11 @@ function useDataFreshness() {
 }
 
 // One row per room: a real link for the one that's live, a ComingSoonModal
-// button for the other five — the same choice RoomCard.jsx already makes
-// for exactly these five room cards elsewhere on this page, just reused
-// here rather than re-decided. Listing all six (not just the live one) is
-// the point of this pass: a reference footer whose own product-list column
-// names everything the company offers, not just what's shipped.
+// button for the other five — the same choice RoomsGrid.jsx's own roadmap
+// rows make for exactly these five rooms elsewhere on this page, just
+// reused here rather than re-decided. Listing all six (not just the live
+// one) is the point of this pass: a reference footer whose own product-list
+// column names everything the company offers, not just what's shipped.
 function FooterRoomLink({ room, onComingSoon, className }) {
   if (room.live && room.href) {
     return (
