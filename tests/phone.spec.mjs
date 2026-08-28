@@ -216,8 +216,25 @@ test("the homepage hero starts under the header, not a screen below it", async (
     // handoff, and "FREE · UNLIMITED · NO ACCOUNT" is a different element
     // that sits below the CTA pair. Anchor on whatever is genuinely first,
     // which is what this test is about.
-    const eyebrow = [...root.querySelectorAll("span")]
-      .find((e) => e.textContent.trim() === "AGILITY THROUGH ANALYTICS" && e.getBoundingClientRect().height > 0);
+    /* Matched case-insensitively, and that is the whole of why this stopped
+       finding anything. The slogan is set in CSS `text-transform: uppercase`
+       and its source is title case — "Agility Through Analytics" — so
+       textContent never carried the capitals this compared against. It read
+       as the eyebrow being gone. It was on screen, in capitals, the whole
+       time; the DOM simply does not spell it that way.
+
+       Same family as the /nan/i note in CLAUDE.md, from the opposite side:
+       there a case-insensitive match caught the surname Monangai, here a
+       case-sensitive one missed text that is only uppercase to a reader.
+
+       Leaf nodes only, and the first in document order, because the footer
+       carries the same slogan in a <div>. Matching on the tag alone happens
+       to disambiguate today and would stop the moment either one changed
+       element. */
+    const eyebrow = [...root.querySelectorAll("span, div")]
+      .find((e) => e.children.length === 0
+        && e.textContent.trim().toUpperCase() === "AGILITY THROUGH ANALYTICS"
+        && e.getBoundingClientRect().height > 0);
     if (!header || !eyebrow) return { found: false };
     return {
       found: true,

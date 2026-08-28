@@ -17,7 +17,15 @@ export default function Hero() {
         }}
       />
 
-      <div className="relative mx-auto grid max-w-[1200px] gap-[72px] px-10 pb-0 pt-[72px] lg:grid-cols-[1.05fr_1fr] lg:items-center">
+      {/* pt is responsive, and it has to be. 72px is the desktop rhythm and it
+          was unconditional, so a 375px phone inherited a padding scaled for a
+          1200px column: measured, that put the eyebrow 71px under a 57px
+          header where artboard 1a puts it at 36. Not the 149px the phone spec
+          was originally written against, but past what it allows, and past it
+          for the same reason — a vertical measurement that stands in for
+          desktop proportion has to be as responsive as the proportion is.
+          36px on a phone, the artboard's own figure; 72 from lg up, unchanged. */}
+      <div className="relative mx-auto grid max-w-[1200px] gap-[72px] px-10 pb-0 pt-9 lg:pt-[72px] lg:grid-cols-[1.05fr_1fr] lg:items-center">
         {/* min-w-0: a CSS grid item's default min-width is auto, not 0, so
             without this a wide-enough descendant visually spills past this
             column's actual track instead of being constrained to it — the
