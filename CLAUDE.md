@@ -3636,6 +3636,41 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   static server. Opening a file directly no longer works — see the Stack
   section on why `file://` broke once the legacy scripts became
   root-relative.
+- **A long-lived `vite dev` does not reload `tailwind.config.js`, and the way
+  it fails looks like a design regression rather than a stale server.**
+
+  Reported as sharp white borders around a dozen homepage elements, and it
+  was neither white nor a border anybody had written. `border-line-hairline`
+  resolves through `colors.line.hairline`, and when that token is missing from
+  the config the *generator has already run*, so the utility contributes no
+  colour rule at all — only the `border` width — and the colour falls through
+  to Tailwind's own preflight default, `#e5e7eb`. Measured: **31 elements
+  computing `rgb(229, 231, 235)` where the token says `rgb(37, 41, 48)`.**
+
+  Nothing was wrong with the page. The server had been up since before another
+  session added those tokens, so it was serving CSS generated from a config
+  that no longer existed on disk. Stopping and restarting it took the count
+  from 31 to 0.
+
+  **Ask the deployed stylesheet before hunting through commits.** The built CSS
+  names every utility it generated, so one request settles whether the token is
+  real:
+
+  ```bash
+  curl -s https://jukeff.com/assets/index-<hash>.css | grep -o "border-line-hairline{[^}]*}"
+  ```
+
+  It came back correct on the first try, which turned what looked like a
+  thirteen-commit bisect into a two-minute answer.
+
+  **This is the fourth time in this file that the tooling has worn a bug's
+  clothes**, after the wrangler crash-loop, `startDraft()` not clearing
+  `state.picks`, and a `git stash` in a shared checkout. The tell is the same
+  every time: the symptom is real, reproducible, and describes a fault in
+  something nobody changed. It is most likely here whenever two sessions share
+  the repository, because design tokens are exactly what the *other* session
+  edits while yours has a server up — so restart the preview after any change
+  to `tailwind.config.js`, whoever made it.
 - **In a headless or hidden browser, disable transitions before you measure
   a colour.** A pane that is not compositing produces no frames, so a CSS
   transition never advances — it sits frozen at its starting value, and
