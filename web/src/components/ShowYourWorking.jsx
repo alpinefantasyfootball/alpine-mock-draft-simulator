@@ -311,6 +311,15 @@ function ProofRow({ label, active, value, note }) {
 // (removed) used to read the real final scenario here; this literal is
 // the sanctioned exception to the rest of this file's "nothing is a
 // literal string standing in for real data" rule, not a precedent for one.
+//
+// Letter only, no "/100" — the design handoff's own §5 text (quoted above)
+// paired them, which is the exact "letter grade beside a score out of a
+// hundred" pattern CLAUDE.md documents removing from every other grade
+// surface in the real product (the share card, both Analysis headers, the
+// Insights summary, the mobile grade·score chip, all three standings
+// tables) after finding the letter agreed with a reader's own school
+// reading of the number beside it on 0 of 10 teams. Matches the same fix
+// applied to TakeAPick.jsx's GradePanel just above this card.
 function SameEngineCard() {
   const { waiverLive, tradeLive } = useRoomStatus()
 
@@ -330,12 +339,7 @@ function SameEngineCard() {
         waiver claim and score both sides of a trade once those rooms are live. One engine, not three.
       </p>
       <div className="mt-4 flex flex-col gap-2">
-        <ProofRow
-          label="Draft"
-          active
-          value={<>Grade &middot; <span className="font-numeral tabular-nums font-semibold">29/100</span> &middot; C</>}
-          note="4 weighted parts, computed tonight"
-        />
+        <ProofRow label="Draft" active value="Grade · C" note="4 weighted parts, computed tonight" />
         <ProofRow label="Waivers" active={waiverLive} value={waiverLive ? 'Live' : 'Not live yet'} note="same VORP baseline, once it ships" />
         <ProofRow label="Trades" active={tradeLive} value={tradeLive ? 'Live' : 'Not live yet'} note="same projections, once it ships" />
       </div>

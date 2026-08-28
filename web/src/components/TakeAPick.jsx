@@ -50,7 +50,11 @@ function captionFor(scenario, phase) {
   const deltas = COMPONENT_LABELS.map((c) => ({ ...c, delta: after.components[c.key] - before.components[c.key] }))
   const biggest = deltas.reduce((a, b) => (Math.abs(b.delta) > Math.abs(a.delta) ? b : a))
   const dir = biggest.delta >= 0 ? 'climbs' : 'falls'
-  return `${biggest.label} ${dir} ${Math.abs(biggest.delta)} — the composite moves from ${before.composite} to ${after.composite}, ${before.letter} to ${after.letter}.`
+  // No composite number here either, for the same reason GradePanel's own
+  // comment gives — a sentence pairing a room-relative composite with the
+  // letter it produced is the identical "score out of a hundred beside a
+  // letter grade" pattern, just in prose instead of a chip.
+  return `${biggest.label} ${dir} ${Math.abs(biggest.delta)} — the grade moves from ${before.letter} to ${after.letter}.`
 }
 
 function useThirdRoundScenarios() {
@@ -263,30 +267,31 @@ function GradePanel({ scenario, phase }) {
   return (
     <div className="flex h-full flex-col px-6 py-5">
       <p className="font-numeral text-[10.5px] font-semibold uppercase tracking-[0.13em] text-voidInk-muted">Draft grade &middot; live</p>
-      {/* §5's restructure — production used to render the number and the
-          letter ~450px apart with the "/100 · after N picks" line sandwiched
-          between them, which read as "29 C / 100" rather than one grade.
-          flex/justify-between puts the score on the left and the letter chip
-          on the right, the two halves of one fact rather than three loose
-          pieces in a row. Unlike ShowYourWorking.jsx's SameEngineCard (see
-          that file's own comment), this stays real, animating scenario data
-          — freezing the one live "watch it get graded" number on the page
-          would undercut the section's whole premise. */}
-      <div className="mt-3 flex items-center justify-between gap-3">
-        <div>
-          <div className="flex items-baseline gap-[2px] font-numeral tabular-nums leading-none">
-            <span className="text-[52px] font-bold text-voidInk-primary transition-all duration-700">{grade.composite}</span>
-            <span className="text-[26px] font-semibold text-[#7D8086]">/100</span>
-          </div>
-          <p className="mt-2 font-numeral tabular-nums text-[12.5px] font-medium text-[#83868C]">after {grade.picksMade} picks</p>
-        </div>
+      {/* Letter only, no paired "/100" — this used to render a 52px
+          composite number immediately beside the letter chip (design_
+          handoff_homepage_cosmetic §5's own restructure), which is exactly
+          the pairing CLAUDE.md's "A letter grade may not stand next to a
+          score out of a hundred" section documents fixing everywhere else
+          in the real product (the share card, both Analysis headers, the
+          Insights summary, the mobile grade·score chip, all three
+          standings tables) — a room-relative composite read against a
+          school scale produced a letter that agreed with it on 0 of 10
+          teams. This module is a marketing demo of the same real engine,
+          so it inherited the same bug the moment §5 was implemented
+          literally off a mockup that predated that fix. The letter stays;
+          the number is gone, matching every other grade surface in the
+          app. Still real, animating scenario data — freezing the one live
+          "watch it get graded" number on the page would undercut the
+          section's whole premise. */}
+      <div className="mt-3 flex items-center gap-4">
         <div
-          className="flex flex-col items-center gap-[3px] rounded-xl border px-4 py-[9px]"
+          className="flex flex-col items-center gap-[3px] rounded-xl border px-5 py-3"
           style={{ background: '#0E2628', borderColor: '#155157' }}
         >
-          <span className="font-numeral text-[30px] font-bold leading-none text-[#59E4F3] transition-all duration-700">{grade.letter}</span>
+          <span className="font-numeral text-[42px] font-bold leading-none text-[#59E4F3] transition-all duration-700">{grade.letter}</span>
           <span className="font-numeral text-[9px] font-semibold tracking-[0.14em] text-[#82A6AA]">GRADE</span>
         </div>
+        <p className="font-numeral tabular-nums text-[12.5px] font-medium text-[#83868C]">after {grade.picksMade} picks</p>
       </div>
       <div className="mt-4 flex flex-col gap-3">
         {COMPONENT_LABELS.map((c) => (
