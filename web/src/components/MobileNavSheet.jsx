@@ -23,7 +23,11 @@ import { NAV_LINKS, AccountButtons } from './SiteNav.jsx'
 // — the whole point of that file's existence is one nav both headers agree
 // on, and a sheet that took its own copy of the links as a prop would be
 // exactly the drift SiteNav.jsx was written to stop.
-export default function MobileNavSheet({ open, onClose, modalRef }) {
+// variant: forwarded to AccountButtons' own Sign Up pill (design_handoff_
+// homepage_cosmetic §10) — Header.jsx passes "ghost", LobbyBar.jsx passes
+// nothing and keeps the shared default. See AccountButtons' own comment
+// (SiteNav.jsx) for why this has to be opt-in rather than a redefinition.
+export default function MobileNavSheet({ open, onClose, modalRef, variant }) {
   useEffect(() => {
     if (!open) return
     const onKey = (e) => { if (e.key === 'Escape') onClose() }
@@ -68,7 +72,7 @@ export default function MobileNavSheet({ open, onClose, modalRef }) {
             </nav>
 
             <div className="mt-auto flex flex-col gap-2 border-t border-white/[0.06] p-3">
-              <AccountButtons modalRef={modalRef} />
+              <AccountButtons modalRef={modalRef} variant={variant} />
             </div>
           </motion.div>
         </div>

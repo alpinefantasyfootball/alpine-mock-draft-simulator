@@ -123,8 +123,12 @@ export default function Hero() {
             <a
               href="#/drafts"
               data-hero-cta=""
-              className="flex h-[54px] w-full items-center justify-center rounded-full bg-gradient-to-r from-[#22d3ee] to-[#a78bfa] text-base font-bold text-white
-                         shadow-glass transition-all duration-200 active:scale-[0.98]"
+              className="flex h-[54px] w-full items-center justify-center rounded-full text-[17px] font-bold text-[#0B0D12]
+                         transition-all duration-200 active:scale-[0.98]"
+              style={{
+                background: 'linear-gradient(100deg, #44D4E2, #82A1F6)',
+                boxShadow: '0 10px 34px -14px rgba(63,177,234,0.7)',
+              }}
             >
               Enter the Draft Room
             </a>
@@ -152,14 +156,18 @@ export default function Hero() {
             <a
               href="#/drafts"
               data-hero-cta=""
-              className="rounded-full bg-gradient-to-r from-[#22d3ee] to-[#a78bfa] px-8 py-4 text-base font-bold text-white
-                         shadow-glass transition-all duration-200 hover:scale-105 hover:shadow-[0_0_15px_rgba(34,211,238,0.4)]"
+              className="rounded-full px-[34px] py-[17px] text-[17px] font-bold text-[#0B0D12]
+                         transition-all duration-200 hover:scale-105"
+              style={{
+                background: 'linear-gradient(100deg, #44D4E2, #82A1F6)',
+                boxShadow: '0 10px 34px -14px rgba(63,177,234,0.7)',
+              }}
             >
               Enter the Draft Room
             </a>
             <a
               href="#rooms"
-              className="group inline-flex items-center gap-2 text-base font-semibold text-white/90 transition-colors hover:text-mint"
+              className="group inline-flex items-center gap-2 text-base font-semibold text-[#E6E8EB] transition-colors hover:text-mint"
             >
               Explore The Rooms
               <ChevronRight className="h-4 w-4 text-teal-400 transition-transform group-hover:translate-x-0.5" />

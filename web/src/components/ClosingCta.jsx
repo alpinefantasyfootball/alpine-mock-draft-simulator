@@ -49,11 +49,18 @@ export default function ClosingCta() {
             "Enter the Draft Room" over this section's own — reported directly
             (four total appearances of the button on one mobile page, two of
             them stacked at once at every section that has its own). */}
+        {/* Same gradient as Hero's primary, §10's own instruction — but no
+            glow here: the closing band already carries its own gradient
+            fill (this file's own top comment), so a second glow on top of
+            it would be competing with the surface it sits on rather than
+            lifting off it the way it does against Hero's plain void
+            ground. */}
         <a
           href="#/drafts"
           data-hero-cta=""
-          className="flex h-[54px] w-full shrink-0 items-center justify-center rounded-full bg-gradient-to-r from-[#22d3ee] to-[#a78bfa] text-base font-bold text-white
-                     shadow-glass transition-all duration-200 active:scale-[0.98] lg:h-auto lg:w-auto lg:px-[34px] lg:py-[17px] lg:hover:scale-105 lg:hover:shadow-[0_0_15px_rgba(34,211,238,0.4)]"
+          className="flex h-[54px] w-full shrink-0 items-center justify-center rounded-full text-base font-bold text-[#0B0D12]
+                     transition-all duration-200 active:scale-[0.98] lg:h-auto lg:w-auto lg:px-8 lg:py-4"
+          style={{ background: 'linear-gradient(100deg, #44D4E2, #82A1F6)' }}
         >
           Enter the Draft Room
         </a>

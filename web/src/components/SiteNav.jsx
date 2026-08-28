@@ -57,7 +57,23 @@ export const NAV_LINKS = [
 // ComingSoonModal every other "not built yet" control in this app already
 // uses. Takes the modal's ref rather than owning one, so each caller
 // decides where its own <ComingSoonModal/> instance lives in the tree.
-export function AccountButtons({ modalRef }) {
+//
+// variant="ghost" (design_handoff_homepage_cosmetic §10's "Nav 'Sign Up'"
+// row) is opt-in and homepage-only — Header.jsx passes it explicitly, both
+// to its own direct call below and through to MobileNavSheet.jsx's copy.
+// LobbyBar.jsx's two call sites (its own desktop row and its own
+// MobileNavSheet instance) pass nothing and keep today's filled gradient
+// pill. This component is shared with the Draft Room specifically so the
+// two headers can't drift apart (this file's own top comment) — restyling
+// the shared default in place would have silently carried the homepage's
+// ghost treatment into the Cockpit's nav too, which the handoff never asks
+// for and CLAUDE.md's scope note rules out ("the marketing homepage only").
+export function AccountButtons({ modalRef, variant = 'filled' }) {
+  const signUpClass =
+    variant === 'ghost'
+      ? 'inline-flex h-11 items-center justify-center rounded-full border border-[#454D5E] px-[18px] text-[15px] font-semibold text-[#E6E8EB] transition-colors duration-150 hover:border-[#4892A8] md:h-9'
+      : 'inline-flex h-11 items-center justify-center rounded-full bg-gradient-to-r from-[#22d3ee] to-[#a78bfa] px-4 text-sm font-semibold text-white shadow-glass transition-all duration-200 hover:scale-105 hover:shadow-[0_0_15px_rgba(34,211,238,0.4)] md:h-9'
+
   return (
     <>
       {/* h-11 (44px) below md, §9's own tap-target floor — py-2 alone
@@ -90,8 +106,7 @@ export function AccountButtons({ modalRef }) {
               'sign-up, and your drafts already save to this device.'
           )
         }
-        className="inline-flex h-11 items-center justify-center rounded-full bg-gradient-to-r from-[#22d3ee] to-[#a78bfa] px-4 text-sm font-semibold text-white
-                   shadow-glass transition-all duration-200 hover:scale-105 hover:shadow-[0_0_15px_rgba(34,211,238,0.4)] md:h-9"
+        className={signUpClass}
       >
         Sign Up
       </button>

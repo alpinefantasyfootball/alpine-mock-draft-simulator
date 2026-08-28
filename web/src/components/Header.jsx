@@ -200,7 +200,7 @@ export default function Header() {
         </div>
 
         <div className="ml-auto hidden shrink-0 items-center gap-2 md:flex">
-          <AccountButtons modalRef={modalRef} />
+          <AccountButtons modalRef={modalRef} variant="ghost" />
         </div>
       </div>
 
@@ -230,7 +230,7 @@ export default function Header() {
         <header> — a native <dialog> promotes to the browser's own top
         layer on showModal(), which sits above this containing-block
         question entirely, so it was never the same bug. */}
-    <MobileNavSheet open={navOpen} onClose={() => setNavOpen(false)} modalRef={modalRef} />
+    <MobileNavSheet open={navOpen} onClose={() => setNavOpen(false)} modalRef={modalRef} variant="ghost" />
 
     {/* Sticky bottom action bar — the marketing shell's other half, and a
         true sibling of <header> above rather than a descendant of it.
@@ -259,7 +259,11 @@ export default function Header() {
     >
       <a
         href="#/drafts"
-        className="flex h-[50px] w-full items-center justify-center rounded-full bg-gradient-to-r from-[#22d3ee] to-[#a78bfa] text-[15px] font-bold text-white shadow-glass transition-transform active:scale-[0.98]"
+        className="flex h-[50px] w-full items-center justify-center rounded-full text-[15px] font-bold text-[#0B0D12] transition-transform active:scale-[0.98]"
+        style={{
+          background: 'linear-gradient(100deg, #44D4E2, #82A1F6)',
+          boxShadow: '0 10px 34px -14px rgba(63,177,234,0.7)',
+        }}
       >
         Enter the Draft Room
       </a>
