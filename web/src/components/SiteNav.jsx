@@ -1,3 +1,5 @@
+import RoomsNavMenu from './RoomsNavMenu.jsx'
+
 // The one canonical top-nav link list and account-controls pair. Before
 // this file existed, LobbyBar.jsx (the Draft Room / Locker screen) had
 // quietly grown its own smaller header — "Draft Room · The Rooms · Method,"
@@ -31,26 +33,76 @@
 // that reaches applyRoute()'s hiding logic without ever reaching
 // applyRoute() itself.
 //
-// Header.jsx keeps its own literal copy of NAV_LINKS rather than importing
-// this one — the homepage is out of scope for the pass that added this
-// file, so nothing there was touched. The two lists are identical today;
-// if they're ever meant to diverge, that has to be a real decision made in
-// Header.jsx, not a second copy quietly drifting from this one.
+// Both Header.jsx and LobbyBar.jsx render this through NavLinks below now
+// — a literal copy in either file would be the exact "two different
+// implementations that have drifted" bug this file's own top comment
+// describes, just moved one level down from "which links exist" to "how
+// they render."
 // Scores dropped: the homepage's own scores strip was removed (a design
 // review flagged live NFL scores as off-message on a page selling draft
 // prep in August), which took the #scores section with it — leaving this
-// entry pointing at an anchor that no longer exists anywhere. Header.jsx's
-// own copy lost it for the same reason; this one has to agree, per the
-// file comment above about the two lists staying identical.
+// entry pointing at an anchor that no longer exists anywhere.
+//
+// "Draft Room" used to be a third, permanent entry here
+// (`{ label: 'Draft Room', href: '#/drafts' }`), on every screen including
+// the homepage — where it duplicated the page's own much larger "Enter the
+// Draft Room" CTAs (Hero.jsx, RoomsGrid.jsx's featured card, this file's
+// own sticky bottom bar) as a second, smaller way to do the identical
+// thing. It's gone from the list entirely now: The Draft Room is still
+// reachable from "The Rooms" dropdown below (RoomsNavMenu), same as every
+// other room, and NavLinks' own `currentRoom` prop covers the one thing
+// that entry was actually doing inside the Lobby itself — see NavLinks'
+// comment.
 export const NAV_LINKS = [
   { label: 'How It Works', href: '#proof' },
   { label: 'The Rooms', href: '#rooms' },
-  // #/drafts (the Lobby), not #/draft-room — see the comment on ROOMS in
-  // app.js. A nav link is a fresh choice, not a resume; #/draft-room
-  // lands wherever DraftRoom.jsx's own enteredRoom state already was,
-  // stale draft included.
-  { label: 'Draft Room', href: '#/drafts' },
 ]
+
+// The shared renderer for NAV_LINKS — Header.jsx and LobbyBar.jsx both call
+// this instead of mapping the array themselves, because "The Rooms" needs
+// more than a plain <a> now: it renders as RoomsNavMenu, a dropdown grouped
+// by season, instead of a #rooms scroll link — every header gets the
+// dropdown for free rather than each one wiring it up (and drifting)
+// separately.
+//
+// `currentRoom` is the second reason this isn't a plain .map(): a caller
+// that is itself a room's own header — LobbyBar.jsx today, whichever
+// component the next room's lobby uses tomorrow — passes the name of that
+// room (e.g. "The Draft Room"), and NavLinks appends it as a fourth,
+// non-interactive item: `aria-current="page"`, nothing to click. This
+// replaces what "Draft Room" used to do as a permanent NAV_LINKS entry
+// (see that array's own comment) with something that (a) only appears
+// inside a room, never on the homepage, since Header.jsx never passes this
+// prop, and (b) says whichever room is actually open rather than always
+// saying "Draft Room" — the mechanism generalises to every future room's
+// header for free; only the string passed in changes. It used to be a
+// real, always-clickable <a href="#/drafts"> even from inside the Lobby
+// itself, which meant clicking it while already there set the hash to the
+// value it already was — no hashchange, nothing visibly happens, a silent
+// no-op with no explanation. A room's name is a fact about which screen
+// you're on, not a link: there's nothing left to navigate to from inside a
+// room that "The Rooms" beside it doesn't already cover.
+export function NavLinks({ linkClassName, currentRoomClassName, currentRoom, modalRef, onNavigate }) {
+  return (
+    <>
+      {NAV_LINKS.map((link) => {
+        if (link.label === 'The Rooms') {
+          return <RoomsNavMenu key={link.label} triggerClassName={linkClassName} modalRef={modalRef} />
+        }
+        return (
+          <a key={link.label} href={link.href} onClick={onNavigate} className={linkClassName}>
+            {link.label}
+          </a>
+        )
+      })}
+      {currentRoom && (
+        <span aria-current="page" className={currentRoomClassName}>
+          {currentRoom}
+        </span>
+      )}
+    </>
+  )
+}
 
 // Log in / Sign Up, verbatim from Header.jsx: neither does anything real
 // yet (there are no accounts), so both just explain that through the same

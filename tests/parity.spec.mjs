@@ -108,7 +108,15 @@ const DESKTOP_ONLY = [
   // PROMPT 1 — the nav collapses into the hamburger sheet below lg.
   "How It Works",
   "The Rooms",
-  "Draft Room",
+  // "Draft Room" was here as a third, permanent NAV_LINKS entry — it's gone
+  // from the array in SiteNav.jsx now (the homepage already carries much
+  // larger "Enter the Draft Room" CTAs, so the nav link was a redundant,
+  // smaller copy of the same action), and NavLinks' replacement for it
+  // (currentRoom, a room's own name shown only inside that room) never
+  // renders on the homepage at all — Header.jsx doesn't pass it. So this
+  // string no longer appears at either breakpoint; leaving it listed here
+  // would be allowing a difference that can't happen any more, same trap
+  // as "Deal with confidence." a few lines below.
   "Sign Up",
 
   // PROMPT 2 "Cut from mobile" — the insights ticker, and review item 36's

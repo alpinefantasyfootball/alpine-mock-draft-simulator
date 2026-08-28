@@ -1,33 +1,14 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef } from 'react'
 import ComingSoonModal from './ComingSoonModal.jsx'
 import PhaseRail from './PhaseRail.jsx'
-import { DraftIcon, ProspectIcon, WaiverIcon, TradeIcon, StrategyIcon, LeagueIcon } from './icons.jsx'
+import { ROOM_ICON_BY_NAME, DraftIcon } from './icons.jsx'
+import { useRooms } from '../hooks/useRooms.js'
 
-// Icons are the only thing about a room this file gets to decide — the
-// name, blurb, lead, live flag and season all come from app.js's ROOMS via
-// the bridge, so this grid and the header's own rooms panel (if one is ever
-// built again) read the same six rooms and cannot drift the way a second
+// Room data (name, blurb, lead, live flag, season) comes from app.js's
+// ROOMS via the bridge. useRooms() and ROOM_ICON_BY_NAME are shared with
+// RoomsNavMenu.jsx (the header's "The Rooms" dropdown), so this grid and
+// that dropdown read the same six rooms and cannot drift the way a second
 // hardcoded list once did (it was missing "The League Room" entirely).
-const ICON_BY_NAME = {
-  'The Draft Room': DraftIcon,
-  'The Prospect Room': ProspectIcon,
-  'The Waiver Room': WaiverIcon,
-  'The Trade Room': TradeIcon,
-  'The Strategy Room': StrategyIcon,
-  'The League Room': LeagueIcon,
-}
-
-function useRooms() {
-  const [rooms, setRooms] = useState([])
-
-  useEffect(() => {
-    const engine = typeof window !== 'undefined' ? window.JukeEngine : null
-    if (!engine) return
-    setRooms(engine.rooms())
-  }, [])
-
-  return rooms
-}
 
 // Homepage cosmetic revision (design_handoff_homepage_cosmetic) §9. This
 // replaces both the desktop season-grouped six-card grid and the separate
@@ -53,7 +34,7 @@ export default function RoomsGrid() {
 
   const liveRoom = rooms.find((r) => r.live)
   const roadmapRooms = rooms.filter((r) => !r.live)
-  const LiveIcon = liveRoom ? (ICON_BY_NAME[liveRoom.name] ?? DraftIcon) : null
+  const LiveIcon = liveRoom ? (ROOM_ICON_BY_NAME[liveRoom.name] ?? DraftIcon) : null
 
   const openComingSoon = (room) =>
     modalRef.current?.open(

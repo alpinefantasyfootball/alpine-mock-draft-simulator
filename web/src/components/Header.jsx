@@ -3,9 +3,9 @@ import { Menu } from 'lucide-react'
 import JukeLogo from './juke-logo/JukeLogo.jsx'
 import ComingSoonModal from './ComingSoonModal.jsx'
 import MobileNavSheet from './MobileNavSheet.jsx'
-import { NAV_LINKS, AccountButtons } from './SiteNav.jsx'
+import { NavLinks, AccountButtons } from './SiteNav.jsx'
 
-// NAV_LINKS/AccountButtons come from SiteNav.jsx now rather than a second
+// NavLinks/AccountButtons come from SiteNav.jsx now rather than a second
 // literal copy — this file's own comment used to say the homepage was "out
 // of scope for the pass that added [SiteNav.jsx], so nothing there was
 // touched," which is exactly the drift SiteNav.jsx exists to prevent once
@@ -13,7 +13,13 @@ import { NAV_LINKS, AccountButtons } from './SiteNav.jsx'
 // mobile hamburger sheet needs the same list LobbyBar.jsx already reads from
 // there, and a second copy behind it would be the identical two-headers bug
 // SiteNav.jsx was written to fix, just moved one level down into "which
-// list does the mobile sheet see."
+// list does the mobile sheet see." NavLinks (rather than mapping NAV_LINKS
+// directly, the way this file used to) is the same fix applied a second
+// time, for "The Rooms" dropdown and the currentRoom indicator — see
+// SiteNav.jsx's own comment on NavLinks. This file never passes
+// currentRoom: the homepage isn't "inside" any room, which is also why
+// NAV_LINKS no longer carries a permanent "Draft Room" entry at all — see
+// that array's own comment.
 /* The sticky bottom CTA hides while ANY primary "Enter the Draft Room" CTA
    is on screen — Hero's own pair, RoomsGrid's live-room card, and
    ClosingCta's closing band all carry the same data-hero-cta marker now.
@@ -171,15 +177,10 @@ export default function Header() {
         </a>
 
         <nav className="hidden shrink-0 items-center gap-7 md:flex">
-          {NAV_LINKS.map((link) => (
-            <a
-              key={link.label}
-              href={link.href}
-              className="text-[15px] font-medium text-[#B5B7BD] transition-colors hover:text-white"
-            >
-              {link.label}
-            </a>
-          ))}
+          <NavLinks
+            linkClassName="text-[15px] font-medium text-[#B5B7BD] transition-colors hover:text-white"
+            modalRef={modalRef}
+          />
         </nav>
 
         {/* Log in stays a text link at every width — the mockup keeps it

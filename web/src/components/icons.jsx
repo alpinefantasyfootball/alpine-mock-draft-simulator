@@ -51,3 +51,19 @@ export function LeagueIcon(props) {
     </svg>
   )
 }
+
+// Shared by RoomsGrid.jsx (the homepage's own Rooms section) and
+// RoomsNavMenu.jsx (the header's "The Rooms" dropdown) — the name, blurb,
+// lead, live flag and season all come from app.js's ROOMS via the bridge,
+// and this map is the one place a room name resolves to an icon, so the
+// grid and the header's dropdown can't drift onto two different icon sets
+// the way RoomsGrid.jsx's own top comment already warns about for the room
+// list itself.
+export const ROOM_ICON_BY_NAME = {
+  'The Draft Room': DraftIcon,
+  'The Prospect Room': ProspectIcon,
+  'The Waiver Room': WaiverIcon,
+  'The Trade Room': TradeIcon,
+  'The Strategy Room': StrategyIcon,
+  'The League Room': LeagueIcon,
+}
