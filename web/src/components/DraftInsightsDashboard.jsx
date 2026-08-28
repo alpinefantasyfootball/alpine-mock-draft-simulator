@@ -31,11 +31,22 @@ const PANEL =
    standings row. Both shapes carry exactly these fields under exactly
    these names, so this component never needs to know which one it got. */
 function ComponentBars({ scored, weights }) {
+  /* scaled: true for the three components analyseDraft() actually runs
+     through scaleAcross() (see app.js) — their 0-100 number is this specific
+     room's floor and ceiling, min-max stretched, and means nothing outside
+     it. Roster construction never goes through that transform (see
+     CLAUDE.md's "Roster construction is the one component that is not
+     scaled" section); its 0-100 is an absolute score computed the same way
+     for every room. Reported directly: a 0 on a scaled component read as
+     "this draft had zero value," when it only ever means "the worst of
+     these N teams" — the "vs. room" / "own scale" tag below and the
+     footnote at the bottom of this component exist to say which is which,
+     right next to the number a reader is about to misread. */
   const bars = [
-    { key: 'starters', label: 'Starter strength', pct: scored.startersScaled, weight: weights.starters },
-    { key: 'value', label: 'Draft value', pct: scored.valueScaled, weight: weights.value },
-    { key: 'build', label: 'Roster construction', pct: scored.buildScaled, weight: weights.build },
-    { key: 'byes', label: 'Bye-week safety', pct: scored.byePenaltyScaled, weight: weights.byes },
+    { key: 'starters', label: 'Starter strength', pct: scored.startersScaled, weight: weights.starters, scaled: true },
+    { key: 'value', label: 'Draft value', pct: scored.valueScaled, weight: weights.value, scaled: true },
+    { key: 'build', label: 'Roster construction', pct: scored.buildScaled, weight: weights.build, scaled: false },
+    { key: 'byes', label: 'Bye-week safety', pct: scored.byePenaltyScaled, weight: weights.byes, scaled: true },
   ]
   const weakest = bars.reduce((a, b) => (b.pct < a.pct ? b : a))
 
@@ -48,7 +59,9 @@ function ComponentBars({ scored, weights }) {
             <div key={b.key}>
               <div className="flex items-baseline justify-between gap-2 text-xs">
                 <span className="font-semibold text-white/80">{b.label}</span>
-                <span className="font-numeral text-ink-muted">wt {Math.round(b.weight * 100)}%</span>
+                <span className="font-numeral text-ink-muted">
+                  wt {Math.round(b.weight * 100)}% <span className="text-[10px]">· {b.scaled ? 'vs. room' : 'own scale'}</span>
+                </span>
               </div>
               <div className="mt-1.5 flex items-center gap-2">
                 <div className="h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-white/[0.08]">
@@ -96,7 +109,9 @@ function ComponentBars({ scored, weights }) {
       <p className="mt-2 text-[10px] leading-relaxed text-ink-muted">
         A weight is how much a component counts, not how much it separates the room. Roster
         construction is scored on its own scale rather than against the other teams, so it varies
-        less and shifts the order less than its weight alone suggests.
+        less and shifts the order less than its weight alone suggests. On the three marked "vs.
+        room," 0 and 100 are this room's floor and ceiling, not a verdict — someone always scores
+        0 there and someone always scores 100, whatever actually happened in the draft.
       </p>
     </div>
   )

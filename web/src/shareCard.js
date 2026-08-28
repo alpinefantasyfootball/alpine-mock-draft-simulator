@@ -403,6 +403,20 @@ export async function drawShareCard(data) {
     }
   })
 
+  /* Starters, Value and Byes are min-max scaled against the room a report
+     was drawn from — the worst of that room's teams reads 0 there, the
+     best reads 100, and neither means anything outside that one room.
+     Build never goes through that transform (see CLAUDE.md's "Roster
+     construction is the one component that is not scaled"); it's the same
+     absolute 0-100 score in every room. Reported directly: a shared card
+     with Value at 0 read as "this draft had zero value" rather than "worst
+     value of these 10 teams" — same fix as the live dashboard's own
+     "vs. room" / "own scale" tag, just as one caption line here since a
+     canvas panel this narrow has no room for a tag on every row. */
+  ctx.fillStyle = 'rgba(255,255,255,0.38)'
+  ctx.font = '400 13px "Inter", sans-serif'
+  ctx.fillText('Starters/Value/Byes: vs. room · Build: own scale', px, py + ph + 22)
+
   // callouts along the bottom of the header, when the draft produced them
   ctx.font = '400 24px "Inter", sans-serif'
   const footY = 572

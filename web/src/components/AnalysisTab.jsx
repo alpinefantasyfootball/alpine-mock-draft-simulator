@@ -130,23 +130,34 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
   // only if an older bundle without the bridge entry is somehow live.
   const weights = engine.weights ? engine.weights() : { starters: 0.5, value: 0.25, build: 0.15, byes: 0.1 }
 
+  /* scaled: true for the three components analyseDraft() actually runs
+     through scaleAcross() (see app.js) — their 0-100 number is this room's
+     floor and ceiling, min-max stretched across whoever is in it, and means
+     nothing outside that room. Roster construction never goes through that
+     transform (see CLAUDE.md's "Roster construction is the one component
+     that is not scaled" section); its 0-100 is an absolute score, computed
+     the same way in every room. Reported directly: a 0 on a scaled
+     component read as "this draft had zero value," when it only ever means
+     "the worst of these N teams." Drives the "vs. room" / "own scale" tag
+     on each bar row below, and the summary sentence a few lines down that
+     used to claim all four worked the same way — they don't. */
   const bars = [
     // Caption from the engine, not rebuilt here: the bar is scored against par
     // for this seat and the raw sum is what the VORP matrix adds up to, so a
     // locally-composed detail line would describe a different number from the
     // bar it sits under. See parText() in app.js.
-    { key: 'starters', label: 'Starter strength', detail: engine.parText ? engine.parText(me) : Math.round(me.starters) + ' pts above replacement', pct: me.startersScaled, weight: weights.starters },
+    { key: 'starters', label: 'Starter strength', detail: engine.parText ? engine.parText(me) : Math.round(me.starters) + ' pts above replacement', pct: me.startersScaled, weight: weights.starters, scaled: true },
     // Caption from the engine, same contract as starter strength above: the
     // bar is scored against par for this seat and the raw figure is what the
     // value timeline's own bars sum to, so composing it here would describe a
     // different number from the bar it labels. See parValueText() in app.js.
-    { key: 'value', label: 'Draft value', detail: engine.parValueText ? engine.parValueText(me) : (me.value >= 0 ? '+' : '') + me.value + ' picks, K and D/ST aside', pct: me.valueScaled, weight: weights.value },
+    { key: 'value', label: 'Draft value', detail: engine.parValueText ? engine.parValueText(me) : (me.value >= 0 ? '+' : '') + me.value + ' picks, K and D/ST aside', pct: me.valueScaled, weight: weights.value, scaled: true },
     /* The headline is the raw score now — buildScaled is aliased to it, so the
        bar, its number and the weighted-sum line all read the same thing. The
        caption used to be `me.build + ' / 100'`, which was that same number a
        second time; engine.buildText() names what actually cost the points. */
-    { key: 'build', label: 'Roster construction', detail: engine.buildText ? engine.buildText(me) : me.build + ' / 100', pct: me.buildScaled, weight: weights.build },
-    { key: 'byes', label: 'Bye week safety', detail: engine.byeSummary(me.badWeeks), pct: me.byePenaltyScaled, weight: weights.byes },
+    { key: 'build', label: 'Roster construction', detail: engine.buildText ? engine.buildText(me) : me.build + ' / 100', pct: me.buildScaled, weight: weights.build, scaled: false },
+    { key: 'byes', label: 'Bye week safety', detail: engine.byeSummary(me.badWeeks), pct: me.byePenaltyScaled, weight: weights.byes, scaled: true },
   ]
 
   const standings = all.slice().sort((a, b) => a.rank - b.rank)
@@ -286,8 +297,10 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
       on a quarterback, kicker or defense you can never start, and how far from startable your best benched
       running back and receiver are — nothing if either could start today. Bye week safety is the last 10%,
       charging every week that leaves more than two starters out — by the square of how many are missing
-      beyond the second, so one week with four off costs more than two weeks with three. Each component is
-      scaled against the other {teams - 1} teams before weighting.
+      beyond the second, so one week with four off costs more than two weeks with three. Starter strength,
+      draft value and bye safety are each scaled against the other {teams - 1} teams before weighting, so
+      0 and 100 on those three mean this room's worst and best, not an absolute verdict. Roster construction
+      is not scaled against anyone — it's an absolute 0-100 score, the same in every room.
     </>
   )
 
@@ -404,7 +417,7 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
                     <div className={'h-1.5 rounded-full transition-all duration-300 ' + barFill[t]} style={{ width: width + '%' }} />
                   </div>
                   <div className="mt-1.5 flex items-center justify-between font-numeral text-[11px] text-ink-muted">
-                    <span>{Math.round(b.weight * 100)}% weight</span>
+                    <span>{Math.round(b.weight * 100)}% weight · {b.scaled ? 'vs. room' : 'own scale'}</span>
                     <span>contributes {contributes.toFixed(1)}</span>
                   </div>
                 </div>
@@ -418,8 +431,17 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
               {me.total.toFixed(1)} <span className="text-ink-muted">&rarr;</span> {me.grade}
             </span>
           </div>
+          {/* Used to claim all four bars work the same way ("every score is
+              ranked against the room, 50 is the average") — false for
+              roster construction, which is never scaled against the room
+              at all (see CLAUDE.md and the bars array's own comment above).
+              Fixed in place rather than left standing: it was the same
+              "0 reads as a verdict" confusion the vs.-room tag on each bar
+              now heads off closer to the number itself, just stated wrong. */}
           <p className="mt-3 text-[13.5px] leading-relaxed text-ink-muted">
-            Every score is your value ranked against the other {teams - 1} teams, so 50 is the room average.
+            Starter strength, draft value and bye safety are ranked against the other {teams - 1} teams — 50 is
+            the room average on those three, and 0 means "worst in this room," never "no value." Roster
+            construction is scored on its own scale instead: an absolute 0-100, not ranked against anyone.
             Bars run one direction: right is better.
           </p>
 
@@ -599,7 +621,9 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
               return (
                 <div key={b.key} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                   <b className="w-32 shrink-0 font-semibold text-white/80 sm:w-40">{b.label}</b>
-                  <span className="w-14 shrink-0 font-numeral text-[10px] text-ink-muted">wt {Math.round(b.weight * 100)}%</span>
+                  <span className="w-24 shrink-0 font-numeral text-[10px] text-ink-muted">
+                    wt {Math.round(b.weight * 100)}% · {b.scaled ? 'room' : 'own'}
+                  </span>
                   <div className="h-1.5 min-w-[100px] max-w-[420px] flex-1 rounded-full bg-slate-rule">
                     <div className={'h-1.5 rounded-full transition-all duration-300 ' + barFill[t]} style={{ width: width + '%' }} />
                   </div>
