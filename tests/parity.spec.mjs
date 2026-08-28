@@ -122,6 +122,10 @@ const DESKTOP_ONLY = [
   "Half PPR",
   "Full PPR",
   /^Projected season points · /,
+  // The mobile card shipped §3.9's documented fallback (drop Proj, keep
+  // Surv) once the hero grid's 40px side padding left its five-column
+  // player cell 31px wide — so the Proj column header is desktop's alone.
+  "Proj",
   // Desktop's own panel title, the counterpart to the phone eyebrow listed
   // in PHONE_ONLY above. Both branches have always had one; only the phone's
   // was written down here.

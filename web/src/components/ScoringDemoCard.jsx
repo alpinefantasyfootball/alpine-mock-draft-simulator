@@ -138,7 +138,13 @@ function useRankedRows(pool, ready, format, count) {
 // header row and every data row so the two can never drift out of
 // alignment with each other.
 const ROW_GRID = 'grid-cols-[34px_minmax(0,1fr)_56px_62px_52px]'
-const MOBILE_ROW_GRID = 'grid-cols-[28px_minmax(0,1fr)_46px_46px_40px]'
+// Four columns, not five: the documented fallback below ("drop Proj, keep
+// Surv") is now the shipped state. Five was "measured at 375px and it fits",
+// but that measurement predated the hero grid's 40px side padding — inside
+// today's hero the card is 295px, which left the 1fr player column 31px and
+// every name truncated to two letters. Dropping Proj hands its 46px + gap to
+// the name, which is the widest thing the row actually carries.
+const MOBILE_ROW_GRID = 'grid-cols-[28px_minmax(0,1fr)_46px_40px]'
 
 function RowCells({ row, grid, dense }) {
   const { player, projPts, vorp, surv, rank } = row
@@ -156,9 +162,14 @@ function RowCells({ row, grid, dense }) {
       <span className={`min-w-0 truncate font-semibold text-voidInk-primary ${dense ? 'text-[13px]' : 'text-[14.5px]'}`}>
         {player.name}
       </span>
-      <span className={`text-right font-numeral tabular-nums font-semibold text-voidInk-body ${dense ? 'text-[11px]' : 'text-[13px]'}`}>
-        {projPts != null ? Math.round(projPts) : '—'}
-      </span>
+      {/* Proj is desktop-only — the mobile grid dropped its column (see
+          MOBILE_ROW_GRID above), and a fifth cell in a four-column grid
+          would wrap onto a phantom second row rather than error. */}
+      {!dense && (
+        <span className="text-right font-numeral tabular-nums font-semibold text-voidInk-body text-[13px]">
+          {projPts != null ? Math.round(projPts) : '—'}
+        </span>
+      )}
       <span
         className={`text-right font-numeral tabular-nums font-semibold ${dense ? 'text-[11px]' : 'text-[13px]'} ${emphasized ? 'text-teal-300' : 'text-voidInk-muted'}`}
       >
@@ -194,12 +205,13 @@ export default function ScoringDemoCard() {
   return (
     <>
       {/* ---------- Mobile ----------
-          Five columns per §3.9's own "ship five if it fits" instruction —
-          measured at 375px with the dense sizing below and it does; the
-          documented fallback (drop Proj, keep Surv — "survival is the
-          differentiator, projection is the commodity") is a one-line
-          change to MOBILE_ROW_GRID and RowCells' dense branch if a
-          narrower target ever needs it. */}
+          Four columns — §3.9's documented fallback (drop Proj, keep Surv:
+          "survival is the differentiator, projection is the commodity"),
+          shipped rather than held in reserve. "Ship five if it fits" was
+          measured against a 375px viewport, not against the 295px this
+          card actually gets inside the hero grid's 40px side padding, and
+          at 295 the five-column player cell was 31px wide — every name
+          two letters and an ellipsis. See MOBILE_ROW_GRID. */}
       <div className="rounded-[14px] border border-line-hairline bg-surface-card p-5 lg:hidden">
         <div className="flex items-center justify-between gap-3">
           <p className="font-numeral text-[10.5px] font-semibold tracking-[0.13em] text-voidInk-muted">
@@ -230,7 +242,6 @@ export default function ScoringDemoCard() {
         <div className={`mt-4 grid ${MOBILE_ROW_GRID} gap-2 px-[14px] font-numeral text-[10.5px] font-semibold uppercase tracking-[0.13em] text-voidInk-muted`}>
           <span>Pos</span>
           <span>Player</span>
-          <span className="text-right">Proj</span>
           <span className="text-right">VORP</span>
           <span className="text-right">Surv</span>
         </div>

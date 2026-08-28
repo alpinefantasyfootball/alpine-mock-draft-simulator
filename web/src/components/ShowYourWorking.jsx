@@ -406,7 +406,12 @@ export default function ShowYourWorking() {
           content again. */}
       <div className="mt-[28px] grid items-stretch gap-[14px] lg:grid-cols-2">
         <div className="flex h-full flex-col rounded-[14px] border border-line-hairline bg-surface-card px-[26px] py-6 transition-colors duration-200 hover:border-teal-400/70">
-          <div className="flex items-start justify-between gap-3">
+          {/* flex-wrap: label + three format pills want ~257px and the card
+              hands this row 241px at 375px, so without it the pill group
+              (shrink-0 below, deliberately — pills must not squash) ran
+              16px past the card edge and "Full PPR" clipped. Wrapping drops
+              the pills onto their own line only where they no longer fit. */}
+          <div className="flex flex-wrap items-start justify-between gap-3">
             <p className="font-numeral text-[10.5px] font-semibold tracking-[0.13em] text-[#4DDAE9]">
               01 &middot; VORP
             </p>
