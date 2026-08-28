@@ -2,11 +2,11 @@
    Alpine Draft Room - player data
    GENERATED FILE. Edit scripts/build_players.py instead.
 
-   Generated : 2026-08-27 14:48 UTC
+   Generated : 2026-08-28 01:16 UTC
    Players   : standard 218 · half 225 · ppr 267
    Seasons   : 2018-2025
    Matched   : 225 of the half set carry a Sleeper id
-   Flagged   : 43 carry an injury designation
+   Flagged   : 44 carry an injury designation
    Projected : 267 have 2026 projections
 
    ADP: Fantasy Football Calculator, one set per scoring format.
@@ -15,7 +15,7 @@
    Player, injury and stat data: Sleeper.
    ========================================================== */
 
-const PLAYERS_META = { generated: "2026-08-27 14:48 UTC", count: 225, matched: 225, flagged: 43, projected: 267, unmatched: 0 };
+const PLAYERS_META = { generated: "2026-08-28 01:16 UTC", count: 225, matched: 225, flagged: 44, projected: 267, unmatched: 0 };
 
 /* One ordered list per scoring format. app.js picks the set that
    matches league.scoring when a draft starts, and works out every
@@ -129,7 +129,7 @@ const ADP_SETS = {
   { id: "HOU", name: "Houston Defense", pos: "DST", team: "HOU", bye: 8, adp: 100.0, sd: 9.2, td: 217, inj: "" },
   { id: "8121", name: "Romeo Doubs", pos: "WR", team: "NE", bye: 11, adp: 100.4, sd: 8.3, td: 83, inj: "" },
   { id: "3163", name: "Jared Goff", pos: "QB", team: "DET", bye: 6, adp: 102.0, sd: 12.6, td: 107, inj: "" },
-  { id: "8126", name: "Wan'Dale Robinson", pos: "WR", team: "TEN", bye: 9, adp: 102.7, sd: 8.7, td: 84, inj: "" },
+  { id: "8126", name: "Wan'Dale Robinson", pos: "WR", team: "TEN", bye: 9, adp: 102.7, sd: 8.7, td: 84, inj: "Q" },
   { id: "4046", name: "Patrick Mahomes", pos: "QB", team: "KC", bye: 5, adp: 106.0, sd: 13.2, td: 171, inj: "Q" },
   { id: "7553", name: "Kyle Pitts Sr.", pos: "TE", team: "ATL", bye: 11, adp: 106.1, sd: 10.9, td: 35, inj: "" },
   { id: "11586", name: "Blake Corum", pos: "RB", team: "LAR", bye: 11, adp: 106.3, sd: 14.1, td: 297, inj: "" },
@@ -339,7 +339,7 @@ const ADP_SETS = {
   { id: "7523", name: "Trevor Lawrence", pos: "QB", team: "JAX", bye: 7, adp: 91.7, sd: 11.7, td: 291, inj: "" },
   { id: "DEN", name: "Denver Defense", pos: "DST", team: "DEN", bye: 10, adp: 92.1, sd: 8.4, td: 97, inj: "" },
   { id: "11560", name: "Caleb Williams", pos: "QB", team: "CHI", bye: 10, adp: 92.2, sd: 12.9, td: 335, inj: "" },
-  { id: "8126", name: "Wan'Dale Robinson", pos: "WR", team: "TEN", bye: 9, adp: 93.0, sd: 8.4, td: 171, inj: "" },
+  { id: "8126", name: "Wan'Dale Robinson", pos: "WR", team: "TEN", bye: 9, adp: 93.0, sd: 8.4, td: 171, inj: "Q" },
   { id: "9484", name: "Tucker Kraft", pos: "TE", team: "GB", bye: 11, adp: 94.6, sd: 15.2, td: 202, inj: "Q" },
   { id: "2449", name: "Stefon Diggs", pos: "WR", team: "WAS", bye: 7, adp: 95.3, sd: 9.4, td: 304, inj: "" },
   { id: "HOU", name: "Houston Defense", pos: "DST", team: "HOU", bye: 8, adp: 98.9, sd: 8.9, td: 215, inj: "" },
@@ -557,7 +557,7 @@ const ADP_SETS = {
   { id: "7594", name: "Chuba Hubbard", pos: "RB", team: "CAR", bye: 5, adp: 81.2, sd: 10.3, td: 496, inj: "Q" },
   { id: "SEA", name: "Seattle Defense", pos: "DST", team: "SEA", bye: 11, adp: 81.7, sd: 8.7, td: 274, inj: "" },
   { id: "5947", name: "Jakobi Meyers", pos: "WR", team: "JAX", bye: 7, adp: 86.5, sd: 7.7, td: 421, inj: "Q" },
-  { id: "8126", name: "Wan'Dale Robinson", pos: "WR", team: "TEN", bye: 9, adp: 86.7, sd: 8.4, td: 738, inj: "" },
+  { id: "8126", name: "Wan'Dale Robinson", pos: "WR", team: "TEN", bye: 9, adp: 86.7, sd: 8.4, td: 738, inj: "Q" },
   { id: "DEN", name: "Denver Defense", pos: "DST", team: "DEN", bye: 10, adp: 86.8, sd: 7.1, td: 421, inj: "" },
   { id: "8183", name: "Brock Purdy", pos: "QB", team: "SF", bye: 8, adp: 87.2, sd: 11.6, td: 278, inj: "" },
   { id: "9500", name: "Josh Downs", pos: "WR", team: "IND", bye: 13, adp: 87.7, sd: 8.4, td: 1023, inj: "Q" },
