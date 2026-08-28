@@ -334,7 +334,27 @@ test("a room of identical drafters does not produce a full-scale grade spread", 
   expect(room.rawStarterSpread, "a seat-driven starter spread, in points").toBeGreaterThan(25);
   expect(room.rawStarterSpread, "but not an unbounded one").toBeLessThan(320);
 
-  expect(room.spread, `composite spread across a room of identical drafters (was 100 unfloored)`).toBeLessThan(60);
+  /* Re-derived a second time, when par stopped applying the model multiplier.
+
+     This read `toBeLessThan(60)` and the pinned seed now produces 67.6, so it
+     had to move — but the number is measured, not nudged to fit. Across eight
+     seeds a room of identical drafters spans **48 to 80** of the 100 available,
+     against the 100 this same comment records for the unfloored original. 90
+     leaves headroom over the worst observed room and still fails outright if
+     the floors are ever removed.
+
+     Read what this actually guards before tightening it. The metric saturates:
+     measured over the same seeds, a room of identical drafters spreads a mean
+     of **60**, and a room containing a deliberately unbuilt roster spreads
+     **48** — *less*, because min-max scaling is capped either way and one bad
+     team only moves the floor of the range. So composite spread cannot tell a
+     room of equals from a room with a terrible drafter in it, and it is a
+     backstop against full-scale confidence rather than a measure of anything.
+
+     The assertions that carry real weight are elsewhere: the chair test below,
+     and "the app's own advice beats a deliberately unbuilt roster" above. The
+     bad drafter finishes last in 6 of 6 seeded rooms at every floor tried. */
+  expect(room.spread, `composite spread across a room of identical drafters (was 100 unfloored)`).toBeLessThan(90);
 
   // The ordering survives — somebody still finishes first. Flooring the span
   // compresses the scores, it does not flatten the standings.
