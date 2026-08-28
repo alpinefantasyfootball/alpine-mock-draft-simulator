@@ -157,8 +157,15 @@ export default function DraftLocker({ onStartNew, problem, lobbySlot, roomActive
   const [analyzingId, setAnalyzingId] = useState(null)
   // Which team's report the dashboard shows — yours on open, or another
   // seat's if a future caller wants that; kept separate from mySlot the
-  // same way DraftRoom.jsx's own insightsSlot is.
+  // same way DraftRoom.jsx's own insightsSlot is. Only meaningful for the
+  // live-recompute fallback path below; a frozen report only ever has full
+  // detail for the drafter's own seat, so it ignores this entirely.
   const [insightsSlot, setInsightsSlot] = useState(0)
+  // The frozen report for analyzingId, or null when analyzing a pre-freeze
+  // entry that has to fall back to the live recompute — see analyze() and
+  // DraftInsightsDashboard.jsx's own file comment on why the two disagree
+  // and why that gap matters.
+  const [historyReport, setHistoryReport] = useState(null)
 
   if (!engine) return null
 
@@ -190,9 +197,22 @@ export default function DraftLocker({ onStartNew, problem, lobbySlot, roomActive
   // gets right (DraftRoom.jsx's handleDiscard); this screen just hadn't
   // been calling it.
   const discard = () => { engine.restart(); forceLocal() }
+  // Frozen report first — a plain localStorage read, no board rebuild, no
+  // drift. Only an entry recorded before freezeReport() existed comes back
+  // null, and only then does this fall back to the old path: rebuild
+  // today's board and replay the picks onto it, live. See
+  // DraftInsightsDashboard.jsx's own file comment for why the two can
+  // disagree on the very same picks and why that gap was a real bug.
   const analyze = (id) => {
+    const frozen = engine.historyReport(id)
+    if (frozen) {
+      setHistoryReport(frozen)
+      setAnalyzingId(id)
+      return
+    }
     if (!engine.openHistoryDraft(id)) return
     setInsightsSlot(engine.mySlot())
+    setHistoryReport(null)
     setAnalyzingId(id)
   }
   const deleteEntry = (id) => { engine.deleteHistoryDraft(id); forceLocal() }
@@ -213,6 +233,15 @@ export default function DraftLocker({ onStartNew, problem, lobbySlot, roomActive
   // against the just-cleared board and silently returned null — see
   // DraftInsightsDashboard.jsx's own comment on this prop.
   if (analyzingId) {
+    // historyReport set: nothing live was touched to get here (analyze()
+    // took the frozen-report path), so closing just drops local state —
+    // engine.closeHistoryDraft() only undoes what openHistoryDraft() did,
+    // and that was never called this time.
+    const closeAnalysis = () => {
+      if (!historyReport) engine.closeHistoryDraft()
+      setAnalyzingId(null)
+      setHistoryReport(null)
+    }
     return (
       <DraftInsightsDashboard
         engine={engine}
@@ -220,8 +249,10 @@ export default function DraftLocker({ onStartNew, problem, lobbySlot, roomActive
         mySlot={engine.mySlot()}
         viewSlot={insightsSlot}
         onViewSlot={setInsightsSlot}
-        onClose={() => { engine.closeHistoryDraft(); setAnalyzingId(null) }}
-        onRunAnother={() => { engine.closeHistoryDraft(); setAnalyzingId(null); engine.restart() }}
+        historyReport={historyReport ? historyReport.report : null}
+        historyCompletedAt={historyReport ? historyReport.completedAt : null}
+        onClose={closeAnalysis}
+        onRunAnother={() => { closeAnalysis(); engine.restart() }}
         cameFromLocker
       />
     )

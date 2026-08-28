@@ -7182,6 +7182,99 @@ function projectedWinPctForRoom(all, cv) {
   });
 }
 
+/* The Draft Insights report, frozen whole at the moment a draft completes —
+   see DraftInsightsDashboard.jsx's own file comment for the bug this fixes.
+   openHistoryDraft() rebuilds the whole board from *today's* live
+   projections and ADP before replaying a saved draft's picks onto it, so
+   every grade, VORP figure and callout on a reopened report used to be
+   recomputed against data that had moved since the draft actually
+   happened — a D+ in the Locker table (itself already frozen, see
+   recordHistory() below) reading back as an A- in the report built from
+   the same picks. And freezing only the raw inputs and re-running today's
+   *formula* would not have fixed it either: WEIGHTS, MIN_SPAN and
+   GRADE_SCALE have each been retuned more than once in this file's own
+   history (see CLAUDE.md's grade section), so only the fully computed
+   output — post-scaling, post-weights, post-grade-lookup — is immune to
+   the grade's own shape changing out from under an old report.
+
+   Full per-team detail (the VORP matrix, the value timeline, the one that
+   got away) is frozen only for the drafter's own team — a roster-sized
+   chunk of data per team, and nobody has asked to inspect a CPU seat's
+   report after the fact. Every other team gets the lightweight row the
+   standings and the share card's room comparison actually need: rank,
+   grade, total and the four scaled components. Team names are resolved to
+   strings here rather than left as slot numbers, because teamLabel()
+   depends on state.mySlot, which will not be this draft's mySlot once a
+   different draft is later in progress. */
+function freezeReport(all, slot) {
+  const mine = all[slot];
+  if (!mine) return null;
+
+  const winPcts = projectedWinPctForRoom(all);
+
+  const standings = all.map(function (t) {
+    return {
+      slot: t.slot,
+      teamName: teamLabel(t.slot),
+      rank: t.rank,
+      grade: t.grade,
+      total: t.total,
+      startersScaled: t.startersScaled,
+      valueScaled: t.valueScaled,
+      buildScaled: t.buildScaled,
+      byePenaltyScaled: t.byePenaltyScaled,
+      winPct: winPcts ? winPcts[t.slot] : null
+    };
+  });
+
+  const lineup = (mine.lineup || []).map(function (seat) {
+    return {
+      slotLabel: seat.slot,
+      name: seat.player ? seat.player.name : null,
+      pos: seat.player ? seat.player.pos : null,
+      vorpGap: seat.player ? replacementGap(seat.player) : null
+    };
+  });
+
+  const teamPicks = state.picks.filter((p) => p.slot === slot)
+    .slice().sort((a, b) => a.overall - b.overall);
+  const timeline = teamPicks
+    .filter((p) => !FORCED_LATE[p.player.pos])
+    .map(function (p) {
+      return { round: p.round, overall: p.overall, pos: p.player.pos,
+               name: shortName(p.player), gap: p.overall - p.player.overall };
+    });
+
+  const away = oneThatGotAway(slot);
+  const missed = away ? {
+    theirsName: away.theirs.player.name,
+    theirsTeamName: teamLabel(away.theirs.slot),
+    theirsOverall: away.theirs.overall,
+    mineName: away.mine.player.name,
+    mineRound: away.mine.round,
+    mineOverall: away.mine.overall,
+    delta: away.delta
+  } : null;
+
+  return {
+    mySlot: slot,
+    weights: { starters: WEIGHTS.starters, value: WEIGHTS.value, build: WEIGHTS.build, byes: WEIGHTS.byes },
+    standings: standings,
+    mine: {
+      value: mine.value,
+      bargain: mine.bargain ? {
+        name: mine.bargain.pick.player.name, pos: mine.bargain.pick.player.pos, gap: mine.bargain.gap
+      } : null,
+      reach: mine.reach ? {
+        name: mine.reach.pick.player.name, pos: mine.reach.pick.player.pos, gap: mine.reach.gap
+      } : null,
+      lineup: lineup,
+      timeline: timeline,
+      oneThatGotAway: missed
+    }
+  };
+}
+
 function recordHistory() {
   // The whole room, not just mine — the tendencies strip's "room average"
   // roster-VORP baseline needs every team's number, and this is the one
@@ -7227,7 +7320,15 @@ function recordHistory() {
     // strength) rather than sit beside it disagreeing.
     rosterVorp: mine ? rosterVorpOf(mine) : null,
     roomAvgRosterVorp: roomAvgRosterVorp,
-    weakestSpot: mine ? weakestStartingSpot(mine.lineup) : null
+    weakestSpot: mine ? weakestStartingSpot(mine.lineup) : null,
+    // The whole Draft Insights report, frozen right here — see
+    // freezeReport()'s own comment for why a reopened report used to
+    // disagree with this very entry's own `grade` a few lines up. Absent
+    // (undefined, same convention as every other field below) on any
+    // entry recorded before this existed; DraftLocker.jsx falls back to
+    // the old live-recompute path for those, exactly as every entry used
+    // to work.
+    report: freezeReport(all, state.mySlot)
     // Net ADP value, positional strength and projected win % all used to
     // be frozen here too, reasoning that this was the one moment the board
     // matched the draft that was actually played. That reasoning was
@@ -9519,6 +9620,19 @@ window.JukeEngine = {
   // remove one — this is the plain filter-and-rewrite clearSave() already
   // does for the single in-progress save, extended to one entry among many.
   deleteHistoryDraft: (id) => writeHistory(readHistory().filter((e) => e.id !== id)),
+  // The frozen report recordHistory() saved when this draft finished, or
+  // null for an entry recorded before freezeReport() existed and for an id
+  // that no longer exists — either way, a plain localStorage read with no
+  // side effect on the live board, league or state.picks, unlike
+  // openHistoryDraft() below. DraftLocker.jsx tries this first and only
+  // falls back to openHistoryDraft()'s live recompute when it comes back
+  // null. Also hands back completedAt, so a reopened report's share card
+  // can date itself the day the draft actually finished rather than today.
+  historyReport: (id) => {
+    const entry = readHistory().find((h) => h.id === id);
+    if (!entry || !entry.report) return null;
+    return { report: entry.report, completedAt: entry.completedAt };
+  },
   openHistoryDraft: openHistoryDraft,
   // The counterpart — see closeHistoryDraft()'s own comment for why this is
   // not just goHome() again.
