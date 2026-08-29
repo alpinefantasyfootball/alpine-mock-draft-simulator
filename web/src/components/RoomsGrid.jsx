@@ -131,7 +131,13 @@ export default function RoomsGrid() {
               <span className="font-numeral text-[10.5px] font-semibold tracking-[0.13em] text-[#7D8086]">
                 ON THE ROADMAP
               </span>
-              <span className="font-numeral tabular-nums text-[11.5px] font-semibold text-[#6F7278]">
+              {/* #7D8086, was #6F7278 — measured 3.83:1 against this card's
+                  bg-surface-nav (#111419), under the 4.5:1 floor this size
+                  needs. Matched to its own sibling label's already-passing
+                  tone (4.66:1) rather than a new value, since the two read
+                  as one pair — a section label and its count, both meant
+                  to sit at the same quiet weight. */}
+              <span className="font-numeral tabular-nums text-[11.5px] font-semibold text-[#7D8086]">
                 {roadmapRooms.length} rooms
               </span>
             </div>

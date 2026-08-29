@@ -308,17 +308,34 @@ function ProofRow({ label, active, value, note }) {
 // plausible-looking number nobody computed — CLAUDE.md's "Claim and proof"
 // and "Real data requirements" sections are the rule this follows.
 //
-// The Draft row is the one deliberate exception, on direct instruction from
-// the design handoff (design_handoff_homepage_cosmetic §5): "production
+// The Draft row used to be a hardcoded "Grade · C", on direct instruction
+// from the design handoff (design_handoff_homepage_cosmetic §5): "production
 // shows 29/100 · C in the live demo and 19/100 · C− in the 'same engine'
 // card... unify to one value." TakeAPick.jsx's own GradePanel keeps
 // animating real scenario data — gutting that would undercut the section's
-// entire "watch it get graded" premise — but this card is a single static
-// snapshot next to it, and a visitor comparing the two mid-loop was seeing
-// two different numbers for what reads as the same claim. useLatestGrade()
-// (removed) used to read the real final scenario here; this literal is
-// the sanctioned exception to the rest of this file's "nothing is a
-// literal string standing in for real data" rule, not a precedent for one.
+// entire "watch it get graded" premise — so the literal was meant as a
+// static snapshot beside it. It didn't unify anything: TakeAPick cycles
+// through three different real scenarios (seats 2/5/8), each with its own
+// real letter, while this row said "C" regardless — a visitor watching the
+// loop land on a B+ or a D+ was reading it right beside a fixed "C" and a
+// caption claiming it was "computed tonight," which it never was.
+//
+// It reads a real value now: engine.thirdRoundScenarios()[0] — the exact
+// same seeded, deterministic simulation TakeAPick.jsx's own
+// useThirdRoundScenarios() calls (jitter is arithmetic off each player's
+// own board data, not Math.random(), so both calls against the same board
+// return the identical scenario — see CLAUDE.md's "the CPU wobble is
+// arithmetic, not randomness"). Index 0 rather than tracking whichever
+// scenario TakeAPick happens to be cycling through at that instant: that
+// would need scenario/phase state lifted out of TakeAPick and into
+// Homepage.jsx to share between two sibling components, a real
+// restructure for a card whose own job is a single static snapshot, not a
+// second animated one. This still doesn't guarantee the two never differ
+// at a given moment — TakeAPick rotates through seats 5 and 8 too — but it
+// replaces an always-wrong hardcoded guess with a real, board-derived
+// value that agrees whenever TakeAPick is on its own first scenario
+// (true on load), and "computed tonight" is now an honest claim rather
+// than a false one regardless of which scenario TakeAPick is showing.
 //
 // Letter only, no "/100" — the design handoff's own §5 text (quoted above)
 // paired them, which is the exact "letter grade beside a score out of a
@@ -328,8 +345,30 @@ function ProofRow({ label, active, value, note }) {
 // tables) after finding the letter agreed with a reader's own school
 // reading of the number beside it on 0 of 10 teams. Matches the same fix
 // applied to TakeAPick.jsx's GradePanel just above this card.
+function useSameEngineGrade() {
+  const [letter, setLetter] = useState(null)
+
+  useEffect(() => {
+    const engine = typeof window !== 'undefined' ? window.JukeEngine : null
+    if (!engine) return
+
+    const read = () => {
+      if (!engine.dataReady()) return
+      const rows = engine.thirdRoundScenarios()
+      if (rows && rows[0] && rows[0].after) setLetter(rows[0].after.letter)
+    }
+
+    read()
+    window.addEventListener('juke:header', read)
+    return () => window.removeEventListener('juke:header', read)
+  }, [])
+
+  return letter
+}
+
 function SameEngineCard() {
   const { waiverLive, tradeLive } = useRoomStatus()
+  const draftLetter = useSameEngineGrade()
 
   return (
     <div
@@ -347,7 +386,12 @@ function SameEngineCard() {
         waiver claim and score both sides of a trade once those rooms are live. One engine, not three.
       </p>
       <div className="mt-4 flex flex-col gap-2">
-        <ProofRow label="Draft" active value="Grade · C" note="4 weighted parts, computed tonight" />
+        <ProofRow
+          label="Draft"
+          active
+          value={draftLetter ? `Grade · ${draftLetter}` : 'Grade · —'}
+          note="4 weighted parts, computed tonight"
+        />
         <ProofRow label="Waivers" active={waiverLive} value={waiverLive ? 'Live' : 'Not live yet'} note="same VORP baseline, once it ships" />
         <ProofRow label="Trades" active={tradeLive} value={tradeLive ? 'Live' : 'Not live yet'} note="same projections, once it ships" />
       </div>
