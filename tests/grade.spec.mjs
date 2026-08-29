@@ -147,6 +147,135 @@ test("a fully CPU-driven draft grades every team consistently, at two league siz
   }
 });
 
+/* Phase 0: the Analysis tab must never assert a room comparison it cannot
+   make yet.
+
+   Exactly one pick per team in — round 1 just finished, round 2 is on the
+   clock — `build` and `byePenalty` are mathematically tied across every
+   team: nobody has a bye-week collision with only one starter drafted, and
+   every team is missing the identical number of starting slots (see
+   AnalysisTab.jsx's own isMeasurable() comment for the full arithmetic).
+   scaleAcross() maps that tie to a flat 50 for everyone, which used to
+   print "+0 vs room median" on both of those bars — right beside a real,
+   non-tied "Nth of 10" rank computed from full-precision totals. Two true
+   facts, shown so they read as a contradiction.
+
+   The premise (both spreads genuinely ~0) is asserted before the screen is
+   trusted, the same discipline every other test in this file follows —
+   confirmed a mathematical certainty for the default league at exactly
+   `teams` picks: one player each, always a starter rather than bench, so
+   both cover checks and the hole count land on the same number for every
+   seat regardless of who they happen to have taken. */
+test("the Analysis tab does not assert a room comparison before the room has one", async ({ browser }) => {
+  const context = await browser.newContext();
+  const page = await openApp(context, "#/draft-room");
+  await startSoloDraft(page);
+
+  const teams = await page.evaluate(() => league.teams);
+
+  // Round 1 only, every seat included (mySlot too) — the same
+  // fully-CPU-driven shape as the test above, stopped one round early.
+  await page.evaluate((n) => {
+    let guard = 0;
+    while (state.picks.length < n && guard++ < 500) {
+      const c = onTheClock();
+      if (!c) break;
+      const choice = cpuChoice(c.slot, c.round);
+      if (!choice) break;
+      makePick(choice);
+    }
+    render();
+  }, teams);
+
+  const early = await page.evaluate(() => {
+    const all = analyseDraft();
+    const spread = (key) => Math.max(...all.map((t) => t[key])) - Math.min(...all.map((t) => t[key]));
+    return {
+      picks: state.picks.length,
+      buildSpread: spread("build"),
+      byeSpread: spread("byePenalty"),
+      mine: all.find((t) => t.slot === state.mySlot),
+    };
+  });
+
+  expect(early.picks, "exactly one pick per team, round 1 done").toBe(teams);
+  expect(early.buildSpread, "roster construction genuinely tied across the room at this point").toBeLessThan(0.5);
+  expect(early.byeSpread, "and so is bye week safety").toBeLessThan(0.5);
+
+  const screen = (await readAnalysisScreen(page)).replace(/\s+/g, " ");
+
+  // The rank is real and printed, off the same full-precision totals the
+  // two tied components above cannot see.
+  const rankWord = early.mine.rank === 1 ? "st" : early.mine.rank === 2 ? "nd" : early.mine.rank === 3 ? "rd" : "th";
+  expect(screen, "a real, non-blank rank").toContain(`${early.mine.rank}${rankWord} of ${teams}`);
+
+  // The two components confirmed tied above must not claim a room
+  // comparison — anchored on the label so this can't accidentally match
+  // the unrelated "How the grade is built" row for the same component,
+  // which never says "vs room median" at all.
+  expect(screen, "roster construction prints no room-comparison delta")
+    .not.toMatch(/Roster construction[\s\S]{0,40}[-+]?\d+ vs room median/);
+  expect(screen, "bye week safety prints no room-comparison delta")
+    .not.toMatch(/Bye week safety[\s\S]{0,40}[-+]?\d+ vs room median/);
+
+  // And the dash placeholder is what actually renders in their place — not
+  // just "the misleading number is gone", but "the honest one is there".
+  expect(screen, "roster construction shows the not-yet-measurable dash")
+    .toMatch(/Roster construction[\s\S]{0,40}— vs room median/);
+  expect(screen, "bye week safety shows the not-yet-measurable dash")
+    .toMatch(/Bye week safety[\s\S]{0,40}— vs room median/);
+
+  await context.close();
+});
+
+/* The other half of the same fix: the dash is not a one-way door. Once the
+   room has genuinely differed on a component, real numbers have to come
+   back on their own — nothing in AnalysisTab.jsx may count picks or rounds
+   to decide this, only the room's own current spread. Driven to a finished
+   draft rather than a fixed round count, so the premise below is measured
+   rather than assumed: by the end of a real draft, fourteen rounds of
+   different positions, different roster shapes and different bye weeks
+   have had every chance to separate the room on both components the first
+   test above found tied. */
+test("a component that was tied starts showing real numbers again once the room differs", async ({ browser }) => {
+  const context = await browser.newContext();
+  const page = await openApp(context, "#/draft-room");
+  await startSoloDraft(page);
+
+  await page.evaluate(() => {
+    let guard = 0;
+    while (!draftOver() && guard++ < 500) {
+      const c = onTheClock();
+      if (!c) break;
+      const choice = cpuChoice(c.slot, c.round);
+      if (!choice) break;
+      makePick(choice);
+    }
+    render();
+  });
+
+  const later = await page.evaluate(() => {
+    const all = analyseDraft();
+    const spread = (key) => Math.max(...all.map((t) => t[key])) - Math.min(...all.map((t) => t[key]));
+    return { buildSpread: spread("build"), byeSpread: spread("byePenalty") };
+  });
+
+  // The premise: a finished draft has to have actually differentiated
+  // roster construction across the room, the same fact the "fully
+  // CPU-driven draft" test above already relies on ("build is not a
+  // constant across the room").
+  expect(later.buildSpread, "roster construction has genuinely differentiated by the end of the draft").toBeGreaterThan(1);
+
+  const screen = (await readAnalysisScreen(page)).replace(/\s+/g, " ");
+
+  expect(screen, "roster construction shows a real delta now, not the tied placeholder")
+    .toMatch(/Roster construction[\s\S]{0,40}[-+]?\d+ vs room median/);
+  expect(screen, "and the dash is gone for that component")
+    .not.toMatch(/Roster construction[\s\S]{0,40}— vs room median/);
+
+  await context.close();
+});
+
 test("the Analysis screen's own numbers match what analyseDraft() computed for that seat", async ({ browser }) => {
   const context = await browser.newContext();
   const page = await openApp(context, "#/draft-room");
