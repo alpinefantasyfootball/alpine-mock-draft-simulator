@@ -6837,7 +6837,23 @@ function settingsText(cfg) {
 }
 
 function saveDraft() {
-  if (!state.started) return;
+  // hasRoom(), not inRoom() — see the distinction CLAUDE.md draws between
+  // them: inRoom() is Live.active(), which blips false during an ordinary
+  // reconnect, and a save written during that blip would still be a room
+  // draft's picks sitting under the exact same key a solo draft resumes
+  // from. A room member's real way back in is the invite link/room code,
+  // which already reconnects correctly (see live.js's own reconnect-on-
+  // visibilitychange/pageshow logic) — this key was never a working
+  // second path for that, only an accidental one. Confirmed reachable:
+  // close the tab on a room draft without using "Leave the room" (an
+  // ordinary way to lose a tab, not a deliberate departure), come back
+  // with no ?room= code, and the Locker showed an "in progress" band
+  // indistinguishable from a solo draft. "Resume draft" rebuilt state
+  // purely from the saved name list — it never touched Live or the
+  // socket — so it silently forked the draft into an offline solo
+  // continuation against CPUs while the real room carried on without
+  // this seat, with nothing on screen saying that had happened.
+  if (!state.started || hasRoom()) return;
   try {
     localStorage.setItem(SAVE_KEY, JSON.stringify({
       v: 2,

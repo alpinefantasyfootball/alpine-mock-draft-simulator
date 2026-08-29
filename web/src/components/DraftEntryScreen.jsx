@@ -15,7 +15,7 @@ export default function DraftEntryScreen({
   roomActive,
   seats,
   onClaimSeat,
-  soloAutopick,
+  autopick,
   onOpenSettings,
 }) {
   const scoringNames = engine.scoringNames()
@@ -28,7 +28,7 @@ export default function DraftEntryScreen({
     { label: 'Order', value: 'Snake' },
     { label: 'Rounds', value: league.rounds },
     { label: 'Per pick', value: clock ? `${clock}s` : 'No clock' },
-    { label: 'Autopick', value: soloAutopick ? 'On' : 'Off' },
+    { label: 'Autopick', value: autopick ? 'On' : 'Off' },
   ]
 
   const board = engine.board()

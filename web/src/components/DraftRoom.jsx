@@ -673,10 +673,14 @@ export default function DraftRoom() {
 
   // Declared before the !started early return below — DraftCockpitHeader
   // shows a working Autopick toggle pre-draft too (Entry's own summary
-  // row reads the same soloAutopick state), so this has to exist before
-  // that branch can reach it. Room vs. solo really do mean different
-  // things here — see the bridge comment on toggleRoomAutopilot in app.js
-  // for why neither branch is a stand-in for the other.
+  // row displays the same room-aware `autopick` value), so this has to
+  // exist before that branch can reach it. Room vs. solo really do mean
+  // different things here — see the bridge comment on toggleRoomAutopilot
+  // in app.js for why neither branch is a stand-in for the other. Both
+  // pre-draft display sites used to read the raw `soloAutopick` state
+  // regardless of room status, so toggling room autopilot here genuinely
+  // worked but never visibly updated either of them — fixed at both call
+  // sites below.
   const handleToggleAutopick = () => {
     if (roomActive) engine.toggleRoomAutopilot()
     else setSoloAutopick((a) => !a)
@@ -721,7 +725,13 @@ export default function DraftRoom() {
           waitingForHost={waitingForHost}
           startDisabled={!!problem || (roomActive && !engine.isHost())}
           onStartDraft={beginDraft}
-          autopick={soloAutopick}
+          /* autopick (room-aware), not soloAutopick — handleToggleAutopick
+             right above correctly flips the room's real state.autoMe when
+             roomActive, but this was still displaying the local solo flag,
+             which toggleRoomAutopilot() never touches. A room guest could
+             tap this, genuinely enable their own room autopilot, and watch
+             the switch keep reading "off" the whole pre-draft screen. */
+          autopick={autopick}
           onToggleAutopick={handleToggleAutopick}
           onOpenMenu={() => setSettingsOpen(true)}
           soundOn={soundOn}
@@ -763,7 +773,11 @@ export default function DraftRoom() {
             mySlot={roomActive ? (roomSeats ? mySlot : -1) : lobbySlot}
             roomActive={roomActive}
             seats={roomSeats}
-            soloAutopick={soloAutopick}
+            /* autopick, not soloAutopick — same fix as the header a few
+               lines up: this summary row unconditionally read the local
+               solo flag, so a room guest who toggled room autopilot on
+               kept seeing "Autopick: Off" here regardless. */
+            autopick={autopick}
             onOpenSettings={() => setSettingsOpen(true)}
             onClaimSeat={(seat) => {
               // In a room the room decides; off-room this is just my chair.
