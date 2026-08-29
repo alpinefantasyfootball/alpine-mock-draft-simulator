@@ -87,27 +87,27 @@ function usePlayerPool() {
 // a fixed VORP that only Proj reran under would be exactly the "half the
 // grade was reading a lie" class of bug that file is written to prevent.
 //
-// Survival is asked once per pool refresh, not per format: "still on the
-// board at your next turn" describes when a real draft would take him,
-// which a scoring toggle does not change.
-function useRankedRows(pool, ready, format, count) {
-  const [secondPick, setSecondPick] = useState(null)
-  // Declared before the effect below, not after — a dependency array is
-  // evaluated at the point useEffect() is called, so referencing a const
-  // declared later in the same function body throws "Cannot access
-  // before initialization" rather than reading it as a later reassignment
-  // the way a var would.
-  const engine = typeof window !== 'undefined' ? window.JukeEngine : null
+// Seat 0's own second pick (round 2) of a fresh, unstarted DEMO_TEAMS-team
+// draft — not "my next turn" in whatever draft the browser's shared engine
+// singleton happens to be holding. engine.nextPicksFor() used to answer
+// this by walking the real, global state.picks, which on the marketing
+// homepage is whatever a previous visit (or this tab's own solo draft)
+// left behind — often near-finished or already discarded — so the target
+// pick it returned could land near the very last pick of an entire draft.
+// This card's rows are the top seven by VORP, the earliest-ADP players on
+// the board by construction, so survival against a pick that late rounded
+// to 0% for every single one of them. DraftEngine.overallOf() is pure
+// snake arithmetic with no such state to drift off of — the same function
+// DraftBoardGrid.jsx already calls for a corner pick number on an empty
+// board cell (CLAUDE.md's "the seat-versus-pick-number bug"). Exported so
+// ShowYourWorking.jsx's own "next turn" demo targets the identical pick
+// rather than a second, independently-chosen team count.
+export const DEMO_TEAMS = 10
 
-  useEffect(() => {
-    if (!engine || !ready) return
-    // Seat 0's own second pick in the default league — there is no real
-    // draft in progress on the marketing homepage to ask "my next turn"
-    // of, so this is the one league config every control on the setup
-    // screen still defaults to (CLAUDE.md), read live rather than assumed.
-    const picks = engine.nextPicksFor(0, 2)
-    setSecondPick(picks.length > 1 ? picks[1] : null)
-  }, [engine, ready])
+function useRankedRows(pool, ready, format, count) {
+  const engine = typeof window !== 'undefined' ? window.JukeEngine : null
+  const DE = typeof window !== 'undefined' ? window.DraftEngine : null
+  const secondPick = DE ? DE.overallOf(2, 0, DEMO_TEAMS) : null
 
   if (!engine || !ready || !pool.length) return []
 

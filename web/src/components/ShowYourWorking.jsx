@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { COMPONENT_LABELS } from './TakeAPick.jsx'
+import { DEMO_TEAMS } from './ScoringDemoCard.jsx'
 
 // standard/half/full — same three keys ScoringDemoCard.jsx's own
 // PPR_OPTIONS already uses; kept as a second, small array rather than an
@@ -163,8 +164,15 @@ function useFeaturedSurvival() {
       const forcedLate = engine.forcedLate()
       if (!statKeys) return
 
-      const picks = engine.nextPicksFor(0, 2)
-      const targetOverall = picks.length > 1 ? picks[1] : null
+      // Seat 0's own second pick of a fresh, unstarted DEMO_TEAMS-team draft
+      // — see ScoringDemoCard.jsx's own comment on DEMO_TEAMS for why this
+      // is pure snake arithmetic rather than a read of the live, shared
+      // state.picks (which used to put this caption's "next turn" pick as
+      // late as pick 139 of an entire draft). Both widgets target the
+      // identical pick by construction, which is what this function's own
+      // comment above promises.
+      const DE = typeof window !== 'undefined' ? window.DraftEngine : null
+      const targetOverall = DE ? DE.overallOf(2, 0, DEMO_TEAMS) : null
       if (targetOverall == null) return
       const picksFromNow = targetOverall - 1
 
