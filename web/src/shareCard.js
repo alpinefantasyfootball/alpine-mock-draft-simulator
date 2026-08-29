@@ -34,6 +34,18 @@ const ROSE_B = '#FB7185'
 const BG = '#0B0E14'
 const PANEL = '#131A24'
 
+/* The one real logo on the card, not just the eyebrow's spelled-out
+   "J U K E". juke-mark.svg specifically, not one of its ground-specific
+   siblings — JukeLogo.jsx's own SURFACE map names it as the variant baked
+   for a #0B0E14 background ("obsidian"), and BG above is that exact hex.
+   Drawing juke-mark-void.svg or -appbar.svg here would carry the wrong
+   negative-space colour baked into the file and read as a mismatched logo
+   the moment it landed on this card's ground — see CLAUDE.md's "The
+   shark" and "A variant per ground, not one file you recolour" for why
+   there is no single mark file that works on every surface. */
+const MARK_SRC = '/juke-mark.svg'
+const MARK_ASPECT = 564 / 352 // do not stretch — same ratio JukeLogo.jsx and build_og.html use
+
 // The four grade components, same order and names as the dashboard's radar.
 const COMPONENTS = [
   { key: 'startersScaled', label: 'Starters' },
@@ -106,6 +118,27 @@ async function ensureFonts() {
   for (const family of ['Archivo', 'Inter']) {
     if (!faceIsReal(family, ctx)) throw new Error(`${family} did not load`)
   }
+}
+
+/* The one actual image this file draws — everything else on the card is
+   canvas text and gradients, per the file comment at the top. Fetched and
+   decoded from an object URL rather than a bare `new Image().src = MARK_SRC`,
+   matching how scripts/build_og.html already solves this identical problem
+   for the link-preview card: a network miss surfaces here as a thrown error
+   instead of a card silently drawn with a hole where the mark should be —
+   the same "refuse rather than ship it broken" rule ensureFonts() already
+   follows for the two faces, applied to the one image alongside them. The
+   geometry itself stays out of this bundle; only the loader lives here. */
+async function loadMark() {
+  const res = await fetch(MARK_SRC)
+  if (!res.ok) throw new Error(`${MARK_SRC} returned ${res.status}`)
+  const svg = await res.text()
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => resolve(img)
+    img.onerror = () => reject(new Error('the mark did not decode'))
+    img.src = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }))
+  })
 }
 
 function roundRect(ctx, x, y, w, h, r) {
@@ -217,7 +250,10 @@ function wrapText(ctx, text, x, y, maxWidth, lineHeight, maxLines) {
 }
 
 export async function drawShareCard(data) {
-  await ensureFonts()
+  // Run concurrently: neither depends on the other, and both are the same
+  // "refuse rather than ship a broken card" contract, so a failure in
+  // either one aborts the draw before any pixel is painted.
+  const [markImg] = await Promise.all([loadMark(), ensureFonts()])
 
   const vorpRows = data.vorpRows || []
   const timeline = data.timeline || []
@@ -272,11 +308,23 @@ export async function drawShareCard(data) {
   ctx.fillStyle = rule
   ctx.fillRect(0, 0, W, 6)
 
+  /* The shark, left of the eyebrow. Sized off the eyebrow line it sits
+     beside (24px Archivo) rather than a number chosen by eye, so the two
+     read as one lockup and a future face change keeps them in proportion —
+     64px is close to what JukeLogo.jsx's own `size * 1.7` would produce for
+     text this size (size 24 -> ~41px there; wider here on purpose, since a
+     card meant to be glanced at small in a group chat needs more presence
+     than a 21px header lockup does). Height is derived, never a second
+     number that could drift from the aspect ratio. */
+  const MARK_W = 64
+  const MARK_H = Math.round(MARK_W / MARK_ASPECT)
+  ctx.drawImage(markImg, TEXT_X, 55, MARK_W, MARK_H)
+
   // eyebrow + identity
   ctx.fillStyle = TEAL
   ctx.font = '600 24px "Archivo", sans-serif'
   ctx.textBaseline = 'alphabetic'
-  ctx.fillText('J U K E   ·   D R A F T   R E P O R T', 64, 84)
+  ctx.fillText('J U K E   ·   D R A F T   R E P O R T', TEXT_X + MARK_W + 20, 84)
 
   ctx.fillStyle = '#FFFFFF'
   ctx.font = '700 52px "Archivo", sans-serif'
@@ -431,6 +479,33 @@ export async function drawShareCard(data) {
     ctx.fillText('BIGGEST REACH', 620, footY)
     ctx.fillStyle = 'rgba(255,255,255,0.75)'
     ctx.fillText(data.biggestReach, 620 + 200, footY)
+  }
+  /* Projected win % — computed by the dashboard (winPctForRoom(), app.js)
+     and shown on screen next to the rank, and until now the one figure in
+     that row the card silently dropped: nobody excluded it on purpose,
+     shareData's object literal just never named it. Drawn as a third stat
+     here, in the same label/value convention as the two callouts above,
+     rather than appended to the rank line itself — that line's width is
+     already solved against the panel it has to clear (see the grade-sizing
+     comment above), and a variable-width suffix is exactly what that
+     comment warns can push it under the panel again. Same
+     `typeof === 'number'` guard the dashboard renders behind, so a draft
+     with no room-wide win-probability model draws no line at all rather
+     than a broken "NaN%".
+
+     The value's x is measured off the label rather than a second hand-tuned
+     offset like the two callouts above use — those were eyeballed once
+     against a label of fixed, known text ("BEST VALUE", "BIGGEST REACH")
+     that never changes length. "PROJECTED WIN %" is a new label with no
+     history of being checked against a real render, so it earns the same
+     `ctx.measureText()` this file already leans on for the truncation loops
+     below rather than a third guessed number. */
+  if (typeof data.winPct === 'number') {
+    const winLabel = 'PROJECTED WIN %'
+    ctx.fillStyle = TEAL
+    ctx.fillText(winLabel, 64, footY + 40)
+    ctx.fillStyle = 'rgba(255,255,255,0.75)'
+    ctx.fillText(`${Math.round(data.winPct * 100)}%`, 64 + ctx.measureText(winLabel).width + 14, footY + 40)
   }
 
   // watermark, top-right of the header
