@@ -2761,22 +2761,6 @@ function draftFit(player) {
 // drafted in the first several rounds.
 const MIN_ADP_SAMPLE = 20;
 
-// Abramowitz & Stegun 7.1.26 — |error| < 1.5e-7, plenty for a pick
-// probability nobody is reading past two significant figures.
-function erf(x) {
-  const sign = x < 0 ? -1 : 1;
-  const ax = Math.abs(x);
-  const a1 = 0.254829592, a2 = -0.284496736, a3 = 1.421413741,
-        a4 = -1.453152027, a5 = 1.061405429, p = 0.3275911;
-  const t = 1 / (1 + p * ax);
-  const y = 1 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-ax * ax);
-  return sign * y;
-}
-
-function normalCdf(z) {
-  return 0.5 * (1 + erf(z / Math.SQRT2));
-}
-
 /* P(player still on the board at a given overall pick) — the Cockpit's
    "gone before pick 43 in 87% of boards" copy, and the reason it can say
    that honestly. draftFit()'s own adp field above is deliberately not a
