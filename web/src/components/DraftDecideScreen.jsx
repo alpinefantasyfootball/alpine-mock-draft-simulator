@@ -18,10 +18,27 @@ function ordinal(n) {
 // you a rose Draft-now button underneath it. Thresholds are round numbers
 // chosen for legibility, not fit to anything; survivalProbability() is
 // the real measurement, this only buckets it into three sentences.
-function verdictFor(survival) {
+//
+// `actionable` is whether Draft is really available right now. SurvivorCard
+// is the "who's still here at my next turn" screen, rendered exactly when
+// it is NOT your turn (Card covers the myTurn case and never calls this),
+// so its Draft button is correctly disabled the whole time it's on screen.
+// "Take him now" above a button that cannot be pressed is the same failure
+// as naming a kicker the biggest reach: a correct number nobody can act on.
+// The bucket, the colour and the button's own action never change — only
+// the word painted above a button that was never clickable.
+function verdictFor(survival, actionable = true) {
   if (survival == null) return { label: 'Unranked market', color: 'text-white/50', action: 'Draft' }
-  if (survival < 0.2) return { label: 'Take him now', color: 'text-rose-300', action: 'Draft' }
-  if (survival < 0.65) return { label: 'Coin flip', color: 'text-amber-300', action: 'Queue him' }
+  if (survival < 0.2) {
+    return actionable
+      ? { label: 'Take him now', color: 'text-rose-300', action: 'Draft' }
+      : { label: 'Likely gone', color: 'text-rose-300', action: 'Draft' }
+  }
+  if (survival < 0.65) {
+    return actionable
+      ? { label: 'Coin flip', color: 'text-amber-300', action: 'Queue him' }
+      : { label: 'Coin flip on lasting', color: 'text-amber-300', action: 'Queue him' }
+  }
   return { label: 'Safe to wait', color: 'text-emerald-300', action: 'Leave him' }
 }
 
@@ -236,7 +253,7 @@ function Card({ candidate, rankLabel, primary, onDraft, myTurn, engine, board, c
 
 function SurvivorCard({ candidate, engine, onQueueToggle, onDraft, myTurn, queued, onOpenProfile }) {
   const { player, survival } = candidate
-  const verdict = verdictFor(survival)
+  const verdict = verdictFor(survival, myTurn)
   const pct = survival != null ? Math.round(survival * 100) : null
   const barColor = survival == null ? 'bg-white/20' : survival < 0.2 ? 'bg-rose-400' : survival < 0.65 ? 'bg-amber-300' : 'bg-emerald-400'
 
@@ -566,11 +583,20 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, auto
      app.js already stamped every player), not a new scarcity metric. One
      row per skill position: how many of tier 1 are left, and how big the
      drop to tier 2 actually is once it runs out, so "cliff" means a real
-     points gap rather than a feeling. */
+     points gap rather than a feeling.
+
+     "How many remain" goes through engine.tierRemaining() rather than a
+     second `!p.drafted` filter here — it's the exact function app.js's own
+     board chip prints ("2 left in tier 1") and the candidate cards above
+     already call it per-player (see `tierLeft` a few lines up). tier1[0]
+     stands in for "a tier-1 player at this position" because every element
+     of tier1 shares the same pos/tier by construction, which is all
+     tierRemaining() reads — it re-counts off the real board itself, so it
+     can't drift from this array's own contents. */
   const tierLadder = ['QB', 'RB', 'WR', 'TE'].map((pos) => {
     const posBoard = board.filter((p) => p.pos === pos)
     const tier1 = posBoard.filter((p) => p.tier === 1)
-    const remaining = tier1.filter((p) => !p.drafted).length
+    const remaining = tier1.length ? engine.tierRemaining(tier1[0]) : 0
     const tier2 = posBoard.filter((p) => p.tier === 2)
     let drop = null
     if (tier1.length && tier2.length) {

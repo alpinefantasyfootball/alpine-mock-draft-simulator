@@ -494,7 +494,7 @@ export default function DraftRoom() {
   // Solo autopick's real submission path: the exact same engine.draftPlayer
   // the Draft button uses (draftAndAdvance() underneath), just triggered
   // automatically instead of by a click, with the pick chosen by
-  // engine.autoPickForMe() — the same queueTop() -> suggestions()[0] ->
+  // engine.autoPickForMe() — the same queueTop() -> cpuChoice() ->
   // bestLeft() order autoDraftRest()'s own solo loop already uses for my
   // seat. Room mode needs none of this: driveMyAutopilot() already re-runs
   // itself off every room broadcast once toggled on (see the bridge
@@ -1464,6 +1464,7 @@ export default function DraftRoom() {
                     {isDesktop && (
                     <PlayerQueueSidebar
                       bareTable
+                      engine={engine}
                       players={availablePlayers}
                       posFilter={posFilter}
                       /* pointsForActive/vorpForActive, not the plain
@@ -1561,6 +1562,7 @@ export default function DraftRoom() {
                     <PlayerQueueSidebar
                       bareTable
                       mobile
+                      engine={engine}
                       players={availablePlayers}
                       posFilter={posFilter}
                       // Same fix as the desktop dock above, same reason —

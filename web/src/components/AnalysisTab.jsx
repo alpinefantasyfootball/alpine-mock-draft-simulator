@@ -5,9 +5,39 @@ import { POS_BADGE } from './draftRoomPositions.js'
 /* One row of the "against the room" panel — where "you" sits on a 0-100
    track against this component's room median and best. All three come off
    the same analyseDraft() call the four bars already read; nothing here is
-   a second measurement. */
+   a second measurement.
+
+   `item.measurable` is false when this component's raw, pre-scaling figure
+   is still tied (or as good as tied) across the whole room — see
+   `isMeasurable()` below for why that happens early in a draft and why it
+   is checked on the raw value rather than the scaled one. A tied room maps
+   every team to the same scaled 50, so the marker, the median tick and the
+   delta text below would all sit on top of each other and print "+0 vs
+   room median" — a real number, honestly rounded, that still reads as "you
+   are exactly average" when the truer statement is "nobody can be compared
+   on this yet." Drawing a marker or a delta here would assert a comparison
+   that does not exist, so this renders a plain dash instead — no bar, no
+   "you" square, no median tick — until the room actually differs. */
 function ComponentBand({ item }) {
   const clamp = (v) => Math.max(0, Math.min(100, v))
+  if (!item.measurable) {
+    return (
+      <div className="mb-3.5 last:mb-0">
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="text-[12.5px] font-medium text-white/80">{item.label}</span>
+          <span
+            className="font-numeral text-[11px] font-semibold text-ink-muted"
+            title="Not enough of the room has drafted yet to compare this."
+          >
+            &mdash; vs room median
+          </span>
+        </div>
+        <div className="relative mt-2 h-4">
+          <div className="absolute inset-x-0 top-[7px] h-1 rounded-full bg-white/[0.07]" />
+        </div>
+      </div>
+    )
+  }
   const below = item.pct < item.median
   return (
     <div className="mb-3.5 last:mb-0">
@@ -141,24 +171,65 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
      "the worst of these N teams." Drives the "vs. room" / "own scale" tag
      on each bar row below, and the summary sentence a few lines down that
      used to claim all four worked the same way — they don't. */
+  /* Whether a component's raw, pre-scaling figure has actually started to
+     differ across the room — independent of what scaleAcross() does with it
+     afterwards. Early in a draft `build` and `byePenalty` are mathematically
+     forced to an identical raw value for every team: nobody has a bye-week
+     collision yet, and nobody has picked up an unfilled-slot or roster-cap
+     penalty nobody else also has. scaleAcross() then maps that tied raw
+     value to a flat 50 for every team (a raw spread of exactly 0 puts every
+     team at the room midpoint — see scaleAcross() in app.js), so a real,
+     non-tied "4th of 10" rank can sit over four component bars that all
+     round to "+0 vs room median." Both facts are true; only one of them is
+     informative, and nothing on screen said which.
+
+     Checked against the RAW figure rather than the *scaled* one, and rather
+     than MIN_SPAN: MIN_SPAN says how much of a real spread to trust once
+     scaleAcross() is stretching it across 0-100, which is a different
+     question from whether a spread exists at all. A component can be
+     genuinely measurable well before its spread clears that floor.
+
+     Epsilons are per component, in that component's own units, not a shared
+     percentage. `build` is Math.round()ed to a whole number and `byePenalty`
+     only ever moves in steps of 20 — one squared starter, one week, at a
+     time (see byeCost above) — so anything short of a full step apart is
+     the same tied value, not a coincidence of rounding. `startersVsPar` and
+     `valueVsPar` are continuous points and picks respectively, so a much
+     smaller gap already means two genuinely different rosters; 1 is small
+     enough to catch only the case both are actually still tied. This is a
+     live, data-driven check re-run on every render — never a fixed
+     picks-count threshold — so a component starts showing its real numbers
+     again the moment the room actually differs on it, whatever round that
+     happens to be. */
+  const RAW_KEY = { starters: 'startersVsPar', value: 'valueVsPar', build: 'build', byes: 'byePenalty' }
+  const RAW_EPSILON = { starters: 1, value: 1, build: 0.5, byes: 0.5 }
+  const isMeasurable = (key) => {
+    const values = all.map((t) => t[RAW_KEY[key]])
+    return Math.max(...values) - Math.min(...values) > RAW_EPSILON[key]
+  }
+
   const bars = [
     // Caption from the engine, not rebuilt here: the bar is scored against par
     // for this seat and the raw sum is what the VORP matrix adds up to, so a
     // locally-composed detail line would describe a different number from the
     // bar it sits under. See parText() in app.js.
-    { key: 'starters', label: 'Starter strength', detail: engine.parText ? engine.parText(me) : Math.round(me.starters) + ' pts above replacement', pct: me.startersScaled, weight: weights.starters, scaled: true },
+    { key: 'starters', label: 'Starter strength', detail: engine.parText ? engine.parText(me) : Math.round(me.starters) + ' pts above replacement', pct: me.startersScaled, weight: weights.starters, scaled: true, measurable: isMeasurable('starters') },
     // Caption from the engine, same contract as starter strength above: the
     // bar is scored against par for this seat and the raw figure is what the
     // value timeline's own bars sum to, so composing it here would describe a
     // different number from the bar it labels. See parValueText() in app.js.
-    { key: 'value', label: 'Draft value', detail: engine.parValueText ? engine.parValueText(me) : (me.value >= 0 ? '+' : '') + me.value + ' picks, K and D/ST aside', pct: me.valueScaled, weight: weights.value, scaled: true },
+    { key: 'value', label: 'Draft value', detail: engine.parValueText ? engine.parValueText(me) : (me.value >= 0 ? '+' : '') + me.value + ' picks, K and D/ST aside', pct: me.valueScaled, weight: weights.value, scaled: true, measurable: isMeasurable('value') },
     /* The headline is the raw score now — buildScaled is aliased to it, so the
        bar, its number and the weighted-sum line all read the same thing. The
        caption used to be `me.build + ' / 100'`, which was that same number a
        second time; engine.buildText() names what actually cost the points. */
-    { key: 'build', label: 'Roster construction', detail: engine.buildText ? engine.buildText(me) : me.build + ' / 100', pct: me.buildScaled, weight: weights.build, scaled: false },
-    { key: 'byes', label: 'Bye week safety', detail: engine.byeSummary(me.badWeeks), pct: me.byePenaltyScaled, weight: weights.byes, scaled: true },
+    { key: 'build', label: 'Roster construction', detail: engine.buildText ? engine.buildText(me) : me.build + ' / 100', pct: me.buildScaled, weight: weights.build, scaled: false, measurable: isMeasurable('build') },
+    { key: 'byes', label: 'Bye week safety', detail: engine.byeSummary(me.badWeeks), pct: me.byePenaltyScaled, weight: weights.byes, scaled: true, measurable: isMeasurable('byes') },
   ]
+  // How many of the four are currently tied across the room — drives the
+  // optional caveat near the rank below. Not used to gate anything else:
+  // each bar/band still decides its own measurability independently.
+  const unmeasurableCount = bars.filter((b) => !b.measurable).length
 
   const standings = all.slice().sort((a, b) => a.rank - b.rank)
 
@@ -181,8 +252,18 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
     'Roster construction': ['a deep bench', 'a thin bench'],
     'Bye week safety': ['bye-safe starters', 'bye-week exposure'],
   }
-  const strongest = bars.reduce((a, b) => (b.pct > a.pct ? b : a))
-  const weakest = bars.reduce((a, b) => (b.pct < a.pct ? b : a))
+  /* Picked from the measurable bars only, when there are any. A component
+     tied across the whole room (see isMeasurable() above) still carries a
+     real `pct` — often the lowest or highest of the four purely because
+     roster construction starts everyone near 100 and empty slots subtract
+     from it fastest — and naming it "weak" or "strong" in the sentence
+     below would be the same false claim ComponentBand refuses to draw,
+     just said in prose instead of a marker. Falls back to every bar only
+     in the (rare, very-early) case none of the four have differentiated
+     yet, so the sentence never throws on an empty array. */
+  const measurableBars = bars.filter((b) => b.measurable)
+  const strongest = (measurableBars.length ? measurableBars : bars).reduce((a, b) => (b.pct > a.pct ? b : a))
+  const weakest = (measurableBars.length ? measurableBars : bars).reduce((a, b) => (b.pct < a.pct ? b : a))
   const roomAverage = Math.round(all.reduce((s, t) => s + t.total, 0) / all.length)
   const goodPhrase = PHRASE[strongest.label][0]
   const summarySentence =
@@ -210,7 +291,16 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
     const values = all.map((t) => t[scaledKeyOf[b.key]])
     const roomMedian = median(values)
     const best = Math.max(...values)
-    return { ...b, median: roomMedian, best, cost: b.weight * Math.max(0, roomMedian - b.pct) }
+    /* cost is 0 for a component that isn't measurable yet, same as it
+       already is at or above the room median — there is no real gap to
+       close, only the display noise ComponentBand and the bars above are
+       both refusing to draw. Without this, "Fix this first" could name a
+       roster-construction hole every team shares in round 2 as the seat's
+       single most expensive problem, alongside a real player upgrade for
+       it, which is the same false-signal-as-advice failure this whole pass
+       exists to remove. */
+    const cost = b.measurable ? b.weight * Math.max(0, roomMedian - b.pct) : 0
+    return { ...b, median: roomMedian, best, cost }
   })
   // "Fix this first" targets whichever component costs the most, in
   // weighted points, against the room's middle team — not just the lowest
@@ -350,6 +440,15 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
                 {ordinal(me.rank)} <span className="text-[16px] font-semibold text-white/50">of {teams}</span>
               </h2>
               <p className="mt-2 text-[14px] leading-snug text-white/55">{summarySentence}</p>
+              {/* Optional, low-key — only shows once more than one of the
+                  four bars is currently a dash (see isMeasurable() above),
+                  so a rank this real doesn't sit over several ties with
+                  nothing on screen explaining why. */}
+              {unmeasurableCount >= 2 && (
+                <p className="mt-1 text-[12px] leading-snug text-ink-muted">
+                  A few components below are still settling in as more of the room drafts.
+                </p>
+              )}
             </div>
             {/* The letter, demoted, and no longer standing next to a score out
                 of a hundred.
@@ -579,6 +678,11 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
             <p className="max-w-sm text-xs leading-relaxed text-white/50">
               {done ? 'Draft complete.' : 'Updates after every pick.'} Graded against the {teams - 1} teams in
               this room, not against the league at large.
+              {/* Same optional caveat as the mobile header, same threshold —
+                  see unmeasurableCount and isMeasurable() above. */}
+              {unmeasurableCount >= 2 && (
+                <span className="text-ink-muted"> A few components below are still settling in as more of the room drafts.</span>
+              )}
             </p>
             {/* The letter, demoted, and the "Weighted score / x / 100" block
                 that used to sit here is gone — see the mobile header's own

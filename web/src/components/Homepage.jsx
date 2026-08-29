@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react'
-import { Apple, PlaySquare } from 'lucide-react'
 import Header from './Header.jsx'
 import Hero from './Hero.jsx'
 import TakeAPick from './TakeAPick.jsx'
@@ -37,18 +36,14 @@ const LEGAL_LINKS = [
 // Real marks now, not mono-label placeholders — path data pulled straight
 // from Simple Icons (simpleicons.org), whose SVG recreations are
 // dedicated to the public domain (CC0 1.0; checked the project's own
-// LICENSE.md), so redrawing them here isn't a copyright question the way
-// the App Store/Google Play badges below still are.
+// LICENSE.md), so redrawing them here isn't a copyright question.
 //
 // The trademarks the marks depict still belong to Meta/X Corp/Reddit, same
 // as any logo — but using a platform's own mark to point at your own real
 // profile on it ("follow us on X") is ordinary, widely-practiced nominative
-// use, not the tightly-licensed, agreement-bound territory Apple/Google's
-// *store badges* live in (those are tied to an actual listing Juke doesn't
-// have, under marketing guidelines that gate the artwork itself). Different
-// question, different answer — accurate icons are fine here; there's just
-// no Juke account behind any of them yet, which is a "not live" problem,
-// not a "not allowed" one, so they still open the same ComingSoonModal.
+// use. There's just no Juke account behind any of them yet, which is a
+// "not live" problem, not a "not allowed" one, so they still open the same
+// ComingSoonModal.
 //
 // LinkedIn and YouTube dropped per instruction, matching the reference
 // footer's own four (Reddit, X, Facebook, Instagram) rather than the five
@@ -79,16 +74,6 @@ function SocialIcon({ path }) {
     </svg>
   )
 }
-
-// Juke isn't listed in either store — it installs as a PWA (manifest.json),
-// which is a real, working feature this pair of badges doesn't hook up to
-// yet. Apple/PlaySquare are lucide's generic, brand-neutral icons, not a
-// hand-traced reproduction of Apple's or Google's actual trademarked badge
-// artwork, which this project has no license to redraw.
-const APP_BADGES = [
-  { store: 'App Store', article: 'the App Store', kicker: 'Download on the', Icon: Apple },
-  { store: 'Google Play', article: 'Google Play', kicker: 'Get it on', Icon: PlaySquare },
-]
 
 function useRooms() {
   const [rooms, setRooms] = useState([])
@@ -151,17 +136,17 @@ function FooterColumn({ title, children }) {
   )
 }
 
-// The brand stack — logo, then socials, then app badges, in that order —
-// is identical on both breakpoints, so it gets its own component rather
-// than being written out twice.
-function FooterBrandStack({ onSocialClick, onAppClick }) {
+// The brand stack — logo, then socials, in that order — is identical on
+// both breakpoints, so it gets its own component rather than being written
+// out twice.
+function FooterBrandStack({ onSocialClick }) {
   return (
     <div className="flex flex-col items-start gap-5">
       {/* §11's footer repeat of the slogan — wrapped with the logo in its
           own div rather than joining the outer gap-5 flex column directly,
           since the spec's own 8px gap is specific to logo-to-slogan and
           would otherwise apply uniformly to every child in this stack
-          (i.e. also pushing the socials row and the app badges apart). */}
+          (i.e. also pushing the socials row away from it). */}
       <div>
         <JukeLogo size={18} />
         <div className="mt-2 font-display text-[14px] font-extrabold italic uppercase tracking-[0.05em] text-[#7A808D]">
@@ -182,23 +167,6 @@ function FooterBrandStack({ onSocialClick, onAppClick }) {
           </button>
         ))}
       </div>
-
-      <div className="flex flex-wrap gap-2">
-        {APP_BADGES.map(({ store, article, kicker, Icon }) => (
-          <button
-            key={store}
-            type="button"
-            onClick={() => onAppClick(store, article)}
-            className="flex items-center gap-2 rounded-lg border border-line-hairline px-3 py-[7px] transition-colors hover:border-teal-400/40"
-          >
-            <Icon className="h-5 w-5 text-voidInk-body" />
-            <span className="flex flex-col items-start leading-tight">
-              <span className="text-[8.5px] uppercase tracking-[0.06em] text-voidInk-muted">{kicker}</span>
-              <span className="text-[12.5px] font-semibold text-voidInk-primary">{store}</span>
-            </span>
-          </button>
-        ))}
-      </div>
     </div>
   )
 }
@@ -211,7 +179,6 @@ export default function Homepage() {
 
   const openComingSoon = (label, body) => modalRef.current?.open(`${label} is coming soon`, body)
   const openSocial = (label) => openComingSoon(label, `Juke isn't on ${label} yet — check back once it is.`)
-  const openApp = (store, article) => openComingSoon(store, `Juke isn't listed on ${article} yet — it installs as a browser app for now.`)
   // ROOM_SIGNUP_SOURCE/roomSignupCopy (icons.jsx) are the same lookup
   // RoomsGrid.jsx's roadmap list and RoomsNavMenu.jsx's dropdown rows use,
   // so these footer links, that grid and that dropdown all tag the
@@ -240,8 +207,8 @@ export default function Homepage() {
       </main>
 
       {/* ---------- Footer, restructured after a real competitor's (Sleeper's)
-          own footer ---------- Logo, then socials, then app badges, stacked
-          top-left; everything else in equal-width columns to the right —
+          own footer ---------- Logo, then socials, stacked top-left;
+          everything else in equal-width columns to the right —
           Rooms/Method/Company/Legal here, standing in for Sleeper's own
           Available-on/Company/Resources/Play columns. Rooms and Method are
           Juke's real content; Company now holds one real destination
@@ -257,7 +224,7 @@ export default function Homepage() {
           visually close. */}
       <footer className="mt-[72px] border-t border-line-hairline bg-surface-nav">
         <div className="mx-auto flex max-w-[1200px] flex-col gap-12 px-10 py-14 lg:grid lg:grid-cols-5 lg:gap-x-10 lg:gap-y-12">
-          <FooterBrandStack onSocialClick={openSocial} onAppClick={openApp} />
+          <FooterBrandStack onSocialClick={openSocial} />
 
           <FooterColumn title="The Rooms">
             {rooms.map((room) => (

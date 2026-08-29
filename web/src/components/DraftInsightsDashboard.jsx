@@ -489,6 +489,12 @@ export default function DraftInsightsDashboard({
       ? `${bargain.name}${bargain.gap > 0 ? ` · ${bargain.gap} picks late` : ''}`
       : null,
     biggestReach: reach ? `${reach.name} · ${Math.abs(reach.gap)} picks early` : null,
+    // Shown on screen a few lines below (next to Net ADP value), and until
+    // now dropped here with nothing saying why — this wasn't a deliberate
+    // omission the way `total` above is. shareCard.js guards it the same
+    // `typeof === 'number'` way the JSX render does, so a draft with no
+    // room-wide win-probability model draws no line rather than "NaN%".
+    winPct,
     // Everything below this line is what makes the card the whole report
     // rather than the old fixed 630px teaser — see shareCard.js's own file
     // comment on why Share/Copy/Download all drew that same short card and
