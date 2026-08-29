@@ -565,6 +565,36 @@ export default function DraftRoom() {
     beginDraft()
   }
 
+  // The recommendation banner's own launch path (WhatToRunNext.jsx,
+  // RecommendationEngine.jsx, via runRecommendation() in recommendation.js)
+  // — deliberately its own function rather than an optional seat parameter
+  // on beginDraft/handleStartNew above, even though that reads like less
+  // code. Both of those are bound directly to a raw onClick in more than
+  // one place already (DraftCockpitHeader's "Start" button passes
+  // beginDraft straight through as onStartDraft; NewMockPanel's own "Start
+  // mock draft" button does the same with handleStartNew) — an ordinary
+  // click passes its own SyntheticEvent as the first argument, and an
+  // optional `seatOverride ?? lobbySlot` would happily treat that truthy
+  // event object as a seat index. This path is never bound to a click
+  // directly, only ever called from inside runRecommendation() with a
+  // real seat, so it stays separate rather than a shared signature two
+  // very different call shapes would have to stay compatible with.
+  //
+  // roomActive is checked and refused here too, not just left to the
+  // caller's own disabled state — every other control that can rewrite
+  // league shape (NewMockPanel's Teams/Scoring selects, DraftSettingsModal)
+  // refuses the same way once a room exists, and this was the one write
+  // path to setLeague() that didn't.
+  const startAtSeat = (seat) => {
+    if (roomActive) return
+    setLobbySlot(seat)
+    location.hash = '#/draft-room'
+    setEnteredRoom(true)
+    startingSinceRef.current = performance.now()
+    setStarting(true)
+    engine.startDraft({ mySlot: seat, clockLength: engine.clockLength() })
+  }
+
   // The Lobby's direct multiplayer action — createRoom() is the exact call
   // RoomPanel.jsx's own "Create a room" button already makes; this just
   // reaches it without an Edit setup -> Invite detour first. Deliberately
@@ -650,6 +680,7 @@ export default function DraftRoom() {
               enforce before this screen owned the action itself. */}
           <DraftLocker
             onStartNew={handleStartNew}
+            onRunAtSeat={startAtSeat}
             problem={problem}
             lobbySlot={lobbySlot}
             roomActive={roomActive}
@@ -1168,6 +1199,11 @@ export default function DraftRoom() {
             league={league}
             mySlot={mySlot}
             myTurn={myTurn}
+            /* This screen never received autopick at all — every Draft
+               affordance on it (the ranked cards, the queue, "Everyone
+               else") stayed live through a whole autopick turn. See
+               DraftDecideScreen.jsx's own comment on canDraftNow. */
+            autopick={autopick}
             picks={picks}
             onDraft={handleDraft}
             onQueueToggle={handleToggleQueue}
@@ -1456,7 +1492,21 @@ export default function DraftRoom() {
                       photoFor={photoFor}
                       initialsFor={initialsFor}
                       onDraft={handleDraft}
-                      myTurn={myTurn}
+                      /* myTurn && !autopick, not bare myTurn — PlayerQueueSidebar
+                         has no autopick concept of its own; it just trusts
+                         whatever myTurn it's given and disables its Draft
+                         buttons on `!myTurn`, exactly like PlayersTab.jsx's
+                         identical fold at its own two call sites (see its
+                         own comment: "a human clicking Draft while [autopick
+                         is] on is a race that shouldn't read as available").
+                         This dock skipped that fold, so during autopick it
+                         kept showing live, clickable Draft buttons — and
+                         engine.draftPlayer() only checks whose turn it is,
+                         never the local autopick toggle, so a click here
+                         while autopick's own effect is also about to submit
+                         is a genuine race for who actually drafts, not a
+                         harmless no-op. */
+                      myTurn={myTurn && !autopick}
                       queuedNames={queuedNames}
                       onToggleQueue={handleToggleQueue}
                       draftedByFor={draftedByFor}
@@ -1525,7 +1575,8 @@ export default function DraftRoom() {
                       photoFor={photoFor}
                       initialsFor={initialsFor}
                       onDraft={handleDraft}
-                      myTurn={myTurn}
+                      // Same fix as the desktop dock above, same reason.
+                      myTurn={myTurn && !autopick}
                       queuedNames={queuedNames}
                       onToggleQueue={handleToggleQueue}
                       draftedByFor={draftedByFor}

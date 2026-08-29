@@ -83,8 +83,26 @@ export default function PickTicker({ league, onClock, overall, mySlot, myTurn, u
   /* The ribbon holds no scrollbar of its own — it advances. Every pick
      that lands consumes one chip off the front, and the strip translates
      by that chip's own width so the next thing the ticker points at is
-     always the leftmost thing in view. Marks are 44px, chips 116px. */
-  const consumed = Math.max(0, (overall ?? baseOverall) - baseOverall)
+     always the leftmost thing in view. Marks are 44px, chips 116px.
+
+     Measured from itemsStartOverall — the first overall pick that
+     actually appears in items[] — not from baseOverall (the mount pick).
+     items[] starts at baseRound + 1 (buildTicker, above) and carries
+     nothing for baseRound itself, but baseOverall can sit anywhere inside
+     baseRound. Counting from baseOverall meant every pick still left in
+     the mount round got credited against items[] before that round's own
+     picks had happened: mount at round 1 pick 1 in a 10-team league, and
+     the instant round 2 begins, overall - baseOverall is already 10 — the
+     eat-loop below spent all 10 of round 2's own chips (plus its own
+     round-3 marker) before a single round-2 pick had actually landed,
+     leaving the ribbon parked on round 3 the moment round 2 started.
+     Self-correcting only because switching tabs remounts and re-anchors —
+     anyone who stayed on one tab through a round boundary saw the ribbon
+     sitting a full round ahead of the real draft. Clamped at 0 by
+     Math.max: while overall is still inside baseRound, itemsStartOverall
+     hasn't been reached yet, so nothing in items[] should read as eaten. */
+  const itemsStartOverall = baseRound * league.teams + 1
+  const consumed = Math.max(0, (overall ?? baseOverall) - itemsStartOverall)
   let shift = 0
   let i = 0
   let eaten = 0

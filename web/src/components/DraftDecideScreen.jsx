@@ -366,7 +366,18 @@ function CardPager({ count, index, onIndex, children }) {
   )
 }
 
-export default function DraftDecideScreen({ engine, league, mySlot, myTurn, picks, onDraft, onQueueToggle, onOpenProfile, queuedNames, nextOverall, nextPicks, onOpenHub }) {
+export default function DraftDecideScreen({ engine, league, mySlot, myTurn, autopick, picks, onDraft, onQueueToggle, onOpenProfile, queuedNames, nextOverall, nextPicks, onOpenHub }) {
+  // Folded once, here, rather than at every Draft affordance below —
+  // PlayersTab.jsx's own two PlayerQueueSidebar calls already do this same
+  // fold ("a human clicking Draft while [autopick's] on is a race that
+  // shouldn't read as available"); this screen never received an autopick
+  // prop at all, so every Draft button here — the two ranked cards, the
+  // queue list, and the "Everyone else" rows, on both mobile and desktop —
+  // stayed clickable through a whole autopick turn. engine.draftPlayer()
+  // only checks whose turn it is, never this local toggle, so a tap here
+  // during autopick was a genuine race for who actually drafts, not a
+  // harmless no-op.
+  const canDraftNow = myTurn && !autopick
   // Mobile's own segmented control (Juke/Everyone/Team) and the pager's
   // current card, declared above the draftOver() early return below so
   // every hook still runs on every render regardless of which branch this
@@ -654,7 +665,7 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, pick
                     rankLabel={rankLabels[i]}
                     primary={i === 0}
                     onDraft={onDraft}
-                    myTurn={myTurn}
+                    myTurn={canDraftNow}
                     engine={engine}
                     board={board}
                     counts={counts}
@@ -667,7 +678,7 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, pick
                     engine={engine}
                     onQueueToggle={onQueueToggle}
                     onDraft={onDraft}
-                    myTurn={myTurn}
+                    myTurn={canDraftNow}
                     queued={queuedNames.has(c.player.name)}
                     onOpenProfile={onOpenProfile}
                   />
@@ -681,7 +692,7 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, pick
                 <span className="text-[10px] font-bold uppercase tracking-[0.11em] text-white/55">Your queue · while you wait</span>
               </div>
               <p className="mb-2.5 text-xs text-white/55">Autopick will take #1 if you're away</p>
-              <QueueList players={queue} myTurn={myTurn} engine={engine} survivalOf={survivalOfName} />
+              <QueueList players={queue} myTurn={canDraftNow} engine={engine} survivalOf={survivalOfName} />
             </div>
           )}
         </div>
@@ -712,10 +723,22 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, pick
                     {o.vorp != null ? `${o.vorp >= 0 ? '+' : ''}${Math.round(o.vorp)}` : '—'}
                   </span>
                   <span className="text-right text-xs font-semibold tabular-nums text-teal-300">{o.juke ?? '—'}</span>
+                  {/* This row had no disabled state at all — reachable
+                      whenever the "Everyone" pane is open, independent of
+                      whose turn it is (a completely ordinary thing to check
+                      while waiting), unlike every other Draft control in
+                      the app. */}
                   <button
                     type="button"
-                    onClick={(e) => { e.stopPropagation(); onDraft(o.player) }}
-                    className="h-11 rounded-full border border-teal-400/40 text-[11px] font-bold text-teal-300"
+                    onClick={(e) => { e.stopPropagation(); if (canDraftNow) onDraft(o.player) }}
+                    disabled={!canDraftNow}
+                    title={canDraftNow ? 'Draft' : 'Not your turn'}
+                    className={
+                      'h-11 rounded-full border text-[11px] font-bold ' +
+                      (canDraftNow
+                        ? 'border-teal-400/40 text-teal-300'
+                        : 'cursor-not-allowed border-white/10 text-white/25')
+                    }
                   >
                     Draft
                   </button>
@@ -1030,7 +1053,7 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, pick
                   rankLabel={rankLabels[i]}
                   primary={i === 0}
                   onDraft={onDraft}
-                  myTurn={myTurn}
+                  myTurn={canDraftNow}
                   engine={engine}
                   board={board}
                   counts={counts}
@@ -1094,10 +1117,19 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, pick
                         {o.vorp != null ? `${o.vorp >= 0 ? '+' : ''}${Math.round(o.vorp)}` : '—'}
                       </span>
                       <span className="text-right text-xs font-semibold tabular-nums text-teal-300">{o.juke ?? '—'}</span>
+                      {/* Same missing disabled state as the mobile "Everyone
+                          else" row — see its own comment. */}
                       <button
                         type="button"
-                        onClick={(e) => { e.stopPropagation(); onDraft(o.player) }}
-                        className="h-11 rounded-full border border-teal-400/40 text-xs font-bold text-teal-300 lg:h-auto lg:border-0 lg:bg-teal-400/[0.14] lg:py-1.5"
+                        onClick={(e) => { e.stopPropagation(); if (canDraftNow) onDraft(o.player) }}
+                        disabled={!canDraftNow}
+                        title={canDraftNow ? 'Draft' : 'Not your turn'}
+                        className={
+                          'h-11 rounded-full border text-xs font-bold lg:h-auto lg:border-0 lg:py-1.5 ' +
+                          (canDraftNow
+                            ? 'border-teal-400/40 text-teal-300 lg:bg-teal-400/[0.14]'
+                            : 'cursor-not-allowed border-white/10 text-white/25 lg:bg-white/[0.04]')
+                        }
                       >
                         Draft
                       </button>
@@ -1122,7 +1154,7 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, pick
                   engine={engine}
                   onQueueToggle={onQueueToggle}
                   onDraft={onDraft}
-                  myTurn={myTurn}
+                  myTurn={canDraftNow}
                   queued={queuedNames.has(c.player.name)}
                   onOpenProfile={onOpenProfile}
                 />
@@ -1135,7 +1167,7 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, pick
                 <div className="flex-1" />
                 <span className="text-xs text-white/55">Autopick will take #1 if you're away</span>
               </div>
-              <QueueList players={queue} myTurn={myTurn} engine={engine} survivalOf={survivalOfName} />
+              <QueueList players={queue} myTurn={canDraftNow} engine={engine} survivalOf={survivalOfName} />
             </div>
           </>
         )}
