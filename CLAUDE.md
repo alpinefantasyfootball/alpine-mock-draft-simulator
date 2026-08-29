@@ -132,6 +132,8 @@ the Stack section above, not a one-time migration hiccup.
 | `favicon.ico`, `favicon-16.png`, `favicon-32.png` | The root favicons, named by `404.html` and all three `docs/` pages. The PNGs are rendered exports; the `.ico` is assembled from them by `scripts/build_favicon_ico.py`. Duplicated into `web/public/`, which is the copy a browser reaches. |
 | `scripts/build_favicon_ico.py` | Wraps `favicon-{16,32,48}.png` in an `.ico` container, payloads unmodified. Stdlib only, no encoder, and it re-traces nothing — if the mark changes, re-render the PNGs and run it again. |
 | `unmatched.txt` | **GENERATED.** Five sections: FFC rows that failed to join, players with no id at another source, **Sleeper stats we are not storing** (read this before adding a feed), Sleeper against nflverse, and the missed-field-goal reconciliation. |
+| `data/baselines/2026/preseason/` | **FROZEN, not generated.** The one-shot 2026 preseason projections/VORP/tiers/ADP snapshot, hashed in `manifest.json`. Never regenerated, never hand-edited — see the Data section below and the directory's own README.md. |
+| `scripts/freeze_baseline.mjs` | Wrote the frozen baseline above, once. Drives the real app in a headless browser rather than reimplementing scoring/VORP/tiers in Python — see its own header comment. Refuses to run again if a baseline already exists. |
 | `data/season/<year>/week-<NN>/` | **APPEND-ONLY.** One week's real actuals, written once by `scripts/archive_week.mjs` and never touched again. See the Data section below and `data/season/README.md`. |
 | `scripts/archive_week.mjs` | Writes the weekly actuals archive above. Drives the real app in a headless browser for `pointsUnder()`/`rulesForFormat()` rather than reimplementing scoring — see its own header comment. Refuses to overwrite an already-archived week without `--force`. |
 | `scripts/test_archive_week.mjs` | Offline check for `archive_week.mjs`'s raw-stat mapping and the points it produces, against a synthetic, hand-computable stat line — the one part of that script this project can test without live Sleeper access. |
@@ -144,6 +146,27 @@ weekly logs, projections, depth charts), **Fantasy Football Calculator**
 (ADP, one set per scoring format, written to `players.js` as `ADP_SETS`), and
 **nflverse** (nflfastR's play-by-play derivatives, used to check Sleeper and
 never to replace it — see "The second feed" below).
+
+### `data/baselines/2026/preseason/` is frozen, not generated
+
+Every other generated file in this project — `players.js`, `stats.js`,
+`unmatched.txt` — is meant to be rebuilt from scratch every night, and
+CLAUDE.md says so throughout. This one directory is the opposite on purpose:
+`scripts/freeze_baseline.mjs` ran exactly once, before Week 1 of the 2026
+season, and captured every player's raw projection, their points under all
+three scoring presets, VORP and replacement level per position, the ADP
+snapshot, and tier assignments — the last moment any of that could be
+captured honestly, before a single game told the projection whether it was
+right. `manifest.json` carries a SHA-256 of the frozen payload for exactly
+that reason: to prove, later, that nothing in it was touched after the fact.
+
+**Do not run `scripts/freeze_baseline.mjs` again, and do not hand-edit
+`baseline.json` or `manifest.json`.** The script itself refuses to overwrite
+an existing baseline, but that only helps if nobody deletes the files first
+to "fix" one. A wrong number discovered later is a data point about the
+projection, not a bug in this directory — see its own README.md for the
+full argument. This is the one place in the pipeline where regenerating the
+data is the mistake, not the fix.
 
 ### `data/season/<year>/week-<NN>/` is the season's actual record
 
