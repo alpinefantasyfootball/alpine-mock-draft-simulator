@@ -1,5 +1,5 @@
 FFC rows that did not join to a Sleeper player
-Generated 2026-08-28 21:49 UTC
+Generated 2026-08-29 11:02 UTC
 Across every scoring format, each name listed once.
 Add an entry to MANUAL_MATCHES in build_players.py to fix one.
 
@@ -19,23 +19,24 @@ Texans | DEF | HOU | no Tank01 id
 Vikings | DEF | MIN | no Tank01 id
 Rams | DEF | LAR | no Tank01 id
 Lions | DEF | DET | no Tank01 id
-49ers | DEF | SF | no Tank01 id
 Patriots | DEF | NE | no Tank01 id
 Steelers | DEF | PIT | no Tank01 id
 Eagles | DEF | PHI | no Tank01 id
+49ers | DEF | SF | no Tank01 id
 Chargers | DEF | LAC | no Tank01 id
+Jets | DEF | NYJ | no Tank01 id
+Giants | DEF | NYG | no Tank01 id
 Cowboys | DEF | DAL | no Tank01 id
-Buccaneers | DEF | TB | no Tank01 id
-Packers | DEF | GB | no Tank01 id
 Jaguars | DEF | JAX | no Tank01 id
+Packers | DEF | GB | no Tank01 id
+Buccaneers | DEF | TB | no Tank01 id
 Browns | DEF | CLE | no Tank01 id
-Bills | DEF | BUF | no Tank01 id
 Ravens | DEF | BAL | no Tank01 id
-Saints | DEF | NO | no Tank01 id
+Bills | DEF | BUF | no Tank01 id
 Falcons | DEF | ATL | no Tank01 id
 Titans | DEF | TEN | no Tank01 id
-Giants | DEF | NYG | no Tank01 id
 Bears | DEF | CHI | no Tank01 id
+Saints | DEF | NO | no Tank01 id
 Bengals | DEF | CIN | no Tank01 id
 Commanders | DEF | WAS | no Tank01 id
 
@@ -204,7 +205,7 @@ every season we store. Sleeper stays authoritative: this changes no
 stored number and never should. It is here so that when the two
 start disagreeing, somebody finds out from this file.
 
-242 of 267 players joined to an nflverse record.
+247 of 273 players joined to an nflverse record.
 
 No nflverse record for:
 Seahawks | DEF | SEA | no nflverse id
@@ -213,23 +214,24 @@ Texans | DEF | HOU | no nflverse id
 Vikings | DEF | MIN | no nflverse id
 Rams | DEF | LAR | no nflverse id
 Lions | DEF | DET | no nflverse id
-49ers | DEF | SF | no nflverse id
 Patriots | DEF | NE | no nflverse id
 Steelers | DEF | PIT | no nflverse id
 Eagles | DEF | PHI | no nflverse id
+49ers | DEF | SF | no nflverse id
 Chargers | DEF | LAC | no nflverse id
+Jets | DEF | NYJ | no nflverse id
+Giants | DEF | NYG | no nflverse id
 Cowboys | DEF | DAL | no nflverse id
-Buccaneers | DEF | TB | no nflverse id
-Packers | DEF | GB | no nflverse id
 Jaguars | DEF | JAX | no nflverse id
+Packers | DEF | GB | no nflverse id
+Buccaneers | DEF | TB | no nflverse id
 Browns | DEF | CLE | no nflverse id
-Bills | DEF | BUF | no nflverse id
 Ravens | DEF | BAL | no nflverse id
-Saints | DEF | NO | no nflverse id
+Bills | DEF | BUF | no nflverse id
 Falcons | DEF | ATL | no nflverse id
 Titans | DEF | TEN | no nflverse id
-Giants | DEF | NYG | no nflverse id
 Bears | DEF | CHI | no nflverse id
+Saints | DEF | NO | no nflverse id
 Bengals | DEF | CIN | no nflverse id
 Commanders | DEF | WAS | no nflverse id
 
@@ -251,49 +253,50 @@ single kick, and the made-total always agrees. A league paying extra
 for 60+ is slightly under-paying on those seasons. (Same date.)
 
 season    compared  disagree    rate
-2018           314        51   16.2%
-2019           456        45    9.9%
-2020           566        13    2.3%
-2021           696        14    2.0%
-2022           927        38    4.1%
-2023          1170         8    0.7%
-2024          1447         7    0.5%
-2025          1652         5    0.3%
+2018           338        53   15.7%
+2019           484        47    9.7%
+2020           606        13    2.1%
+2021           726        14    1.9%
+2022           960        38    4.0%
+2023          1219        10    0.8%
+2024          1503         7    0.5%
+2025          1693         5    0.3%
 
 stat  compared   agree   agree%
-cfd       648     599    92.4%
-ct        548     548   100.0%
-cy        676     673    99.6%
+cfd       666     616    92.5%
+ct        560     560   100.0%
+cy        694     691    99.6%
 f19        17      17   100.0%
-f29       102      99    97.1%
-f39       103     103   100.0%
-f49       103     102    99.0%
-f59       100      93    93.0%
-f60        17      10    58.8%
-fg        103     102    99.0%
-fgx       101     101   100.0%
-pa        215     211    98.1%
-pc        188     185    98.4%
-pfd       171     145    84.8%
-pi        148     148   100.0%
-pt        163     162    99.4%
-py        188     185    98.4%
-ra        611     606    99.2%
-rc        673     671    99.7%
-rfd       513     466    90.8%
-rt        380     380   100.0%
-ry        602     595    98.8%
-tg        682     671    98.4%
-xp        103     102    99.0%
-xpx        73      73   100.0%
+f29       110     107    97.3%
+f39       111     111   100.0%
+f49       111     110    99.1%
+f59       108     100    92.6%
+f60        18      10    55.6%
+fg        111     110    99.1%
+fgx       109     109   100.0%
+pa        228     224    98.2%
+pc        200     197    98.5%
+pfd       183     155    84.7%
+pi        161     161   100.0%
+pt        175     174    99.4%
+py        200     197    98.5%
+ra        633     628    99.2%
+rc        691     689    99.7%
+rfd       534     486    91.0%
+rt        394     394   100.0%
+ry        624     617    98.9%
+tg        700     689    98.4%
+xp        111     110    99.1%
+xpx        80      80   100.0%
 
-181 disagreements beyond 0.5, largest first:
+187 disagreements beyond 0.5, largest first:
   2022 | py   | Joe Burrow | ours 4527 | theirs 4475
   2018 | pfd  | Patrick Mahomes | ours 235 | theirs 187
   2022 | py   | Josh Allen | ours 4316 | theirs 4283
   2018 | pfd  | Jared Goff | ours 233 | theirs 201
   2018 | py   | Josh Allen | ours 2074 | theirs 2044
   2018 | pfd  | Baker Mayfield | ours 171 | theirs 144
+  2018 | pfd  | Deshaun Watson | ours 202 | theirs 176
   2022 | cy   | Stefon Diggs | ours 1455 | theirs 1429
   2018 | pfd  | Aaron Rodgers | ours 200 | theirs 175
   2018 | pfd  | Dak Prescott | ours 184 | theirs 162
@@ -323,6 +326,7 @@ xpx        73      73   100.0%
   2019 | pfd  | Dak Prescott | ours 206 | theirs 199
   2018 | cfd  | Mike Evans | ours 68 | theirs 61
   2019 | pfd  | Kyler Murray | ours 159 | theirs 153
+  2019 | pfd  | Deshaun Watson | ours 171 | theirs 165
   2018 | pfd  | Lamar Jackson | ours 60 | theirs 54
   2022 | pa   | Josh Allen | ours 573 | theirs 567
   2018 | cfd  | Cooper Kupp | ours 25 | theirs 19
@@ -331,6 +335,7 @@ xpx        73      73   100.0%
   2019 | rfd  | Derrick Henry | ours 62 | theirs 57
   2019 | rfd  | Aaron Jones | ours 44 | theirs 39
   2018 | rfd  | Lamar Jackson | ours 45 | theirs 40
+  2018 | rfd  | Deshaun Watson | ours 33 | theirs 28
   2019 | pfd  | Sam Darnold | ours 133 | theirs 128
   2018 | cfd  | Keenan Allen | ours 61 | theirs 56
   2018 | cfd  | George Kittle | ours 60 | theirs 55
@@ -345,10 +350,7 @@ xpx        73      73   100.0%
   2018 | cfd  | Dallas Goedert | ours 15 | theirs 11
   2018 | cfd  | Chris Godwin Jr. | ours 45 | theirs 41
   2018 | cfd  | Alvin Kamara | ours 31 | theirs 27
-  2020 | ry   | Jalen Hurts | ours 357 | theirs 354
-  2018 | ry   | Sam Darnold | ours 138 | theirs 135
-  2019 | rfd  | Alvin Kamara | ours 30 | theirs 27
-  ... and 121 more, not listed
+  ... and 127 more, not listed
 
 
 
@@ -363,14 +365,14 @@ kicker season -- so a shortfall here is a band that was never
 populated, not a kick that did not happen.
 
 season    fgm  in bands   short      fgmiss  in bands   short
-2018      149       151   -1.3%          24        16   33.3%
-2019      222       223   -0.5%          45        28   37.8%
-2020      235       235    0.0%          30        16   46.7%
-2021      257       257    0.0%          41        25   39.0%
-2022      338       338    0.0%          57        40   29.8%
-2023      438       438    0.0%          52        25   51.9%
-2024      498       498    0.0%          74        74    0.0%
-2025      601       601    0.0%          88        88    0.0%
+2018      175       177   -1.1%          29        18   37.9%
+2019      244       245   -0.4%          49        30   38.8%
+2020      249       249    0.0%          35        18   48.6%
+2021      287       287    0.0%          44        28   36.4%
+2022      358       358    0.0%          60        42   30.0%
+2023      468       468    0.0%          54        26   51.9%
+2024      526       526    0.0%          82        82    0.0%
+2025      621       621    0.0%          95        95    0.0%
 
 Bands are complete from 2024 on and lossy before it,
 and the two halves are lossy to very different degrees in this pool.
