@@ -1,0 +1,45 @@
+{
+  "season": 2026,
+  "kind": "preseason",
+  "doNotRegenerate": "This is a frozen preseason snapshot, not generated data. Never re-run scripts/freeze_baseline.mjs over it and never hand-edit baseline.json or this file — see the README.md in this directory for why.",
+  "frozenAt": "2026-08-29T20:05:50.837Z",
+  "gitSha": "f169389e905c22e1cf56a4402a92773e6755f354",
+  "sourceData": {
+    "playersJsGenerated": "2026-08-29 11:02 UTC",
+    "statsJsGenerated": "2026-08-29 11:02 UTC"
+  },
+  "leagueShape": {
+    "teams": 10,
+    "rounds": 14,
+    "starters": {
+      "QB": 1,
+      "RB": 2,
+      "WR": 2,
+      "TE": 1,
+      "K": 1,
+      "DST": 1
+    },
+    "flex": 1,
+    "superflex": 0,
+    "bench": 5
+  },
+  "formats": [
+    "standard",
+    "half",
+    "ppr"
+  ],
+  "counts": {
+    "standard": 223,
+    "half": 232,
+    "ppr": 271
+  },
+  "rawProjectionCount": 273,
+  "payload": {
+    "file": "baseline.json",
+    "sha256": "56ca07b8a9e71b0dbc0cff8cd92bbdcac0f8a1fb32f778795dc5db725ab6fc75"
+  },
+  "generator": {
+    "script": "scripts/freeze_baseline.mjs",
+    "nodeVersion": "v22.22.2"
+  }
+}
