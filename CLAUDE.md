@@ -134,6 +134,10 @@ the Stack section above, not a one-time migration hiccup.
 | `unmatched.txt` | **GENERATED.** Five sections: FFC rows that failed to join, players with no id at another source, **Sleeper stats we are not storing** (read this before adding a feed), Sleeper against nflverse, and the missed-field-goal reconciliation. |
 | `data/baselines/2026/preseason/` | **FROZEN, not generated.** The one-shot 2026 preseason projections/VORP/tiers/ADP snapshot, hashed in `manifest.json`. Never regenerated, never hand-edited — see the Data section below and the directory's own README.md. |
 | `scripts/freeze_baseline.mjs` | Wrote the frozen baseline above, once. Drives the real app in a headless browser rather than reimplementing scoring/VORP/tiers in Python — see its own header comment. Refuses to run again if a baseline already exists. |
+| `data/season/<year>/week-<NN>/` | **APPEND-ONLY.** One week's real actuals, written once by `scripts/archive_week.mjs` and never touched again. See the Data section below and `data/season/README.md`. |
+| `scripts/archive_week.mjs` | Writes the weekly actuals archive above. Drives the real app in a headless browser for `pointsUnder()`/`rulesForFormat()` rather than reimplementing scoring — see its own header comment. Refuses to overwrite an already-archived week without `--force`. |
+| `scripts/test_archive_week.mjs` | Offline check for `archive_week.mjs`'s raw-stat mapping and the points it produces, against a synthetic, hand-computable stat line — the one part of that script this project can test without live Sleeper access. |
+| `.github/workflows/archive-weekly-actuals.yml` | Runs `archive_week.mjs` weekly (Tuesdays, 14:00 UTC), after Monday Night Football and Sleeper's own box-score finalization. |
 
 ## Data
 
@@ -163,6 +167,26 @@ to "fix" one. A wrong number discovered later is a data point about the
 projection, not a bug in this directory — see its own README.md for the
 full argument. This is the one place in the pipeline where regenerating the
 data is the mistake, not the fix.
+
+### `data/season/<year>/week-<NN>/` is the season's actual record
+
+`players.js`/`stats.js` are rebuilt from scratch every night, which is
+exactly right for a live draft board and exactly wrong for keeping a record
+of what happened in a given week — the next night's rebuild simply
+overwrites it. `scripts/archive_week.mjs` runs weekly (Tuesdays, after
+Monday Night Football and Sleeper's own box-score finalization) and writes
+what actually happened that week — raw stats, snap/target usage where
+Sleeper sends it, injury/depth-chart status at capture time, and points
+under all three scoring presets — to its own directory, once. See
+`data/season/README.md` for the shape and `scripts/archive_week.mjs`'s own
+header comment for why it drives the real app in a headless browser rather
+than reimplementing `pointsUnder()`.
+
+**Archives are append-only.** The script refuses to overwrite an
+already-archived week unless run with `--force`. This is the substrate a
+projections backtest (graded against `data/baselines/2026/preseason/`) and
+the future Waiver Room both need, and neither is buildable retroactively —
+there is no asking Sleeper what it said about a week that has since passed.
 
 **The pipeline stores raw components and no points total at all.** Scoring
 lives in `app.js` (`DEFAULT_RULES` and `fantasyPoints()`), so all 49 rules are
