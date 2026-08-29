@@ -566,11 +566,20 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, auto
      app.js already stamped every player), not a new scarcity metric. One
      row per skill position: how many of tier 1 are left, and how big the
      drop to tier 2 actually is once it runs out, so "cliff" means a real
-     points gap rather than a feeling. */
+     points gap rather than a feeling.
+
+     "How many remain" goes through engine.tierRemaining() rather than a
+     second `!p.drafted` filter here — it's the exact function app.js's own
+     board chip prints ("2 left in tier 1") and the candidate cards above
+     already call it per-player (see `tierLeft` a few lines up). tier1[0]
+     stands in for "a tier-1 player at this position" because every element
+     of tier1 shares the same pos/tier by construction, which is all
+     tierRemaining() reads — it re-counts off the real board itself, so it
+     can't drift from this array's own contents. */
   const tierLadder = ['QB', 'RB', 'WR', 'TE'].map((pos) => {
     const posBoard = board.filter((p) => p.pos === pos)
     const tier1 = posBoard.filter((p) => p.tier === 1)
-    const remaining = tier1.filter((p) => !p.drafted).length
+    const remaining = tier1.length ? engine.tierRemaining(tier1[0]) : 0
     const tier2 = posBoard.filter((p) => p.tier === 2)
     let drop = null
     if (tier1.length && tier2.length) {

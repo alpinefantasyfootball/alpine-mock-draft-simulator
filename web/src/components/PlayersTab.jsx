@@ -232,6 +232,7 @@ export default function PlayersTab({
           {isDesktop && (
           <PlayerQueueSidebar
             bareTable
+            engine={engine}
             players={players}
             posFilter={posFilter}
             pointsFor={pointsFor}
@@ -380,6 +381,7 @@ export default function PlayersTab({
             <PlayerQueueSidebar
               bareTable
               mobile
+              engine={engine}
               players={players}
               posFilter={posFilter}
               pointsFor={pointsFor}

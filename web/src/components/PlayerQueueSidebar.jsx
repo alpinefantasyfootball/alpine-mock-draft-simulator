@@ -117,6 +117,11 @@ const LASTS_CLASS = {
 // suggestions() in app.js. The list here is ordered by the board's own
 // `overall` (ADP rank), same as the legacy Players tab.
 export default function PlayerQueueSidebar({
+  // Only for the tier-cliff dividers below — engine.tierRemaining(), the
+  // same canonical count app.js's own board chip and DraftDecideScreen's
+  // tier ladder read, rather than this component tallying `players` (its
+  // own, possibly search/team/exp-filtered prop) a third time.
+  engine,
   players,
   search,
   onSearch,
@@ -266,38 +271,46 @@ export default function PlayerQueueSidebar({
      is worth signposting — nobody scanning DST while wondering about a
      WR run needs to be told about it.
 
-     tierCounts is a first pass — how many undrafted players this position
-     has left at each tier in the list currently on screen — computed
-     before the second pass needs it, since "how many left before the
-     drop" has to count every remaining player in the ending tier, not
-     just the ones already walked past. */
+     "How many left before the drop" goes through engine.tierRemaining()
+     rather than a second tally over `players` here — that was the bug:
+     `players` is this component's own prop, already narrowed by whatever
+     search text, NFL-team filter or rookie/veteran band the Players tab
+     has active, none of which changes what "left in the tier" actually
+     means. A manager filtered to WR, sorted by board order (the default),
+     who then types a name into the search box keeps every condition above
+     satisfied while the divider's own count silently shrank to "how many
+     of the *visible* rows are left" — a different, smaller number than
+     the real one, and a real one the Decide tab's ladder and the board's
+     own tier chip both still print correctly, because they read off the
+     whole board rather than this filtered list. tierRemaining() recounts
+     off the real board every time, so it can't inherit a filter this list
+     happens to be under — one call per divider row, not per player, since
+     dividers are rare next to rows. lastPlayer holds the last *player
+     object* seen at each position (not just its tier number), because
+     that object is exactly what tierRemaining() needs to identify "the
+     tier that just ended" — its own pos and tier are all the function
+     reads. */
   const rows = []
   if (sortBy === 'board' && tierAvgByPos && POS_LIST.includes(posFilter)) {
-    const tierCounts = {}
-    players.forEach((p) => {
-      if (p.drafted || !POS_LIST.includes(p.pos) || p.tier == null) return
-      tierCounts[p.pos] = tierCounts[p.pos] || {}
-      tierCounts[p.pos][p.tier] = (tierCounts[p.pos][p.tier] || 0) + 1
-    })
-    const lastTier = {}
+    const lastPlayer = {}
     players.forEach((player) => {
       if (!player.drafted && POS_LIST.includes(player.pos) && player.tier != null) {
-        const last = lastTier[player.pos]
-        if (last != null && player.tier > last) {
+        const last = lastPlayer[player.pos]
+        if (last != null && player.tier > last.tier) {
           const posAvgs = tierAvgByPos[player.pos] || {}
-          const endingAvg = posAvgs[last]
-          const nextAvg = posAvgs[last + 1]
+          const endingAvg = posAvgs[last.tier]
+          const nextAvg = posAvgs[last.tier + 1]
           const drop = endingAvg != null && nextAvg != null ? Math.round(endingAvg - nextAvg) : null
           rows.push({
             type: 'divider',
-            key: 'tier-' + player.pos + '-' + last,
+            key: 'tier-' + player.pos + '-' + last.tier,
             pos: player.pos,
-            tierEnding: last,
-            remaining: tierCounts[player.pos]?.[last] || 0,
+            tierEnding: last.tier,
+            remaining: engine.tierRemaining(last),
             drop,
           })
         }
-        lastTier[player.pos] = player.tier
+        lastPlayer[player.pos] = player
       }
       rows.push({ type: 'player', key: player.id || player.name, player })
     })
