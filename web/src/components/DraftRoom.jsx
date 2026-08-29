@@ -1464,6 +1464,7 @@ export default function DraftRoom() {
                     {isDesktop && (
                     <PlayerQueueSidebar
                       bareTable
+                      engine={engine}
                       players={availablePlayers}
                       posFilter={posFilter}
                       /* pointsForActive/vorpForActive, not the plain
@@ -1561,6 +1562,7 @@ export default function DraftRoom() {
                     <PlayerQueueSidebar
                       bareTable
                       mobile
+                      engine={engine}
                       players={availablePlayers}
                       posFilter={posFilter}
                       // Same fix as the desktop dock above, same reason —
