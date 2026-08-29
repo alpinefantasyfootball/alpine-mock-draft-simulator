@@ -1,6 +1,7 @@
-import { useReducer, useState } from 'react'
+import { useEffect, useReducer, useState } from 'react'
 import { Calendar, TrendingUp, Shield } from 'lucide-react'
 import { useEngine, useJukeTick } from '../hooks/useJukeEngine.js'
+import { useAccount } from '../hooks/useAccount.js'
 import NewMockPanel from './NewMockPanel.jsx'
 import InProgressBand from './InProgressBand.jsx'
 import LockerTable from './LockerTable.jsx'
@@ -187,6 +188,22 @@ export default function DraftLocker({ onStartNew, onRunAtSeat, problem, lobbySlo
   // DraftInsightsDashboard.jsx's own file comment on why the two disagree
   // and why that gap matters.
   const [historyReport, setHistoryReport] = useState(null)
+  const account = useAccount()
+  const signedIn = account && account.status === 'signed-in'
+
+  // Pull the server locker down and merge it in whenever this screen is
+  // opened signed in — the "sign in on a second browser, same locker"
+  // acceptance criterion for a device that was *already* signed in before
+  // this mount, not just the fresh sign-in account.js's own consume()
+  // already handles. adoptServerLocker() writes straight into localStorage
+  // (readHistory()/readSave()'s own backing store), which nothing else
+  // here watches — forceLocal() is the same manual re-render
+  // clearSave()/deleteHistoryDraft() already need for exactly that reason.
+  useEffect(() => {
+    if (!signedIn || typeof window === 'undefined' || !window.Account) return
+    window.Account.pullLocker().then(forceLocal)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signedIn])
 
   if (!engine) return null
 

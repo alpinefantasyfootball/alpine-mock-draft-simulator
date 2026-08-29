@@ -28,7 +28,12 @@ import Room from "../room.js";
 /* The D1 cache. Every function in there answers "no" to a missing binding
    rather than throwing, so this file works unchanged with no database — which
    is what keeps `wrangler dev --local` and the keyless news test running. */
-import { syncPlayerPool, cachedNews, storeNews, usableNews, storeSignup } from "./store.js";
+import {
+  syncPlayerPool, cachedNews, storeNews, usableNews, storeSignup,
+  requestMagicLink, sendMagicLinkEmail, consumeMagicLink, accountForSession,
+  revokeSession, getLocker, upsertSavedDraft, addHistoryEntries, deleteHistoryEntry,
+  migrateLocalLocker, deleteAccount
+} from "./store.js";
 
 /* How long after the last socket closes before the room is forgotten. Long
    enough that a phone locking, a tunnel, or closing a laptop for lunch does
@@ -737,6 +742,253 @@ async function captureSignup(request, env) {
                       { headers });
 }
 
+/* Accounts — phase 1: email plus magic link, no passwords, and the
+   server-side locker behind it.
+
+   Every route below answers through jsonWithCors() and refuses an origin we
+   do not serve before anything else runs — the same shape as /signup and
+   for the same reason: this is a wider target than the invite-only room
+   routes, since nothing here requires already holding a room link.
+
+   Unlike the cache functions in store.js, the account functions imported
+   above are allowed to throw — see that file's own comment on why an
+   account write is not survivable the way a cache miss is. Every handler
+   here therefore wraps its call to them in a try/catch and turns a throw
+   into a real 500, rather than the "never fails, just answers false"
+   contract the rest of this worker follows. */
+
+const ACCOUNT_ROUTES = new Set([
+  "/account/request-link", "/account/consume", "/account/session",
+  "/account/sign-out", "/account/migrate", "/account/locker",
+  "/account/locker/delete", "/account/delete"
+]);
+
+function jsonWithCors(request, body, status) {
+  const headers = Object.assign({ "content-type": "application/json" }, corsFor(request));
+  return new Response(JSON.stringify(body), { status: status || 200, headers });
+}
+
+/* Same local-dev regex originAllowed() already tests against, isolated so
+   the dev-only token leak below can be gated on "specifically local," not
+   on "any origin this worker will answer" — which also includes the real
+   jukeff.com/www.jukeff.com hosts. */
+function isLocalOrigin(request) {
+  return /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(request.headers.get("Origin") || "");
+}
+
+/* The one header every authenticated account route reads the session
+   token from. Not a cookie: this worker and the site are different origins,
+   and every other client-worker exchange in this project already goes
+   through an explicit header/param rather than cookie auth — see live.js's
+   member/name query params for the room, and originAllowed()'s own note
+   that CORS is a browser-read permission, not a request gate. A bearer
+   header needs no SameSite story to get right. */
+const SESSION_HEADER = "x-juke-session";
+
+/* Resolves the session header to an account, or writes the 401 itself and
+   returns null — every authenticated route below starts by checking this
+   for null and returning immediately if so, the same guard shape
+   originAllowed() already established for the origin check. */
+async function requireAccount(request, env) {
+  if (!env.DB) return { account: null, refusal: jsonWithCors(request, { ok: false, error: "no-db" }, 503) };
+  const token = request.headers.get(SESSION_HEADER) || "";
+  const account = await accountForSession(env, token);
+  if (!account) {
+    return { account: null, refusal: jsonWithCors(request, { ok: false, error: "signed-out" }, 401) };
+  }
+  return { account, refusal: null };
+}
+
+async function accountRequestLink(request, env) {
+  if (!originAllowed(request)) return jsonWithCors(request, { error: "forbidden" }, 403);
+  if (!env.DB) return jsonWithCors(request, { ok: false, error: "no-db" }, 503);
+
+  let body;
+  try { body = await request.json(); } catch (err) { return jsonWithCors(request, { ok: false, error: "bad-json" }, 400); }
+  const email = String((body && body.email) || "").trim().slice(0, 254);
+  if (!EMAIL_RE.test(email)) return jsonWithCors(request, { ok: false, error: "bad-email" }, 400);
+
+  try {
+    const result = await requestMagicLink(env, email);
+    if (!result.ok) return jsonWithCors(request, result, 429);
+
+    const origin = request.headers.get("Origin") || "";
+    const sent = await sendMagicLinkEmail(env, email, result.token, origin);
+
+    // Dev-only: with no provider configured (or a send that failed) and the
+    // request coming from a local dev origin, hand back the raw token so a
+    // developer or a test can drive the whole flow with no real inbox to
+    // read from. Never in production — isLocalOrigin() checks the literal
+    // localhost/127.0.0.1 pattern, not "any origin this worker answers,"
+    // which also includes jukeff.com.
+    if (!sent && isLocalOrigin(request)) {
+      return jsonWithCors(request, { ok: true, devToken: result.token });
+    }
+    return jsonWithCors(request, { ok: true });
+  } catch (err) {
+    console.error("request-link failed:", err && err.message);
+    return jsonWithCors(request, { ok: false, error: "server-error" }, 500);
+  }
+}
+
+async function accountConsume(request, env) {
+  if (!originAllowed(request)) return jsonWithCors(request, { error: "forbidden" }, 403);
+  if (!env.DB) return jsonWithCors(request, { ok: false, error: "no-db" }, 503);
+
+  let body;
+  try { body = await request.json(); } catch (err) { return jsonWithCors(request, { ok: false, error: "bad-json" }, 400); }
+  const token = String((body && body.token) || "").trim();
+  if (!token) return jsonWithCors(request, { ok: false, error: "unknown" }, 400);
+
+  try {
+    const result = await consumeMagicLink(env, token);
+    if (!result.ok) return jsonWithCors(request, result, 400);
+    return jsonWithCors(request, {
+      ok: true,
+      sessionToken: result.sessionToken,
+      account: { id: result.account.id, email: result.account.email, migratedAt: result.account.migrated_at }
+    });
+  } catch (err) {
+    console.error("consume failed:", err && err.message);
+    return jsonWithCors(request, { ok: false, error: "server-error" }, 500);
+  }
+}
+
+async function accountSession(request, env) {
+  if (!originAllowed(request)) return jsonWithCors(request, { error: "forbidden" }, 403);
+  const { account, refusal } = await requireAccount(request, env);
+  if (refusal) return refusal;
+  return jsonWithCors(request, {
+    ok: true,
+    account: { id: account.id, email: account.email, migratedAt: account.migrated_at }
+  });
+}
+
+async function accountSignOut(request, env) {
+  if (!originAllowed(request)) return jsonWithCors(request, { error: "forbidden" }, 403);
+  if (!env.DB) return jsonWithCors(request, { ok: true }); // nothing to revoke without a database
+  const token = request.headers.get(SESSION_HEADER) || "";
+  if (token) {
+    try { await revokeSession(env, token); } catch (err) { console.error("sign-out failed:", err && err.message); }
+  }
+  return jsonWithCors(request, { ok: true });
+}
+
+async function accountMigrate(request, env) {
+  if (!originAllowed(request)) return jsonWithCors(request, { error: "forbidden" }, 403);
+  const { account, refusal } = await requireAccount(request, env);
+  if (refusal) return refusal;
+
+  let body;
+  try { body = await request.json(); } catch (err) { return jsonWithCors(request, { ok: false, error: "bad-json" }, 400); }
+
+  try {
+    const result = await migrateLocalLocker(env, account.id, body && body.save, body && body.history);
+    return jsonWithCors(request, result, result.ok ? 200 : 409);
+  } catch (err) {
+    console.error("migrate failed:", err && err.message);
+    return jsonWithCors(request, { ok: false, error: "server-error" }, 500);
+  }
+}
+
+async function accountLockerGet(request, env) {
+  if (!originAllowed(request)) return jsonWithCors(request, { error: "forbidden" }, 403);
+  const { account, refusal } = await requireAccount(request, env);
+  if (refusal) return refusal;
+
+  try {
+    const locker = await getLocker(env, account.id);
+    return jsonWithCors(request, { ok: true, save: locker.save, history: locker.history });
+  } catch (err) {
+    console.error("locker read failed:", err && err.message);
+    return jsonWithCors(request, { ok: false, error: "server-error" }, 500);
+  }
+}
+
+/* Write-through sync while signed in: called with { save } right after
+   saveDraft()'s own local write, or { historyEntry } right after
+   recordHistory()'s — see account.js. Either field is optional so one
+   request only ever does the one thing it was sent for; save may be null
+   to mean "clear the save," the same convention upsertSavedDraft() itself
+   follows. */
+async function accountLockerPost(request, env) {
+  if (!originAllowed(request)) return jsonWithCors(request, { error: "forbidden" }, 403);
+  const { account, refusal } = await requireAccount(request, env);
+  if (refusal) return refusal;
+
+  let body;
+  try { body = await request.json(); } catch (err) { return jsonWithCors(request, { ok: false, error: "bad-json" }, 400); }
+
+  try {
+    if (body && "save" in body) await upsertSavedDraft(env, account.id, body.save);
+    if (body && body.historyEntry) await addHistoryEntries(env, account.id, [body.historyEntry]);
+    return jsonWithCors(request, { ok: true });
+  } catch (err) {
+    console.error("locker write failed:", err && err.message);
+    return jsonWithCors(request, { ok: false, error: "server-error" }, 500);
+  }
+}
+
+async function accountLockerDelete(request, env) {
+  if (!originAllowed(request)) return jsonWithCors(request, { error: "forbidden" }, 403);
+  const { account, refusal } = await requireAccount(request, env);
+  if (refusal) return refusal;
+
+  let body;
+  try { body = await request.json(); } catch (err) { return jsonWithCors(request, { ok: false, error: "bad-json" }, 400); }
+  const id = String((body && body.id) || "");
+  if (!id) return jsonWithCors(request, { ok: false, error: "bad-id" }, 400);
+
+  try {
+    await deleteHistoryEntry(env, account.id, id);
+    return jsonWithCors(request, { ok: true });
+  } catch (err) {
+    console.error("history delete failed:", err && err.message);
+    return jsonWithCors(request, { ok: false, error: "server-error" }, 500);
+  }
+}
+
+/* Deletes the account and every row scoped to it — see deleteAccount() in
+   store.js for exactly what that covers. This also ends the very session
+   making the request: deleteAccount()'s batch removes every row in
+   `sessions` for this account, this one included, so there is nothing left
+   to revoke separately afterward. */
+async function accountDelete(request, env) {
+  if (!originAllowed(request)) return jsonWithCors(request, { error: "forbidden" }, 403);
+  const { account, refusal } = await requireAccount(request, env);
+  if (refusal) return refusal;
+
+  try {
+    await deleteAccount(env, account.id);
+    return jsonWithCors(request, { ok: true });
+  } catch (err) {
+    console.error("account delete failed:", err && err.message);
+    return jsonWithCors(request, { ok: false, error: "server-error" }, 500);
+  }
+}
+
+async function handleAccountRoute(request, env, pathname) {
+  if (request.method === "OPTIONS") {
+    return new Response(null, { headers: Object.assign({
+      "access-control-allow-methods": "GET, POST, OPTIONS",
+      "access-control-allow-headers": "content-type, " + SESSION_HEADER,
+      "access-control-max-age": "86400"
+    }, corsFor(request)) });
+  }
+
+  if (pathname === "/account/request-link" && request.method === "POST") return accountRequestLink(request, env);
+  if (pathname === "/account/consume" && request.method === "POST") return accountConsume(request, env);
+  if (pathname === "/account/session" && request.method === "GET") return accountSession(request, env);
+  if (pathname === "/account/sign-out" && request.method === "POST") return accountSignOut(request, env);
+  if (pathname === "/account/migrate" && request.method === "POST") return accountMigrate(request, env);
+  if (pathname === "/account/locker" && request.method === "GET") return accountLockerGet(request, env);
+  if (pathname === "/account/locker" && request.method === "POST") return accountLockerPost(request, env);
+  if (pathname === "/account/locker/delete" && request.method === "POST") return accountLockerDelete(request, env);
+  if (pathname === "/account/delete" && request.method === "POST") return accountDelete(request, env);
+
+  return new Response("Method not allowed", { status: 405 });
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -771,6 +1023,10 @@ export default {
       }
       if (request.method !== "POST") return new Response("Method not allowed", { status: 405 });
       return captureSignup(request, env);
+    }
+
+    if (ACCOUNT_ROUTES.has(url.pathname)) {
+      return handleAccountRoute(request, env, url.pathname);
     }
 
     const match = url.pathname.match(/^\/room\/([A-Za-z0-9_-]{4,40})/);

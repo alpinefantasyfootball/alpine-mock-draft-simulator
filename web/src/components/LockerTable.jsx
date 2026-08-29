@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
-import { Search, ChevronDown, ChevronRight, MoreHorizontal, HardDrive } from 'lucide-react'
-import EarlyAccessModal from './EarlyAccessModal.jsx'
+import { Search, ChevronDown, ChevronRight, MoreHorizontal, HardDrive, Cloud } from 'lucide-react'
+import SignInModal from './SignInModal.jsx'
+import { useAccount } from '../hooks/useAccount.js'
 import { POS_BADGE } from './draftRoomPositions.js'
 
 const FORMAT_FILTERS = [
@@ -274,7 +275,9 @@ export default function LockerTable({ entries, onAnalyze, onDeleteConfirmed }) {
   const [menuOpenId, setMenuOpenId] = useState(null)
   const [pending, setPending] = useState(null) // { id, entry }
   const pendingTimer = useRef(null)
-  const earlyAccessRef = useRef(null)
+  const signInRef = useRef(null)
+  const account = useAccount()
+  const signedIn = account && account.status === 'signed-in'
 
   // Takes the id directly rather than reading `pending` from closure — a
   // setTimeout callback scheduled inside requestDelete() closes over
@@ -487,36 +490,39 @@ export default function LockerTable({ entries, onAnalyze, onDeleteConfirmed }) {
             )}
           </div>
 
-          {/* The honest and strongest sign-up argument on the page: every
-              row above is real, local, and one cache-clear from gone. The
-              button is real too, not a dead click — same EarlyAccessModal
-              every other not-built-yet account control in this app now
-              opens (SiteNav.jsx's AccountButtons), not a second, silent
-              implementation of "coming soon." */}
-          <div className="flex flex-wrap items-center gap-4 border-t border-teal-400/[0.15] bg-teal-400/[0.03] px-5 py-[13px]">
-            <HardDrive className="h-[15px] w-[15px] shrink-0 text-teal-300" aria-hidden="true" />
-            <p className="min-w-0 flex-1 text-[13px] leading-snug text-white/80">
-              These {entries.length} mock{entries.length === 1 ? '' : 's'} live in <b>this browser only</b>. Clear
-              your history and the locker and your tendencies go with them.
-            </p>
-            <button
-              type="button"
-              onClick={() =>
-                earlyAccessRef.current?.open(
-                  "Your mocks live in this browser today. Leave an email and we'll tell you when they can live " +
-                    'in an account instead.',
-                  'locker'
-                )
-              }
-              className="shrink-0 rounded-lg bg-teal-400 px-[18px] py-2.5 text-xs font-bold uppercase tracking-wide text-obsidian transition-colors hover:bg-teal-300"
-            >
-              Sign up to keep it
-            </button>
-          </div>
+          {/* The honest argument for an account, replaced by the honest
+              fact of one once signed in — real accounts exist now, so this
+              either sells the thing or confirms it already happened,
+              never a "coming soon" for a feature that already shipped. */}
+          {signedIn ? (
+            <div className="flex flex-wrap items-center gap-4 border-t border-teal-400/[0.15] bg-teal-400/[0.03] px-5 py-[13px]">
+              <Cloud className="h-[15px] w-[15px] shrink-0 text-teal-300" aria-hidden="true" />
+              <p className="min-w-0 flex-1 text-[13px] leading-snug text-white/80">
+                These {entries.length} mock{entries.length === 1 ? '' : 's'} are synced to your account —
+                signed in as <b>{account.account?.email}</b>. They'll be right here on any device you
+                sign into.
+              </p>
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center gap-4 border-t border-teal-400/[0.15] bg-teal-400/[0.03] px-5 py-[13px]">
+              <HardDrive className="h-[15px] w-[15px] shrink-0 text-teal-300" aria-hidden="true" />
+              <p className="min-w-0 flex-1 text-[13px] leading-snug text-white/80">
+                These {entries.length} mock{entries.length === 1 ? '' : 's'} live in <b>this browser only</b>. Clear
+                your history and the locker and your tendencies go with them.
+              </p>
+              <button
+                type="button"
+                onClick={() => signInRef.current?.open()}
+                className="shrink-0 rounded-lg bg-teal-400 px-[18px] py-2.5 text-xs font-bold uppercase tracking-wide text-obsidian transition-colors hover:bg-teal-300"
+              >
+                Sign in to keep it
+              </button>
+            </div>
+          )}
         </>
       )}
 
-      <EarlyAccessModal ref={earlyAccessRef} />
+      <SignInModal ref={signInRef} />
 
       {pending && (
         // bottom offset clears MobileAppTabBar's own fixed 58px + safe-area

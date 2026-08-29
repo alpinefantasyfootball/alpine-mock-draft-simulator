@@ -3,6 +3,7 @@ import { Menu } from 'lucide-react'
 import JukeLogo from './juke-logo/JukeLogo.jsx'
 import EarlyAccessModal from './EarlyAccessModal.jsx'
 import MobileNavSheet from './MobileNavSheet.jsx'
+import AccountNotice from './AccountNotice.jsx'
 import { NavLinks, AccountButtons } from './SiteNav.jsx'
 
 // NavLinks/AccountButtons come from SiteNav.jsx now rather than a second
@@ -183,35 +184,18 @@ export default function Header() {
           />
         </nav>
 
-        {/* "Get early access" stays a text link at every width — the same
-            one-tap-not-two reasoning this used to carry for "Log in" alone,
-            now that there's only the one account control to show. The
-            hamburger sheet's own copy of AccountButtons (MobileNavSheet.jsx)
-            opens the identical modal, so a visitor who opens the sheet
-            instead sees the same offer rather than a different one.
-
-            whitespace-nowrap: this label is more than twice as long as "Log
-            in" was, sharing this row with the hamburger at 390px — measured
-            comfortable at that width, but a button's default white-space
-            lets it wrap onto a second line rather than overflow, and a
-            wrapped label here would sit at a different height from the
-            44px hamburger beside it. Nothing this codebase's own truncation
-            rule prefers over the alternative: this text is never cut off,
-            it just refuses to stack. */}
+        {/* AccountButtons itself at every width now that accounts are real
+            — "Sign in" one tap, or the account menu once signed in — rather
+            than the "Get early access" placeholder this used to open, which
+            promised a feature this component now delivers directly. The
+            hamburger sheet's own copy (MobileNavSheet.jsx) is the identical
+            component, so a visitor who opens the sheet instead sees the same
+            control rather than a different one. Fits this row at 390px
+            comfortably: "Sign in" is under half the length of the copy it
+            replaced, and the signed-in state (an email, truncated) is capped
+            by AccountButtons' own max-w-[180px]. */}
         <div className="ml-auto flex shrink-0 items-center gap-1 md:hidden">
-          <button
-            type="button"
-            onClick={() =>
-              modalRef.current?.open(
-                "Accounts aren't live yet. Leave an email and we'll tell you the day your " +
-                  'locker follows you between devices.',
-                'header'
-              )
-            }
-            className="inline-flex h-11 items-center justify-center whitespace-nowrap rounded-full px-3 text-sm text-white/60 transition-colors hover:text-white"
-          >
-            Get early access
-          </button>
+          <AccountButtons variant="ghost" />
           <button
             type="button"
             onClick={() => setNavOpen(true)}
@@ -223,7 +207,7 @@ export default function Header() {
         </div>
 
         <div className="ml-auto hidden shrink-0 items-center gap-2 md:flex">
-          <AccountButtons modalRef={modalRef} variant="ghost" />
+          <AccountButtons variant="ghost" />
         </div>
       </div>
 
@@ -254,6 +238,12 @@ export default function Header() {
         layer on showModal(), which sits above this containing-block
         question entirely, so it was never the same bug. */}
     <MobileNavSheet open={navOpen} onClose={() => setNavOpen(false)} modalRef={modalRef} variant="ghost" />
+
+    {/* A true sibling of <header> for the same containing-block reason as
+        MobileNavSheet just above — this is `fixed inset-x-0`, and nesting
+        it inside the blurred <header> would resolve that fixed position
+        against the header's own short box rather than the viewport. */}
+    <AccountNotice />
 
     {/* Sticky bottom action bar — the marketing shell's other half, and a
         true sibling of <header> above rather than a descendant of it.

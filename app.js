@@ -6847,30 +6847,38 @@ function saveDraft() {
   // continuation against CPUs while the real room carried on without
   // this seat, with nothing on screen saying that had happened.
   if (!state.started || hasRoom()) return;
+  const data = {
+    v: 2,
+    mySlot: state.mySlot,
+    clockLength: state.clockLength,
+    paused: state.paused,
+    seed: state.seed,
+    // Stored whole, not just as a fingerprint, so the resume banner can
+    // describe the saved league and the refusal can name what it wants.
+    league: JSON.parse(JSON.stringify(league)),
+    fingerprint: settingsFingerprint(league),
+    picks: state.picks.map((p) => p.player.name),
+    queue: state.queue.slice(),
+    watchlist: state.watchlist.slice(),
+    savedAt: Date.now(),
+    // When the draft actually began, not when it was last saved (savedAt,
+    // above) — the Locker's in-progress band wants "Started 14 min ago",
+    // which has to survive every autosave between now and a resume.
+    startedAt: state.startedAt
+  };
   try {
-    localStorage.setItem(SAVE_KEY, JSON.stringify({
-      v: 2,
-      mySlot: state.mySlot,
-      clockLength: state.clockLength,
-      paused: state.paused,
-      seed: state.seed,
-      // Stored whole, not just as a fingerprint, so the resume banner can
-      // describe the saved league and the refusal can name what it wants.
-      league: JSON.parse(JSON.stringify(league)),
-      fingerprint: settingsFingerprint(league),
-      picks: state.picks.map((p) => p.player.name),
-      queue: state.queue.slice(),
-      watchlist: state.watchlist.slice(),
-      savedAt: Date.now(),
-      // When the draft actually began, not when it was last saved (savedAt,
-      // above) — the Locker's in-progress band wants "Started 14 min ago",
-      // which has to survive every autosave between now and a resume.
-      startedAt: state.startedAt
-    }));
+    localStorage.setItem(SAVE_KEY, JSON.stringify(data));
   } catch (err) {
     // Private browsing and full quotas both land here. Losing the save is
     // not worth breaking the draft over.
   }
+  // account.js listens for this to push the same save to a signed-in
+  // account's server-side locker — a plain DOM event rather than app.js
+  // knowing anything about accounts, sessions or fetch, the same seam
+  // renderHeader()'s "juke:header" event already draws between this file
+  // and the rest of the page. Fired unconditionally: account.js itself
+  // decides whether anyone is signed in to care.
+  window.dispatchEvent(new CustomEvent("juke:locker-saved", { detail: { kind: "save", data } }));
 }
 
 // Version 1 saves carry no league at all and were all ten-team, fourteen
@@ -6893,6 +6901,10 @@ function readSave() {
 
 function clearSave() {
   try { localStorage.removeItem(SAVE_KEY); } catch (err) {}
+  // Same bridge saveDraft() fires, with data:null — account.js reads that
+  // as "clear the server-side save too," the same convention
+  // upsertSavedDraft() on the worker follows.
+  window.dispatchEvent(new CustomEvent("juke:locker-saved", { detail: { kind: "save", data: null } }));
 }
 
 function resumeDraft(data) {
@@ -7297,7 +7309,7 @@ function recordHistory() {
     : null;
   const round1 = state.picks.find((p) => p.slot === state.mySlot && p.round === 1);
   const list = readHistory();
-  list.unshift({
+  const entry = {
     id: "h" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
     completedAt: Date.now(),
     mySlot: state.mySlot,
@@ -7352,8 +7364,13 @@ function recordHistory() {
     // without it. historyStats() reconstructs them against today's board
     // now, same as everything else per-mock in that function — see its
     // own comment on exactly this trade.
-  });
+  };
+  list.unshift(entry);
   writeHistory(list.slice(0, HISTORY_LIMIT));
+  // Same bridge saveDraft() fires — account.js pushes this one entry to a
+  // signed-in account's server-side history the moment a draft finishes,
+  // rather than waiting for the Locker screen to be opened again.
+  window.dispatchEvent(new CustomEvent("juke:locker-saved", { detail: { kind: "history", entry } }));
 }
 
 // What a Locker card actually shows, derived rather than stored, so a label
@@ -9628,7 +9645,44 @@ window.JukeEngine = {
   // The Locker's completed drafts had a way to open one and no way to
   // remove one — this is the plain filter-and-rewrite clearSave() already
   // does for the single in-progress save, extended to one entry among many.
-  deleteHistoryDraft: (id) => writeHistory(readHistory().filter((e) => e.id !== id)),
+  deleteHistoryDraft: (id) => {
+    writeHistory(readHistory().filter((e) => e.id !== id));
+    // Same bridge saveDraft()/recordHistory() fire — account.js deletes the
+    // matching row server-side too, for a signed-in account.
+    window.dispatchEvent(new CustomEvent("juke:locker-saved", { detail: { kind: "delete", id } }));
+  },
+  // Added for account.js. The exact local shapes readSave()/readHistory()
+  // already produce — not the display-shaped historyList() above — because
+  // this is what migration sends to the server to be adopted verbatim, and
+  // a summary has already thrown away half of what a history entry holds
+  // (the frozen report, the full pick list).
+  rawLocalLocker: () => ({ save: readSave(), history: readHistory() }),
+  // The other direction: what a signed-in account's server locker becomes
+  // once pulled down, on every sign-in (not just the first). Added for
+  // account.js.
+  adoptServerLocker: (locker) => {
+    // History entries are immutable once recorded — recordHistory() never
+    // updates one after the fact — so two copies of the same id are always
+    // the same content, and merging is a plain union rather than a conflict
+    // to resolve.
+    if (locker && Array.isArray(locker.history) && locker.history.length) {
+      const local = readHistory();
+      const seen = new Set(local.map((e) => e.id));
+      const merged = local.concat(locker.history.filter((e) => !seen.has(e.id)));
+      merged.sort((a, b) => b.completedAt - a.completedAt);
+      writeHistory(merged.slice(0, HISTORY_LIMIT));
+    }
+    // The save is the one thing here that isn't a list, so it can't be
+    // merged the same way. Local wins when this device already has one: a
+    // save sitting on this device is either newer than whatever the server
+    // last saw, or this device's own next autosave overwrites it anyway.
+    // A device with no local save at all — a fresh sign-in on a second
+    // browser — adopts the server's, which is the one case this exists
+    // for: picking an in-progress mock back up somewhere else.
+    if (locker && locker.save && !readSave()) {
+      try { localStorage.setItem(SAVE_KEY, JSON.stringify(locker.save)); } catch (err) {}
+    }
+  },
   // The frozen report recordHistory() saved when this draft finished, or
   // null for an entry recorded before freezeReport() existed and for an id
   // that no longer exists — either way, a plain localStorage read with no

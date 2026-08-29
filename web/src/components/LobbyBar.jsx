@@ -118,7 +118,7 @@ export default function LobbyBar({ onOpenSettings }) {
           <div className="hidden h-5 w-px shrink-0 bg-white/10 md:block" />
 
           <div className="hidden shrink-0 items-center gap-3 md:flex">
-            <AccountButtons modalRef={modalRef} />
+            <AccountButtons />
           </div>
 
           <button

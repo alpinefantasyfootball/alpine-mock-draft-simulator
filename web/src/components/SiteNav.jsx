@@ -1,4 +1,8 @@
+import { useEffect, useRef, useState } from 'react'
 import RoomsNavMenu from './RoomsNavMenu.jsx'
+import SignInModal from './SignInModal.jsx'
+import DeleteAccountModal from './DeleteAccountModal.jsx'
+import { useAccount } from '../hooks/useAccount.js'
 
 // The one canonical top-nav link list and account-controls pair. Before
 // this file existed, LobbyBar.jsx (the Draft Room / Locker screen) had
@@ -105,18 +109,23 @@ export function NavLinks({ linkClassName, currentRoomClassName, currentRoom, mod
 }
 
 // The header's one account control. Log in and Sign Up used to sit here as
-// two separate dead ends, each opening the same ComingSoonModal with a
-// slightly different "not live yet" paragraph — which was true and useless:
-// neither button could do anything, so a visitor had two ways to learn the
-// identical fact. Phase 0 of accounts replaces both with the one thing
-// either button *could* usefully do today — take an email — so this is
-// "Get early access" now, singular, opening EarlyAccessModal.jsx rather
-// than ComingSoonModal.jsx. Takes the modal's ref rather than owning one, so
-// each caller decides where its own <EarlyAccessModal/> instance lives in
-// the tree — the same modalRef-as-prop pattern this file's own NavLinks
-// already uses for RoomsNavMenu's coming-soon rooms, which share this exact
-// ref: one modal instance per header, several triggers, each opening it
-// with its own copy and source tag.
+// two separate dead ends, then both were replaced by Phase 0's single "Get
+// early access" (opening EarlyAccessModal.jsx) once real accounts didn't
+// exist yet to control anything else. Real accounts do now: signed out this
+// opens SignInModal.jsx (a real email-plus-magic-link sign-in, not another
+// "leave an email" form); signed in it becomes an account menu.
+//
+// This component owns its own SignInModal/DeleteAccountModal instances now,
+// unlike the EarlyAccessModal.jsx flow it replaces — that modal is shared
+// across several *different* triggers within one header (a room's
+// coming-soon signup, the mobile "Get early access" link), which is what the
+// modalRef-as-prop pattern exists for. Every one of *this* component's own
+// instances is its own single trigger, so it needs no ref threaded in from a
+// caller — one call site, one pair of dialogs, exactly the encapsulation
+// EarlyAccessModal.jsx itself already has for its own single trigger.
+// `modalRef` (the EarlyAccessModal instance) still flows past this file to
+// NavLinks/RoomsNavMenu unchanged; it was only ever forwarded through
+// AccountButtons for this control's own old behaviour.
 //
 // variant="ghost" (design_handoff_homepage_cosmetic §10's "Nav 'Sign Up'"
 // row) is opt-in and homepage-only — Header.jsx passes it explicitly, both
@@ -128,32 +137,102 @@ export function NavLinks({ linkClassName, currentRoomClassName, currentRoom, mod
 // the shared default in place would have silently carried the homepage's
 // ghost treatment into the Cockpit's nav too, which the handoff never asks
 // for and CLAUDE.md's scope note rules out ("the marketing homepage only").
-export function AccountButtons({ modalRef, variant = 'filled' }) {
+export function AccountButtons({ variant = 'filled' }) {
+  const account = useAccount()
+  const signInRef = useRef(null)
+  const deleteRef = useRef(null)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuBoxRef = useRef(null)
+
+  // Closes on an outside click/tap, the same as RoomsNavMenu's own dropdown
+  // — only registered while the menu is actually open, so a signed-out
+  // visitor (the common case) never pays for a document-wide listener that
+  // has nothing to do.
+  useEffect(() => {
+    if (!menuOpen) return
+    const onDocClick = (e) => {
+      if (menuBoxRef.current && !menuBoxRef.current.contains(e.target)) setMenuOpen(false)
+    }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [menuOpen])
+
   const buttonClass =
     variant === 'ghost'
       ? 'inline-flex h-11 items-center justify-center rounded-full border border-[#454D5E] px-[18px] text-[15px] font-semibold text-[#E6E8EB] transition-colors duration-150 hover:border-[#4892A8] md:h-9'
       : 'inline-flex h-11 items-center justify-center rounded-full bg-gradient-to-r from-[#22d3ee] to-[#a78bfa] px-4 text-sm font-semibold text-white shadow-glass transition-all duration-200 hover:scale-105 hover:shadow-[0_0_15px_rgba(34,211,238,0.4)] md:h-9'
 
+  // account is null until account.js has run at all, and "loading" until
+  // its first /account/session check answers — both read as signed-out
+  // here, the same "don't know yet" a visitor should never be able to tell
+  // apart from "definitely signed out": there is nothing this button can
+  // usefully show in either case except the one it already shows a
+  // signed-out visitor every single time regardless.
+  const signedIn = account && account.status === 'signed-in'
+  const email = account?.account?.email || ''
+
+  // Both modals are unconditional siblings of the signed-in/signed-out
+  // branch below, not nested inside it — deleteAccount() succeeding is
+  // exactly what flips signedIn to false, and a DeleteAccountModal that only
+  // existed inside the signed-in branch used to get unmounted, dialog and
+  // all, in that same render: the "Account deleted" confirmation screen it
+  // was about to show never had a chance to paint. A dialog closed by
+  // default costs nothing to keep mounted through a state change it itself
+  // causes — same reasoning EarlyAccessModal.jsx's shared ref already
+  // relies on for staying mounted across whichever trigger opened it.
   return (
-    // h-11 (44px) below md, §9's own tap-target floor — py-2 alone measured
-    // 36px, found during homepage v4 pass 3's tap-target audit (this pill is
-    // the exact one §9 names: "the nav Sign Up pill"). md:h-9 keeps the
-    // shorter desktop nav pill AccountButtons shipped with, the same split
-    // CLAUDE.md documents ScoringDemoCard's own mobile pills already using
-    // ("h-11 ... not met by desktop's shorter chip") — one shared
-    // component, two heights, not two components.
-    <button
-      type="button"
-      onClick={() =>
-        modalRef.current?.open(
-          "Accounts aren't live yet. Leave an email and we'll tell you the day your " +
-            'locker follows you between devices.',
-          'header'
-        )
-      }
-      className={buttonClass}
-    >
-      Get early access
-    </button>
+    <>
+      {!signedIn ? (
+        // h-11 (44px) below md, §9's own tap-target floor — py-2 alone
+        // measured 36px, found during homepage v4 pass 3's tap-target
+        // audit (this pill is the exact one §9 names: "the nav Sign Up
+        // pill"). md:h-9 keeps the shorter desktop nav pill this
+        // component shipped with.
+        <button type="button" onClick={() => signInRef.current?.open()} className={buttonClass}>
+          Sign in
+        </button>
+      ) : (
+        <div className="relative" ref={menuBoxRef}>
+          <button
+            type="button"
+            onClick={() => setMenuOpen((v) => !v)}
+            aria-expanded={menuOpen}
+            aria-haspopup="menu"
+            className={buttonClass + ' max-w-[180px]'}
+            title={email}
+          >
+            <span className="truncate">{email}</span>
+          </button>
+
+          {menuOpen && (
+            <div
+              role="menu"
+              className="absolute right-0 top-full z-50 mt-2 w-56 overflow-hidden rounded-xl border border-white/10 bg-[#141821] p-1.5 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.6)]"
+            >
+              <div className="truncate px-3 py-2 text-xs text-white/40">{email}</div>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => { setMenuOpen(false); window.Account?.signOut() }}
+                className="block w-full rounded-lg px-3 py-2 text-left text-sm text-white/80 transition-colors hover:bg-white/[0.06] hover:text-white"
+              >
+                Sign out
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => { setMenuOpen(false); deleteRef.current?.open() }}
+                className="block w-full rounded-lg px-3 py-2 text-left text-sm text-rose-300 transition-colors hover:bg-rose-500/10"
+              >
+                Delete account
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      <SignInModal ref={signInRef} />
+      <DeleteAccountModal ref={deleteRef} onDeleted={() => setMenuOpen(false)} />
+    </>
   )
 }

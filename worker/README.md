@@ -17,9 +17,9 @@ the multi-user section of `CLAUDE.md`.
 
 | File | Role |
 |---|---|
-| `draft-room.js` | The Durable Object. Sockets, storage, the alarm — and nothing else. |
-| `store.js` | The D1 cache: the player pool and the headlines. Every function answers "no" to a missing binding rather than throwing. |
-| `migrations/` | The SQL. `0001_init.sql` creates `players`, `player_news` and `news_lookups`. |
+| `draft-room.js` | The Durable Object, the routing worker, and every `/account/*` route. |
+| `store.js` | D1: the player-pool/headline cache (never throws) and the accounts system (allowed to throw — see **Accounts** below for why). |
+| `migrations/` | The SQL. `0001_init.sql` creates `players`, `player_news` and `news_lookups`; `0002_signup.sql` adds the email-capture list; `0003_accounts.sql` adds `accounts`, `magic_links`, `sessions`, `saved_draft` and `draft_history`. |
 | `wrangler.toml` | Bindings, the DO migration and the cron. One class, `DraftRoom`; one database, `juke_db`. |
 | `../room.js` | Who is sitting where, what has been picked, how long is left. Pure. |
 | `../draft-engine.js` | The rules of a snake draft. Pure. |
@@ -251,7 +251,14 @@ A local key goes in `worker/.dev.vars`, which is gitignored:
 ```
 TANK01_KEY = "…"
 GIPHY_KEY = "…"
+RESEND_API_KEY = "…"
 ```
+
+`RESEND_API_KEY` is the accounts system's own secret — see **Accounts**
+below. Unlike the two above, its absence isn't invisible: with no key set,
+`/account/request-link` still works locally (a dev-only response field hands
+back the raw token instead of emailing it — see accountRequestLink() in
+draft-room.js), but nobody receives a real email in production without it.
 
 **`--var` on the command line works and a stale `workerd` will make you think
 it does not.** `wrangler dev` leaves `workerd.exe` processes behind when its
@@ -259,6 +266,98 @@ parent is killed, two can hold port 8787 at once, and the old one answers — so
 a route came back `configured: false` with the key visibly bound in the new
 process's own startup log. Check `netstat -ano | grep :8787` before believing a
 binding is missing.
+
+## Accounts
+
+Email plus a magic link, no passwords, and the server-side locker behind it
+— Phase 1 of accounts, replacing the "there is still no login anywhere in
+Juke" note `/signup` left for this day. `0003_accounts.sql` adds five
+tables (`accounts`, `magic_links`, `sessions`, `saved_draft`,
+`draft_history`); every function behind the routes below lives in
+`store.js`'s own "Accounts — phase 1" section.
+
+**Unlike the cache functions above, these are allowed to throw.** A cache
+miss is survivable — the caller just asks upstream again — which is the
+whole reason `syncPlayerPool()`/`cachedNews()`/etc. swallow their own
+errors. An account write is not survivable the same way: if creating a
+session fails, the person simply cannot sign in, and papering over that as
+a silent `false` would turn a real 500 into "the link did nothing," which
+is worse than an error the route can show honestly. Every account route in
+`draft-room.js` therefore wraps its own store.js calls in try/catch and
+answers with a real error rather than trusting the "never fails" contract
+the rest of this worker follows.
+
+**Sessions are opaque bearer tokens, hashed at rest — not a JWT.** A
+signed, self-contained token can't be revoked without a denylist, which is
+a database table anyway, so this skips the signing complexity and stores
+the one table it would have needed regardless. Sent as a plain header
+(`x-juke-session`), never a cookie: this worker and the site are different
+origins, and every other client-worker exchange here already goes through
+an explicit header/param instead of cookie auth (see `live.js`'s own
+member/name query params for the room).
+
+### The routes
+
+| Route | Method | Auth | What it does |
+|---|---|---|---|
+| `/account/request-link` | POST `{email}` | — | Mints a magic link, emails it via Resend. `too-soon` (429) inside a 60s cooldown per address. |
+| `/account/consume` | POST `{token}` | — | Redeems a magic link, creates the account if it's the first time, returns a session token. `unknown`/`used`/`expired` (400) otherwise. |
+| `/account/session` | GET | session | Whether the session is still good, and the account it belongs to. |
+| `/account/sign-out` | POST | session | Revokes the session. Always `{ok:true}`, even for an already-dead token. |
+| `/account/migrate` | POST `{save, history}` | session | One-time adoption of a browser's local locker. `already-migrated` (409) on a second call for the same account. |
+| `/account/locker` | GET | session | The server locker: `{save, history}`. |
+| `/account/locker` | POST `{save?, historyEntry?}` | session | Write-through sync — one save or one new history entry per call. `save:null` clears it. |
+| `/account/locker/delete` | POST `{id}` | session | Deletes one history entry. |
+| `/account/delete` | POST | session | Deletes the account and everything scoped to it. Ends the calling session along with every other one on the account. |
+
+Every route refuses an origin it doesn't serve **before** touching the
+database or the session header, the same `originAllowed()` check every
+other route in this file already runs first.
+
+### The magic link itself
+
+The email carries `https://jukeff.com/?authToken=<token>` — the query
+string, never the hash. `account.js` (the client, loaded alongside
+`live.js`) reads `authToken` off `location.search` on load, strips it
+immediately (before the async consume even resolves, so a reload mid-flight
+can't resubmit an already-spent token), and calls `/account/consume`. This
+never touches `app.js`'s own hash router: `applyRoute()` has no reason to
+know this exists, and doesn't need to.
+
+### Migration and sync
+
+`account.js` reads/writes the browser's local locker through two
+`window.JukeEngine` bridge functions built for this — `rawLocalLocker()`
+and `adoptServerLocker()` — never a second copy of `readSave()`/
+`readHistory()` in the account script. `app.js` fires a `juke:locker-saved`
+DOM event after every `saveDraft()`/`recordHistory()`/`clearSave()`/
+`deleteHistoryDraft()`, the same seam `renderHeader()`'s own
+`juke:header` event already draws between that file and the rest of the
+page — `app.js` knows nothing about accounts, sessions, or fetch. Ignored
+outright while signed out, so a solo drafter's every save costs exactly the
+same network activity it always did: none.
+
+### Sending the email
+
+Resend's plain HTTP API — a `fetch()` call, not a package, so this adds no
+dependency. `RESEND_API_KEY` (`wrangler secret put RESEND_API_KEY`) is the
+only thing required; `EMAIL_FROM` is optional and defaults to Resend's own
+`onboarding@resend.dev`, which sends real mail with zero DNS setup — set it
+to a `jukeff.com` address once that domain is verified with Resend for a
+more branded From line. With no key at all, `sendMagicLinkEmail()` returns
+`false` the same way `giphySearch()`/`playerNews()` answer `configured:false`
+with no key — except a magic link with nowhere to go isn't a degraded
+feature the way a missing GIF picker is, so the dev-only token leak below
+exists specifically to keep the whole flow testable without a real inbox.
+
+**The dev-only token leak, and why it's safe.** With no `RESEND_API_KEY` (or
+a send that failed) *and* the request coming from `localhost`/`127.0.0.1`
+(the identical regex `originAllowed()` already tests local dev origins
+against), `/account/request-link` hands the raw token back in the response
+body as `devToken`. Gated on the literal local-origin pattern, not on "any
+origin this worker will answer" — which also includes the real
+`jukeff.com`/`www.jukeff.com` hosts — so this can never fire in production
+regardless of whether the secret happens to be set there.
 
 ## Not done yet
 

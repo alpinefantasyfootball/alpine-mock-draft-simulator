@@ -447,6 +447,335 @@ export async function storeSignup(env, email, source) {
 }
 
 /* ----------------------------------------------------------
+   Accounts — phase 1
+   ---------------------------------------------------------- */
+
+/* Everything below this line breaks the "nothing here ever throws" rule the
+   top of this file states for the cache tables, deliberately. A cache miss
+   is survivable — the caller re-asks upstream — and that is the whole reason
+   store.js's cache functions swallow their own errors. An account write is
+   not survivable the same way: if creating a session fails, the person
+   cannot sign in, and papering over that as a silent `false` would turn a
+   real 500 into "the sign-in link did nothing," which is worse than an
+   error a route handler can show. So these throw, and draft-room.js's
+   account routes catch them and answer honestly. */
+
+/* Not a source of truth for what a draft *is*. saved_draft/draft_history
+   hold the exact JSON blobs app.js's saveDraft()/recordHistory() already
+   produce — see this file's own migration (0003_accounts.sql) for why that
+   is not re-modelled as columns. */
+
+const TOKEN_BYTES = 32;                     // 256 bits
+const MAGIC_LINK_TTL = 15 * 60;             // fifteen minutes
+const SESSION_TTL = 90 * 24 * 60 * 60;      // ninety days
+const REQUEST_COOLDOWN = 60;                // seconds between link requests for one address
+
+/* A URL-safe random token. Used for both a magic link and a session — two
+   different credentials, same shape, because both are opaque bearer strings
+   validated against a hash in the same two tables' pattern. crypto is a
+   Workers-runtime global, the same Web Crypto API a browser has; no
+   dependency to add for it. */
+function randomToken() {
+  const bytes = new Uint8Array(TOKEN_BYTES);
+  crypto.getRandomValues(bytes);
+  let bin = "";
+  bytes.forEach((b) => { bin += String.fromCharCode(b); });
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+/* SHA-256 of a token, hex. What actually sits in magic_links/sessions —
+   never the raw token, the same reason a password is hashed rather than
+   stored: a database dump must not be a list of usable credentials. */
+async function sha256Hex(text) {
+  const bytes = new TextEncoder().encode(text);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/* Same shape as randomToken(), through its own function rather than that one
+   reused — an account id is not a bearer credential, and conflating "how ids
+   are generated" with "how secrets are generated" is the kind of thing that
+   invites reusing one where the other was meant, later. */
+function newAccountId() {
+  return randomToken();
+}
+
+/* Request a magic link. Returns { ok:true, token } — the one moment the raw
+   token exists outside somebody's inbox — or { ok:false, error }.
+
+   error is "too-soon" under REQUEST_COOLDOWN, which is the only abuse
+   defence at this layer: it stops one address being hammered, not a script
+   spraying a link at many different addresses. That is the same "belongs on
+   the edge, not in the room" limit CLAUDE.md already states for room
+   creation — a Cloudflare rate-limiting rule on this route is the next real
+   layer, not more code here. */
+export async function requestMagicLink(env, email) {
+  const recent = await env.DB
+    .prepare("SELECT created_at FROM magic_links WHERE email = ? ORDER BY created_at DESC LIMIT 1")
+    .bind(email)
+    .first();
+  const now = nowSeconds();
+  if (recent && now - recent.created_at < REQUEST_COOLDOWN) {
+    return { ok: false, error: "too-soon" };
+  }
+
+  const token = randomToken();
+  const tokenHash = await sha256Hex(token);
+  await env.DB.prepare(
+    "INSERT INTO magic_links (token_hash, email, created_at, expires_at) VALUES (?, ?, ?, ?)"
+  ).bind(tokenHash, email, now, now + MAGIC_LINK_TTL).run();
+
+  return { ok: true, token };
+}
+
+/* The email itself, through Resend's plain HTTP API — a fetch call, not a
+   package; Workers already have fetch, so this adds no dependency the way a
+   provider SDK would.
+
+   With no RESEND_API_KEY set, this returns false rather than throwing —
+   the one function in this section that follows the cache-table
+   convention, because "no email provider configured" is a deployment fact
+   the route already has a documented way to answer (same as GIPHY_KEY/
+   TANK01_KEY), not a request that failed.
+
+   env.EMAIL_FROM lets a verified sending domain replace Resend's own
+   onboarding@resend.dev once jukeff.com's DNS is set up with them; unset,
+   the default works today with zero domain setup, at the cost of the
+   less-branded From address. */
+export async function sendMagicLinkEmail(env, email, token, siteOrigin) {
+  if (!env.RESEND_API_KEY) return false;
+
+  const link = siteOrigin + "/?authToken=" + encodeURIComponent(token);
+  const from = env.EMAIL_FROM || "Juke <onboarding@resend.dev>";
+
+  const html =
+    '<div style="font-family:Inter,Arial,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px">' +
+    '<h1 style="font-size:20px;margin:0 0 16px">Sign in to Juke</h1>' +
+    '<p style="font-size:14px;line-height:1.6;color:#444;margin:0 0 24px">' +
+    "Click the button below to sign in. This link works once and expires in 15 minutes." +
+    "</p>" +
+    '<a href="' + link + '" style="display:inline-block;background:#00E5FF;color:#0B0E14;' +
+    'font-weight:600;font-size:14px;padding:12px 24px;border-radius:999px;text-decoration:none">' +
+    "Sign in to Juke</a>" +
+    '<p style="font-size:12px;color:#888;margin:24px 0 0">' +
+    "If you didn't ask for this, you can ignore this email." +
+    "</p></div>";
+  const text =
+    "Sign in to Juke\n\n" + link + "\n\n" +
+    "This link works once and expires in 15 minutes. " +
+    "If you didn't ask for this, you can ignore this email.";
+
+  try {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        "authorization": "Bearer " + env.RESEND_API_KEY,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({ from, to: [email], subject: "Sign in to Juke", html, text })
+    });
+    if (!res.ok) throw new Error("resend " + res.status);
+    return true;
+  } catch (err) {
+    console.error("magic link email failed:", err && err.message);
+    return false;
+  }
+}
+
+/* Consume a magic link. Returns one of:
+     { ok:true, account, sessionToken }
+     { ok:false, error: "unknown" | "used" | "expired" }
+
+   Finds-or-creates the account by email — the first successful consume for
+   an address IS the sign-up, there is no separate registration step, which
+   is the whole point of "email plus magic link, no passwords." */
+export async function consumeMagicLink(env, token) {
+  const tokenHash = await sha256Hex(token);
+  const row = await env.DB
+    .prepare("SELECT email, expires_at, used_at FROM magic_links WHERE token_hash = ?")
+    .bind(tokenHash)
+    .first();
+  if (!row) return { ok: false, error: "unknown" };
+  if (row.used_at) return { ok: false, error: "used" };
+  if (row.expires_at < nowSeconds()) return { ok: false, error: "expired" };
+
+  await env.DB.prepare("UPDATE magic_links SET used_at = ? WHERE token_hash = ?")
+    .bind(nowSeconds(), tokenHash).run();
+
+  let account = await env.DB
+    .prepare("SELECT id, email, created_at, migrated_at FROM accounts WHERE email = ?")
+    .bind(row.email)
+    .first();
+  if (!account) {
+    account = { id: newAccountId(), email: row.email, created_at: nowSeconds(), migrated_at: null };
+    await env.DB.prepare(
+      "INSERT INTO accounts (id, email, created_at, migrated_at) VALUES (?, ?, ?, NULL)"
+    ).bind(account.id, account.email, account.created_at).run();
+  }
+
+  const sessionToken = await createSession(env, account.id);
+  return { ok: true, account, sessionToken };
+}
+
+/* A fresh session for an account. Returns the raw token — the one moment it
+   exists outside the client's own localStorage. */
+export async function createSession(env, accountId) {
+  const token = randomToken();
+  const tokenHash = await sha256Hex(token);
+  const now = nowSeconds();
+  await env.DB.prepare(
+    "INSERT INTO sessions (token_hash, account_id, created_at, last_seen_at, expires_at) VALUES (?, ?, ?, ?, ?)"
+  ).bind(tokenHash, accountId, now, now, now + SESSION_TTL).run();
+  return token;
+}
+
+/* The account behind a session token, or null — unknown, revoked and
+   expired all answer the same way, because none of them should tell the
+   caller which one it was: that is information about other people's
+   sessions leaking through an error message. Touches last_seen_at on every
+   valid check, which is the only piece of session activity this stores. */
+export async function accountForSession(env, token) {
+  if (!token) return null;
+  const tokenHash = await sha256Hex(token);
+  const now = nowSeconds();
+
+  const row = await env.DB.prepare(
+    "SELECT a.id, a.email, a.created_at, a.migrated_at, s.expires_at, s.revoked_at" +
+    " FROM sessions s JOIN accounts a ON a.id = s.account_id" +
+    " WHERE s.token_hash = ?"
+  ).bind(tokenHash).first();
+
+  if (!row || row.revoked_at || row.expires_at < now) return null;
+
+  await env.DB.prepare("UPDATE sessions SET last_seen_at = ? WHERE token_hash = ?")
+    .bind(now, tokenHash).run();
+
+  return { id: row.id, email: row.email, created_at: row.created_at, migrated_at: row.migrated_at };
+}
+
+/* Sign out. Sets revoked_at rather than deleting the row, so a request that
+   raced the sign-out sees a session that is unambiguously dead rather than
+   one that has vanished — same shape as magic_links.used_at. */
+export async function revokeSession(env, token) {
+  const tokenHash = await sha256Hex(token);
+  await env.DB.prepare("UPDATE sessions SET revoked_at = ? WHERE token_hash = ?")
+    .bind(nowSeconds(), tokenHash).run();
+}
+
+/* The server locker: the save (or null) and every history entry, newest
+   first — the exact shapes app.js's readSave()/readHistory() already
+   produce, parsed back out of the JSON they were stored as. */
+export async function getLocker(env, accountId) {
+  const saveRow = await env.DB
+    .prepare("SELECT data FROM saved_draft WHERE account_id = ?")
+    .bind(accountId)
+    .first();
+
+  const historyRows = await env.DB
+    .prepare("SELECT data FROM draft_history WHERE account_id = ? ORDER BY completed_at DESC")
+    .bind(accountId)
+    .all();
+
+  return {
+    save: saveRow ? JSON.parse(saveRow.data) : null,
+    history: (historyRows.results || []).map((r) => JSON.parse(r.data))
+  };
+}
+
+/* Replace the one save row. Called on every autosave while signed in — an
+   upsert, the same "a new one overwrites the last" rule the local SAVE_KEY
+   already follows, never a second row. save === null clears it (a draft
+   finished or was discarded), the server-side mirror of clearSave(). */
+export async function upsertSavedDraft(env, accountId, save) {
+  if (save === null) {
+    await env.DB.prepare("DELETE FROM saved_draft WHERE account_id = ?").bind(accountId).run();
+    return;
+  }
+  const now = nowSeconds();
+  await env.DB.prepare(
+    "INSERT INTO saved_draft (account_id, data, updated_at) VALUES (?, ?, ?)" +
+    " ON CONFLICT(account_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at"
+  ).bind(accountId, JSON.stringify(save), now).run();
+}
+
+/* Add history entries that don't already exist, by their own client-
+   generated id. Used both by migration (adopting a browser's whole local
+   history at once) and by the ongoing sync (one entry, the moment a draft
+   finishes) — IGNORE rather than REPLACE because a history entry is
+   immutable once recorded (recordHistory() in app.js never updates one),
+   so the only two things a repeat of the same id can mean are a retried
+   request or a second device that already has it; either way the existing
+   row is already correct. Returns how many were actually new, which is what
+   the migration confirmation ("Your 6 saved mocks are now on your account")
+   reads — not how many were sent, since a partial resend must not inflate
+   the count a second time. */
+export async function addHistoryEntries(env, accountId, entries) {
+  if (!entries || !entries.length) return 0;
+
+  const before = await env.DB
+    .prepare("SELECT COUNT(*) AS n FROM draft_history WHERE account_id = ?")
+    .bind(accountId).first();
+
+  const statements = entries.map((entry) => env.DB.prepare(
+    "INSERT OR IGNORE INTO draft_history (id, account_id, data, completed_at) VALUES (?, ?, ?, ?)"
+  ).bind(entry.id, accountId, JSON.stringify(entry), entry.completedAt || nowSeconds() * 1000));
+  await env.DB.batch(statements);
+
+  const after = await env.DB
+    .prepare("SELECT COUNT(*) AS n FROM draft_history WHERE account_id = ?")
+    .bind(accountId).first();
+
+  return after.n - before.n;
+}
+
+export async function deleteHistoryEntry(env, accountId, id) {
+  await env.DB.prepare("DELETE FROM draft_history WHERE account_id = ? AND id = ?")
+    .bind(accountId, id).run();
+}
+
+/* The one-time adoption of a browser's local locker into a just-signed-in
+   account. Refuses if this account has already migrated once — checked
+   here as well as by the route handler, because this is the one action in
+   the whole account system that must never run twice for the same account:
+   a second migration on a browser that still has stale local data (a user
+   who signed in on device A, ran more mocks, then opens a still-logged-out
+   tab on device A again days later) would re-adopt entries the account
+   already has, and while addHistoryEntries() is idempotent per entry, a
+   save that has since moved on would be silently clobbered backwards.
+
+   Returns { ok:true, migratedCount } or { ok:false, error:"already-migrated" }. */
+export async function migrateLocalLocker(env, accountId, save, historyEntries) {
+  const account = await env.DB.prepare("SELECT migrated_at FROM accounts WHERE id = ?")
+    .bind(accountId).first();
+  if (account && account.migrated_at) return { ok: false, error: "already-migrated" };
+
+  if (save) await upsertSavedDraft(env, accountId, save);
+  const migratedCount = await addHistoryEntries(env, accountId, historyEntries || []);
+
+  await env.DB.prepare("UPDATE accounts SET migrated_at = ? WHERE id = ?")
+    .bind(nowSeconds(), accountId).run();
+
+  return { ok: true, migratedCount };
+}
+
+/* Delete the account and everything scoped to it. D1's SQLite does not
+   enforce foreign keys by default, so this deletes explicitly in one batch
+   rather than relying on ON DELETE CASCADE actually cascading — four
+   statements, not a transaction Cloudflare doesn't offer here, but D1
+   guarantees a batch runs as a single unit, which is enough: either all four
+   land or none do. magic_links rows for this email are left to expire on
+   their own TTL rather than deleted here — they hold no reference to the
+   account id and are never a record of anything the account itself did. */
+export async function deleteAccount(env, accountId) {
+  await env.DB.batch([
+    env.DB.prepare("DELETE FROM sessions WHERE account_id = ?").bind(accountId),
+    env.DB.prepare("DELETE FROM saved_draft WHERE account_id = ?").bind(accountId),
+    env.DB.prepare("DELETE FROM draft_history WHERE account_id = ?").bind(accountId),
+    env.DB.prepare("DELETE FROM accounts WHERE id = ?").bind(accountId)
+  ]);
+}
+
+/* ----------------------------------------------------------
    Small things
    ---------------------------------------------------------- */
 

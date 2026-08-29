@@ -96,33 +96,34 @@
   <main class="doc">
 
     <p class="doc-intro">
-      Juke has no accounts, no sign-up and nowhere to enter a password, an
-      email address or a card number &mdash; there has never been a form on
-      this site that asks for any of them. What follows is a complete,
-      specific account of what the app actually does, not a template filled
-      in with the usual disclaimers.
+      Juke has an account system now, and it's the one thing in this document
+      that changed since the last version: email plus a one-time sign-in
+      link, never a password, and nowhere in the app that asks for a card
+      number. What follows is a complete, specific account of what the app
+      actually does, not a template filled in with the usual disclaimers.
     </p>
 
     <div class="note">
-      This is a first version, written to describe what the code actually
-      does rather than to read like a generic policy &mdash; every claim
-      below was checked against the source and the live configuration before
-      being written down. It hasn't been reviewed by a lawyer. Last updated
-      21 August 2026.
+      Written to describe what the code actually does rather than to read
+      like a generic policy &mdash; every claim below was checked against the
+      source and the live configuration before being written down. It hasn't
+      been reviewed by a lawyer. Last updated 29 August 2026, for the account
+      system this version documents for the first time.
     </div>
 
     <div class="toc">
       <ol>
         <li><a href="#s01">A mock draft on your own</a></li>
-        <li><a href="#s02">Drafting with your league</a></li>
-        <li><a href="#s03">What your browser talks to directly</a></li>
-        <li><a href="#s04">What goes through Juke's own server</a></li>
-        <li><a href="#s05">Hosting, and Cloudflare's own analytics</a></li>
-        <li><a href="#s06">What we never collect</a></li>
-        <li><a href="#s07">Cookies</a></li>
-        <li><a href="#s08">Children</a></li>
-        <li><a href="#s09">Changes to this page</a></li>
-        <li><a href="#s10">Contact</a></li>
+        <li><a href="#s02">Signing in</a></li>
+        <li><a href="#s03">Drafting with your league</a></li>
+        <li><a href="#s04">What your browser talks to directly</a></li>
+        <li><a href="#s05">What goes through Juke's own server</a></li>
+        <li><a href="#s06">Hosting, and Cloudflare's own analytics</a></li>
+        <li><a href="#s07">What we collect, and what we never do</a></li>
+        <li><a href="#s08">Cookies</a></li>
+        <li><a href="#s09">Children</a></li>
+        <li><a href="#s10">Changes to this page</a></li>
+        <li><a href="#s11">Contact</a></li>
       </ol>
     </div>
 
@@ -132,19 +133,75 @@
       your draft is sent to a server at all &mdash; there is no server in that
       path to send it to. The board, the projections, the scoring and the
       grade are all computed on your own machine from files the page already
-      downloaded.
+      downloaded. This is still true whether or not you're signed in &mdash;
+      an account adds a second, synced copy of what follows below; it never
+      changes how a draft itself is computed.
     </p>
     <p>
       Your progress &mdash; the seat you picked, every pick made, your league
       settings, your queue and watchlist, and any draft you've finished
       &mdash; is written to your browser's own local storage
-      (<code>localStorage</code>), on your device only. Juke has no way to
-      read it back, because there is nowhere for it to be read back from
-      except the browser it was written on. Clearing your browser's site data
-      deletes it permanently, the same as clearing it for any other site.
+      (<code>localStorage</code>), on your device only. Signed out, Juke has
+      no way to read it back, because there is nowhere for it to be read back
+      from except the browser it was written on. Clearing your browser's site
+      data deletes it permanently, the same as clearing it for any other
+      site. Section 02 covers what changes, and what doesn't, once you sign
+      in.
     </p>
 
-    <h2 id="s02"><span class="no">02</span>Drafting with your league</h2>
+    <h2 id="s02"><span class="no">02</span>Signing in</h2>
+    <p>
+      An account is optional, and every draft feature works exactly the same
+      without one &mdash; unlimited mock drafts, custom scoring, drafting
+      with friends, your locker of saved drafts. The only thing an account
+      adds is that your locker follows you between devices instead of living
+      in one browser.
+    </p>
+    <p>
+      There's no password anywhere in Juke, on purpose: you enter an email
+      address, we send a one-time link, and clicking it signs you in. That
+      link works once and stops working after fifteen minutes, whether or
+      not you clicked it. Signing in creates an account holding exactly three
+      things:
+    </p>
+    <ul>
+      <li>the email address you signed in with;</li>
+      <li>when you created the account;</li>
+      <li>your locker &mdash; your saved in-progress draft and your completed
+        mocks, the same data section 01 describes, copied to our server so a
+        second device can see it too.</li>
+    </ul>
+    <p>
+      Nothing else. No password to store because none is ever set, no name,
+      no payment details, no address.
+    </p>
+    <p>
+      The first time you sign in on a browser that already has mocks saved
+      locally, those mocks are copied into your new account &mdash; you're
+      told how many, on screen, when it happens. That copy runs once per
+      account, ever; signing in again on the same browser, or on a different
+      one, never re-copies or duplicates it. Signing out clears the sign-in
+      from that browser but leaves its local mocks exactly where they were
+      &mdash; signing back in reconnects to the same account and the same
+      locker, it doesn't create a second copy.
+    </p>
+    <p>
+      You can delete your account at any time from the account menu, with no
+      need to email anyone. Deleting removes your email address, your
+      account record, and your entire server-side locker immediately and
+      permanently. It does not touch mocks already saved in the browser you're
+      using &mdash; only what was copied to our server goes away, for the
+      same reason signing out doesn't erase your local locker either.
+    </p>
+    <p>
+      Signing in and staying signed in is handled by a long-lived credential
+      stored in your browser's local storage, the same way the room id in
+      section 03 is &mdash; not a cookie, and not sent to any server besides
+      ours. Signing out (or deleting your account) invalidates it immediately;
+      it also expires on its own after ninety days of not being used.
+    </p>
+
+    <h2 id="s03"><span class="no">03</span>Drafting with your league</h2>
     <p>
       Sending an invite link creates a shared room, and a room is the one
       case where drafting does involve a server &mdash; everyone in it has to
@@ -157,11 +214,11 @@
       <li>the chat messages sent in that room.</li>
     </ul>
     <p>
-      There's still no account behind any of this. Your browser generates a
-      random id the first time you join a room, stored the same way as
-      everything in section 01, and that id is what the room uses to tell you
-      apart from the person in the next seat &mdash; it isn't tied to your
-      name, an email address, or anything else about you.
+      A room doesn't know or care whether you're signed in. Your browser
+      generates a random id the first time you join one, stored the same way
+      as everything in section 01, and that id &mdash; not your account, not
+      your email address &mdash; is what the room uses to tell you apart from
+      the person in the next seat.
     </p>
     <p>
       A room isn't kept forever. Once every participant has been disconnected
@@ -169,7 +226,7 @@
       display names &mdash; is deleted automatically.
     </p>
 
-    <h2 id="s03"><span class="no">03</span>What your browser talks to directly</h2>
+    <h2 id="s04"><span class="no">04</span>What your browser talks to directly</h2>
     <p>
       A few things load straight from someone else's server, the same way an
       embedded video or a web font does on most sites &mdash; that server sees
@@ -187,11 +244,11 @@
       you've typed.
     </p>
 
-    <h2 id="s04"><span class="no">04</span>What goes through Juke's own server</h2>
+    <h2 id="s05"><span class="no">05</span>What goes through Juke's own server</h2>
     <p>
-      Two things are proxied through Juke's server instead of being called
-      directly, specifically so the provider's own access key never has to
-      sit in a page your browser can read:
+      Three things are proxied or handled through Juke's server instead of
+      being called directly, specifically so a provider's own access key
+      never has to sit in a page your browser can read:
     </p>
     <ul>
       <li><b>Player news headlines</b>, from Tank01 &mdash; fetched when you open a
@@ -199,14 +256,20 @@
         isn't fetched fresh from the provider every time.</li>
       <li><b>GIF search in room chat</b>, from GIPHY &mdash; only if you actually
         search for one.</li>
+      <li><b>The sign-in email itself</b>, sent through Resend when you request a
+        sign-in link. Your browser never talks to Resend directly &mdash; it
+        asks our server for a link, our server asks Resend to deliver it,
+        and the only thing Resend is told is the one address you typed and
+        the email's content.</li>
     </ul>
     <p>
-      Both requests carry Juke's own server as the visible caller, not your
-      browser, and neither is told anything about you beyond what's needed
-      to answer that one request (a player id, or a search term).
+      All three carry Juke's own server as the visible caller, not your
+      browser, and none is told anything about you beyond what's needed to
+      answer that one request (a player id, a search term, or the address to
+      send one email to).
     </p>
 
-    <h2 id="s05"><span class="no">05</span>Hosting, and Cloudflare's own analytics</h2>
+    <h2 id="s06"><span class="no">06</span>Hosting, and Cloudflare's own analytics</h2>
     <p>
       The site is hosted on Cloudflare, which sees the same standard request
       information &mdash; your IP address, browser and the page requested
@@ -218,33 +281,44 @@
       that follows you across other, unrelated sites.
     </p>
 
-    <h2 id="s06"><span class="no">06</span>What we never collect</h2>
+    <h2 id="s07"><span class="no">07</span>What we collect, and what we never do</h2>
+    <p>
+      What section 02 already says in full, restated here so it sits beside
+      the "never" list it used to stand alone against: if you create an
+      account, we hold your email address, when you created it, and your
+      locker. Nothing else is ever asked for, account or no account:
+    </p>
     <ul>
-      <li>No sign-up, no password, no email address &mdash; there is no form
-        anywhere in the app that asks for one.</li>
+      <li>No password, ever &mdash; there is nowhere in the app to set or type
+        one.</li>
       <li>No payment information. Juke is free and nothing in it is for sale.</li>
       <li>No advertising trackers, and nothing here is sold or shared with
         anyone for marketing.</li>
       <li>No location data beyond the coarse, IP-level location any web
         request already carries.</li>
+      <li>No name, no phone number, no address of any kind &mdash; an email is
+        the one identifying thing an account ever holds.</li>
     </ul>
 
-    <h2 id="s07"><span class="no">07</span>Cookies</h2>
+    <h2 id="s08"><span class="no">08</span>Cookies</h2>
     <p>
-      Juke's own code sets none. Everything in sections 01 and 02 is held in
-      local storage, which is not a cookie and is never sent to a server
-      automatically the way a cookie is &mdash; it only leaves your browser
-      when the app deliberately sends it, as in a room.
+      Juke's own code sets none, signed in or out. Everything in sections 01
+      and 02 &mdash; your local draft data and, if you sign in, the credential
+      that keeps you signed in &mdash; is held in local storage, which is not
+      a cookie and is never sent to a server automatically the way a cookie
+      is. It only leaves your browser when the app deliberately sends it, as
+      in a room or when it checks you're still signed in.
     </p>
 
-    <h2 id="s08"><span class="no">08</span>Children</h2>
+    <h2 id="s09"><span class="no">09</span>Children</h2>
     <p>
       Juke isn't directed at children and isn't built to identify anyone's
-      age &mdash; there's no sign-up to ask at. It's a fantasy football tool,
-      built with an adult fantasy-football audience in mind.
+      age &mdash; signing in only ever asks for an email address. It's a
+      fantasy football tool, built with an adult fantasy-football audience in
+      mind.
     </p>
 
-    <h2 id="s09"><span class="no">09</span>Changes to this page</h2>
+    <h2 id="s10"><span class="no">10</span>Changes to this page</h2>
     <p>
       If what the app actually does changes, this page changes with it
       &mdash; the same rule the rest of the app follows: nothing here should
@@ -252,7 +326,7 @@
       moves when it does.
     </p>
 
-    <h2 id="s10"><span class="no">10</span>Contact</h2>
+    <h2 id="s11"><span class="no">11</span>Contact</h2>
     <p>
       Questions about this page, or a request about your own data: <a href="mailto:PLACEHOLDER@jukeff.com">[owner &mdash; add a real contact address here before this goes live]</a>.
     </p>

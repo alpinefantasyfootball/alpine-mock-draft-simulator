@@ -269,8 +269,9 @@ export default function Homepage() {
             cut to match a shape that has no room for it. */}
         <div className="mx-auto flex max-w-[1200px] flex-col items-center gap-3 border-t border-line-divider px-10 py-6 text-center">
           <p className="max-w-[560px] text-[13px] text-voidInk-muted">
-            A solo mock draft runs entirely in your browser — nothing you draft is sent anywhere.
-            Drafting with your league uses a server, just for that room.
+            A solo mock draft runs entirely in your browser — nothing you draft is sent anywhere,
+            unless you're signed in, where it's also saved to your account so it follows you
+            between devices. Drafting with your league uses a server, just for that room.
           </p>
           <span className="font-numeral tabular-nums text-xs font-medium text-voidInk-muted">&copy; 2026 Juke. All rights reserved.</span>
         </div>

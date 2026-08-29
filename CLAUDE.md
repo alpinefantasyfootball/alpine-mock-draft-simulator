@@ -112,9 +112,10 @@ the Stack section above, not a one-time migration hiccup.
 | `draft-engine.js` | The rules of a snake draft — turn order, legality, the CPU wobble. No DOM, no globals, no dependencies, so a server can run the identical file. |
 | `room.js` | One shared draft: seats, picks, the clock. Pure, and time is always passed in rather than read. Loaded by the worker only; the page consumes the view it sends. Not copied into `web/dist/` — nothing client-side ever references it. |
 | `live.js` | The client end of a room: one socket, the invite code, and the messages. Knows nothing about the board or how anything is drawn. |
-| `worker/` | The Cloudflare Durable Object behind an invite link, plus the two proxied routes whose keys may not be in the page (`/giphy`, `/news`) and its `wrangler.toml`. Deployed to `juke-draft-room.jukeff.workers.dev`; **a change here needs `wrangler deploy`** — the site deploys itself from git and the worker does not. See `worker/README.md`. |
-| `worker/store.js` | The D1 cache: Sleeper's pool and Tank01 headlines. A cache and never a source of truth, and a missing binding is a normal condition rather than a fault. |
-| `worker/migrations/` | D1 schema, applied with `wrangler d1 migrations apply`. The database is not to be shaped by hand — see the note on three variants of one schema. |
+| `account.js` | The client end of an account: sign-in state, the `/account/*` calls, and the locker sync — see the Accounts section. Knows nothing about a draft; `app.js` fires `juke:locker-saved` and this is the only listener. |
+| `worker/` | The Cloudflare Durable Object behind an invite link, the two proxied routes whose keys may not be in the page (`/giphy`, `/news`), every `/account/*` route, and its `wrangler.toml`. Deployed to `juke-draft-room.jukeff.workers.dev`; **a change here needs `wrangler deploy`** — the site deploys itself from git and the worker does not. See `worker/README.md`. |
+| `worker/store.js` | The D1 cache (Sleeper's pool, Tank01 headlines — never throws, a missing binding is a normal condition) and the accounts system (deliberately allowed to throw — see the Accounts section for why). |
+| `worker/migrations/` | D1 schema, applied with `wrangler d1 migrations apply`. The database is not to be shaped by hand — see the note on three variants of one schema. `0003_accounts.sql` adds the account tables. |
 | `web/index.html` | The real homepage entry Vite builds from. Loads the legacy files above as root-relative classic scripts, alongside Vite's own hashed module bundle for React. The Draft Room markup lives here too, hidden — see the Stack section. |
 | `web/src/` | The React homepage: `Homepage.jsx` composes `Header`, `Hero`, `ScoresStrip`, `ShowYourWorking`, `RoomsGrid`, `ClosingCta`. Every one of them reads real data through `window.JukeEngine` (or `window.DraftEngine` directly, for `pickCode()`) rather than inventing sample content — the header ticker used to be six fabricated stats and is now five real ones read off the live board. |
 | `web/vite.config.js` | The Vite build config, plus a dev-server middleware that serves the same `LEGACY_FILES`/`LEGACY_DIRS` list `copy-legacy-assets.mjs` uses, from the true repo root, so `window.JukeEngine` carries real data under `vite dev` too — not just after a full build. |
@@ -4739,3 +4740,216 @@ hold different `juke.member` ids and the room treats them as two people. Two
 tabs on the same origin share the id and the worker correctly treats them as
 one manager with two sockets, which tests nothing about a second person — and
 overwriting the id in one tab breaks the other the next time it reconnects.
+
+## Accounts
+
+This file used to say Juke has no accounts. The April/May 2027 closed beta
+can't run without one — there is no way to identify a tester, contact them,
+or see what they did — so the rule is replaced by the terms it happens on,
+the same way multi-user drafting's own section above was.
+
+**Email plus a magic link, no passwords, anywhere.** The user enters an
+email, gets a one-time signed link, clicks it, lands signed in. Least
+infrastructure for the most reliability: no password hashing, no reset flow,
+no "forgot password" email to also get right. It reuses Phase 0's D1
+database (`juke_db`) and the same worker `/signup` sits beside, but it is a
+new system, not an extension of the mailing list that came before it —
+`worker/migrations/0003_accounts.sql` adds five tables (`accounts`,
+`magic_links`, `sessions`, `saved_draft`, `draft_history`) and none of them
+reference `signups`.
+
+**Nothing about the locker's shape is re-modelled as SQL columns.**
+`saved_draft`/`draft_history` store the exact JSON blob `saveDraft()`/
+`recordHistory()` already produce in `app.js`, byte for byte. The same rule
+CLAUDE.md states everywhere about the league shape applies here: the shape
+of a save or a history entry lives in one file, and encoding it a second way
+in a migration is exactly the kind of drift that rule exists to prevent.
+`draft_history.id` is reused from the entry's own client-generated id (`"h" +
+timestamp + random`, from `recordHistory()`) rather than a fresh server-side
+one — see migration, below, for why that's load-bearing rather than
+incidental.
+
+**Sessions are opaque bearer tokens, hashed at rest — not a JWT.** A signed,
+self-contained token can't be revoked without a denylist, which is a database
+table anyway, so this skips the signing complexity and stores the one table
+it would have needed regardless. Not a cookie either: the site and the
+worker are different origins, and every other client-worker exchange in this
+project already goes through an explicit header or query param instead of
+cookie auth (`live.js`'s member id, the room's own query-string handshake) —
+a bearer header needs no SameSite story to get right. Ninety days, revocable
+by a visible "sign out," which calls `/account/sign-out` and clears the local
+token — both have to happen, because clearing the token alone would leave a
+copied or leaked one still live server-side.
+
+**Magic links and sessions are both hashed with SHA-256 before they ever
+touch a row.** The same reason a password is never stored in plain text: a
+database dump must not be a list of usable credentials. The raw token exists
+in exactly one place outside the click itself — the moment `store.js`
+generates it — and every later check hashes what it's given and compares.
+
+**The dev-only token leak is gated on the literal local-origin regex, not on
+"any origin this worker answers."** With no `RESEND_API_KEY` configured (or
+a send that failed) and the request coming from `localhost`/`127.0.0.1`,
+`/account/request-link` hands the raw token back as `devToken` instead of
+emailing it, which is what let the whole flow — request, consume, migrate,
+sync, sign out, delete — be driven end to end with `curl` against a real
+`wrangler dev --local` instance with no inbox anywhere in the loop. It uses
+the identical regex `originAllowed()` already tests local dev origins
+against, deliberately narrower than `originAllowed()` itself, which also
+accepts `jukeff.com`/`www.jukeff.com` — a check written against "any origin
+this worker will answer" would leak a real production token the day someone
+forgot to set the secret.
+
+**Email is sent through Resend, a plain `fetch()` call and not a package.**
+`EMAIL_FROM` defaults to Resend's own `onboarding@resend.dev`, which sends
+real mail with zero DNS setup; a verified `jukeff.com` sending domain is a
+config change away, not a code change, once the account owner sets it up
+with Resend. See `worker/README.md`'s own **Accounts** section for the exact
+routes and the `RESEND_API_KEY` secret.
+
+**Migration adopts a browser's local locker exactly once per account, ever
+— tracked server-side, not client-side.** `accounts.migrated_at` is null
+until the first successful `/account/migrate`, and every consume after that
+reads it and skips straight to a locker *pull* instead. Tracking this on the
+client (a "have I migrated" flag in localStorage) was the obvious shape and
+would have been wrong the way this file's testing section keeps finding
+wrong things: it would migrate a second time the moment someone signs in on
+a second device, or a cleared-cache first device, that has never itself
+sent a migrate call. Tracking it on the account is what makes "adopt once,
+ever" actually mean *ever* rather than *once per browser*.
+
+**Sending the same local history twice is a no-op, not a duplicate, because
+the entry keeps its own id.** `addHistoryEntries()` is `INSERT OR IGNORE`
+keyed by `recordHistory()`'s own generated id — a retried request, or a
+second device that happens to already hold the same entries, collides on a
+primary key it already satisfies rather than writing a second row. This is
+the direct reason `draft_history.id` is the client's id and not a fresh
+server one: a server-generated id would make every resend of the same local
+entry a new row, and "migration is idempotent" would have been a claim
+rather than a fact.
+
+**A pulled server locker merges into the local one; it does not replace
+it.** History is a plain union deduplicated by id — safe, because an entry
+is immutable once `recordHistory()` writes it, so the same id from both
+sides is always the same content. The in-progress save is the one thing
+that can't be merged the same way, being a single value rather than a list,
+and the two sides are asymmetric on purpose: local wins when this device
+already has a save (it's either newer than whatever the server last saw, or
+this device's own next autosave overwrites it regardless), and the server's
+copy is adopted only when local has none at all — the fresh-sign-in-on-a-
+second-device case this whole mechanism exists for. See
+`adoptServerLocker()` in `app.js`.
+
+**`app.js` knows nothing about accounts, sessions, or fetch.** It fires a
+plain DOM event, `juke:locker-saved`, after `saveDraft()`, `clearSave()`,
+`recordHistory()` and the Locker's `deleteHistoryDraft()` bridge entry — the
+identical seam `renderHeader()`'s own `juke:header` event already draws
+between that file and the rest of the page for a completely different
+reason. `account.js` is the only listener, and it ignores the event outright
+while signed out, so a solo drafter's every save costs exactly the network
+activity it always did: none. Two new `window.JukeEngine` bridge entries
+exist only for this: `rawLocalLocker()` (the raw shapes `readSave()`/
+`readHistory()` already produce, not `historyList()`'s display-summarised
+one) and `adoptServerLocker()` (the merge above). Neither depends on
+`DraftEngine`/`PLAYERS`/`STAT_KEYS` being loaded — both are plain
+`localStorage` reads and writes, the one category of bridge function this
+file's own hard-won rule about guarding `DraftEngine`-dependent entries
+doesn't apply to.
+
+**Signed-out parity is not a feature to maintain, it's a constraint on how
+this was built.** Every localStorage function `saveDraft()`/`readSave()`/
+`clearSave()`/`recordHistory()`/`readHistory()`/`writeHistory()` already had
+is untouched — this adds a second destination on top of each, through the
+event above, and never replaces or gates the first one. A signed-out visitor
+never loads `account.js`'s network code path at all on the draft-saving side
+of the app; the only place sign-in state is ever read is the account UI
+itself (`SiteNav.jsx`'s `AccountButtons`, the Locker's own sync-on-mount
+effect) and the Locker's one-line "these mocks live in this browser
+only"/"synced to your account" footer (`LockerTable.jsx`).
+
+**Deleting an account never touches the browser it's deleted from.**
+`deleteAccount()` in `store.js` removes the account row, every session,
+the saved draft and every history row scoped to that account id, in one D1
+batch — but a signed-in browser's own `localStorage` locker is left exactly
+as it was. Deleting an account is a statement about the server's copy; a
+solo drafter's local locker was never something an account was allowed to
+take away, the same "keep the local cache" promise that makes the whole
+system safe to sign out of in the first place.
+
+**`AccountButtons` (`SiteNav.jsx`) owns its own `SignInModal`/
+`DeleteAccountModal` instances now, rather than sharing the `modalRef` prop
+it used to take.** That ref is still `EarlyAccessModal` — still shared
+across a room's coming-soon signup, the mobile "Get early access" link
+before it was replaced, and this component's own old behaviour — and it
+still has to be, because those really are several different triggers around
+one header agreeing to share one modal. `AccountButtons` itself is one
+trigger, one component, in every place it's rendered (`Header.jsx`,
+`LobbyBar.jsx`, both their `MobileNavSheet.jsx` copies), so it owns its own
+pair the same way `EarlyAccessModal.jsx` itself is self-contained for its
+own single trigger — not a shortcut, the same level of encapsulation applied
+one component over.
+
+**The magic link rides the query string, never the hash.** The emailed
+link is `https://jukeff.com/?authToken=<token>` — `account.js` reads
+`authToken` off `location.search` on load and strips it immediately, before
+the async consume even resolves, so a refresh mid-flight can't resubmit an
+already-spent token. This was a deliberate choice over a hash param
+specifically so it never has to interact with `applyRoute()`'s own router:
+a magic link click is always a fresh page load with nothing to route to yet,
+and putting the token anywhere near the hash would have meant either
+teaching the router about a route that isn't one, or racing whatever
+`applyRoute()` does on boot against the token consume. The query string
+sidesteps the question entirely.
+
+**The privacy policy and the footer both say what's actually stored now.**
+`docs/privacy.html` used to open by saying Juke has no accounts and no
+form anywhere asks for an email — both already false the moment Phase 0's
+email capture shipped, and neither noticed until this pass. It's rewritten
+now with its own "Signing in" section (what an account holds: an email, a
+created-at, and the locker — nothing else) ahead of the room section, and
+the homepage footer's "a solo mock draft runs entirely in your browser"
+line is qualified for the one case where it stops being fully true: signed
+in, a draft is also saved to the account. Same rule this file states in its
+own "Changes to this page" section it added: nothing here should describe
+a version of Juke that no longer exists.
+
+**`useAccount()` broadcasts on a window event, not a callback slot — the
+first version copied the wrong half of `live.js`.** `Live.onChange(fn)`
+is `live.onchange = fn`, one slot, and that's safe there for a reason
+worth restating: exactly one consumer, `app.js`, ever calls it. The first
+`account.js` mirrored that shape exactly — `Account.onChange(fn)` set a
+single `state.onchange` — for a hook with nothing like app.js's one-
+consumer guarantee: the account menu, the welcome/error banner, and the
+Locker screen all call `useAccount()` at once, each registering its own
+callback in its own mount effect. Whichever mounted last won the one slot;
+every earlier subscriber kept whatever it read on its own mount and never
+heard from `announce()` again. It renders and it contrasts and nothing
+throws, so it only actually surfaced by loading a signed-in page and
+finding the header still reading "Sign in" seconds after a real sign-in —
+the same class of dead-control failure this file's rail "My Team" section
+and its React header both already have their own entries for, arrived at
+a third time. Fixed the way `renderHeader()`'s own `juke:header` already
+solves the identical problem for `useJukeTick()`: `announce()` dispatches
+a plain `window` event, `"juke:account"`, and every mounted `useAccount()`
+listens for it directly rather than fighting over a method call. A DOM
+event has no slot to lose — `Account.onChange` is gone from the object
+`account.js` exports.
+
+**`DeleteAccountModal` has to survive the account it just deleted, and it
+used to be nested inside the branch that account's own disappearance
+unmounts.** It lived inside `AccountButtons`' signed-in return — the same
+branch `useAccount()` swaps away from the instant `deleteAccount()`
+succeeds and `signedIn` flips false. So the modal, mid its own "Account
+deleted" confirmation screen, got unmounted by that exact state change in
+the same render: a user who clicked "Delete my account" never saw the
+screen telling them what had just happened, because the component drawing
+it was gone before the browser painted it. Confirmed with a real browser:
+dumping the open `<dialog>`'s content immediately after the click found no
+open dialog at all, not an error state — the element had simply been torn
+down. Both `SignInModal` and `DeleteAccountModal` are unconditional
+siblings of the signed-in/signed-out branch now, mounted regardless of
+which branch is current — a closed `<dialog>` costs nothing to keep
+around, which is the same reasoning `EarlyAccessModal.jsx`'s shared ref
+already relies on for staying mounted across whichever of its several
+triggers opened it, applied here to a modal whose own action is what
+would otherwise unmount it.

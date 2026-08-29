@@ -1262,6 +1262,11 @@
   <!-- Before app.js, which calls backToTop() on the last line of its setup. -->
   <script src="/back-to-top.js?v=202608291102"></script>
   <script src="/app.js?v=202608291102"></script>
+  <!-- After app.js and live.js, on purpose: account.js reads window.JukeEngine
+       (rawLocalLocker()/adoptServerLocker()) and window.Live.WORKER, both at
+       parse time for the latter and on first use for the former, and a
+       classic script only ever sees what already ran before it. -->
+  <script src="/account.js?v=202608291102"></script>
 
   <!-- The React homepage. A module script, so it runs after the classic
        scripts above regardless of source order — modules always behave as

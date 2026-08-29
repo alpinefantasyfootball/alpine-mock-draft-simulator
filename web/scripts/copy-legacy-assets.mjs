@@ -16,6 +16,7 @@ export const LEGACY_FILES = [
   'app.js',
   'draft-engine.js',
   'live.js',
+  'account.js',
   'theme.js',
   'back-to-top.js',
   'players.js',
