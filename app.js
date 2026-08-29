@@ -2094,46 +2094,55 @@ function pruneQueue() {
   });
 }
 
-// The first player in your queue still on the board. This is what the clock
-// takes when it runs out, in preference to the computed suggestion — being
-// away from the screen should not throw away the plan you made before you
-// left it.
-function queueTop() {
+// The first player in your queue that is still on the board, not ruled
+// out, and not currently illegal to draft. This is what the clock takes
+// when it runs out, in preference to cpuChoice() — being away from the
+// screen should not throw away the plan you made before you left it.
+//
+// A star can go stale: queued in round 3 for a position that fills up by
+// round 8, or for a kicker before he is legal at all. needFromCount() is
+// the same refusal cpuChoice() and atPositionCap()'s own fraction already
+// ask — a roster limit, a still-too-early K or DST, a superflex-aware
+// quarterback cap — so an entry that would now be illegal is skipped
+// rather than drafted into a roster the engine would reject.
+function queueTop(round) {
   for (let i = 0; i < state.queue.length; i++) {
     const player = board.find((p) => p.name === state.queue[i]);
-    if (player && !player.drafted && !isRuledOut(player)) return player;
+    if (!player || player.drafted || isRuledOut(player)) continue;
+    if (needFromCount(countAt(state.mySlot, player.pos), player.pos, round) === 999) continue;
+    return player;
   }
   return null;
 }
 
-// What to take on my behalf when I am not the one choosing. Order matters:
-// my own list first, the model's opinion second.
 /* What to take on my behalf when I am not the one choosing.
 
-   Four answers, in falling order of how much they know about what you want,
-   because this must always have one. It used to be
-   `queueTop() || suggestions()[0] || null`, and that `null` stopped a draft
-   dead: `suggestions()` is filtered by the position chip on the panel, so a
-   manager who tapped "TE" and already held their three tight ends had an
-   empty list — and "Auto-draft the rest" read that as "there is nothing left
-   to draft" and abandoned the remaining rounds without a word. Reported from
-   a real draft, stopping in the ninth round of fourteen.
+   Two answers now, in falling order of how much they know about what you
+   want. It used to fall through to `suggestions("ALL")[0]`, and that is
+   wrong for an autopick specifically: suggestions() applies
+   modelMultipliers() — up to a quarter off a player's ADP — whenever
+   scoringIsStock() is false, and that discount is the Decide tab's own
+   opinion for a human reading it, not a rule every seat at the table has
+   agreed to. cpuChoice() never applies it, because an empty chair's opinion
+   has to be the same for every client in a room — and an autopicked seat is
+   exactly that kind of seat, discount or not. Falling through to the
+   model's opinion let an autopick reach for a player no CPU at the table
+   would ever take, on a discount nobody else gets.
 
-   The chip is a way of *looking* at the board, not a rule about what may be
-   drafted, so it is not consulted here at all — `suggestions("ALL")`, always.
-
-   Consulting it first and falling back looked like the respectful version and
-   was worse: leave the panel on K, walk away, and the clock hands you a
-   kicker in the fifth round. Caught by the test written for the bug above,
-   which is the argument for writing it. A filter that can lose you a draft is
-   not deference, and the queue is already where "what I actually want" lives.
-
-   The roster caps go the same way at the last step: they exist to stop the
-   CPU hoarding tight ends, not to decide that your draft is over. */
+   It was `queueTop() || suggestions()[0] || null` even further back, and
+   that bare `null` stopped a draft dead — see CLAUDE.md's "A filter is a
+   lens, never a decision". `suggestions("ALL")` closed that hole by
+   ignoring the position chip; cpuChoice() closes it more completely still,
+   because it has no filter of its own to empty in the first place — it
+   weighs the whole board every time. bestLeft() stays as the very last
+   resort, for the rare case the board holds nothing cpuChoice() itself
+   would take. */
 function autoPickForMe() {
-  return queueTop()               // the plan you actually made
-      || suggestions("ALL")[0]    // the model's opinion, whatever you were looking at
-      || bestLeft();              // and failing that, simply the best man left
+  const c = onTheClock();
+  const round = c ? c.round : league.rounds;
+  return queueTop(round)                 // the plan you actually made, if it still holds
+      || cpuChoice(state.mySlot, round)  // exactly what a CPU in this chair would take
+      || bestLeft();                     // and failing that, simply the best man left
 }
 
 /* The best player still on the board, ignoring every preference there is.
@@ -10008,7 +10017,7 @@ window.JukeEngine = {
   // resumable per-turn toggle, so it is not what a persistent "Autopick:
   // ON" switch should mean. The page drives its own turn-by-turn loop for
   // that case instead, off autoPickForMe() — bridged here as a pure read,
-  // the exact function (queueTop() -> suggestions()[0] -> bestLeft()) that
+  // the exact function (queueTop() -> cpuChoice() -> bestLeft()) that
   // autoDraftRest()'s own solo loop already uses for my seat, so a second
   // "what would I draft" rule never gets invented in React.
   inRoom: inRoom,
@@ -10176,7 +10185,7 @@ window.JukeEngine = {
   // already call (queueToggle()/queueMove() themselves don't render;
   // the caller does, same as the legacy delegated click handler does
   // here). queueTop() is what autoPickForMe() and the clock-expiry pick
-  // already prefer over the model's own opinion — starring a player here
+  // already prefer over cpuChoice()'s own choice — starring a player here
   // is the same real plan, not a second, cosmetic-only "favorites" list.
   queue: () => state.queue,
   queued: queued,
