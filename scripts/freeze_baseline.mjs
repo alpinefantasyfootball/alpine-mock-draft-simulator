@@ -84,10 +84,17 @@ console.log(`players.js generated: ${generatedStamp('players.js')}`)
 console.log(`stats.js generated:   ${generatedStamp('stats.js')}`)
 
 console.log('\nStarting the Vite dev server (repo-root data, no build step)...')
-const vite = spawn('npm', ['run', 'dev', '--', '--port', String(PORT), '--strictPort'], {
-  cwd: join(ROOT, 'web'),
-  stdio: ['ignore', 'pipe', 'pipe'],
-})
+// The vite binary directly, not `npm run dev` -- npm interposes its own
+// process between this one and vite, and does not reliably forward the
+// SIGTERM from vite.kill() to the process actually holding the port. That
+// left an orphaned vite running long after a script exited, the same
+// "orphaned wrangler dev outlives the run that started it" failure
+// CLAUDE.md already documents for the worker's own dev server.
+const vite = spawn(join(ROOT, 'web', 'node_modules', '.bin', 'vite'),
+  ['--port', String(PORT), '--strictPort'], {
+    cwd: join(ROOT, 'web'),
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
 let viteOutput = ''
 vite.stdout.on('data', (d) => { viteOutput += d })
 vite.stderr.on('data', (d) => { viteOutput += d })
