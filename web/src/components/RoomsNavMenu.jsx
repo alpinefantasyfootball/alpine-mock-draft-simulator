@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { useRooms } from '../hooks/useRooms.js'
-import { ROOM_ICON_BY_NAME, ROOM_TIER, TierBadge } from './icons.jsx'
+import { ROOM_ICON_BY_NAME, ROOM_TIER, ROOM_SIGNUP_SOURCE, roomSignupCopy, TierBadge } from './icons.jsx'
 
 // The room rows themselves, grouped by season — shared by RoomsNavMenu
 // below (the desktop dropdown) and MobileNavSheet.jsx's own accordion, so
@@ -18,10 +18,14 @@ import { ROOM_ICON_BY_NAME, ROOM_TIER, TierBadge } from './icons.jsx'
 // "nothing about the league shape may be written down twice" rule exists
 // to catch, just for room phases instead of scoring.
 //
-// modalRef is the ComingSoonModal instance the calling header already owns
-// (Header.jsx and LobbyBar.jsx both build one for Log in/Sign Up) — reused
-// here for "room X is coming soon" rather than mounting a second <dialog>,
-// the same modalRef-as-prop pattern AccountButtons already uses.
+// modalRef is the EarlyAccessModal instance the calling header already owns
+// (Header.jsx and LobbyBar.jsx both build one for the account button) —
+// reused here for a non-live room's own signup rather than mounting a
+// second <dialog>, the same modalRef-as-prop pattern AccountButtons already
+// uses. ROOM_SIGNUP_SOURCE/roomSignupCopy (icons.jsx) are the same lookup
+// RoomsGrid.jsx's roadmap list and Homepage.jsx's footer room links use, so
+// all three surfaces tag the identical five rooms with the identical source
+// string rather than each inventing its own.
 //
 // onSelect fires on every row click, live room or not — what "selecting a
 // room" should close is the caller's call: RoomsNavMenu collapses its own
@@ -30,11 +34,8 @@ import { ROOM_ICON_BY_NAME, ROOM_TIER, TierBadge } from './icons.jsx'
 export function RoomsList({ rooms, modalRef, onSelect }) {
   const seasons = [...new Set(rooms.map((room) => room.season))]
 
-  const openComingSoon = (room) =>
-    modalRef?.current?.open(
-      `${room.name} is coming soon`,
-      `${room.blurb} There's nothing to sign up for yet — check back once it's live.`
-    )
+  const openSignup = (room) =>
+    modalRef?.current?.open(roomSignupCopy(room), ROOM_SIGNUP_SOURCE[room.name])
 
   return (
     <>
@@ -85,7 +86,7 @@ export function RoomsList({ rooms, modalRef, onSelect }) {
                   role="menuitem"
                   onClick={() => {
                     onSelect?.()
-                    openComingSoon(room)
+                    openSignup(room)
                   }}
                   className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left transition-colors hover:bg-white/[0.06]"
                 >

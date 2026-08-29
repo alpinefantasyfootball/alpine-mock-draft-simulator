@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Menu } from 'lucide-react'
 import JukeLogo from './juke-logo/JukeLogo.jsx'
-import ComingSoonModal from './ComingSoonModal.jsx'
+import EarlyAccessModal from './EarlyAccessModal.jsx'
 import MobileNavSheet from './MobileNavSheet.jsx'
 import { NavLinks, AccountButtons } from './SiteNav.jsx'
 
@@ -183,26 +183,34 @@ export default function Header() {
           />
         </nav>
 
-        {/* Log in stays a text link at every width — the mockup keeps it
-            beside the hamburger rather than folding it into the sheet, so
-            it's one tap rather than two for the one account action a visitor
-            is likeliest to already have a reason to press. Sign Up moves
-            into the sheet: two CTAs competing for a 375px-wide row is the
-            same crowding problem the bottom action bar exists to solve for
-            the page's real primary action. */}
+        {/* "Get early access" stays a text link at every width — the same
+            one-tap-not-two reasoning this used to carry for "Log in" alone,
+            now that there's only the one account control to show. The
+            hamburger sheet's own copy of AccountButtons (MobileNavSheet.jsx)
+            opens the identical modal, so a visitor who opens the sheet
+            instead sees the same offer rather than a different one.
+
+            whitespace-nowrap: this label is more than twice as long as "Log
+            in" was, sharing this row with the hamburger at 390px — measured
+            comfortable at that width, but a button's default white-space
+            lets it wrap onto a second line rather than overflow, and a
+            wrapped label here would sit at a different height from the
+            44px hamburger beside it. Nothing this codebase's own truncation
+            rule prefers over the alternative: this text is never cut off,
+            it just refuses to stack. */}
         <div className="ml-auto flex shrink-0 items-center gap-1 md:hidden">
           <button
             type="button"
             onClick={() =>
               modalRef.current?.open(
-                'Accounts are not live yet',
-                'There is nothing to log into so far. Your drafts save to this device, ' +
-                  'so you can close the tab and pick up where you left off.'
+                "Accounts aren't live yet. Leave an email and we'll tell you the day your " +
+                  'locker follows you between devices.',
+                'header'
               )
             }
-            className="inline-flex h-11 items-center justify-center rounded-full px-3 text-sm text-white/60 transition-colors hover:text-white"
+            className="inline-flex h-11 items-center justify-center whitespace-nowrap rounded-full px-3 text-sm text-white/60 transition-colors hover:text-white"
           >
-            Log in
+            Get early access
           </button>
           <button
             type="button"
@@ -228,7 +236,7 @@ export default function Header() {
           scroll-padding-top both had to shrink with it — see the comments
           on both. */}
 
-      <ComingSoonModal ref={modalRef} />
+      <EarlyAccessModal ref={modalRef} />
     </header>
 
     {/* A true sibling of <header>, not a descendant, for the identical
@@ -241,7 +249,7 @@ export default function Header() {
         of the viewport: measured live, the panel's rendered height was
         exactly 56px, with its nav links and account buttons overflowing
         that box uncontained and reading as pasted over the hero underneath
-        rather than a slide-in drawer. ComingSoonModal stays inside
+        rather than a slide-in drawer. EarlyAccessModal stays inside
         <header> — a native <dialog> promotes to the browser's own top
         layer on showModal(), which sits above this containing-block
         question entirely, so it was never the same bug. */}

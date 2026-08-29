@@ -7,6 +7,8 @@ import RoomsGrid from './RoomsGrid.jsx'
 import ClosingCta from './ClosingCta.jsx'
 import JukeLogo from './juke-logo/JukeLogo.jsx'
 import ComingSoonModal from './ComingSoonModal.jsx'
+import EarlyAccessModal from './EarlyAccessModal.jsx'
+import { ROOM_SIGNUP_SOURCE, roomSignupCopy } from './icons.jsx'
 import { freshnessLine } from './dataFreshness.js'
 
 // METHOD is Juke's own real content — three sections of one doc plus the
@@ -19,22 +21,17 @@ const METHOD_LINKS = [
   { label: 'Data sources', href: '/docs/draft-room-how-it-works.html#s02' },
 ]
 
-// COMPANY and SUPPORT_LINKS are the sections a reference footer (Sleeper's)
-// carries that Juke doesn't have real pages behind yet — About Us, Careers,
-// Contact; Support alongside the two real legal pages. None of them are
-// left out the way "no real page yet" would normally mean here, because
-// the ask this time is explicitly to shape the footer for where the
-// company is headed, not just where it is today. Each opens the same
-// ComingSoonModal every other not-live control on this page already uses
-// rather than a dead href="#" — honest about "not yet" without pointing
-// at nothing.
-const COMPANY_LINKS = ['About Us', 'Careers', 'Contact']
+// Phase 0 of accounts turned Contact and Support into a real destination —
+// an email address — so both left this file's "not live yet" family
+// entirely. About Us and Careers had no such destination to turn into and
+// are gone outright rather than left pointing at a ComingSoonModal that
+// exists for lack of anything better to say.
+const CONTACT_EMAIL = 'hello@jukeff.com'
 
 const LEGAL_LINKS = [
   { label: 'Privacy Policy', href: '/docs/privacy.html' },
   { label: 'Terms of Service', href: '/docs/terms.html' },
 ]
-const SUPPORT_LINK = 'Support'
 
 // Real marks now, not mono-label placeholders — path data pulled straight
 // from Simple Icons (simpleicons.org), whose SVG recreations are
@@ -109,13 +106,13 @@ function useDataFreshness() {
   return freshness
 }
 
-// One row per room: a real link for the one that's live, a ComingSoonModal
+// One row per room: a real link for the one that's live, an EarlyAccessModal
 // button for the other five — the same choice RoomsGrid.jsx's own roadmap
 // rows make for exactly these five rooms elsewhere on this page, just
 // reused here rather than re-decided. Listing all six (not just the live
 // one) is the point of this pass: a reference footer whose own product-list
 // column names everything the company offers, not just what's shipped.
-function FooterRoomLink({ room, onComingSoon, className }) {
+function FooterRoomLink({ room, onSignup, className }) {
   if (room.live && room.href) {
     return (
       <a href={room.href} className={className}>
@@ -124,7 +121,7 @@ function FooterRoomLink({ room, onComingSoon, className }) {
     )
   }
   return (
-    <button type="button" onClick={() => onComingSoon(room)} className={`${className} text-left`}>
+    <button type="button" onClick={() => onSignup(room)} className={`${className} text-left`}>
       {room.name}
     </button>
   )
@@ -178,12 +175,15 @@ export default function Homepage() {
   const rooms = useRooms()
   const freshness = useDataFreshness()
   const modalRef = useRef(null)
+  const earlyAccessRef = useRef(null)
 
   const openComingSoon = (label, body) => modalRef.current?.open(`${label} is coming soon`, body)
   const openSocial = (label) => openComingSoon(label, `Juke isn't on ${label} yet — check back once it is.`)
-  const openCompanyLink = (label) => openComingSoon(label, `There's no ${label} page yet — check back as Juke grows.`)
-  const openRoom = (room) => openComingSoon(room.name, `${room.blurb} There's nothing to sign up for yet — check back once it's live.`)
-  const openSupport = () => openComingSoon(SUPPORT_LINK, "There's no support channel yet — check back as Juke grows.")
+  // ROOM_SIGNUP_SOURCE/roomSignupCopy (icons.jsx) are the same lookup
+  // RoomsGrid.jsx's roadmap list and RoomsNavMenu.jsx's dropdown rows use,
+  // so these footer links, that grid and that dropdown all tag the
+  // identical five rooms with the identical source string.
+  const openRoom = (room) => earlyAccessRef.current?.open(roomSignupCopy(room), ROOM_SIGNUP_SOURCE[room.name])
 
   const roomLinkClass = 'flex min-h-[44px] items-center text-sm text-voidInk-body transition-colors hover:text-white lg:min-h-0 lg:text-[13px]'
 
@@ -211,22 +211,24 @@ export default function Homepage() {
           everything else in equal-width columns to the right —
           Rooms/Method/Company/Legal here, standing in for Sleeper's own
           Available-on/Company/Resources/Play columns. Rooms and Method are
-          Juke's real content; Company and Legal's three new entries
-          (About Us, Careers, Contact, Support) are the "shape it for where
-          the company is headed" half of this pass — see the ComingSoonModal
-          note on COMPANY_LINKS above for why they're buttons, not dead
-          links. gap-x-10/gap-y-12 on both breakpoints is the one spacing
-          scale for the whole footer, rather than a different hand-picked
-          value per section, which is what "evenly spaced" actually means
-          here: every gap between every pair of sections is the same
-          number, not just visually close. */}
+          Juke's real content; Company now holds one real destination
+          (Contact, a mailto:) rather than the reference footer's four —
+          About Us and Careers never had anywhere to point and are gone
+          rather than left opening a "nothing here yet" dialog. Support in
+          Legal is a mailto: too, the same address as Contact — one real way
+          to reach a person beats two ways to open the same dead end.
+          gap-x-10/gap-y-12 on both breakpoints is the one spacing scale for
+          the whole footer, rather than a different hand-picked value per
+          section, which is what "evenly spaced" actually means here: every
+          gap between every pair of sections is the same number, not just
+          visually close. */}
       <footer className="mt-[72px] border-t border-line-hairline bg-surface-nav">
         <div className="mx-auto flex max-w-[1200px] flex-col gap-12 px-10 py-14 lg:grid lg:grid-cols-5 lg:gap-x-10 lg:gap-y-12">
           <FooterBrandStack onSocialClick={openSocial} />
 
           <FooterColumn title="The Rooms">
             {rooms.map((room) => (
-              <FooterRoomLink key={room.name} room={room} onComingSoon={openRoom} className={roomLinkClass} />
+              <FooterRoomLink key={room.name} room={room} onSignup={openRoom} className={roomLinkClass} />
             ))}
           </FooterColumn>
 
@@ -239,11 +241,9 @@ export default function Homepage() {
           </FooterColumn>
 
           <FooterColumn title="Company">
-            {COMPANY_LINKS.map((label) => (
-              <button key={label} type="button" onClick={() => openCompanyLink(label)} className={`${roomLinkClass} text-left`}>
-                {label}
-              </button>
-            ))}
+            <a href={`mailto:${CONTACT_EMAIL}`} className={roomLinkClass}>
+              Contact
+            </a>
           </FooterColumn>
 
           <FooterColumn title="Legal">
@@ -252,13 +252,14 @@ export default function Homepage() {
                 {link.label}
               </a>
             ))}
-            <button type="button" onClick={openSupport} className={`${roomLinkClass} text-left`}>
-              {SUPPORT_LINK}
-            </button>
+            <a href={`mailto:${CONTACT_EMAIL}`} className={roomLinkClass}>
+              Support
+            </a>
           </FooterColumn>
         </div>
 
         <ComingSoonModal ref={modalRef} />
+        <EarlyAccessModal ref={earlyAccessRef} />
 
         {/* The legal/copyright row — a single centred line, matching the
             reference footer's own bottom bar, plus the one Juke-specific

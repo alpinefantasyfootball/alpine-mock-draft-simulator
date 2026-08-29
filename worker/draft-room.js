@@ -28,7 +28,7 @@ import Room from "../room.js";
 /* The D1 cache. Every function in there answers "no" to a missing binding
    rather than throwing, so this file works unchanged with no database — which
    is what keeps `wrangler dev --local` and the keyless news test running. */
-import { syncPlayerPool, cachedNews, storeNews, usableNews } from "./store.js";
+import { syncPlayerPool, cachedNews, storeNews, usableNews, storeSignup } from "./store.js";
 
 /* How long after the last socket closes before the room is forgotten. Long
    enough that a phone locking, a tunnel, or closing a laptop for lunch does
@@ -681,6 +681,62 @@ function newsCacheKey(playerId) {
                      encodeURIComponent(playerId || "none"));
 }
 
+/* Email capture, proxied to D1.
+
+   Phase 0 of accounts: there is still no login anywhere in Juke and this
+   route does not add one. It is a mailing list of one column, so the whole
+   job is: refuse an origin we do not serve, refuse an address that is not
+   one, and hand the write to storeSignup() — same shape as the two routes
+   above, and for the same reason: the origin check happens *before* any
+   work, not after.
+
+   Unlike /news and /giphy there is no key to protect here, but a public
+   form is a wider target than an invite-only room's proxy routes — anyone
+   can POST to it, not just someone already holding a room link. The origin
+   check is the only defence today; a rate limit would be the next thing to
+   add if this is ever abused (see the note in CLAUDE.md's Security section
+   on why the room's own limiter lives on the socket and not here — this
+   route has no socket to hang one off yet). */
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+async function captureSignup(request, env) {
+  const cors = corsFor(request);
+  const headers = Object.assign({ "content-type": "application/json" }, cors);
+
+  if (!originAllowed(request)) {
+    return new Response(JSON.stringify({ error: "forbidden" }),
+                        { status: 403, headers: { "content-type": "application/json" } });
+  }
+
+  // Malformed JSON is a 400, not a throw — the same defensive parse
+  // safeJson() gives a socket message, just returned rather than dropped,
+  // because there is a caller here actually waiting on an answer.
+  let body;
+  try {
+    body = await request.json();
+  } catch (err) {
+    return new Response(JSON.stringify({ ok: false, error: "bad-json" }),
+                        { status: 400, headers });
+  }
+
+  const email = String((body && body.email) || "").trim().slice(0, 254);
+  const source = String((body && body.source) || "").trim().slice(0, 64);
+
+  if (!EMAIL_RE.test(email)) {
+    return new Response(JSON.stringify({ ok: false, error: "bad-email" }),
+                        { status: 400, headers });
+  }
+
+  // storeSignup() never throws — a missing or broken DB binding answers
+  // false, same as every other function in store.js — so this is a plain
+  // read of what happened rather than a try/catch of its own. A failed
+  // write is still a 200: the client asked a real question and deserves a
+  // real, honest answer rather than an HTTP error code standing in for one.
+  const kept = await storeSignup(env, email, source);
+  return new Response(JSON.stringify(kept ? { ok: true } : { ok: false, error: "store-failed" }),
+                      { headers });
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -703,6 +759,18 @@ export default {
         }, corsFor(request)) });
       }
       return giphySearch(request, env);
+    }
+
+    if (url.pathname === "/signup") {
+      if (request.method === "OPTIONS") {
+        return new Response(null, { headers: Object.assign({
+          "access-control-allow-methods": "POST, OPTIONS",
+          "access-control-allow-headers": "content-type",
+          "access-control-max-age": "86400"
+        }, corsFor(request)) });
+      }
+      if (request.method !== "POST") return new Response("Method not allowed", { status: 405 });
+      return captureSignup(request, env);
     }
 
     const match = url.pathname.match(/^\/room\/([A-Za-z0-9_-]{4,40})/);
