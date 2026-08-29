@@ -833,11 +833,30 @@ export default function DraftRoom() {
   const priorSeasonYear = engine.priorSeason ? engine.priorSeason() : null
   const pointsForActive = season === 'prior' ? (player) => player.priorPts : pointsFor
   const vorpForActive = season === 'prior' ? () => null : vorpFor
-  /* The projection block a player's raw counting stats live on — the same
-     `s.p` logColumns() reads in app.js. Handed to the list so its stat
-     columns and its sort read one source. */
+  /* The block a player's raw counting stats live on — the same `s.p`
+     logColumns() reads in app.js, UNLESS the season toggle is on
+     `priorSeasonYear`'s actual season, in which case it's `s.s[year]`
+     instead. This was unconditionally `s.p` for a while: pointsForActive/
+     vorpForActive already switched with the season toggle (above), and
+     the "2025 Actual" group label already claimed to (playerColumns.js's
+     projectedGroupLabel prop), but the raw REC/YDS/TD cells underneath
+     that label kept reading next season's projection regardless of which
+     season was selected. Reported directly: a true rookie with no 2025
+     line at all — Makai Lemon, exp: 0 — sorted to the top of "2025
+     Season" with 775 receiving yards, while the PTS/VORP columns in the
+     same row correctly showed a dash for the very same reason (no prior-
+     season stat.s entry to read). Same gp > 0 "a season the player was
+     not in the league is absent, never a zero" test buildPriorSeason()
+     already applies to p.priorPts — a second, independent read of the
+     identical fact rather than reusing p.priorGames, since this can be
+     asked about a season the toggle names before p.priorPts is even in
+     scope on the caller's side. */
   const projOf = (player) => {
     const s = engine.statOf(player)
+    if (season === 'prior') {
+      const line = priorSeasonYear && s && s.s ? s.s[priorSeasonYear] : null
+      return line && line.gp > 0 ? line : null
+    }
     return s && s.p ? s.p : null
   }
 
@@ -1397,11 +1416,29 @@ export default function DraftRoom() {
                       bareTable
                       players={availablePlayers}
                       posFilter={posFilter}
-                      pointsFor={pointsFor}
+                      /* pointsForActive/vorpForActive, not the plain
+                         pointsFor/vorpFor this used to pass — availablePlayers
+                         (above) is already sorted by the season-aware
+                         readers whenever the Players tab's season toggle is
+                         on "prior", and projOf (passed a few lines down) is
+                         season-aware too, so this dock was displaying
+                         2026-projected PTS/VORP in rows a season toggle had
+                         already sorted, and re-drawn with, 2025-actual data.
+                         Same bug as the Makai Lemon incident, just on the
+                         Board tab's own dock instead of the Players table —
+                         found auditing for other instances of that shape
+                         rather than reported. */
+                      pointsFor={pointsForActive}
                       valueFor={valueFor}
-                      vorpFor={vorpFor}
+                      vorpFor={vorpForActive}
                       survivalFor={survivalFor}
                       projOf={projOf}
+                      // Same expression PlayersTab.jsx computes from these
+                      // same two props — without this, the fix above makes
+                      // the numbers season-aware while the column-group
+                      // header above them still reads "Projected", which is
+                      // the identical label-vs-data mismatch in a new spot.
+                      projectedGroupLabel={season === 'prior' ? `${priorSeasonYear} Actual` : 'Projected'}
                       photoFor={photoFor}
                       initialsFor={initialsFor}
                       onDraft={handleDraft}
@@ -1462,11 +1499,15 @@ export default function DraftRoom() {
                       mobile
                       players={availablePlayers}
                       posFilter={posFilter}
-                      pointsFor={pointsFor}
+                      // Same fix as the desktop dock above, same reason —
+                      // including the group label, or the numbers go
+                      // season-aware while the header above them doesn't.
+                      pointsFor={pointsForActive}
                       valueFor={valueFor}
-                      vorpFor={vorpFor}
+                      vorpFor={vorpForActive}
                       survivalFor={survivalFor}
                       projOf={projOf}
+                      projectedGroupLabel={season === 'prior' ? `${priorSeasonYear} Actual` : 'Projected'}
                       photoFor={photoFor}
                       initialsFor={initialsFor}
                       onDraft={handleDraft}
