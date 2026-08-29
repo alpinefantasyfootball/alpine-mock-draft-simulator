@@ -387,6 +387,28 @@
       return fetch(http + "/news?player=" + encodeURIComponent(playerId || ""))
         .then((r) => r.json())
         .catch(() => ({ configured: false, items: [] }));
+    },
+
+    /* Email capture, through the worker. Same shape as gifSearch()/news()
+       above and for the same reason: this is the file that knows where the
+       worker is, so a "get early access" form posts here rather than
+       working out a base URL of its own — a second copy of WORKER.replace()
+       is exactly the kind of thing that drifts the day the host changes.
+
+       There is no account behind this and nothing here requires one; it is
+       a mailing list of one field, tagged with which dead end asked for it.
+       Never rejects: a signup form failing silently into "that didn't send"
+       is the whole of the contract, so the catch is load-bearing rather
+       than politeness. */
+    signup: function (email, source) {
+      const http = WORKER.replace(/^ws/, "http");
+      return fetch(http + "/signup", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: email, source: source })
+      })
+        .then((r) => r.json())
+        .catch(() => ({ ok: false }));
     }
   };
 })(window);

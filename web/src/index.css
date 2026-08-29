@@ -96,8 +96,11 @@ body {
 }
 
 /* Tailwind 3 has no backdrop: variant, so ::backdrop is styled directly.
-   ComingSoonModal.jsx is the only <dialog> in web/src today. */
-.coming-soon-dialog::backdrop {
+   ComingSoonModal.jsx and EarlyAccessModal.jsx are the two <dialog>s in
+   web/src, and both want the identical treatment — one rule for both rather
+   than two copies of the same three lines. */
+.coming-soon-dialog::backdrop,
+.early-access-dialog::backdrop {
   background: rgba(11, 14, 20, 0.7);
   backdrop-filter: blur(4px);
 }

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { CalendarClock, Compass, ListChecks, User } from 'lucide-react'
-import ComingSoonModal from './ComingSoonModal.jsx'
+import EarlyAccessModal from './EarlyAccessModal.jsx'
 
 // The app-level bottom nav — Lobby / Draft / Rooms / You — mounted only
 // alongside LobbyBar.jsx (DraftRoom.jsx's Locker branch), never inside a
@@ -9,15 +9,22 @@ import ComingSoonModal from './ComingSoonModal.jsx'
 // the app, not this bar reused. Two bars, two navigation depths — confirmed
 // against the handoff's own screenshots (1b vs 1c/1d), not assumed.
 //
-// Lobby and Draft are real routes; Rooms and You have no screen behind them
-// yet, so they open the same ComingSoonModal every other not-built-yet
-// control in this app already uses (SiteNav.jsx's AccountButtons,
-// RoomsGrid.jsx's five non-live room cards) rather than linking somewhere
-// that 404s.
+// Lobby and Draft are real routes, and Rooms is one now too: '#rooms' is
+// the homepage's own Rooms section (RoomsGrid.jsx), the identical anchor
+// SiteNav.jsx's "The Rooms" link already uses. Its own file comment
+// documents why this works from inside the Locker despite being "a
+// different screen" — DraftRoom.jsx's hash-route watcher only treats a hash
+// starting with "#/" as a real route change, so following a bare "#rooms"
+// un-mounts the fixed Locker overlay and lets the browser's native anchor
+// scroll land on the section underneath. This tab was opening a "coming
+// soon" dialog for a page section that already existed. You has no screen
+// behind it yet and stays a button — it opens EarlyAccessModal, the same
+// phase-0 signup every other not-built-yet control in this app now offers,
+// rather than linking somewhere that 404s.
 const TABS = [
   { key: 'lobby', label: 'Lobby', icon: CalendarClock, href: '#/drafts' },
   { key: 'draft', label: 'Draft', icon: ListChecks, href: '#/draft-room' },
-  { key: 'rooms', label: 'Rooms', icon: Compass },
+  { key: 'rooms', label: 'Rooms', icon: Compass, href: '#rooms' },
   { key: 'you', label: 'You', icon: User },
 ]
 
@@ -70,8 +77,8 @@ export default function MobileAppTabBar() {
               type="button"
               onClick={() =>
                 modalRef.current?.open(
-                  `The ${t.label} room is coming`,
-                  'This room is still in build. The Draft Room is the one that’s live today.'
+                  "The You room is in build. Leave an email and we'll tell you when it opens.",
+                  'nav:you'
                 )
               }
               className={commonClass + ' h-[58px]'}
@@ -81,7 +88,7 @@ export default function MobileAppTabBar() {
           )
         })}
       </nav>
-      <ComingSoonModal ref={modalRef} />
+      <EarlyAccessModal ref={modalRef} />
     </>
   )
 }

@@ -90,15 +90,18 @@ export default function Hero() {
               it is read in. Reported from the live site as exactly that, and
               unified to one sentence, read at every width, for that reason.
 
-              Changed again on direct instruction to name the tier split
-              directly: the Draft Room is free today, Juke Pro and Juke
-              All-Access are what waivers, trades and week-to-week strategy
-              sit behind once those rooms open (see ROOMS in app.js and the
-              rooms-grid section below for which room is which tier). Price
-              still lives only in the mono line under the CTA pair. */}
+              The second sentence used to name Juke Pro and Juke All-Access
+              as unlockable tiers directly. Phase 0 has no purchase behind
+              either name — the rooms are in build, not for sale — so
+              stating them as something a visitor could "unlock" today would
+              be a claim the product can't back. The badges themselves stay
+              exactly where they are on the Rooms cards below: those read as
+              roadmap labels rather than an offer, which is the distinction
+              this sentence couldn't make. Price still lives only in the
+              mono line under the CTA pair. */}
           <p className="mt-4 max-w-[520px] text-pretty text-[19px] leading-[1.5] text-voidInk-body lg:mt-6">
-            Test your strategy in the Draft Room completely free. Unlock Juke Pro and Juke All-Access when you're
-            ready to master waivers, trades, and week-to-week strategy.
+            Test your strategy in the Draft Room completely free. Waivers, trades and week-to-week tools are in
+            build.
           </p>
 
           {/* Two stacked 54px CTAs, mobile only. The secondary is "Explore

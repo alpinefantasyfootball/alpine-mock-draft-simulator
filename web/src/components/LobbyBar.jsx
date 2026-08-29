@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { Menu, Settings } from 'lucide-react'
 import JukeLogo from './juke-logo/JukeLogo.jsx'
-import ComingSoonModal from './ComingSoonModal.jsx'
+import EarlyAccessModal from './EarlyAccessModal.jsx'
 import MobileNavSheet from './MobileNavSheet.jsx'
 import { NavLinks, AccountButtons } from './SiteNav.jsx'
 import { useRooms } from '../hooks/useRooms.js'
@@ -67,9 +67,9 @@ export default function LobbyBar({ onOpenSettings }) {
     // documents the identical mechanism). Nested inside this header the
     // sheet's `fixed inset-0` resolved against the *header's own* short
     // h-14 box instead of the viewport — measured live at exactly 56px
-    // tall, with its nav links and Sign Up/Log in buttons overflowing that
+    // tall, with its nav links and account button overflowing that
     // box uncontained and reading as pasted directly over the Lobby
-    // underneath rather than a slide-in drawer. ComingSoonModal stays
+    // underneath rather than a slide-in drawer. EarlyAccessModal stays
     // inside <header>: a native <dialog> promotes to the browser's own top
     // layer on showModal(), above this containing-block question entirely.
     <>
@@ -132,7 +132,7 @@ export default function LobbyBar({ onOpenSettings }) {
         </div>
       </div>
 
-      <ComingSoonModal ref={modalRef} />
+      <EarlyAccessModal ref={modalRef} />
     </header>
 
     <MobileNavSheet open={navOpen} onClose={() => setNavOpen(false)} modalRef={modalRef} currentRoom={currentRoom} />

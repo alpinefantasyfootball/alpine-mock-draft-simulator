@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import { Search, ChevronDown, ChevronRight, MoreHorizontal, HardDrive } from 'lucide-react'
-import ComingSoonModal from './ComingSoonModal.jsx'
+import EarlyAccessModal from './EarlyAccessModal.jsx'
 import { POS_BADGE } from './draftRoomPositions.js'
 
 const FORMAT_FILTERS = [
@@ -274,7 +274,7 @@ export default function LockerTable({ entries, onAnalyze, onDeleteConfirmed }) {
   const [menuOpenId, setMenuOpenId] = useState(null)
   const [pending, setPending] = useState(null) // { id, entry }
   const pendingTimer = useRef(null)
-  const comingSoonRef = useRef(null)
+  const earlyAccessRef = useRef(null)
 
   // Takes the id directly rather than reading `pending` from closure — a
   // setTimeout callback scheduled inside requestDelete() closes over
@@ -489,8 +489,8 @@ export default function LockerTable({ entries, onAnalyze, onDeleteConfirmed }) {
 
           {/* The honest and strongest sign-up argument on the page: every
               row above is real, local, and one cache-clear from gone. The
-              button is real too, not a dead click — same ComingSoonModal
-              every other not-built-yet account control in this app already
+              button is real too, not a dead click — same EarlyAccessModal
+              every other not-built-yet account control in this app now
               opens (SiteNav.jsx's AccountButtons), not a second, silent
               implementation of "coming soon." */}
           <div className="flex flex-wrap items-center gap-4 border-t border-teal-400/[0.15] bg-teal-400/[0.03] px-5 py-[13px]">
@@ -502,11 +502,10 @@ export default function LockerTable({ entries, onAnalyze, onDeleteConfirmed }) {
             <button
               type="button"
               onClick={() =>
-                comingSoonRef.current?.open(
-                  'Sign-up is coming',
-                  'Juke does not have accounts yet, so there is nowhere to back this up to — everything here ' +
-                    'is free and saves to this device only. Signing up will let you keep it across devices once ' +
-                    'accounts exist.'
+                earlyAccessRef.current?.open(
+                  "Your mocks live in this browser today. Leave an email and we'll tell you when they can live " +
+                    'in an account instead.',
+                  'locker'
                 )
               }
               className="shrink-0 rounded-lg bg-teal-400 px-[18px] py-2.5 text-xs font-bold uppercase tracking-wide text-obsidian transition-colors hover:bg-teal-300"
@@ -517,7 +516,7 @@ export default function LockerTable({ entries, onAnalyze, onDeleteConfirmed }) {
         </>
       )}
 
-      <ComingSoonModal ref={comingSoonRef} />
+      <EarlyAccessModal ref={earlyAccessRef} />
 
       {pending && (
         // bottom offset clears MobileAppTabBar's own fixed 58px + safe-area

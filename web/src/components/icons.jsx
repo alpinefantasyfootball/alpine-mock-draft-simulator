@@ -91,6 +91,32 @@ export const TIER_META = {
   allAccess: { label: 'Juke All-Access', Icon: Crown, color: '#FBBF77', bg: 'rgba(251,191,119,0.12)' },
 }
 
+// Which "source" tag a non-live room's early-access signup gets recorded
+// under — one lookup for the same reason ROOM_TIER above is one lookup:
+// RoomsGrid.jsx's roadmap list, RoomsNavMenu.jsx's dropdown/mobile-sheet
+// rows, and Homepage.jsx's footer room links all show the identical five
+// rooms as a dead end today, and a second, independently-typed source
+// string at each call site is exactly how one of them ends up tagged
+// "room:waivers" while the others say "room:waiver".
+export const ROOM_SIGNUP_SOURCE = {
+  'The Prospect Room': 'room:prospect',
+  'The Waiver Room': 'room:waiver',
+  'The Trade Room': 'room:trade',
+  'The Strategy Room': 'room:strategy',
+  'The League Room': 'room:league',
+}
+
+// The EarlyAccessModal body text for a non-live room, shared for the same
+// reason as ROOM_SIGNUP_SOURCE above. Keeps the room's own one-line blurb
+// (the fact a visitor came here to read) ahead of the fixed signup line, the
+// same two-sentence shape the room cards' old "coming soon" copy already
+// used — only the second sentence changed, from "nothing to sign up for
+// yet" to an actual way to sign up.
+export function roomSignupCopy(room) {
+  const short = room.name.replace(/^The\s+/, '')
+  return `${room.blurb} The ${short} is in build. Leave an email and we'll tell you when it opens.`
+}
+
 // One badge component for both surfaces, sized for the compact roadmap
 // row/nav row it always renders in — a card-sized variant was tried and
 // rejected: the only two call sites (RoomsGrid.jsx's roadmap list,

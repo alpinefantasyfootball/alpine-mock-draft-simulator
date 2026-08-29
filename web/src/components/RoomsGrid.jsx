@@ -1,7 +1,7 @@
 import { useRef } from 'react'
-import ComingSoonModal from './ComingSoonModal.jsx'
+import EarlyAccessModal from './EarlyAccessModal.jsx'
 import PhaseRail from './PhaseRail.jsx'
-import { ROOM_ICON_BY_NAME, DraftIcon, ROOM_TIER, TierBadge } from './icons.jsx'
+import { ROOM_ICON_BY_NAME, DraftIcon, ROOM_TIER, ROOM_SIGNUP_SOURCE, roomSignupCopy, TierBadge } from './icons.jsx'
 import { useRooms } from '../hooks/useRooms.js'
 
 // Room data (name, blurb, lead, live flag, season) comes from app.js's
@@ -36,11 +36,8 @@ export default function RoomsGrid() {
   const roadmapRooms = rooms.filter((r) => !r.live)
   const LiveIcon = liveRoom ? (ROOM_ICON_BY_NAME[liveRoom.name] ?? DraftIcon) : null
 
-  const openComingSoon = (room) =>
-    modalRef.current?.open(
-      `${room.name} is coming soon`,
-      `${room.blurb} There's nothing to sign up for yet — check back once it's live.`
-    )
+  const openSignup = (room) =>
+    modalRef.current?.open(roomSignupCopy(room), ROOM_SIGNUP_SOURCE[room.name])
 
   return (
     <section id="rooms" className="mx-auto max-w-[1200px] px-10 pb-0 pt-[96px]">
@@ -146,7 +143,7 @@ export default function RoomsGrid() {
                 <button
                   key={room.name}
                   type="button"
-                  onClick={() => openComingSoon(room)}
+                  onClick={() => openSignup(room)}
                   className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-[#1C1F25] py-[13px] text-left last:border-b-0"
                 >
                   <div className="min-w-0">
@@ -158,7 +155,7 @@ export default function RoomsGrid() {
                         per-row `blurb` field is set to what app.js actually
                         calls `lead`, not to a long description. The long
                         descriptions §9 says to drop are still real data
-                        (openComingSoon's modal body still reads room.blurb),
+                        (roomSignupCopy's modal body still reads room.blurb),
                         just not shown in this row. */}
                     <p className="mt-[2px] text-[14px] text-[#A2A5AA]">{room.lead}</p>
                   </div>
@@ -180,7 +177,7 @@ export default function RoomsGrid() {
         </div>
       )}
 
-      <ComingSoonModal ref={modalRef} />
+      <EarlyAccessModal ref={modalRef} />
     </section>
   )
 }

@@ -417,6 +417,36 @@ function publishedSeconds(raw) {
 }
 
 /* ----------------------------------------------------------
+   Email capture — phase 0
+   ---------------------------------------------------------- */
+
+/* Keep one signup. Returns whether it was kept.
+
+   No account exists behind this and none is implied. It is a mailing list of
+   one column plus provenance: an email, which dead end asked for it, and
+   when. Same shape as storeNews() above and for the same reason — a form
+   failing because the cache database hiccuped is worse than a write we
+   quietly lost, so this never throws and the caller decides what "kept"
+   means to the person who typed the address. */
+export async function storeSignup(env, email, source) {
+  if (!env.DB) return false;
+
+  try {
+    await env.DB.prepare(
+      "INSERT INTO signups (email, source, created_at) VALUES (?, ?, ?)"
+    ).bind(
+      String(email || "").slice(0, 254),
+      String(source || "").slice(0, 64),
+      nowSeconds()
+    ).run();
+    return true;
+  } catch (err) {
+    console.error("signup write failed:", err && err.message);
+    return false;
+  }
+}
+
+/* ----------------------------------------------------------
    Small things
    ---------------------------------------------------------- */
 
