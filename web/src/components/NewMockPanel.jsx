@@ -210,7 +210,14 @@ export default function NewMockPanel({
             : 'bg-gradient-to-r from-[#00E5FF] to-[#7B1FA2] text-white shadow-glass hover:scale-[1.02] hover:shadow-[0_0_15px_rgba(0,229,255,0.4)]')
         }
       >
-        Start mock draft
+        {/* roomActive: this button doesn't start anything in a room — it
+            calls enterDraftRoom() (DraftRoom.jsx's handleStartNew) and
+            just navigates to the seat picker. RoomPanel.jsx already uses
+            the honest label, "Enter draft room", for the identical action;
+            this was the one place still calling it "Start mock draft"
+            after a host closed the "Draft with friends" modal without
+            using that panel's own button. */}
+        {roomActive ? 'Enter draft room' : 'Start mock draft'}
       </button>
       {problem && <p className="mt-2 text-[11px] leading-relaxed text-rose-300/90">{problem}</p>}
 

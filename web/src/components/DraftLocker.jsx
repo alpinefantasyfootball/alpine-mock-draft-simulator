@@ -67,7 +67,7 @@ const MIN_MOCKS_FOR_ANALYTICS = 5
 // and the heatmap's 3-column span (13 cell-units of content into 12 cells)
 // and had to invent a fourth row to make the arithmetic work. It didn't
 // need to: the spec was describing a visual proportion, not a grid mechanic.
-function AnalyticsGrid({ engine, league, stats, problem, lobbySlot, roomActive, onSetLobbySlot, onStartNew, onOpenSettings, onDraftWithFriends }) {
+function AnalyticsGrid({ engine, league, stats, problem, lobbySlot, roomActive, onSetLobbySlot, onStartNew, onRunAtSeat, onOpenSettings, onDraftWithFriends }) {
   const totalMocks = stats.total || 0
   const thin = totalMocks < MIN_MOCKS_FOR_ANALYTICS
 
@@ -121,7 +121,7 @@ function AnalyticsGrid({ engine, league, stats, problem, lobbySlot, roomActive, 
       ) : (
         <>
           <div className="sm:col-span-2 lg:col-start-2 lg:col-span-2 lg:row-start-1">
-            <RecommendationEngine engine={engine} league={league} stats={stats} onSetLobbySlot={onSetLobbySlot} onStartNew={onStartNew} />
+            <RecommendationEngine engine={engine} league={league} stats={stats} roomActive={roomActive} onRunAtSeat={onRunAtSeat} />
           </div>
           <div className="lg:col-start-4 lg:row-start-1">
             <MostDraftedCard stats={stats} />
@@ -159,7 +159,7 @@ function AnalyticsGrid({ engine, league, stats, problem, lobbySlot, roomActive, 
 // child here is presentational — this component owns the one thing that
 // has to live above all of them, which is knowing whether an in-progress
 // draft or history entry changed and needs a re-render.
-export default function DraftLocker({ onStartNew, problem, lobbySlot, roomActive, onSetLobbySlot, onOpenSettings, onDraftWithFriends }) {
+export default function DraftLocker({ onStartNew, onRunAtSeat, problem, lobbySlot, roomActive, onSetLobbySlot, onOpenSettings, onDraftWithFriends }) {
   const engine = useEngine()
   useJukeTick(engine)
   // clearSave()/deleteHistoryDraft() are plain localStorage writes with no
@@ -366,8 +366,8 @@ export default function DraftLocker({ onStartNew, problem, lobbySlot, roomActive
           engine={engine}
           league={league}
           stats={stats}
-          onSetLobbySlot={onSetLobbySlot}
-          onStartNew={onStartNew}
+          roomActive={roomActive}
+          onRunAtSeat={onRunAtSeat}
         />
       )}
 
@@ -391,6 +391,7 @@ export default function DraftLocker({ onStartNew, problem, lobbySlot, roomActive
           roomActive={roomActive}
           onSetLobbySlot={onSetLobbySlot}
           onStartNew={onStartNew}
+          onRunAtSeat={onRunAtSeat}
           onOpenSettings={onOpenSettings}
           onDraftWithFriends={onDraftWithFriends}
         />
