@@ -55,20 +55,29 @@ const COMPONENTS = [
 ]
 
 // Six hues, one per position — the exact values draftRoomPositions.js's
-// POS_BADGE names as Tailwind classes (orange/emerald/blue/fuchsia/yellow/
-// indigo), translated to hex because a canvas fillStyle can't read a
-// class name. Not re-derived from anywhere at runtime: this file has no
-// access to the Tailwind theme, and these six are load-bearing enough
-// (the one position reference for the whole site, per that file's own
-// comment) that a hardcoded, commented copy is the honest option rather
-// than pretending there's a shared source at draw time.
+// POS_BADGE names as Tailwind classes (rose/emerald/blue/orange/violet/
+// slate), translated to hex because a canvas fillStyle can't read a class
+// name. Not re-derived from anywhere at runtime: this file has no access
+// to the Tailwind theme, and these six are load-bearing enough (the one
+// position reference for the whole site, per that file's own comment)
+// that a hardcoded, commented copy is the honest option rather than
+// pretending there's a shared source at draw time.
+//
+// Which makes this the copy that has to be walked when that file moves,
+// and it went stale exactly once: the palette handoff took QB rose, TE
+// orange, K violet and DST slate, and every hex below still said orange,
+// fuchsia, yellow and indigo. Nothing broke — a share card drew a
+// perfectly legible fuchsia TE chip beside a board that had just stopped
+// drawing one, in an image that leaves the app and cannot be corrected
+// after the fact. If POS_BADGE moves again, grep for "rgba(" in this file
+// before believing the change is done.
 const POS_COLORS = {
-  QB: { bg: 'rgba(249,115,22,0.16)', fg: '#FDBA74' },
-  RB: { bg: 'rgba(16,185,129,0.16)', fg: '#6EE7B7' },
-  WR: { bg: 'rgba(59,130,246,0.16)', fg: '#93C5FD' },
-  TE: { bg: 'rgba(217,70,239,0.16)', fg: '#F0ABFC' },
-  K: { bg: 'rgba(234,179,8,0.16)', fg: '#FDE047' },
-  DST: { bg: 'rgba(99,102,241,0.16)', fg: '#A5B4FC' },
+  QB: { bg: 'rgba(244,63,94,0.16)', fg: '#FDA4AF' },     // rose-500 / rose-300
+  RB: { bg: 'rgba(16,185,129,0.16)', fg: '#6EE7B7' },    // emerald-500 / emerald-300
+  WR: { bg: 'rgba(59,130,246,0.16)', fg: '#93C5FD' },    // blue-500 / blue-300
+  TE: { bg: 'rgba(249,115,22,0.16)', fg: '#FDBA74' },    // orange-500 / orange-300
+  K: { bg: 'rgba(139,92,246,0.16)', fg: '#C4B5FD' },     // violet-500 / violet-300
+  DST: { bg: 'rgba(100,116,139,0.16)', fg: '#CBD5E1' },  // slate-500 / slate-300
 }
 const POS_NEUTRAL = { bg: 'rgba(255,255,255,0.06)', fg: 'rgba(255,255,255,0.4)' }
 

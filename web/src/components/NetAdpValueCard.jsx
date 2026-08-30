@@ -11,7 +11,8 @@ const SLOT_COUNT = 10
 // One column per mock — green growing up from the centre line for a
 // bargain, pink growing down for a reach. Green rather than this grid's
 // earlier teal: green is otherwise unused for meaning anywhere in Juke
-// (RB's emerald in POS_SOLID is identity, not a "good/bad" signal), so it's
+// (RB's emerald in the position palette is identity, not a "good/bad"
+// signal, and it is a pale chalk green rather than this one), so it's
 // free to carry "positive" here without colliding with an existing rule.
 // Pink instead of the heatmap's red on purpose — a reach here is an
 // ordinary outcome, not the kind of real problem the heatmap's red is
