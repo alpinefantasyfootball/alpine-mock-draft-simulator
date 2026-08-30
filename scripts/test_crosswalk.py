@@ -439,6 +439,72 @@ check("xf/xd do not collide with another usage short key",
       sorted({"xf", "xd"} & set(s for s, _, _ in bp.USAGE_FIELDS)), [])
 
 
+# ---- N. extending past real ADP with Sleeper's own deeper pool ----------
+#
+# Real ADP for this format is one player; the pool behind it deliberately
+# includes everything that should be excluded -- an id already on the real
+# list, a player with no team (retired or a free agent), a position that
+# isn't fantasy-relevant (a long snapper), and a team defense keyed by team
+# code the way Sleeper's own master actually stores one -- so a wrong
+# exclusion or a wrong inclusion shows up as a wrong id in the result
+# rather than merely a wrong count.
+DEEP_SLEEPER = {
+    "1001": {"full_name": "Real Starter", "position": "QB", "team": "BUF", "search_rank": 5},
+    "2001": {"full_name": "Bench Guy One", "position": "RB", "team": "DET", "search_rank": 300},
+    "2002": {"full_name": "Bench Guy Two", "position": "WR", "team": "MIA", "search_rank": 100},
+    "2003": {"full_name": "No Team Guy",   "position": "WR", "team": None,  "search_rank": 1},
+    "2004": {"full_name": "Ray Guy",       "position": "LS", "team": "DAL", "search_rank": 1},
+    "2005": {"full_name": "No Rank Guy",   "position": "TE", "team": "NYJ"},
+    "MIA":  {"position": "DEF", "team": "MIA"},
+}
+DEEP_PLAYERS = [
+    {"id": "1001", "name": "Real Starter", "pos": "QB", "team": "BUF", "bye": 7,
+     "adp": 1.0, "sd": 1.1, "td": 40, "inj": "", "_entry": DEEP_SLEEPER["1001"]},
+]
+DEEP_BYES = {"BUF": 7, "DET": 8, "MIA": 11, "NYJ": 9}
+
+no_op = bp.extend_deep_bench(list(DEEP_PLAYERS), DEEP_SLEEPER, DEEP_BYES, target=1)
+check("nothing to add once the target is already met", no_op, DEEP_PLAYERS)
+
+extended = bp.extend_deep_bench(list(DEEP_PLAYERS), DEEP_SLEEPER, DEEP_BYES, target=5)
+check("real ADP is left in place, first", extended[0]["id"], "1001")
+check("ranked by search_rank -- lowest (best-known) first, ties in candidate order",
+      [p["id"] for p in extended[1:]], ["2002", "2001", "2005", "MIA"])
+check("an id already on the real list is never duplicated",
+      "1001" in [p["id"] for p in extended[1:]], False)
+check("no team means no candidacy", "2003" in [p["id"] for p in extended], False)
+check("a position outside FANTASY_POSITIONS is never added",
+      "2004" in [p["id"] for p in extended], False)
+
+added = extended[1:]
+check("every extension carries deep: true", all(p.get("deep") is True for p in added), True)
+check("no real ADP sample behind these, so sd/td are both zero",
+      [(p["sd"], p["td"]) for p in added], [(0.0, 0)] * 4)
+check("adp continues past the real sequence rather than restarting it",
+      [p["adp"] for p in added], [2.0, 3.0, 4.0, 5.0])
+check("bye comes from the team lookup built off real ADP rows, not a fetch of its own",
+      [p["bye"] for p in added], [11, 8, 9, 11])
+check("a team defense gets the same city name join_rows() gives one",
+      extended[4]["name"], "Miami Defense")
+
+exhausted = bp.extend_deep_bench(list(DEEP_PLAYERS), DEEP_SLEEPER, DEEP_BYES, target=50)
+check("stops once the real pool runs out, rather than inventing players to hit target",
+      len(exhausted), 1 + 4)
+
+# A player Sleeper only carries as first_name/last_name (no full_name) still
+# gets a real name -- join_rows()'s own ADP rows never hit this path (FFC
+# always sends a name), but Sleeper's master sometimes has no full_name for
+# a player nobody has looked up yet.
+NO_FULL_NAME = {
+    "1001": DEEP_SLEEPER["1001"],
+    "4001": {"first_name": "Fallback", "last_name": "Name", "position": "RB",
+              "team": "CHI", "search_rank": 1},
+}
+fallback = bp.extend_deep_bench(list(DEEP_PLAYERS), NO_FULL_NAME, DEEP_BYES, target=2)
+check("first_name + last_name stands in for a missing full_name",
+      fallback[1]["name"], "Fallback Name")
+
+
 print()
 if FAILURES:
     print(f"{len(FAILURES)} FAILED: " + ", ".join(FAILURES))

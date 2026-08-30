@@ -9798,6 +9798,15 @@ window.JukeEngine = {
           ' no better than chance — one of those seasons came out backwards. The number is ' +
           'withheld rather than guessed at; the projected points are still real.'
         : null,
+      // Below real ADP -- see extend_deep_bench() in scripts/build_players.py.
+      // Unlike unranked, this doesn't withhold the score: there's no
+      // three-season finding that the ranking is wrong, only the fact that
+      // no real draft has ever priced this player. A note, not a dash.
+      deep: !!player.deep,
+      deepNote: player.deep
+        ? 'No real draft has ever taken this player — ranked by Sleeper\'s own depth order ' +
+          'instead of a live market, and the projection above may be thin or missing entirely.'
+        : null,
       upside: sig ? Math.round(sig.upside) : null,
       upsideLabel: sig ? label(sig.upside) : null,
       upsideWhy: sig ? sig.reasons.upside : [],

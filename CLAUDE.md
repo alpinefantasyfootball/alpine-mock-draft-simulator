@@ -2721,6 +2721,133 @@ team defense has no height, weight, age or college — it is eleven people —
 so `bioLine()` gives it its own line rather than a strip of dashes, and
 `ourRead()` calls it "this defense" rather than "him".
 
+## The board depth
+
+`setupProblem()` offers 4 to 24 teams and 8 to 20 rounds on the setup screen
+and then refused most of the deep end of that range outright: 24 teams over
+14 rounds is 336 picks, and the half-PPR board carried 228 to 232. A
+standard 12-team, 20-round league — 240 picks — could not run at all. Deep,
+superflex and dynasty drafters bounced before they saw anything.
+
+**The limit was never the pipeline's own `KEEP` cap.** `KEEP = 320` has been
+generous headroom since it was written; FFC's real ADP sample is the
+binding constraint, at 223 to 271 rows depending on format (measured against
+the 29 August 2026 `players.js`). Raising `KEEP` would have changed nothing
+— FFC genuinely does not return more rows than that, because it is sourced
+from real recorded drafts and nobody drafts a fifth-string long snapper in a
+twelve-team mock. So the real question was never "how many rows do we ask
+for," it was "what happens below the depth real drafters ever reach."
+
+**`extend_deep_bench()` (`scripts/build_players.py`) answers it with
+Sleeper's own player master**, which — unlike FFC's ADP — runs to every
+player still on an NFL roster. Below real ADP there is no more market
+signal to rank by, so the extension orders candidates by `search_rank`,
+Sleeper's own general "how known is this player" figure. That is
+deliberately not the same move as reading `pts_ppr` or `rank_ppr` off
+Sleeper's stats feed — both of those are opinions about fantasy value and
+sit in `IGNORED_KEYS` for exactly that reason (`Sleeper's own pts_half_ppr
+is discarded... because it bakes in assumptions we do not share`).
+`search_rank` never claims to be a fantasy score, so ordering the players
+nobody has scored an opinion on by it isn't the same mistake. Each format's
+list tops up toward `DEEP_TARGET = 480` — 24 teams × 20 rounds, the deepest
+picture the setup screen can ask for — until real candidates run out.
+
+**Bye weeks for the extension come from the same run's own ADP rows, not a
+second fetch.** Every real ADP row already carries its player's team's bye,
+so a `team -> bye` map built once from all three formats' rows covers all
+32 teams for free, before a single extended entry needs one.
+
+**Every extended player carries `deep: true`, and it means something
+narrower than K/DST's `UNRANKED_POSITIONS`.** A kicker or a defense is
+withheld — `overallScore()` returns `null` — because three seasons of
+backtesting found the ranking no better than chance. There is no equivalent
+finding here, only the fact that no real draft has ever priced this player.
+So the Juke score is never withheld for a deep player; `jukeReadout()`
+adds `deep`/`deepNote` alongside the existing `unranked`/`unrankedNote`
+pair, and the UI adds a note rather than swapping the number for a dash —
+the same "replaced, not fed a null" rule, applied one notch more gently
+because the underlying claim is weaker, not absent. `survivalProbability()`
+needs no equivalent change: a synthetic row's `sd`/`td` are both `0`, which
+the function already treats as "no real sample," the same as a thin one.
+
+**Replacement level did not need to change to handle a deeper board, and
+that is a property worth stating rather than assuming.** `replacementRank()`
+is pure arithmetic over `league` (`teams * starters + flex share`), with no
+reference to board length; `REPLACEMENT_PTS` clamps to the shallowest
+available rank when a league asks for one deeper than the board (`cut =
+min(rank, ranked.length) - 1`), which is exactly the fallback a very deep
+league used to hit constantly and now hits rarely. A deeper board makes
+that clamp fire less often — the replacement player for a 24-team league is
+now an actual ranked player near the real cutoff instead of whoever was
+left at the old board's edge — which is what "moves correctly" means here:
+not a new formula, an existing one finally being fed enough players to
+answer honestly.
+
+**The Players table's tier-divider machinery grew a sibling, not a second
+system.** `PlayerQueueSidebar.jsx` already interleaves `{type: 'divider'}`
+rows into the row list for a tier cliff; a `{type: 'divider', kind: 'deep'}`
+row does the same for "real ADP ends here," gated on board order for the
+identical reason tier dividers are — outside ADP order a deep player can
+sort anywhere among real ones, and a single boundary line would claim a
+cliff that isn't there. Unlike a tier cliff it needs no `posFilter` narrowed
+to one position: "no real draft has taken these" is a fact about the whole
+board. A per-row `DEEP` badge carries the same information for every other
+sort order, where the divider can't — once the list isn't in board order,
+deep and real players interleave and there is no single line to draw.
+
+**Confirming any of this against a live, ~460-player board could not be
+done against real network data — Sleeper and FFC are both unreachable from
+this environment (org egress policy) — so verification split into two
+halves.** `extend_deep_bench()` itself is unit-tested directly, against
+synthetic Sleeper-shaped fixtures, in `scripts/test_crosswalk.py`: exclusion
+by id, no-team candidates, non-fantasy positions, `search_rank` ordering
+with ties broken by candidate order, the `adp`/`sd`/`td`/`bye` shape of an
+extended row, and the `first_name`+`last_name` fallback for a player
+Sleeper has no `full_name` for. None of it needs a network. Everything
+downstream of the pipeline — the guard, the Players table, `jukeReadout()`,
+a full room-shaped draft — was verified against a locally-built ~460-player
+fixture: the real committed `players.js`/`stats.js`, cloned past real ADP
+using the *real* app's own stat shapes rather than invented data, swapped
+in for a build, driven through a real browser, and reverted before
+anything was committed. **Never committed as generated output** — the
+`Never hand-edit players.js or stats.js` rule is about exactly this kind of
+temptation, and the distinction that keeps it from applying here is that
+this was a local, disposable test fixture, built and torn down inside one
+verification pass, not a replacement for the pipeline's own output.
+
+**The fixture's first cut nearly manufactured a false regression.** Cloning
+extension candidates from the *best* real players first, tapering their
+production only gradually, put a near-duplicate of the #1 overall player at
+a fake ADP in the low 200s — production real deep-bench players never have.
+`tests/solo.spec.mjs`'s existing grade-variance test ("every lineup fields
+the best eligible player") failed against it: inserting a stealth near-elite
+producer into a position's points-sorted list shifts which real player sits
+at the replacement cutoff, moving `REPLACEMENT_PTS` for shallow leagues that
+should never have been touched by anything past real ADP at all. Cloning
+from the *worst* real players instead, capped well below replacement from
+the start, made the failure disappear — which is the tell that it was a
+property of the fixture, not of `extend_deep_bench()` (which draws from
+Sleeper's own master, ordered by `search_rank`, and never manufactures a
+duplicate of an already-real-ADP player in the first place) or of anything
+downstream of it. Two lessons worth keeping past this one verification
+pass: a synthetic fixture standing in for a missing feed has to model the
+*shape* of what's missing, not just its schema — and a component that only
+just started reading the tail of a much bigger array is exactly the moment
+to re-run whatever already checks that component's variance.
+
+**And the other thing that broke was the tooling, not the app — a fourth
+instance of a pattern this file already names.** A batch Playwright run
+produced a stuck test and a `12x15` draft that stopped 12 picks short. Both
+traced to an orphaned `wrangler dev`/`workerd` process, left running from an
+earlier, interrupted batch, quietly eating 30% of a CPU the whole time.
+Killing it and rerunning the identical suite passed all 19 tests clean. The
+same class of false lead `CLAUDE.md`'s Testing section already documents
+for the wrangler crash-loop, `startDraft()` not clearing `state.picks`, and
+a stale `vite dev` serving an old Tailwind config: a real, reproducible
+symptom whose cause was the harness, not the change under test. Check what
+process holds a CPU or a port before trusting a flaky rerun to mean
+anything about the code.
+
 ## The board card
 
 Five things per cell: who, what and where, which way the pick order is
