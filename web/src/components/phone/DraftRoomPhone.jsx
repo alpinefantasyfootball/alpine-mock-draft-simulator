@@ -39,6 +39,14 @@ export default function DraftRoomPhone({
   const [sheetSnap, setSheetSnap] = useState(1)
   const [selectedPlayer, setSelectedPlayer] = useState(null)
   const [viewSlot, setViewSlot] = useState(mySlot)
+  // The sheet's tallest snap has to stay below this fixed header (z-40,
+  // above the sheet's own z-30) — see BottomSheet.jsx's own comment on
+  // `maxHeight` for what goes wrong otherwise. Read once at mount, same as
+  // HEADER_H itself is a fixed measured constant rather than something
+  // re-read on every render.
+  const [sheetMaxHeight] = useState(() => (
+    typeof window !== 'undefined' ? window.innerHeight - HEADER_H : undefined
+  ))
 
   return (
     <>
@@ -57,6 +65,7 @@ export default function DraftRoomPhone({
       <BottomSheet
         snapIndex={sheetSnap}
         onSnapIndexChange={setSheetSnap}
+        maxHeight={sheetMaxHeight}
         header={
           <div className="flex w-full shrink-0 border-b border-white/[0.06] px-0">
             {TABS.map((t) => (

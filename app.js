@@ -4700,7 +4700,19 @@ function shortName(player) {
 }
 
 function initials(name) {
-  const parts = name.replace(/[^A-Za-z .'-]/g, "").split(" ");
+  // filter(Boolean) drops the empty strings a stripped-then-split name can
+  // leave behind — "Lambo No. 5" (a real CPU team name, TEAM_NAMES above)
+  // strips its trailing digit to "Lambo No. ", and splitting that on " "
+  // ends in "", so parts[parts.length - 1][0] read `undefined` and string
+  // concatenation coerced it to the literal text "LUNDEFINED". Every real
+  // player name already survives this unchanged; only a name that strips to
+  // a trailing (or leading, or doubled) space could ever have hit it, and
+  // team names are exactly the shape that does. Found via
+  // TeamTabPhone.jsx's 26px chip, the first caller with no truncation to
+  // hide it — but the defect was always here, for every caller of
+  // initials(), not something the phone redesign introduced.
+  const parts = name.replace(/[^A-Za-z .'-]/g, "").split(" ").filter(Boolean);
+  if (parts.length === 0) return "";
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }

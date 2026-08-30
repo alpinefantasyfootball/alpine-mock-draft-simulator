@@ -20,10 +20,10 @@ const SHEET_MAX = 720
 // jitter first. 4px matches the design brief's own threshold.
 const TAP_SLOP = 4
 
-function nearestSnapIndex(h) {
+function nearestSnapIndex(h, snaps) {
   let best = 0
   let bestDist = Infinity
-  SHEET_SNAPS.forEach((s, i) => {
+  snaps.forEach((s, i) => {
     const d = Math.abs(s - h)
     if (d < bestDist) { bestDist = d; best = i }
   })
@@ -40,15 +40,32 @@ function nearestSnapIndex(h) {
  * motion value bound straight to `style.height`, so dragging never round-
  * trips through React state on every pointer-move frame. `onSnapIndexChange`
  * only fires once, on release, with the settled index.
+ *
+ * `maxHeight` is a ceiling under `SHEET_MAX`, and it exists because the
+ * sheet is not the only fixed thing on screen. CockpitHeaderPhone sits at
+ * `z-40`, above this sheet's own `z-30`, so a sheet tall enough to reach
+ * behind the header does not just look wrong — the header physically
+ * covers the drag handle and the tab row underneath it. On a device short
+ * enough that `SHEET_SNAPS`' own 700px exceeds the room below the header
+ * (measured: a 664px-tall viewport minus a 106px header leaves 558), that
+ * happens on the ordinary path of expanding the sheet, and there is then
+ * no way to shrink it back down or switch tabs at all — no error, nothing
+ * in the console, just a control that looks reachable and is not. Capping
+ * every height this component ever sets — the initial value, the snap
+ * animations, and the live drag clamp — is what keeps the handle inside
+ * the room the header actually leaves it, at every snap.
  */
-export default function BottomSheet({ snapIndex, onSnapIndexChange, header, children, className }) {
-  const height = useMotionValue(SHEET_SNAPS[snapIndex])
+export default function BottomSheet({ snapIndex, onSnapIndexChange, header, children, className, maxHeight }) {
+  const ceiling = maxHeight ? Math.min(SHEET_MAX, maxHeight) : SHEET_MAX
+  const snaps = SHEET_SNAPS.map((s) => Math.min(s, ceiling))
+
+  const height = useMotionValue(snaps[snapIndex])
   // The height the drag started from — offset.y is relative to the drag's
   // own start, not to the sheet, so the live height has to be computed as
   // "where we started minus how far up/down the pointer has moved" rather
   // than accumulated delta-by-delta (accumulating would drift under
   // framer's own sub-pixel rounding over a long drag).
-  const dragStartH = useRef(SHEET_SNAPS[snapIndex])
+  const dragStartH = useRef(snaps[snapIndex])
   const draggedPastSlop = useRef(false)
   const controlsRef = useRef(null)
 
@@ -58,7 +75,7 @@ export default function BottomSheet({ snapIndex, onSnapIndexChange, header, chil
   // writes to that prop until release.
   useEffect(() => {
     controlsRef.current?.stop()
-    controlsRef.current = animate(height, SHEET_SNAPS[snapIndex], { type: 'spring', stiffness: 420, damping: 42 })
+    controlsRef.current = animate(height, snaps[snapIndex], { type: 'spring', stiffness: 420, damping: 42 })
     return () => controlsRef.current?.stop()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [snapIndex])
@@ -72,7 +89,7 @@ export default function BottomSheet({ snapIndex, onSnapIndexChange, header, chil
   const handleDrag = (_, info) => {
     if (Math.abs(info.offset.y) > TAP_SLOP) draggedPastSlop.current = true
     // Dragging the handle up (negative offset.y) grows the sheet.
-    const next = Math.min(SHEET_MAX, Math.max(SHEET_MIN, dragStartH.current - info.offset.y))
+    const next = Math.min(ceiling, Math.max(SHEET_MIN, dragStartH.current - info.offset.y))
     height.set(next)
   }
 
@@ -81,14 +98,14 @@ export default function BottomSheet({ snapIndex, onSnapIndexChange, header, chil
       // A tap: cycle forward regardless of where the drag jitter left the
       // height, so a tap always means "one step on," never "wherever a
       // few stray pixels of touch noise happened to land."
-      const next = (snapIndex + 1) % SHEET_SNAPS.length
+      const next = (snapIndex + 1) % snaps.length
       onSnapIndexChange(next)
-      controlsRef.current = animate(height, SHEET_SNAPS[next], { type: 'spring', stiffness: 420, damping: 42 })
+      controlsRef.current = animate(height, snaps[next], { type: 'spring', stiffness: 420, damping: 42 })
       return
     }
-    const next = nearestSnapIndex(height.get())
+    const next = nearestSnapIndex(height.get(), snaps)
     onSnapIndexChange(next)
-    controlsRef.current = animate(height, SHEET_SNAPS[next], { type: 'spring', stiffness: 420, damping: 42 })
+    controlsRef.current = animate(height, snaps[next], { type: 'spring', stiffness: 420, damping: 42 })
   }
 
   return (
