@@ -4,6 +4,7 @@ import DraftLocker from './DraftLocker.jsx'
 import DraftLogDock from './DraftLogDock.jsx'
 import DraftCockpitHeader from './DraftCockpitHeader.jsx'
 import DraftMenuOverlay from './DraftMenuOverlay.jsx'
+import NotificationSettings from './settings/NotificationSettings.jsx'
 import DraftWithFriendsModal from './DraftWithFriendsModal.jsx'
 import DraftBoardGrid from './DraftBoardGrid.jsx'
 import PickTicker from './PickTicker.jsx'
@@ -24,6 +25,7 @@ import MobileDraftTabBar from './MobileDraftTabBar.jsx'
 import PickClockBand from './PickClockBand.jsx'
 import { POS_LIST } from './draftRoomPositions.js'
 import { useMinWidth, usePhoneWidth } from '../hooks/useBreakpoint.js'
+import { useDraftNotifications } from '../hooks/useDraftNotifications.js'
 import DraftRoomPhone from './phone/DraftRoomPhone.jsx'
 
 // The Board tab's own dock height per tray position — fixed pixels. This
@@ -189,6 +191,7 @@ export default function DraftRoom() {
   const TRAY = ['hidden', 'default', 'raised']
   const [tray, setTray] = useState('default')
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [notifyOpen, setNotifyOpen] = useState(false)
   // The Lobby's direct "Draft with friends" popover — see
   // DraftWithFriendsModal.jsx. Separate from settingsOpen: the two used to
   // be the same modal (Edit setup -> Invite tab), and collapsing them back
@@ -423,6 +426,21 @@ export default function DraftRoom() {
   // insights effect below can watch it — the later render code reuses this
   // same value rather than asking engine.draftOver() a second time.
   const draftIsOver = engine && started ? !!engine.draftOver() : false
+
+  /* Tell the reader it is their pick when they are not looking at the tab.
+     Sits here, above every early return, for the reason the comment on the
+     derived values above already gives: every hook in this component runs
+     on every render in the same order, so this cannot wait until after
+     `if (!engine) return null` or the phone branch's own return. The hook
+     is a no-op with notifications off, unsupported or unpermitted, and
+     fires on the turn-CHANGE rather than the turn — see its own file for
+     why that distinction is the whole feature. */
+  useDraftNotifications({
+    engine,
+    myTurn,
+    over: draftIsOver,
+    code: DE && league && onClock ? DE.pickCode(picks.length + 1, league) : null,
+  })
 
   // Which team's report the Insights tab is showing. Yours on the
   // auto-navigate below; a board header click opens that column's team
@@ -1076,6 +1094,15 @@ export default function DraftRoom() {
   // action. Not reimplemented here.
   const handleDiscard = () => engine.restart()
 
+  /* "End draft" finishes it rather than stepping away from it — see
+     DraftMenuOverlay's own note on why those have to be two different
+     things and why this is never offered in a room. autoDraftRest() is
+     app.js's own function, the same one a finished-draft test harness
+     uses; the effect above that flips `view` to 'insights' on draftIsOver
+     is what lands the reader on the report, and the Lobby is one press
+     from there with the draft in the locker. */
+  const handleEndDraft = () => engine.autoDraftRest()
+
   // The real queue (state.queue, an array of player names) — queueToggle()
   // is the exact function the legacy rail's star button already calls.
   // queuedNames as a Set just makes the sidebar's per-row lookup cheap.
@@ -1155,12 +1182,17 @@ export default function DraftRoom() {
             engine={engine}
             onClose={() => setMenuOpen(false)}
             onOpenSettings={() => setSettingsOpen(true)}
+            onOpenNotifications={() => setNotifyOpen(true)}
             inRoom={roomActive}
-            discardLabel={hasRoomVal ? 'Leave the room' : 'Discard draft'}
+            started={started}
+            over={draftIsOver}
+            discardLabel={hasRoomVal ? 'Leave the room' : 'Delete draft'}
             discardDanger={!hasRoomVal}
             onDiscard={handleDiscard}
+            onEndDraft={handleEndDraft}
           />
         )}
+        {notifyOpen && <NotificationSettings onBack={() => setNotifyOpen(false)} />}
         {settingsOpen && (
           <DraftSettingsModal
             engine={engine}
@@ -1213,12 +1245,17 @@ export default function DraftRoom() {
           engine={engine}
           onClose={() => setMenuOpen(false)}
           onOpenSettings={() => setSettingsOpen(true)}
+          onOpenNotifications={() => setNotifyOpen(true)}
           inRoom={roomActive}
-          discardLabel={hasRoomVal ? 'Leave the room' : 'Discard draft'}
+          started={started}
+          over={draftIsOver}
+          discardLabel={hasRoomVal ? 'Leave the room' : 'Delete draft'}
           discardDanger={!hasRoomVal}
           onDiscard={handleDiscard}
+          onEndDraft={handleEndDraft}
         />
       )}
+      {notifyOpen && <NotificationSettings onBack={() => setNotifyOpen(false)} />}
       {/* pt-[46px]/lg:pt-[62px] matches DraftCockpitHeader's own height at
           each breakpoint — 46px below lg now that a live draft renders the
           compact mobile header there instead of the 62px bar (see that
