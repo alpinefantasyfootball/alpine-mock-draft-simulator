@@ -150,6 +150,66 @@ it keeps the number of fields the page has to escape down to what it draws.
 **`source` is never dropped** — we link and attribute rather than republish,
 and an unattributed headline is the version of this that is not allowed.
 
+## Chat media (voice and photos)
+
+R2, bound as `MEDIA`, bucket `juke-chat-media`. Two chat message types —
+`voice` (a clip and its length in seconds) and `photo` — carry a URL rather
+than bytes, and this is where the bytes live: neither the Durable Object
+(a hard storage ceiling, and the whole room is written to it on every
+action) nor D1 (a cache of somebody else's data, never a source of truth of
+our own) is the right place for a recording or a photo that exists nowhere
+but here.
+
+**MANUAL STEP — this binding does nothing until the bucket exists.** Unlike
+`GIPHY_KEY` and `TANK01_KEY`, which are secrets set with `wrangler secret
+put`, R2 needs the bucket itself created first, from an account with R2
+enabled:
+
+```bash
+wrangler r2 bucket create juke-chat-media
+wrangler deploy
+```
+
+Until that has run, `env.MEDIA` is unbound: `POST /media` answers
+`{ configured: false }` — the same shape a missing GIPHY or Tank01 key
+already answers — rather than throwing, and nothing else in the worker is
+affected.
+
+**Two routes, not R2's own public-bucket URL.**
+
+- **`POST /media?kind=voice|photo&room=<code>`** — the upload. Origin-checked
+  before the binding is even looked at, same as `/giphy` and `/news`.
+  Content-type is checked against an allowlist per kind and the body against
+  a byte cap (2MB for voice, sized off two minutes of Chrome's default
+  128kbps Opus encoding; 8MB for photos, sized off an unmodified 12-megapixel
+  phone camera JPEG — see `MEDIA_KINDS`' own comment in `draft-room.js` for
+  the arithmetic). Stores to R2 under a random 16-byte key and returns
+  `{ url }`.
+- **`GET /media/<key>`** — the read, streamed straight from the binding. No
+  origin check: an `<img>`/`<audio>` load is never CORS-governed in the
+  first place, so refusing an unrecognised Origin here would not stop a page
+  embedding one anyway, and some browsers omit Origin on a plain media fetch
+  regardless — a check that would 403 a legitimate load for no security
+  benefit. The random key is what stands in for access control, at a length
+  nobody is going to guess, the same trust model the invite code itself
+  already relies on.
+
+Serving it ourselves rather than through R2's own public-bucket URL is
+deliberate: a public bucket needs its own "make this public" step (a
+dashboard toggle or a connected custom domain) with its own security
+surface, on top of the `bucket create` above. This way needs nothing extra
+— the binding is private by default — and every media URL stays on a host
+`MEDIA_HOSTS` and `room.js`'s `cleanMediaUrl()` already know about, the same
+way a GIF has to be giphy.com's own domain and not merely contain the
+string.
+
+`voice`/`photo` chat actions carry only the URL that route returns; the
+worker refuses one that is not on `MEDIA_HOSTS` (127.0.0.1/localhost under
+`wrangler dev`, the deployed host in production) before it is ever stored,
+the same way `cleanGif()` refuses a GIF that is not giphy.com's own — a
+crafted message could otherwise name any URL on the internet and have every
+other client's browser fetch it.
+
 ## The cache database
 
 D1, bound as `DB`, created as `juke_db`. Two tables that matter and one that

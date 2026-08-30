@@ -45,7 +45,14 @@
     EMPTY_MESSAGE: "empty-message",
     NOT_STARTED:   "not-started",
     NO_SUCH_LINE:  "no-such-line",
-    BAD_REACTION:  "bad-reaction"
+    BAD_REACTION:  "bad-reaction",
+    BAD_POLL_QUESTION: "bad-poll-question",
+    BAD_POLL_CHOICES:  "bad-poll-choices",
+    NOT_A_POLL:    "not-a-poll",
+    NO_SUCH_CHOICE:"no-such-choice",
+    POLL_CLOSED:   "poll-closed",
+    BAD_VOICE:     "bad-voice",
+    BAD_PHOTO:     "bad-photo"
   };
 
   function fail(state, code) { return { state: state, error: code }; }
@@ -520,6 +527,21 @@
     }
   }
 
+  /* Which message this one answers, if any. A pointer only — no new message
+     type, and no validation that the id still exists: a reply to a line that
+     has since scrolled out of trimChat()'s bounded log is not an error, it is
+     a reply nobody can render the parent of any more. The UI's job, not
+     this file's — a bogus or vanished id is stored as-is and a renderer that
+     cannot find it just shows the message standalone.
+
+     Coerced to a number (or dropped) so a client cannot park an arbitrary
+     string or object here — the id space is `chatSeq`, always numeric. */
+  function cleanReplyTo(value) {
+    if (value == null) return null;
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  }
+
   function say(state, opts) {
     const text = String(opts.text == null ? "" : opts.text).trim().slice(0, CHAT_MAX);
     const gif = cleanGif(opts.gif);
@@ -537,10 +559,253 @@
       name: (next.members[opts.member] || {}).name || null,
       text: text,
       gif: gif,
+      replyTo: cleanReplyTo(opts.replyTo),
       at: opts.now
     });
 
     return ok(trimChat(next));
+  }
+
+  /* A voice or photo URL is a claim, exactly the way a GIF address is: it
+     arrives from another manager's message and ends up in an <audio> or
+     <img> src, so only our own media route is accepted — checked with URL
+     rather than a substring, for the same reason cleanGif() is.
+
+     Unlike GIPHY's host, ours is not a fixed third-party constant this file
+     can hardcode: it is wherever this deployment's worker answers, which
+     `wrangler dev --local` and the real deploy do not share. So the caller
+     passes the list of hosts that count as "ours" — the worker adapter
+     passes its real one, a test passes a stub — the same way the room
+     itself is handed `now` rather than reading a clock. */
+  function cleanMediaUrl(value, hosts) {
+    if (!value) return null;
+    try {
+      const url = new URL(String(value));
+      if (url.protocol !== "https:" && url.protocol !== "http:") return null;
+      const host = url.hostname.toLowerCase();
+      const allowed = Array.isArray(hosts) ? hosts : (hosts ? [hosts] : []);
+      const ok = allowed.some(function (h) {
+        h = String(h).toLowerCase();
+        return host === h || host.endsWith("." + h);
+      });
+      if (!ok) return null;
+      return url.href.slice(0, CHAT_MAX);
+    } catch (err) {
+      return null;
+    }
+  }
+
+  /* Two minutes, and the number is not free choice — it is the duration the
+     worker's own upload route sizes its byte cap around (see draft-room.js:
+     at Chrome's default 128kbps Opus encoding, two minutes of audio is about
+     1.9MB, which is where that cap comes from). A client can lie about
+     `seconds` — it is a label, not a measurement the room can verify — but it
+     cannot lie the file past the upload route's byte cap, so that is the
+     bound that actually holds; this one just keeps a wildly wrong label off
+     the log. */
+  const VOICE_SECONDS_MAX = 120;
+
+  function sayVoice(state, opts) {
+    const url = cleanMediaUrl(opts.url, opts.mediaHosts);
+    const seconds = Math.max(0, Math.min(VOICE_SECONDS_MAX, Math.round(Number(opts.seconds) || 0)));
+    if (!url || !seconds) return fail(state, ERR.BAD_VOICE);
+
+    const next = clone(state);
+    const seat = seatOf(next, opts.member);
+
+    next.chat.push({
+      id: nextId(next),
+      type: "voice",
+      seat: seat,
+      name: (next.members[opts.member] || {}).name || null,
+      url: url,
+      seconds: seconds,
+      replyTo: cleanReplyTo(opts.replyTo),
+      at: opts.now
+    });
+
+    return ok(trimChat(next));
+  }
+
+  // A phone's own reported pixel size, clamped rather than trusted, so a
+  // crafted message cannot claim a canvas the size of a stadium jumbotron.
+  const PHOTO_DIM_MAX = 8000;
+
+  function sayPhoto(state, opts) {
+    const url = cleanMediaUrl(opts.url, opts.mediaHosts);
+    if (!url) return fail(state, ERR.BAD_PHOTO);
+
+    const next = clone(state);
+    const seat = seatOf(next, opts.member);
+
+    next.chat.push({
+      id: nextId(next),
+      type: "photo",
+      seat: seat,
+      name: (next.members[opts.member] || {}).name || null,
+      url: url,
+      w: opts.w ? Math.max(1, Math.min(PHOTO_DIM_MAX, Math.round(Number(opts.w) || 0))) : null,
+      h: opts.h ? Math.max(1, Math.min(PHOTO_DIM_MAX, Math.round(Number(opts.h) || 0))) : null,
+      replyTo: cleanReplyTo(opts.replyTo),
+      at: opts.now
+    });
+
+    return ok(trimChat(next));
+  }
+
+  /* ---- polls -------------------------------------------------
+
+     A poll is a chat-log entry like any other, so it sorts into the
+     transcript by `at` the same way a message or a reply does, rather than
+     living in a parallel list that has to be merged back in.
+
+     Votes are stored as member ids and reactsFor()'s whole reason applies
+     unchanged: a client that has never been told another member's id cannot
+     impersonate them by echoing it back. pollView() is the projection, the
+     same job reactsFor() already does for reactions — read that one first,
+     this follows its shape on purpose. */
+  const POLL_QUESTION_MAX = 140;
+  const POLL_CHOICE_MAX = 40;
+  const POLL_CHOICES_MIN = 2;
+
+  /* Eight, not a round number picked by feel. A poll asking to pick among
+     more than eight things stops being something a phone-width chat bubble
+     can lay out at a glance, and every choice is a voter-id array in the
+     same bounded-bytes log a long voice or photo URL already competes with
+     — see trimChat(). Reused rather than re-derived: this is the same shape
+     of limit REACTIONS already states for the same reason, at a different
+     number because a poll author is choosing the options and a reactor is
+     picking from a fixed emoji set. */
+  const POLL_CHOICES_MAX = 8;
+
+  function createPoll(state, opts) {
+    const question = String(opts.question == null ? "" : opts.question)
+      .trim().slice(0, POLL_QUESTION_MAX);
+    if (!question) return fail(state, ERR.BAD_POLL_QUESTION);
+
+    const choices = (Array.isArray(opts.choices) ? opts.choices : [])
+      .map(function (c) { return String(c == null ? "" : c).trim().slice(0, POLL_CHOICE_MAX); })
+      .filter(function (c) { return c; })
+      .slice(0, POLL_CHOICES_MAX);
+    if (choices.length < POLL_CHOICES_MIN) return fail(state, ERR.BAD_POLL_CHOICES);
+
+    const next = clone(state);
+    const seat = seatOf(next, opts.member);
+    // durationMs, not an absolute endsAt from the client: the room is handed
+    // `now` by its caller and never reads a clock of its own, and a client
+    // trusted with its own end time could park a poll open forever by lying
+    // about it. A relative "how long from now" is the one shape that stays
+    // honest no matter whose clock sent it.
+    const durationMs = Math.max(0, Number(opts.durationMs) || 0);
+
+    next.chat.push({
+      id: nextId(next),
+      type: "poll",
+      seat: seat,
+      name: (next.members[opts.member] || {}).name || null,
+      question: question,
+      choices: choices,
+      multi: !!opts.multi,
+      anon: !!opts.anon,
+      endsAt: durationMs ? opts.now + durationMs : null,
+      votes: {},          // choice index -> [memberId, ...]; never sent whole
+      replyTo: cleanReplyTo(opts.replyTo),
+      at: opts.now
+    });
+
+    return ok(trimChat(next));
+  }
+
+  function votePoll(state, opts) {
+    const line = (state.chat || []).filter(function (m) { return m.id === opts.id; })[0];
+    if (!line) return fail(state, ERR.NO_SUCH_LINE);
+    if (line.type !== "poll") return fail(state, ERR.NOT_A_POLL);
+    if (line.endsAt !== null && line.endsAt !== undefined && opts.now >= line.endsAt) {
+      return fail(state, ERR.POLL_CLOSED);
+    }
+
+    /* Validated whole, before anything is cloned — the same shape as
+       react()'s emoji check. A vote naming even one index outside the
+       choices array is refused outright rather than applying the indices
+       that do exist, so a client sees one clear error instead of a partial
+       vote it never asked for. */
+    const raw = line.multi
+      ? (Array.isArray(opts.choice) ? opts.choice : [opts.choice])
+      : [Array.isArray(opts.choice) ? opts.choice[0] : opts.choice];
+    const indices = raw.map(Number);
+    const bad = !indices.length || indices.some(function (i) {
+      return !(Number.isInteger(i) && i >= 0 && i < line.choices.length);
+    });
+    if (bad) return fail(state, ERR.NO_SUCH_CHOICE);
+
+    const next = clone(state);
+    const target = next.chat.filter(function (m) { return m.id === opts.id; })[0];
+    if (!target.votes) target.votes = {};
+
+    if (target.multi) {
+      /* Each index in the array toggles that one option — present becomes
+         absent and back, the same as react() — so sending the single index
+         a checkbox click just changed is enough; the other options a member
+         already chose are untouched. */
+      indices.forEach(function (i) {
+        const who = target.votes[i] || [];
+        const at = who.indexOf(opts.member);
+        if (at >= 0) who.splice(at, 1); else who.push(opts.member);
+        if (who.length) target.votes[i] = who; else delete target.votes[i];
+      });
+    } else {
+      /* A single choice replaces whatever this member had picked before —
+         it never accumulates. Cleared from every option first, then added
+         to the one just chosen, so a repeat vote for the same option nets
+         out to exactly the same single vote rather than a growing list. */
+      Object.keys(target.votes).forEach(function (k) {
+        const who = target.votes[k];
+        const at = who.indexOf(opts.member);
+        if (at >= 0) who.splice(at, 1);
+        if (!who.length) delete target.votes[k];
+      });
+      const who = target.votes[indices[0]] || [];
+      who.push(opts.member);
+      target.votes[indices[0]] = who;
+    }
+
+    return ok(next);
+  }
+
+  /* Counts, whether it was you, and — only when the poll is not anonymous —
+     the names of who chose it. Never ids, the same rule reactsFor() already
+     follows; a name is already public on every chair and every message, so
+     handing it back here tells a client nothing it could not already see
+     elsewhere in the same room.
+
+     `anon` has to make an actual difference here or it is a control that
+     cannot act — the same trap the fraction-denominator note in CLAUDE.md
+     describes, a setting that renders, does nothing, and looks fine either
+     way. Hiding `voters` (never the count) is that difference: an anonymous
+     poll still says how many chose an option, it just never says who. */
+  function pollView(state, line, member) {
+    const votes = line.votes || {};
+    const options = line.choices.map(function (choice, i) {
+      const who = votes[i] || [];
+      const opt = {
+        choice: choice,
+        count: who.length,
+        you: !!member && who.indexOf(member) >= 0
+      };
+      if (!line.anon) {
+        opt.voters = who.map(function (id) {
+          return (state.members[id] || {}).name || null;
+        });
+      }
+      return opt;
+    });
+    return {
+      question: line.question,
+      options: options,
+      multi: !!line.multi,
+      anon: !!line.anon,
+      endsAt: line.endsAt
+    };
   }
 
   /* Said by the room itself: who arrived, who left, when it started. The
@@ -622,10 +887,18 @@
       paused: state.paused,
       msLeft: msLeft(state, now),
       /* Rebuilt rather than handed over. The stored line carries the member
-         ids of everyone who reacted to it, and those are exactly the thing
-         this function exists to keep in. */
+         ids of everyone who reacted to it (and, for a poll, everyone who
+         voted on it), and those are exactly the thing this function exists
+         to keep in.
+
+         Every entry keeps the same base shape a text or gif message has
+         always had — a UI that has never heard of a poll still gets `text`,
+         `gif`, `reacts`, `replyTo` on every line, unchanged. `type` is only
+         present on the newer kinds, so a switch on it falls through to the
+         existing text/gif rendering by default rather than needing an
+         `|| "text"` at every call site. */
       chat: (state.chat || []).map(function (m) {
-        return {
+        const out = {
           id: m.id,
           seat: m.seat,
           name: m.name,
@@ -633,8 +906,14 @@
           gif: m.gif,
           at: m.at,
           system: m.system,
+          replyTo: m.replyTo || null,
           reacts: reactsFor(m, member)
         };
+        if (m.type) out.type = m.type;
+        if (m.type === "poll") out.poll = pollView(state, m, member);
+        if (m.type === "voice") { out.url = m.url; out.seconds = m.seconds; }
+        if (m.type === "photo") { out.url = m.url; out.w = m.w; out.h = m.h; }
+        return out;
       }),
       reactions: REACTIONS,
       isHost: !!state.host && state.host === member,
@@ -675,8 +954,14 @@
     pause: pause,
     say: say,
     react: react,
+    sayVoice: sayVoice,
+    sayPhoto: sayPhoto,
+    createPoll: createPoll,
+    votePoll: votePoll,
     cleanGif: cleanGif,
     cleanName: cleanName,
+    cleanReplyTo: cleanReplyTo,
+    cleanMediaUrl: cleanMediaUrl,
     announce: announce,
     onTheClock: onTheClock,
     seatOf: seatOf,
