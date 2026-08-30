@@ -40,8 +40,21 @@ const league = {
      everybody sees the same one. */
   draftType: "snake",         // "snake" | "linear" — see DraftEngine.reversedRound
   thirdRoundReversal: false,  // snake only; round 3 repeats round 2's direction
-  playerPool: "all",          // "all" | "rookies" | "vets" — see poolFilter()
-  name: ""                    // what this draft is called; blank means unnamed
+  playerPool: "all",          // "all" | "rookies" | "vets" — see inPool()
+  name: "",                   // what this draft is called; blank means unnamed
+
+  /* Whether a human seat whose clock runs out gets drafted for.
+
+     This has always happened and was never a setting: startTicking() hits
+     zero and calls autoPickForMe(). Turning it off is a real, describable
+     behaviour rather than a stall dressed up as one — the clock reaches
+     0:00 and the seat stays yours until you pick, which is what a league
+     with a commissioner actually does when somebody misses their window.
+
+     CPU seats are untouched by it in both states. They are not users
+     running out of time; they are the room, and a room that stops moving
+     because a setting about humans was switched off is a deadlock. */
+  cpuAutopick: true
 };
 
 const POSITIONS = ["QB", "RB", "WR", "TE", "K", "DST"];
@@ -2433,6 +2446,16 @@ function startTicking() {
     state.timeLeft--;
     if (state.timeLeft <= 0) {
       stopClock();
+      /* league.cpuAutopick off means the clock is a stopwatch rather than a
+         deadline: it runs out, it stops, and the seat is still yours. The
+         header keeps drawing 0:00 and the Draft buttons keep working,
+         because whose turn it is never changed — only whether anything
+         happened when the number hit zero.
+
+         Rendering rather than returning silently is the difference between
+         "the clock expired" and "the app froze": without it the last tick
+         paints 0:01 and nothing ever repaints 0:00. */
+      if (league.cpuAutopick === false) { renderHeader(); tickBoardClock(); return; }
       const auto = autoPickForMe();
       if (auto) draftAndAdvance(auto);
     } else {
