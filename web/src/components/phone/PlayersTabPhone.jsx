@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Search, X } from 'lucide-react'
+import { FilePlus2, Search, X } from 'lucide-react'
 import { POS_BADGE } from '../draftRoomPositions.js'
 import { PHONE_POSITION_COLUMNS, phoneColumnValue, phoneColumnRaw } from './playerColumnsPhone.js'
 
@@ -257,7 +257,7 @@ export default function PlayersTabPhone({
                           title={queued ? 'Remove from your queue' : 'Add to your queue'}
                           className={'flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full ' + (queued ? 'bg-slate-rule text-ink-muted' : 'bg-[#0FBFA0] text-[#06251F]')}
                         >
-                          {queued ? <X className="h-3.5 w-3.5" /> : <span className="text-[13px] leading-none">+</span>}
+                          {queued ? <X className="h-3.5 w-3.5" /> : <FilePlus2 className="h-4 w-4" strokeWidth={2.25} />}
                         </button>
                       )}
                     </div>
