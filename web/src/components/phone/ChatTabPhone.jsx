@@ -302,7 +302,7 @@ export default function ChatTabPhone({ engine, onExpandSheet }) {
             return <p key={'sys-' + entry.id} className="my-2 text-center text-[11px] text-ink-muted">{entry.text}</p>
           }
           if (entry.kind === 'pick') {
-            const teams = (room.league && room.league.teams) || 0
+            const teams = room.league || null
             const code = DE && teams ? DE.pickCode(entry.overall, teams) : entry.overall
             return (
               <div key={'pick-' + entry.overall} className="my-2 flex items-center gap-2 rounded-md border-l-2 border-l-[#FFD166] bg-[#FFD166]/5 px-2 py-1 text-xs">

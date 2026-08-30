@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { ChevronLeft, ChevronRight, Sparkles } from 'lucide-react'
-import { POS_BADGE, POS_SOLID, INJURY_META } from './draftRoomPositions.js'
+import { POS_BADGE, POS_MATTE, INJURY_META } from './draftRoomPositions.js'
 import QueueList from './QueueList.jsx'
 
 function round1(v) {
@@ -852,7 +852,7 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, auto
               <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.12em] text-[#FFD166]">Your next picks</div>
               <div className="flex flex-wrap gap-[7px]">
                 {nextPicks.map((overall) => {
-                  const code = window.DraftEngine ? window.DraftEngine.pickCode(overall, league.teams) : overall
+                  const code = window.DraftEngine ? window.DraftEngine.pickCode(overall, league) : overall
                   return (
                     <span key={overall} className="rounded bg-white/10 px-2.5 py-1 font-plex text-xs font-semibold text-[#FFD166]">
                       {code}
@@ -866,7 +866,7 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, auto
           {projectedSurvivors.length > 0 && (
             <div className="rounded-lg border border-teal-400/20 bg-teal-400/[0.03] p-3.5">
               <div className="mb-2.5 text-[10px] font-bold uppercase tracking-[0.12em] text-teal-300">
-                Likely there at {window.DraftEngine ? window.DraftEngine.pickCode(nextOverall, league.teams) : nextOverall}
+                Likely there at {window.DraftEngine ? window.DraftEngine.pickCode(nextOverall, league) : nextOverall}
               </div>
               <div className="flex flex-col gap-2">
                 {projectedSurvivors.map(({ player, survival }) => (
@@ -954,7 +954,7 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, auto
             <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.12em] text-[#FFD166]">Your next picks</div>
             <div className="flex flex-wrap gap-[7px]">
               {nextPicks.map((overall) => {
-                const code = window.DraftEngine ? window.DraftEngine.pickCode(overall, league.teams) : overall
+                const code = window.DraftEngine ? window.DraftEngine.pickCode(overall, league) : overall
                 return (
                   <span key={overall} className="rounded bg-white/10 px-2.5 py-1 font-plex text-xs font-semibold text-[#FFD166]">
                     {code}
@@ -971,7 +971,7 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, auto
         {projectedSurvivors.length > 0 && (
           <div className="mt-3 rounded-lg border border-teal-400/20 bg-teal-400/[0.03] p-3.5">
             <div className="mb-2.5 text-[10px] font-bold uppercase tracking-[0.12em] text-teal-300">
-              Likely there at {window.DraftEngine ? window.DraftEngine.pickCode(nextOverall, league.teams) : nextOverall}
+              Likely there at {window.DraftEngine ? window.DraftEngine.pickCode(nextOverall, league) : nextOverall}
             </div>
             <div className="flex flex-col gap-2">
               {projectedSurvivors.map(({ player, survival }) => (
@@ -1045,7 +1045,7 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, auto
                           <span
                             key={p.name}
                             className="h-[9px] w-[9px] rounded-sm"
-                            style={{ background: p.drafted ? 'rgba(255,255,255,0.13)' : POS_SOLID[row.pos] || 'rgba(255,255,255,0.4)' }}
+                            style={{ background: p.drafted ? 'rgba(255,255,255,0.13)' : POS_MATTE[row.pos] || 'rgba(255,255,255,0.4)' }}
                           />
                         ))}
                       </div>
@@ -1213,7 +1213,7 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, auto
             <div className="mb-2.5 text-sm font-semibold text-white">{runPos} run</div>
             <div className="mb-2.5 flex gap-1">
               {last10.map((p, i) => (
-                <span key={i} className="h-5 flex-1 rounded-sm" style={{ background: POS_SOLID[p.player.pos] || 'rgba(255,255,255,0.15)' }} />
+                <span key={i} className="h-5 flex-1 rounded-sm" style={{ background: POS_MATTE[p.player.pos] || 'rgba(255,255,255,0.15)' }} />
               ))}
             </div>
             <div className="text-xs leading-[1.5] text-white/60">
@@ -1226,7 +1226,7 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, auto
         <div className="mb-2.5 text-[10px] font-bold uppercase tracking-[0.12em] text-white/50">Last picks</div>
         <div className="flex flex-col gap-[3px]">
           {picks.slice(-9).reverse().map((p) => {
-            const code = window.DraftEngine ? window.DraftEngine.pickCode(p.overall, league.teams) : p.overall
+            const code = window.DraftEngine ? window.DraftEngine.pickCode(p.overall, league) : p.overall
             const mine = p.slot === mySlot
             return (
               <div

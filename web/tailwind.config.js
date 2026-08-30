@@ -5,6 +5,46 @@ export default {
     extend: {
       colors: {
         obsidian: '#0B0E14',
+        // ---- The six position hues, as real named colours ----
+        //
+        // draftRoomPositions.js is documented as the one hue reference for
+        // the whole site, and POS_BADGE has always been literal Tailwind
+        // class strings rather than inline style — that file's own header
+        // explains why (the JIT scanner greps source for a complete class
+        // token, so `bg-${hue}-500/15` compiles to nothing, silently).
+        // Those literals used to point at Tailwind's own stock scales
+        // (orange-500, emerald-500, ...), which meant the tint a badge drew
+        // and the hex a board cell filled with were two different colours
+        // that only looked related. They are one colour now: the matte
+        // value below IS what POS_BADGE names, so a position reads the
+        // same hue whether it arrives as a chip or as a cell.
+        //
+        // `pos-*` is the matte (flat, pastel) fill — dark ink on top,
+        // never white; `pos-*-deep` is the same hue darkened by lightness
+        // alone until white clears 4.6:1, for the places that carry white
+        // type (roster chips, bars, dots). Both sets are generated and
+        // verified in one pass rather than eyeballed: every matte value
+        // clears 8.4:1 against #0E1116 and every deep value 4.6:1 against
+        // white, and the closest pair in either set is 19.9 CIE76 (WR/DST)
+        // against a just-noticeable threshold near 2.3.
+        pos: {
+          qb: '#F0A189',
+          rb: '#8EE1C8',
+          wr: '#8AB6EF',
+          te: '#E89CE8',
+          k: '#F1D274',
+          dst: '#B2A4EA',
+          'qb-deep': '#D1451A',
+          'rb-deep': '#238366',
+          'wr-deep': '#1E71DE',
+          'te-deep': '#C42EC4',
+          'k-deep': '#906F0E',
+          'dst-deep': '#735AD8',
+          // The one ink a matte fill may carry. Named here so a component
+          // can say text-pos-ink rather than re-typing a hex that has to
+          // agree with draftRoomPositions.js's own POS_MATTE_INK.
+          ink: '#0E1116',
+        },
         charcoal: '#151923',
         teal: {
           // Continues the same +10%-lightness-per-step pattern 400/500/600

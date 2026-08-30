@@ -1,5 +1,5 @@
 import AnalyticsCard from './AnalyticsCard.jsx'
-import { POS_SOLID, POS_NAMES } from './draftRoomPositions.js'
+import { POS_MATTE, POS_NAMES } from './draftRoomPositions.js'
 
 // Row 2, col 3 — what share of your early picks (historyStats()'s own
 // CAPITAL_EARLY_ROUNDS in app.js — five rounds, named there once rather
@@ -34,7 +34,7 @@ export default function DraftCapitalAllocationCard({ stats }) {
               <div className="flex h-16 w-full items-end overflow-hidden rounded-t-sm bg-white/[0.06]">
                 <div
                   className="w-full rounded-t-sm"
-                  style={{ height: `${row.pct}%`, background: POS_SOLID[row.pos] || 'rgba(255,255,255,0.3)' }}
+                  style={{ height: `${row.pct}%`, background: POS_MATTE[row.pos] || 'rgba(255,255,255,0.3)' }}
                 />
               </div>
               <span className="text-[10px] font-bold text-white/50">{row.pos}</span>

@@ -33,32 +33,78 @@
   "use strict";
 
   /* ---- shape ------------------------------------------------
-     A config is { teams, rounds }. Anything else about a league
-     — the lineup, the scoring, the bench — changes what a good
-     pick is, never what a legal one is, so none of it is here. */
+     A config is { teams, rounds } plus, since draft types arrived,
+     { type, thirdRoundReversal }. Anything else about a league —
+     the lineup, the scoring, the bench — changes what a good pick
+     is, never what a legal one is, so none of it is here.
+
+     Every function below that used to take a bare `teams` number
+     still does, and a bare number still means a plain snake. That
+     is not backwards compatibility for its own sake: it is what
+     lets DraftBoardGrid ask for a pick code while holding only a
+     team count, and it is what keeps every existing call site in
+     app.js, room.js and the worker correct rather than quietly
+     drawing round three the old way. Pass the league object
+     wherever the ORDER matters and a number wherever it cannot. */
+
+  function shapeOf(teamsOrConfig) {
+    if (typeof teamsOrConfig === "number") {
+      return { teams: teamsOrConfig, type: "snake", trr: false };
+    }
+    const c = teamsOrConfig || {};
+    return {
+      teams: c.teams,
+      type: c.type || c.draftType || "snake",
+      trr: !!(c.thirdRoundReversal || c.trr)
+    };
+  }
 
   function totalPicks(config) {
     return config.teams * config.rounds;
   }
 
-  /* Overall pick 1 is round 1, seat 1. In even rounds the order reverses,
-     which is the only thing that makes a snake draft a snake. Seats are
-     returned zero-indexed, because every caller uses them as an index. */
-  function pickInfo(overall, teams) {
+  /* Does this round run backwards? The one place the answer lives.
+
+     - linear: never. Every round runs seat 1 to seat N, which is
+       what "non-snaking" means and is the whole of that format.
+     - snake: even rounds, which is the only thing that makes a
+       snake draft a snake.
+     - snake with third-round reversal: rounds one and two are an
+       ordinary snake, round three repeats round two's direction
+       instead of flipping back, and it snakes normally from there.
+       So from round three on the parity is inverted — odd rounds
+       run backwards and even rounds forwards, the mirror image of
+       the two rounds before it.
+
+     Written as one expression per format rather than as a table,
+     because the reversal is a property of the round number and a
+     table would have to be as long as the draft. */
+  function reversedRound(round, shape) {
+    if (shape.type === "linear") return false;
+    if (shape.trr && round >= 3) return round % 2 === 1;
+    return round % 2 === 0;
+  }
+
+  /* Overall pick 1 is round 1, seat 1. Seats are returned
+     zero-indexed, because every caller uses them as an index. */
+  function pickInfo(overall, teamsOrConfig) {
+    const shape   = shapeOf(teamsOrConfig);
+    const teams   = shape.teams;
     const round   = Math.ceil(overall / teams);
     const inRound = overall - (round - 1) * teams;
-    const slot    = (round % 2 === 0) ? (teams + 1 - inRound) : inRound;
+    const slot    = reversedRound(round, shape) ? (teams + 1 - inRound) : inRound;
     return { round: round, slot: slot - 1 };
   }
 
   /* The inverse of pickInfo: which pick of its own round a seat holds.
 
-     In an odd round that is simply the seat. In an even round it is mirrored,
-     and that mirror is the entire difference between a seat number and a pick
-     number — which is why it is written down once, here, rather than by each
-     caller that happens to have a round and a seat in hand. */
-  function pickInRound(round, slot, teams) {
-    return (round % 2 === 0) ? (teams - slot) : (slot + 1);
+     In a forward round that is simply the seat. In a reversed one it is
+     mirrored, and that mirror is the entire difference between a seat number
+     and a pick number — which is why it is written down once, here, rather
+     than by each caller that happens to have a round and a seat in hand. */
+  function pickInRound(round, slot, teamsOrConfig) {
+    const shape = shapeOf(teamsOrConfig);
+    return reversedRound(round, shape) ? (shape.teams - slot) : (slot + 1);
   }
 
   /* Which overall pick a seat holds in a given round — the other inverse of
@@ -69,8 +115,9 @@
      round and a seat must never work it out again. The board printed "5.01"
      and had no way to say that is the 41st pick of the draft without either
      asking this or writing the mirror down a second time. */
-  function overallOf(round, slot, teams) {
-    return (round - 1) * teams + pickInRound(round, slot, teams);
+  function overallOf(round, slot, teamsOrConfig) {
+    const shape = shapeOf(teamsOrConfig);
+    return (round - 1) * shape.teams + pickInRound(round, slot, teamsOrConfig);
   }
 
   /* The label a draft actually uses: the round, then which pick of that round.
@@ -84,9 +131,9 @@
      when 11 overall can only be the first pick of the round. Two correct
      numbers side by side disagreeing, which is the tell worth remembering:
      nothing about the arithmetic was wrong, only what it was called. */
-  function pickCode(overall, teams) {
-    const p = pickInfo(overall, teams);
-    return p.round + "." + String(pickInRound(p.round, p.slot, teams)).padStart(2, "0");
+  function pickCode(overall, teamsOrConfig) {
+    const p = pickInfo(overall, teamsOrConfig);
+    return p.round + "." + String(pickInRound(p.round, p.slot, teamsOrConfig)).padStart(2, "0");
   }
 
   /* Whose turn it is, from the number of picks already made. Deliberately
@@ -95,7 +142,13 @@
      a round trip to learn something it already knows. */
   function onTheClock(config, pickCount) {
     if (pickCount >= totalPicks(config)) return null;
-    return pickInfo(pickCount + 1, config.teams);
+    // `config`, not `config.teams`: the whole point of threading the shape
+    // through is that whose turn it is depends on the draft type, and this
+    // is the function every other caller asks. Passing the bare team count
+    // here would make a linear or reversal draft snake anyway, correctly
+    // labelled and in the wrong order — which is the pick-number-versus-seat
+    // bug all over again, with nothing on screen disagreeing with itself.
+    return pickInfo(pickCount + 1, config);
   }
 
   function draftOver(config, pickCount) {
@@ -107,7 +160,7 @@
     const total = totalPicks(config);
     let n = pickCount + 1;
     let gap = 0;
-    while (n <= total && pickInfo(n, config.teams).slot !== seat) { n++; gap++; }
+    while (n <= total && pickInfo(n, config).slot !== seat) { n++; gap++; }
     return gap;
   }
 
@@ -166,6 +219,13 @@
 
   return {
     totalPicks: totalPicks,
+    // Exported so a caller can ask which way a round runs without
+    // re-deriving the rule — the arrow on every board cell wants exactly
+    // this and was working it out from `round % 2` on its own, which is
+    // right for a plain snake and wrong for both of the other two formats.
+    reversedRound: function (round, teamsOrConfig) {
+      return reversedRound(round, shapeOf(teamsOrConfig));
+    },
     pickInfo: pickInfo,
     pickInRound: pickInRound,
     overallOf: overallOf,

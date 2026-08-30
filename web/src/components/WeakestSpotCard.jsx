@@ -1,5 +1,5 @@
 import AnalyticsCard from './AnalyticsCard.jsx'
-import { POS_NAMES, POS_SOLID } from './draftRoomPositions.js'
+import { POS_NAMES, POS_MATTE } from './draftRoomPositions.js'
 
 // Row 2, col 1. Headline position plus the full per-position breakdown
 // behind it (historyStats()'s weakestSpot + weakestSpotBreakdown in
@@ -49,7 +49,7 @@ export default function WeakestSpotCard({ stats }) {
                 <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.07]">
                   <div
                     className="h-full rounded-full"
-                    style={{ width: `${(row.count / maxCount) * 100}%`, background: POS_SOLID[row.pos] || 'rgba(255,255,255,0.3)' }}
+                    style={{ width: `${(row.count / maxCount) * 100}%`, background: POS_MATTE[row.pos] || 'rgba(255,255,255,0.3)' }}
                   />
                 </div>
                 <span className="whitespace-nowrap text-right text-[10.5px] tabular-nums text-white/70">

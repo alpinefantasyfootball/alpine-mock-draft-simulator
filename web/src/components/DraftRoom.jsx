@@ -828,7 +828,7 @@ export default function DraftRoom() {
     )
   }
 
-  const code = onClock && DE ? DE.pickCode(overall, league.teams) : null
+  const code = onClock && DE ? DE.pickCode(overall, league) : null
 
   // "If you wait" means past *this* pick — when it's genuinely my turn,
   // nextPicksFor(mySlot, 1) returns the pick I'm on right now (trivial: of
@@ -1262,7 +1262,7 @@ export default function DraftRoom() {
           nextOverall={nextOverall}
           nextPicks={nextPicks}
           overall={overall}
-          teams={league.teams}
+          league={league}
           onClock={onClock}
           teamLabelOf={(slot) => engine.teamLabel(slot)}
           collapsed={bandCollapsed}

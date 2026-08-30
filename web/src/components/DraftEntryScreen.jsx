@@ -42,7 +42,7 @@ export default function DraftEntryScreen({
   // pick is just its 1-indexed position — no snake mirror to ask for yet,
   // there's nothing on the board to mirror against.
   const firstOverall = mySlot + 1
-  const firstPick = DE ? DE.pickCode(firstOverall, league.teams) : null
+  const firstPick = DE ? DE.pickCode(firstOverall, league) : null
   // The first four picks this seat holds — first is shown on its own
   // above, so the strip below wants the four *after* it.
   const nextPicks = engine.nextPicksFor(mySlot, 5).slice(1)

@@ -3,7 +3,7 @@ import { motion, useMotionValue, animate } from 'framer-motion'
 
 // The phone draft room's one new interaction primitive: a sheet whose own
 // HEIGHT is the state, not its position — the board sits fixed behind it
-// (DraftBoardPeek.jsx) and never scrolls or resizes itself, so revealing
+// (DraftBoardPeekPhone.jsx) and never scrolls or resizes itself, so revealing
 // more of it is purely a matter of the sheet getting shorter. That's a
 // different gesture from PlayerProfileModal.jsx's own mobile sheet, which
 // drags on `y` to dismiss from one fixed height — this one never dismisses
@@ -12,13 +12,72 @@ import { motion, useMotionValue, animate } from 'framer-motion'
 // the sheet's own top edge at every height, which is what animating
 // `height` directly (via a motion value bound to inline style, not a CSS
 // transition) gives for free.
-export const SHEET_SNAPS = [188, 470, 700]
-const SHEET_MIN = 150
+//
+// ---- The collapsed snap is chrome-only, and that is the point ----
+//
+// SHEET_SNAPS[0] was 188px, which left roughly a tab row plus two list rows
+// showing. Reported directly against the reference app: swiping the sheet
+// down there compresses it "to the bottom to allow full view of the board,"
+// and 188px is not that — it is a shorter sheet still covering the last
+// four rounds of a fourteen-round board, which is exactly the rounds a
+// drafter swipes down to look at. 58px is the drag handle plus the tab row
+// and nothing else: the sheet is still there, still says which tab it is
+// on, still one swipe from coming back, and the board behind it is whole.
+//
+// It is a measurement rather than a round number — 9px of handle margin, a
+// 5px handle, 6px under it, then the tab row's own 9+17+8+1. The safe-area
+// inset is deliberately NOT in it: that is padding INSIDE the sheet (see
+// the content wrapper below), so folding it in here would double-count the
+// home indicator on the devices that have one and add dead space on the
+// ones that do not.
+export const SHEET_SNAPS = [58, 470, 700]
+const SHEET_MIN = SHEET_SNAPS[0]
 const SHEET_MAX = 720
 // "Dragging" vs. "tapping the handle" is the one thing a bare onClick can't
 // tell apart on a touch device — every tap fires a few pixels of pointer
 // jitter first. 4px matches the design brief's own threshold.
 const TAP_SLOP = 4
+
+/* ---- Why release is not simply "nearest snap" -------------------------
+
+   Nearest-snap-by-distance is what this did, and it is what made the sheet
+   feel heavy. The snaps are 58 / 470 / 700, so the gap between collapsed
+   and default is 412px: a perfectly decisive 84px swipe down from the
+   default snap released 328px from collapsed and 84px from where it
+   started, and went back where it came from. Measured, in a browser, doing
+   exactly the gesture the reference app collapses on. The sheet was not
+   ignoring small movements — it was ignoring most real ones, because
+   "nearest" is the wrong question when the two candidates are 412px apart.
+
+   Release therefore asks three questions in order, and each one exists for
+   a gesture the one after it gets wrong:
+
+   1. Was it FLICKED? Above FLING_V, the direction is the whole message and
+      distance is irrelevant — a flick moves fast and not far by definition.
+      One snap that way.
+   2. Did it TRAVEL decisively? Past DRAG_STEP in one direction, the reader
+      has committed even if they let go nowhere near the next snap. Land on
+      the nearest snap, but never back on the one they started from: at
+      minimum, one step in the direction they were going.
+   3. Otherwise, nearest — which for a small movement is the snap it started
+      from, so an accidental nudge springs back, which is right.
+
+   Together these produce all three of the behaviours this was asked for
+   without any of them being special-cased. A swipe down from default is one
+   step down: the collapsed sheet and a whole board. A short swipe up from
+   there is one step up, back to default. A long swipe up releases past the
+   halfway point on its own and rule 3 alone would settle it at the tallest
+   snap.
+
+   Both thresholds are deliberately low. A deliberate drag ends with the
+   finger slowing to a stop, so its release velocity is near zero however
+   fast the middle of it was — there is no risk of catching one by accident
+   with FLING_V, and a low bar is what makes a small casual swipe count.
+   DRAG_STEP at 56px is just past the collapsed sheet's own height, which
+   makes it comfortably more than a scroll-start wobble and comfortably
+   less than any movement somebody made on purpose. */
+const FLING_V = 550
+const DRAG_STEP = 56
 
 function nearestSnapIndex(h, snaps) {
   let best = 0
@@ -68,14 +127,38 @@ export default function BottomSheet({ snapIndex, onSnapIndexChange, header, chil
   const dragStartH = useRef(snaps[snapIndex])
   const draggedPastSlop = useRef(false)
   const controlsRef = useRef(null)
+  // The snap this drag began from. `snapIndex` itself is a prop closed over
+  // by the handler of whichever render armed it, which is the right value
+  // here today only because a drag never writes to it mid-gesture — but a
+  // flick is defined as "one step from where this gesture started," and
+  // reading that off a prop is exactly the stale-closure shape the settings
+  // modal's own seat-swap comment already documents as a real bug. A ref is
+  // current at release time whatever else re-rendered meanwhile.
+  const startIndex = useRef(snapIndex)
+
+  // Settle on a snap, carrying the gesture's own release velocity into the
+  // spring rather than starting a fresh one from zero. Without this the
+  // sheet visibly stops dead at the moment of release and then re-animates,
+  // which is the single biggest difference between a sheet that feels
+  // attached to the finger and one that feels like it is playing a
+  // transition at you.
+  const settle = (index, velocity) => {
+    controlsRef.current?.stop()
+    controlsRef.current = animate(height, snaps[index], {
+      type: 'spring',
+      stiffness: 460,
+      damping: 44,
+      // A drag up shrinks offset.y and GROWS height, so the sign flips.
+      velocity: velocity ? -velocity : 0,
+    })
+  }
 
   // A prop-driven snap change (composer opening, tap-to-cycle already
   // reported up) animates in; nothing here fights a drag in progress
   // because this only runs when snapIndex itself changes, and a drag never
   // writes to that prop until release.
   useEffect(() => {
-    controlsRef.current?.stop()
-    controlsRef.current = animate(height, snaps[snapIndex], { type: 'spring', stiffness: 420, damping: 42 })
+    settle(snapIndex, 0)
     return () => controlsRef.current?.stop()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [snapIndex])
@@ -83,6 +166,7 @@ export default function BottomSheet({ snapIndex, onSnapIndexChange, header, chil
   const handleDragStart = () => {
     controlsRef.current?.stop()
     dragStartH.current = height.get()
+    startIndex.current = snapIndex
     draggedPastSlop.current = false
   }
 
@@ -93,19 +177,41 @@ export default function BottomSheet({ snapIndex, onSnapIndexChange, header, chil
     height.set(next)
   }
 
-  const handleDragEnd = () => {
+  const handleDragEnd = (_, info) => {
     if (!draggedPastSlop.current) {
       // A tap: cycle forward regardless of where the drag jitter left the
       // height, so a tap always means "one step on," never "wherever a
       // few stray pixels of touch noise happened to land."
       const next = (snapIndex + 1) % snaps.length
       onSnapIndexChange(next)
-      controlsRef.current = animate(height, snaps[next], { type: 'spring', stiffness: 420, damping: 42 })
+      settle(next, 0)
       return
     }
-    const next = nearestSnapIndex(height.get(), snaps)
+
+    const v = info.velocity.y
+    const from = startIndex.current
+    // Positive = the sheet grew = the finger went up. One name for the
+    // direction, so the flick branch and the travel branch cannot disagree
+    // about which way "one step" is.
+    const grew = height.get() - dragStartH.current
+    const dir = (Math.abs(v) > FLING_V ? (v < 0 ? 1 : -1) : (grew > 0 ? 1 : -1))
+    // Clamped rather than wrapped: a flick down from the collapsed sheet
+    // means "stay out of the way," and wrapping round to the tallest snap
+    // would be the most disruptive possible reading of it.
+    const stepped = Math.max(0, Math.min(snaps.length - 1, from + dir))
+
+    let next
+    if (Math.abs(v) > FLING_V) {
+      next = stepped
+    } else if (Math.abs(grew) > DRAG_STEP) {
+      // Nearest, but never back where it started — see rule 2 above.
+      const nearest = nearestSnapIndex(height.get(), snaps)
+      next = nearest === from ? stepped : nearest
+    } else {
+      next = nearestSnapIndex(height.get(), snaps)
+    }
     onSnapIndexChange(next)
-    controlsRef.current = animate(height, snaps[next], { type: 'spring', stiffness: 420, damping: 42 })
+    settle(next, v)
   }
 
   return (
@@ -122,11 +228,17 @@ export default function BottomSheet({ snapIndex, onSnapIndexChange, header, chil
           just this row is what stops the browser starting a page scroll
           on iOS Safari before framer's own pointer handling gets a look at
           it (see PlayerProfileModal.jsx's identical `touch-none` on the
-          drag surface for the same reason). */}
+          drag surface for the same reason).
+
+          dragMomentum={false} because this component runs its own settle:
+          framer's momentum would carry the height past the release point
+          and then the spring would pull it back, which reads as a bounce
+          nobody asked for on a sheet whose resting heights are fixed. */}
       <motion.div
         drag="y"
         dragConstraints={{ top: 0, bottom: 0 }}
         dragElastic={0}
+        dragMomentum={false}
         onDragStart={handleDragStart}
         onDrag={handleDrag}
         onDragEnd={handleDragEnd}
@@ -136,7 +248,12 @@ export default function BottomSheet({ snapIndex, onSnapIndexChange, header, chil
         {header}
       </motion.div>
 
-      <div className="min-h-0 flex-1">{children}</div>
+      {/* pb on the CONTENT, not on the sheet, and not folded into
+          SHEET_SNAPS[0] — see that constant's own note. At the collapsed
+          snap this wrapper has no height to speak of anyway, so the inset
+          costs nothing there and keeps the last row of a list clear of the
+          home indicator at every other snap. */}
+      <div className="min-h-0 flex-1" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>{children}</div>
     </motion.div>
   )
 }

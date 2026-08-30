@@ -1,5 +1,5 @@
 import AnalyticsCard from './AnalyticsCard.jsx'
-import { POS_SOLID } from './draftRoomPositions.js'
+import { POS_MATTE } from './draftRoomPositions.js'
 
 const SKILL_POSITIONS = ['QB', 'RB', 'WR', 'TE']
 
@@ -55,7 +55,7 @@ export default function AvgRoundByPositionCard({ stats }) {
               <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.07]">
                 <div
                   className="h-full rounded-full"
-                  style={{ width: `${(row.avgRound / maxRound) * 100}%`, background: POS_SOLID[row.pos] || 'rgba(255,255,255,0.3)' }}
+                  style={{ width: `${(row.avgRound / maxRound) * 100}%`, background: POS_MATTE[row.pos] || 'rgba(255,255,255,0.3)' }}
                 />
               </div>
               <span className="whitespace-nowrap text-right text-[10.5px] tabular-nums text-white/70">Rd {row.avgRound.toFixed(1)}</span>

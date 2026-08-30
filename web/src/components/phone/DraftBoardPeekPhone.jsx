@@ -1,4 +1,4 @@
-import { POS_SOLID } from '../draftRoomPositions.js'
+import { POS_MATTE } from '../draftRoomPositions.js'
 import DraftBoardGrid from '../DraftBoardGrid.jsx'
 
 // The board behind the phone sheet. README section 2 draws this as a
@@ -23,7 +23,7 @@ import DraftBoardGrid from '../DraftBoardGrid.jsx'
 // engine-side).
 const POSITIONS = ['QB', 'RB', 'WR', 'TE', 'K', 'DST']
 
-export default function DraftBoardPeekPhone({ engine, league, picks, mySlot, onClock, onSelectPlayer, headerH }) {
+export default function DraftBoardPeekPhone({ engine, league, picks, mySlot, onClock, onSelectPlayer, headerH, scrollToLiveSignal }) {
   const counts = engine.filterCounts()
 
   return (
@@ -36,7 +36,7 @@ export default function DraftBoardPeekPhone({ engine, league, picks, mySlot, onC
               key={pos}
               className="flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-slate-rule bg-slate-panel px-[9px] py-[5px]"
             >
-              <span className="h-[7px] w-[7px] shrink-0 rounded-full" style={{ backgroundColor: POS_SOLID[pos] }} aria-hidden="true" />
+              <span className="h-[7px] w-[7px] shrink-0 rounded-full" style={{ backgroundColor: POS_MATTE[pos] }} aria-hidden="true" />
               <span className="font-body text-[11px] font-semibold text-ink-soft">
                 {pos === 'DST' ? 'DEF' : pos} {c ? c.text : '—'}
               </span>
@@ -55,6 +55,7 @@ export default function DraftBoardPeekPhone({ engine, league, picks, mySlot, onC
           shortNameOf={engine.shortName}
           onSelectPlayer={onSelectPlayer}
           hideLegend
+          scrollToLiveSignal={scrollToLiveSignal}
         />
       </div>
     </div>

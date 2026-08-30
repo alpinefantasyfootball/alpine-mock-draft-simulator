@@ -22,8 +22,26 @@ const league = {
   flex: 1,           // one FLEX, drawn from RB / WR / TE
   superflex: 0,      // a FLEX a quarterback may also fill; 1 makes it 2QB
   bench: 5,
-  scoring: "half",   // "standard" | "half" | "ppr" — also picks the ADP set
-  rules: null        // the scoring table; filled in below, editable on setup
+  scoring: "half",   // see SCORING_NAMES — also picks the ADP set
+  rules: null,       // the scoring table; filled in below, editable on setup
+
+  /* ---- The three fields the draft-settings screen added ----
+
+     All three are read by draft-engine.js rather than by anything here,
+     which is why they sit on `league` and not on `state`: the engine's
+     whole contract is that a config decides what is LEGAL, and every
+     client and the server have to reach the same answer from the same
+     config. A per-drafter setting (the pick clock) lives on `state`; a
+     property of the board everyone shares lives here.
+
+     `name` is the exception and is here for a duller reason: a room
+     broadcasts its league whole (see adoptRoom's own note on why joining
+     a room means taking ALL of it), so a draft's name arrives with it and
+     everybody sees the same one. */
+  draftType: "snake",         // "snake" | "linear" — see DraftEngine.reversedRound
+  thirdRoundReversal: false,  // snake only; round 3 repeats round 2's direction
+  playerPool: "all",          // "all" | "rookies" | "vets" — see poolFilter()
+  name: ""                    // what this draft is called; blank means unnamed
 };
 
 const POSITIONS = ["QB", "RB", "WR", "TE", "K", "DST"];
@@ -990,8 +1008,52 @@ function adpSet() {
   // when this runs. An empty board is a real, renderable state everywhere
   // this gets called; a ReferenceError is not.
   const fallback = typeof PLAYERS === "undefined" ? [] : PLAYERS;
-  if (typeof ADP_SETS === "undefined") return fallback;
-  return ADP_SETS[league.scoring] || ADP_SETS[DEFAULT_SET] || fallback;
+  if (typeof ADP_SETS === "undefined") return fallback.filter(inPool);
+  const set = ADP_SETS[adpFormat(league.scoring)] || ADP_SETS[DEFAULT_SET] || fallback;
+  return set.filter(inPool);
+}
+
+/* Which ADP set a scoring preset draws from.
+
+   Fantasy Football Calculator publishes exactly three — standard, half and
+   full PPR — and the preset list is longer than three now. A superflex
+   league is not a fourth ADP set here; it is full PPR's board with a second
+   startable quarterback, which is a roster shape rather than a scoring one.
+   The market's own quarterback ADP is therefore wrong for it, and the note
+   under SCORING_NAMES says so on screen rather than the app pretending
+   otherwise.
+
+   Mapping through a named function rather than indexing ADP_SETS directly
+   is what stops a new preset silently falling through to DEFAULT_SET: a
+   preset with no entry here is a preset nobody decided the board for. */
+const ADP_FORMAT = { standard: "standard", half: "half", ppr: "ppr", superflex: "ppr" };
+function adpFormat(scoring) { return ADP_FORMAT[scoring] || DEFAULT_SET; }
+
+/* ---- The available-players filter -------------------------------------
+
+   Rookies-only and vets-only, asked of the data rather than of a list of
+   names. `exp` is Sleeper's own years_exp and is already in stats.js on
+   every player the crosswalk matched — 0 for a rookie, counting up from
+   there — so this needs no pipeline change and no second source: the
+   filter is reading the same record the Seasons tab and the bust score
+   already read.
+
+   A player with no `exp` at all is kept in BOTH filtered pools, and that
+   is deliberate rather than lazy. 27 of the board's rows have no stats
+   record — team defenses have no years of experience, and a handful of
+   skill players never matched — and a defense is neither a rookie nor a
+   veteran in any sense a drafter means. Dropping them would take every
+   D/ST off a rookies board and off a vets board alike, which would leave a
+   league that starts one with no legal pick for the slot. "Treat 0 from an
+   API as missing" is the rule this is the other half of: `undefined` is
+   missing, and missing is not evidence of anything. */
+function inPool(player) {
+  const pool = league.playerPool;
+  if (!pool || pool === "all") return true;
+  const stat = typeof PLAYER_STATS === "undefined" || !player.id ? null : PLAYER_STATS[player.id];
+  const exp = stat ? stat.exp : undefined;
+  if (typeof exp !== "number") return true;
+  return pool === "rookies" ? exp === 0 : exp > 0;
 }
 
 // How many picks the selected set can actually support. A 14-team, 15-round
@@ -1077,7 +1139,7 @@ const state = {
 // begun, every one of these can be — and, on a marketing-homepage load
 // before draft-engine.js has landed, is — reached while board is still [].
 // "No draft is happening" is the correct answer here, not a thrown error.
-function pickInfo(overall)  { return typeof DraftEngine === "undefined" ? null : DraftEngine.pickInfo(overall, league.teams); }
+function pickInfo(overall)  { return typeof DraftEngine === "undefined" ? null : DraftEngine.pickInfo(overall, league); }
 function currentOverall()   { return state.picks.length + 1; }
 function draftOver()        { return typeof DraftEngine === "undefined" ? false : DraftEngine.draftOver(league, state.picks.length); }
 function onTheClock()       { return typeof DraftEngine === "undefined" ? null : DraftEngine.onTheClock(league, state.picks.length); }
@@ -1087,7 +1149,7 @@ function teamLabel(slot) {
   return slot === state.mySlot ? "Your Team" : cpuName(slot);
 }
 
-function pickCode(overall) { return typeof DraftEngine === "undefined" ? "" : DraftEngine.pickCode(overall, league.teams); }
+function pickCode(overall) { return typeof DraftEngine === "undefined" ? "" : DraftEngine.pickCode(overall, league); }
 
 function picksUntilMyTurn() {
   return typeof DraftEngine === "undefined" ? 0 : DraftEngine.picksUntil(league, state.picks.length, state.mySlot);
@@ -1750,7 +1812,7 @@ function chatPickHtml(entry, room) {
   const teams = (room.league && room.league.teams) || league.teams;
 
   return `<div class="pickline${mine ? " mine" : ""}">
-      <span class="pickno">${DraftEngine.pickCode(entry.overall, teams)}</span>
+      <span class="pickno">${DraftEngine.pickCode(entry.overall, (room.league || league))}</span>
       <span class="picktext"><b>${escHtml(who)}</b> drafted ${escHtml(entry.player)}</span>
       <span class="msgwhen">${escHtml(chatTime(entry.at))}</span>
     </div>`;
@@ -2964,7 +3026,16 @@ const DEFAULT_RULES = {
 
 // The format dropdown is a preset over one rule. Everything else it leaves
 // alone, so a custom table survives switching between standard and PPR.
-const REC_BY_FORMAT = { standard: 0, half: 0.5, ppr: 1 };
+/* Receptions per catch, per preset. This is the one rule a preset owns
+   outright — everything else in the scoring table is the same 49 rules,
+   editable, and a preset only ever sets a starting point for them.
+
+   Superflex is full PPR's rec value on purpose: it is not a scoring format
+   at all, it is a roster shape (a second startable quarterback), and
+   pretending it scored differently would be inventing a rule to justify a
+   name. What it actually changes is league.superflex, which SCORING_PRESET
+   below applies alongside this. */
+const REC_BY_FORMAT = { standard: 0, half: 0.5, ppr: 1, superflex: 1 };
 
 function rulesForFormat(fmt) {
   const rec = REC_BY_FORMAT[fmt];
@@ -3009,7 +3080,69 @@ function scoringIsStock() {
    Title Case throughout, because "Half PPR" is the industry's name for the
    thing rather than a description of it, and because a format name appears
    far more often as a label or a chip than inside a sentence. */
-const SCORING_NAMES = { standard: "Standard", half: "Half PPR", ppr: "Full PPR" };
+const SCORING_NAMES = {
+  standard: "Standard",
+  half: "Half PPR",
+  ppr: "Full PPR",
+  superflex: "Superflex (2QB)"
+};
+
+/* What a preset does beyond its `rec` value, and the caveat each one
+   carries.
+
+   `note` is shown beside the preset on the settings screen rather than
+   kept as a comment, because it is the honest half of offering a preset
+   whose ADP the market never published. Superflex draws full PPR's board
+   (see adpFormat) and a real superflex room takes quarterbacks far
+   earlier than that board says — the preset gets the roster right and
+   cannot get the market right, and a drafter is better off being told
+   than finding out in round three.
+
+   `lineup` is applied by setScoring() and is a patch, not a whole roster:
+   a preset may say "one superflex slot" without also having an opinion
+   about how many receivers somebody starts. */
+/* The three draft types, and the honest state of each.
+
+   Snake and linear are both real: DraftEngine.reversedRound() is the whole
+   of the difference between them and the engine runs either one today.
+
+   Auction is listed and NOT available, which is a deliberate choice rather
+   than an oversight. It is not a setting — it is a second draft mode end to
+   end (a budget per team, a nomination order, live bidding, a bid clock,
+   and a CPU that has to value a player in dollars rather than in board
+   position), and none of that exists here. Shipping a control that silently
+   ran a snake draft under an "Auction" label would be worse than not
+   offering it: this project's own rule is that a right number in the wrong
+   place is a bug, and this would be a whole wrong product behind a right
+   label. Listed rather than hidden because a settings screen that shows two
+   options where the category has three tells a visitor Juke does not know
+   about the third. */
+const DRAFT_TYPES = [
+  { key: "snake", label: "Snake", sub: "Serpentine", available: true },
+  { key: "linear", label: "Linear", sub: "Non-snaking", available: true },
+  { key: "auction", label: "Auction", sub: "Salary cap", available: false,
+    note: "Auction drafting is a different draft entirely — a budget, nominations and live bidding — not a setting on this one. It is in build." }
+];
+
+/* Who is on the board. Read off Sleeper's own years_exp (`exp` in
+   stats.js), which is already there on every matched player — see
+   inPool() for what happens to a row that has none, and why that is the
+   only defensible answer rather than the lazy one. */
+const PLAYER_POOLS = [
+  { key: "all", label: "All", sub: "Players", available: true },
+  { key: "rookies", label: "Rookies", sub: "Only", available: true },
+  { key: "vets", label: "Vets", sub: "Only", available: true }
+];
+
+const SCORING_PRESET = {
+  standard: { lineup: { superflex: 0 } },
+  half: { lineup: { superflex: 0 } },
+  ppr: { lineup: { superflex: 0 } },
+  superflex: {
+    lineup: { superflex: 1 },
+    note: "Adds a SUPERFLEX slot a quarterback can fill. ADP still comes from full-PPR drafts, so the market underrates quarterbacks here — the projection does not."
+  }
+};
 
 function scoringLabel(scoring) {
   const s = scoring || league.scoring;
@@ -3832,7 +3965,7 @@ function parRun(jitterOf, lg) {
   const running = new Array(teams).fill(0);
 
   for (let n = 1; n <= total; n++) {
-    const c = DraftEngine.pickInfo(n, teams);
+    const c = DraftEngine.pickInfo(n, L);
     const pool = board.filter((p) => !taken[p.name] && !isRuledOut(p));
     if (!pool.length) break;
     const best = bestAvailable(pool, have, c.slot, c.round, { jitterOf: jitterOf, model: false, league: L });
@@ -4563,7 +4696,10 @@ function generateThirdRoundScenario(targetSlot) {
   let targetOverall = null;
   const total = teams * league.rounds;
   for (let n = 1; n <= total; n++) {
-    const c = DraftEngine.pickInfo(n, teams);
+    // `league`, not `league.teams` — the whole point of this simulation is
+    // which picks the target seat holds, and under linear or third-round
+    // reversal that is a different set of picks entirely.
+    const c = DraftEngine.pickInfo(n, league);
     const pool = board.filter(function (p) { return !taken[p.name] && !isRuledOut(p); });
     if (!pool.length) break;
     const best = bestAvailable(pool, have, c.slot, c.round);
@@ -4647,7 +4783,7 @@ function generateThirdRoundScenario(targetSlot) {
   const after = gradeAndRosterAt(myIndex + 3);
 
   return {
-    pickCode: DraftEngine.pickCode(myPick.overall, teams),
+    pickCode: DraftEngine.pickCode(myPick.overall, league),
     overall: myPick.overall,
     round: myPick.round,
     slot: targetSlot,
@@ -5356,9 +5492,17 @@ function boardArrow(round, slot, teams) {
   // Same guard as the wrappers above: the board grid draws league.teams x
   // league.rounds empty cells from league shape alone, with no dependence
   // on board/state, so it runs during the deferred-data window too.
+  //
+  // `round % 2 === 0` was the direction test here, written when a snake was
+  // the only draft this app had. It is wrong for both of the formats added
+  // since — a linear draft runs forward in every round, and third-round
+  // reversal inverts the parity from round three on — so the answer comes
+  // from DraftEngine.reversedRound(), the one place the rule lives. The
+  // pre-load fallback still has to guess, and guesses snake, because that
+  // is what an unconfigured league is.
   if (typeof DraftEngine === "undefined") return round % 2 === 0 ? "&larr;" : "&rarr;";
-  if (DraftEngine.pickInRound(round, slot, teams) === teams) return "&darr;";
-  return round % 2 === 0 ? "&larr;" : "&rarr;";
+  if (DraftEngine.pickInRound(round, slot, league) === teams) return "&darr;";
+  return DraftEngine.reversedRound(round, league) ? "&larr;" : "&rarr;";
 }
 
 /* The headshot, or nothing at all.
@@ -5424,7 +5568,7 @@ function renderBoard() {
         // above, and this cell gets rebuilt from scratch the moment real
         // data lands (see the deferred-data boot), so there's nothing to
         // gain from an approximation here, correct or not.
-        const inRound = typeof DraftEngine === "undefined" ? "?" : DraftEngine.pickInRound(r, s, league.teams);
+        const inRound = typeof DraftEngine === "undefined" ? "?" : DraftEngine.pickInRound(r, s, league);
 
         /* `mine` goes on an empty cell too, and that is the half of this
            that was missing. The class only ever went on a filled one, so the
@@ -5464,7 +5608,7 @@ function renderBoard() {
            DraftEngine.overallOf() rather than the sum written out here: the
            mirror is inside it, and a caller holding a round and a seat must
            never work that out again. */
-        const ovr = `<span class="cell-ovr">${typeof DraftEngine === "undefined" ? "" : DraftEngine.overallOf(r, s, league.teams)}</span>`;
+        const ovr = `<span class="cell-ovr">${typeof DraftEngine === "undefined" ? "" : DraftEngine.overallOf(r, s, league)}</span>`;
 
         // The cell on the clock is the clock. Looking away from where the
         // pick lands to find out how long is left is the thing this removes.
@@ -6866,8 +7010,30 @@ function settingsFingerprint(cfg) {
 }
 
 // Turned back into something a human can read, for the refusal message.
+/* One sentence describing a league's shape, for a shut settings box, a
+   header, a Locker row and a room's own summary.
+
+   Both functions below print the same four core facts and then whatever
+   is NOT the default, and only that. A summary that lists every setting is
+   a settings screen with worse formatting; a summary that lists none of the
+   unusual ones lets somebody sit in a linear rookies-only draft with the
+   header cheerfully reading "10 teams · 14 rounds · Half PPR" — which is
+   the "right value, wrong column" failure with a whole missing column. So
+   snake and an all-players pool say nothing, because they are what a reader
+   already assumes, and anything else says itself. */
+function shapeExtras(cfg) {
+  const bits = [];
+  if (cfg.draftType === "linear") bits.push("Linear");
+  if (cfg.thirdRoundReversal) bits.push("3RR");
+  if (cfg.playerPool === "rookies") bits.push("Rookies only");
+  if (cfg.playerPool === "vets") bits.push("Vets only");
+  return bits;
+}
+
 function settingsText(cfg) {
-  return `${cfg.teams} teams · ${cfg.rounds} rounds · ${scoringLabel(cfg.scoring)}`;
+  return [
+    `${cfg.teams} teams`, `${cfg.rounds} rounds`, scoringLabel(cfg.scoring)
+  ].concat(shapeExtras(cfg)).join(" · ");
 }
 
 function saveDraft() {
@@ -8017,7 +8183,7 @@ function inProgressSummary() {
   // resumeDraft() already takes when a whole save fails to resolve.
   const myPicks = [];
   data.picks.forEach(function (name, i) {
-    if (DraftEngine.pickInfo(i + 1, data.league.teams).slot !== data.mySlot) return;
+    if (DraftEngine.pickInfo(i + 1, data.league).slot !== data.mySlot) return;
     const player = board.find((p) => p.name === name);
     if (player) myPicks.push({ name: player.name, pos: player.pos });
   });
@@ -8405,10 +8571,12 @@ function scoringSummary() {
    everything else, so it cannot describe a different league from the one the
    controls inside it hold — the same reason scoringSummary() exists. */
 function leagueSummary() {
-  // scoringLabel(), not SCORING_NAMES directly — the same lookup with the
-  // same fallback already exists and drifting from it is how the dropdown
-  // and the scoring summary once disagreed about the same league.
-  return `${league.teams} teams · ${league.rounds} rounds · ${scoringLabel()}`;
+  // settingsText(league), not a second copy of the same join — that
+  // function is already the one place a league's shape becomes a sentence,
+  // and this used to be a near-identical template literal beside it. The
+  // moment settingsText() learned about draft type and player pool, this
+  // one would have gone on describing a league that no longer existed.
+  return settingsText(league);
 }
 
 function fillSetupControls() {
@@ -8466,8 +8634,20 @@ function setupProblem() {
            `= ${filled} roster spots, but the draft runs ${league.rounds} rounds.`;
   }
   if (totalPicks() > poolSize()) {
+    /* The pool is what adpSet() actually returns, which since the
+       available-players filter arrived is not always the whole ADP set —
+       so a rookies-only draft is refused here the same way an over-long one
+       always was, with the reason naming the filter rather than the format.
+       Getting this from poolSize() rather than from a second count is what
+       makes the two agree by construction: the board this validates is
+       literally the array buildBoard() will map over. */
+    if (league.playerPool && league.playerPool !== "all") {
+      return `${league.teams} teams over ${league.rounds} rounds is ${totalPicks()} picks, ` +
+             `and there are only ${poolSize()} ${league.playerPool === "rookies" ? "rookies" : "veterans"} ` +
+             `on the board. Widen the player pool, or run fewer teams or rounds.`;
+    }
     return `${league.teams} teams over ${league.rounds} rounds is ${totalPicks()} picks, ` +
-           `and the ${league.scoring === "half" ? "half PPR" : league.scoring} board only ` +
+           `and the ${scoringLabel(league.scoring)} board only ` +
            `carries ${poolSize()} players.`;
   }
   return "";
@@ -9630,9 +9810,26 @@ window.JukeEngine = {
   scoringNames: () => SCORING_NAMES,
   setLeague: function (patch) {
     Object.assign(league, patch);
-    // The format preset owns exactly one rule, at the moment it is chosen —
-    // same side effect readSetup() has always applied, kept in one place.
-    if (patch.scoring) league.rules.rec = REC_BY_FORMAT[patch.scoring];
+    /* A scoring preset owns exactly one rule and, since superflex joined the
+       list, one roster slot — applied at the moment it is chosen, which is
+       the same side effect readSetup() has always had for `rec`, kept in one
+       place.
+
+       The lineup patch has to move `rounds` with it, for the reason
+       DraftSettingsModal's own setLineup() already documents: setupProblem()
+       refuses a draft whose roster size and round count disagree, so a
+       preset that adds a starting slot without adding a round would leave
+       the Start button refusing and nothing on screen saying which control
+       caused it. Derived here rather than left to the caller, because the
+       caller is a settings screen that did not choose to change the roster. */
+    if (patch.scoring) {
+      league.rules.rec = REC_BY_FORMAT[patch.scoring] === undefined ? 0.5 : REC_BY_FORMAT[patch.scoring];
+      const preset = SCORING_PRESET[patch.scoring];
+      if (preset && preset.lineup) {
+        Object.assign(league, preset.lineup);
+        league.rounds = rosterSize();
+      }
+    }
     // readSetup() re-reads teams/scoring off these same two legacy <select>
     // elements every time refreshSetup() runs — goHome() among other places
     // — and until this line it always won: the legacy controls are hidden
@@ -9654,6 +9851,63 @@ window.JukeEngine = {
     render();
   },
   setupProblem: setupProblem,
+  /* ---- Everything the Draft Settings screen needs that was not on the
+     bridge yet. Every one is a read of, or a write to, the one real
+     `league`/`state` — never a second idea of what a league is, which is
+     the failure "nothing about the league shape may be written down twice"
+     exists to prevent and which the superflex grading bug is what looks
+     like when it happens. ---- */
+
+  // The three draft-order formats and the two that are real. `available`
+  // is what the settings screen disables on, so the screen never has to
+  // carry its own opinion about which of these the engine can actually
+  // run — see DRAFT_TYPES for why auction is listed rather than hidden.
+  draftTypes: () => DRAFT_TYPES,
+  playerPools: () => PLAYER_POOLS,
+  // What a preset does beyond its rec value, plus the caveat it carries.
+  scoringPreset: (key) => SCORING_PRESET[key] || null,
+  // How many players the current league/pool combination actually has to
+  // draft from — the same number setupProblem() validates against, so a
+  // screen can show the constraint rather than only the refusal.
+  poolSize: poolSize,
+  // Draft order, as the settings screen's own list: seat, who sits there,
+  // and which overall pick they hold first. cpuName() rather than
+  // teamLabel() for the reason the bridge already records beside it —
+  // teamLabel() answers "Your Team" against the *committed* state.mySlot,
+  // which is the wrong source while somebody is still choosing a seat.
+  draftOrder: function () {
+    const out = [];
+    for (let s = 0; s < league.teams; s++) {
+      out.push({
+        slot: s,
+        name: s === state.mySlot ? (teamLabel(s) || cpuName(s)) : cpuName(s),
+        you: s === state.mySlot,
+        firstPick: typeof DraftEngine === "undefined" ? null : DraftEngine.overallOf(1, s, league)
+      });
+    }
+    return out;
+  },
+  /* Randomising the order means moving ONE seat — mine — because every
+     other chair is a CPU with no identity to preserve. A shuffle of the
+     whole array would be a lie dressed as a feature: the nine other seats
+     are interchangeable by construction, so permuting them changes
+     nothing anybody can observe.
+
+     In a room it is a real reorder and belongs to the host, which is why
+     this refuses there and the Seats tab (swapSeats) is the way instead. */
+  randomizeOrder: function () {
+    if (hasRoom()) return false;
+    state.mySlot = Math.floor(Math.random() * league.teams);
+    render();
+    return true;
+  },
+  setMySlot: function (slot) {
+    const n = Number(slot);
+    if (!isFinite(n) || n < 0 || n >= league.teams) return false;
+    state.mySlot = n;
+    render();
+    return true;
+  },
   resumeDraft:  resumeDraft,
   clearSave:    clearSave,
   // Added for the Draft Locker (web/src/components/DraftLocker.jsx). Summary

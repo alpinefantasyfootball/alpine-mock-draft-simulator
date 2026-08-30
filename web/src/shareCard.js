@@ -16,6 +16,8 @@
    or an 18-round bench draws a taller image, a short 4-team league draws a
    shorter one, and nothing here hardcodes a row count. */
 
+import { POS_MATTE, posTint } from './components/draftRoomPositions.js'
+
 const W = 1200
 // The left text margin and where the component panel starts. The grade sizing
 // below solves against both, so neither may be written down twice.
@@ -54,22 +56,26 @@ const COMPONENTS = [
   { key: 'byePenaltyScaled', label: 'Byes' },
 ]
 
-// Six hues, one per position — the exact values draftRoomPositions.js's
-// POS_BADGE names as Tailwind classes (orange/emerald/blue/fuchsia/yellow/
-// indigo), translated to hex because a canvas fillStyle can't read a
-// class name. Not re-derived from anywhere at runtime: this file has no
-// access to the Tailwind theme, and these six are load-bearing enough
-// (the one position reference for the whole site, per that file's own
-// comment) that a hardcoded, commented copy is the honest option rather
-// than pretending there's a shared source at draw time.
-const POS_COLORS = {
-  QB: { bg: 'rgba(249,115,22,0.16)', fg: '#FDBA74' },
-  RB: { bg: 'rgba(16,185,129,0.16)', fg: '#6EE7B7' },
-  WR: { bg: 'rgba(59,130,246,0.16)', fg: '#93C5FD' },
-  TE: { bg: 'rgba(217,70,239,0.16)', fg: '#F0ABFC' },
-  K: { bg: 'rgba(234,179,8,0.16)', fg: '#FDE047' },
-  DST: { bg: 'rgba(99,102,241,0.16)', fg: '#A5B4FC' },
-}
+// Six hues, one per position — read straight off draftRoomPositions.js
+// rather than hand-copied as hex.
+//
+// This used to be a literal table, with a comment arguing that a canvas
+// fillStyle cannot read a Tailwind class name so a commented copy was
+// "the honest option rather than pretending there's a shared source."
+// The premise was wrong: this file is an ES module in the same bundle as
+// every component, so it can import the map like anything else — what it
+// cannot read is the *Tailwind theme*, which is a different thing. And
+// the copy did exactly what a second copy of a load-bearing fact does.
+// It went on naming the stock Tailwind orange/emerald/blue/fuchsia/
+// yellow/indigo scales after the site moved to its own matte palette, so
+// a share card drew six positions in colours the product no longer used
+// anywhere — silently, because nobody puts a share card next to a board.
+//
+// POS_MATTE is the fill; posTint() is the same value as a background at
+// the 15% POS_BADGE uses, so the card and a chip are one formula.
+const POS_COLORS = Object.fromEntries(
+  Object.keys(POS_MATTE).map((pos) => [pos, { bg: posTint(pos, 0.15), fg: POS_MATTE[pos] }]),
+)
 const POS_NEUTRAL = { bg: 'rgba(255,255,255,0.06)', fg: 'rgba(255,255,255,0.4)' }
 
 /* document.fonts.check() cannot answer the question this guard is asking, and

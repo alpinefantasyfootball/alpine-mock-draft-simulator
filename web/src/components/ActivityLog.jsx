@@ -6,7 +6,7 @@ export default function ActivityLog({ picks, engine, DE, league }) {
   }
 
   return picks.map((pick) => {
-    const code = DE ? DE.pickCode(pick.overall, league.teams) : pick.overall
+    const code = DE ? DE.pickCode(pick.overall, league) : pick.overall
     return (
       <p key={pick.overall} className="mb-1.5 px-1 text-xs leading-relaxed text-white/60">
         <span className="text-ink-muted">{code}</span>{' '}
