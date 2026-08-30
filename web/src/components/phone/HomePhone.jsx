@@ -388,8 +388,15 @@ export default function HomePhone() {
             {freshness}
           </p>
         )}
-        <p className="mt-1.5 text-center text-[11.5px] text-voidInk-muted">
-          A solo mock runs entirely in your browser.
+        {/* The free/no-account claim, which this page did not make at all
+            until a parity check went looking for it. The desktop page has
+            carried it since the rebrand ("Free Draft Room · No Account
+            Needed") and it is one of the two things a visitor most wants to
+            know — a launcher that omits it is not being concise, it is
+            leaving out a reason to press the button. The browser half is
+            Juke's own, and true: a solo mock sends nothing anywhere. */}
+        <p className="mt-1.5 text-center font-plex text-[11px] tracking-[0.08em] text-voidInk-muted">
+          FREE &middot; NO ACCOUNT &middot; RUNS IN YOUR BROWSER
         </p>
         <div className="mt-4 flex justify-center gap-4">
           <a href="/docs/draft-room-how-it-works.html" className="text-[12px] text-voidInk-body underline-offset-2 hover:underline">How it works</a>
