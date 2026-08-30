@@ -4661,6 +4661,32 @@ running app before it is believed**, which is the same instruction the
 `?cb=` note gives about deployment and the `LOCAL_WORKER` skip gives about
 news.
 
+### A standing red that is not the pass that found it
+
+`autopick-adp.spec.mjs`'s "the autopicked seat's draft value is not a
+systematic bottom-of-room outlier" fails, and it was failing before the
+mobile pass touched anything. **Measured rather than assumed**: the same five
+seeds run against the build at `356243f` and against the current one return
+byte-identical numbers — rank 10 of 10, raw value −57, in all five — so the
+failure is attributable to neither.
+
+**Seat 1 is the reason, and the grade already knows it.** The test reads
+`t.value`, the RAW draft-value component, and `startSoloDraft()` leaves the
+default `lobbySlot` of 0. This file's own section on par records exactly what
+that means: value is pick number minus board rank, "the first pick of a draft
+can only ever score zero or worse because no player has a board rank below
+1", and mean raw value by chair runs −23 at seat 1 against +14 at seat 5.
+`valueVsPar` is what the grade actually weighs and what removes that; the
+test does not read it. Measured across six seats on one board: seat 0 ranks
+2nd of 10 on `valueVsPar` and last on `value`.
+
+So the assertion is very likely testing the chair rather than the autopick.
+**It has not been changed, deliberately** — it is a claim about the grade
+rather than about anything this pass built, and quietly rewriting a grade
+test to go green is how a real signal gets lost. It is written down here
+instead, with the measurement, so the next person to look at it starts from
+evidence rather than from the failure text.
+
 ### Six stale specs, one predicted failure, and the fix that outlives both
 
 The mobile pass turned six specs red. Five were stale in the ordinary way —
