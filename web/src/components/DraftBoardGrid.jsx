@@ -213,7 +213,7 @@ function RaiseLowerButton({ onClick, disabled, title, children }) {
   )
 }
 
-export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLabelOf, onTeamClick, shortNameOf, onClaimSeat, seats, onSelectPlayer, trayPos, onTrayUp, onTrayDown }) {
+export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLabelOf, onTeamClick, shortNameOf, onClaimSeat, seats, onSelectPlayer, trayPos, onTrayUp, onTrayDown, hideLegend }) {
   const byCell = new Map()
   picks.forEach((p) => byCell.set(p.round + '-' + p.slot, p))
 
@@ -295,7 +295,14 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
           nothing in its place — every filled cell on the lg+ board carries
           the identical wash and the identical ADP-gap number this legend
           decodes, with zero explanation beside them. */}
-      <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-slate-rule px-3 py-2">
+      {/* hideLegend: the phone board-peek (DraftBoardPeekPhone.jsx) draws
+          its own strip above this grid instead — roster need per position,
+          not "what does each colour mean." Rendering both would be two
+          strips answering two different questions stacked on top of a view
+          that already has the least vertical room of any surface this
+          component appears in. Every other caller passes nothing, so this
+          defaults to showing exactly what it always has. */}
+      {!hideLegend && <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-slate-rule px-3 py-2">
         <span className="font-plex text-[10px] uppercase tracking-wide text-white/60">
           Fill = position
         </span>
@@ -316,7 +323,7 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
           <span className="h-2.5 w-2.5 shrink-0 rounded-sm border-2 border-[#FFD166]" aria-hidden="true" />
           you
         </span>
-      </div>
+      </div>}
 
       {/* The one scroll container, both axes — everything above this point
           is shrink-0 chrome that never scrolls with it, so there is exactly

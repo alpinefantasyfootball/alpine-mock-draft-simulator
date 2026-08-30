@@ -72,6 +72,39 @@ test("no field is under 16px, or iOS zooms in and stays there", async ({ browser
 
   const inDraft = await page.evaluate(() => readSmallFields());
   expect(inDraft, "and so does every field in the draft itself").toEqual([]);
+
+  /* The player-search field on the new phone Players tab is genuinely new
+     markup (PlayersTabPhone.jsx) and is hidden behind a search toggle button
+     until tapped, so the sweep above never actually rendered it — it would
+     pass identically whether this field cleared the floor or not. Opened
+     explicitly here so the redesign's own field is the one under test, not
+     just the settings modal it happens to share a document with.
+
+     The chat tab has an input too (ChatTabPhone.jsx), and it is not checked
+     here: that panel only renders one once you are actually in a room
+     ("Nobody to talk to here" otherwise, with no field at all), and standing
+     up a room only to read one font-size would duplicate what room.spec.mjs
+     and the two checks above already establish about this same blanket
+     rule — `@media (pointer: coarse) { input, select, textarea { ... !important } }`
+     in style.css applies to every field in the document by tag, Tailwind
+     class or not, which is what makes the search field's 14px source
+     (`text-sm`) beside it. */
+  await page.evaluate(() => {
+    const root = document.getElementById("draftroom-root");
+    const sheet = [...root.querySelectorAll("div")]
+      .find((d) => /fixed inset-x-0 bottom-0 z-30/.test(d.className));
+    const panel = sheet && sheet.lastElementChild;
+    const searchBtn = panel && [...panel.querySelectorAll("button")]
+      .find((b) => b.textContent.trim() === "" && b.querySelector("svg"));
+    if (!searchBtn) throw new Error("no icon-only search toggle on the Players panel");
+    searchBtn.click();
+  });
+  await page.waitForTimeout(300);
+  const searchFieldSize = await page.evaluate(() => {
+    const input = document.querySelector('#draftroom-root input[placeholder="Search players"]');
+    return input ? parseFloat(getComputedStyle(input).fontSize) : null;
+  });
+  expect(searchFieldSize, "the Players tab's search field clears the floor too").toBeGreaterThanOrEqual(16);
   await context.close();
 });
 
@@ -84,7 +117,13 @@ test("no field is under 16px, or iOS zooms in and stays there", async ({ browser
    The *intent* survives and is worth more than the mechanism, so it is kept
    rather than deleted: the one control this screen exists to get you to press
    must actually be pressable. Anything landing on top of it — a dock, a
-   sticky bar, a modal that forgot to close — fails this the same way. */
+   sticky bar, a modal that forgot to close — fails this the same way.
+
+   Unaffected by the phone board-peek redesign: this is the pre-`started`
+   Locker/lobby screen, and DraftRoom.jsx's `isPhone` branch is only taken
+   once a draft is `started` (see that file's own `if (!started)` early
+   return, well before it). A phone in the lobby sees exactly what this test
+   already checks. */
 test("nothing is sitting on top of the Start button", async ({ browser }) => {
   const context = await browser.newContext(PHONE);
   const page = await openApp(context, "#/draft-room");
@@ -117,6 +156,61 @@ test("nothing is sitting on top of the Start button", async ({ browser }) => {
   await context.close();
 });
 
+/* An element wider than its box is not a fault on its own — a truncated
+   team name is behaving exactly as intended. The question is whether it can
+   either scroll or ellipsise. Anything that can do neither is the leak. */
+function sweepOverflow() {
+  const out = [];
+
+  /* The tolerance is tied to the device pixel ratio, and that is not a
+     fudge factor - it is the measurement's own resolution.
+
+     clientWidth rounds and scrollWidth ceils, so a box whose real width is
+     fractional reports the two integers disagreeing by a pixel or two with
+     nothing wrong at all. On a device at dpr 3 - which is what an iPhone 13
+     is - every nested flex row in a 112px board cell lands on thirds, and
+     the whole board reported `over=2` on three elements per card.
+
+     That cost a wrong fix before it was measured: eleven "leaks" were
+     chased into the board card and none of them existed. The same page at
+     dpr 1 reports zero. So the check keeps its edge where it can see one
+     and stops inventing them where it cannot. */
+  const slack = devicePixelRatio > 1 ? 2 : 1;
+
+  document.querySelectorAll("#draftroom-root *").forEach((el) => {
+    const b = el.getBoundingClientRect();
+    if (!b.width || !b.height) return;
+    if (el.scrollWidth <= el.clientWidth + slack) return;
+    if (el.tagName === "INPUT") return;            // an input scrolls its own value
+    const c = getComputedStyle(el);
+    const scrolls = /auto|scroll/.test(c.overflowX);
+    const ellipsises = c.textOverflow === "ellipsis" && c.overflow !== "visible";
+    if (scrolls || ellipsises) return;
+
+    /* A decoration hung deliberately outside its box is not a leak.
+       The position badge on an avatar sits at -bottom-1 -right-1, so its
+       wrapper measures ~4px of overflow on every one of them — 190 of the
+       193 this sweep first reported. Nothing is unreachable there: the
+       question this test asks is whether *content* has been put somewhere
+       a thumb cannot get to, and an absolutely-positioned child placed
+       past the edge on purpose is the opposite of that.
+
+       Checked by asking what actually sticks out rather than by
+       allow-listing a class or waving a pixel threshold at it — a
+       threshold would hide a genuinely clipped short label. */
+    const overflowingKids = [...el.children].filter((k) => {
+      const kb = k.getBoundingClientRect(), eb = el.getBoundingClientRect();
+      return kb.right > eb.right + 1 || kb.left < eb.left - 1;
+    });
+    const allDecoration = overflowingKids.length > 0 &&
+      overflowingKids.every((k) => getComputedStyle(k).position === "absolute");
+    if (allDecoration) return;
+
+    out.push(el.tagName + "." + String(el.className).slice(0, 30) + " over=" + (el.scrollWidth - el.clientWidth));
+  });
+  return out;
+}
+
 test("nothing overflows sideways that cannot scroll or ellipsise", async ({ browser }) => {
   const context = await browser.newContext(PHONE);
   const page = await openApp(context, "#/draft-room");
@@ -126,63 +220,53 @@ test("nothing overflows sideways that cannot scroll or ellipsise", async ({ brow
     render();
   });
   await page.waitForTimeout(700);
+  await page.evaluate((fn) => { window.__sweep = new Function("return (" + fn + ")()"); }, sweepOverflow.toString());
 
-  /* An element wider than its box is not a fault on its own — a truncated
-     team name is behaving exactly as intended. The question is whether it can
-     either scroll or ellipsise. Anything that can do neither is the leak. */
-  const leaks = await page.evaluate(() => {
-    const out = [];
+  /* Swept once per tab of the new bottom sheet, not just on whatever the
+     draft opens on. Each tab is a distinct component (PlayersTabPhone,
+     QueueTabPhone, TeamTabPhone, ChatTabPhone) with its own markup, and the
+     original single-tab sweep is exactly what let the rank-number column's
+     overflow past its own box ship: three-digit ranks (100+) sat in a
+     16px-wide cell built for two, colliding with the Draft button beside it
+     on well over half the board. Confirmed by measurement before the fix —
+     `scrollWidth 20` against `clientWidth 16` — and by screenshot, then
+     fixed by widening the cell rather than by loosening this sweep. */
+  const byTab = {};
+  for (const label of ["Players", "Queue", "Team", "Chat"]) {
+    await page.evaluate((l) => {
+      const root = document.getElementById("draftroom-root");
+      const btn = [...root.querySelectorAll("button")]
+        .find((b) => b.textContent.trim() === l && b.getBoundingClientRect().height > 0);
+      if (!btn) throw new Error("no visible tab button reading " + l);
+      btn.click();
+    }, label);
+    await page.waitForTimeout(350);
+    byTab[label] = await page.evaluate(() => window.__sweep());
+  }
+  for (const [label, leaks] of Object.entries(byTab)) {
+    expect(leaks, `the ${label} tab`).toEqual([]);
+  }
 
-    /* The tolerance is tied to the device pixel ratio, and that is not a
-       fudge factor - it is the measurement's own resolution.
-
-       clientWidth rounds and scrollWidth ceils, so a box whose real width is
-       fractional reports the two integers disagreeing by a pixel or two with
-       nothing wrong at all. On a device at dpr 3 - which is what an iPhone 13
-       is - every nested flex row in a 112px board cell lands on thirds, and
-       the whole board reported `over=2` on three elements per card.
-
-       That cost a wrong fix before it was measured: eleven "leaks" were
-       chased into the board card and none of them existed. The same page at
-       dpr 1 reports zero. So the check keeps its edge where it can see one
-       and stops inventing them where it cannot. */
-    const slack = devicePixelRatio > 1 ? 2 : 1;
-
-    document.querySelectorAll("#draftroom-root *").forEach((el) => {
-      const b = el.getBoundingClientRect();
-      if (!b.width || !b.height) return;
-      if (el.scrollWidth <= el.clientWidth + slack) return;
-      if (el.tagName === "INPUT") return;            // an input scrolls its own value
-      const c = getComputedStyle(el);
-      const scrolls = /auto|scroll/.test(c.overflowX);
-      const ellipsises = c.textOverflow === "ellipsis" && c.overflow !== "visible";
-      if (scrolls || ellipsises) return;
-
-      /* A decoration hung deliberately outside its box is not a leak.
-         The position badge on an avatar sits at -bottom-1 -right-1, so its
-         wrapper measures ~4px of overflow on every one of them — 190 of the
-         193 this sweep first reported. Nothing is unreachable there: the
-         question this test asks is whether *content* has been put somewhere
-         a thumb cannot get to, and an absolutely-positioned child placed
-         past the edge on purpose is the opposite of that.
-
-         Checked by asking what actually sticks out rather than by
-         allow-listing a class or waving a pixel threshold at it — a
-         threshold would hide a genuinely clipped short label. */
-      const overflowingKids = [...el.children].filter((k) => {
-        const kb = k.getBoundingClientRect(), eb = el.getBoundingClientRect();
-        return kb.right > eb.right + 1 || kb.left < eb.left - 1;
-      });
-      const allDecoration = overflowingKids.length > 0 &&
-        overflowingKids.every((k) => getComputedStyle(k).position === "absolute");
-      if (allDecoration) return;
-
-      out.push(el.tagName + "." + String(el.className).slice(0, 30) + " over=" + (el.scrollWidth - el.clientWidth));
-    });
-    return out;
+  // And the player profile overlay, opened from the Players tab — its own
+  // full-screen surface (PlayerProfilePhone.jsx) with a four-way tab strip
+  // of its own, swept the same way.
+  await page.evaluate(() => {
+    const root = document.getElementById("draftroom-root");
+    const btn = [...root.querySelectorAll("button")]
+      .find((b) => b.textContent.trim() === "Players" && b.getBoundingClientRect().height > 0);
+    btn.click();
   });
+  await page.waitForTimeout(350);
+  await page.evaluate(() => {
+    const root = document.getElementById("draftroom-root");
+    const nameBtn = [...root.querySelectorAll("button")].find((b) => b.querySelector("p.truncate"));
+    if (!nameBtn) throw new Error("no player row to open a profile from");
+    nameBtn.click();
+  });
+  await page.waitForTimeout(350);
+  const profileLeaks = await page.evaluate(() => window.__sweep());
+  expect(profileLeaks, "the player profile overlay").toEqual([]);
 
-  expect(leaks).toEqual([]);
   expect(await page.evaluate(() => document.body.scrollWidth > window.innerWidth)).toBe(false);
   await context.close();
 });
@@ -251,152 +335,67 @@ test("the homepage hero starts under the header, not a screen below it", async (
   await context.close();
 });
 
-/* Artboard 1c: clock band, a one-line roster strip, then "Three ways to go"
-   and the three cards. The build put the desktop roster rail — nine lineup
-   rows, four need bars, the next-picks chips — above the cards instead, so
-   the recommendations started roughly a screen and a half down on a
-   thirty-second clock.
+/* Was "Decide leads with the recommendations, not the roster rail" — a
+   phone-specific recommendation screen (JukeValueAssistant / DraftDecideScreen)
+   that has been retired outright by the board-peek redesign rather than
+   replaced one-for-one. Below 640px `DraftRoom.jsx` now returns
+   `<DraftRoomPhone>` in place of the whole desktop/tablet render tree (see
+   its own `if (isPhone && view !== 'insights')`), and DraftRoomPhone has no
+   "Decide" concept anywhere in it: neither `DraftDecideScreen` nor
+   `JukeValueAssistant` is imported by anything under `web/src/components/
+   phone/`. Rewriting this test to look for "What Juke would do" would be
+   asserting a screen the phone build no longer has an opinion about, which
+   is the "premise gone" case CLAUDE.md's own testing section describes
+   rather than a stale selector.
 
-   Two assertions, because either alone passes the bug. "The rail is hidden"
-   passes a screen that hid it and put something equally tall in its place;
-   "the first card is on screen" passes a screen that kept the rail and simply
-   made it shorter. Together they are the artboard's actual claim: Decide is
-   the only tab you need to draft. */
-test("Decide leads with the recommendations, not the roster rail", async ({ browser }) => {
+   What survives is the underlying claim, restated for what actually replaced
+   it: the phone draft room has to put you in a position to draft the moment
+   it opens, not behind a screen of furniture you have to get past first —
+   which the four-tab board-peek sheet does differently, by opening straight
+   on the Players list with a live Draft button rather than on a recommend-
+   first intermediate screen at all. */
+test("the live draft opens ready to draft, not behind extra taps", async ({ browser }) => {
   const context = await browser.newContext(PHONE);
   const page = await openApp(context, "#/draft-room");
-  // Seat 0, so pick 1.01 is mine and Decide draws the three cards rather than
-  // its own not-your-turn branch. The other tests in this file take seat 3
-  // because they only need a board; this one needs the turn.
+  // Seat 0, so pick 1.01 is mine and the Draft button on the top row is
+  // enabled rather than greyed out for not being my turn.
   await page.evaluate(() => {
     window.JukeEngine.startDraft({ mySlot: 0, clockLength: 90 });
     render();
   });
   await page.waitForTimeout(700);
 
-  /* Decide has to be asked for. The draft room opens on Players — it has
-     since 22 August, before this test was last touched — so a version of
-     this that only started a draft was measuring the Players tab and
-     reporting "the still-to-fill block is missing", which is true of a
-     screen that was never on. Tapped through the bottom bar rather than a
-     bare button-by-text, for the reason the Players test below already
-     records: the legacy chrome carries its own "Decide"-less nav and an
-     unscoped click can land outside #draftroom-root entirely. */
-  await page.evaluate(() => {
-    const root = document.getElementById("draftroom-root");
-    const bar = [...root.querySelectorAll("nav")]
-      .find((n) => n.getBoundingClientRect().height > 0 &&
-        [...n.querySelectorAll("button")].some((b) => b.textContent.trim() === "Decide"));
-    if (!bar) throw new Error("no visible nav in #draftroom-root offering Decide");
-    [...bar.querySelectorAll("button")].find((b) => b.textContent.trim() === "Decide").click();
-  });
-  await page.waitForTimeout(500);
-
   const r = await page.evaluate(() => {
     const root = document.getElementById("draftroom-root");
-    const seen = (el) => { const b = el.getBoundingClientRect(); return b.width > 0 && b.height > 0 };
-    const leaf = (text) => [...root.querySelectorAll("*")]
-      .find((e) => e.children.length === 0 && e.textContent.trim() === text && seen(e));
-    // The live heading at both widths now — the phone-specific
-    // "Three ways to go" it briefly carried is gone.
-    const heading = leaf("What Juke would do");
-    /* Two measurements off the first card, not one.
-
-       Its top edge is the assertion that matters: the recommendation has to
-       be the thing you land on. Its Draft button is the second, and it is
-       deliberately a looser bound — following the revised handoff (a
-       two-line still-to-fill block, and the live subline restored under the
-       heading) costs about 45px, which puts the button just under the fold
-       on a 664px-tall device profile while the card itself is plainly
-       visible. That is a fair trade and not the bug this test exists for.
-
-       What it must still catch is the 644px desktop rail coming back, which
-       put the button past 780px and the card's own top past the fold with
-       it. So the button gets a ceiling of 1.2 viewports — a thumb-flick —
-       rather than no assertion at all. */
-    const rankLabel = [...root.querySelectorAll("*")]
-      .find((e) => e.children.length === 0 && /^(JUKE.S PICK|SCARCEST|SAFEST WAIT|ALSO AVAILABLE)$/i.test(e.textContent.trim()) && seen(e));
+    const seen = (el) => { const b = el.getBoundingClientRect(); return b.width > 0 && b.height > 0; };
+    const sheet = [...root.querySelectorAll("div")]
+      .find((d) => /fixed inset-x-0 bottom-0 z-30/.test(d.className));
+    const tabLabels = sheet
+      ? [...sheet.querySelectorAll("button")]
+        .filter((b) => seen(b) && ["Players", "Queue", "Team", "Chat", "Decide"].includes(b.textContent.trim()))
+        .map((b) => b.textContent.trim())
+      : [];
+    const activeTab = [...root.querySelectorAll("button")]
+      .find((b) => seen(b) && /text-teal-300/.test(b.className) && tabLabels.includes(b.textContent.trim()));
     const draftBtn = [...root.querySelectorAll("button")]
-      .find((b) => /^Draft .+/.test(b.textContent.trim()) && seen(b));
+      .find((b) => seen(b) && b.textContent.trim() === "Draft" && !b.disabled);
     return {
-      headingTop: heading ? heading.getBoundingClientRect().top : null,
-      cardTop: rankLabel ? rankLabel.getBoundingClientRect().top : null,
+      tabLabels,
+      activeTab: activeTab ? activeTab.textContent.trim() : null,
       draftBtnTop: draftBtn ? draftBtn.getBoundingClientRect().top : null,
-      railShown: !!leaf("Your team"),
       viewport: innerHeight,
     };
   });
 
-  expect(r.railShown, "the desktop roster rail is not on the phone").toBe(false);
-  expect(r.headingTop, "What Juke would do is drawn").not.toBeNull();
-  expect(r.headingTop, "and it is above the fold").toBeLessThan(r.viewport);
-  expect(r.cardTop, "and so is the first recommendation card").toBeLessThan(r.viewport);
-  /* 1.5, measured, and the number moved for a reason worth reading rather
-     than for the test's convenience.
-
-     The ceiling was 1.2 viewports. The button now sits at 892px on a 664px
-     profile — 1.34 — and the rail is not back: railShown is false above and
-     the card's own top is at 379, comfortably in view. What changed is the
-     card, which is 578px tall on its own, so its action cannot be above the
-     fold on this device whatever sits above it. Decide also grew a
-     Juke/Everyone/Team row and a tier strip between the heading and the
-     first card.
-
-     Two honest options were available: raise the bound, or call the card too
-     tall and change the screen. That is a design judgement about how far a
-     thumb should travel to the primary action, and it belongs to whoever owns
-     the screen rather than to a test being made green — so it is raised here
-     and written down, not decided here.
-
-     The rail regression this was really guarding is still caught, and caught
-     directly, by the two assertions above: the rail put the card's own top
-     past the fold, which cardTop tests without needing a proxy. */
-  expect(r.draftBtnTop, "with its Draft button within a flick and a half")
-    .toBeLessThan(r.viewport * 1.5);
-
-  /* Where the roster went, asserted rather than assumed missing.
-
-     The still-to-fill block used to sit under the cards, and this test used
-     to look for it there. Decide on a phone is three panes now — Juke,
-     Everyone, Team — and it moved to Team, so a version of this that kept
-     looking beside the recommendations reported "the compact still-to-fill
-     block replaced it: false" about a block that is present and one tap away.
-
-     That is the same reading as before with the pass/fail inverted, which is
-     the dangerous kind of stale test: the headline claim, that Decide leads
-     with the recommendations and not the roster, is now MORE true than when
-     this was written. So the two halves are asserted separately — the cards
-     lead, and the roster detail is still reachable — instead of requiring
-     both to be on one screen. */
-  const team = await page.evaluate(() => {
-    const root = document.getElementById("draftroom-root");
-    const seen = (el) => { const b = el.getBoundingClientRect(); return b.width > 0 && b.height > 0 };
-    const tab = [...root.querySelectorAll("button")]
-      .find((b) => b.textContent.trim() === "Team" && seen(b));
-    if (!tab) return { missing: true };
-    tab.click();
-    return { missing: false };
-  });
-  expect(team.missing, "Decide's Team pane is reachable on a phone").toBe(false);
-  await page.waitForTimeout(350);
-
-  const fill = await page.evaluate(() => {
-    const root = document.getElementById("draftroom-root");
-    const seen = (el) => { const b = el.getBoundingClientRect(); return b.width > 0 && b.height > 0 };
-    // Matched on text at whatever element carries it — it is a div now and
-    // was a span when this last passed, and the tag is not the point.
-    const label = [...root.querySelectorAll("*")]
-      .find((e) => e.children.length === 0 && e.textContent.trim() === "Still to fill" && seen(e));
-    return {
-      label: !!label,
-      // One row per position, each a `QB` cell with its count beside it.
-      rows: !label ? 0 : [...label.parentElement.querySelectorAll("*")]
-        .filter((e) => e.children.length === 0 && /^(QB|RB|WR|TE)$/.test(e.textContent.trim()) && seen(e))
-        .length,
-    };
-  });
-  expect(fill.label, "the still-to-fill block is on the Team pane").toBe(true);
-  expect(fill.rows, "with a row per starting position").toBeGreaterThanOrEqual(4);
+  // The bottom sheet's own four tabs, and nothing named Decide among them —
+  // the concept this test used to guard is gone from the phone build, not
+  // hiding under a new label.
+  expect(r.tabLabels.sort(), "the sheet offers exactly Players/Queue/Team/Chat")
+    .toEqual(["Chat", "Players", "Queue", "Team"]);
+  expect(r.activeTab, "and it opens on Players, not a middle step").toBe("Players");
+  expect(r.draftBtnTop, "with an enabled Draft button already on screen").not.toBeNull();
+  expect(r.draftBtnTop, "above the fold, with nothing to scroll past first")
+    .toBeLessThan(r.viewport);
   await context.close();
 });
 
@@ -429,7 +428,12 @@ test("Decide leads with the recommendations, not the roster rail", async ({ brow
 
    Both widths are checked, because "never both" is only true if it holds on
    each side of the breakpoint, and the surviving nav still has to select a
-   tab whose panel is really mounted. */
+   tab whose panel is really mounted.
+
+   Untouched by the board-peek redesign: 900px and 1280px both sit above the
+   phone gate (`usePhoneWidth()` is `!useMinWidth(640)`), so DraftRoom.jsx
+   never takes the `isPhone` branch at either width and this test still
+   exercises exactly the tablet/desktop nav it always did. */
 const BAR_READER = `window.visibleNavs = function () {
   var root = document.getElementById("draftroom-root");
   return [].slice.call(root.querySelectorAll("nav")).filter(function (n) {
@@ -537,7 +541,10 @@ for (const width of [900, 1280]) {
    is the one under test", which is true and reads like a layout regression.
 
    The screen itself is unchanged and still ships, so the guard is worth
-   keeping rather than deleting; a phone in a room is exactly who sees it. */
+   keeping rather than deleting; a phone in a room is exactly who sees it.
+   Unaffected by the board-peek redesign for the same reason the Start-button
+   test above is: this whole screen renders on `!started`, before
+   DraftRoom.jsx's `isPhone` branch is ever reached. */
 test("the entry screen stacks on a phone instead of painting over itself", async ({ browser }) => {
   const context = await browser.newContext(PHONE);
   const page = await openApp(context, "#/draft-room");
@@ -582,36 +589,28 @@ test("the entry screen stacks on a phone instead of painting over itself", async
 
 /* Every player is reachable on the Players tab, on a phone.
 
-   Three separate things had to be true and none of them were.
+   This used to be about `PlayerHub` — the desktop/tablet mobile-nav's own
+   Players pane — and it isn't that component any more on a phone below
+   640px: `DraftRoomPhone` mounts `PlayersTabPhone` instead, a fresh table
+   built for the bottom sheet rather than a resized copy of the tablet one.
+   The three things that had to be true are the same three things worth
+   asking about *any* scrollable list in a fixed-height container, so the
+   underlying check survives even though nothing about its old selectors
+   does: the scroller has to have `min-h-0` (or it pins to its content and
+   never scrolls at all), the panel around it has to fit its own container
+   rather than inflating past it, and enough of it has to be visible at once
+   to be a list rather than a sliver.
 
-   The list's own scroller is `flex-1 overflow-auto` and was missing
-   `min-h-0`, so min-height:auto pinned it to its content and the scroller
-   had nothing to scroll. Above it, PlayerQueueSidebar's root carried
-   `h-full` inside a flex row — the parent's height comes from flex layout
-   rather than an explicit value, so the percentage resolved against an
-   indefinite height and fell back to auto, making the box 6867px tall
-   inside a 518px parent. And the tall JukeValueAssistant took 225px of a
-   471px header, leaving the list 47 visible pixels of 518.
-
-   Reported as one player and half of another sitting above the footer with
-   no way to scroll to the rest, which is exactly what 47px of a 48px row
-   looks like.
-
-   Why the earlier sweep passed this tab is the part worth keeping. It asked
-   "does any element's content overflow its own box", which is the right
-   question for a clipped layout and the wrong one here: the box had grown
-   to fit its content, so it never overflowed anything — it was simply the
-   wrong size and hung off the bottom of the screen. A box that inflates to
-   its content is invisible to an overflow check by construction. So this
-   measures against the *container* and the *viewport* instead.
-
-   The tab is opened through #draftroom-root deliberately. The legacy draft
-   chrome in .sticky-top has its own "Players" button, earlier in the DOM
-   and laid out (it is painted over by the React overlay, not hidden), so an
-   unscoped click by button text hits that one, changes nothing, and leaves
-   a sweep auditing the Decide tab five times believing it cycled all five.
-   That is how this shipped. Asserting the view actually changed is the
-   cheap guard against it. */
+   The tab is opened through #draftroom-root deliberately, and by clicking
+   through the real Lobby ("Start mock draft") rather than the
+   `window.JukeEngine.startDraft()` bridge the other tests in this file use —
+   the same reasoning `startSoloDraft()` in helpers.mjs already gives for
+   driving a real journey rather than the shortcut: it is the path a person
+   actually takes, and it is the one that would have caught the "second Start
+   button that no longer exists" class of bug on its own. Players is already
+   the sheet's default tab, so the click on it below is a real tap on an
+   already-selected control — kept rather than skipped, in case the default
+   ever changes and stops being a no-op. */
 test("every player on the Players tab is reachable on a phone", async ({ browser }) => {
   const context = await browser.newContext(PHONE);
   const page = await openApp(context, "#/draft-room");
@@ -648,54 +647,299 @@ test("every player on the Players tab is reachable on a phone", async ({ browser
   await page.waitForTimeout(500);
 
   const r = await page.evaluate(() => {
+    /* The sheet, found by its own fixed/z-30 signature rather than by a
+       class that names the tab underneath it — BottomSheet.jsx's outer div
+       carries this on every tab, so it is the stable anchor. Its own last
+       child is whichever tab body is mounted (BottomSheet's own JSX: the
+       drag/handle row, then `<div className="min-h-0 flex-1">{children}</div>`),
+       which is PlayersTabPhone's root here since Players is selected. */
     const root = document.getElementById("draftroom-root");
-    const hub = [...root.querySelectorAll("div")]
-      .find((d) => String(d.className).includes("flex-col overflow-hidden bg-slate-bar/40"));
-    if (!hub) return { missing: true };
-    /* The hub's own scroller, found by being one rather than by its class
-       list. It was `overflow-auto pb-28` when this was written and is
-       `min-h-0 flex-1 overflow-auto no-scrollbar pb-4` now — the padding
-       changed because the bottom bar's clearance moved, which has nothing to
-       do with what this test measures, and matching on the string turned that
-       into "Cannot read properties of undefined". What the test actually
-       needs is "the box the rows scroll inside", and that is a computed
-       style, not a name. */
-    const list = [...hub.querySelectorAll("div")]
-      .find((d) => /auto|scroll/.test(getComputedStyle(d).overflowY));
-    const hb = hub.getBoundingClientRect(), lb = list.getBoundingClientRect();
+    const sheet = [...root.querySelectorAll("div")]
+      .find((d) => /fixed inset-x-0 bottom-0 z-30/.test(d.className));
+    const panel = sheet && sheet.lastElementChild;
+    if (!panel) return { missing: true };
+    /* The panel's own scroller, found by being one rather than by its class
+       list, and by actually holding the table — DraftBoardPeekPhone sits in
+       the same document with an identically-classed `min-h-0 flex-1` wrapper
+       around the board grid, so matching the class alone resolves to
+       whichever of the two comes first in the DOM and silently measures the
+       wrong list. */
+    const list = [...panel.querySelectorAll("div")]
+      .find((d) => /auto|scroll/.test(getComputedStyle(d).overflowY) && d.querySelector("table"));
+    if (!list) return { missing: true };
+    const pb = panel.getBoundingClientRect(), lb = list.getBoundingClientRect();
     list.scrollTop = 999999;
     const maxScroll = Math.round(list.scrollTop);
     list.scrollTop = 0;
     /* Rows counted by the player names in them, not by a "Draft" button per
-       row. The list's rows have no text button any more — 444 of the 446
-       buttons on this screen are icon-only now — so counting by label
-       returned 0 and read as "the tab never switched", which was false: the
-       board was right there with 222 names on it. A name from the live board
-       cannot be mistaken for a header or a control. */
+       row — the row itself carries one, but so does every other row on the
+       phone, and matching text is what a name-list actually is. A name from
+       the live board cannot be mistaken for a header or a control. */
     const names = new Set((typeof board === "object" ? board : []).map((p) => p.name));
     return {
-      rows: [...list.querySelectorAll("*")]
-        .filter((e) => e.children.length === 0 && names.has(e.textContent.trim())).length,
+      missing: false,
+      rows: [...list.querySelectorAll("p")].filter((e) => names.has(e.textContent.trim())).length,
       // the panel must fit its own container rather than inflating past it
-      hubOverflow: hub.scrollHeight - hub.clientHeight,
+      panelOverflow: panel.scrollHeight - panel.clientHeight,
       // how much of the list is actually on screen, inside the panel
-      visibleListPx: Math.round(Math.min(lb.bottom, hb.bottom, innerHeight) - lb.top),
+      visibleListPx: Math.round(Math.min(lb.bottom, pb.bottom, innerHeight) - lb.top),
       listCanScroll: list.scrollHeight > list.clientHeight + 1,
       maxScroll,
     };
   });
 
-  expect(r.missing, "the players panel is mounted").toBeFalsy();
-  expect(r.rows, "the tab really switched — Decide shows 3 cards, Players shows the board")
+  expect(r.missing, "the Players panel and its scroller are both mounted").toBeFalsy();
+  expect(r.rows, "the tab really switched — the board's names are on screen")
     .toBeGreaterThan(50);
-  // Not toBe(0): fractional row heights round to a pixel or two on a real
-  // device. The bug this guards was 6349px of it, so the tolerance costs
-  // nothing in discrimination and saves a permanently red test.
-  expect(r.hubOverflow, "the panel fits its container instead of inflating past it")
+  expect(r.panelOverflow, "the panel fits its container instead of inflating past it")
     .toBeLessThanOrEqual(4);
   expect(r.listCanScroll, "the list scrolls").toBe(true);
   expect(r.maxScroll, "and scrolling reaches the far end of it").toBeGreaterThan(1000);
-  // 47px shipped. Four rows is the bar for a list of 200+ being usable at all.
   expect(r.visibleListPx, "with enough of it on screen to be a list").toBeGreaterThan(150);
+  await context.close();
+});
+
+/* ---------------------------------------------------------------------------
+   New coverage for the board-peek redesign itself, below. Nothing above this
+   line existed to guard the bottom sheet, the four-tab nav or the player
+   profile overlay before this pass — they are the phone build's own new
+   surface, not a phone-shaped copy of something the tablet already had.
+   ------------------------------------------------------------------------- */
+
+/* BottomSheet.jsx's whole interaction: tap the handle to cycle through
+   SHEET_SNAPS (188 / 470 / 700), or drag it to any height in between. Both
+   paths are exercised here because they are genuinely different code paths
+   in the component (`handleDragEnd`'s two branches), not one behaviour
+   asserted twice.
+
+   The tap has to move the pointer a few pixels, and that is not a shortcut
+   around a true zero-movement click — it is the honest shape of a tap.
+   Measured directly: a mouse down/up with literally no movement between them
+   never fires framer-motion's drag callbacks at all (no onDragStart, no
+   onDragEnd), so nothing happens — not a cycle, not a resize, nothing. A
+   real finger on a real screen does not manage zero movement either; framer
+   itself only starts recognising the gesture once the pointer has moved
+   about 3px, which is what TAP_SLOP=4 in BottomSheet.jsx is already sized
+   to sit just above. 3px of movement is what makes this a tap rather than a
+   no-op in the harness, exactly as it would be in a hand. */
+test("the bottom sheet cycles through its three snap heights on a tap", async ({ browser }) => {
+  const context = await browser.newContext(PHONE);
+  const page = await openApp(context, "#/draft-room");
+  await page.evaluate(() => {
+    window.JukeEngine.startDraft({ mySlot: 3, clockLength: 90 });
+    render();
+  });
+  await page.waitForTimeout(700);
+
+  const readHeight = () => page.evaluate(() => {
+    const root = document.getElementById("draftroom-root");
+    const sheet = [...root.querySelectorAll("div")].find((d) => /fixed inset-x-0 bottom-0 z-30/.test(d.className));
+    return sheet ? Math.round(sheet.getBoundingClientRect().height) : null;
+  });
+  // The drag surface, found by what it actually does (cursor: grab) rather
+  // than by its class list — the one thing a `<div>` with no text and no
+  // role has to identify it by.
+  const getHandlePoint = () => page.evaluate(() => {
+    const root = document.getElementById("draftroom-root");
+    const sheet = [...root.querySelectorAll("div")].find((d) => /fixed inset-x-0 bottom-0 z-30/.test(d.className));
+    const drag = [...sheet.children].find((c) => getComputedStyle(c).cursor === "grab");
+    const b = drag.getBoundingClientRect();
+    return { x: Math.round(b.x + b.width / 2), y: Math.round(Math.max(4, b.top + 8)) };
+  });
+  async function tapHandle() {
+    const p = await getHandlePoint();
+    await page.mouse.move(p.x, p.y);
+    await page.mouse.down();
+    await page.mouse.move(p.x, p.y - 3, { steps: 3 });
+    await page.waitForTimeout(50);
+    await page.mouse.up();
+    await page.waitForTimeout(650); // the spring settles well inside this
+  }
+
+  /* 188 / 470 / 700 are SHEET_SNAPS as authored, but the tallest of the
+     three is capped on this device: at a 664px-tall viewport (this file's
+     own PHONE profile — see the "Decide"-replacement test's own note on
+     it) minus the 106px CockpitHeaderPhone, only 558px is actually free.
+     That cap is the fix for a real bug this test is what caught: with the
+     sheet honestly at 700px it rendered 36px taller than the viewport, and
+     the header — `z-40`, above the sheet's own `z-30` — physically covered
+     the drag handle and the whole tab row for as long as the sheet stayed
+     that tall. No error, nothing in the console: the handle was simply
+     under something else, un-tappable and un-draggable, with no way back
+     down to a shorter snap. Confirmed by tapping the one sliver of the drag
+     surface still on-screen at 700px and finding it did nothing either,
+     because the header sat on top of that sliver too. BottomSheet.jsx now
+     takes a `maxHeight` prop for exactly this, and DraftRoomPhone.jsx
+     supplies `window.innerHeight - HEADER_H`. */
+  const start = await readHeight();
+  expect(start, "the sheet opens at its middle snap").toBe(470);
+
+  await tapHandle();
+  const afterOne = await readHeight();
+  expect(afterOne, "one tap grows it to the capped tallest snap").toBe(558);
+
+  await tapHandle();
+  const afterTwo = await readHeight();
+  expect(afterTwo, "a second tap wraps to the shortest snap").toBe(188);
+
+  await tapHandle();
+  const afterThree = await readHeight();
+  expect(afterThree, "a third tap returns to the middle snap it started at").toBe(470);
+
+  // And the handle is reachable at every one of those heights — not just
+  // on-screen by pixel count, but not covered by the header either. A tap
+  // that lands within the viewport but under CockpitHeaderPhone (z-40) would
+  // pass a naive "is it visible" check and still do nothing, which is the
+  // exact shape the bug above took.
+  for (const expected of [558, 188, 470]) {
+    const p = await getHandlePoint();
+    const underCursor = await page.evaluate(({ x, y }) => {
+      const el = document.elementFromPoint(x, y);
+      const sheet = [...document.querySelectorAll("div")].find((d) => /fixed inset-x-0 bottom-0 z-30/.test(d.className));
+      return !!(el && sheet && sheet.contains(el));
+    }, p);
+    expect(underCursor, `the handle at height ${expected} is what a tap there actually lands on`).toBe(true);
+    await tapHandle();
+  }
+
+  // A real drag, not a tap: past TAP_SLOP, so this is `handleDrag`'s live-
+  // clamp path rather than the discrete cycle above. Dragged well past the
+  // capped ceiling to confirm the clamp holds under a real gesture too, not
+  // only in the three authored snap values.
+  const p = await getHandlePoint();
+  await page.mouse.move(p.x, p.y);
+  await page.mouse.down();
+  await page.mouse.move(p.x, p.y - 400, { steps: 15 });
+  await page.waitForTimeout(50);
+  await page.mouse.up();
+  await page.waitForTimeout(700);
+  const dragged = await readHeight();
+  expect(dragged, "a drag past the cap settles at the cap, not above it").toBeLessThanOrEqual(558);
+  expect(dragged, "and it did grow — this is the drag path, not a stuck tap").toBeGreaterThan(470);
+
+  await context.close();
+});
+
+/* Four tabs, one sheet body — and switching between them has to actually
+   replace what is on screen, not layer a new panel over the last one
+   (BottomSheet's `{children}` slot holds exactly one tab component at a
+   time, by construction, but "by construction" is exactly the kind of claim
+   this file's own testing culture says to measure rather than trust).
+
+   And a player profile opened from a row in the Players tab has to be a
+   real overlay over all of it — its own full-screen surface
+   (PlayerProfilePhone.jsx, `fixed inset-0 z-[70]`) with a tab strip of its
+   own, not a fifth pane inside the sheet — and closing it has to return
+   cleanly to the list underneath rather than leaving a phantom overlay
+   behind. Both are checked in one pass because opening the profile is only
+   reachable from the Players tab, so the two are already one journey. */
+test("the four tabs each show their own content, and a player profile opens and closes over them", async ({ browser }) => {
+  const context = await browser.newContext(PHONE);
+  const page = await openApp(context, "#/draft-room");
+  await page.evaluate(() => {
+    window.JukeEngine.startDraft({ mySlot: 3, clockLength: 90 });
+    render();
+  });
+  await page.waitForTimeout(700);
+
+  // Text pulled from the sheet's own content slot, scoped past the same
+  // class collision the test above documents (DraftBoardPeekPhone's board
+  // wrapper shares BottomSheet's own `min-h-0 flex-1` class verbatim).
+  const readTabBody = () => page.evaluate(() => {
+    const root = document.getElementById("draftroom-root");
+    const sheet = [...root.querySelectorAll("div")].find((d) => /fixed inset-x-0 bottom-0 z-30/.test(d.className));
+    return sheet && sheet.lastElementChild ? sheet.lastElementChild.innerText : "";
+  });
+  const tapTab = (label) => page.evaluate((l) => {
+    const root = document.getElementById("draftroom-root");
+    const btn = [...root.querySelectorAll("button")]
+      .find((b) => b.textContent.trim() === l && b.getBoundingClientRect().height > 0);
+    if (!btn) throw new Error("no visible tab reading " + l);
+    btn.click();
+  }, label);
+
+  await tapTab("Team");
+  await page.waitForTimeout(350);
+  const team = await readTabBody();
+  expect(team, "Team shows the seated lineup, not another tab's content").toContain("Your Team");
+
+  await tapTab("Queue");
+  await page.waitForTimeout(350);
+  const queue = await readTabBody();
+  expect(queue, "Queue shows the empty-queue state").toContain("Draft queue is empty");
+  expect(queue, "not what Team was just showing").not.toContain("Your Team");
+
+  await tapTab("Chat");
+  await page.waitForTimeout(350);
+  const chat = await readTabBody();
+  // A solo draft has no room, so ChatTabPhone's own EmptyNoRoom branch is
+  // what should be on screen — genuinely different content again, and the
+  // honest "there is nobody here" rather than a chat box with no room behind
+  // it (see CLAUDE.md's own rule on a control that cannot act having to say
+  // so, applied here to a whole panel rather than one field).
+  expect(chat, "Chat shows the no-room state in a solo draft").toContain("Nobody to talk to here");
+
+  await tapTab("Players");
+  await page.waitForTimeout(350);
+  const players = await readTabBody();
+  expect(players, "and Players is back to the board, not stuck on Chat").toContain("AVAILABLE");
+
+  // Open a profile from the first player row.
+  const opened = await page.evaluate(() => {
+    const root = document.getElementById("draftroom-root");
+    const nameBtn = [...root.querySelectorAll("button")].find((b) => b.querySelector("p.truncate"));
+    const name = nameBtn ? nameBtn.querySelector("p").textContent.trim() : null;
+    if (nameBtn) nameBtn.click();
+    return name;
+  });
+  expect(opened, "a player row was actually found to open").toBeTruthy();
+  await page.waitForTimeout(400);
+
+  const profile = await page.evaluate((expectedName) => {
+    const root = document.getElementById("draftroom-root");
+    const seen = (el) => { const b = el.getBoundingClientRect(); return b.width > 0 && b.height > 0; };
+    const overlay = [...root.querySelectorAll("div")]
+      .find((d) => /fixed inset-0/.test(d.className) && /z-\[70\]/.test(d.className));
+    const closeBtn = [...root.querySelectorAll("button")]
+      .find((b) => (b.getAttribute("aria-label") || "") === "Close player profile" && seen(b));
+    const tabs = overlay
+      ? [...overlay.querySelectorAll("button")]
+        .filter((b) => ["SUMMARY", "GAME LOG", "TEAM", "HISTORY"].includes(b.textContent.trim()))
+        .map((b) => b.textContent.trim())
+      : [];
+    // The surname is what the profile's own headline renders in caps
+    // (PlayerProfilePhone.jsx splits the full name and uppercases the last
+    // word) — checked against the row's own full name rather than hard-
+    // coding a player, since the board is real, live data.
+    const surname = expectedName.split(" ").slice(-1)[0].toUpperCase();
+    return {
+      overlayFound: !!overlay,
+      overlayHasName: overlay ? overlay.innerText.toUpperCase().includes(surname) : false,
+      tabs,
+      closeBtnFound: !!closeBtn,
+    };
+  }, opened);
+
+  expect(profile.overlayFound, "the profile overlay is on screen").toBe(true);
+  expect(profile.overlayHasName, "showing the player that was tapped").toBe(true);
+  expect(profile.tabs, "with its own Summary/Game Log/Team/History strip")
+    .toEqual(["SUMMARY", "GAME LOG", "TEAM", "HISTORY"]);
+  expect(profile.closeBtnFound, "and a way to close it").toBe(true);
+
+  await page.evaluate(() => {
+    const root = document.getElementById("draftroom-root");
+    const closeBtn = [...root.querySelectorAll("button")]
+      .find((b) => (b.getAttribute("aria-label") || "") === "Close player profile");
+    closeBtn.click();
+  });
+  await page.waitForTimeout(400);
+  const afterClose = await page.evaluate(() => {
+    const root = document.getElementById("draftroom-root");
+    const overlay = [...root.querySelectorAll("div")]
+      .find((d) => /fixed inset-0/.test(d.className) && /z-\[70\]/.test(d.className));
+    return !!overlay;
+  });
+  expect(afterClose, "closing it leaves no phantom overlay behind").toBe(false);
+
   await context.close();
 });

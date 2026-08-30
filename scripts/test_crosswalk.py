@@ -439,6 +439,86 @@ check("xf/xd do not collide with another usage short key",
       sorted({"xf", "xd"} & set(s for s, _, _ in bp.USAGE_FIELDS)), [])
 
 
+# ---- 20. team ranks -------------------------------------------------------
+#
+# A different kind of block from everything above: no player, no crosswalk,
+# just clean_team() and nflverse's own stats_team release. The pool is the
+# real 32 team codes (TEAM_CITIES's keys, the same universe join_rows() uses
+# for a defense's own city name) so the permutation check below means what it
+# says rather than passing on a fixture too small to reveal a gap.
+TEAMS_32 = sorted(bp.TEAM_CITIES.keys())
+check("the real team pool is 32 teams", len(TEAMS_32), 32)
+
+
+def team_row(i, code):
+    # Deliberately decorrelated across categories -- passing yards rises
+    # with i, attempts and rushing yards fall with it -- so "most passing
+    # yards" and "most attempts" land on different teams rather than the
+    # same one coincidentally leading everywhere. passing_tds and
+    # rushing_tds both cycle, which manufactures real ties on purpose: the
+    # tie-break is only proven by a fixture that actually has one.
+    return {
+        "season": "2025", "team": code, "season_type": "REG", "games": "17",
+        "completions": str(300 + i),
+        "attempts": str(400 + (31 - i)),
+        "passing_yards": str(3000 + i * 13),
+        "passing_tds": str(15 + (i % 7)),
+        "passing_interceptions": "10",
+        "rushing_yards": str(2500 - i * 9),
+        "rushing_tds": str(8 + ((31 - i) % 5)),
+        "receiving_yards": str(3000 + i * 13),
+        "receiving_tds": str(15 + (i % 7)),
+        "def_sacks": "40", "def_interceptions": "12",
+    }
+
+
+rows = [team_row(i, code) for i, code in enumerate(TEAMS_32)]
+
+# nflverse calls the Rams "LA", not "LAR" -- swap this one row's own code so
+# build_team_ranks() has to run it through clean_team() same as every other
+# nflverse join in this file, rather than passing by coincidence because the
+# fixture happened to already spell it our way. Reuses TEAM_ALIASES, the
+# same table the player-level nflverse join is tested against above -- not a
+# second alias table for the same fact.
+lar_index = TEAMS_32.index("LAR")
+rows[lar_index] = dict(rows[lar_index], team="LA")
+
+ranks = bp.build_team_ranks(rows)
+
+check("every one of the 32 teams is ranked", len(ranks), 32)
+check("an nflverse LA row joins our LAR team code", "LAR" in ranks, True)
+check("and does not also leave a phantom LA entry behind", "LA" in ranks, False)
+
+# (a) a complete 1-32 permutation, no duplicate and no gap, on every
+# category -- including the two with real ties in this fixture.
+for category in ("off", "passYd", "passAtt", "passTd", "td"):
+    check(f"{category} ranks are a complete 1-32 permutation with no ties left over",
+          sorted(r[category]["rank"] for r in ranks.values()), list(range(1, 33)))
+
+# (b) the team with the most passing yards is ranked 1st in PASS YD, with
+# the raw value alongside it -- not just "some team is rank 1", the actual
+# leader.
+leader = max(TEAMS_32, key=lambda t: 3000 + TEAMS_32.index(t) * 13)
+check("the team with the most passing yards is PASS YD rank 1",
+      ranks[leader]["passYd"], {"rank": 1, "val": 3000 + TEAMS_32.index(leader) * 13})
+
+# (c) PASS ATT is ranked the same descending way as the rest (most = 1st),
+# not inverted as though fewer attempts were better.
+att_leader = max(TEAMS_32, key=lambda t: 400 + (31 - TEAMS_32.index(t)))
+check("the team with the most attempts is PASS ATT rank 1",
+      ranks[att_leader]["passAtt"]["rank"], 1)
+
+# The 404/outage path: nflverse not having published the file yet arrives
+# here as no rows, same as everywhere else in this pipeline, and must not
+# raise or invent a partial ranking.
+check("no rows ranks no teams and does not raise", bp.build_team_ranks([]), {})
+
+# A row with no team code at all -- clean_team()'s own "FA" fallback -- is
+# dropped rather than stored as a 33rd, fictitious "team".
+check("a blank team code (clean_team()'s FA fallback) is dropped, not stored",
+      bp.build_team_ranks([dict(team_row(0, "ARI"), team="")]), {})
+
+
 print()
 if FAILURES:
     print(f"{len(FAILURES)} FAILED: " + ", ".join(FAILURES))
