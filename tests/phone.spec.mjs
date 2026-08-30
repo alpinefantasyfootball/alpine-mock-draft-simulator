@@ -591,7 +591,7 @@ test("the entry screen stacks on a phone instead of painting over itself", async
 
    This used to be about `PlayerHub` — the desktop/tablet mobile-nav's own
    Players pane — and it isn't that component any more on a phone below
-   640px: `DraftRoomPhone` mounts `PlayersTabPhone` instead, a fresh table
+   640px: `DraftRoomPhone` mounts `PlayersTabPhone` instead, a fresh list
    built for the bottom sheet rather than a resized copy of the tablet one.
    The three things that had to be true are the same three things worth
    asking about *any* scrollable list in a fixed-height container, so the
@@ -600,6 +600,13 @@ test("the entry screen stacks on a phone instead of painting over itself", async
    never scrolls at all), the panel around it has to fit its own container
    rather than inflating past it, and enough of it has to be visible at once
    to be a list rather than a sliver.
+
+   `d.querySelector("table")` used to be what told this list apart from
+   DraftBoardPeekPhone's own identically-classed `min-h-0 flex-1` wrapper —
+   there is no `<table>` any more (see the row-layout rewrite below this
+   test), so the marker is a descendant carrying `overflow-x-auto` instead:
+   every player row owns one of those for its own independent horizontal
+   scroll, and the board peek has nothing that scrolls sideways at all.
 
    The tab is opened through #draftroom-root deliberately, and by clicking
    through the real Lobby ("Start mock draft") rather than the
@@ -659,13 +666,14 @@ test("every player on the Players tab is reachable on a phone", async ({ browser
     const panel = sheet && sheet.lastElementChild;
     if (!panel) return { missing: true };
     /* The panel's own scroller, found by being one rather than by its class
-       list, and by actually holding the table — DraftBoardPeekPhone sits in
-       the same document with an identically-classed `min-h-0 flex-1` wrapper
-       around the board grid, so matching the class alone resolves to
-       whichever of the two comes first in the DOM and silently measures the
-       wrong list. */
+       list, and by actually holding a row's own horizontal scroller —
+       DraftBoardPeekPhone sits in the same document with an identically-
+       classed `min-h-0 flex-1` wrapper around the board grid, so matching
+       the class alone resolves to whichever of the two comes first in the
+       DOM and silently measures the wrong list. */
     const list = [...panel.querySelectorAll("div")]
-      .find((d) => /auto|scroll/.test(getComputedStyle(d).overflowY) && d.querySelector("table"));
+      .find((d) => /auto|scroll/.test(getComputedStyle(d).overflowY)
+        && d.querySelector("[class*='overflow-x-auto']"));
     if (!list) return { missing: true };
     const pb = panel.getBoundingClientRect(), lb = list.getBoundingClientRect();
     list.scrollTop = 999999;
@@ -946,25 +954,33 @@ test("the four tabs each show their own content, and a player profile opens and 
 
 /* Reported from a real phone: scrolling the Players table sideways left the
    player name behind, scrolling off with the stat columns instead of
-   staying pinned. The table had `border-collapse` — Chrome accepts
-   `position: sticky` on a `<td>` under collapsed borders (the computed style
-   genuinely says "sticky") and scrolls the cell away anyway, because the
-   table itself owns border rendering rather than the cell. Switching to
-   `border-separate` fixed the collapse half and was not enough on its own:
-   `style.css` has a bare `table { ... overflow: hidden; ... }` rule for the
-   legacy desktop pages, and it reaches this React table too — the same
-   "grep the tag before trusting a Tailwind background" trap CLAUDE.md
-   documents for a bare `table { background }` selector, hit here by
-   `overflow` instead. `overflow: hidden` on the table makes the table its
-   own scroll container, so the sticky cell sticks to *it* — which also
-   scrolls — rather than to the real scroller two levels up. Both had to be
-   beaten with explicit Tailwind utilities on the `<table>` element itself
-   before the column actually stayed still. */
-test("the player name column stays put when the Players table scrolls sideways", async ({ browser }) => {
+   staying pinned. First fixed by making the name column `position: sticky`
+   within a shared table — a real fix (confirmed against real Sleeper
+   screenshots the reporter sent, and against a synthetic before/after) —
+   and then superseded by a request to match a reference app's own row shape
+   exactly rather than approximate it with a pinned column. See this file's
+   own "Fully match Sleeper's structure" note above `PlayersTabPhone.jsx`'s
+   row rewrite: name and position/team/bye now live on their own line,
+   never part of any horizontal scroll at all, with the Draft button, rank,
+   queue toggle and every stat pair scrolling together beneath it — so the
+   Draft button is reachable at scroll position 0 and nowhere else, which is
+   a deliberate trade for matching the reference layout rather than an
+   oversight.
+
+   This asserts three things a per-row independent scroll strip needs to be
+   true, not just "the name doesn't move" — which is close to true by
+   construction once the name is a separate DOM sibling of the strip, and
+   this file's own testing culture says a construction argument is exactly
+   the kind of claim worth measuring rather than trusting: */
+test("each row's name stays fixed while its own strip scrolls, independently of every other row", async ({ browser }) => {
   const context = await browser.newContext(PHONE);
   const page = await openApp(context, "#/draft-room");
+  // Seat 0, so pick 1 is mine and nobody's autopick can have claimed the
+  // first couple of board slots out from under this test in the interval
+  // before it reads the DOM — a real risk at another seat, since a CPU's
+  // own turn can fire well inside the wait below.
   await page.evaluate(() => {
-    window.JukeEngine.startDraft({ mySlot: 3, clockLength: 90 });
+    window.JukeEngine.startDraft({ mySlot: 0, clockLength: 90 });
     render();
   });
   await page.waitForTimeout(700);
@@ -974,19 +990,57 @@ test("the player name column stays put when the Players table scrolls sideways",
     const sheet = [...root.querySelectorAll("div")].find((d) => /fixed inset-x-0 bottom-0 z-30/.test(d.className));
     const panel = sheet.lastElementChild;
     const list = [...panel.querySelectorAll("div")]
-      .find((d) => /auto|scroll/.test(getComputedStyle(d).overflowY) && d.querySelector("table"));
-    const nameCell = list.querySelector("tbody td");
-    const before = nameCell.getBoundingClientRect().left;
-    const maxScrollLeft = list.scrollWidth - list.clientWidth;
+      .find((d) => /auto|scroll/.test(getComputedStyle(d).overflowY)
+        && d.querySelector("[class*='overflow-x-auto']"));
+    const rowDivs = [...list.children].filter((d) => d.querySelector("[class*='overflow-x-auto']"));
+    if (rowDivs.length < 2) return { skip: true };
+
+    const readRow = (row) => {
+      const nameEl = row.querySelector("p");
+      const scroller = row.querySelector("[class*='overflow-x-auto']");
+      const draftBtn = [...row.querySelectorAll("button")].find((b) => b.textContent.trim() === "Draft");
+      return { nameEl, scroller, draftBtn };
+    };
+
+    // The first two rows that are actually still undrafted, not just the
+    // first two in board order — an already-drafted row has no Draft
+    // button at all (a "drafted by" label instead), which this test needs.
+    const undrafted = rowDivs.map(readRow).filter((r) => r.draftBtn);
+    if (undrafted.length < 2) return { skip: true };
+    const [rowA, rowB] = undrafted;
+    const nameLeftBefore = rowA.nameEl.getBoundingClientRect().left;
+    const draftVisibleBefore = rowA.draftBtn.getBoundingClientRect().width > 0
+      && rowA.draftBtn.getBoundingClientRect().left < innerWidth;
+    const rowBScrollBefore = rowB.scroller.scrollLeft;
+
+    const maxScrollLeft = rowA.scroller.scrollWidth - rowA.scroller.clientWidth;
     if (maxScrollLeft <= 0) return { skip: true };
-    list.scrollLeft = maxScrollLeft;
-    const after = nameCell.getBoundingClientRect().left;
-    return { skip: false, before, after, scrolled: list.scrollLeft > 0 };
+    rowA.scroller.scrollLeft = maxScrollLeft;
+
+    const nameLeftAfter = rowA.nameEl.getBoundingClientRect().left;
+    const draftRectAfter = rowA.draftBtn.getBoundingClientRect();
+    // Scrolled off to the left of the panel entirely, not just re-laid-out.
+    const draftGoneAfter = draftRectAfter.right <= 0;
+    const rowBScrollAfter = rowB.scroller.scrollLeft;
+
+    rowA.scroller.scrollLeft = 0;
+    const draftRectRestored = rowA.draftBtn.getBoundingClientRect();
+    const draftBackAtStart = draftRectRestored.left >= 0 && draftRectRestored.width > 0;
+
+    return {
+      skip: false,
+      nameLeftBefore, nameLeftAfter,
+      draftVisibleBefore, draftGoneAfter, draftBackAtStart,
+      rowBUnaffected: rowBScrollBefore === 0 && rowBScrollAfter === 0,
+    };
   });
 
-  expect(r.skip, "the table is wide enough to actually scroll sideways").toBe(false);
-  expect(r.scrolled, "the scroll actually moved").toBe(true);
-  expect(r.after, "the name cell's left edge does not move with the scroll")
-    .toBe(r.before);
+  expect(r.skip, "at least two rows exist and the first is wide enough to scroll").toBe(false);
+  expect(r.draftVisibleBefore, "the Draft button starts out reachable, at scroll position 0").toBe(true);
+  expect(r.nameLeftAfter, "the name never moves, at any scroll position of its own row's strip")
+    .toBe(r.nameLeftBefore);
+  expect(r.draftGoneAfter, "scrolling the strip does carry the Draft button off screen — the traded-away half of matching the reference layout").toBe(true);
+  expect(r.draftBackAtStart, "and scrolling back to the start of that row recovers it").toBe(true);
+  expect(r.rowBUnaffected, "a second row's own scroll position is untouched by the first row's scroll").toBe(true);
   await context.close();
 });

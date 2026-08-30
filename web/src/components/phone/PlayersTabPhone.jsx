@@ -1,18 +1,25 @@
 import { useMemo, useState } from 'react'
-import { Search, X } from 'lucide-react'
+import { FilePlus2, Search, X } from 'lucide-react'
 import { POS_BADGE } from '../draftRoomPositions.js'
 import { PHONE_POSITION_COLUMNS, phoneColumnValue, phoneColumnRaw } from './playerColumnsPhone.js'
 
-// README section 4. One deliberate simplification from the literal spec,
-// worth knowing before "matching pixel-for-pixel" is taken at face value:
-// the spec's pinned-left block (Draft button, rank, name, queue button)
-// disappears entirely once the table is scrolled right, replaced by a
-// floating name line with no Draft button reachable at all without
-// scrolling back to 0. `sticky left-0` keeps that block on screen at every
-// scroll position instead — the Draft button is the one control this whole
-// tab exists for, and losing it mid-scroll reads as a regression rather
-// than a decluttering. Everything else (chips, column sets, sorting,
-// the SORT BY pill) matches the spec as written.
+// README section 4, matched to the spec as written rather than the earlier
+// "keep it pinned" simplification this file used to carry: the name and
+// position/team/bye sit on their own line above each row, never part of any
+// horizontal scroll, and the Draft button, rank, queue toggle and every stat
+// pair scroll together as one strip beneath it — so the Draft button *is*
+// reachable at any scroll position other than 0, exactly like the reference
+// app this was matched against. Getting back to it means scrolling that
+// row's strip back to its start; that trade was made deliberately, in
+// exchange for matching the reference layout exactly, and is not an
+// oversight to "fix" by pinning the button again.
+//
+// Each row's strip scrolls independently — there is no shared column grid
+// to keep aligned across rows any more, since every stat now carries its
+// own label repeated inline rather than reading one off a header row far
+// above it. That is also why sorting moved: tapping a stat's own label/value
+// pair sets the sort key, in whichever row you happen to tap it in, rather
+// than tapping a column header that no longer exists.
 const CHIPS = [
   { key: 'ALL', label: 'ALL' },
   { key: 'QB', label: 'QB' },
@@ -179,105 +186,71 @@ export default function PlayersTabPhone({
       </div>
 
       <div className="min-h-0 flex-1 overflow-auto overscroll-contain">
-        {/* border-separate, not border-collapse: with collapsed borders Chrome
-            accepts `position: sticky` on a `<td>`/`<th>` — the computed style
-            says sticky — and scrolls the cell away on horizontal scroll anyway,
-            because the table itself owns border rendering rather than the
-            cell (CLAUDE.md's own note on this, from the desktop player grid,
-            reproduced here). Separate mode fixes the sticky name column, but a
-            `<tr>`'s own border does not render under it — only a cell's own
-            border does — so every row divider below moved from the `<tr>`
-            onto each `<td>`/`<th>` in it. */}
-        {/* overflow-visible/border-0/rounded-none/bg-transparent all exist
-            purely to beat style.css's bare `table { ... }` rule (overflow:
-            hidden, a border, a radius, `background: var(--card)`) — it
-            reaches every `<table>` in the document, this one included, the
-            same "grep the tag before trusting a Tailwind background" trap
-            CLAUDE.md already documents for the desktop React tables.
-            `overflow: hidden` on the table itself is the one that actually
-            broke the sticky name column: it makes the table its own
-            scroll container, so the cell sticks to *it* rather than to the
-            real scroller (`.overflow-auto` two levels up). Every cell
-            already paints its own surface (`bg-slate-bar`/`bg-slate-sunk`),
-            so a transparent table has nothing left to show through the
-            zero-width `border-spacing-0` gaps. */}
-        <table className="w-full border-separate border-spacing-0 overflow-visible rounded-none border-0 bg-transparent">
-          <thead className="sticky top-0 z-20 bg-slate-sunk">
-            <tr>
-              <th className="sticky left-0 z-20 border-b border-r border-white/[0.08] bg-slate-sunk px-3 py-1.5 text-left font-plex text-[9px] font-normal uppercase tracking-[0.1em] text-ink-muted">
-                {posFilter === 'ALL' ? 'All' : posFilter} &middot; {rows.length} available
-              </th>
-              {columns.map(([key, label]) => (
-                <th key={key} className="border-b border-white/[0.08] px-2 py-1.5 text-right">
-                  <button
-                    type="button"
-                    onClick={() => handleSort(key)}
-                    className={'whitespace-nowrap font-plex text-[9px] font-normal uppercase ' + (sortKey === key ? 'text-teal-300' : 'text-ink-muted')}
-                  >
-                    {label}{sortKey === key ? (sortDir === 'desc' ? ' ↓' : ' ↑') : ''}
-                  </button>
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((p, i) => {
-              const queued = queuedNames.has(p.name)
-              const draftedBy = p.drafted ? draftedByFor(p) : null
-              return (
-                <tr key={p.name}>
-                  <td className="sticky left-0 z-10 border-b border-r border-white/[0.08] border-b-white/[0.05] bg-slate-bar px-3 py-[7px]">
-                    <div className="flex items-center gap-[7px]">
-                      {p.drafted ? (
-                        <span className="w-[54px] shrink-0 truncate text-center font-plex text-[9px] text-ink-muted">{draftedBy || 'Drafted'}</span>
-                      ) : (
-                        <button
-                          type="button"
-                          disabled={!myTurn}
-                          onClick={() => onDraft(p)}
-                          className={
-                            'h-8 w-[54px] shrink-0 rounded-full text-[11px] font-bold text-white ' +
-                            (myTurn ? 'bg-gradient-to-r from-[#00E5FF] to-[#7B1FA2]' : 'cursor-not-allowed bg-white/10 text-white/30')
-                          }
-                        >
-                          Draft
-                        </button>
-                      )}
-                      <span className="w-6 shrink-0 text-right font-plex text-[11px] text-ink-muted">{i + 1}</span>
-                      <button type="button" onClick={() => onSelectPlayer(p)} className="min-w-0 flex-1 text-left">
-                        <p className="truncate text-[13px] font-semibold text-ink">{p.name}</p>
-                        <p className={'truncate font-plex text-[10px] ' + (POS_BADGE[p.pos] ? POS_BADGE[p.pos].split(' ')[1] : 'text-ink-muted')}>
-                          {p.pos} - {p.team} ({p.bye ?? '—'})
-                        </p>
-                      </button>
-                      {!p.drafted && (
-                        <button
-                          type="button"
-                          onClick={() => onToggleQueue(p.name)}
-                          title={queued ? 'Remove from your queue' : 'Add to your queue'}
-                          className={'flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full ' + (queued ? 'bg-slate-rule text-ink-muted' : 'bg-[#0FBFA0] text-[#06251F]')}
-                        >
-                          {queued ? <X className="h-3.5 w-3.5" /> : <span className="text-[13px] leading-none">+</span>}
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                  {columns.map(([key]) => (
-                    <td
-                      key={key}
+        <div className="sticky top-0 z-20 border-b border-white/[0.08] bg-slate-sunk px-3 py-1.5 font-plex text-[9px] font-normal uppercase tracking-[0.1em] text-ink-muted">
+          {posFilter === 'ALL' ? 'All' : posFilter} &middot; {rows.length} available
+        </div>
+        {rows.map((p, i) => {
+          const queued = queuedNames.has(p.name)
+          const draftedBy = p.drafted ? draftedByFor(p) : null
+          return (
+            <div key={p.name} className="border-b border-white/[0.05]">
+              <button type="button" onClick={() => onSelectPlayer(p)} className="block w-full px-3 pt-[7px] text-left">
+                <p className="truncate text-[13px] font-semibold text-ink">{p.name}</p>
+                <p className={'truncate font-plex text-[10px] ' + (POS_BADGE[p.pos] ? POS_BADGE[p.pos].split(' ')[1] : 'text-ink-muted')}>
+                  {p.pos} - {p.team} ({p.bye ?? '—'})
+                </p>
+              </button>
+              {/* This row's own scroller — every row scrolls independently,
+                  since there is no shared column grid any more for a
+                  synchronized scroll to keep aligned. */}
+              <div className="overflow-x-auto overscroll-contain [scrollbar-width:none]">
+                <div className="flex w-max items-center gap-[18px] px-3 py-[7px]">
+                  {p.drafted ? (
+                    <span className="w-[54px] shrink-0 truncate text-center font-plex text-[9px] text-ink-muted">{draftedBy || 'Drafted'}</span>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={!myTurn}
+                      onClick={() => onDraft(p)}
                       className={
-                        'w-[62px] border-b border-white/[0.05] px-2 py-[7px] text-right font-plex text-xs tabular-nums ' +
-                        (key === 'pts' ? 'text-ink' : 'text-ink-soft')
+                        'h-8 w-[54px] shrink-0 rounded-full text-[11px] font-bold text-white ' +
+                        (myTurn ? 'bg-gradient-to-r from-[#00E5FF] to-[#7B1FA2]' : 'cursor-not-allowed bg-white/10 text-white/30')
                       }
                     >
-                      {phoneColumnValue(key, p, ctx)}
-                    </td>
+                      Draft
+                    </button>
+                  )}
+                  <span className="shrink-0 font-plex text-[11px] text-ink-muted">{i + 1}</span>
+                  {!p.drafted && (
+                    <button
+                      type="button"
+                      onClick={() => onToggleQueue(p.name)}
+                      title={queued ? 'Remove from your queue' : 'Add to your queue'}
+                      className={'flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full ' + (queued ? 'bg-slate-rule text-ink-muted' : 'bg-[#0FBFA0] text-[#06251F]')}
+                    >
+                      {queued ? <X className="h-3.5 w-3.5" /> : <FilePlus2 className="h-4 w-4" strokeWidth={2.25} />}
+                    </button>
+                  )}
+                  {columns.map(([key, label]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => handleSort(key)}
+                      className="flex w-[58px] shrink-0 flex-col items-start"
+                    >
+                      <span className={'whitespace-nowrap font-plex text-[9px] font-normal uppercase ' + (sortKey === key ? 'text-teal-300' : 'text-ink-muted')}>
+                        {label}{sortKey === key ? (sortDir === 'desc' ? ' ↓' : ' ↑') : ''}
+                      </span>
+                      <span className={'font-plex text-xs tabular-nums ' + (key === 'pts' ? 'text-ink' : 'text-ink-soft')}>
+                        {phoneColumnValue(key, p, ctx)}
+                      </span>
+                    </button>
                   ))}
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
+                </div>
+              </div>
+            </div>
+          )
+        })}
       </div>
     </div>
   )
