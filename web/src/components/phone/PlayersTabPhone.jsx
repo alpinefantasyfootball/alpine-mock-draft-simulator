@@ -179,14 +179,36 @@ export default function PlayersTabPhone({
       </div>
 
       <div className="min-h-0 flex-1 overflow-auto overscroll-contain">
-        <table className="w-full border-collapse">
+        {/* border-separate, not border-collapse: with collapsed borders Chrome
+            accepts `position: sticky` on a `<td>`/`<th>` — the computed style
+            says sticky — and scrolls the cell away on horizontal scroll anyway,
+            because the table itself owns border rendering rather than the
+            cell (CLAUDE.md's own note on this, from the desktop player grid,
+            reproduced here). Separate mode fixes the sticky name column, but a
+            `<tr>`'s own border does not render under it — only a cell's own
+            border does — so every row divider below moved from the `<tr>`
+            onto each `<td>`/`<th>` in it. */}
+        {/* overflow-visible/border-0/rounded-none/bg-transparent all exist
+            purely to beat style.css's bare `table { ... }` rule (overflow:
+            hidden, a border, a radius, `background: var(--card)`) — it
+            reaches every `<table>` in the document, this one included, the
+            same "grep the tag before trusting a Tailwind background" trap
+            CLAUDE.md already documents for the desktop React tables.
+            `overflow: hidden` on the table itself is the one that actually
+            broke the sticky name column: it makes the table its own
+            scroll container, so the cell sticks to *it* rather than to the
+            real scroller (`.overflow-auto` two levels up). Every cell
+            already paints its own surface (`bg-slate-bar`/`bg-slate-sunk`),
+            so a transparent table has nothing left to show through the
+            zero-width `border-spacing-0` gaps. */}
+        <table className="w-full border-separate border-spacing-0 overflow-visible rounded-none border-0 bg-transparent">
           <thead className="sticky top-0 z-20 bg-slate-sunk">
-            <tr className="border-b border-white/[0.08]">
-              <th className="sticky left-0 z-20 border-r border-white/[0.08] bg-slate-sunk px-3 py-1.5 text-left font-plex text-[9px] font-normal uppercase tracking-[0.1em] text-ink-muted">
+            <tr>
+              <th className="sticky left-0 z-20 border-b border-r border-white/[0.08] bg-slate-sunk px-3 py-1.5 text-left font-plex text-[9px] font-normal uppercase tracking-[0.1em] text-ink-muted">
                 {posFilter === 'ALL' ? 'All' : posFilter} &middot; {rows.length} available
               </th>
               {columns.map(([key, label]) => (
-                <th key={key} className="px-2 py-1.5 text-right">
+                <th key={key} className="border-b border-white/[0.08] px-2 py-1.5 text-right">
                   <button
                     type="button"
                     onClick={() => handleSort(key)}
@@ -203,8 +225,8 @@ export default function PlayersTabPhone({
               const queued = queuedNames.has(p.name)
               const draftedBy = p.drafted ? draftedByFor(p) : null
               return (
-                <tr key={p.name} className="border-b border-white/[0.05]">
-                  <td className="sticky left-0 z-10 border-r border-white/[0.08] bg-slate-bar px-3 py-[7px]">
+                <tr key={p.name}>
+                  <td className="sticky left-0 z-10 border-b border-r border-white/[0.08] border-b-white/[0.05] bg-slate-bar px-3 py-[7px]">
                     <div className="flex items-center gap-[7px]">
                       {p.drafted ? (
                         <span className="w-[54px] shrink-0 truncate text-center font-plex text-[9px] text-ink-muted">{draftedBy || 'Drafted'}</span>
@@ -244,7 +266,7 @@ export default function PlayersTabPhone({
                     <td
                       key={key}
                       className={
-                        'w-[62px] px-2 py-[7px] text-right font-plex text-xs tabular-nums ' +
+                        'w-[62px] border-b border-white/[0.05] px-2 py-[7px] text-right font-plex text-xs tabular-nums ' +
                         (key === 'pts' ? 'text-ink' : 'text-ink-soft')
                       }
                     >
