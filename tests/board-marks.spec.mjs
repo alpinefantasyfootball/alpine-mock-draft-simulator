@@ -198,7 +198,15 @@ test.describe("what the board marks", () => {
         const all = cells();
         const ringed = all.filter((e) => /255, 209, 102/.test(getComputedStyle(e).boxShadow));
 
+        /* The ring is a PAIR, so what has to clear the bar is the pair and
+           not either half of it. Gold is invisible on a light matte fill
+           (1.06 on the RB emerald) and the keyline is invisible on the dark
+           empty cell (1.27) — that is the whole construction: exact
+           complements, so one of the two always has the surface under it.
+           Measuring gold alone is measuring half a mark, and it is what this
+           test used to do, correctly, back when every filled cell was dark. */
         const gold = [255, 209, 102];
+        const edge = [11, 16, 23];
         const worst = { ratio: 99, on: null };
         const surfaces = new Set();
         ringed.forEach((cell) => {
@@ -208,23 +216,39 @@ test.describe("what the board marks", () => {
           const raw = card ? getComputedStyle(card).backgroundColor : "rgba(0,0,0,0)";
           const under = over(parse(raw), boardBg);
           surfaces.add(raw);
-          const cr = ratio(gold, under);
+          const cr = Math.max(ratio(gold, under), ratio(edge, under));
           if (cr < worst.ratio) { worst.ratio = cr; worst.on = raw; }
         });
         return { checked: ringed.length, surfaces: surfaces.size,
-                 worst: Math.round(worst.ratio * 100) / 100, on: worst.on };
+                 worst: Math.round(worst.ratio * 100) / 100, on: worst.on,
+                 // And the two halves have to read apart from each other, or
+                 // the pair is one thick edge rather than an edge and a
+                 // keyline.
+                 pair: Math.round(ratio(gold, edge) * 100) / 100 };
       }, CONTRAST);
 
       expect(r.checked, "there were rings to measure").toBeGreaterThan(5);
       expect(r.surfaces, "and more than one kind of surface under them").toBeGreaterThan(1);
       // Marks, not type: 1.4.11's 3:1 is the right bar here, and the only
       // place in this project where the lower one applies.
-      expect(r.worst, `gold on ${r.on}`).toBeGreaterThanOrEqual(3);
+      expect(r.worst, `neither half of the ring reads on ${r.on}`).toBeGreaterThanOrEqual(3);
+      expect(r.pair, "the ring's two halves read apart from each other").toBeGreaterThanOrEqual(3);
 
-      /* The precondition the single ring rests on. A light theme would put a
-         near-white empty cell under it, where gold measures 1.26 and the
-         legacy board's keyline earns its place — so if this ever stops being
-         true, the pair has to come back and this is the line that says so. */
+      /* This used to assert a precondition rather than a property: that the
+         board's ground is dark in both themes, which is what let a SINGLE
+         gold ring be enough. Its comment said "if this ever stops being
+         true, the pair has to come back and this is the line that says so"
+         — and it did stop being true, from a direction it did not
+         anticipate. Not a light theme: the matte palette made the filled
+         CELLS light while the ground stayed dark, so this assertion would
+         have gone on passing while gold measured 1.06 on a real card. The
+         failure that actually caught it is the one above.
+
+         The pair is back, so the precondition is no longer load-bearing.
+         What replaces it is the two lines above, which measure the thing the
+         design rests on rather than a condition under which half of it would
+         have been enough. This stays as a fact worth knowing about the
+         board, not as the guard. */
       const dark = await page.evaluate((c) => {
         eval(c);
         document.documentElement.setAttribute("data-theme", "light");

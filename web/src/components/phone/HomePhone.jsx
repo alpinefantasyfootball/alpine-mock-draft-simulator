@@ -234,7 +234,14 @@ export default function HomePhone() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.45 }}
         >
-          <p className="flex items-center gap-1.5 font-display text-[13px] font-extrabold uppercase italic tracking-[0.06em] text-mint">
+          {/* data-hero-eyebrow: the same kind of hook as data-start-draft.
+              phone.spec.mjs measures the gap between the fixed header and
+              the first thing under it, and it found that first thing by
+              matching the slogan's own words — which broke the moment there
+              were two homepages and the phone's eyebrow was a <p> with an
+              icon in it rather than a bare <span>. The property under test
+              has nothing to do with the words. */}
+          <p data-hero-eyebrow className="flex items-center gap-1.5 font-display text-[13px] font-extrabold uppercase italic tracking-[0.06em] text-mint">
             <Sparkles className="h-3.5 w-3.5 not-italic" aria-hidden="true" />
             Agility through analytics
           </p>

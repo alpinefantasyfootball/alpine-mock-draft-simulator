@@ -62,7 +62,14 @@ test("homepage to a finished draft, pressing only what a person can press",
        live Cockpit was the most direct way a manager landed back on a stale
        finished draft instead of a fresh choice. So this follows the Lobby,
        which is also what the rest of this test already walks through. */
-    const doors = page.locator('a[href="#/drafts"]');
+    /* :visible, because there are two homepages in this document now and
+       both mount — the phone one is `sm:hidden` at this width and is first
+       in document order, so `.first()` picked a zero-box link and clicked
+       nothing for a minute before timing out. This is the "Desktop and
+       mobile both mount, so a label matches twice" note in CLAUDE.md,
+       reached from a third direction: not two renderings of one control,
+       but two whole pages. */
+    const doors = page.locator('a[href="#/drafts"]:visible');
     expect(await doors.count(), "the homepage offers a way in").toBeGreaterThan(0);
     await doors.first().click();
 

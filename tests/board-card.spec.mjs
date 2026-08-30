@@ -237,10 +237,16 @@ test.describe("the draft board card", () => {
       const root = document.getElementById("draftroom-root");
       const grid = [...root.querySelectorAll("div")].find(
         (d) => getComputedStyle(d).display === "grid" && d.style.getPropertyValue("--cols"));
-      // font-plex is the pick code's own class, not a styling accident: the
-      // Cockpit board is the one place this codebase sets IBM Plex Mono for
-      // tabular figures, and it names nothing else on a card.
-      const drawn = [...grid.querySelectorAll("span.font-plex")]
+      /* data-pick-code, not `span.font-plex`.
+
+         The old selector rested on font-plex "naming nothing else on a
+         card", which was true and then quietly stopped being true: the
+         matte-cell redesign made the position abbreviation mono as well, so
+         this found two spans per card and reported 86 codes against 43
+         picks. Nothing about pick codes was wrong; the test was describing
+         markup rather than the property under test, which is the exact
+         failure this suite's own stale-spec note warns about. */
+      const drawn = [...grid.querySelectorAll("[data-pick-code]")]
         .map((s) => s.textContent.trim());
       const expected = JukeEngine.picks().map(
         (p) => DraftEngine.pickCode(p.overall, league.teams));

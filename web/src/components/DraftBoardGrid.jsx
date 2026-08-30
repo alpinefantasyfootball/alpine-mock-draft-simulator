@@ -50,17 +50,24 @@ function adpGap(pick) {
 // export's own comment), so every mark on it is dark-on-light rather than
 // light-on-dark and the two colours are the *inverse* of what they were.
 // #00E5FF on #F1D274 is a smudge. These are the darkest step of a green
-// and a red that still read as green and red, solved against the LIGHTEST
-// fill in the set rather than against an average — measured, the worst
-// case is 4.53 (green) and 4.51 (red), so both clear 4.5:1 on all six
-// fills rather than on most of them.
+// and a red that still read as green and red, solved against every fill in
+// the set rather than against an average — a colour drawn on top of a
+// per-player background has to clear all six, not the one that happened to
+// be on screen. That is the "every stop in a gradient must clear white on
+// its own" rule in a new shape.
 //
-// This is the "every stop in a gradient must clear white on its own" rule
-// in a new shape: a colour drawn on top of a per-player fill has to be
-// checked against every fill it can land on, not the one that happened to
-// be on screen.
-const GAP_GOOD = '#064B32'
-const GAP_BAD = '#7F1C15'
+// Solved to 5.0 rather than to the 4.5 bar itself, and the 0.5 was bought
+// rather than chosen. The first pair was solved to exactly 4.5 and the
+// model said 4.53 worst case; measured on the real rendered board, with
+// transitions killed and ancestor opacity composited, the delta came back
+// 4.37 — under. The model and the browser disagreed by about four
+// hundredths of a step, which is nothing until the target is the bar
+// itself. The browser is the authority (CLAUDE.md: check the actual screen,
+// not only the arithmetic), and the lesson is not to distrust the model but
+// not to spend its entire margin: solve past the bar so a small
+// disagreement cannot cross it.
+const GAP_GOOD = '#05432D'
+const GAP_BAD = '#721913'
 
 function adpText(gap) {
   if (gap == null) return ''
@@ -78,14 +85,23 @@ function hexToRgba(hex, alpha) {
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`
 }
 
-// The meta line's own ink — the same near-black the name uses, at the
-// alpha where it still clears 4.5:1 on every one of the six fills.
-// Measured across all six: 0.72 lands 4.66 (DST, the worst) to 5.90 (K).
-// 0.55 was tried first and reads correctly as "secondary" while measuring
-// 3.22 on DST, which is the translucent-white-on-a-saturated-surface false
-// economy this project already found once on the draft header's labels,
-// arriving from the opposite side of the value scale.
-const META_INK = hexToRgba(POS_MATTE_INK, 0.72)
+// The meta line's own ink — the same near-black the name uses, at an alpha
+// that still clears 4.5:1 on every one of the six fills.
+//
+// 0.55 was the first value and reads correctly as "secondary" while
+// measuring 3.22 on the DST fill: the translucent-white-on-a-saturated-
+// surface false economy this project already found once on the draft
+// header's labels, arriving from the other side of the value scale.
+//
+// 0.72 was the second, and it cleared — but only just. Measured on the
+// real rendered board, with transitions killed and every ancestor's own
+// `opacity` composited in (the third way to lie about a colour), the worst
+// case came back 4.56 against a 4.5 bar. A value that clears by six
+// hundredths is a value that stops clearing the next time anything about
+// the surface moves, and this surface is six different colours. 0.78 is
+// still visibly the secondary line against the name's full-strength ink
+// and puts the worst case comfortably clear instead.
+const META_INK = hexToRgba(POS_MATTE_INK, 0.78)
 
 // The legend's position row and the cell's own fill read the same six
 // hues off the same map — Object.keys() rather than a second, hand-typed
@@ -183,16 +199,48 @@ function Arrow({ dir, className }) {
 // cell still rendered the class name — React doesn't care that it means
 // nothing — so nothing looked wrong until a test actually read
 // getComputedStyle(cell).boxShadow and got back "none".
+//
+// ---- The keyline came back, and a test predicted it would ----
+//
+// This was a single gold edge at 0.45 alpha, and it was correct for as
+// long as every filled cell on this board was dark. The matte palette
+// made them light, and gold on a light surface is nothing: measured on
+// the real board, #FFD166 lands 1.06 on the RB fill and 1.02 on the K
+// fill, against a 3:1 bar for a mark.
+//
+// board-marks.spec.mjs called this in advance. Its own comment reads "the
+// precondition the single ring rests on... if this ever stops being true,
+// the pair has to come back and this is the line that says so" — written
+// about a hypothetical light theme, and what actually falsified it was
+// making the CELLS light. The failing assertion is the one that comment
+// is attached to.
+//
+// So it is gold-then-keyline now, the identical construction style.css's
+// own `.board .cell.mine` has always used, for the identical reason: no
+// single colour clears 3:1 on both a position fill and an empty cell, and
+// one half of a pair always has the surface. Measured, gold clears 10.45
+// on an empty cell and the keyline 8.53-12.91 on all six fills — exact
+// complements — and the two clear each other at 13.23, so the pair always
+// reads as an edge whatever it lands on.
+//
+// The order is load-bearing. Box shadows paint first-on-top, so the 2px
+// gold is listed before the 3px keyline: the keyline's own outer 2px is
+// covered by the gold, and what remains visible of it is the 1px sitting
+// just inside. Swap them and the keyline covers the gold entirely.
+//
+// Gold is full strength rather than the old 0.45 for the same reason: an
+// alpha that read as a tasteful wash on a dark cell is a third of a
+// colour on a light one, and this is a mark rather than a surface.
 const MINE_WASH = 'bg-[rgba(255,209,102,0.07)]'
 const MINE_EDGE = {
-  mid: MINE_WASH + ' shadow-[inset_2px_0_0_rgba(255,209,102,0.45),inset_-2px_0_0_rgba(255,209,102,0.45)]',
-  first: MINE_WASH + ' shadow-[inset_2px_0_0_rgba(255,209,102,0.45),inset_-2px_0_0_rgba(255,209,102,0.45),inset_0_2px_0_rgba(255,209,102,0.45)]',
-  last: MINE_WASH + ' shadow-[inset_2px_0_0_rgba(255,209,102,0.45),inset_-2px_0_0_rgba(255,209,102,0.45),inset_0_-2px_0_rgba(255,209,102,0.45)]',
+  mid: MINE_WASH + ' shadow-[inset_2px_0_0_#FFD166,inset_-2px_0_0_#FFD166,inset_3px_0_0_#0B1017,inset_-3px_0_0_#0B1017]',
+  first: MINE_WASH + ' shadow-[inset_2px_0_0_#FFD166,inset_-2px_0_0_#FFD166,inset_0_2px_0_#FFD166,inset_3px_0_0_#0B1017,inset_-3px_0_0_#0B1017,inset_0_3px_0_#0B1017]',
+  last: MINE_WASH + ' shadow-[inset_2px_0_0_#FFD166,inset_-2px_0_0_#FFD166,inset_0_-2px_0_#FFD166,inset_3px_0_0_#0B1017,inset_-3px_0_0_#0B1017,inset_0_-3px_0_#0B1017]',
   // Both edges at once only happens in a one-round league — an edge case,
   // but a real one (this app supports 1-round drafts), so it gets its own
   // real literal rather than falling through to "mid" and drawing a
   // column with no top or bottom.
-  both: MINE_WASH + ' shadow-[inset_2px_0_0_rgba(255,209,102,0.45),inset_-2px_0_0_rgba(255,209,102,0.45),inset_0_2px_0_rgba(255,209,102,0.45),inset_0_-2px_0_rgba(255,209,102,0.45)]',
+  both: MINE_WASH + ' shadow-[inset_2px_0_0_#FFD166,inset_-2px_0_0_#FFD166,inset_0_2px_0_#FFD166,inset_0_-2px_0_#FFD166,inset_3px_0_0_#0B1017,inset_-3px_0_0_#0B1017,inset_0_3px_0_#0B1017,inset_0_-3px_0_#0B1017]',
 }
 
 function mineEdge(isMine, isFirstRound, isLastRound) {
@@ -699,7 +747,18 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
                             )}
                             <Arrow dir={arrow} className="shrink-0 text-[9px]" />
                           </span>
-                          {code && <span className="shrink-0 font-plex text-[9px] font-semibold lg:text-[10px]">{code}</span>}
+                          {/* data-pick-code, not the font class it happens to
+                              carry. board-card.spec.mjs used to find these by
+                              `span.font-plex` on the strength of that class
+                              "naming nothing else on a card" — true when the
+                              code was the only mono thing in the cell, and
+                              false the moment the position abbreviation
+                              became mono too, which doubled the count and
+                              failed a test about pick codes for a reason
+                              that had nothing to do with pick codes. A test
+                              anchored on markup breaks when the markup moves;
+                              this attribute says what the element IS. */}
+                          {code && <span data-pick-code className="shrink-0 font-plex text-[9px] font-semibold lg:text-[10px]">{code}</span>}
                         </div>
                         {/* Line 2 — the name at full ink, and the ADP gap on
                             its own side so it never competes with the name

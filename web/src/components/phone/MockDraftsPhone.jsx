@@ -183,9 +183,16 @@ export default function MockDraftsPhone({
             The gear is here rather than in a header bar because the two
             belong together: the line under the button IS the settings, so
             pressing the thing that describes them is how you change them. */}
+        {/* data-start-draft / aria-label: hooks the phone suite anchors on.
+            This screen's label ("Start a mock draft") is the fourth name
+            this one button has had across the app, and every rename has
+            failed a test about something else — phone.spec.mjs still
+            carries a regex of every previous one. An attribute says what
+            the control IS rather than what it currently reads. */}
         <button
           type="button"
           onClick={onStartNew}
+          data-start-draft
           disabled={!!problem}
           className="flex w-full items-center gap-3 rounded-[18px] px-4 py-4 text-left transition-transform duration-150 active:scale-[0.985] disabled:opacity-50"
           style={{ background: 'linear-gradient(100deg, #44D4E2, #82A1F6)' }}
@@ -203,6 +210,7 @@ export default function MockDraftsPhone({
           <button
             type="button"
             onClick={onOpenSettings}
+            aria-label="Draft settings"
             className="flex flex-1 items-center justify-center gap-2 rounded-[14px] border border-line-hairline py-2.5 text-[13px] font-semibold text-voidInk-body active:bg-white/[0.04]"
           >
             <Settings className="h-4 w-4" aria-hidden="true" />
