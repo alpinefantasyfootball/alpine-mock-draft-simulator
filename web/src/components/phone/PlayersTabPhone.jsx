@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { FilePlus2, Search, X } from 'lucide-react'
+import { Check, FilePlus2, Search, X } from 'lucide-react'
 import { POS_BADGE } from '../draftRoomPositions.js'
 import { PHONE_POSITION_COLUMNS, phoneColumnValue, phoneColumnRaw } from './playerColumnsPhone.js'
 
@@ -20,6 +20,22 @@ import { PHONE_POSITION_COLUMNS, phoneColumnValue, phoneColumnRaw } from './play
 // above it. That is also why sorting moved: tapping a stat's own label/value
 // pair sets the sort key, in whichever row you happen to tap it in, rather
 // than tapping a column header that no longer exists.
+// ALL/QB/RB/.../ROOKIES/VETERANS are alternate *views* of the pool — exactly
+// one of each group is the "current" one, and the solid-fill active style
+// says so. WATCHLIST/DRAFTED/'25 STATS are add-on toggles instead: each one
+// can be true or false independent of every other chip on the row,
+// including each other, the same way desktop's own "Show drafted" checkbox
+// sits beside the position tabs rather than replacing one of them (see
+// DraftRoom.jsx). Rendering all fourteen chips with one shared "active"
+// look was the bug — not that a toggle can be on at the same time as a
+// view is selected (that combination is real and desktop already has it),
+// but that nothing on screen said these three were a different kind of
+// control. They get the pill's other existing "on, but not a view" look
+// instead — the same teal outline the SORT BY chip above already uses for
+// its own supplementary, non-exclusive state — plus a checkmark, so a
+// glance reads "toggled on" rather than "the selected tab."
+const TOGGLE_KEYS = new Set(['watchlist', 'drafted', 'stats25']);
+
 const CHIPS = [
   { key: 'ALL', label: 'ALL' },
   { key: 'QB', label: 'QB' },
@@ -38,7 +54,7 @@ const CHIPS = [
 ]
 
 export default function PlayersTabPhone({
-  engine, league, board, mySlot, myTurn,
+  engine, tick, league, board, mySlot, myTurn,
   pointsFor, vorpFor, valueFor, survivalFor,
   photoFor, initialsFor, flexPositions, draftedByFor,
   queuedNames, onToggleQueue, onDraft,
@@ -59,6 +75,16 @@ export default function PlayersTabPhone({
 
   const columns = PHONE_POSITION_COLUMNS[posFilter] || PHONE_POSITION_COLUMNS.ALL
 
+  // `tick` is in the dependency list below and `board` is not what actually
+  // changes on a pick: draft-engine.js flags a player drafted in place
+  // (`player.drafted = true`) rather than replacing the board array, so
+  // `board` is the exact same reference before and after every pick and a
+  // plain useMemo keyed on it never recomputes — a drafted player stayed in
+  // the pool on screen until something else happened to remount this tab.
+  // DraftRoom.jsx's own `availablePlayersMemo` solves the identical problem
+  // the identical way, for the identical reason: `tick` increments on the
+  // "juke:header" event every pick already fires, so it is what actually
+  // invalidates this, not `board`'s content.
   const rows = useMemo(() => {
     let list = board
       .filter((p) => showDrafted || !p.drafted)
@@ -91,7 +117,7 @@ export default function PlayersTabPhone({
     })
     return list
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [board, showDrafted, showWatchlist, posFilter, expBand, search, sortKey, sortDir, season, flexPositions])
+  }, [tick, board, showDrafted, showWatchlist, posFilter, expBand, search, sortKey, sortDir, season, flexPositions])
 
   const handleSort = (key) => {
     if (key === sortKey) setSortDir((d) => (d === 'desc' ? 'asc' : 'desc'))
@@ -155,6 +181,8 @@ export default function PlayersTabPhone({
           else { active = posFilter === chip.key; text = filterCounts && filterCounts[chip.key] ? filterCounts[chip.key].text : null }
           const filled = filterCounts && filterCounts[chip.key] ? filterCounts[chip.key].full : false
 
+          const isToggle = TOGGLE_KEYS.has(chip.key)
+
           const onClick = () => {
             if (chip.key === 'rookies') setExpBand((v) => (v === 'rookie' ? 'all' : 'rookie'))
             else if (chip.key === 'veterans') setExpBand((v) => (v === 'veteran' ? 'all' : 'veteran'))
@@ -169,17 +197,27 @@ export default function PlayersTabPhone({
               key={chip.key}
               type="button"
               onClick={onClick}
+              aria-pressed={isToggle ? active : undefined}
               className={
-                'flex h-[38px] shrink-0 flex-col items-center justify-center whitespace-nowrap rounded-full px-3.5 leading-tight transition-colors duration-150 ' +
-                (active ? 'bg-ink text-[#0D0F15]' : 'bg-slate-panel text-ink border border-slate-rule')
+                'flex h-[38px] shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-full px-3.5 leading-tight transition-colors duration-150 ' +
+                (isToggle
+                  ? (active ? 'border border-teal-400 bg-teal-500/[0.12] text-teal-300' : 'bg-slate-panel text-ink border border-slate-rule')
+                  : (active ? 'bg-ink text-[#0D0F15]' : 'bg-slate-panel text-ink border border-slate-rule'))
               }
             >
-              <span className="text-xs font-bold">{chip.label}</span>
-              {text != null && (
-                <span className={'font-plex text-[9px] ' + (active ? 'text-[#4C5763]' : filled ? 'text-ink-muted' : 'text-teal-300')}>
-                  {text}
-                </span>
-              )}
+              {isToggle && active && <Check className="h-3 w-3 shrink-0" strokeWidth={3} />}
+              <span className="flex flex-col items-center">
+                <span className="text-xs font-bold">{chip.label}</span>
+                {text != null && (
+                  <span className={
+                    'font-plex text-[9px] ' +
+                    (isToggle ? (active ? 'text-teal-300/70' : 'text-teal-300')
+                      : (active ? 'text-[#4C5763]' : filled ? 'text-ink-muted' : 'text-teal-300'))
+                  }>
+                    {text}
+                  </span>
+                )}
+              </span>
             </button>
           )
         })}

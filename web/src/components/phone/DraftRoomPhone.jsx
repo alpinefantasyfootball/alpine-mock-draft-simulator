@@ -27,7 +27,7 @@ const TABS = [
 // desktop/tablet render — nothing here re-derives from `engine` a second
 // time, same rule this whole file's siblings already follow.
 export default function DraftRoomPhone({
-  engine, league, picks, board, mySlot, onClock, overall, myTurn, code, urgent,
+  engine, tick, league, picks, board, mySlot, onClock, overall, myTurn, code, urgent,
   timeLeft, clockLength, onOpenMenu,
   autopick, onToggleAutopick, over,
   rules, pointsFor, valueFor, vorpFor, survivalFor,
@@ -87,6 +87,7 @@ export default function DraftRoomPhone({
         {tab === 'players' && (
           <PlayersTabPhone
             engine={engine}
+            tick={tick}
             league={league}
             board={board}
             mySlot={mySlot}

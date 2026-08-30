@@ -1114,6 +1114,7 @@ export default function DraftRoom() {
       <div className="fixed inset-0 z-[60] flex flex-col overflow-hidden bg-slate text-white">
         <DraftRoomPhone
           engine={engine}
+          tick={tick}
           league={league}
           picks={picks}
           board={board}
