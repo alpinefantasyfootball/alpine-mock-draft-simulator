@@ -943,3 +943,50 @@ test("the four tabs each show their own content, and a player profile opens and 
 
   await context.close();
 });
+
+/* Reported from a real phone: scrolling the Players table sideways left the
+   player name behind, scrolling off with the stat columns instead of
+   staying pinned. The table had `border-collapse` — Chrome accepts
+   `position: sticky` on a `<td>` under collapsed borders (the computed style
+   genuinely says "sticky") and scrolls the cell away anyway, because the
+   table itself owns border rendering rather than the cell. Switching to
+   `border-separate` fixed the collapse half and was not enough on its own:
+   `style.css` has a bare `table { ... overflow: hidden; ... }` rule for the
+   legacy desktop pages, and it reaches this React table too — the same
+   "grep the tag before trusting a Tailwind background" trap CLAUDE.md
+   documents for a bare `table { background }` selector, hit here by
+   `overflow` instead. `overflow: hidden` on the table makes the table its
+   own scroll container, so the sticky cell sticks to *it* — which also
+   scrolls — rather than to the real scroller two levels up. Both had to be
+   beaten with explicit Tailwind utilities on the `<table>` element itself
+   before the column actually stayed still. */
+test("the player name column stays put when the Players table scrolls sideways", async ({ browser }) => {
+  const context = await browser.newContext(PHONE);
+  const page = await openApp(context, "#/draft-room");
+  await page.evaluate(() => {
+    window.JukeEngine.startDraft({ mySlot: 3, clockLength: 90 });
+    render();
+  });
+  await page.waitForTimeout(700);
+
+  const r = await page.evaluate(() => {
+    const root = document.getElementById("draftroom-root");
+    const sheet = [...root.querySelectorAll("div")].find((d) => /fixed inset-x-0 bottom-0 z-30/.test(d.className));
+    const panel = sheet.lastElementChild;
+    const list = [...panel.querySelectorAll("div")]
+      .find((d) => /auto|scroll/.test(getComputedStyle(d).overflowY) && d.querySelector("table"));
+    const nameCell = list.querySelector("tbody td");
+    const before = nameCell.getBoundingClientRect().left;
+    const maxScrollLeft = list.scrollWidth - list.clientWidth;
+    if (maxScrollLeft <= 0) return { skip: true };
+    list.scrollLeft = maxScrollLeft;
+    const after = nameCell.getBoundingClientRect().left;
+    return { skip: false, before, after, scrolled: list.scrollLeft > 0 };
+  });
+
+  expect(r.skip, "the table is wide enough to actually scroll sideways").toBe(false);
+  expect(r.scrolled, "the scroll actually moved").toBe(true);
+  expect(r.after, "the name cell's left edge does not move with the scroll")
+    .toBe(r.before);
+  await context.close();
+});
