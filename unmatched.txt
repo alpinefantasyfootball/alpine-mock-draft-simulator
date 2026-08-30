@@ -1,5 +1,5 @@
 FFC rows that did not join to a Sleeper player
-Generated 2026-08-29 11:02 UTC
+Generated 2026-08-30 11:03 UTC
 Across every scoring format, each name listed once.
 Add an entry to MANUAL_MATCHES in build_players.py to fix one.
 
@@ -21,23 +21,24 @@ Rams | DEF | LAR | no Tank01 id
 Lions | DEF | DET | no Tank01 id
 Patriots | DEF | NE | no Tank01 id
 Steelers | DEF | PIT | no Tank01 id
-Eagles | DEF | PHI | no Tank01 id
 49ers | DEF | SF | no Tank01 id
+Eagles | DEF | PHI | no Tank01 id
 Chargers | DEF | LAC | no Tank01 id
+Cowboys | DEF | DAL | no Tank01 id
 Jets | DEF | NYJ | no Tank01 id
 Giants | DEF | NYG | no Tank01 id
-Cowboys | DEF | DAL | no Tank01 id
 Jaguars | DEF | JAX | no Tank01 id
-Packers | DEF | GB | no Tank01 id
-Buccaneers | DEF | TB | no Tank01 id
 Browns | DEF | CLE | no Tank01 id
+Buccaneers | DEF | TB | no Tank01 id
 Ravens | DEF | BAL | no Tank01 id
-Bills | DEF | BUF | no Tank01 id
+Packers | DEF | GB | no Tank01 id
 Falcons | DEF | ATL | no Tank01 id
+Bills | DEF | BUF | no Tank01 id
 Titans | DEF | TEN | no Tank01 id
-Bears | DEF | CHI | no Tank01 id
 Saints | DEF | NO | no Tank01 id
+Bears | DEF | CHI | no Tank01 id
 Bengals | DEF | CIN | no Tank01 id
+Chiefs | DEF | KC | no Tank01 id
 Commanders | DEF | WAS | no Tank01 id
 
 
@@ -205,7 +206,7 @@ every season we store. Sleeper stays authoritative: this changes no
 stored number and never should. It is here so that when the two
 start disagreeing, somebody finds out from this file.
 
-247 of 273 players joined to an nflverse record.
+247 of 274 players joined to an nflverse record.
 
 No nflverse record for:
 Seahawks | DEF | SEA | no nflverse id
@@ -216,23 +217,24 @@ Rams | DEF | LAR | no nflverse id
 Lions | DEF | DET | no nflverse id
 Patriots | DEF | NE | no nflverse id
 Steelers | DEF | PIT | no nflverse id
-Eagles | DEF | PHI | no nflverse id
 49ers | DEF | SF | no nflverse id
+Eagles | DEF | PHI | no nflverse id
 Chargers | DEF | LAC | no nflverse id
+Cowboys | DEF | DAL | no nflverse id
 Jets | DEF | NYJ | no nflverse id
 Giants | DEF | NYG | no nflverse id
-Cowboys | DEF | DAL | no nflverse id
 Jaguars | DEF | JAX | no nflverse id
-Packers | DEF | GB | no nflverse id
-Buccaneers | DEF | TB | no nflverse id
 Browns | DEF | CLE | no nflverse id
+Buccaneers | DEF | TB | no nflverse id
 Ravens | DEF | BAL | no nflverse id
-Bills | DEF | BUF | no nflverse id
+Packers | DEF | GB | no nflverse id
 Falcons | DEF | ATL | no nflverse id
+Bills | DEF | BUF | no nflverse id
 Titans | DEF | TEN | no nflverse id
-Bears | DEF | CHI | no nflverse id
 Saints | DEF | NO | no nflverse id
+Bears | DEF | CHI | no nflverse id
 Bengals | DEF | CIN | no nflverse id
+Chiefs | DEF | KC | no nflverse id
 Commanders | DEF | WAS | no nflverse id
 
 Two differences are known, applied rather than reported, and
@@ -258,14 +260,14 @@ season    compared  disagree    rate
 2020           606        13    2.1%
 2021           726        14    1.9%
 2022           960        38    4.0%
-2023          1219        10    0.8%
-2024          1503         7    0.5%
-2025          1693         5    0.3%
+2023          1228        10    0.8%
+2024          1505         7    0.5%
+2025          1696         5    0.3%
 
 stat  compared   agree   agree%
-cfd       666     616    92.5%
+cfd       667     617    92.5%
 ct        560     560   100.0%
-cy        694     691    99.6%
+cy        695     692    99.6%
 f19        17      17   100.0%
 f29       110     107    97.3%
 f39       111     111   100.0%
@@ -280,12 +282,12 @@ pfd       183     155    84.7%
 pi        161     161   100.0%
 pt        175     174    99.4%
 py        200     197    98.5%
-ra        633     628    99.2%
-rc        691     689    99.7%
-rfd       534     486    91.0%
-rt        394     394   100.0%
-ry        624     617    98.9%
-tg        700     689    98.4%
+ra        635     630    99.2%
+rc        692     690    99.7%
+rfd       537     489    91.1%
+rt        397     397   100.0%
+ry        626     619    98.9%
+tg        701     690    98.4%
 xp        111     110    99.1%
 xpx        80      80   100.0%
 
