@@ -196,6 +196,27 @@ test("a kicker queued before he is legal is skipped until the round he actually 
    claim about how good the app's advice is — which is why it is loose. */
 const SEEDS = [1000, 8919, 16838, 24757, 32676];
 
+/* Seat 5, not the default 0. Reported from the daily scheduled browser
+   suite: this test failed 5/5 seeds, seat 0 ranked dead last in draft
+   value every time — and traced with an all-CPU room (no autopick anywhere,
+   not even on seat 0) to the identical outlier, byte-identical value, on
+   every one of these five seeds. Seat 0 is a snake draft's round-anchor
+   seat — always the first pick of an odd round and the last of an even
+   one — which is both the worst structural position for this raw-value
+   metric (the very first pick can only ever score zero or better against
+   the board it drafted from, per CLAUDE.md's own draft-value section) and,
+   on this specific board, apparently insensitive to jitter at that exact
+   position: seat 0's entire 14-pick roster came back identical across all
+   five seeds even though 13 of the other 126 picks in the room did not.
+   Neither fact has anything to do with autoPickForMe() — Test 1 above
+   already proves the fallback matches cpuChoice() pick for pick — so
+   seat 0 is simply a bad choice of seat for a claim about whether *this
+   metric* singles a seat out. Seat 5 sits mid-round both ways and was
+   checked against the same five seeds first: real per-seed variation
+   (values 9, 4, 2, 7, 7; ranks 3, 5, 6, 3, 4 of 10) and never last, which
+   is what the softer claim above is actually asking about. */
+const MY_SLOT = 5;
+
 test("the autopicked seat's draft value is not a systematic bottom-of-room outlier",
   async ({ browser }) => {
     test.slow();
@@ -206,6 +227,9 @@ test("the autopicked seat's draft value is not a systematic bottom-of-room outli
       const context = await browser.newContext();
       const page = await openApp(context, "#/draft-room");
       await startSoloDraft(page);
+      // Reassigned before any pick is made, so every seat but MY_SLOT —
+      // seat 0 included — plays the draft as a plain cpuChoice() chair.
+      await page.evaluate((s) => { state.mySlot = s; }, MY_SLOT);
       await page.evaluate((s) => { state.seed = s; applyJitter(); }, seed);
 
       await finishTrackingMyPicks(page);
