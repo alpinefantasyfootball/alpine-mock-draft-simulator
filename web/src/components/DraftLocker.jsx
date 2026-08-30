@@ -1,5 +1,5 @@
-import { useReducer, useState } from 'react'
-import { Calendar, TrendingUp, Shield } from 'lucide-react'
+import { useEffect, useReducer, useRef, useState } from 'react'
+import { Calendar, ChevronLeft, TrendingUp, Shield } from 'lucide-react'
 import { useEngine, useJukeTick } from '../hooks/useJukeEngine.js'
 import NewMockPanel from './NewMockPanel.jsx'
 import InProgressBand from './InProgressBand.jsx'
@@ -159,7 +159,7 @@ function AnalyticsGrid({ engine, league, stats, problem, lobbySlot, roomActive, 
 // child here is presentational — this component owns the one thing that
 // has to live above all of them, which is knowing whether an in-progress
 // draft or history entry changed and needs a re-render.
-export default function DraftLocker({ onStartNew, onRunAtSeat, problem, lobbySlot, roomActive, onSetLobbySlot, onOpenSettings, onDraftWithFriends }) {
+export default function DraftLocker({ onStartNew, onRunAtSeat, problem, lobbySlot, roomActive, onSetLobbySlot, onOpenSettings, onDraftWithFriends, initialAnalyzeId, onBackToList }) {
   const engine = useEngine()
   useJukeTick(engine)
   // clearSave()/deleteHistoryDraft() are plain localStorage writes with no
@@ -187,6 +187,41 @@ export default function DraftLocker({ onStartNew, onRunAtSeat, problem, lobbySlo
   // DraftInsightsDashboard.jsx's own file comment on why the two disagree
   // and why that gap matters.
   const [historyReport, setHistoryReport] = useState(null)
+  /* Open one report straight away, when a caller already knows which.
+
+     MockDraftsPhone.jsx is that caller: on a phone the history list lives
+     on its own screen, so tapping a row has to land on the report rather
+     than on the dashboard the row is not part of. It goes through the
+     identical analyze() below rather than reaching for openHistoryDraft()
+     itself — the frozen-report-first path is the whole reason a reopened
+     draft and the report it was graded with cannot disagree, and a second
+     entry point that skipped it would silently reintroduce exactly that.
+
+     ---- Two things about where this sits ----
+
+     ABOVE `if (!engine) return null`, and that is not style. Placed below
+     it, the hook ran on the renders where the engine had resolved and not
+     on the ones before, so the hook COUNT changed between renders —
+     React's "rendered more hooks than during the previous render", thrown
+     on the first press of the button that mounts this component. Every
+     hook in a component runs on every render or none of them do; an early
+     return is a wall no hook may sit behind.
+
+     And it fires once, tracked by a ref rather than by an empty dep array.
+     `analyze` is a const assigned further down this function, so on the
+     render where the engine is still null it is never assigned at all —
+     an empty-dep effect would run exactly then, reach a binding in its
+     temporal dead zone, and throw. Keyed on `engine` it runs again once
+     there is one, and the ref is what stops it re-opening a report the
+     reader has since closed. */
+  const openedInitial = useRef(false)
+  useEffect(() => {
+    if (!engine || !initialAnalyzeId || openedInitial.current) return
+    openedInitial.current = true
+    analyze(initialAnalyzeId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [engine, initialAnalyzeId])
+
 
   if (!engine) return null
 
@@ -289,6 +324,20 @@ export default function DraftLocker({ onStartNew, onRunAtSeat, problem, lobbySlo
     // the real ancestor scroller (DraftRoom.jsx's own overflow-y-auto) take
     // over, rather than being capped at 100% and clipping.
     <div className="mx-auto flex min-h-full max-w-[1600px] flex-col px-4 py-5 lg:px-8 lg:py-7">
+      {/* Only when somebody arrived here from a screen that is still
+          behind this one — the phone's Mock Drafts list. At every other
+          width and entry point this IS the screen, and a back control on
+          the thing you cannot go back from is the dead-control problem. */}
+      {onBackToList && (
+        <button
+          type="button"
+          onClick={onBackToList}
+          className="-ml-2 mb-2 flex items-center gap-1 self-start rounded-[10px] py-2 pl-2 pr-3 text-[14px] font-semibold text-white/70 active:bg-white/[0.05] lg:hidden"
+        >
+          <ChevronLeft className="h-5 w-5" />
+          Mock drafts
+        </button>
+      )}
       <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="font-display text-[32px] font-bold text-white">Draft Lobby</h1>
