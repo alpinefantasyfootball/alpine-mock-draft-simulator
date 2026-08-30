@@ -221,7 +221,7 @@ export default function PlayersTabPhone({
                           Draft
                         </button>
                       )}
-                      <span className="w-4 shrink-0 text-right font-plex text-[11px] text-ink-muted">{i + 1}</span>
+                      <span className="w-6 shrink-0 text-right font-plex text-[11px] text-ink-muted">{i + 1}</span>
                       <button type="button" onClick={() => onSelectPlayer(p)} className="min-w-0 flex-1 text-left">
                         <p className="truncate text-[13px] font-semibold text-ink">{p.name}</p>
                         <p className={'truncate font-plex text-[10px] ' + (POS_BADGE[p.pos] ? POS_BADGE[p.pos].split(' ')[1] : 'text-ink-muted')}>
