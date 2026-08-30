@@ -10458,8 +10458,43 @@ window.JukeEngine = {
   // one real `league` object current via setLeague() on every change — a
   // second read off empty/default DOM elements would overwrite an
   // already-correct league with defaults, not update it.
+  /* Why a room refuses a draft type the solo board runs happily.
+
+     draft-engine.js is the one file the browser and the server both run —
+     that is the whole reason it has no DOM, no globals and no imports — and
+     the two have to agree about what is legal or two managers take the same
+     player milliseconds apart and the room forks. Draft type is now part of
+     that agreement: `room.js` asks `Engine.onTheClock(state.league, ...)`,
+     so a linear or third-round-reversal league produces a different pick
+     order on both sides once the deployed engine knows about it.
+
+     The site deploys itself from git and THE WORKER DOES NOT — it ships only
+     when somebody runs `wrangler deploy -c worker/wrangler.toml`, which is
+     the gap CLAUDE.md already records as invisible. In the window between
+     this merging and that command being run, the server is still snaking
+     while a client draws linear, and the failure is not a broken page: it is
+     picks quietly rejected from round two on, which reads as the room
+     freezing.
+
+     So the room refuses the two orders it cannot yet guarantee, and says so.
+     **Delete this once the worker carrying the new draft-engine.js is
+     deployed** — it is a guard on a version skew, not a rule about rooms,
+     and the solo board has run all three orders correctly since the day this
+     was written. */
+  roomShapeProblem: function () {
+    if (league.draftType && league.draftType !== "snake") {
+      return "Drafting with friends runs a standard snake for now. " +
+             "Set the draft type back to Snake, or run this one solo.";
+    }
+    if (league.thirdRoundReversal) {
+      return "Third-round reversal is solo-only for now. " +
+             "Turn it off to draft this one with friends.";
+    }
+    return "";
+  },
   createRoom: function () {
     if (setupProblem()) return null;
+    if (window.JukeEngine.roomShapeProblem()) return null;
     const code = Live.newCode();
     location.hash = "#/draft-room?room=" + code;
     joinRoom(code, true);
