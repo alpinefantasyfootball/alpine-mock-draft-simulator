@@ -10,6 +10,7 @@ import ComingSoonModal from './ComingSoonModal.jsx'
 import EarlyAccessModal from './EarlyAccessModal.jsx'
 import { ROOM_SIGNUP_SOURCE, roomSignupCopy } from './icons.jsx'
 import { freshnessLine } from './dataFreshness.js'
+import HomePhone from './phone/HomePhone.jsx'
 
 // METHOD is Juke's own real content — three sections of one doc plus the
 // doc's own top, the same four destinations the footer has carried since
@@ -188,7 +189,33 @@ export default function Homepage() {
   const roomLinkClass = 'flex min-h-[44px] items-center text-sm text-voidInk-body transition-colors hover:text-white lg:min-h-0 lg:text-[13px]'
 
   return (
-    <div className="min-h-screen overflow-x-hidden bg-surface-page font-body text-voidInk-primary">
+    <>
+      {/* ---- Two homepages, chosen by CSS rather than by a media-query
+          hook, and the reason is hydration ----
+
+          scripts/prerender.mjs writes real server-rendered markup into
+          #root and main.jsx hydrates onto it. A width-dependent BRANCH
+          cannot survive that: the server has no window, so it renders the
+          desktop tree, and a phone's first client render would disagree —
+          React patches the mismatch by re-rendering the subtree, which on
+          a phone means one visible frame of desktop layout before the
+          phone one replaces it. That flash is exactly what the prerender
+          exists to prevent.
+
+          So both trees are prerendered and `sm:hidden` / `hidden sm:block`
+          picks. The cost is real and is worth naming: the desktop tree
+          MOUNTS on a phone (CSS-hidden is still mounted — the rule
+          useMinWidth's own comment exists for), so its effects run and its
+          engine reads happen on the device least able to afford them. That
+          is the same work today's homepage already does on a phone, so
+          nothing gets slower; it simply does not get faster. If it ever
+          needs to, the fix is to prerender two documents, not to move this
+          back to a hook. */}
+      <div className="sm:hidden">
+        <HomePhone />
+      </div>
+
+      <div className="hidden min-h-screen overflow-x-hidden bg-surface-page font-body text-voidInk-primary sm:block">
       <Header />
 
       {/* The fixed header is just its nav row now — the status strip that
@@ -286,6 +313,7 @@ export default function Homepage() {
           </div>
         )}
       </footer>
-    </div>
+      </div>
+    </>
   )
 }

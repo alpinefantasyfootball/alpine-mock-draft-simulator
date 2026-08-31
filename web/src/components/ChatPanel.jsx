@@ -42,7 +42,7 @@ function SystemLine({ text }) {
 }
 
 function PickLine({ entry, room, DE, mine }) {
-  const teams = (room.league && room.league.teams) || 0
+  const teams = room.league || null
   const code = DE && teams ? DE.pickCode(entry.overall, teams) : entry.overall
   return (
     <div

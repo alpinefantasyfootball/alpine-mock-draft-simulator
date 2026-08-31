@@ -50,12 +50,37 @@ test("no field is under 16px, or iOS zooms in and stays there", async ({ browser
       .click();
   });
   await page.waitForTimeout(400);
+
+  /* The scoring rules are a collapsible section now, not a "Scoring" tab —
+     the settings modal became the whole Draft Settings screen (draft name,
+     type, third-round reversal, scoring, teams, player pool, clock, CPU
+     autopick, roster, draft order) and forty-nine numeric inputs are a
+     screen rather than a section, so they are folded away behind a row.
+
+     That row is what has to be opened, and opening it is the point: the
+     inputs it holds are the whole reason this test visits the settings
+     screen at all, and a version that stopped opening them would keep
+     passing while checking nothing. Matched on "scoring rules" rather than
+     on a tab label, because the section header is what the row says. */
   await page.evaluate(() => {
     const m = [...document.querySelectorAll("div")]
       .find((d) => (d.className || "").toString().includes("z-[70]"));
-    [...m.querySelectorAll("button")].find((b) => b.textContent.trim() === "Scoring").click();
+    const row = [...m.querySelectorAll("button")]
+      .find((b) => /scoring rules/i.test(b.textContent || ""));
+    if (!row) throw new Error("no scoring-rules row on the settings screen");
+    row.click();
   });
   await page.waitForTimeout(400);
+
+  const fieldCount = await page.evaluate(() => {
+    const m = [...document.querySelectorAll("div")]
+      .find((d) => (d.className || "").toString().includes("z-[70]"));
+    return m.querySelectorAll("input").length;
+  });
+  // The guard on the guard: the sweep below is only meaningful if the fields
+  // are actually on screen, and "the section did not open" looks exactly like
+  // "every field passed" to it.
+  expect(fieldCount, "the scoring editor's own fields are rendered").toBeGreaterThan(20);
 
   const inModal = await page.evaluate(() => readSmallFields());
   expect(inModal, "every settings field clears the floor").toEqual([]);
@@ -131,14 +156,18 @@ test("nothing is sitting on top of the Start button", async ({ browser }) => {
 
   const r = await page.evaluate(() => {
     const root = document.getElementById("draftroom-root");
-    // "Start mock draft" now (NewMockPanel.jsx), not "Enter Draft Room" —
-    // Settings & Locker is the first screen since the seat-picker moved to
-    // its own step, and the button on it was renamed a second time since,
-    // fixing a two-primaries bug. The property this test is actually
-    // checking (the one CTA this screen exists to get you to press has to
-    // be pressable) is unchanged; only the label keeps moving under it.
-    const btn = [...root.querySelectorAll("button")]
-      .find((b) => /start draft|start for everyone|start mock draft|enter draft room/i.test(b.textContent || ""));
+    /* [data-start-draft], and the attribute exists because of this test.
+
+       This used to be a regex of every name the button has ever had —
+       "Enter Draft Room", "Start draft", "Start mock draft" — and it grew
+       one alternative per rename until the phone's own Mock Drafts screen
+       called it "Start a mock draft" and the regex missed by one word.
+       The property under test (the one CTA this screen exists to get you
+       to press has to be pressable) never had anything to do with the
+       label. Both the lobby's button and the phone screen's carry the
+       attribute, and exactly one of them is on screen at a time. */
+    const btn = [...root.querySelectorAll("[data-start-draft]")]
+      .find((b) => b.getBoundingClientRect().height > 0);
     if (!btn) return { found: false };
     const b = btn.getBoundingClientRect();
     // Whatever the browser says is actually under the pointer at the button's
@@ -294,31 +323,33 @@ test("the homepage hero starts under the header, not a screen below it", async (
 
   const r = await page.evaluate(() => {
     const root = document.getElementById("view-home");
-    const header = root.querySelector("header");
-    // The eyebrow is desktop's mint pill at every width now — the phone's
-    // own teal "FREE · UNLIMITED MOCKS" line was retired by the revised
-    // handoff, and "FREE · UNLIMITED · NO ACCOUNT" is a different element
-    // that sits below the CTA pair. Anchor on whatever is genuinely first,
-    // which is what this test is about.
-    /* Matched case-insensitively, and that is the whole of why this stopped
-       finding anything. The slogan is set in CSS `text-transform: uppercase`
-       and its source is title case — "Agility Through Analytics" — so
-       textContent never carried the capitals this compared against. It read
-       as the eyebrow being gone. It was on screen, in capitals, the whole
-       time; the DOM simply does not spell it that way.
+    // The VISIBLE header. There are two homepages in this document now and
+    // each has one; the desktop tree's is CSS-hidden at this width and
+    // reports a zero rect, which would make the gap below meaningless
+    // rather than wrong — and it happens to be second in document order
+    // today, so a bare querySelector passes for a reason that could change.
+    const header = [...root.querySelectorAll("header")]
+      .find((h) => h.getBoundingClientRect().height > 0);
+    /* [data-hero-eyebrow], and the attribute is the fix for two rounds of
+       this same failure.
 
-       Same family as the /nan/i note in CLAUDE.md, from the opposite side:
-       there a case-insensitive match caught the surname Monangai, here a
-       case-sensitive one missed text that is only uppercase to a reader.
+       It first matched the slogan's own words and found nothing, because
+       the text is uppercased in CSS and title case in the source — the
+       DOM never spelled it the way this compared. That was repaired with
+       a case-insensitive compare on leaf <span>/<div> nodes.
 
-       Leaf nodes only, and the first in document order, because the footer
-       carries the same slogan in a <div>. Matching on the tag alone happens
-       to disambiguate today and would stop the moment either one changed
-       element. */
-    const eyebrow = [...root.querySelectorAll("span, div")]
-      .find((e) => e.children.length === 0
-        && e.textContent.trim().toUpperCase() === "AGILITY THROUGH ANALYTICS"
-        && e.getBoundingClientRect().height > 0);
+       Then the homepage became two homepages. The phone's own hero draws
+       its eyebrow as a <p> with an icon inside it, so it is neither a
+       leaf nor a span, and the desktop one is CSS-hidden at this width
+       and reports zero height — nothing matched again. The property this
+       test measures is the gap between the fixed header and the first
+       thing under it, and it has never had anything to do with what that
+       thing says or which element it is.
+
+       Both eyebrows carry the attribute; the visible one is whichever
+       homepage this width renders. */
+    const eyebrow = [...root.querySelectorAll("[data-hero-eyebrow]")]
+      .find((e) => e.getBoundingClientRect().height > 0);
     if (!header || !eyebrow) return { found: false };
     return {
       found: true,
@@ -631,6 +662,16 @@ test("every player on the Players tab is reachable on a phone", async ({ browser
     b.click();
   }, name);
 
+  // The start button by attribute rather than by label — see "nothing is
+  // sitting on top of the Start button" above for why the label is not a
+  // thing to match on.
+  const clickStart = () => page.evaluate(() => {
+    const b = [...document.querySelectorAll("#draftroom-root [data-start-draft]")]
+      .find((x) => x.getBoundingClientRect().height > 0);
+    if (!b) throw new Error("no [data-start-draft] on screen in #draftroom-root");
+    b.click();
+  });
+
   /* One step, not two. "Start mock draft" used to open the entry screen and
      leave a second "Start draft" to press; handleStartNew() now calls
      beginDraft() straight from the lobby for a solo draft, deliberately —
@@ -644,7 +685,7 @@ test("every player on the Players tab is reachable on a phone", async ({ browser
      to 2100 (SonarLoader's own RING_MS) so the sweep can complete — a fixed
      500ms wait was racing it and would have gone red again the next time
      that number moved. Waiting for the nav to exist cannot. */
-  await clickIn("Start mock draft");
+  await clickStart();
   await page.waitForFunction(() => {
     const root = document.getElementById("draftroom-root");
     return [...root.querySelectorAll("button")]
@@ -764,10 +805,11 @@ test("the bottom sheet cycles through its three snap heights on a tap", async ({
     await page.waitForTimeout(650); // the spring settles well inside this
   }
 
-  /* 188 / 470 / 700 are SHEET_SNAPS as authored, but the tallest of the
+  /* 58 / 470 / 700 are SHEET_SNAPS as authored, but the tallest of the
      three is capped on this device: at a 664px-tall viewport (this file's
      own PHONE profile — see the "Decide"-replacement test's own note on
-     it) minus the 106px CockpitHeaderPhone, only 558px is actually free.
+     it) minus whatever CockpitHeaderPhone actually measures, only that
+     much is free.
      That cap is the fix for a real bug this test is what caught: with the
      sheet honestly at 700px it rendered 36px taller than the viewport, and
      the header — `z-40`, above the sheet's own `z-30` — physically covered
@@ -779,16 +821,42 @@ test("the bottom sheet cycles through its three snap heights on a tap", async ({
      because the header sat on top of that sliver too. BottomSheet.jsx now
      takes a `maxHeight` prop for exactly this, and DraftRoomPhone.jsx
      supplies `window.innerHeight - HEADER_H`. */
+  /* The cap is derived from the header, not written down as a number.
+
+     It was 558 — the 664px viewport minus a CockpitHeaderPhone that was
+     hardcoded at 106px. That constant was only ever right on a device with
+     a notch: `pt-[env(safe-area-inset-top)]` is 0 everywhere else, so the
+     real header measured about 65 and the board started 41px below where
+     the header ended. The header measures and reports its own height now,
+     which makes the honest cap 588 here — and this assertion would have
+     gone red for the fix as loudly as for a regression, because it was
+     pinned to the wrong number's arithmetic rather than to the rule.
+
+     CLAUDE.md already states the rule this now follows, about the padding
+     that stood in for a fixed header's height: assert the relationship,
+     never an absolute offset, or the test has to be rewritten every time
+     the header's own height moves. */
+  const headerH = await page.evaluate(() => {
+    const h = document.querySelector("#draftroom-root header");
+    return Math.round(h.getBoundingClientRect().height);
+  });
+  const cap = Math.min(700, 664 - headerH);
+
   const start = await readHeight();
   expect(start, "the sheet opens at its middle snap").toBe(470);
 
   await tapHandle();
   const afterOne = await readHeight();
-  expect(afterOne, "one tap grows it to the capped tallest snap").toBe(558);
+  expect(afterOne, "one tap grows it to the tallest snap the header leaves room for").toBe(cap);
 
   await tapHandle();
   const afterTwo = await readHeight();
-  expect(afterTwo, "a second tap wraps to the shortest snap").toBe(188);
+  /* 58, not 188. The shortest snap used to leave a tab row and two list
+     rows showing, which is a shorter sheet still covering the last four
+     rounds of the board — and the board is what somebody swiping the sheet
+     down is trying to see. It is the drag handle and the tab row and
+     nothing else now. */
+  expect(afterTwo, "a second tap wraps to the shortest snap").toBe(58);
 
   await tapHandle();
   const afterThree = await readHeight();
@@ -799,7 +867,7 @@ test("the bottom sheet cycles through its three snap heights on a tap", async ({
   // that lands within the viewport but under CockpitHeaderPhone (z-40) would
   // pass a naive "is it visible" check and still do nothing, which is the
   // exact shape the bug above took.
-  for (const expected of [558, 188, 470]) {
+  for (const expected of [cap, 58, 470]) {
     const p = await getHandlePoint();
     const underCursor = await page.evaluate(({ x, y }) => {
       const el = document.elementFromPoint(x, y);
@@ -822,7 +890,7 @@ test("the bottom sheet cycles through its three snap heights on a tap", async ({
   await page.mouse.up();
   await page.waitForTimeout(700);
   const dragged = await readHeight();
-  expect(dragged, "a drag past the cap settles at the cap, not above it").toBeLessThanOrEqual(558);
+  expect(dragged, "a drag past the cap settles at the cap, not above it").toBeLessThanOrEqual(cap);
   expect(dragged, "and it did grow — this is the drag path, not a stuck tap").toBeGreaterThan(470);
 
   await context.close();

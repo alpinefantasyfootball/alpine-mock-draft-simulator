@@ -4,6 +4,7 @@ import DraftLocker from './DraftLocker.jsx'
 import DraftLogDock from './DraftLogDock.jsx'
 import DraftCockpitHeader from './DraftCockpitHeader.jsx'
 import DraftMenuOverlay from './DraftMenuOverlay.jsx'
+import NotificationSettings from './settings/NotificationSettings.jsx'
 import DraftWithFriendsModal from './DraftWithFriendsModal.jsx'
 import DraftBoardGrid from './DraftBoardGrid.jsx'
 import PickTicker from './PickTicker.jsx'
@@ -24,7 +25,10 @@ import MobileDraftTabBar from './MobileDraftTabBar.jsx'
 import PickClockBand from './PickClockBand.jsx'
 import { POS_LIST } from './draftRoomPositions.js'
 import { useMinWidth, usePhoneWidth } from '../hooks/useBreakpoint.js'
+import { useDraftNotifications } from '../hooks/useDraftNotifications.js'
 import DraftRoomPhone from './phone/DraftRoomPhone.jsx'
+import MockDraftsPhone from './phone/MockDraftsPhone.jsx'
+import EarlyAccessModal from './EarlyAccessModal.jsx'
 
 // The Board tab's own dock height per tray position — fixed pixels. This
 // used to also size a percentage-of-remaining-space split on the Analysis
@@ -189,6 +193,18 @@ export default function DraftRoom() {
   const TRAY = ['hidden', 'default', 'raised']
   const [tray, setTray] = useState('default')
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [notifyOpen, setNotifyOpen] = useState(false)
+  /* Which of the two Lobby screens a phone is on. null is the simple Mock
+     Drafts list; anything else is the full analytics dashboard, with an
+     id meaning "and open this report". Desktop never reads it — the
+     dashboard is unconditionally what #/drafts is there. */
+  const [lockerView, setLockerView] = useState(null)
+  const sportsModalRef = useRef(null)
+  /* Deleting a locker entry changes nothing the engine broadcasts — it is a
+     localStorage rewrite — so there is no "juke:header" to ride and this
+     screen has to redraw itself. The same local bump DraftLocker's own
+     forceLocal() already does for the identical action. */
+  const [, forceTick] = useReducer((n) => n + 1, 0)
   // The Lobby's direct "Draft with friends" popover — see
   // DraftWithFriendsModal.jsx. Separate from settingsOpen: the two used to
   // be the same modal (Edit setup -> Invite tab), and collapsing them back
@@ -232,6 +248,20 @@ export default function DraftRoom() {
   // The one thing that can refuse the Start button, said beside it rather
   // than folded away — the rule the legacy setup screen already followed.
   const problem = engine ? engine.setupProblem() : ''
+
+  /* The saved, unfinished draft — for the phone Mock Drafts list's own
+     resume row. DraftLocker computes the same thing for its InProgressBand
+     and keeps it local, which is right for it; this one has to live here
+     because the two Lobby screens are chosen here.
+
+     inProgressSummary() is guarded on its own (CLAUDE.md records the cold-
+     load ReferenceError that came of trusting a caller to check dataReady()
+     first), so this is safe on the first pass and simply returns null until
+     the deferred data lands. `tick` is what makes it re-read once it has,
+     and after a discard or a resume. */
+  const inProgress = engine && tick >= 0 ? (() => {
+    try { return engine.inProgressSummary() } catch { return null }
+  })() : null
   // Recomputed each render rather than memoized: these change on every pick,
   // and state.picks is mutated in place so nothing here may be keyed on it.
   const filterCounts = engine ? engine.filterCounts() : null
@@ -423,6 +453,21 @@ export default function DraftRoom() {
   // insights effect below can watch it — the later render code reuses this
   // same value rather than asking engine.draftOver() a second time.
   const draftIsOver = engine && started ? !!engine.draftOver() : false
+
+  /* Tell the reader it is their pick when they are not looking at the tab.
+     Sits here, above every early return, for the reason the comment on the
+     derived values above already gives: every hook in this component runs
+     on every render in the same order, so this cannot wait until after
+     `if (!engine) return null` or the phone branch's own return. The hook
+     is a no-op with notifications off, unsupported or unpermitted, and
+     fires on the turn-CHANGE rather than the turn — see its own file for
+     why that distinction is the whole feature. */
+  useDraftNotifications({
+    engine,
+    myTurn,
+    over: draftIsOver,
+    code: DE && league && onClock ? DE.pickCode(picks.length + 1, league) : null,
+  })
 
   // Which team's report the Insights tab is showing. Yours on the
   // auto-navigate below; a board header click opens that column's team
@@ -652,7 +697,13 @@ export default function DraftRoom() {
        z-40 would trap this whole overlay beneath it. */
     return (
       <div className="fixed inset-0 z-[60] flex flex-col bg-slate text-white">
-        <LobbyBar onOpenSettings={() => setSettingsOpen(true)} />
+        {/* Not on the phone's Mock Drafts screen: that screen carries its
+            own back chevron, its own title and its own "Draft settings"
+            button, so LobbyBar above it is a second header with a second
+            gear opening the identical modal — the duplicate-affordance
+            problem, stacked. It stays for the dashboard, which has no
+            header of its own at any width. */}
+        {!(isPhone && !lockerView) && <LobbyBar onOpenSettings={() => setSettingsOpen(true)} />}
 
         {settingsOpen && (
           <DraftSettingsModal
@@ -678,25 +729,65 @@ export default function DraftRoom() {
             elsewhere in this file — never a fixed offset guessed
             independently of what's actually covering the content. lg: reverts
             to nothing, since the bar itself is lg:hidden. */}
-        <div className="min-h-0 flex-1 overflow-y-auto pb-[calc(58px+env(safe-area-inset-bottom))] lg:pb-0">
-          {/* Host-only gating belongs on the real Start Draft action one
-              screen further in, not here — anyone should be able to walk in
-              and look at seats regardless of who the room says can actually
-              begin it. Only a genuinely broken league config (problem) stops
-              the launcher's own CTA from working, same rule LobbyBar used to
-              enforce before this screen owned the action itself. */}
-          <DraftLocker
-            onStartNew={handleStartNew}
-            onRunAtSeat={startAtSeat}
-            problem={problem}
-            lobbySlot={lobbySlot}
-            roomActive={roomActive}
-            onSetLobbySlot={setLobbySlot}
-            onOpenSettings={() => setSettingsOpen(true)}
-            onDraftWithFriends={handleDraftWithFriends}
-          />
+        {/* No bottom padding of its own any more: the nav is a floating
+            pill now (FloatingNavPill.jsx) and a `fixed` pill costs the page
+            no layout height, so the clearance moved onto the screens
+            themselves — NAV_PILL_CLEARANCE, which each of them reserves.
+            Reserving it here too would double it on the phone screen and
+            leave the desktop dashboard with padding for a bar that is
+            `sm:hidden`. */}
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          {/* Two Lobbies, and which one a phone gets is a real product
+              split rather than a responsive layout. See MockDraftsPhone's
+              own file comment: the dashboard is twelve analytics cells and
+              a history table, which stacks into one very long column on a
+              390px screen with the button the whole screen exists to offer
+              somewhere past the fourth chart. Nothing is lost — "Your
+              insights" on that screen opens this exact component, and a
+              history row opens this exact component's own report path. */}
+          {isPhone && !lockerView ? (
+            <MockDraftsPhone
+              engine={engine}
+              tick={tick}
+              problem={problem}
+              inProgress={inProgress}
+              onStartNew={handleStartNew}
+              onResume={() => { engine.resumeSavedDraft(); location.hash = '#/draft-room'; setEnteredRoom(true) }}
+              onDiscard={() => engine.restart()}
+              onOpenSettings={() => setSettingsOpen(true)}
+              onOpenAnalytics={() => setLockerView('dashboard')}
+              onAnalyze={(id) => setLockerView(id)}
+              onDelete={(id) => { engine.deleteHistoryDraft(id); forceTick() }}
+              onSignupSport={(sport) =>
+                sportsModalRef.current?.open(
+                  `Juke is football only today. Leave an email and we'll tell you when ${sport} opens.`,
+                  'sport:' + sport.toLowerCase(),
+                )
+              }
+            />
+          ) : (
+            /* Host-only gating belongs on the real Start Draft action one
+               screen further in, not here — anyone should be able to walk in
+               and look at seats regardless of who the room says can actually
+               begin it. Only a genuinely broken league config (problem) stops
+               the launcher's own CTA from working, same rule LobbyBar used to
+               enforce before this screen owned the action itself. */
+            <DraftLocker
+              onStartNew={handleStartNew}
+              onRunAtSeat={startAtSeat}
+              problem={problem}
+              lobbySlot={lobbySlot}
+              roomActive={roomActive}
+              onSetLobbySlot={setLobbySlot}
+              onOpenSettings={() => setSettingsOpen(true)}
+              onDraftWithFriends={handleDraftWithFriends}
+              initialAnalyzeId={typeof lockerView === 'string' && lockerView !== 'dashboard' ? lockerView : null}
+              onBackToList={isPhone ? () => setLockerView(null) : undefined}
+            />
+          )}
         </div>
         <MobileAppTabBar />
+        <EarlyAccessModal ref={sportsModalRef} />
       </div>
     )
   }
@@ -828,7 +919,7 @@ export default function DraftRoom() {
     )
   }
 
-  const code = onClock && DE ? DE.pickCode(overall, league.teams) : null
+  const code = onClock && DE ? DE.pickCode(overall, league) : null
 
   // "If you wait" means past *this* pick — when it's genuinely my turn,
   // nextPicksFor(mySlot, 1) returns the pick I'm on right now (trivial: of
@@ -1076,6 +1167,15 @@ export default function DraftRoom() {
   // action. Not reimplemented here.
   const handleDiscard = () => engine.restart()
 
+  /* "End draft" finishes it rather than stepping away from it — see
+     DraftMenuOverlay's own note on why those have to be two different
+     things and why this is never offered in a room. autoDraftRest() is
+     app.js's own function, the same one a finished-draft test harness
+     uses; the effect above that flips `view` to 'insights' on draftIsOver
+     is what lands the reader on the report, and the Lobby is one press
+     from there with the draft in the locker. */
+  const handleEndDraft = () => engine.autoDraftRest()
+
   // The real queue (state.queue, an array of player names) — queueToggle()
   // is the exact function the legacy rail's star button already calls.
   // queuedNames as a Set just makes the sidebar's per-row lookup cheap.
@@ -1155,12 +1255,17 @@ export default function DraftRoom() {
             engine={engine}
             onClose={() => setMenuOpen(false)}
             onOpenSettings={() => setSettingsOpen(true)}
+            onOpenNotifications={() => setNotifyOpen(true)}
             inRoom={roomActive}
-            discardLabel={hasRoomVal ? 'Leave the room' : 'Discard draft'}
+            started={started}
+            over={draftIsOver}
+            discardLabel={hasRoomVal ? 'Leave the room' : 'Delete draft'}
             discardDanger={!hasRoomVal}
             onDiscard={handleDiscard}
+            onEndDraft={handleEndDraft}
           />
         )}
+        {notifyOpen && <NotificationSettings onBack={() => setNotifyOpen(false)} />}
         {settingsOpen && (
           <DraftSettingsModal
             engine={engine}
@@ -1213,12 +1318,17 @@ export default function DraftRoom() {
           engine={engine}
           onClose={() => setMenuOpen(false)}
           onOpenSettings={() => setSettingsOpen(true)}
+          onOpenNotifications={() => setNotifyOpen(true)}
           inRoom={roomActive}
-          discardLabel={hasRoomVal ? 'Leave the room' : 'Discard draft'}
+          started={started}
+          over={draftIsOver}
+          discardLabel={hasRoomVal ? 'Leave the room' : 'Delete draft'}
           discardDanger={!hasRoomVal}
           onDiscard={handleDiscard}
+          onEndDraft={handleEndDraft}
         />
       )}
+      {notifyOpen && <NotificationSettings onBack={() => setNotifyOpen(false)} />}
       {/* pt-[46px]/lg:pt-[62px] matches DraftCockpitHeader's own height at
           each breakpoint — 46px below lg now that a live draft renders the
           compact mobile header there instead of the 62px bar (see that
@@ -1262,7 +1372,7 @@ export default function DraftRoom() {
           nextOverall={nextOverall}
           nextPicks={nextPicks}
           overall={overall}
-          teams={league.teams}
+          league={league}
           onClock={onClock}
           teamLabelOf={(slot) => engine.teamLabel(slot)}
           collapsed={bandCollapsed}
