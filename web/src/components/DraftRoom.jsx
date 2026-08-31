@@ -485,11 +485,34 @@ export default function DraftRoom() {
   // once — Decide is hidden from the tab bar the same edge this fires on
   // (see DraftCockpitHeader.jsx/MobileDraftTabBar.jsx), so there's nowhere
   // stale left to nudge away from.
+  //
+  // The falling edge matters just as much and had no handler, which is the
+  // second half of the "Start mock draft opens an old insights report" bug.
+  // This component never unmounts between drafts — the Lobby is one of its
+  // own branches (draftsActive, below), so finishing a draft, going back to
+  // the locker and starting a new one is all one mount, and `view` stayed on
+  // 'insights' from wherever the last draft had left it. With the engine
+  // side fixed the new draft was genuinely fresh and still landed on a
+  // report: grade A+, every lineup slot "Empty", the header beside it
+  // correctly reading ROUND 1 · PICK 1. A right value in the wrong view.
+  //
+  // Watched through a ref rather than added as an `else` on the branch
+  // above, because this effect also depends on mySlot: an `else` would fire
+  // on any mySlot change while a draft was merely in progress and yank a
+  // reader off whatever tab they were on. Only a real true -> false
+  // transition means "the draft I was reading about is gone".
+  const wasOverRef = useRef(false)
   useEffect(() => {
     if (draftIsOver) {
       setInsightsSlot(mySlot)
       setView('insights')
+    } else if (wasOverRef.current) {
+      // Board rather than the previous tab: there is no previous tab to
+      // return to, and Board is where every other "Close" in this room
+      // already lands.
+      setView('board')
     }
+    wasOverRef.current = draftIsOver
   }, [draftIsOver, mySlot])
 
   // The Roster panel opens on your own seat. mySlot is 0 until a draft
@@ -548,9 +571,34 @@ export default function DraftRoom() {
   // onStartDraft, because the solo-skip path below needs the identical
   // sequence and a second copy of "start the sonar, then start the
   // engine" is exactly the kind of duplication that drifts.
-  const beginDraft = () => {
+  /* Everything this screen has to forget before a new draft, in one place
+     because there are exactly two functions that call engine.startDraft()
+     and a second copy of this would drift the first time a third arrives.
+
+     Autopilot is a decision about the next few minutes, not a preference —
+     the same reasoning state.autoMe is already deliberately never saved
+     under ("coming back to a draft still on autopilot is a nasty surprise").
+     soloAutopick is this component's own state and this component does not
+     unmount between drafts, so a manager who armed it to step away from one
+     draft had it still armed on the next, which then drafted their team
+     without being asked. Found while fixing the stale-picks bug above: same
+     screen, same shape, one flag over.
+
+     Deliberately not an effect on an edge of `started` or `draftIsOver`,
+     which is where this was written first and does not hold: "Back to the
+     locker" is a route change that leaves state.started true, so neither
+     flag moves between finishing one draft and starting the next, and the
+     effect never re-fires. That is the same wrong assumption the bug itself
+     is made of. Pressing Start is the event that actually means "new
+     draft", so this hangs off that and nothing else. */
+  const armFreshDraft = () => {
+    setSoloAutopick(false)
     startingSinceRef.current = performance.now()
     setStarting(true)
+  }
+
+  const beginDraft = () => {
+    armFreshDraft()
     /* The clock comes from state, which is where it lives — the New Mock
        card and the settings modal both write it through setClockLength().
        Reading it here rather than holding a second copy is what stopped
@@ -597,8 +645,7 @@ export default function DraftRoom() {
     setLobbySlot(seat)
     location.hash = '#/draft-room'
     setEnteredRoom(true)
-    startingSinceRef.current = performance.now()
-    setStarting(true)
+    armFreshDraft()
     engine.startDraft({ mySlot: seat, clockLength: engine.clockLength() })
   }
 
