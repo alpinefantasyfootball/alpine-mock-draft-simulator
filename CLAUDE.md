@@ -2795,6 +2795,47 @@ board. A per-row `DEEP` badge carries the same information for every other
 sort order, where the divider can't — once the list isn't in board order,
 deep and real players interleave and there is no single line to draw.
 
+**Confirmed against the live feeds on 30 August 2026, which the session that
+built this could not do.** Sleeper and FFC were both reachable, and all three
+sets came out at the target with the two holes below closed:
+
+```
+standard  total 480 | ranked 219 | teams 32 | FA: no | no-bye 0 | K 32  DST 32
+half      total 480 | ranked 230 | teams 32 | FA: no | no-bye 0 | K 32  DST 32
+ppr       total 480 | ranked 266 | teams 32 | FA: no | no-bye 0 | K 32  DST 32
+```
+
+**A free agent is not "no team", and the two look like one test.** The filter
+was `entry.get("team")`, which correctly excluded a `None` team and let every
+unsigned player straight through — Sleeper stamps them `"FA"`, which is
+truthy. Measured on the real feed: **fourteen of them on the half-PPR board**,
+a retired Derek Carr and four unsigned kickers among them. Each arrived as a
+33rd "club" with no accent colour and a bye of **0**, and a 0 bye reads as
+*never on bye* — a quietly better roster in a grade that spends 10% of itself
+on bye-week safety. The test is `clean_team(...) in NFL_TEAMS` now, in both
+`extend_deep_bench()` and `join_rows()`, from one constant.
+
+**`join_rows()` had the same hole and it predates the deep bench.** FFC ranks a
+few unsigned players too, because its sample was taken before they were
+released. The 30 August build carried Bub Means in the standard and PPR sets
+and missed the half set only by luck, which is why `team-accent.spec.mjs`'s
+"all 32 clubs resolve to a colour" had never gone red. It goes red the moment
+the data shifts one player, which is what found it.
+
+**Every roster needs a kicker and a defense, and `search_rank` ranks both far
+below any receiver.** The half-PPR set carried **19 kickers and 21 defenses**
+against one starting slot each per team, so an 18- or 24-team league could not
+fill them *even with picks to spare*. `poolSize()` cannot see it, because it
+counts players and not positions — it surfaces as a draft that completes and
+leaves lineups unfillable rather than as a setup screen that refuses.
+
+Filling to `DEEP_TARGET` by `search_rank` alone happens to cover it at 480,
+which is exactly the kind of accident that stops being true when the target
+moves. `FULL_POSITION_COVER` states it as a rule instead: K and DST are pulled
+to the front of the queue until all 32 clubs have one. **A total that fits is
+not the same as a roster that fills**, and any future check on pool depth wants
+to ask both.
+
 **Confirming any of this against a live, ~460-player board could not be
 done against real network data — Sleeper and FFC are both unreachable from
 this environment (org egress policy) — so verification split into two

@@ -88,6 +88,10 @@ KEEP = 320             # players written per ADP set (FFC currently returns 205-
 # ceiling extend_deep_bench() fills toward, not a floor it pads to
 # artificially if Sleeper's own pool runs out first.
 DEEP_TARGET = 480
+# One starting kicker and one starting defense per club, at the largest league
+# the setup screen offers. There are only 32 of each in the league, so this is
+# "all of them" rather than a number chosen to fit.
+FULL_POSITION_COVER = 32
 
 # Every fantasy-relevant Sleeper position, in one place. index_sleeper() and
 # extend_deep_bench() both need exactly this list, and writing it out twice
@@ -153,6 +157,11 @@ TEAM_CITIES = {
     "SEA": "Seattle", "SF": "San Francisco", "TB": "Tampa Bay", "TEN": "Tennessee",
     "WAS": "Washington",
 }
+
+# The 32 clubs, and the one test for "is this a real team". TEAM_CITIES is
+# already exactly them and is needed for a defense's own city name anyway, so
+# this is a view of it rather than a second list that could drift.
+NFL_TEAMS = frozenset(TEAM_CITIES)
 
 INJURY_CODES = {
     "questionable": "Q", "doubtful": "D", "out": "O",
@@ -629,6 +638,16 @@ def join_rows(adp_rows, sleeper, indexes):
             continue
 
         team = clean_team(row.get("team"))
+        # Same rule as extend_deep_bench()'s, from the same constant, because
+        # FFC ranks a few unsigned players too -- its sample was taken before
+        # they were released, so their ADP is a fact about a roster that no
+        # longer exists. Left in they arrive as a 33rd "club" called FA with no
+        # bye. Pre-existing rather than new: the 30 August build carried Bub
+        # Means in the standard and PPR sets and missed the half set only by
+        # luck, which is why "all 32 clubs resolve to a colour" had never gone
+        # red.
+        if team not in NFL_TEAMS:
+            continue
         name = (row.get("name") or "").strip()
         key = normalise(name)
         sleeper_position = "DEF" if position == "DST" else position
@@ -711,7 +730,15 @@ def extend_deep_bench(players, sleeper, team_byes, target):
         (player_id, entry) for player_id, entry in sleeper.items()
         if player_id not in covered
         and entry.get("position") in FANTASY_POSITIONS
-        and entry.get("team")
+        # `entry.get("team")` was the test here and it is truthy for a free
+        # agent: Sleeper stamps an unsigned player "FA", so retired and
+        # released players came through as a 33rd "club" with no accent colour
+        # and, worse, no bye. team_byes.get(team, 0) then gives them 0, and a
+        # 0 bye reads as *never on bye* -- a quietly better roster in a grade
+        # that spends 10% of itself on bye-week safety. Measured on the real
+        # feed: fourteen of them on the half-PPR board, a retired Derek Carr
+        # and four unsigned kickers among them.
+        and clean_team(entry.get("team")) in NFL_TEAMS
     ]
     candidates.sort(key=lambda pair: pair[1].get("search_rank") or 9_999_999)
 
@@ -725,8 +752,37 @@ def extend_deep_bench(players, sleeper, team_byes, target):
     # per-position one, mark where real ADP ends (see PlayerQueueSidebar.jsx).
     next_adp = int(max((p["adp"] for p in players), default=0)) + 1
 
+    # Kickers and defenses are pulled to the front of the queue until every
+    # club has one, before depth is spent on anyone else.
+    #
+    # search_rank is a "how known is this player" figure, so it orders the
+    # league's kickers and defenses far below its receivers -- and every roster
+    # needs exactly one of each. Measured on the 30 August board: the half-PPR
+    # set carried 19 kickers and 21 defenses, so an 18- or 24-team league could
+    # not have filled those two starting slots even with picks to spare. That
+    # is a ceiling poolSize() cannot see, because it counts players and not
+    # positions, and it surfaces as a draft that completes and leaves lineups
+    # unfillable rather than as a setup screen that refuses.
+    #
+    # Filling to DEEP_TARGET by search_rank alone happens to cover it today at
+    # 480, which is exactly the kind of accident that stops being true when the
+    # target moves. Stated as a rule instead: a total that fits is not the same
+    # as a roster that fills.
+    have = {}
+    for player in players:
+        have[player["pos"]] = have.get(player["pos"], 0) + 1
+    scarce, rest = [], []
+    for player_id, entry in candidates:
+        position = POSITION_MAP.get(entry.get("position"))
+        if position in ("K", "DST") and have.get(position, 0) < FULL_POSITION_COVER:
+            have[position] = have.get(position, 0) + 1
+            scarce.append((player_id, entry))
+        else:
+            rest.append((player_id, entry))
+    ordered = scarce + rest
+
     extra = []
-    for player_id, entry in candidates[:room]:
+    for player_id, entry in ordered[:room]:
         position = POSITION_MAP.get(entry.get("position"))
         team = clean_team(entry.get("team"))
         if position == "DST":

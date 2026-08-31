@@ -547,8 +547,13 @@ check("nothing to add once the target is already met", no_op, DEEP_PLAYERS)
 
 extended = bp.extend_deep_bench(list(DEEP_PLAYERS), DEEP_SLEEPER, DEEP_BYES, target=5)
 check("real ADP is left in place, first", extended[0]["id"], "1001")
-check("ranked by search_rank -- lowest (best-known) first, ties in candidate order",
-      [p["id"] for p in extended[1:]], ["2002", "2001", "2005", "MIA"])
+# The Miami defense leads the tail rather than trailing it, and that is the
+# scarce-position rule rather than a search_rank surprise: every roster needs
+# one defense and one kicker, and search_rank puts both far below any
+# receiver. Everyone after them is still in search_rank order -- 2002 at 100,
+# 2001 at 300, then 2005 with none at all.
+check("scarce positions lead, then search_rank -- best-known first",
+      [p["id"] for p in extended[1:]], ["MIA", "2002", "2001", "2005"])
 check("an id already on the real list is never duplicated",
       "1001" in [p["id"] for p in extended[1:]], False)
 check("no team means no candidacy", "2003" in [p["id"] for p in extended], False)
@@ -562,9 +567,12 @@ check("no real ADP sample behind these, so sd/td are both zero",
 check("adp continues past the real sequence rather than restarting it",
       [p["adp"] for p in added], [2.0, 3.0, 4.0, 5.0])
 check("bye comes from the team lookup built off real ADP rows, not a fetch of its own",
-      [p["bye"] for p in added], [11, 8, 9, 11])
+      [p["bye"] for p in added], [11, 11, 8, 9])
+# Found by id rather than by position in the list. It was extended[4], which
+# was true until the scarce-position rule moved defenses to the front -- an
+# index is a claim about ordering smuggled into a test about naming.
 check("a team defense gets the same city name join_rows() gives one",
-      extended[4]["name"], "Miami Defense")
+      next(p["name"] for p in extended if p["id"] == "MIA"), "Miami Defense")
 
 exhausted = bp.extend_deep_bench(list(DEEP_PLAYERS), DEEP_SLEEPER, DEEP_BYES, target=50)
 check("stops once the real pool runs out, rather than inventing players to hit target",
@@ -582,6 +590,44 @@ NO_FULL_NAME = {
 fallback = bp.extend_deep_bench(list(DEEP_PLAYERS), NO_FULL_NAME, DEEP_BYES, target=2)
 check("first_name + last_name stands in for a missing full_name",
       fallback[1]["name"], "Fallback Name")
+
+# A free agent is not "no team". Sleeper stamps an unsigned player "FA",
+# which is truthy, so `entry.get("team")` let them through while correctly
+# excluding the None case above -- the two look like the same test and are
+# not. Measured on the real feed before this was fixed: fourteen of them on
+# the half-PPR board, a retired Derek Carr and four unsigned kickers among
+# them, each arriving as a 33rd "club" with a bye of 0. A 0 bye reads as
+# *never on bye*, which is a quietly better roster in a grade that spends
+# 10% of itself on bye-week safety.
+FA_SLEEPER = {
+    "1001": DEEP_SLEEPER["1001"],
+    "3001": {"full_name": "Released Guy", "position": "WR", "team": "FA", "search_rank": 1},
+    "3002": {"full_name": "Signed Guy",   "position": "WR", "team": "DET", "search_rank": 900},
+}
+fa = bp.extend_deep_bench(list(DEEP_PLAYERS), FA_SLEEPER, DEEP_BYES, target=3)
+check("a free agent is dropped even though \"FA\" is a truthy team",
+      [p["id"] for p in fa], ["1001", "3002"])
+check("and no club called FA reaches the board",
+      sorted({p["team"] for p in fa}), ["BUF", "DET"])
+
+# Every roster needs one kicker and one defense, and search_rank ranks both
+# far below any receiver -- so depth alone does not guarantee the two slots a
+# league cannot start without. FULL_POSITION_COVER pulls them forward until
+# every club has one. Here the receiver is the best-known player in the pool
+# and still goes last.
+COVER_SLEEPER = {
+    "1001": DEEP_SLEEPER["1001"],
+    "4101": {"full_name": "Famous Receiver", "position": "WR", "team": "DET", "search_rank": 2},
+    "4102": {"full_name": "Some Kicker",     "position": "K",  "team": "MIA", "search_rank": 5000},
+    "MIA":  {"position": "DEF", "team": "MIA"},
+}
+cover = bp.extend_deep_bench(list(DEEP_PLAYERS), COVER_SLEEPER, DEEP_BYES, target=3)
+check("a kicker and a defense are taken before a better-known receiver",
+      sorted(p["pos"] for p in cover[1:]), ["DST", "K"])
+
+deep_all = bp.extend_deep_bench(list(DEEP_PLAYERS), COVER_SLEEPER, DEEP_BYES, target=4)
+check("and the receiver still arrives once both slots are covered",
+      [p["pos"] for p in deep_all[1:]].count("WR"), 1)
 
 print()
 if FAILURES:
