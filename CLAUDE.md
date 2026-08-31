@@ -3520,9 +3520,10 @@ the screens themselves.
 
 ### Behavioural hooks, because labels keep moving
 
-Three `data-*` attributes were added purely so tests stop breaking on copy:
-`data-start-draft`, `data-hero-eyebrow` and `data-pick-code`. Each one exists
-because a rename failed a test about something else.
+Four `data-*` attributes were added purely so tests stop breaking on copy:
+`data-start-draft`, `data-hero-eyebrow`, `data-pick-code` and
+`data-hero-cta`. Each one exists because a rename — or, for the last, a
+second page — failed a test about something else.
 
 - The start button has been called "Enter Draft Room", "Start draft", "Start
   mock draft" and now "Start a mock draft". `phone.spec.mjs` carried a regex
@@ -3531,6 +3532,18 @@ because a rename failed a test about something else.
   once on case (the text is uppercased in CSS and title case in the source)
   and again when the phone homepage drew it as a `<p>` with an icon rather
   than a bare `<span>`.
+- **`data-hero-cta` is the one that is not about a rename.** It already
+  existed on the marketing page, and `sonar.spec.mjs` uses it to hit-test
+  the page's primary call to action — the only check that can tell an
+  overlay that has really gone from one that is merely transparent. It is
+  scoped to a visible instance, which was enough while one homepage
+  rendered at every width. With two mounted and CSS picking between them,
+  the desktop tree is `hidden sm:block` and reports a zero box on a phone,
+  and the launcher carried no marker at all — so the check reported "the
+  hero CTA rendered: false" against a page that was fine. The Mock Draft
+  row carries it now. **Splitting a page by breakpoint orphans every
+  attribute only one half of it carries**, and the failure reads as a
+  missing element rather than as a missing marker.
 - The pick code was found by `span.font-plex`, on the strength of a comment
   saying that class "names nothing else on a card" — true until the matte
   redesign made the position abbreviation mono too, which doubled the count
@@ -4219,6 +4232,31 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   the repository, because design tokens are exactly what the *other* session
   edits while yours has a server up — so restart the preview after any change
   to `tailwind.config.js`, whoever made it.
+- **A proxied sandbox makes a render-blocking `<link>` look like a broken
+  loader.** `sonar.spec.mjs` holds `#boot-sonar` to leaving between 4800ms and
+  5800ms of navigation start, and it came back `removedAt: null` — the overlay
+  still on screen nine seconds in, on a build whose teardown had not been
+  touched. Nothing was wrong with it. `web/index.html` links Barlow Condensed
+  from `fonts.googleapis.com`, that link is render-blocking, and in a container
+  where outbound HTTPS goes through an agent proxy whose CA the browser does
+  not trust, the TLS handshake hangs and resets — twice, six seconds each. So
+  `domContentLoadedEventEnd` was **12,512ms**, the teardown's two nested rAFs
+  fired after it, and every bound in the file was missed by seven seconds.
+
+  **Chromium reads `HTTPS_PROXY` from the environment by itself**, which is
+  what makes this hard to see and what makes two obvious repairs do nothing:
+  `--host-resolver-rules` and an `/etc/hosts` entry are both resolution-side,
+  and with a proxy in play the hostname is resolved at the proxy, not here.
+  Measured: DCL stayed at 12.4s under both. Running the suite with the proxy
+  variables unset takes it to **120ms** and the file to 4 passed. Never
+  `--ignore-certificate-errors` for this — the fault is reachability, and
+  turning off verification is a different and much larger change.
+
+  The tell is that the failing number is a *duration* and the thing it
+  measures is downstream of page load. Check `performance.getEntriesByType(
+  "resource")` for an entry whose `responseEnd` is in the seconds before
+  reading anything into the app's own timing. This is the fifth time in this
+  file that the tooling has worn a bug's clothes.
 - **In a headless or hidden browser, disable transitions before you measure
   a colour.** A pane that is not compositing produces no frames, so a CSS
   transition never advances — it sits frozen at its starting value, and
