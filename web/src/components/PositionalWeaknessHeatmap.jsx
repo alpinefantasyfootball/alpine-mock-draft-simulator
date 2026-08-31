@@ -33,9 +33,11 @@ function mix(hexA, hexB, t) {
 
 // Red -> yellow -> green: the traffic-light convention a heatmap is
 // expected to use, rather than this grid's usual teal/rose pairing. Green
-// is otherwise unused for *meaning* anywhere in Juke (RB's emerald in
-// POS_SOLID is identity, not a verdict — it stays put, it just isn't what
-// this scale is borrowing), so introducing it here as "strong" doesn't
+// is otherwise unused for *meaning* anywhere in Juke (RB's emerald in the
+// position palette is identity, not a verdict — it stays put, it just isn't
+// what this scale is borrowing, and since the palette went chalk it is a
+// pastel rather than a saturated green), so introducing it here as
+// "strong" doesn't
 // collide with an existing rule the way reusing a POSITION hue would.
 function strengthColor(gap) {
   if (gap === null || gap === undefined) return 'rgba(255,255,255,0.05)'

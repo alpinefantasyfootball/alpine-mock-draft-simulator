@@ -237,23 +237,47 @@ test("the hero and the closing band carry the agreed copy at both widths", async
        walker collects is title case. Asserting the rendered casing here is
        what left this test red for a day with no bug behind it. */
     "Agility Through Analytics",
-    "Master the draft.",
-    "Dominate the season.",
-    /* The hero paragraph. It used to be "Draft against a room of CPU
-       opponents that react to your picks, then get a graded report that
-       shows its working. Change your scoring rules and every number
-       reruns." — replaced on direct instruction, and Hero.jsx's own
-       comment records why: that sentence named the Draft Room
-       specifically, which was right while the Draft Room was the whole
-       product and reads narrow next to a page that now frames Juke as a
-       season-long platform.
+    /* Title case since 20852fd ("Homepage: introduce Juke Pro/All-Access
+       tiers"), which capitalized Hero.jsx's own two lines without touching
+       this list — left it red against the real page for two days straight,
+       the mirror image of the eyebrow note just above: that one was a test
+       reading CSS casing that was never in the DOM, this one is a DOM
+       casing change the test never picked up. Checked against the live
+       page rather than assumed, same as that one was. */
+    "Master the Draft.",
+    "Dominate the Season.",
+    /* The hero paragraph, rewritten twice over and this list only caught up
+       once. It used to be "Draft against a room of CPU opponents that react
+       to your picks, then get a graded report that shows its working.
+       Change your scoring rules and every number reruns." — replaced on
+       direct instruction, and Hero.jsx's own comment records why: that
+       sentence named the Draft Room specifically, which was right while the
+       Draft Room was the whole product and reads narrow next to a page that
+       now frames Juke as a season-long platform. This list was updated to
+       "From pre-season scouting to a championship push, dominate every
+       phase of the fantasy calendar." for that change.
+
+       8c6d934 ("Phase 0: email capture at every dead-end CTA") rewrote it
+       again, to the sentence below, and this list stayed on the previous
+       one — left red against the real page from that commit on, the same
+       shape of miss as the two casing notes above: a deliberate DOM change,
+       recorded in Hero.jsx's own comment, that nothing here was updated
+       to match. Hero.jsx's comment on it: Phase 0 has no purchase behind
+       Juke Pro or Juke All-Access yet, so a sentence naming them as
+       something to "unlock" would be a claim the product can't back.
 
        The list is still asserted by value on purpose (see above): the
        point is that one sentence is read at every width, not which
-       sentence it is. Both widths carry this one — checked before
-       changing it here. */
-    "From pre-season scouting to a championship push, dominate every phase of the fantasy calendar.",
-    "FREE · UNLIMITED · NO ACCOUNT",
+       sentence it is. Both widths carry this one — checked against the
+       real built page before changing it here, not assumed from the
+       source alone. */
+    "Test your strategy in the Draft Room completely free. Waivers, trades and week-to-week tools are in build.",
+    /* Also rewritten in 20852fd, the same commit as the two casing changes
+       above — "FREE · UNLIMITED · NO ACCOUNT" (all-caps, middle dots)
+       became "Free Draft Room • No Account Needed" (title case, bullets),
+       and this was the third of three misses this list carried from that
+       one commit. Checked against the real built page, not assumed. */
+    "Free Draft Room • No Account Needed",
     "Open the Draft Room.",
     "No setup, no league import. Pick your scoring and start.",
   ];

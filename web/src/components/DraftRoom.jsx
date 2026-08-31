@@ -23,7 +23,8 @@ import MobileAppTabBar from './MobileAppTabBar.jsx'
 import MobileDraftTabBar from './MobileDraftTabBar.jsx'
 import PickClockBand from './PickClockBand.jsx'
 import { POS_LIST } from './draftRoomPositions.js'
-import { useMinWidth } from '../hooks/useBreakpoint.js'
+import { useMinWidth, usePhoneWidth } from '../hooks/useBreakpoint.js'
+import DraftRoomPhone from './phone/DraftRoomPhone.jsx'
 
 // The Board tab's own dock height per tray position — fixed pixels. This
 // used to also size a percentage-of-remaining-space split on the Analysis
@@ -143,6 +144,12 @@ export default function DraftRoom() {
   // for why the Board tab's dock needs a real answer to "is this desktop"
   // rather than trusting its own `hidden ... lg:flex` CSS to imply it.
   const isDesktop = useMinWidth(1024)
+  // The mobile redesign's own line, distinct from isDesktop above — see
+  // usePhoneWidth()'s own comment for why 640 rather than reusing lg. A
+  // tablet (640-1024) still falls through to every branch below exactly as
+  // it already did; only a real phone width takes the exit near the bottom
+  // of this component's live-draft return.
+  const isPhone = usePhoneWidth()
   const active = useHashActive('#/draft-room')
   // A direct, bookmarkable link to the locker — previously there was none:
   // the locker only ever showed as #/draft-room's own not-yet-entered
@@ -1092,6 +1099,80 @@ export default function DraftRoom() {
     .filter((p) => p.slot !== mySlot)
     .slice(-10)
     .reverse()
+
+  /* The phone redesign's own exit, taken only mid-draft — `view` flips to
+     'insights' the moment draftIsOver (the effect above), and Insights is
+     already responsive at every width today (it's been a real tab reached
+     from MobileDraftTabBar since before this pass), so falling through to
+     the existing return below for that one view is a deliberate choice,
+     not an oversight: rebuilding a phone-specific Insights would duplicate
+     a screen that already works here. Every value passed down is one this
+     component already computed for the desktop/tablet render a few lines
+     up — nothing here re-derives from `engine` a second time. */
+  if (isPhone && view !== 'insights') {
+    return (
+      <div className="fixed inset-0 z-[60] flex flex-col overflow-hidden bg-slate text-white">
+        <DraftRoomPhone
+          engine={engine}
+          league={league}
+          picks={picks}
+          board={board}
+          mySlot={mySlot}
+          onClock={onClock}
+          overall={overall}
+          myTurn={myTurn}
+          code={code}
+          urgent={urgent}
+          timeLeft={engine.timeLeft()}
+          clockLength={engine.clockLength()}
+          onOpenMenu={() => setMenuOpen(true)}
+          autopick={autopick}
+          onToggleAutopick={handleToggleAutopick}
+          over={draftIsOver}
+          rules={rules}
+          pointsFor={pointsForActive}
+          valueFor={valueFor}
+          vorpFor={vorpForActive}
+          survivalFor={survivalFor}
+          photoFor={photoFor}
+          initialsFor={initialsFor}
+          flexPositions={flexPositions}
+          draftedByFor={draftedByFor}
+          queuedNames={queuedNames}
+          queuePlayers={queuePlayers}
+          onToggleQueue={handleToggleQueue}
+          onDraft={handleDraft}
+          filterCounts={filterCounts}
+          tierAvgByPos={tierAvgByPos}
+          priorSeasonYear={priorSeasonYear}
+          projOf={projOf}
+          season={season}
+          onSetSeason={setSeason}
+        />
+
+        {menuOpen && (
+          <DraftMenuOverlay
+            engine={engine}
+            onClose={() => setMenuOpen(false)}
+            onOpenSettings={() => setSettingsOpen(true)}
+            inRoom={roomActive}
+            discardLabel={hasRoomVal ? 'Leave the room' : 'Discard draft'}
+            discardDanger={!hasRoomVal}
+            onDiscard={handleDiscard}
+          />
+        )}
+        {settingsOpen && (
+          <DraftSettingsModal
+            engine={engine}
+            started={started}
+            inRoom={roomActive}
+            mySlot={mySlot}
+            onClose={() => setSettingsOpen(false)}
+          />
+        )}
+      </div>
+    )
+  }
 
   return (
     // z-[60], not z-40: #root (Homepage) is a separate React root that

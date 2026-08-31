@@ -380,6 +380,233 @@ check("jitter differs by seed", E.jitter(42, 1) === E.jitter(42, 2), false);
   check("ids are unique", new Set(ids).size, ids.length);
 })();
 
+/* ---- reply threading ----
+
+   A pointer stored on the entry, nothing more: no lookup, no validation
+   that the id still exists. That is deliberate — a reply to a line that
+   has since scrolled out of trimChat()'s bounded log is not a room error,
+   it is a UI question (render it standalone), so the room's only job is to
+   keep the id honest as a number and get out of the way. */
+(function () {
+  const league = { teams: 4, rounds: 2, starters: { QB: 1, RB: 1 },
+                   flex: 0, superflex: 0, bench: 0 };
+  const T0 = 1000000;
+  let r = R.create({ league: league, seed: 1, host: "alice" });
+  r = R.join(r, { member: "alice", name: "Alice" }, T0).state;
+  r = R.join(r, { member: "bob", name: "Bob" }, T0).state;
+
+  r = R.say(r, { member: "alice", text: "first", now: T0 }).state;
+  const first = r.chat[r.chat.length - 1];
+  check("a message with no replyTo stores null", first.replyTo, null);
+
+  r = R.say(r, { member: "bob", text: "second", now: T0 + 1, replyTo: first.id }).state;
+  check("replyTo is stored on the entry", r.chat[r.chat.length - 1].replyTo, first.id);
+
+  r = R.say(r, { member: "bob", text: "third", now: T0 + 2, replyTo: 999999 }).state;
+  check("a replyTo naming a message that never existed is stored anyway",
+        r.chat[r.chat.length - 1].replyTo, 999999);
+
+  check("garbage replyTo is dropped, not stored as a string",
+        R.cleanReplyTo("not-a-number"), null);
+  check("no replyTo is no replyTo", R.cleanReplyTo(null), null);
+  check("a numeric string still counts", R.cleanReplyTo("42"), 42);
+})();
+
+/* ---- voice and photo ----
+
+   Both share cleanMediaUrl(): the same URL-based host check cleanGif()
+   already does, parameterised because room.js cannot hardcode a host that
+   varies by deployment the way giphy.com never does — see the function's
+   own comment in room.js. */
+(function () {
+  const league = { teams: 4, rounds: 2, starters: { QB: 1, RB: 1 },
+                   flex: 0, superflex: 0, bench: 0 };
+  const T0 = 1000000;
+  const HOSTS = ["juke-draft-room.jukeff.workers.dev", "127.0.0.1"];
+  let r = R.create({ league: league, seed: 1, host: "alice" });
+  r = R.join(r, { member: "alice", name: "Alice" }, T0).state;
+
+  check("our own host is accepted",
+        R.cleanMediaUrl("https://juke-draft-room.jukeff.workers.dev/media/x.webm", HOSTS) !== null,
+        true);
+  check("local dev is accepted over plain http",
+        R.cleanMediaUrl("http://127.0.0.1:8787/media/x.webm", HOSTS) !== null, true);
+  check("a lookalike host is refused",
+        R.cleanMediaUrl("https://juke-draft-room.jukeff.workers.dev.evil.example/x.webm", HOSTS),
+        null);
+  check("an unrelated host is refused",
+        R.cleanMediaUrl("https://evil.example/x.webm", HOSTS), null);
+
+  const voiced = R.sayVoice(r, {
+    member: "alice", url: "https://juke-draft-room.jukeff.workers.dev/media/room/AB/voice/a.webm",
+    seconds: 12, mediaHosts: HOSTS, now: T0
+  });
+  check("a voice clip on our own host is accepted", voiced.error, null);
+  const vline = voiced.state.chat[voiced.state.chat.length - 1];
+  check("a voice line carries its type", vline.type, "voice");
+  check("and its length", vline.seconds, 12);
+
+  check("a voice clip on a foreign host is refused",
+        R.sayVoice(r, {
+          member: "alice", url: "https://evil.example/x.webm",
+          seconds: 12, mediaHosts: HOSTS, now: T0
+        }).error, R.ERR.BAD_VOICE);
+
+  /* seconds is a label, not a measurement the room can verify — the byte
+     cap on the worker's own upload route is what actually bounds a clip's
+     length, and this only keeps a wildly false label off the log. */
+  const tooLong = R.sayVoice(r, {
+    member: "alice", url: "https://juke-draft-room.jukeff.workers.dev/media/x.webm",
+    seconds: 99999, mediaHosts: HOSTS, now: T0
+  }).state;
+  check("a claimed duration is clamped rather than trusted",
+        tooLong.chat[tooLong.chat.length - 1].seconds, 120);
+
+  const photoed = R.sayPhoto(r, {
+    member: "alice", url: "https://juke-draft-room.jukeff.workers.dev/media/room/AB/photo/b.jpg",
+    w: 4000, h: 3000, mediaHosts: HOSTS, now: T0
+  });
+  check("a photo on our own host is accepted", photoed.error, null);
+  const pline = photoed.state.chat[photoed.state.chat.length - 1];
+  check("a photo line carries its type", pline.type, "photo");
+  check("and its dimensions", [pline.w, pline.h], [4000, 3000]);
+
+  check("a photo naming an absurd dimension is clamped",
+        R.sayPhoto(r, {
+          member: "alice", url: "https://juke-draft-room.jukeff.workers.dev/media/x.jpg",
+          w: 999999, h: 1, mediaHosts: HOSTS, now: T0
+        }).state.chat.slice(-1)[0].w, 8000);
+})();
+
+/* ---- polls ----
+
+   Votes are stored as member ids, the same as reactions, for the same
+   reason: a client that has never been told another member's id cannot
+   impersonate them by echoing it back. pollView() is the projection, and
+   this checks it never leaks one. */
+(function () {
+  const league = { teams: 4, rounds: 2, starters: { QB: 1, RB: 1 },
+                   flex: 0, superflex: 0, bench: 0 };
+  const T0 = 1000000;
+  let r = R.create({ league: league, seed: 1, host: "alice" });
+  r = R.join(r, { member: "alice", name: "Alice" }, T0).state;
+  r = R.join(r, { member: "bob", name: "Bob" }, T0).state;
+
+  check("a poll needs a question",
+        R.createPoll(r, { member: "alice", question: "   ", choices: ["A", "B"], now: T0 }).error,
+        R.ERR.BAD_POLL_QUESTION);
+  check("a poll needs at least two choices",
+        R.createPoll(r, { member: "alice", question: "Trade?", choices: ["Yes"], now: T0 }).error,
+        R.ERR.BAD_POLL_CHOICES);
+  check("blank choices don't count toward the minimum",
+        R.createPoll(r, { member: "alice", question: "Trade?", choices: ["Yes", "  ", ""], now: T0 }).error,
+        R.ERR.BAD_POLL_CHOICES);
+
+  const created = R.createPoll(r, {
+    member: "alice", question: "Best pick so far?",
+    choices: ["Gibbs", "Bijan", "Bijan", "x", "x", "x", "x", "x", "x", "x"],
+    multi: false, anon: false, now: T0
+  });
+  check("a poll is created", created.error, null);
+  r = created.state;
+  const poll = r.chat[r.chat.length - 1];
+  check("a poll carries its type", poll.type, "poll");
+  check("choices are capped, not refused, past the limit", poll.choices.length, 8);
+  check("a poll starts with nobody voted", poll.votes, {});
+
+  // ---- single choice: a second vote replaces, never accumulates ----
+  r = R.votePoll(r, { member: "alice", id: poll.id, choice: 0, now: T0 }).state;
+  r = R.votePoll(r, { member: "bob", id: poll.id, choice: 1, now: T0 }).state;
+  let line = R.viewFor(r, "alice", T0).chat.find((m) => m.id === poll.id);
+  check("alice's own vote reads back as hers", line.poll.options[0].you, true);
+  check("and not the other option", line.poll.options[1].you, false);
+  check("each option's count is right", [line.poll.options[0].count, line.poll.options[1].count], [1, 1]);
+
+  r = R.votePoll(r, { member: "alice", id: poll.id, choice: 1, now: T0 }).state;
+  line = R.viewFor(r, "alice", T0).chat.find((m) => m.id === poll.id);
+  check("a second single-choice vote replaces the first",
+        [line.poll.options[0].count, line.poll.options[1].count], [0, 2]);
+  check("she is credited on the new choice", line.poll.options[1].you, true);
+  check("and cleared off the old one", line.poll.options[0].you, false);
+
+  check("voting an index off the end is refused",
+        R.votePoll(r, { member: "alice", id: poll.id, choice: 99, now: T0 }).error,
+        R.ERR.NO_SUCH_CHOICE);
+  check("voting a message that fell off the log is refused",
+        R.votePoll(r, { member: "alice", id: 999999, now: T0 }).error, R.ERR.NO_SUCH_LINE);
+
+  const textLine = R.say(r, { member: "alice", text: "not a poll", now: T0 }).state;
+  const notAPoll = textLine.chat[textLine.chat.length - 1];
+  check("voting on an ordinary message is refused",
+        R.votePoll(textLine, { member: "bob", id: notAPoll.id, choice: 0, now: T0 }).error,
+        R.ERR.NOT_A_POLL);
+
+  /* Nobody's member id has leaked in any of the above — only names, which
+     were already public on every chair and every message. */
+  check("no member id ever appears in a poll view",
+        JSON.stringify(R.viewFor(r, "alice", T0)).indexOf('"bob"') < 0, true);
+
+  // ---- non-anonymous: names are knowable; anonymous: they never are ----
+  check("a non-anonymous poll names who chose an option",
+        line.poll.options[1].voters, ["Bob", "Alice"]);
+
+  const anonCreated = R.createPoll(r, {
+    member: "alice", question: "Anon?", choices: ["Yes", "No"], anon: true, now: T0
+  });
+  let anonRoom = anonCreated.state;
+  const anonPoll = anonRoom.chat[anonRoom.chat.length - 1];
+  anonRoom = R.votePoll(anonRoom, { member: "bob", id: anonPoll.id, choice: 0, now: T0 }).state;
+  const anonLine = R.viewFor(anonRoom, "alice", T0).chat.find((m) => m.id === anonPoll.id);
+  check("an anonymous poll still reports a count", anonLine.poll.options[0].count, 1);
+  check("but never who", anonLine.poll.options[0].voters, undefined);
+  check("anon does not hide a viewer's own vote from themselves",
+        R.viewFor(anonRoom, "bob", T0).chat.find((m) => m.id === anonPoll.id).poll.options[0].you,
+        true);
+
+  // ---- multi-choice: each index toggles independently ----
+  const multiCreated = R.createPoll(r, {
+    member: "alice", question: "Which positions are you targeting?",
+    choices: ["RB", "WR", "TE"], multi: true, now: T0
+  });
+  let mr = multiCreated.state;
+  const mpoll = mr.chat[mr.chat.length - 1];
+
+  mr = R.votePoll(mr, { member: "alice", id: mpoll.id, choice: [0, 1], now: T0 }).state;
+  let mline = R.viewFor(mr, "alice", T0).chat.find((m) => m.id === mpoll.id);
+  check("a multi vote can select more than one option at once",
+        mline.poll.options.map((o) => o.you), [true, true, false]);
+
+  mr = R.votePoll(mr, { member: "alice", id: mpoll.id, choice: [0], now: T0 }).state;
+  mline = R.viewFor(mr, "alice", T0).chat.find((m) => m.id === mpoll.id);
+  check("sending an already-selected index toggles it back off",
+        mline.poll.options.map((o) => o.you), [false, true, false]);
+
+  // ---- a poll can close, and voting after that is refused ----
+  const timedCreated = R.createPoll(r, {
+    member: "alice", question: "Closing soon", choices: ["A", "B"],
+    durationMs: 1000, now: T0
+  });
+  let tr = timedCreated.state;
+  const tpoll = tr.chat[tr.chat.length - 1];
+  check("a duration becomes an absolute end time", tpoll.endsAt, T0 + 1000);
+
+  check("voting before the deadline succeeds",
+        R.votePoll(tr, { member: "bob", id: tpoll.id, choice: 0, now: T0 + 500 }).error, null);
+  check("voting after the deadline is refused",
+        R.votePoll(tr, { member: "bob", id: tpoll.id, choice: 0, now: T0 + 1500 }).error,
+        R.ERR.POLL_CLOSED);
+
+  const foreverCreated = R.createPoll(r, {
+    member: "alice", question: "No deadline", choices: ["A", "B"], now: T0
+  });
+  check("no durationMs means no end time",
+        foreverCreated.state.chat[foreverCreated.state.chat.length - 1].endsAt, null);
+  check("a poll with no end time can be voted on far in the future",
+        R.votePoll(foreverCreated.state, {
+          member: "bob", id: foreverCreated.state.chat.slice(-1)[0].id, choice: 0, now: T0 + 1e12
+        }).error, null);
+})();
+
 if (failures.length) {
   console.log("FAIL " + failures.length);
   failures.forEach((f) => console.log("  x " + f));

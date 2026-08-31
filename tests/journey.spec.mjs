@@ -62,9 +62,22 @@ test("homepage to a finished draft, pressing only what a person can press",
        live Cockpit was the most direct way a manager landed back on a stale
        finished draft instead of a fresh choice. So this follows the Lobby,
        which is also what the rest of this test already walks through. */
-    const doors = page.locator('a[href="#/drafts"]');
+    /* `a[href="#/drafts"]` alone matches three links at once — Hero.jsx's
+       two CTA variants (one `lg:hidden`, one `hidden lg:flex`, exactly one
+       ever visible) and Header.jsx's own sticky mobile bottom bar, which
+       carries the same href but no `data-hero-cta` marker and sits earlier
+       in the DOM than either Hero variant. At this test's default desktop
+       viewport that bar is `lg:hidden` — permanently hidden, not merely slow
+       to render — so `.first()` on the bare selector resolves to it and a
+       click retries against an element that will never become visible,
+       timing out. `data-hero-cta` exists for precisely this — Hero.jsx's own
+       comment: "only one is ever rendered" of the two marked variants, so
+       filtering to the marked ones and taking whichever is on screen is the
+       one real door regardless of viewport, without needing to know which
+       breakpoint is active. */
+    const doors = page.locator('[data-hero-cta]');
     expect(await doors.count(), "the homepage offers a way in").toBeGreaterThan(0);
-    await doors.first().click();
+    await page.locator('[data-hero-cta]:visible').first().click();
 
     // The door lands on the Locker first, not the seat-picker directly —
     // seat-picking moved to its own screen one step further in. "Start

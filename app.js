@@ -1549,6 +1549,26 @@ function safeGif(value) {
   }
 }
 
+/* A voice/photo URL from chat is a claim, not a fact — same rule as a GIF
+   address, and for the same reason: it arrives from another manager and
+   ends up in an <audio>/<img src>. The room already refused anything not
+   served from its own worker (room.js's cleanMediaUrl()); this is the
+   second check, on the browser's own side, before a URL is ever handed to
+   an element that fetches it. `typeof window.Live` guards the same way
+   every other DraftEngine/Live reference in this file does — see CLAUDE.md
+   on why a bridge entry is only as safe as its own guard. */
+function safeMediaUrl(value) {
+  if (!value || typeof window === "undefined" || !window.Live) return null;
+  try {
+    const url = new URL(String(value));
+    const origin = Live.workerHttpOrigin();
+    if (!origin || url.origin !== new URL(origin).origin) return null;
+    return url.href;
+  } catch (err) {
+    return null;
+  }
+}
+
 /* ---- room chat ------------------------------------------
 
    What the room stores is a flat list of things people said. What a draft
@@ -1642,7 +1662,16 @@ function chatStream(room) {
     out.push({
       kind: m.system ? "system" : "said",
       id: m.id, seat: m.seat, name: m.name, text: m.text,
-      gif: m.gif, at: m.at, reacts: m.reacts
+      gif: m.gif, at: m.at, reacts: m.reacts,
+      // Poll/voice/photo/reply — the mobile redesign's own chat types.
+      // chatSaidHtml() (the legacy renderer) never reads these, so an old
+      // message keeps rendering exactly as it always has; a new one used to
+      // come through as an empty text-and-gif-less bubble because this
+      // function stripped every field it didn't already know the name of.
+      // Voice/photo are flat fields on the entry (url/seconds, url/w/h) —
+      // only a poll carries a nested object — see room.js's own view shape.
+      type: m.type, poll: m.poll, url: m.url, seconds: m.seconds,
+      w: m.w, h: m.h, replyTo: m.replyTo
     });
   });
 
@@ -4671,7 +4700,19 @@ function shortName(player) {
 }
 
 function initials(name) {
-  const parts = name.replace(/[^A-Za-z .'-]/g, "").split(" ");
+  // filter(Boolean) drops the empty strings a stripped-then-split name can
+  // leave behind — "Lambo No. 5" (a real CPU team name, TEAM_NAMES above)
+  // strips its trailing digit to "Lambo No. ", and splitting that on " "
+  // ends in "", so parts[parts.length - 1][0] read `undefined` and string
+  // concatenation coerced it to the literal text "LUNDEFINED". Every real
+  // player name already survives this unchanged; only a name that strips to
+  // a trailing (or leading, or doubled) space could ever have hit it, and
+  // team names are exactly the shape that does. Found via
+  // TeamTabPhone.jsx's 26px chip, the first caller with no truncation to
+  // hide it — but the defect was always here, for every caller of
+  // initials(), not something the phone redesign introduced.
+  const parts = name.replace(/[^A-Za-z .'-]/g, "").split(" ").filter(Boolean);
+  if (parts.length === 0) return "";
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
@@ -9737,6 +9778,17 @@ window.JukeEngine = {
   projectionSummary: projectionSummary,
   gameLogFor:        gameLogFor,
   depthChartFor:     depthChartFor,
+  // TEAM_RANKS/TEAM_RANKS_META are stats.js top-level consts, same cross-
+  // script-tag visibility PLAYER_STATS already relies on (see statOf()) —
+  // guarded the same way, since a page that hasn't finished loading the
+  // deferred data has neither yet. Real per-team offensive ranks (build_
+  // players.py, from nflverse's stats_team file), never a second lookup.
+  teamRanksFor: function (team) {
+    return typeof TEAM_RANKS !== "undefined" && team ? (TEAM_RANKS[team] || null) : null;
+  },
+  teamRanksMeta: function () {
+    return typeof TEAM_RANKS_META !== "undefined" ? TEAM_RANKS_META : null;
+  },
   // Returns null when nflverse never wrote a `u` block — a defence, an
   // unjoined player, or a run where nflverse was down. The tab is hidden on
   // null rather than drawn empty, the same way the news tab is.
@@ -10160,14 +10212,26 @@ window.JukeEngine = {
     renderInvite();
     renderChat();
   },
-  sendChat: (text, gif) => Live.chat(text, gif || null),
+  // replyTo is the third, optional argument all the way down — Live.chat()
+  // already defaults it to null for a caller that only ever passed two.
+  sendChat: (text, gif, replyTo) => Live.chat(text, gif || null, replyTo || null),
   sendReaction: (id, emoji) => Live.react(id, emoji),
   onTyping: (fn) => Live.onTyping(fn),
   sendTyping: (on) => Live.typing(!!on),
+  // The mobile redesign's chat types — thin bridges over the identical
+  // Live.* functions sendChat/sendReaction already wrap, not reimplemented.
+  // uploadMedia resolves to a URL (or null on any failure) and is a
+  // separate step from posting, same as GIPHY search vs. sending a gif.
+  sendPoll: (question, choices, opts) => Live.pollCreate(question, choices, opts),
+  votePoll: (id, choice) => Live.pollVote(id, choice),
+  sendVoice: (url, seconds, replyTo) => Live.voice(url, seconds, replyTo || null),
+  sendPhoto: (url, w, h, replyTo) => Live.photo(url, w, h, replyTo || null),
+  uploadMedia: (kind, blob) => Live.uploadMedia(kind, blob),
   claimSeat: (seat) => Live.claimSeat(seat),
   swapSeats: (a, b) => Live.swapSeats(a, b),
   gifSearch: (q) => Live.gifSearch(q),
   safeGif: safeGif,
+  safeMediaUrl: safeMediaUrl,
   // chatStream() is the real merge of room.chat and room.picks into one
   // timeline by `at` — picks are not chat messages, and this is the same
   // function that keeps the legacy dock from storing them twice (see

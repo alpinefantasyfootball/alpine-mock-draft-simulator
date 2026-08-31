@@ -21,9 +21,21 @@
    the colour and not the element's opacity. That is a third way to lie about
    contrast, after alpha and gradients, and it is the one this file watches.
 
-   The React cells are translucent rather than solid, which the check has to
-   handle too: a cell's own background is composited over the board's ground
-   before anything is measured, or the numbers are fiction.
+   The cells are opaque chalk fills with dark ink on them since the palette
+   handoff (option 2h), where they were translucent washes over a dark ground
+   before it. The compositing step below survives that on purpose rather than
+   being simplified away: over() is a no-op at alpha 1, and this cell has now
+   been redrawn four times in two directions. A check that only works on the
+   current fill is a check that has to be rewritten every time somebody
+   changes it.
+
+   What did change is the direction of the contrast. Every line on a card is
+   dark type on a light ground now (#16202E and #2B3540 on six pastels), and
+   the worst case measured across a real 60-pick board is 7.38:1 against the
+   4.5 asserted — comfortably better than the translucent cells it replaced,
+   which is worth knowing before anybody "improves" the sub colour. It was
+   raised twice in design review and the handoff says explicitly not to
+   lighten it.
 */
 
 import { test, expect } from "@playwright/test";
@@ -75,7 +87,7 @@ const FILLED = `(() => {
   const grid = [...root.querySelectorAll("div")].find(
     (d) => getComputedStyle(d).display === "grid" && d.style.getPropertyValue("--cols"));
   return [...grid.querySelectorAll("p.truncate")]
-    .map((n) => n.closest('[class*="rounded-md"]'))
+    .map((n) => n.closest('[class*="rounded-lg"]'))
     .filter(Boolean);
 })()`;
 
@@ -107,10 +119,17 @@ test.describe("the draft board card", () => {
           return [0, 1, 2].map((i) => c[i] * a + under[i] * (1 - a));
         };
 
-        // The board's own ground, which every translucent cell sits on.
-        const board = parse(getComputedStyle(
-          document.querySelector('#draftroom-root [class*="bg-\\\\[\\\\#0B0E14\\\\]"]') || document.body
-        ).backgroundColor).slice(0, 3);
+        /* The board's own ground. The cards are opaque chalk fills now, so
+           over() folds this away for every one of them — it is kept
+           because a card that ever goes translucent again has to be
+           composited against something real rather than against white,
+           and because the empty-cell measurements below share it. Read off
+           the grid's own scroll parent rather than matched by a hex class:
+           that selector named #0B0E14 and the app moved to slate long ago,
+           so it had been silently falling through to document.body. */
+        const grid = [...document.getElementById("draftroom-root").querySelectorAll("div")].find(
+          (d) => getComputedStyle(d).display === "grid" && d.style.getPropertyValue("--cols"));
+        const board = parse(getComputedStyle(grid.parentElement).backgroundColor).slice(0, 3);
 
         const fails = [];
         let checked = 0, worst = 99;
@@ -237,11 +256,17 @@ test.describe("the draft board card", () => {
       const root = document.getElementById("draftroom-root");
       const grid = [...root.querySelectorAll("div")].find(
         (d) => getComputedStyle(d).display === "grid" && d.style.getPropertyValue("--cols"));
-      // font-plex is the pick code's own class, not a styling accident: the
-      // Cockpit board is the one place this codebase sets IBM Plex Mono for
-      // tabular figures, and it names nothing else on a card.
+      /* Both mono lines on a card are font-plex now — the pick code and the
+         "WR · CIN" line the position badge became when the cell went chalk
+         — so the class alone matches twice per card and this used to come
+         back at exactly double the expected length. Matched on the shape of
+         a pick code instead, which is what the assertion is actually about:
+         round-dot-two-digits, and nothing else on the card can produce one.
+         Anchoring on the value rather than on the markup is also what stops
+         this breaking again the next time the cell is redrawn. */
       const drawn = [...grid.querySelectorAll("span.font-plex")]
-        .map((s) => s.textContent.trim());
+        .map((s) => s.textContent.trim())
+        .filter((t) => /^\d+\.\d\d$/.test(t));
       const expected = JukeEngine.picks().map(
         (p) => DraftEngine.pickCode(p.overall, league.teams));
       return { drawn, expected, missing: expected.filter((c) => !drawn.includes(c)) };

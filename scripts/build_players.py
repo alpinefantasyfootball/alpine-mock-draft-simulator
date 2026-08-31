@@ -1276,6 +1276,103 @@ def audit_against_nflverse(stats, linked, nfl_seasons):
     return lines, len(flagged)
 
 
+# ---------------------------------------------------------------- team ranks
+#
+# A team's own offense, ranked against the other 31 -- not a player number at
+# all, but the shape of the games a fantasy player is playing in, for the
+# player profile's Team tab. nflverse publishes this pre-aggregated, one row
+# per team per season, under a different release tag from the player-level
+# file fetched above (stats_team rather than stats_player), so there is no
+# per-game rollup to do and no player crosswalk to build: clean_team() is the
+# only join this needs, for the same reason it is needed everywhere else
+# nflverse's own team codes show up -- it calls the Rams "LA" and we call
+# them "LAR".
+#
+# Five categories, all real columns on this file and none invented: OFFENSE
+# (passing + rushing yards), PASS YD, PASS ATT, PASS TD, and TD (passing +
+# rushing touchdowns -- deliberately not defensive or special-teams scores,
+# because this describes the offense a fantasy player plays IN, not the team
+# as a whole). There is no red-zone column on stats_team, so there is no
+# red-zone category here; inventing one is exactly what this project's whole
+# pipeline exists to refuse to do.
+TEAM_RANK_FIELDS = [
+    ("off",     lambda r: team_stat(r, "passing_yards") + team_stat(r, "rushing_yards")),
+    ("passYd",  lambda r: team_stat(r, "passing_yards")),
+    # Pass attempts is volume, not a skill measure the way the other four
+    # are -- more is not really "better" -- but it is ranked the same
+    # descending way as the rest for consistency, most attempts first,
+    # rather than singled out with its own inverted rule.
+    ("passAtt", lambda r: team_stat(r, "attempts")),
+    ("passTd",  lambda r: team_stat(r, "passing_tds")),
+    ("td",      lambda r: team_stat(r, "passing_tds") + team_stat(r, "rushing_tds")),
+]
+
+
+def team_stat(row, column):
+    try:
+        return float(row.get(column) or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def fetch_team_stats(season):
+    """One season of team-level offensive totals, or nothing at all.
+
+    Same optional shape as fetch_nflverse_season() -- a season not yet played
+    is a 404, not a fault, so the pipeline picks a new one up on its own the
+    first morning nflverse publishes it and is otherwise unaffected. This is
+    a different release tag though (stats_team, not stats_player): nflverse
+    already aggregates it to one row per team, so there is no per-game work
+    to do on this side at all.
+    """
+    rows = fetch_csv_gz(
+        f"{NFLVERSE}/stats_team/stats_team_reg_{season}.csv.gz", optional=True)
+    print(f"  {season}: {len(rows)} team lines")
+    return rows
+
+
+def build_team_ranks(rows):
+    """Rank all 32 teams, 1st (best) to 32nd (worst), on five offensive counts.
+
+    Descending value order on every category, PASS ATT included -- see the
+    note above TEAM_RANK_FIELDS on why volume is ranked the same way as the
+    rest rather than singled out.
+
+    Ties are broken by team code, so every category comes out a complete
+    1-32 permutation with no shared rank and no gap. Real season totals
+    rarely tie exactly, but a rank column that COULD ever come out with a
+    hole in it is a worse bug than a coin-flipped tie, so the tie-break is
+    unconditional rather than a fallback for an edge case.
+
+    Returns {team: {category: {"rank": int, "val": int}}}. The raw value
+    travels with the rank so the UI can print "3947 pass yds", not just
+    "3rd" -- a number with nothing under it is exactly the kind of unchecked
+    claim this project's data pipeline exists to avoid.
+    """
+    by_team = {}
+    for row in rows:
+        team = clean_team(row.get("team"))
+        if not team or team == "FA":
+            continue
+        # First row per team wins. stats_team_reg_<season> is documented as
+        # one row per team per season already; a duplicate is a data problem
+        # worth seeing, not a total worth silently summing twice.
+        by_team.setdefault(team, row)
+
+    if by_team and len(by_team) != 32:
+        print(f"  ! stats_team returned {len(by_team)} teams, not 32 -- ranking anyway")
+
+    values = {team: {key: fn(row) for key, fn in TEAM_RANK_FIELDS}
+              for team, row in by_team.items()}
+
+    ranks = {team: {} for team in by_team}
+    for key, _ in TEAM_RANK_FIELDS:
+        ordered = sorted(by_team, key=lambda t: (-values[t][key], t))
+        for i, team in enumerate(ordered):
+            ranks[team][key] = {"rank": i + 1, "val": int(round(values[team][key]))}
+    return ranks
+
+
 # The usage block: what nflverse adds that no box score can produce.
 #
 # Every one of these needs either the rest of the offence (a share needs the
@@ -1466,6 +1563,30 @@ def main():
         if got:
             weekly[season] = got
         print(f"  {len(got)} weeks")
+
+    # ---- team ranks: the offense a fantasy player is playing in ----
+    #
+    # Derived from season_stats rather than hardcoded, the same reason
+    # PRIOR_SEASON in app.js is derived rather than written down: a literal
+    # year here would go stale every February, and app.js's own
+    # latestStatSeason() already treats "the max season key actually
+    # returned" as the definition of "the last completed season" -- this is
+    # that same rule, asked of the same data, once.
+    team_ranks, team_ranks_season = {}, None
+    if season_stats:
+        team_ranks_season = max(season_stats)
+        print(f"Fetching {team_ranks_season} team stats (nflverse stats_team)...")
+        team_rows = fetch_team_stats(team_ranks_season)
+        if team_rows:
+            team_ranks = build_team_ranks(team_rows)
+            print(f"  team ranks: {len(team_ranks)} of 32 teams ranked "
+                  f"for {team_ranks_season}")
+        else:
+            print(f"  ! nflverse stats_team not published for {team_ranks_season} "
+                  "yet -- skipping Team Rank this run")
+    else:
+        print("  ! no season stats fetched at all, so there is no 'last completed "
+              "season' to rank teams for -- skipping Team Rank this run")
 
     # ---- join every ADP set to Sleeper records ----
     indexes = index_sleeper(sleeper)
@@ -1754,6 +1875,14 @@ def main():
             "   over anything outside it scores history correctly and adds\n"
             "   nothing to the 2026 projection, which is what the draft board\n"
             "   is ranked on. The scoring editor says so on each rule.\n\n"
+            "   TEAM_RANKS is a separate, player-less block: each of the 32 NFL\n"
+            "   teams (by code, aliased through the same TEAM_ALIASES a player\n"
+            "   record's own team uses) ranked 1st (best) to 32nd (worst) on\n"
+            "   five offensive counts from nflverse's stats_team release --\n"
+            "   off (pass+rush yards), passYd, passAtt, passTd, td (pass+rush\n"
+            "   TDs). Every entry is {rank, val}, so the UI can print the raw\n"
+            "   number beside the rank. For the Team tab, not a player's own\n"
+            "   sheet. TEAM_RANKS_META names the season it was built from.\n\n"
             f"   Source ids : {crosswalked} of {len(stats)} players carry a Tank01 id\n"
             f"   Archived   : {archived} players carry past projections"
             f"{' for ' + ', '.join(archive_years) if archive_years else ' (none returned)'}\n"
@@ -1761,7 +1890,11 @@ def main():
             "   ========================================================== */\n\n"
             "const STAT_KEYS = " + json.dumps(key_map, separators=(",", ":")) + ";\n\n"
             "const PROJECTED_KEYS = " + json.dumps(projected_keys, separators=(",", ":")) + ";\n\n"
-            "const PLAYER_STATS = " + json.dumps(stats, separators=(",", ":")) + ";\n")
+            "const PLAYER_STATS = " + json.dumps(stats, separators=(",", ":")) + ";\n\n"
+            "const TEAM_RANKS_META = " + json.dumps(
+                {"season": team_ranks_season, "teams": len(team_ranks)},
+                separators=(",", ":")) + ";\n\n"
+            "const TEAM_RANKS = " + json.dumps(team_ranks, separators=(",", ":")) + ";\n")
 
     with open(UNMATCHED_FILE, "w", encoding="utf-8") as handle:
         handle.write(f"FFC rows that did not join to a Sleeper player\nGenerated {stamp}\n"
@@ -1860,6 +1993,14 @@ def main():
              if not band_off
              else f"{band_off} seasons at or after {BAND_COMPLETE_FROM} DO NOT "
                   f"reconcile, which is new -- see {UNMATCHED_FILE}"))
+    # Said out loud either way, same convention as every other optional feed
+    # above: a number that only appears on success is a number nobody learns
+    # to trust the absence of.
+    if team_ranks:
+        print(f"  team ranks: {len(team_ranks)} teams ranked for "
+              f"{team_ranks_season} (OFFENSE / PASS YD / PASS ATT / PASS TD / TD)")
+    else:
+        print("  team ranks: none this run (see log above)")
 
     # The smallest set is the ceiling on teams x rounds, so print it: it is the
     # number the setup screen validates against.

@@ -24,3 +24,20 @@ export function useMinWidth(px) {
   }, [query])
   return matches
 }
+
+// The mobile draft room redesign's own three-way split, distinct from the
+// desktop/mobile line above. `lg` (1024px) still decides desktop vs.
+// everything else — nothing about that changed, and nothing here may widen
+// it. Below that, "mobile" used to be one tier; the phone redesign (the
+// 390x844 board-peek/bottom-sheet design) is deliberately scoped to real
+// phone widths only, on the owner's own call: a tablet keeps the existing
+// segmented-control mobile layout (MobileDraftTabBar, PlayersTab's own
+// Pool/Queue/Roster/Picks panes) as the middle tier, rather than stretching
+// a phone-shaped bottom sheet across a much wider frame it was never
+// measured against. 640px is Tailwind's own `sm` — chosen because it's
+// already the line every other phone-only affordance in this codebase
+// reaches for (the `.field-row.wordy` legacy note, `sm:` steps throughout
+// DraftCockpitHeader.jsx), not a new number invented for this redesign.
+export function usePhoneWidth() {
+  return !useMinWidth(640)
+}
