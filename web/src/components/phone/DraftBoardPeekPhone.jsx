@@ -31,7 +31,7 @@ import DraftBoardGrid from '../DraftBoardGrid.jsx'
 // panel itself (#232D3A).
 const POSITIONS = ['QB', 'RB', 'WR', 'TE', 'K', 'DST']
 
-export default function DraftBoardPeekPhone({ engine, league, picks, mySlot, onClock, onSelectPlayer, headerH }) {
+export default function DraftBoardPeekPhone({ engine, league, picks, mySlot, onClock, onSelectPlayer, headerH, scrollToLiveSignal }) {
   const counts = engine.filterCounts()
 
   return (
@@ -62,6 +62,7 @@ export default function DraftBoardPeekPhone({ engine, league, picks, mySlot, onC
           teamLabelOf={(slot) => engine.teamLabel(slot)}
           shortNameOf={engine.shortName}
           onSelectPlayer={onSelectPlayer}
+          scrollToLiveSignal={scrollToLiveSignal}
         />
       </div>
     </div>

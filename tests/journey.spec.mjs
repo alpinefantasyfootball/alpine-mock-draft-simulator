@@ -62,7 +62,7 @@ test("homepage to a finished draft, pressing only what a person can press",
        live Cockpit was the most direct way a manager landed back on a stale
        finished draft instead of a fresh choice. So this follows the Lobby,
        which is also what the rest of this test already walks through. */
-    /* `a[href="#/drafts"]` alone matches three links at once — Hero.jsx's
+    /* `a[href="#/drafts"]` alone matches several links at once — Hero.jsx's
        two CTA variants (one `lg:hidden`, one `hidden lg:flex`, exactly one
        ever visible) and Header.jsx's own sticky mobile bottom bar, which
        carries the same href but no `data-hero-cta` marker and sits earlier
@@ -74,7 +74,14 @@ test("homepage to a finished draft, pressing only what a person can press",
        comment: "only one is ever rendered" of the two marked variants, so
        filtering to the marked ones and taking whichever is on screen is the
        one real door regardless of viewport, without needing to know which
-       breakpoint is active. */
+       breakpoint is active.
+
+       And the mobile pass added a fourth: there are two whole HOMEPAGES in
+       this document now, not just two renderings of one control, and both
+       mount — the phone one is `sm:hidden` at this width and first in
+       document order. It carries the marker too (HomePhone.jsx's Mock Draft
+       row), which is why the count below is the only thing the bare marker
+       answers and the click on line 91 still asks for `:visible`. */
     const doors = page.locator('[data-hero-cta]');
     expect(await doors.count(), "the homepage offers a way in").toBeGreaterThan(0);
     await page.locator('[data-hero-cta]:visible').first().click();

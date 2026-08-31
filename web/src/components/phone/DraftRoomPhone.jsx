@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import CockpitHeaderPhone from './CockpitHeaderPhone.jsx'
 import DraftBoardPeekPhone from './DraftBoardPeekPhone.jsx'
 import BottomSheet from '../BottomSheet.jsx'
@@ -8,7 +8,15 @@ import TeamTabPhone from './TeamTabPhone.jsx'
 import ChatTabPhone from './ChatTabPhone.jsx'
 import PlayerProfilePhone from './PlayerProfilePhone.jsx'
 
-const HEADER_H = 106 // CockpitHeaderPhone's own measured height: pt-1.5 row (44px hit targets) + mt-2 8px gap + 3px bar + ~1px border, rounded up
+/* The header's height before it has measured itself — a first-paint
+   estimate only, replaced within a frame by CockpitHeaderPhone's own
+   ResizeObserver (see useReportHeight there for why this cannot be a
+   constant). 106 is what it used to be hardcoded to: right on a notched
+   phone, ~41px too tall everywhere else. Kept as the seed rather than
+   dropped to the un-notched 65 because overshooting for one frame hides a
+   sliver of board, and undershooting draws the board under the header. */
+const HEADER_SEED_H = 106
+
 const TABS = [
   { key: 'players', label: 'Players' },
   { key: 'queue', label: 'Queue' },
@@ -39,18 +47,38 @@ export default function DraftRoomPhone({
   const [sheetSnap, setSheetSnap] = useState(1)
   const [selectedPlayer, setSelectedPlayer] = useState(null)
   const [viewSlot, setViewSlot] = useState(mySlot)
-  // The sheet's tallest snap has to stay below this fixed header (z-40,
-  // above the sheet's own z-30) — see BottomSheet.jsx's own comment on
-  // `maxHeight` for what goes wrong otherwise. Read once at mount, same as
-  // HEADER_H itself is a fixed measured constant rather than something
-  // re-read on every render.
-  const [sheetMaxHeight] = useState(() => (
-    typeof window !== 'undefined' ? window.innerHeight - HEADER_H : undefined
-  ))
+  /* A counter, not a boolean — see DraftBoardGrid's own note on the prop
+     it feeds. Pressing the crosshair twice in a row has to scroll twice,
+     and only a value that changes every press can say that. */
+  const [findLive, setFindLive] = useState(0)
+  const [headerH, setHeaderH] = useState(HEADER_SEED_H)
+  // Stable across renders so the observer in the header is set up once —
+  // see useReportHeight's own note on why it deliberately does not list
+  // this in its dependency array.
+  const onHeaderHeight = useCallback((h) => setHeaderH((prev) => (prev === h ? prev : h)), [])
+  /* The sheet's tallest snap has to stay below the fixed header (z-40,
+     above the sheet's own z-30) — see BottomSheet.jsx's own comment on
+     `maxHeight` for what goes wrong otherwise. The viewport height is read
+     once at mount, as it always was; the header's own share of it is the
+     part that has to be live, since the auto-pick ribbon can appear and
+     disappear mid-draft. */
+  const [viewportH] = useState(() => (typeof window !== 'undefined' ? window.innerHeight : 0))
+  const sheetMaxHeight = viewportH ? viewportH - headerH : undefined
 
   return (
     <>
-      <CockpitHeaderPhone code={code} myTurn={myTurn} urgent={urgent} timeLeft={timeLeft} clockLength={clockLength} onOpenMenu={onOpenMenu} />
+      <CockpitHeaderPhone
+        code={code}
+        myTurn={myTurn}
+        urgent={urgent}
+        timeLeft={timeLeft}
+        clockLength={clockLength}
+        onOpenMenu={onOpenMenu}
+        onFindLive={() => setFindLive((n) => n + 1)}
+        autopick={autopick}
+        onToggleAutopick={onToggleAutopick}
+        onHeight={onHeaderHeight}
+      />
 
       <DraftBoardPeekPhone
         engine={engine}
@@ -59,7 +87,8 @@ export default function DraftRoomPhone({
         mySlot={mySlot}
         onClock={onClock}
         onSelectPlayer={setSelectedPlayer}
-        headerH={HEADER_H}
+        headerH={headerH}
+        scrollToLiveSignal={findLive}
       />
 
       <BottomSheet

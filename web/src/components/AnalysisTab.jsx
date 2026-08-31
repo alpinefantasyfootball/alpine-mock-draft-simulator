@@ -782,7 +782,7 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
                   <div className="text-[10px] font-semibold uppercase tracking-wide text-emerald-400">Best value</div>
                   <div className="mt-0.5 truncate text-sm font-medium text-white">{me.bargain.pick.player.name}</div>
                   <div className="mt-0.5 text-[11px] leading-relaxed text-white/50">
-                    Taken at {DE ? DE.pickCode(me.bargain.pick.overall, teams) : me.bargain.pick.overall}, board had
+                    Taken at {DE ? DE.pickCode(me.bargain.pick.overall, league) : me.bargain.pick.overall}, board had
                     him {me.bargain.pick.player.overall}
                     {me.bargain.gap > 0 ? ` — ${me.bargain.gap} picks late` : ''}
                   </div>
@@ -800,7 +800,7 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
                   </div>
                   <div className="mt-0.5 truncate text-sm font-medium text-white">{me.reach.pick.player.name}</div>
                   <div className="mt-0.5 text-[11px] leading-relaxed text-white/50">
-                    Taken at {DE ? DE.pickCode(me.reach.pick.overall, teams) : me.reach.pick.overall}, board had him{' '}
+                    Taken at {DE ? DE.pickCode(me.reach.pick.overall, league) : me.reach.pick.overall}, board had him{' '}
                     {me.reach.pick.player.overall} — {Math.abs(me.reach.gap)} picks early
                   </div>
                 </div>

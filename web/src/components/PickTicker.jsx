@@ -212,7 +212,7 @@ export default function PickTicker({ league, onClock, overall, mySlot, myTurn, u
               >
                 <span className="flex items-center gap-1.5">
                   <span className={'font-plex text-[9.5px] font-semibold ' + (item.mine ? 'text-[#FFD166]' : 'text-ink-muted')}>
-                    {DE ? DE.pickCode(item.overall, league.teams) : item.overall}
+                    {DE ? DE.pickCode(item.overall, league) : item.overall}
                   </span>
                   {item.auto && (
                     <span className="rounded px-1 py-px font-plex text-[8px] font-bold tracking-[0.08em] bg-amber-400/[0.14] text-amber-300">

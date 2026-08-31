@@ -256,17 +256,26 @@ test.describe("the draft board card", () => {
       const root = document.getElementById("draftroom-root");
       const grid = [...root.querySelectorAll("div")].find(
         (d) => getComputedStyle(d).display === "grid" && d.style.getPropertyValue("--cols"));
-      /* Both mono lines on a card are font-plex now — the pick code and the
-         "WR · CIN" line the position badge became when the cell went chalk
-         — so the class alone matches twice per card and this used to come
-         back at exactly double the expected length. Matched on the shape of
-         a pick code instead, which is what the assertion is actually about:
-         round-dot-two-digits, and nothing else on the card can produce one.
-         Anchoring on the value rather than on the markup is also what stops
-         this breaking again the next time the cell is redrawn. */
-      const drawn = [...grid.querySelectorAll("span.font-plex")]
-        .map((s) => s.textContent.trim())
-        .filter((t) => /^\d+\.\d\d$/.test(t));
+      /* data-pick-code, not `span.font-plex`.
+
+         The old selector rested on font-plex "naming nothing else on a
+         card", which was true and then quietly stopped being true: the
+         chalk-cell redesign made the position line mono as well, so this
+         found two spans per card and reported double the expected count.
+         Nothing about pick codes was wrong; the test was describing markup
+         rather than the property under test, which is the exact failure
+         this suite's own stale-spec note warns about.
+
+         Filtering `span.font-plex` by the shape of a pick code
+         (round-dot-two-digits) fixes the same count and was the other
+         repair on the table. The attribute is preferred for the reason
+         CLAUDE.md states: an attribute says what an element IS, and a
+         value filter would also quietly drop a code that came out
+         MALFORMED — which is one of the things this test exists to catch,
+         since the assertion below is that every drawn code matches
+         DraftEngine.pickCode() exactly. */
+      const drawn = [...grid.querySelectorAll("[data-pick-code]")]
+        .map((s) => s.textContent.trim());
       const expected = JukeEngine.picks().map(
         (p) => DraftEngine.pickCode(p.overall, league.teams));
       return { drawn, expected, missing: expected.filter((c) => !drawn.includes(c)) };

@@ -28,7 +28,7 @@ export default function PickClockBand({
   nextOverall,
   nextPicks,
   overall,
-  teams,
+  league,
   onClock,
   teamLabelOf,
   // The grab handle's own collapse state — lifted to DraftRoom.jsx rather
@@ -41,7 +41,7 @@ export default function PickClockBand({
 }) {
   const picksAway = nextOverall != null && overall != null ? nextOverall - overall : null
   const nextCode = nextPicks && nextPicks.length > 0
-    ? (window.DraftEngine ? window.DraftEngine.pickCode(nextPicks[0], teams) : nextPicks[0])
+    ? (window.DraftEngine ? window.DraftEngine.pickCode(nextPicks[0], league) : nextPicks[0])
     : null
   const pct = clockLength ? Math.max(0, Math.min(100, (timeLeft / clockLength) * 100)) : 0
   const label = myTurn
