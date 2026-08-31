@@ -3689,6 +3689,28 @@ count ask for a pick code, and what keeps every existing call site in
 `app.js`, `room.js` and the worker correct rather than quietly drawing round
 three the old way. **Pass the league object wherever the ORDER matters.**
 
+**A room ran a plain snake and nothing else for a while, and that was a
+deploy skew wearing a feature's clothes.** `draft-engine.js` is the one file
+the browser and the server both run, so the two have to agree about what is
+legal or two managers take the same player milliseconds apart and the room
+forks. The site deploys itself from git and **the worker does not** — it ships
+only when somebody runs `wrangler deploy -c worker/wrangler.toml` — so in the
+window between the draft types merging and that command being run, the server
+was still snaking while a client drew linear. That failure is not a broken
+page: it is picks quietly rejected from round two on, which reads as the room
+freezing.
+
+So `roomShapeProblem()` refused the two orders it could not yet guarantee and
+said so on screen, and it was deleted the moment the worker carrying the new
+engine was live. It is written down because the *shape* recurs: any change to
+`draft-engine.js` or `room.js` has this window in it, the window is invisible
+(CLAUDE.md's own "ask the database, not the response"), and a guard that
+refuses loudly is the cheap way through it. **A control that cannot act must
+not merely fail; it must not be offered** — `createRoom()` returning null with
+nothing on screen is the dead-control failure this project has shipped once
+already, which is why the refusal had a sentence beside it rather than only a
+disabled button.
+
 **`round % 2 === 0` is no longer a legal direction test anywhere.** It was
 inlined in `boardArrow()` on both boards, and it is right for a plain snake
 and wrong for the other two — a board asked for a team count alone draws

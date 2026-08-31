@@ -67,9 +67,6 @@ export default function RoomPanel({ onCreated, onEnter }) {
       const code = joinCode.trim().toUpperCase()
       if (code) engine.joinRoomByCode(code)
     }
-    // Empty string when a room can run this league as-is.
-    const shapeProblem = engine.roomShapeProblem ? engine.roomShapeProblem() : ''
-
     return (
       <div className="flex h-full flex-col rounded-2xl border border-white/10 bg-charcoal p-6 sm:p-8">
         <h2 className="font-display text-xl font-bold text-white">Draft with friends</h2>
@@ -79,24 +76,11 @@ export default function RoomPanel({ onCreated, onEnter }) {
             : 'Same board, same picks, everyone watching the same clock.'}
         </p>
 
-        {/* A room refuses two of the three draft orders for now — see
-            roomShapeProblem() in app.js. The reason is a version skew
-            rather than a rule about rooms (the worker ships by hand and
-            the site ships from git), and the important part here is that
-            it is SAID: createRoom() returning null with nothing on screen
-            is a button that does nothing, which is the dead-control
-            failure this project has shipped once already. */}
-        {!started && shapeProblem && (
-          <p className="mt-4 rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-[12px] leading-relaxed text-amber-200/90">
-            {shapeProblem}
-          </p>
-        )}
-
         <button
           type="button"
-          onClick={() => { if (!started && !shapeProblem && engine.createRoom() && onCreated) onCreated() }}
-          disabled={started || !!shapeProblem}
-          title={started ? "Can't create a room mid-draft" : shapeProblem || undefined}
+          onClick={() => { if (!started && engine.createRoom() && onCreated) onCreated() }}
+          disabled={started}
+          title={started ? "Can't create a room mid-draft" : undefined}
           className="mt-6 w-full rounded-full bg-gradient-to-r from-[#00E5FF] to-[#7B1FA2] py-3 text-sm font-semibold text-white
                      shadow-glass transition-all duration-200 hover:scale-[1.02] hover:animate-pulse-glow
                      disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:scale-100 disabled:hover:animate-none"
