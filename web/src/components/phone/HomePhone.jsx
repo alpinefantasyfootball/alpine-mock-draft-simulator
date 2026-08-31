@@ -7,7 +7,7 @@ import FloatingNavPill, { NAV_PILL_CLEARANCE } from './FloatingNavPill.jsx'
 import { ROOM_ICON_BY_NAME, ROOM_SIGNUP_SOURCE, roomSignupCopy } from '../icons.jsx'
 import { useRooms } from '../../hooks/useRooms.js'
 import { freshnessLine } from '../dataFreshness.js'
-import { POS_MATTE } from '../draftRoomPositions.js'
+import { POS_CHALK, CELL_INK } from '../draftRoomPositions.js'
 
 /* The phone homepage, and it is a different product from the desktop one.
 
@@ -81,8 +81,9 @@ function useInProgress(engine, tick) {
 /* A strip of the real board, colour-coded — the one genuinely playful
    thing on this screen and the one thing on it that could not be a
    picture. Six cells, the top of tonight's board, each in its position's
-   own matte colour with dark ink, which is exactly what the draft room's
-   cells look like.
+   own chalk fill with CELL_INK on it, which is exactly the pairing the
+   draft room's own cells use — the same two maps, so this strip cannot
+   drift into being a second opinion about what a running back looks like.
 
    It renders nothing at all until the board has landed rather than drawing
    placeholders: the score strip's own contract, and the reason is the same
@@ -111,7 +112,7 @@ function BoardTaste({ engine, tick }) {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.05 * i, duration: 0.35 }}
           className="flex w-[112px] shrink-0 flex-col justify-between rounded-2xl px-3 py-2.5"
-          style={{ backgroundColor: POS_MATTE[r.pos] || '#C9D1DA', color: '#0E1116' }}
+          style={{ backgroundColor: POS_CHALK[r.pos] || '#C9D1DA', color: CELL_INK }}
         >
           <span className="font-plex text-[10px] font-bold tracking-tight opacity-70">
             {r.pos === 'DST' ? 'DEF' : r.pos} · {r.team}

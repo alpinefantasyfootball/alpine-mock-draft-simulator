@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { ChevronLeft, ChevronRight, Sparkles } from 'lucide-react'
-import { POS_BADGE, POS_MATTE, INJURY_META } from './draftRoomPositions.js'
+import { POS_BADGE, POS_CHALK, INJURY_META } from './draftRoomPositions.js'
 import QueueList from './QueueList.jsx'
 
 function round1(v) {
@@ -1041,11 +1041,21 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, auto
                         <span className="font-numeral tabular-nums text-[10.5px] text-white/50">{row.remaining} left</span>
                       </div>
                       <div className="mt-2 flex flex-wrap gap-[3px]">
+                        {/* POS_CHALK, not POS_SOLID. These nine-pixel
+                            squares carry no text, and the whole row is a
+                            count of how many of a tier are left — which
+                            only works if a taken square and a live one are
+                            told apart at a glance. At -700 against this
+                            panel the live squares measured 1.46-2.93:1
+                            and the drafted grey sat *brighter* than some
+                            of them, so the two states could invert. The
+                            chalk fills clear 8.74 at worst and are the
+                            same six the board draws. */}
                         {row.tier1.map((p) => (
                           <span
                             key={p.name}
                             className="h-[9px] w-[9px] rounded-sm"
-                            style={{ background: p.drafted ? 'rgba(255,255,255,0.13)' : POS_MATTE[row.pos] || 'rgba(255,255,255,0.4)' }}
+                            style={{ background: p.drafted ? 'rgba(255,255,255,0.13)' : POS_CHALK[row.pos] || 'rgba(255,255,255,0.55)' }}
                           />
                         ))}
                       </div>
@@ -1212,8 +1222,13 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, auto
           <div className="mb-4 rounded-lg bg-white/[0.04] p-3.5">
             <div className="mb-2.5 text-sm font-semibold text-white">{runPos} run</div>
             <div className="mb-2.5 flex gap-1">
+              {/* POS_CHALK, same reason as the tier squares above: a
+                  bare colour block with the sentence underneath doing all
+                  the naming. This strip exists to make a position *run*
+                  visible as a block of one colour, which is the reading
+                  the darkest steps cost most. */}
               {last10.map((p, i) => (
-                <span key={i} className="h-5 flex-1 rounded-sm" style={{ background: POS_MATTE[p.player.pos] || 'rgba(255,255,255,0.15)' }} />
+                <span key={i} className="h-5 flex-1 rounded-sm" style={{ background: POS_CHALK[p.player.pos] || 'rgba(255,255,255,0.25)' }} />
               ))}
             </div>
             <div className="text-xs leading-[1.5] text-white/60">

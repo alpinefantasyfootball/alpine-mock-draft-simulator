@@ -16,8 +16,6 @@
    or an 18-round bench draws a taller image, a short 4-team league draws a
    shorter one, and nothing here hardcodes a row count. */
 
-import { POS_MATTE, posTint } from './components/draftRoomPositions.js'
-
 const W = 1200
 // The left text margin and where the component panel starts. The grade sizing
 // below solves against both, so neither may be written down twice.
@@ -56,26 +54,31 @@ const COMPONENTS = [
   { key: 'byePenaltyScaled', label: 'Byes' },
 ]
 
-// Six hues, one per position — read straight off draftRoomPositions.js
-// rather than hand-copied as hex.
+// Six hues, one per position — the exact values draftRoomPositions.js's
+// POS_BADGE names as Tailwind classes (rose/emerald/blue/orange/violet/
+// slate), translated to hex because a canvas fillStyle can't read a class
+// name. Not re-derived from anywhere at runtime: this file has no access
+// to the Tailwind theme, and these six are load-bearing enough (the one
+// position reference for the whole site, per that file's own comment)
+// that a hardcoded, commented copy is the honest option rather than
+// pretending there's a shared source at draw time.
 //
-// This used to be a literal table, with a comment arguing that a canvas
-// fillStyle cannot read a Tailwind class name so a commented copy was
-// "the honest option rather than pretending there's a shared source."
-// The premise was wrong: this file is an ES module in the same bundle as
-// every component, so it can import the map like anything else — what it
-// cannot read is the *Tailwind theme*, which is a different thing. And
-// the copy did exactly what a second copy of a load-bearing fact does.
-// It went on naming the stock Tailwind orange/emerald/blue/fuchsia/
-// yellow/indigo scales after the site moved to its own matte palette, so
-// a share card drew six positions in colours the product no longer used
-// anywhere — silently, because nobody puts a share card next to a board.
-//
-// POS_MATTE is the fill; posTint() is the same value as a background at
-// the 15% POS_BADGE uses, so the card and a chip are one formula.
-const POS_COLORS = Object.fromEntries(
-  Object.keys(POS_MATTE).map((pos) => [pos, { bg: posTint(pos, 0.15), fg: POS_MATTE[pos] }]),
-)
+// Which makes this the copy that has to be walked when that file moves,
+// and it went stale exactly once: the palette handoff took QB rose, TE
+// orange, K violet and DST slate, and every hex below still said orange,
+// fuchsia, yellow and indigo. Nothing broke — a share card drew a
+// perfectly legible fuchsia TE chip beside a board that had just stopped
+// drawing one, in an image that leaves the app and cannot be corrected
+// after the fact. If POS_BADGE moves again, grep for "rgba(" in this file
+// before believing the change is done.
+const POS_COLORS = {
+  QB: { bg: 'rgba(244,63,94,0.16)', fg: '#FDA4AF' },     // rose-500 / rose-300
+  RB: { bg: 'rgba(16,185,129,0.16)', fg: '#6EE7B7' },    // emerald-500 / emerald-300
+  WR: { bg: 'rgba(59,130,246,0.16)', fg: '#93C5FD' },    // blue-500 / blue-300
+  TE: { bg: 'rgba(249,115,22,0.16)', fg: '#FDBA74' },    // orange-500 / orange-300
+  K: { bg: 'rgba(139,92,246,0.16)', fg: '#C4B5FD' },     // violet-500 / violet-300
+  DST: { bg: 'rgba(100,116,139,0.16)', fg: '#CBD5E1' },  // slate-500 / slate-300
+}
 const POS_NEUTRAL = { bg: 'rgba(255,255,255,0.06)', fg: 'rgba(255,255,255,0.4)' }
 
 /* document.fonts.check() cannot answer the question this guard is asking, and

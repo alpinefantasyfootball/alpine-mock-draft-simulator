@@ -1,5 +1,5 @@
 import AnalyticsCard from './AnalyticsCard.jsx'
-import { POS_MATTE, POS_NAMES } from './draftRoomPositions.js'
+import { POS_CHALK, POS_NAMES } from './draftRoomPositions.js'
 
 // Row 2, col 3 — what share of your early picks (historyStats()'s own
 // CAPITAL_EARLY_ROUNDS in app.js — five rounds, named there once rather
@@ -31,10 +31,17 @@ export default function DraftCapitalAllocationCard({ stats }) {
           {rows.map((row) => (
             <div key={row.pos} className="flex min-w-0 flex-1 flex-col items-center gap-1.5">
               <span className="text-[10.5px] font-bold tabular-nums text-white/80">{Math.round(row.pct)}%</span>
+              {/* POS_CHALK, not POS_SOLID — see AvgRoundByPositionCard
+                  for the measurement. This is the card where it showed
+                  worst: the columns are the largest position marks in the
+                  Lobby, and at -700 the TE and QB ones read as holes in
+                  the panel rather than as bars. The percentage above and
+                  the code below are the labels; nothing is written on the
+                  column itself. */}
               <div className="flex h-16 w-full items-end overflow-hidden rounded-t-sm bg-white/[0.06]">
                 <div
                   className="w-full rounded-t-sm"
-                  style={{ height: `${row.pct}%`, background: POS_MATTE[row.pos] || 'rgba(255,255,255,0.3)' }}
+                  style={{ height: `${row.pct}%`, background: POS_CHALK[row.pos] || 'rgba(255,255,255,0.55)' }}
                 />
               </div>
               <span className="text-[10px] font-bold text-white/50">{row.pos}</span>

@@ -1,5 +1,5 @@
 import AnalyticsCard from './AnalyticsCard.jsx'
-import { POS_NAMES, POS_MATTE } from './draftRoomPositions.js'
+import { POS_NAMES, POS_CHALK } from './draftRoomPositions.js'
 
 // Row 2, col 1. Headline position plus the full per-position breakdown
 // behind it (historyStats()'s weakestSpot + weakestSpotBreakdown in
@@ -46,10 +46,20 @@ export default function WeakestSpotCard({ stats }) {
             {breakdown.map((row) => (
               <div key={row.pos} className="grid grid-cols-[26px_1fr_44px] items-center gap-2">
                 <span className="text-[10px] font-bold text-white/50">{row.pos}</span>
+                {/* POS_CHALK, not POS_SOLID. Nothing is written on this
+                    bar — every label on the row sits outside it — so the
+                    -700 step buys nothing here and costs the whole mark:
+                    measured against this card's own track, the six solids
+                    run 1.46:1 (DST) to 2.93:1 (TE), every one of them under
+                    the 3:1 a non-text mark answers to. A DST bar was
+                    effectively not drawn. The chalk fills clear 8.74 at
+                    worst, and they are the same six colours the board's
+                    cells now carry, so a position learned there is the same
+                    colour here. */}
                 <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.07]">
                   <div
                     className="h-full rounded-full"
-                    style={{ width: `${(row.count / maxCount) * 100}%`, background: POS_MATTE[row.pos] || 'rgba(255,255,255,0.3)' }}
+                    style={{ width: `${(row.count / maxCount) * 100}%`, background: POS_CHALK[row.pos] || 'rgba(255,255,255,0.55)' }}
                   />
                 </div>
                 <span className="whitespace-nowrap text-right text-[10.5px] tabular-nums text-white/70">

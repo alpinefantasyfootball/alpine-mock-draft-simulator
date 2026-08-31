@@ -7,7 +7,9 @@ import { describeRecommendation, runRecommendation } from './recommendation.js'
 // close to the brand's existing teal/purple hue family (cyan and magenta
 // sit either side of it on the wheel) rather than an arbitrary rainbow, so
 // this still reads as the same app. Never reused for anything that names a
-// POSITION — POS_SOLID owns that vocabulary everywhere else and this file
+// POSITION — draftRoomPositions.js owns that vocabulary everywhere else
+// (POS_CHALK for a mark, POS_BADGE for a chip, POS_SOLID under white
+// text) and this file
 // must not compete with it (see draftRoomPositions.js's own file comment on
 // exactly that failure mode).
 const FORMAT_COLORS = ['#22D3EE', '#E879F9', '#FBBF24']

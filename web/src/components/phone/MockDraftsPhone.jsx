@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { BarChart3, ChevronLeft, Lock, Play, Settings, Trash2 } from 'lucide-react'
 import { NAV_PILL_CLEARANCE } from './FloatingNavPill.jsx'
-import { POS_MATTE, POS_MATTE_INK } from '../draftRoomPositions.js'
+import { POS_CHALK, CELL_INK } from '../draftRoomPositions.js'
 
 /* The Mock Drafts screen — what #/drafts is on a phone.
 
@@ -143,7 +143,7 @@ export default function MockDraftsPhone({
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: 0.06 * i, type: 'spring', stiffness: 300, damping: 22 }}
                 className="flex h-[42px] w-[46px] items-end justify-start rounded-[10px] px-1.5 pb-1 font-plex text-[10px] font-bold"
-                style={{ backgroundColor: POS_MATTE[pos], color: POS_MATTE_INK }}
+                style={{ backgroundColor: POS_CHALK[pos], color: CELL_INK }}
               >
                 {pos}
               </motion.span>
@@ -311,8 +311,8 @@ export default function MockDraftsPhone({
                   <span
                     className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] font-plex text-[11px] font-bold"
                     style={{
-                      backgroundColor: entry.round1PickPos ? POS_MATTE[entry.round1PickPos] : 'rgba(255,255,255,0.06)',
-                      color: entry.round1PickPos ? POS_MATTE_INK : 'rgba(255,255,255,0.35)',
+                      backgroundColor: entry.round1PickPos ? POS_CHALK[entry.round1PickPos] : 'rgba(255,255,255,0.06)',
+                      color: entry.round1PickPos ? CELL_INK : 'rgba(255,255,255,0.35)',
                     }}
                     aria-hidden="true"
                   >

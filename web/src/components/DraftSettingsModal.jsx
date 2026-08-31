@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ChevronDown, ChevronRight, Clipboard, Clock, Cpu, ListOrdered, Shield, ShieldCheck, Tag, Timer, Users, X } from 'lucide-react'
-import { POS_MATTE } from './draftRoomPositions.js'
+import { POS_CHALK } from './draftRoomPositions.js'
 import { CircleGroup, PillGroup, RadioRow, Section, Stepper, Switch } from './settings/SettingsControls.jsx'
 import ScoringRules, { scoringRuleCount } from './settings/ScoringRules.jsx'
 import DraftOrder from './settings/DraftOrder.jsx'
@@ -62,12 +62,14 @@ const SLOT_LABEL = {
   BN: 'Bench',
 }
 
-/* The dot beside each roster row is the position's own matte colour — the
-   same map the board fills a cell with, so the roster and the board agree
-   about what a running back looks like. FLEX and Bench are deliberately
+/* The dot beside each roster row is the position's own chalk fill — the
+   same map the board paints a cell with, so the roster and the board agree
+   about what a running back looks like. POS_CHALK rather than POS_SOLID
+   because the label sits beside the dot rather than on it, which is the
+   one question draftRoomPositions.js's header says decides this. FLEX and Bench are deliberately
    grey: they are slots rather than positions, and giving a flex a colour
    would make it the seventh position on a six-colour board. */
-const SLOT_DOT = { ...POS_MATTE, FLEX: '#4A5563', SFLEX: '#4A5563', BN: '#7C8A99' }
+const SLOT_DOT = { ...POS_CHALK, FLEX: '#4A5563', SFLEX: '#4A5563', BN: '#7C8A99' }
 
 /* Seconds per pick. "No limit" is 0, which is what state.clockLength has
    always meant — see clockRunnable()/clockShowing(), where a zero-length

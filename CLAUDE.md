@@ -2216,13 +2216,15 @@ way, not reasoned about.
   comments and in this file — real prose about the project rather than copy
   anybody reads on the page. So a sentence that needs the common noun still
   gets a small r; there simply is not one on screen today.
-- **A position is one hue at three lightnesses, and which one depends on
-  what sits on top of it.** `POS_MATTE` is the flat fill and takes dark ink
-  only; `POS_SOLID` is the same hue darkened until WHITE clears it;
-  `POS_BADGE` is the tint, as literal Tailwind classes naming the same hexes.
-  Reaching for the wrong one does not throw — it draws a mark nobody can see,
-  which is how a deep gold bar ended up invisible on a dark panel and gold
-  ended up at 1.06 on a light cell. See "The matte position palette".
+- **A position is one hue at several steps, and which step you want is
+  settled by one question: does type sit on the colour?** `POS_CHALK` is the
+  pastel fill and takes `CELL_INK` only — and it is also what a bar, a dot
+  or a tier square wants, because their labels sit outside them. `POS_SOLID`
+  is the -700 step, for a filled block with white text across it and nothing
+  else. `POS_BADGE` is the translucent chip. Reaching for the wrong one does
+  not throw — it draws a mark nobody can see, which is how five of six
+  analytics bars sat between 1.46 and 2.93 against their own track and how
+  gold ended up at 1.06 on a light cell. See "The chalk position palette".
 - **Check a new class name against the existing sheet before using it.**
   The landing section was first called `.home`, which is already the header's
   home button; it inherited `display:flex` and collapsed to zero width. The
@@ -2735,9 +2737,10 @@ so `bioLine()` gives it its own line rather than a strip of dashes, and
 Five things per cell: who, what and where, which way the pick order is
 travelling, which pick it was, and a face. It was a surname and a position.
 
-**This section describes the LEGACY board.** The React board's cell is a flat
-`POS_MATTE` fill with dark ink on it now — see "The matte position palette"
-above for what moved and why every mark on the cell had to invert with it.
+**This section describes the LEGACY board.** The React board's cell is a
+`POS_CHALK` fill with `CELL_INK` on it and a `POS_RAIL` rule down its left
+edge now — see "The chalk position palette" above for what moved and why
+every mark on the cell had to invert with it.
 The rules below about the arrow, the row owning the height, headshots costing
 nothing per render and empty cells being centred are all still true of both.
 
@@ -3545,93 +3548,128 @@ second page — failed a test about something else.
   attribute only one half of it carries**, and the failure reads as a
   missing element rather than as a missing marker.
 - The pick code was found by `span.font-plex`, on the strength of a comment
-  saying that class "names nothing else on a card" — true until the matte
-  redesign made the position abbreviation mono too, which doubled the count
-  and reported 86 codes against 43 picks.
+  saying that class "names nothing else on a card" — true until the cell
+  redesign made the position line mono too, which doubled the count and
+  reported 86 codes against 43 picks.
 
 **None of those three tests was about the thing that broke it.** An attribute
 says what an element IS; a class or a label says what it currently looks like
 or reads. Anchor on the first.
 
-## The matte position palette
+## The chalk position palette, and the matte one it replaced
 
-The six position hues are unchanged — QB orange, RB emerald, WR blue, TE
-fuchsia, K gold, DST indigo. What changed is that all three renderings of a
-position are now **one hue at three lightnesses**, where they used to be a
-Tailwind stock scale and two separate hand-picked hex maps.
+**Two palettes were built for this board in the same fortnight, from two
+different directions, and only one of them shipped.** The board palette
+handoff on `main` — chalk cells, a saturated left rail, a cyan seat bracket,
+the legend removed — is the one that survives, and the mobile pass's matte
+palette was merged onto it. This section records both, because the reasons
+the losing one was built are still true and would otherwise be rediscovered.
 
-- **`POS_MATTE`** — the flat pastel a board cell is painted with. Dark ink on
-  top, never white.
-- **`POS_MATTE_INK`** — `#0E1116`, the only ink a matte fill may carry.
-- **`POS_SOLID`** — the same hues darkened by lightness alone until white
-  clears 4.6:1, for the places that carry white type.
-- **`POS_BADGE`** — literal Tailwind classes naming the new `pos-*` tokens in
-  `tailwind.config.js`, which are the identical hexes as `POS_MATTE`.
+The six hues MOVED, which is the part to read first if you remember the old
+set: **QB rose, RB emerald, WR blue, TE orange, K violet, DST slate**, where
+they were orange/emerald/blue/fuchsia/gold/indigo. Only RB and WR are where
+they were. The old set's own comment argued at length that rose and violet
+were unavailable — rose being the danger colour, violet the injury chip — and
+the handoff overrules it on the ground that a hue is only spoken for when a
+reader could confuse the two meanings *in the same glance*, which a pink cell
+reading QB and a red countdown digit in the header are not. Teal is still
+out, permanently: it is the CTA, the focus ring, the live pick and now the
+seat bracket.
 
-**The drift this ended was invisible by construction.** `POS_BADGE` named
-`orange-500`/`orange-300` while `POS_SOLID` carried a hand-picked hex, so a
-position wore two colours that only looked related — and a tint and a solid
-are never side by side long enough to compare. `shareCard.js` had a third
-copy, as hex, with a comment arguing that a canvas cannot read a class name
-so a commented copy was "the honest option rather than pretending there's a
-shared source." The premise was wrong: it is a module in the same bundle and
-can import the map. What it cannot read is the *Tailwind theme*, which is a
-different thing. The copy had already drifted.
+`draftRoomPositions.js` is the one hue reference, and it carries five maps.
+Which one a call site wants is decided by one question, and it is not which
+screen it is on: **does type sit on the colour?**
 
-### The board cell inverted, and everything on it had to invert with it
+- **`POS_CHALK`** — the matte pastel a board cell is painted with, and the
+  default for anything whose labels sit *outside* it: a bar, a dot, a tier
+  square, a run strip.
+- **`POS_RAIL`** — the saturated 5px rule down a chalk cell's left edge.
+- **`CELL_INK` / `CELL_SUB`** — the only two inks a chalk fill may carry.
+- **`POS_SOLID`** — the -700 step, for a filled block with white text
+  written across it, and nothing else.
+- **`POS_BADGE`** — the translucent chip, as literal Tailwind class strings.
 
-The cell was `POS_SOLID` at 14% alpha. It was diluted because a colour dark
-enough for white text is far too heavy to paint 140 cells with — so six hues
-read as six tints of the same charcoal. A matte pastel with near-black ink is
-the opposite weight and needs no diluting.
+**Five of the six analytics bars were reading `POS_SOLID` and measured 1.46
+to 2.93 against their own track** — every one under the 3:1 a non-text mark
+answers to, with a DST bar that was effectively not drawn. Five of them
+failed under the *previous* palette too, so that is a long-standing miss the
+handoff surfaced rather than caused. It only became findable once the board
+started drawing the same six positions in a way that visibly worked.
 
-**Which means every mark on the cell moved to the other end of the value
-scale.** The name, the pick code, the club and the arrow are `POS_MATTE_INK`
-rather than white; the ADP delta is dark green/red rather than brand
-teal/rose; the injury dot carries its own `onMatte` value because
-`INJURY_META`'s `dot` is a light value built for a dark panel (amber-400 on
-the gold K fill is very nearly invisible). **A light-on-dark mark left behind
-on a light fill does not throw. It just becomes unreadable.**
+### What the matte pass was for, and what of it survived
+
+It was a different answer to the same complaint — six hues reading as six
+tints of one charcoal, because the cell was `POS_SOLID` at 14% alpha and a
+colour dark enough for white text is far too heavy to paint 140 cells with.
+Matte reached the same place chalk did: a light cell with dark ink. Chalk
+went further by pairing it with a saturated rail, which is what finally made
+the rail legible after two earlier looks had called it invisible.
+
+Three findings from that pass outlived the hexes and are the reason this
+section is not simply deleted:
 
 **Solve against every fill, not an average, and not to the bar itself.** A
 colour drawn on a per-player background has to clear all six — the "every
-stop in a gradient must clear white on its own" rule in a new shape. The
-first pair of value colours was solved to exactly 4.5 and the model said 4.53
-worst case; **measured on the real rendered board, with transitions killed
-and ancestor `opacity` composited, it came back 4.37.** The browser is the
-authority. The lesson is not to distrust the model but not to spend its
-entire margin: solve past the bar so a small disagreement cannot cross it.
-Both values are solved to 5.0 now and measure 5.37 worst case in a browser.
+stop in a gradient must clear white on its own" rule in a new shape. A pair
+of value colours solved to exactly 4.5 modelled at 4.53 worst case and
+**measured 4.37 on the real rendered board**, with transitions killed and
+ancestor `opacity` composited. The browser is the authority. Do not spend the
+model's entire margin: solve past the bar so a small disagreement cannot
+cross it.
 
-The same happened to the meta line: 0.55 alpha read correctly as secondary
-and measured 3.22, 0.72 cleared by six hundredths, and it is 0.78 now.
+**Every mark on a cell has to invert with the cell.** A light-on-dark mark
+left behind on a light fill does not throw — it just becomes unreadable. The
+handoff hit the identical problem from its own direction and solved it the
+same way: `INJURY_META` grew a `chalk` value beside its `dot` because `dot`
+is a -400 step drawn for a dark cell and measures **1.55:1** on QB's own
+fill, which is the same hue family — precisely where it is least visible.
 
-### The gold ring needed its keyline back, and a test said so in advance
+**`shareCard.js`'s hand-copied hex table is a real hazard and it is still
+there.** The matte pass deleted it, on the correct observation that the file
+is a module in the same bundle and can import the map — what it cannot read
+is the *Tailwind theme*, which is a different thing. That import does not
+survive the merge, because `POS_BADGE`'s tints are Tailwind family steps and
+are not exported as hex by anything. So the copy stays, and it has already
+gone stale once: the handoff took QB rose and TE orange while every hex in
+that file still said orange and fuchsia, so a share card drew a fuchsia TE
+chip beside a board that had stopped drawing one — **in an image that leaves
+the app and cannot be corrected after the fact.** If `POS_BADGE` moves again,
+grep `shareCard.js` for `rgba(` before believing the change is done.
 
-`board-marks.spec.mjs` carried this comment against the assertion that the
-board's ground is dark in both themes: *"if this ever stops being true, the
+### Gold is gone, and the ring that replaced it is one colour again
+
+The seat marker was gold, `--mine`, and this file argued for it at length:
+teal acts, blue states, gold is *whose*. On a dark board that worked. On a
+board of chalk cells gold measured **1.06** on a real card, and the mobile
+pass's answer was to restore the legacy board's gold-then-keyline pair — two
+exact complements, so one half always has the surface under it.
+
+The handoff's answer is better and it is what shipped: **cyan hairlines, and
+the separation from the live pick is SHAPE rather than hue.** The seat is a
+pair of 1-2px rules fourteen rows tall that never fills anything; the live
+pick is a filled, pulsing, bordered box occupying one cell. Cyan is the one
+hue on this board no chalk fill goes near, which is what lets a single value
+work where a single gold could not. Inside your own column on your own turn
+both are drawn, nested — the same "two facts coincide, let both draw" call
+the legacy board already makes.
+
+**This is the one place the mobile pass's work was thrown away rather than
+merged**, and the note that predicted the whole thing still deserves its
+place:
+
+`board-marks.spec.mjs` carried a comment against the assertion that the
+board's ground is dark in both themes — *"if this ever stops being true, the
 pair has to come back and this is the line that says so."* It was written
-about a hypothetical light theme. What actually falsified it was making the
-**cells** light while the ground stayed dark — a direction that assertion
-could not see, so it would have gone on passing while gold measured **1.06**
-on a real card.
+about a hypothetical light theme. What falsified it was making the **cells**
+light while the ground stayed dark, a direction that assertion could not see,
+so it would have gone on passing while gold measured 1.06 on a real card.
+**A precondition written down is worth its line even when the thing that
+breaks it arrives from somewhere the author could not have looked.**
 
-The React board's single gold edge is a gold-then-keyline pair now, the
-identical construction `style.css`'s own `.board .cell.mine` has always used.
-Measured: gold clears 10.45 on an empty cell and 1.02–1.55 on the six fills;
-the keyline `#0B1017` clears 8.53–12.91 on the fills and 1.27 on an empty
-one. Exact complements, so one half always has the surface, and the two clear
-each other at 13.23.
-
-**Box shadows paint first-on-top, so the 2px gold is listed before the 3px
-keyline** — the keyline's own outer 2px is covered by the gold and what
-remains visible is the 1px just inside it. Swap the order and the keyline
-covers the gold entirely.
-
-**And the test now measures the pair rather than half of it.** It asserted
-`ratio(gold, surface) >= 3`, which was right when every filled cell was dark
-and is measuring half a mark now. It takes `max(gold, keyline)` against each
-surface, plus the two against each other.
+That spec measures the bracket's geometry now rather than gold's contrast:
+the rail and the card must not share a pixel of x, reported as an overlap
+count rather than a boolean, because the moment the bracket moves onto a
+chalk fill it is `#00E5FF` on a pastel and the mark is gone.
 
 ## Draft types are real, and the engine takes a config
 
@@ -4699,31 +4737,42 @@ running app before it is believed**, which is the same instruction the
 `?cb=` note gives about deployment and the `LOCAL_WORKER` skip gives about
 news.
 
-### A standing red that is not the pass that found it
+### A standing red that was not the pass that found it
 
 `autopick-adp.spec.mjs`'s "the autopicked seat's draft value is not a
-systematic bottom-of-room outlier" fails, and it was failing before the
-mobile pass touched anything. **Measured rather than assumed**: the same five
-seeds run against the build at `356243f` and against the current one return
-byte-identical numbers — rank 10 of 10, raw value −57, in all five — so the
-failure is attributable to neither.
+systematic bottom-of-room outlier" failed 5 of 5 pinned seeds, and it was
+failing before the mobile pass touched anything. **Measured rather than
+assumed**: the same five seeds run against the build at `356243f` and
+against the mobile-pass build returned byte-identical numbers — rank 10 of
+10, raw value −57, in all five — so the failure was attributable to neither,
+and the pass left it alone and wrote it down here instead of quietly
+rewriting a grade test to go green.
 
-**Seat 1 is the reason, and the grade already knows it.** The test reads
-`t.value`, the RAW draft-value component, and `startSoloDraft()` leaves the
-default `lobbySlot` of 0. This file's own section on par records exactly what
-that means: value is pick number minus board rank, "the first pick of a draft
-can only ever score zero or worse because no player has a board rank below
-1", and mean raw value by chair runs −23 at seat 1 against +14 at seat 5.
-`valueVsPar` is what the grade actually weighs and what removes that; the
-test does not read it. Measured across six seats on one board: seat 0 ranks
-2nd of 10 on `valueVsPar` and last on `value`.
+**It is fixed on `main`, in `9d11465`, and the diagnosis converged from two
+directions at once.** The test reads `t.value`, the RAW draft-value
+component, and `startSoloDraft()` leaves the default seat of 0 — which is a
+snake draft's round-anchor chair, always the first pick of an odd round and
+the last of an even one. This file's own section on par already says what
+that costs: value is pick number minus board rank, "the first pick of a
+draft can only ever score zero or worse because no player has a board rank
+below 1", and mean raw value by chair runs −23 at seat 1 against +14 at seat
+5. `valueVsPar` is what the grade actually weighs and what removes it; the
+test never read it.
 
-So the assertion is very likely testing the chair rather than the autopick.
-**It has not been changed, deliberately** — it is a claim about the grade
-rather than about anything this pass built, and quietly rewriting a grade
-test to go green is how a real signal gets lost. It is written down here
-instead, with the measurement, so the next person to look at it starts from
-evidence rather than from the failure text.
+`9d11465` adds the half that settles it: an **all-CPU room, with no autopick
+anywhere including seat 0**, produces the identical outlier on the identical
+seeds — and seat 0's whole fourteen-pick roster comes back byte-identical
+across all five seeds while 13 of the other 126 picks in the room differ.
+Neither fact involves `autoPickForMe()` at all. The test moved to seat 5,
+checked against the same five seeds first: real per-seed variation and never
+last.
+
+**The lesson is about which seat a claim is measured from.** The assertion is
+about whether the metric singles a seat out unfairly, and it was being asked
+from the one chair the metric is structurally unfair to. Nothing was wrong
+with the code under test, and nothing was wrong with the metric either — it
+was the wrong question asked from the wrong chair, which is a shape this file
+records elsewhere as a right value in the wrong column.
 
 ### Six stale specs, one predicted failure, and the fix that outlives both
 

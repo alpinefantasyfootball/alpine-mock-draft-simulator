@@ -177,12 +177,24 @@ test("neither homepage contradicts the other about what Juke is", async ({ brows
    deliberately carries none of the marketing prose. What both lists have in
    common is that each is the copy its own page cannot lose without becoming
    a different page. */
+/* The last five lines here came from `main`'s own version of this file,
+   which was still the string-diff test when the mobile pass split the
+   homepage in two. That diff and its allowlists are gone for the reason
+   the header gives, but the copy it had been corrected against is not
+   guesswork — c7f1c1b tracked down two of these against the live page
+   after the daily scheduled run went red, and 20852fd's casing changes
+   before it. Folding them in keeps that verification rather than
+   discarding it with the mechanism it happened to live in. */
 const DESKTOP_REQUIRED = [
   "Agility Through Analytics",
   "Master the Draft.",
   "Dominate the Season.",
   "Enter the Draft Room",
   "Explore The Rooms",
+  "Test your strategy in the Draft Room completely free. Waivers, trades and week-to-week tools are in build.",
+  "Free Draft Room • No Account Needed",
+  "Open the Draft Room.",
+  "No setup, no league import. Pick your scoring and start.",
 ];
 
 const PHONE_REQUIRED = [

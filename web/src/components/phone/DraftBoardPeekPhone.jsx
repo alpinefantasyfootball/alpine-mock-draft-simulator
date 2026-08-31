@@ -1,4 +1,4 @@
-import { POS_MATTE } from '../draftRoomPositions.js'
+import { POS_CHALK } from '../draftRoomPositions.js'
 import DraftBoardGrid from '../DraftBoardGrid.jsx'
 
 // The board behind the phone sheet. README section 2 draws this as a
@@ -7,20 +7,28 @@ import DraftBoardGrid from '../DraftBoardGrid.jsx'
 // 20-round board. DraftBoardGrid already renders the real thing at
 // exactly this width (its own `cols`/`rowsTemplate` are the "mobile board
 // pass's own pair," measured for a narrow phone column, not invented
-// here), with real position rails, the real gold "your pick" ring, and
+// here), with real position rails, the real cyan "your seat" bracket, and
 // the same FLIP transition into a drafted cell the desktop board gets.
 // Reusing it — scrollable, not scroll-free — is the deliberate adaptation:
 // a fixed-height no-scroll grid is a real correctness bug the moment a
 // league runs more than a handful of rounds, where the prototype's mock
 // data never had to.
 //
-// What IS new here is the strip above it: not DraftBoardGrid's own
-// built-in "fill = position" colour legend (hidden via hideLegend), but
-// the roster-need pills the README's seat strip actually specifies —
-// `engine.filterCounts()` already computes exactly this for the Players
-// tab's own filter chips (have/need/text, one call, never a second
+// What IS new here is the strip above it: not a "fill = position" colour
+// legend — DraftBoardGrid dropped its own built-in one entirely once the
+// cell, the pool row and the filter chips all started saying what a fill
+// means — but the roster-need pills the README's seat strip actually
+// specifies. `engine.filterCounts()` already computes exactly this for the
+// Players tab's own filter chips (have/need/text, one call, never a second
 // tally — see that function's own comment on why the decision lives
 // engine-side).
+//
+// POS_CHALK, not POS_SOLID, for the dot: it carries no text and its label
+// sits beside it rather than on it, which is exactly the "dot" case
+// draftRoomPositions.js's own header names for POS_CHALK. POS_SOLID's -700
+// step is picked to survive white text and disappears against this strip's
+// dark bg-slate-panel — DST's slate-700 (#334155) is barely a shade off the
+// panel itself (#232D3A).
 const POSITIONS = ['QB', 'RB', 'WR', 'TE', 'K', 'DST']
 
 export default function DraftBoardPeekPhone({ engine, league, picks, mySlot, onClock, onSelectPlayer, headerH, scrollToLiveSignal }) {
@@ -36,7 +44,7 @@ export default function DraftBoardPeekPhone({ engine, league, picks, mySlot, onC
               key={pos}
               className="flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-slate-rule bg-slate-panel px-[9px] py-[5px]"
             >
-              <span className="h-[7px] w-[7px] shrink-0 rounded-full" style={{ backgroundColor: POS_MATTE[pos] }} aria-hidden="true" />
+              <span className="h-[7px] w-[7px] shrink-0 rounded-full" style={{ backgroundColor: POS_CHALK[pos] }} aria-hidden="true" />
               <span className="font-body text-[11px] font-semibold text-ink-soft">
                 {pos === 'DST' ? 'DEF' : pos} {c ? c.text : '—'}
               </span>
@@ -54,7 +62,6 @@ export default function DraftBoardPeekPhone({ engine, league, picks, mySlot, onC
           teamLabelOf={(slot) => engine.teamLabel(slot)}
           shortNameOf={engine.shortName}
           onSelectPlayer={onSelectPlayer}
-          hideLegend
           scrollToLiveSignal={scrollToLiveSignal}
         />
       </div>

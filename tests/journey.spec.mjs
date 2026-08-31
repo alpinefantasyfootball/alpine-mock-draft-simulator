@@ -62,16 +62,29 @@ test("homepage to a finished draft, pressing only what a person can press",
        live Cockpit was the most direct way a manager landed back on a stale
        finished draft instead of a fresh choice. So this follows the Lobby,
        which is also what the rest of this test already walks through. */
-    /* :visible, because there are two homepages in this document now and
-       both mount — the phone one is `sm:hidden` at this width and is first
-       in document order, so `.first()` picked a zero-box link and clicked
-       nothing for a minute before timing out. This is the "Desktop and
-       mobile both mount, so a label matches twice" note in CLAUDE.md,
-       reached from a third direction: not two renderings of one control,
-       but two whole pages. */
-    const doors = page.locator('a[href="#/drafts"]:visible');
+    /* `a[href="#/drafts"]` alone matches several links at once — Hero.jsx's
+       two CTA variants (one `lg:hidden`, one `hidden lg:flex`, exactly one
+       ever visible) and Header.jsx's own sticky mobile bottom bar, which
+       carries the same href but no `data-hero-cta` marker and sits earlier
+       in the DOM than either Hero variant. At this test's default desktop
+       viewport that bar is `lg:hidden` — permanently hidden, not merely slow
+       to render — so `.first()` on the bare selector resolves to it and a
+       click retries against an element that will never become visible,
+       timing out. `data-hero-cta` exists for precisely this — Hero.jsx's own
+       comment: "only one is ever rendered" of the two marked variants, so
+       filtering to the marked ones and taking whichever is on screen is the
+       one real door regardless of viewport, without needing to know which
+       breakpoint is active.
+
+       And the mobile pass added a fourth: there are two whole HOMEPAGES in
+       this document now, not just two renderings of one control, and both
+       mount — the phone one is `sm:hidden` at this width and first in
+       document order. It carries the marker too (HomePhone.jsx's Mock Draft
+       row), which is why the count below is the only thing the bare marker
+       answers and the click on line 91 still asks for `:visible`. */
+    const doors = page.locator('[data-hero-cta]');
     expect(await doors.count(), "the homepage offers a way in").toBeGreaterThan(0);
-    await doors.first().click();
+    await page.locator('[data-hero-cta]:visible').first().click();
 
     // The door lands on the Locker first, not the seat-picker directly —
     // seat-picking moved to its own screen one step further in. "Start
