@@ -245,6 +245,14 @@ test("nothing overflows sideways that cannot scroll or ellipsise", async ({ brow
   const page = await openApp(context, "#/draft-room");
   await page.evaluate(() => {
     window.JukeEngine.startDraft({ mySlot: 3, clockLength: 90 });
+    // Same reason board-card.spec.mjs and board-marks.spec.mjs both call it:
+    // startDraft() ends in runCPUs(), and the loop below drives every pick
+    // itself without ever cancelling that timer. Thirty picks in leaves seat
+    // 9 on the clock, so it would go on drafting six more at 350ms each —
+    // straight through the 700ms wait and into the four-tab sweep below,
+    // which reads every element's box on each tab in turn. A board mutating
+    // between tabs is a sweep whose results are not comparable.
+    stopSim();
     for (let i = 0; i < 30; i++) { const c = onTheClock(); if (c) makePick(cpuChoice(c.slot, c.round)); }
     render();
   });

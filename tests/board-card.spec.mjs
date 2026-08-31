@@ -49,6 +49,18 @@ async function draftInto(page, picks, teams = 10) {
   await page.evaluate(({ n, t }) => {
     if (t !== 10) window.JukeEngine.setLeague({ teams: t });
     window.JukeEngine.startDraft({ mySlot: 3, clockLength: 90 });
+    // startDraft() ends in runCPUs(), which arms a cpuStep() timer to play
+    // whoever it left on the clock. The loop below drives every pick itself
+    // and never touches that timer, so left alone it fires 350ms later and
+    // keeps rescheduling itself until it reaches my seat: mySlot 3 four
+    // picks into an even round is three extra, untracked picks landing
+    // while the assertions below are reading the board. Seen once as
+    // "Expected 43, Received 42" on a test that asked for 40 — the engine
+    // three picks ahead of what was asked for, and the grid one behind the
+    // engine. The number of picks on the board has to be the number this
+    // fixture asked for, or every count in this file is a race.
+    // board-marks.spec.mjs's own draftInto() carries the same call.
+    stopSim();
     for (let i = 0; i < n; i++) { const c = onTheClock(); if (c) makePick(cpuChoice(c.slot, c.round)); }
     render();
     location.hash = "#/draft-room";
