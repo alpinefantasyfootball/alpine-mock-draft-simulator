@@ -475,3 +475,75 @@ test("the suggestion model's discount is capped in absolute picks, not just perc
 
     await context.close();
   });
+
+/* Twelve teams, twenty rounds is 240 picks — past the roughly 210-270 that
+   real ADP alone ever carried, and until extend_deep_bench() existed
+   (scripts/build_players.py) setupProblem() simply refused it, correctly,
+   for every league this deep. See CLAUDE.md's "Take the board past 228
+   players" for the shape of the fix: below real ADP there is no more
+   market signal, so the rest of each format's list is Sleeper's own player
+   master, ranked by search_rank and marked `deep: true`.
+
+   Gated on the board actually being deep enough, the same way
+   news.spec.mjs skips against a keyless worker: players.js only reaches
+   this depth after the pipeline has actually run with real network access,
+   and this checkout may be sitting between rebuilds. Verify a skip in both
+   directions — against a freshly regenerated players.js this should never
+   skip, and if it does that is itself worth noticing. */
+test.describe("a league deeper than real ADP alone can serve", () => {
+  test("twelve teams, twenty rounds runs end to end once the board is deep enough", async ({ browser }) => {
+    const context = await browser.newContext();
+    const page = await openApp(context, "#/draft-room");
+
+    // Eight starters, a FLEX and five bench is fourteen roster spots for
+    // fourteen rounds by default (the same arithmetic solo.spec.mjs's other
+    // bench-aware test already explains) — twenty rounds needs eleven bench
+    // spots instead of five to keep rosterSize() matching league.rounds, so
+    // setupProblem()'s first check (roster vs. rounds) doesn't fire before
+    // its second one (picks vs. pool) gets a chance to.
+    await configure(page, { teams: 12, rounds: 20, bench: 11 });
+
+    const deepEnough = await page.evaluate(() => poolSize() >= 240);
+    test.skip(!deepEnough, "players.js is not deep enough yet for 240 picks — needs a data pipeline run");
+
+    await startSoloDraft(page);
+    const out = await finishDraft(page);
+
+    expect(out.picks, "240 picks").toBe(240);
+    expect(out.distinct).toBe(240);
+    expect(out.seats).toBe(12);
+    expect(out.sizes.every((n) => n === 20), "twenty each").toBe(true);
+    expect(out.over).toBe(true);
+    expect(out.kickerRounds.length ? Math.min(...out.kickerRounds) : 99).toBeGreaterThanOrEqual(19);
+
+    await context.close();
+  });
+
+  /* The deepest configuration the setup screen actually offers — 24 teams,
+     20 rounds — is 480 picks, exactly DEEP_TARGET in build_players.py. So
+     it is a config the pipeline aims to make servable, not one guaranteed
+     to fail — which makes it the wrong shape for "the guard still refuses
+     something genuinely impossible." Twenty-four teams carrying eleven
+     spare bench spots on top of that (rosterSize 9 + 15 bench = 24 rounds)
+     is 576 picks, safely past the 480 ceiling regardless of how deep any
+     future pipeline run reaches, so this one stays a real refusal forever
+     rather than becoming a false failure the day the board finally hits
+     480 exactly. */
+  test("the guard still refuses a league too deep for any board", async ({ browser }) => {
+    const context = await browser.newContext();
+    const page = await openApp(context, "#/draft-room");
+
+    await configure(page, { teams: 24, rounds: 24, bench: 15 });
+
+    const problem = await page.evaluate(() => setupProblem());
+    expect(problem, "setupProblem() names the shortfall").toContain("576 picks");
+    expect(problem).toMatch(/board only carries \d+ players/);
+
+    const startMock = page.locator('#draftroom-root button:text-is("Start mock draft")');
+    if (await startMock.count()) {
+      expect(await startMock.isEnabled(), "the Start button stays disabled").toBe(false);
+    }
+
+    await context.close();
+  });
+});

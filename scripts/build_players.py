@@ -72,7 +72,33 @@ UNMATCHED_FILE = "unmatched.txt"
 # a scoring rule -- see the note on that function.
 APP_FILE = "app.js"
 
-KEEP = 320             # players written per ADP set (FFC currently returns 205-258)
+KEEP = 320             # players written per ADP set (FFC currently returns 205-271)
+
+# FFC's real ADP sample stops where real drafters stop -- 223 to 271 rows
+# depending on format, per the 29 August 2026 players.js. A league running
+# 24 teams over 20 rounds needs 480 picks, more than any format's real
+# sample carries on its own, and until this existed the setup screen simply
+# refused the combination (setupProblem() in app.js) rather than ever
+# drawing a board that deep. DEEP_TARGET is what extend_deep_bench() tops
+# each format's list up to, using Sleeper's own player master once real ADP
+# runs out -- see that function's own comment for why search_rank, not an
+# invented number, is the ordering it uses below real ADP. 480 is the
+# deepest pick count any offered league can ask for (TEAM_COUNTS tops out
+# at 24, and the setup screen's own round range tops out at 20); it is a
+# ceiling extend_deep_bench() fills toward, not a floor it pads to
+# artificially if Sleeper's own pool runs out first.
+DEEP_TARGET = 480
+# One starting kicker and one starting defense per club, at the largest league
+# the setup screen offers. There are only 32 of each in the league, so this is
+# "all of them" rather than a number chosen to fit.
+FULL_POSITION_COVER = 32
+
+# Every fantasy-relevant Sleeper position, in one place. index_sleeper() and
+# extend_deep_bench() both need exactly this list, and writing it out twice
+# is the same "league shape written down twice" trap this project's own
+# rule elsewhere already names.
+FANTASY_POSITIONS = ("QB", "RB", "WR", "TE", "K", "DEF")
+
 WEEKLY_KEEP = 180      # players who also get week-by-week game logs
 # Every season back to 2018 covers the full career of essentially any player
 # with 2026 draft relevance. Seasons that return nothing are skipped, so this
@@ -131,6 +157,11 @@ TEAM_CITIES = {
     "SEA": "Seattle", "SF": "San Francisco", "TB": "Tampa Bay", "TEN": "Tennessee",
     "WAS": "Washington",
 }
+
+# The 32 clubs, and the one test for "is this a real team". TEAM_CITIES is
+# already exactly them and is needed for a defense's own city name anyway, so
+# this is a view of it rather than a second list that could drift.
+NFL_TEAMS = frozenset(TEAM_CITIES)
 
 INJURY_CODES = {
     "questionable": "Q", "doubtful": "D", "out": "O",
@@ -577,7 +608,7 @@ def index_sleeper(sleeper):
     by_name_pos_team, by_name_pos, by_name = {}, {}, {}
 
     for player_id, entry in sleeper.items():
-        if entry.get("position") not in ("QB", "RB", "WR", "TE", "K", "DEF"):
+        if entry.get("position") not in FANTASY_POSITIONS:
             continue
         key = normalise(entry.get("full_name") or entry.get("last_name") or "")
         if not key:
@@ -607,6 +638,16 @@ def join_rows(adp_rows, sleeper, indexes):
             continue
 
         team = clean_team(row.get("team"))
+        # Same rule as extend_deep_bench()'s, from the same constant, because
+        # FFC ranks a few unsigned players too -- its sample was taken before
+        # they were released, so their ADP is a fact about a roster that no
+        # longer exists. Left in they arrive as a 33rd "club" called FA with no
+        # bye. Pre-existing rather than new: the 30 August build carried Bub
+        # Means in the standard and PPR sets and missed the half set only by
+        # luck, which is why "all 32 clubs resolve to a colour" had never gone
+        # red.
+        if team not in NFL_TEAMS:
+            continue
         name = (row.get("name") or "").strip()
         key = normalise(name)
         sleeper_position = "DEF" if position == "DST" else position
@@ -654,6 +695,115 @@ def join_rows(adp_rows, sleeper, indexes):
 
     players.sort(key=lambda p: p["adp"])
     return players[:KEEP], unmatched
+
+
+def extend_deep_bench(players, sleeper, team_byes, target):
+    """Top up one format's real-ADP list with Sleeper's own deeper pool.
+
+    Below real ADP there is no more market signal to rank by -- nobody in
+    FFC's sample drafted these players, and that absence is itself the
+    fact, not a gap to paper over. What's left is Sleeper's own player
+    master, which runs to every player still on an NFL roster, ordered by
+    `search_rank` -- Sleeper's general "how known is this player" figure,
+    used for its own search/autocomplete and computed across virtually the
+    whole league. It is not a fantasy opinion the way `pts_ppr` or
+    `rank_ppr` are (both sit in IGNORED_KEYS for exactly that reason): it
+    never claims to be a scored value, so using it here to order players
+    nobody has scored an opinion on isn't the same mistake as scoring off
+    Sleeper's own points.
+
+    Every player this adds carries `deep: True`. The app owes the reader
+    the same honesty it already gives a kicker or a defense (UNRANKED_
+    POSITIONS in app.js): a rank with no market behind it is not the same
+    claim as one FFC's real drafts priced, and the UI has to say so rather
+    than let a deep-bench player sit in the same tier as somebody real
+    drafters actually took.
+
+    `players` is one format's real-ADP list (already `join_rows()`'s
+    output, so every entry already carries a real Sleeper id or an empty
+    one for an unmatched ADP row). Candidates are excluded by id, so a
+    player already on the list -- real or, in principle, previously
+    extended -- is never duplicated.
+    """
+    covered = {p["id"] for p in players if p["id"]}
+    candidates = [
+        (player_id, entry) for player_id, entry in sleeper.items()
+        if player_id not in covered
+        and entry.get("position") in FANTASY_POSITIONS
+        # `entry.get("team")` was the test here and it is truthy for a free
+        # agent: Sleeper stamps an unsigned player "FA", so retired and
+        # released players came through as a 33rd "club" with no accent colour
+        # and, worse, no bye. team_byes.get(team, 0) then gives them 0, and a
+        # 0 bye reads as *never on bye* -- a quietly better roster in a grade
+        # that spends 10% of itself on bye-week safety. Measured on the real
+        # feed: fourteen of them on the half-PPR board, a retired Derek Carr
+        # and four unsigned kickers among them.
+        and clean_team(entry.get("team")) in NFL_TEAMS
+    ]
+    candidates.sort(key=lambda pair: pair[1].get("search_rank") or 9_999_999)
+
+    room = target - len(players)
+    if room <= 0 or not candidates:
+        return players
+
+    # Continues the real sequence rather than restarting it, so the whole
+    # list stays sorted by "adp" with the deep tail strictly after every
+    # real pick -- the one thing that lets a single divider, rather than a
+    # per-position one, mark where real ADP ends (see PlayerQueueSidebar.jsx).
+    next_adp = int(max((p["adp"] for p in players), default=0)) + 1
+
+    # Kickers and defenses are pulled to the front of the queue until every
+    # club has one, before depth is spent on anyone else.
+    #
+    # search_rank is a "how known is this player" figure, so it orders the
+    # league's kickers and defenses far below its receivers -- and every roster
+    # needs exactly one of each. Measured on the 30 August board: the half-PPR
+    # set carried 19 kickers and 21 defenses, so an 18- or 24-team league could
+    # not have filled those two starting slots even with picks to spare. That
+    # is a ceiling poolSize() cannot see, because it counts players and not
+    # positions, and it surfaces as a draft that completes and leaves lineups
+    # unfillable rather than as a setup screen that refuses.
+    #
+    # Filling to DEEP_TARGET by search_rank alone happens to cover it today at
+    # 480, which is exactly the kind of accident that stops being true when the
+    # target moves. Stated as a rule instead: a total that fits is not the same
+    # as a roster that fills.
+    have = {}
+    for player in players:
+        have[player["pos"]] = have.get(player["pos"], 0) + 1
+    scarce, rest = [], []
+    for player_id, entry in candidates:
+        position = POSITION_MAP.get(entry.get("position"))
+        if position in ("K", "DST") and have.get(position, 0) < FULL_POSITION_COVER:
+            have[position] = have.get(position, 0) + 1
+            scarce.append((player_id, entry))
+        else:
+            rest.append((player_id, entry))
+    ordered = scarce + rest
+
+    extra = []
+    for player_id, entry in ordered[:room]:
+        position = POSITION_MAP.get(entry.get("position"))
+        team = clean_team(entry.get("team"))
+        if position == "DST":
+            name = f"{TEAM_CITIES.get(team, team)} Defense"
+        else:
+            name = entry.get("full_name") or \
+                f"{entry.get('first_name', '')} {entry.get('last_name', '')}".strip()
+        extra.append({
+            "id": player_id, "name": name, "pos": position, "team": team,
+            "bye": team_byes.get(team, 0),
+            # sd/td are 0 rather than omitted, matching what a real row gets
+            # when FFC sends no stdev/sample -- survivalProbability() in
+            # app.js already withholds a probability rather than divide by
+            # a zero sd, so a deep-bench player correctly shows no "still
+            # on the board" odds instead of a fabricated one.
+            "adp": float(next_adp), "sd": 0.0, "td": 0,
+            "inj": injury_code(entry), "_entry": entry, "deep": True,
+        })
+        next_adp += 1
+
+    return players + extra
 
 
 # Sleeper's distance bands are complete from this season on, and lossy
@@ -1375,13 +1525,21 @@ def build_usage(stats, linked, nfl_seasons, ep_seasons=None):
 
 
 def player_line(player):
-    """One line of the PLAYERS array, as it appears in players.js."""
+    """One line of the PLAYERS array, as it appears in players.js.
+
+    `deep` is only ever written as `true` -- appended, never a `false` on
+    every other row, the same convention `inj: ""` breaks and this one
+    doesn't: app.js reads `player.deep` and an absent key is already a
+    falsy read, so a real ADP row costs nothing extra for the field it
+    doesn't have.
+    """
+    extra = ", deep: true" if player.get("deep") else ""
     return ('  {{ id: "{id}", name: "{name}", pos: "{pos}", team: "{team}", '
-            'bye: {bye}, adp: {adp}, sd: {sd}, td: {td}, inj: "{inj}" }}'.format(
+            'bye: {bye}, adp: {adp}, sd: {sd}, td: {td}, inj: "{inj}"{extra} }}'.format(
                 id=player["id"], name=player["name"].replace('"', "'"),
                 pos=player["pos"], team=player["team"], bye=player["bye"],
                 adp=player["adp"], sd=player["sd"], td=player["td"],
-                inj=player["inj"]))
+                inj=player["inj"], extra=extra))
 
 
 # ---------------------------------------------------------------- main
@@ -1404,6 +1562,18 @@ def main():
         if rows:
             adp_raw[key] = rows
         print(f"  {key:<9} {len(rows)} rows")
+
+    # Real 2026 bye weeks, for free: every ADP row already carries its
+    # player's team's bye, so the union across every format and every row
+    # gives every team's real bye without a fetch of its own -- exactly
+    # what extend_deep_bench() needs for a player FFC never sampled.
+    team_byes = {}
+    for rows in adp_raw.values():
+        for row in rows:
+            team = clean_team(row.get("team"))
+            bye = int(row.get("bye") or 0)
+            if bye and team not in team_byes:
+                team_byes[team] = bye
 
     season_stats = {}
     for season in STAT_SEASONS:
@@ -1483,7 +1653,11 @@ def main():
             print(f"  ! no {key} ADP, that set will be missing from players.js")
             continue
         joined, missed = join_rows(adp_raw[key], sleeper, indexes)
+        real_count = len(joined)
+        joined = extend_deep_bench(joined, sleeper, team_byes, DEEP_TARGET)
         sets[key] = joined
+        print(f"  {key:<9} {real_count} real ADP + {len(joined) - real_count} deep bench "
+              f"= {len(joined)}")
         # The same player fails to join in every set, so report each name once.
         for line in missed:
             if line not in unmatched:
@@ -1682,6 +1856,7 @@ def main():
     key_map = {k: STAT_FIELDS[k] for k in SCOREABLE}
     matched = sum(1 for p in players if p["id"])
     flagged = sum(1 for p in players if p["inj"])
+    deep = sum(1 for p in players if p.get("deep"))
     projected = sum(1 for v in stats.values() if "p" in v)
     archived = sum(1 for v in stats.values() if "pp" in v)
     crosswalked = sum(1 for v in stats.values() if "x" in v)
@@ -1704,15 +1879,20 @@ def main():
             f"-{max(season_stats) if season_stats else '-'}\n"
             f"   Matched   : {matched} of the {DEFAULT_FORMAT} set carry a Sleeper id\n"
             f"   Flagged   : {flagged} carry an injury designation\n"
+            f"   Deep      : {deep} of the {DEFAULT_FORMAT} set carry no real ADP -- ranked\n"
+            "               by Sleeper's own depth order rather than a live draft\n"
+            "               sample, and marked `deep: true` for the UI to say so\n"
             f"   Projected : {projected} have {PROJECTION_SEASON} projections\n\n"
             "   ADP: Fantasy Football Calculator, one set per scoring format.\n"
             "   Team count is not an axis: FFC returns the same sample for\n"
             "   8, 10, 12 and 14 teams. See the note in build_players.py.\n"
+            "   Below real ADP, Sleeper's own player master extends each set\n"
+            "   toward DEEP_TARGET players -- see extend_deep_bench().\n"
             "   Player, injury and stat data: Sleeper.\n"
             "   ========================================================== */\n\n"
             f'const PLAYERS_META = {{ generated: "{stamp}", count: {len(players)}, '
-            f"matched: {matched}, flagged: {flagged}, projected: {projected}, "
-            f"unmatched: {len(unmatched)} }};\n\n"
+            f"matched: {matched}, flagged: {flagged}, deep: {deep}, "
+            f"projected: {projected}, unmatched: {len(unmatched)} }};\n\n"
             "/* One ordered list per scoring format. app.js picks the set that\n"
             "   matches league.scoring when a draft starts, and works out every\n"
             "   rank and tier from that set rather than from a fixed board. */\n"

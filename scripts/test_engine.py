@@ -152,9 +152,14 @@ check("no positional ban", E.rejectPick(ten, 0, 0, "Some Kicker", []), null);
 // in every runtime, or two clients drift apart inside a round.
 check("jitter is stable", E.jitter(42, 12345), E.jitter(42, 12345));
 check("jitter is in range", (function () {
+  // 480, not 260: extend_deep_bench() (scripts/build_players.py) takes the
+  // board past real ADP toward DEEP_TARGET=480, the deepest pick count any
+  // offered league (24 teams x 20 rounds) can ask for. jitter() reads a
+  // player's board position, so every position a real draft can reach has
+  // to be covered here, not just where real ADP used to stop.
   let lo = 99, hi = -99;
   for (let seed = 0; seed < 200; seed++) {
-    for (let pos = 1; pos <= 260; pos++) {
+    for (let pos = 1; pos <= 480; pos++) {
       const j = E.jitter(pos, seed);
       if (j < lo) lo = j;
       if (j > hi) hi = j;

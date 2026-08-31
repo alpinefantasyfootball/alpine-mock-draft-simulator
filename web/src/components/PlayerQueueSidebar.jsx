@@ -290,11 +290,27 @@ export default function PlayerQueueSidebar({
      that object is exactly what tierRemaining() needs to identify "the
      tier that just ended" — its own pos and tier are all the function
      reads. */
+  /* The deep-board divider marks where real ADP ends and Sleeper's own
+     depth order (extend_deep_bench() in build_players.py) begins. It's a
+     single, global flip rather than a per-position one: every extended
+     entry gets an adp higher than every real one *in its own format*
+     (build_players.py), so walking board order the `deep` flag goes
+     false -> true exactly once and stays true — no per-position reset
+     the way a tier cliff needs. It still only fires in board order, for
+     the same reason the tier dividers are gated on it: outside ADP order
+     a deep player can sort anywhere among real ones (by name, by a stat
+     column), and one boundary line would claim a cliff that isn't there.
+     Unlike tier dividers it doesn't also need posFilter narrowed to a
+     single tiered position — "real ADP ends here" is true of the whole
+     board, FLEX and ALL included. */
+  const showTierDividers = sortBy === 'board' && tierAvgByPos && POS_LIST.includes(posFilter)
+  const showDeepDivider = sortBy === 'board'
   const rows = []
-  if (sortBy === 'board' && tierAvgByPos && POS_LIST.includes(posFilter)) {
+  if (showTierDividers || showDeepDivider) {
     const lastPlayer = {}
+    let deepDividerShown = !showDeepDivider
     players.forEach((player) => {
-      if (!player.drafted && POS_LIST.includes(player.pos) && player.tier != null) {
+      if (showTierDividers && !player.drafted && POS_LIST.includes(player.pos) && player.tier != null) {
         const last = lastPlayer[player.pos]
         if (last != null && player.tier > last.tier) {
           const posAvgs = tierAvgByPos[player.pos] || {}
@@ -303,6 +319,7 @@ export default function PlayerQueueSidebar({
           const drop = endingAvg != null && nextAvg != null ? Math.round(endingAvg - nextAvg) : null
           rows.push({
             type: 'divider',
+            kind: 'tier',
             key: 'tier-' + player.pos + '-' + last.tier,
             pos: player.pos,
             tierEnding: last.tier,
@@ -312,11 +329,28 @@ export default function PlayerQueueSidebar({
         }
         lastPlayer[player.pos] = player
       }
+      if (!deepDividerShown && player.deep) {
+        rows.push({ type: 'divider', kind: 'deep', key: 'deep-board-start' })
+        deepDividerShown = true
+      }
       rows.push({ type: 'player', key: player.id || player.name, player })
     })
   } else {
     players.forEach((player) => rows.push({ type: 'player', key: player.id || player.name, player }))
   }
+
+  // No windowing on this list — see the file's own history for why that's
+  // an acceptable trade at a few hundred rows — but a deeper board (up to
+  // ~480 now, extend_deep_bench()) makes the one real cost of that worse:
+  // every visible motion.div plays its mount/re-enter animation at once on
+  // a filter change (this file's STICKY_CELL comment already documents
+  // that as a reported, if unreproduced, jank source at the old ~230-row
+  // depth). Skipping the per-row entrance animation once the list is this
+  // long doesn't touch the shared-layoutId fly-to-board-cell animation
+  // (that's one row at a time, on an actual draft, never a mass re-mount)
+  // — it only turns off the opacity/y spring nobody can see resolve
+  // separately in a burst that size anyway.
+  const manyRows = rows.length > 150
 
   return (
     // Sizing against the board+queue row (flex-1, lg:flex-[3], lg:min-w)
@@ -676,6 +710,28 @@ export default function PlayerQueueSidebar({
 
           <AnimatePresence initial={false}>
             {rows.map((row) => {
+              if (row.type === 'divider' && row.kind === 'deep') {
+                return (
+                  // Neutral, not amber — amber already means "a tier is
+                  // about to run out," a scarcity warning. This isn't one:
+                  // it's informational, the same register as an injury
+                  // badge rather than a countdown, so it stays on the
+                  // established muted-white palette this file already
+                  // uses for that (text-ink-muted, bg-white/10 below).
+                  <div
+                    key={row.key}
+                    className="flex min-w-max items-center gap-3 border-y border-white/15 bg-white/[0.03] px-3 py-2"
+                  >
+                    <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-white/70">
+                      Real ADP ends here
+                    </span>
+                    <span className="text-[11px] text-white/50">
+                      Below this line, no real draft has ever taken these players — ranked by Sleeper's
+                      own depth order instead, and marked DEEP.
+                    </span>
+                  </div>
+                )
+              }
               if (row.type === 'divider') {
                 return (
                   // Amber, not gold — #FFD166/--mine is reserved for
@@ -712,7 +768,7 @@ export default function PlayerQueueSidebar({
                 <motion.div
                   key={row.key}
                   layoutId={'player-' + (player.id || player.name)}
-                  initial={{ opacity: 0, y: 6 }}
+                  initial={manyRows ? false : { opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
                   /* No exit animation, deliberately. This row shares its
                      layoutId with the board cell the player lands in, and
@@ -883,6 +939,19 @@ export default function PlayerQueueSidebar({
                         {INJURY_META[player.inj] && (
                           <span className={'rounded px-1 py-px text-[8px] font-bold uppercase leading-tight ' + INJURY_META[player.inj].cls}>
                             {player.inj}
+                          </span>
+                        )}
+                        {/* Per-row, not just the one-time divider above:
+                            any sort other than board order interleaves
+                            deep and real players, so the divider alone
+                            can't carry this once the list stops being in
+                            ADP order. */}
+                        {player.deep && (
+                          <span
+                            className="rounded px-1 py-px text-[8px] font-bold uppercase leading-tight bg-white/10 text-white/50"
+                            title="No real ADP behind this ranking — Sleeper's own depth order, not a live draft"
+                          >
+                            Deep
                           </span>
                         )}
                       </p>

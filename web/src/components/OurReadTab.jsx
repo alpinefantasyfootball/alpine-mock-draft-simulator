@@ -131,6 +131,17 @@ export default function OurReadTab({ engine, player }) {
         )}
       </div>
 
+      {/* Deep-bench players (extend_deep_bench() in build_players.py) keep
+          their score — there's no three-season finding that the ranking is
+          wrong the way there is for K/DST, only the fact that no real
+          draft has ever priced this player. So this is a note beside the
+          score above, not a swap of it. */}
+      {r.deep && (
+        <p className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] leading-relaxed text-ink-muted">
+          <span className="font-semibold text-white/70">Deep board</span> — {r.deepNote}
+        </p>
+      )}
+
       {r.upside !== null && (
         <div className="grid grid-cols-2 gap-2">
           <Meter
