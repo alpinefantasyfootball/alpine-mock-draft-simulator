@@ -1,94 +1,17 @@
-import { useEffect, useRef, useState } from 'react'
-import { CalendarClock, Compass, ListChecks, User } from 'lucide-react'
-import EarlyAccessModal from './EarlyAccessModal.jsx'
+/* The app-level bottom nav — moved to phone/FloatingNavPill.jsx.
 
-// The app-level bottom nav — Lobby / Draft / Rooms / You — mounted only
-// alongside LobbyBar.jsx (DraftRoom.jsx's Locker branch), never inside a
-// live draft: the draft room has its own, different four tabs
-// (MobileDraftTabBar.jsx, Decide/Board/Roster/Players) at a deeper level of
-// the app, not this bar reused. Two bars, two navigation depths — confirmed
-// against the handoff's own screenshots (1b vs 1c/1d), not assumed.
-//
-// Lobby and Draft are real routes, and Rooms is one now too: '#rooms' is
-// the homepage's own Rooms section (RoomsGrid.jsx), the identical anchor
-// SiteNav.jsx's "The Rooms" link already uses. Its own file comment
-// documents why this works from inside the Locker despite being "a
-// different screen" — DraftRoom.jsx's hash-route watcher only treats a hash
-// starting with "#/" as a real route change, so following a bare "#rooms"
-// un-mounts the fixed Locker overlay and lets the browser's native anchor
-// scroll land on the section underneath. This tab was opening a "coming
-// soon" dialog for a page section that already existed. You has no screen
-// behind it yet and stays a button — it opens EarlyAccessModal, the same
-// phase-0 signup every other not-built-yet control in this app now offers,
-// rather than linking somewhere that 404s.
-const TABS = [
-  { key: 'lobby', label: 'Lobby', icon: CalendarClock, href: '#/drafts' },
-  { key: 'draft', label: 'Draft', icon: ListChecks, href: '#/draft-room' },
-  { key: 'rooms', label: 'Rooms', icon: Compass, href: '#rooms' },
-  { key: 'you', label: 'You', icon: User },
-]
+   This file was the flush, edge-to-edge, full-width bar welded to the
+   bottom of the Lobby. It is a floating pill now, and that is a real
+   change rather than a restyle: see FloatingNavPill.jsx's own comment for
+   why a bar attached to the bottom edge reads as browser chrome and a
+   detached one reads as the app.
 
-function activeFromHash(hash) {
-  if (hash.startsWith('#/draft-room')) return 'draft'
-  if (hash.startsWith('#/drafts')) return 'lobby'
-  return null
-}
-
-export default function MobileAppTabBar() {
-  const [active, setActive] = useState(() => activeFromHash(location.hash))
-  const modalRef = useRef(null)
-
-  useEffect(() => {
-    const onHash = () => setActive(activeFromHash(location.hash))
-    window.addEventListener('hashchange', onHash)
-    return () => window.removeEventListener('hashchange', onHash)
-  }, [])
-
-  return (
-    <>
-      {/* env(safe-area-inset-bottom) as padding, not a fixed height bump —
-          the 58px is the tap-target row itself; the home-indicator clearance
-          on top of it varies by device and has to be additive, or a device
-          with no inset gets 58px of dead padding for nothing. lg:hidden:
-          desktop's Locker keeps its own header-only nav, no bottom bar. */}
-      <nav
-        className="fixed inset-x-0 bottom-0 z-40 flex border-t border-white/[0.06] bg-slate-bar/95 backdrop-blur-md lg:hidden"
-        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
-      >
-        {TABS.map((t) => {
-          const Icon = t.icon
-          const isActive = active === t.key
-          const commonClass =
-            'flex flex-1 flex-col items-center justify-center gap-1 border-t-2 text-[11px] font-semibold transition-colors ' +
-            (isActive ? 'border-teal-400 text-teal-300' : 'border-transparent text-[#7C8A99]')
-          const content = (
-            <>
-              <Icon className="h-5 w-5" strokeWidth={isActive ? 2.25 : 1.75} />
-              {t.label}
-            </>
-          )
-          return t.href ? (
-            <a key={t.key} href={t.href} className={commonClass + ' h-[58px]'}>
-              {content}
-            </a>
-          ) : (
-            <button
-              key={t.key}
-              type="button"
-              onClick={() =>
-                modalRef.current?.open(
-                  "The You room is in build. Leave an email and we'll tell you when it opens.",
-                  'nav:you'
-                )
-              }
-              className={commonClass + ' h-[58px]'}
-            >
-              {content}
-            </button>
-          )
-        })}
-      </nav>
-      <EarlyAccessModal ref={modalRef} />
-    </>
-  )
-}
+   Kept as a re-export rather than deleted, and the tabs moved with it, so
+   there is exactly one nav to change when a tab is added. The two things
+   that did move are noted there too — a "Home" tab, which this bar never
+   had because there was no phone homepage to point it at, and the
+   NAV_PILL_CLEARANCE every scroller underneath it now has to reserve
+   (a `fixed` pill costs the page no layout height, so nothing gets that
+   clearance for free the way a flush bar's own height gave it). */
+export { default } from './phone/FloatingNavPill.jsx'
+export { NAV_PILL_CLEARANCE } from './phone/FloatingNavPill.jsx'

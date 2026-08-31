@@ -25,7 +25,7 @@ export default function PicksRail({ picks, league, mySlot, teamLabelOf, initials
       ) : (
         ordered.map((pick) => {
           const mine = pick.slot === mySlot
-          const code = DE ? DE.pickCode(pick.overall, league.teams) : pick.overall
+          const code = DE ? DE.pickCode(pick.overall, league) : pick.overall
           return (
             <div
               key={pick.overall}

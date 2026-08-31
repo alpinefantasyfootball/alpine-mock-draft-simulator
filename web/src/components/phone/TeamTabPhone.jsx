@@ -88,7 +88,7 @@ export default function TeamTabPhone({ engine, league, mySlot, viewSlot, onViewS
   const pickCodeFor = (player) => {
     if (!player || !DE) return null
     const pick = picks.find((p) => p.slot === viewSlot && p.player.name === player.name)
-    return pick ? DE.pickCode(pick.overall, league.teams) : null
+    return pick ? DE.pickCode(pick.overall, league) : null
   }
 
   // Own team first and selected by default: DraftRoom.jsx already seeds

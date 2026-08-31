@@ -116,6 +116,8 @@ the Stack section above, not a one-time migration hiccup.
 | `worker/store.js` | The D1 cache: Sleeper's pool and Tank01 headlines. A cache and never a source of truth, and a missing binding is a normal condition rather than a fault. |
 | `worker/migrations/` | D1 schema, applied with `wrangler d1 migrations apply`. The database is not to be shaped by hand — see the note on three variants of one schema. |
 | `web/index.html` | The real homepage entry Vite builds from. Loads the legacy files above as root-relative classic scripts, alongside Vite's own hashed module bundle for React. The Draft Room markup lives here too, hidden — see the Stack section. |
+| `web/src/components/phone/` | The phone-only screens, mounted below `sm` (`usePhoneWidth()`): the draft room, the homepage, the Mock Drafts Lobby, the floating nav pill. Each is a different screen from its desktop counterpart rather than a narrower one — see "The mobile pass" below for why that is a product decision and what it costs. |
+| `web/src/components/settings/` | The Draft Settings screen's own controls, the scoring-rule editor and the draft-order list. Split out of `DraftSettingsModal.jsx` when that file became the whole settings screen rather than a three-tab modal. |
 | `web/src/` | The React homepage: `Homepage.jsx` composes `Header`, `Hero`, `ScoresStrip`, `ShowYourWorking`, `RoomsGrid`, `ClosingCta`. Every one of them reads real data through `window.JukeEngine` (or `window.DraftEngine` directly, for `pickCode()`) rather than inventing sample content — the header ticker used to be six fabricated stats and is now five real ones read off the live board. |
 | `web/vite.config.js` | The Vite build config, plus a dev-server middleware that serves the same `LEGACY_FILES`/`LEGACY_DIRS` list `copy-legacy-assets.mjs` uses, from the true repo root, so `window.JukeEngine` carries real data under `vite dev` too — not just after a full build. |
 | `web/scripts/copy-legacy-assets.mjs` | Copies the legacy files into `web/dist/` after `vite build`, chained as this package's `build` script. Fails loudly (`process.exit(1)`) and lists exactly what's missing rather than shipping a partial site quietly. |
@@ -2281,6 +2283,15 @@ way, not reasoned about.
   comments and in this file — real prose about the project rather than copy
   anybody reads on the page. So a sentence that needs the common noun still
   gets a small r; there simply is not one on screen today.
+- **A position is one hue at several steps, and which step you want is
+  settled by one question: does type sit on the colour?** `POS_CHALK` is the
+  pastel fill and takes `CELL_INK` only — and it is also what a bar, a dot
+  or a tier square wants, because their labels sit outside them. `POS_SOLID`
+  is the -700 step, for a filled block with white text across it and nothing
+  else. `POS_BADGE` is the translucent chip. Reaching for the wrong one does
+  not throw — it draws a mark nobody can see, which is how five of six
+  analytics bars sat between 1.46 and 2.93 against their own track and how
+  gold ended up at 1.06 on a light cell. See "The chalk position palette".
 - **Check a new class name against the existing sheet before using it.**
   The landing section was first called `.home`, which is already the header's
   home button; it inherited `display:flex` and collapsed to zero width. The
@@ -2792,6 +2803,13 @@ so `bioLine()` gives it its own line rather than a strip of dashes, and
 
 Five things per cell: who, what and where, which way the pick order is
 travelling, which pick it was, and a face. It was a surname and a position.
+
+**This section describes the LEGACY board.** The React board's cell is a
+`POS_CHALK` fill with `CELL_INK` on it and a `POS_RAIL` rule down its left
+edge now — see "The chalk position palette" above for what moved and why
+every mark on the cell had to invert with it.
+The rules below about the arrow, the row owning the height, headshots costing
+nothing per render and empty cells being centred are all still true of both.
 
 **The arrow is there for the turn, which is the one thing the numbers do not
 tell you on sight.** Down on the last pick of a round, along the way its round
@@ -3516,6 +3534,476 @@ picks land, which is when somebody is working out whether their wait is one
 pick or nineteen. It yields to the clock and only to the clock; two facts in a
 74px box is one too many and the countdown is the one being watched.
 
+## The mobile pass: one product on a phone, another on a desk
+
+The owner's instruction was "all of these changes will be for MOBILE ONLY.
+Our website should have a different offering altogether." That is a product
+decision rather than a responsive-layout one, and it is now true of three
+screens: the homepage, the Lobby and the draft menu each render something
+genuinely different below `sm` (640px, `usePhoneWidth()`) rather than the
+same markup at a narrower width.
+
+**Nothing is deleted to make room for it.** The desktop marketing homepage,
+the analytics Lobby and the anchored kebab dropdown are all untouched above
+`sm`, and every one of them is still reachable from the phone: the Lobby's
+dashboard is a button press away from the phone's Mock Drafts screen, and it
+is the *same component*, not a cut-down copy.
+
+### The homepage is chosen by CSS, and that is a hydration decision
+
+`scripts/prerender.mjs` writes real server-rendered markup into `#root` and
+`main.jsx` hydrates onto it. A width-dependent **branch** cannot survive
+that: the server has no `window`, so it renders the desktop tree, and a
+phone's first client render disagrees. React patches a mismatch by
+re-rendering the subtree — which on a phone is one visible frame of desktop
+layout before the phone one replaces it, which is exactly what the prerender
+exists to prevent.
+
+So both trees are prerendered and `sm:hidden` / `hidden sm:block` picks
+between them. **The cost is real and is named in the file**: the desktop tree
+still MOUNTS on a phone, because CSS-hidden is still mounted — the rule
+`useMinWidth` exists for, arriving from a new direction. That is the same
+work today's homepage already did on a phone, so nothing got slower; it
+simply did not get faster. If it ever needs to, the fix is to prerender two
+documents, not to move this back to a hook.
+
+**The Draft Room does not have this problem and uses a hook.** `DraftRoom` is
+its own React root, mounted into `#draftroom-root`, which the prerender never
+touches — so `usePhoneWidth()` is free there and always was.
+
+### The floating nav pill, and the clearance that came with it
+
+`MobileAppTabBar`'s flush, edge-to-edge bar became
+`phone/FloatingNavPill.jsx`: detached, blurred, floating above the safe area.
+A bar welded to the bottom edge sits in the same visual layer as the
+browser's own toolbar and reads as furniture; a floating one reads as the
+app. The old file is a **re-export**, so there is still exactly one nav to
+change when a tab is added.
+
+**A `fixed` pill costs the page no layout height, so nothing under it gets
+clearance for free the way a flush bar's own height gave it.**
+`NAV_PILL_CLEARANCE` is exported for that reason and every screen that
+scrolls under the pill reserves it. Reserving it in the Lobby's scroll
+container *as well* would double it on the phone screen and leave the desktop
+dashboard padded for a bar that is `sm:hidden` — so the clearance moved onto
+the screens themselves.
+
+### Behavioural hooks, because labels keep moving
+
+Four `data-*` attributes were added purely so tests stop breaking on copy:
+`data-start-draft`, `data-hero-eyebrow`, `data-pick-code` and
+`data-hero-cta`. Each one exists because a rename — or, for the last, a
+second page — failed a test about something else.
+
+- The start button has been called "Enter Draft Room", "Start draft", "Start
+  mock draft" and now "Start a mock draft". `phone.spec.mjs` carried a regex
+  of every previous name and missed the fourth by one word.
+- The hero eyebrow was found by matching the slogan's own words. That broke
+  once on case (the text is uppercased in CSS and title case in the source)
+  and again when the phone homepage drew it as a `<p>` with an icon rather
+  than a bare `<span>`.
+- **`data-hero-cta` is the one that is not about a rename.** It already
+  existed on the marketing page, and `sonar.spec.mjs` uses it to hit-test
+  the page's primary call to action — the only check that can tell an
+  overlay that has really gone from one that is merely transparent. It is
+  scoped to a visible instance, which was enough while one homepage
+  rendered at every width. With two mounted and CSS picking between them,
+  the desktop tree is `hidden sm:block` and reports a zero box on a phone,
+  and the launcher carried no marker at all — so the check reported "the
+  hero CTA rendered: false" against a page that was fine. The Mock Draft
+  row carries it now. **Splitting a page by breakpoint orphans every
+  attribute only one half of it carries**, and the failure reads as a
+  missing element rather than as a missing marker.
+- The pick code was found by `span.font-plex`, on the strength of a comment
+  saying that class "names nothing else on a card" — true until the cell
+  redesign made the position line mono too, which doubled the count and
+  reported 86 codes against 43 picks.
+
+**None of those three tests was about the thing that broke it.** An attribute
+says what an element IS; a class or a label says what it currently looks like
+or reads. Anchor on the first.
+
+## The chalk position palette, and the matte one it replaced
+
+**Two palettes were built for this board in the same fortnight, from two
+different directions, and only one of them shipped.** The board palette
+handoff on `main` — chalk cells, a saturated left rail, a cyan seat bracket,
+the legend removed — is the one that survives, and the mobile pass's matte
+palette was merged onto it. This section records both, because the reasons
+the losing one was built are still true and would otherwise be rediscovered.
+
+The six hues MOVED, which is the part to read first if you remember the old
+set: **QB rose, RB emerald, WR blue, TE orange, K violet, DST slate**, where
+they were orange/emerald/blue/fuchsia/gold/indigo. Only RB and WR are where
+they were. The old set's own comment argued at length that rose and violet
+were unavailable — rose being the danger colour, violet the injury chip — and
+the handoff overrules it on the ground that a hue is only spoken for when a
+reader could confuse the two meanings *in the same glance*, which a pink cell
+reading QB and a red countdown digit in the header are not. Teal is still
+out, permanently: it is the CTA, the focus ring, the live pick and now the
+seat bracket.
+
+`draftRoomPositions.js` is the one hue reference, and it carries five maps.
+Which one a call site wants is decided by one question, and it is not which
+screen it is on: **does type sit on the colour?**
+
+- **`POS_CHALK`** — the matte pastel a board cell is painted with, and the
+  default for anything whose labels sit *outside* it: a bar, a dot, a tier
+  square, a run strip.
+- **`POS_RAIL`** — the saturated 5px rule down a chalk cell's left edge.
+- **`CELL_INK` / `CELL_SUB`** — the only two inks a chalk fill may carry.
+- **`POS_SOLID`** — the -700 step, for a filled block with white text
+  written across it, and nothing else.
+- **`POS_BADGE`** — the translucent chip, as literal Tailwind class strings.
+
+**Five of the six analytics bars were reading `POS_SOLID` and measured 1.46
+to 2.93 against their own track** — every one under the 3:1 a non-text mark
+answers to, with a DST bar that was effectively not drawn. Five of them
+failed under the *previous* palette too, so that is a long-standing miss the
+handoff surfaced rather than caused. It only became findable once the board
+started drawing the same six positions in a way that visibly worked.
+
+### What the matte pass was for, and what of it survived
+
+It was a different answer to the same complaint — six hues reading as six
+tints of one charcoal, because the cell was `POS_SOLID` at 14% alpha and a
+colour dark enough for white text is far too heavy to paint 140 cells with.
+Matte reached the same place chalk did: a light cell with dark ink. Chalk
+went further by pairing it with a saturated rail, which is what finally made
+the rail legible after two earlier looks had called it invisible.
+
+Three findings from that pass outlived the hexes and are the reason this
+section is not simply deleted:
+
+**Solve against every fill, not an average, and not to the bar itself.** A
+colour drawn on a per-player background has to clear all six — the "every
+stop in a gradient must clear white on its own" rule in a new shape. A pair
+of value colours solved to exactly 4.5 modelled at 4.53 worst case and
+**measured 4.37 on the real rendered board**, with transitions killed and
+ancestor `opacity` composited. The browser is the authority. Do not spend the
+model's entire margin: solve past the bar so a small disagreement cannot
+cross it.
+
+**Every mark on a cell has to invert with the cell.** A light-on-dark mark
+left behind on a light fill does not throw — it just becomes unreadable. The
+handoff hit the identical problem from its own direction and solved it the
+same way: `INJURY_META` grew a `chalk` value beside its `dot` because `dot`
+is a -400 step drawn for a dark cell and measures **1.55:1** on QB's own
+fill, which is the same hue family — precisely where it is least visible.
+
+**`shareCard.js`'s hand-copied hex table is a real hazard and it is still
+there.** The matte pass deleted it, on the correct observation that the file
+is a module in the same bundle and can import the map — what it cannot read
+is the *Tailwind theme*, which is a different thing. That import does not
+survive the merge, because `POS_BADGE`'s tints are Tailwind family steps and
+are not exported as hex by anything. So the copy stays, and it has already
+gone stale once: the handoff took QB rose and TE orange while every hex in
+that file still said orange and fuchsia, so a share card drew a fuchsia TE
+chip beside a board that had stopped drawing one — **in an image that leaves
+the app and cannot be corrected after the fact.** If `POS_BADGE` moves again,
+grep `shareCard.js` for `rgba(` before believing the change is done.
+
+### Gold is gone, and the ring that replaced it is one colour again
+
+The seat marker was gold, `--mine`, and this file argued for it at length:
+teal acts, blue states, gold is *whose*. On a dark board that worked. On a
+board of chalk cells gold measured **1.06** on a real card, and the mobile
+pass's answer was to restore the legacy board's gold-then-keyline pair — two
+exact complements, so one half always has the surface under it.
+
+The handoff's answer is better and it is what shipped: **cyan hairlines, and
+the separation from the live pick is SHAPE rather than hue.** The seat is a
+pair of 1-2px rules fourteen rows tall that never fills anything; the live
+pick is a filled, pulsing, bordered box occupying one cell. Cyan is the one
+hue on this board no chalk fill goes near, which is what lets a single value
+work where a single gold could not. Inside your own column on your own turn
+both are drawn, nested — the same "two facts coincide, let both draw" call
+the legacy board already makes.
+
+**This is the one place the mobile pass's work was thrown away rather than
+merged**, and the note that predicted the whole thing still deserves its
+place:
+
+`board-marks.spec.mjs` carried a comment against the assertion that the
+board's ground is dark in both themes — *"if this ever stops being true, the
+pair has to come back and this is the line that says so."* It was written
+about a hypothetical light theme. What falsified it was making the **cells**
+light while the ground stayed dark, a direction that assertion could not see,
+so it would have gone on passing while gold measured 1.06 on a real card.
+**A precondition written down is worth its line even when the thing that
+breaks it arrives from somewhere the author could not have looked.**
+
+That spec measures the bracket's geometry now rather than gold's contrast:
+the rail and the card must not share a pixel of x, reported as an overlap
+count rather than a boolean, because the moment the bracket moves onto a
+chalk fill it is `#00E5FF` on a pastel and the mark is gone.
+
+## Draft types are real, and the engine takes a config
+
+`draft-engine.js` accepts a **config object anywhere it took a bare `teams`
+number**, and one function decides whether a round runs backwards:
+
+- **linear** — never. Every round runs seat 1 to seat N.
+- **snake** — even rounds.
+- **snake + third-round reversal** — rounds one and two are an ordinary
+  snake, round three repeats round two's direction instead of flipping back,
+  and it snakes normally from there. So from round three on the parity is
+  inverted: `round >= 3 ? round % 2 === 1 : round % 2 === 0`.
+
+**A bare number still means a plain snake**, which is not backwards
+compatibility for its own sake — it is what lets a caller holding only a team
+count ask for a pick code, and what keeps every existing call site in
+`app.js`, `room.js` and the worker correct rather than quietly drawing round
+three the old way. **Pass the league object wherever the ORDER matters.**
+
+**A room ran a plain snake and nothing else for a while, and that was a
+deploy skew wearing a feature's clothes.** `draft-engine.js` is the one file
+the browser and the server both run, so the two have to agree about what is
+legal or two managers take the same player milliseconds apart and the room
+forks. The site deploys itself from git and **the worker does not** — it ships
+only when somebody runs `wrangler deploy -c worker/wrangler.toml` — so in the
+window between the draft types merging and that command being run, the server
+was still snaking while a client drew linear. That failure is not a broken
+page: it is picks quietly rejected from round two on, which reads as the room
+freezing.
+
+So `roomShapeProblem()` refused the two orders it could not yet guarantee and
+said so on screen, and it was deleted the moment the worker carrying the new
+engine was live. It is written down because the *shape* recurs: any change to
+`draft-engine.js` or `room.js` has this window in it, the window is invisible
+(CLAUDE.md's own "ask the database, not the response"), and a guard that
+refuses loudly is the cheap way through it. **A control that cannot act must
+not merely fail; it must not be offered** — `createRoom()` returning null with
+nothing on screen is the dead-control failure this project has shipped once
+already, which is why the refusal had a sentence beside it rather than only a
+disabled button.
+
+**`round % 2 === 0` is no longer a legal direction test anywhere.** It was
+inlined in `boardArrow()` on both boards, and it is right for a plain snake
+and wrong for the other two — a board asked for a team count alone draws
+confident arrows pointing the wrong way on cells whose pick numbers are
+simultaneously correct. That is the seat-versus-pick-number bug exactly: two
+right numbers side by side disagreeing. `DraftEngine.reversedRound()` is
+exported so nothing has to re-derive it.
+
+**Auction is listed in `DRAFT_TYPES` and marked unavailable, deliberately.**
+It is not a setting — it is a second draft mode end to end (a budget per
+team, a nomination order, live bidding, a bid clock, and a CPU that values a
+player in dollars rather than in board position). A control that silently ran
+a snake draft under an "Auction" label would be a whole wrong product behind
+a right label. It is listed rather than hidden because a settings screen
+showing two options where the category has three tells a visitor the product
+does not know about the third.
+
+### Three more things the league now carries
+
+**`playerPool`** — all / rookies / vets, read off Sleeper's own `years_exp`,
+which is already `exp` in `stats.js` on every matched player. No pipeline
+change and no second source. **A player with no `exp` is kept in BOTH
+filtered pools**: 27 board rows have no stats record, team defenses have no
+years of experience, and a defense is neither a rookie nor a veteran in any
+sense a drafter means. Dropping them would leave a league that starts a D/ST
+with no legal pick for the slot. `undefined` is missing, and missing is not
+evidence of anything — the other half of "treat `0` from an API as missing".
+
+The filter lives inside `adpSet()`, so `poolSize()` and therefore
+`setupProblem()` validate against the array `buildBoard()` will actually map
+over. There are 38 rookies on a 232-player board, so rookies-only is a
+three-round draft; the settings screen prints the count beside the control
+rather than letting the Start button refuse with the reason nowhere near the
+cause.
+
+**`superflex`** is a scoring preset that is not a scoring format. It draws
+full PPR's ADP set — FFC publishes three sets and none of them is superflex —
+and what it actually changes is `league.superflex`, plus the round that has
+to come with it. `SCORING_PRESET` carries a `note` saying so on screen,
+because a superflex board genuinely underrates quarterbacks and a drafter is
+better off being told than finding out in round three. `ADP_FORMAT` maps a
+preset to a set through a named function rather than indexing `ADP_SETS`
+directly, so a new preset with no entry is a preset nobody decided the board
+for, rather than one silently falling through to the default.
+
+**`cpuAutopick`** — whether a human seat whose clock runs out gets drafted
+for. This has always happened and was never a setting. Off, the clock reaches
+0:00 and the seat stays yours. **CPU seats are untouched in both states**:
+they are not users running out of time, and a room that stops moving because
+a setting about humans was switched off is a deadlock.
+
+## The Draft Settings screen
+
+The three-tab modal (Roster / Scoring / Seats) is the whole settings screen
+now — draft name, draft type, third round reversal, scoring, teams, available
+players, time per pick, CPU autopick, roster construction, draft order, and
+the scoring-rule editor folded away at the bottom.
+
+**One component at every width**: a full-screen sheet below `sm`, a centred
+modal above it. A second copy of ten sections is the "written down twice"
+rule in markup and it drifts the first time one of them changes.
+
+**Save is a dismiss, not a commit.** Every control writes through to the one
+real `league` the moment it is pressed, because that is what keeps the board,
+the summary line and `setupProblem()` agreeing with the screen while somebody
+is still reading it. What Save genuinely guards is that refusal, which it
+reports in place instead of closing onto a Start button that will not press.
+
+**Draft order stopped being a dead control.** Its solo branch was a read-only
+list with a paragraph explaining there was nothing to do. It takes a seat and
+randomizes now, through `setMySlot()`/`randomizeOrder()`, which refuse in a
+room — where the same section is the host's real seat-swap and goes through
+`swapSeats()` because the room is the thing that decides. **Randomising solo
+moves one seat, not the whole array**: the other chairs are CPUs drafting to
+one rule, so permuting them changes nothing anybody can observe, and a
+shuffle of the whole list would be a lie dressed as a feature.
+
+**`shapeExtras()` prints only what is not the default.** A summary listing
+every setting is a settings screen with worse formatting; a summary listing
+none of the unusual ones lets somebody sit in a linear rookies-only draft
+under a header reading "10 teams · 14 rounds · Half PPR".
+
+## The phone draft room's own controls
+
+**A crosshair, not an auto-follow.** The board is a real scroller in both axes
+and nothing ever pulled it back to the live pick. It centres the current cell
+in the board's own scroller — `getBoundingClientRect()` differenced against
+the scroller's, never `offsetTop`, and it returns early when already within
+4px, both of which are hard-won rules this file already records for the
+legacy board. It is a **counter** prop rather than a boolean, because
+pressing it twice in a row has to scroll twice.
+
+Deliberately not an automatic follow: that is a bug this project has already
+shipped and removed once, where a reader was pulled back to the live pick two
+or three times a second for as long as they kept trying to look elsewhere.
+
+**The auto-pick ribbon lives inside the header**, drawn only when auto-pick is
+on. Everything on that screen is `fixed` and stacked by hand — the board is
+pinned to the header's height and the sheet's ceiling is measured from it —
+so a ribbon as a separate fixed element would need both of those to know
+about it independently.
+
+**And the header measures and reports its own height.** It was a hardcoded
+106, which is only right on a device with a notch:
+`pt-[env(safe-area-inset-top)]` is 0 everywhere else, so the real header is
+about 65 and **the board started 41px below where the header ended**. Found by
+looking at a screenshot, not by anything failing. A `ResizeObserver` rather
+than a read at mount, because the height genuinely changes while the screen
+is up — the ribbon appears and disappears with auto-pick.
+
+### The bottom sheet: nearest-snap was the wrong question
+
+The collapsed snap was 188px, which is a shorter sheet still covering the
+last four rounds of a fourteen-round board — and those are the rounds
+somebody swiping the sheet down is trying to see. It is **58px** now: the drag
+handle and the tab row and nothing else. The safe-area inset is padding
+*inside* the sheet rather than folded into that number, or it double-counts
+on the devices that have one.
+
+**Release asks three questions in order, and each exists for a gesture the
+next one gets wrong.** The snaps are 412px apart, so nearest-snap-by-distance
+meant a decisive 84px swipe down released 328px from collapsed and went back
+where it came from — measured, doing exactly the gesture the reference app
+collapses on. The sheet was not ignoring small movements, it was ignoring
+most real ones.
+
+1. **Flicked** (above 550 px/s): direction is the whole message, distance is
+   irrelevant. One snap that way.
+2. **Travelled** past 56px in one direction: land on the nearest snap, but
+   never back on the one it started from.
+3. **Otherwise** nearest, which for a small movement is where it started — so
+   an accidental nudge springs back.
+
+Together those produce all three behaviours without special-casing any of
+them, and the release velocity is carried into the settle spring rather than
+starting a fresh one from zero.
+
+**A stale closure was a real hazard here.** "One snap from where this gesture
+started" cannot read `snapIndex` off the prop the handler closed over; it is
+a ref, for the same reason the settings modal's seat swap already uses one.
+
+## The gear menu, and notifications that do something
+
+The kebab dropdown is a bottom **action sheet** below `sm` and the anchored
+dropdown above it, from one array of items — a phone-specific copy of the
+list is the thing that ends up missing an item after the next change.
+
+**Pause is back, which reverses a decision recorded here.** It was cut with
+Undo and "Auto-draft the rest" by a product review that found all three
+buried in a kebab menu and reasoned a mock draft does not need them. The
+argument was about the menu rather than about the control: a list you reach
+by pressing a gear, that reads like a list of things you can do to this
+draft, is exactly where somebody looks for Pause. Undo and auto-draft-the-rest
+stay gone, still for their own reasons.
+
+**"End draft" is not the header's X.** The X steps away and keeps the draft
+resumable; End draft finishes it — the remaining picks are drafted, it is
+recorded and graded like any completed draft, and you land on the report with
+it in the locker. Two controls meaning "back to the Lobby" in different words
+is the duplicate-affordance problem. The confirm says the pick count out
+loud, because "End draft" does not on its own tell anybody that 137 picks are
+about to happen. **Never offered in a room**: "the rest" there is other
+people's teams.
+
+### Notifications are the Notification API, not a stored preference
+
+The obvious cheap version is two switches over `localStorage` that do
+nothing, and that is the dead-control failure this project has shipped once
+already — worse here, because somebody turns a notification toggle on and
+then trusts it.
+
+The point is one moment: your pick arrives while the tab is not the one you
+are looking at, which is precisely when the sound cue and the header turning
+teal reach nobody. There is no push service and none is needed — the page is
+open, it is just not in front.
+
+Three things it will not do, each the difference between a useful
+notification and one that gets the permission revoked. **It never fires while
+the tab is visible.** **It fires on the CHANGE, not the state** — `myTurn` is
+true for hundreds of renders per turn, the same shape `soundCue()`'s own
+comment already records. **It replaces rather than stacks**, one `tag` per
+kind.
+
+**Draft mentions watches the room's own `chatStream()` and needs a priming
+pass.** Joining a room hands you the whole existing chat log at once, so
+without one, every mention from before you arrived fires on connect. It
+tracks the newest message **by id, not by count**: the chat log is bounded in
+lines and bytes and drops old messages off the front, so a length comparison
+would go quiet the moment the log started rolling — silently, and only in the
+long drafts where somebody has most likely stopped watching the tab.
+
+**Three states the screen reports rather than assumes**: no API at all
+(iOS only has it for an installed site, and the note says so), permission
+denied (which Juke cannot undo from here, so it says that instead of offering
+a switch that points at itself), and granted.
+
+## The phone Lobby is a launcher, and the dashboard is a press away
+
+The desktop Lobby is a real analytics dashboard — three KPI tiles, a
+twelve-cell tendencies grid, a recommendation engine, a heatmap and a history
+table. On a 390px phone all twelve cells stack into one column and the button
+the screen exists to offer ends up past the fourth chart.
+
+`MockDraftsPhone.jsx` is what `#/drafts` is below `sm`: start, resume, and
+what you have already run. **Nothing is lost.** "Your insights" mounts the
+identical `DraftLocker`, and a history row opens that component's own report
+path through a new `initialAnalyzeId` prop rather than a second entry point —
+the frozen-report-first path is the whole reason a reopened draft and the
+grade it was recorded with cannot disagree, and skipping it would silently
+reintroduce exactly that.
+
+**`historySummary()` resolves a stored name against the LIVE board**, which is
+how a name becomes a position and a headshot — and the board is empty until
+`players.js` lands, which is deferred rather than blocking. Read once on
+mount, every row came back with a null position and drew a grey dash where
+its colour belongs: the names were right, because those are stored, and only
+the resolved fields were missing. It reads the engine tick. **Anything that
+resolves against `board` needs the same treatment.**
+
+**An early return is a wall no hook may sit behind.** `DraftLocker`'s new
+effect was placed after its own `if (!engine) return null`, so the hook count
+changed between renders and React threw on the first press of the button that
+mounts it. It is keyed on `engine` rather than `[]` for a second reason:
+`analyze` is a const further down the same function, in its temporal dead
+zone on exactly the render that early return takes.
+
 ## Security
 
 The zone is set beyond Cloudflare's defaults, and the defaults were not
@@ -3871,6 +4359,31 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   the repository, because design tokens are exactly what the *other* session
   edits while yours has a server up — so restart the preview after any change
   to `tailwind.config.js`, whoever made it.
+- **A proxied sandbox makes a render-blocking `<link>` look like a broken
+  loader.** `sonar.spec.mjs` holds `#boot-sonar` to leaving between 4800ms and
+  5800ms of navigation start, and it came back `removedAt: null` — the overlay
+  still on screen nine seconds in, on a build whose teardown had not been
+  touched. Nothing was wrong with it. `web/index.html` links Barlow Condensed
+  from `fonts.googleapis.com`, that link is render-blocking, and in a container
+  where outbound HTTPS goes through an agent proxy whose CA the browser does
+  not trust, the TLS handshake hangs and resets — twice, six seconds each. So
+  `domContentLoadedEventEnd` was **12,512ms**, the teardown's two nested rAFs
+  fired after it, and every bound in the file was missed by seven seconds.
+
+  **Chromium reads `HTTPS_PROXY` from the environment by itself**, which is
+  what makes this hard to see and what makes two obvious repairs do nothing:
+  `--host-resolver-rules` and an `/etc/hosts` entry are both resolution-side,
+  and with a proxy in play the hostname is resolved at the proxy, not here.
+  Measured: DCL stayed at 12.4s under both. Running the suite with the proxy
+  variables unset takes it to **120ms** and the file to 4 passed. Never
+  `--ignore-certificate-errors` for this — the fault is reachability, and
+  turning off verification is a different and much larger change.
+
+  The tell is that the failing number is a *duration* and the thing it
+  measures is downstream of page load. Check `performance.getEntriesByType(
+  "resource")` for an entry whose `responseEnd` is in the seconds before
+  reading anything into the app's own timing. This is the fifth time in this
+  file that the tooling has worn a bug's clothes.
 - **In a headless or hidden browser, disable transitions before you measure
   a colour.** A pane that is not compositing produces no frames, so a CSS
   transition never advances — it sits frozen at its starting value, and
@@ -4337,6 +4850,95 @@ running app before it is believed**, which is the same instruction the
 `?cb=` note gives about deployment and the `LOCAL_WORKER` skip gives about
 news.
 
+### A standing red that was not the pass that found it
+
+`autopick-adp.spec.mjs`'s "the autopicked seat's draft value is not a
+systematic bottom-of-room outlier" failed 5 of 5 pinned seeds, and it was
+failing before the mobile pass touched anything. **Measured rather than
+assumed**: the same five seeds run against the build at `356243f` and
+against the mobile-pass build returned byte-identical numbers — rank 10 of
+10, raw value −57, in all five — so the failure was attributable to neither,
+and the pass left it alone and wrote it down here instead of quietly
+rewriting a grade test to go green.
+
+**It is fixed on `main`, in `9d11465`, and the diagnosis converged from two
+directions at once.** The test reads `t.value`, the RAW draft-value
+component, and `startSoloDraft()` leaves the default seat of 0 — which is a
+snake draft's round-anchor chair, always the first pick of an odd round and
+the last of an even one. This file's own section on par already says what
+that costs: value is pick number minus board rank, "the first pick of a
+draft can only ever score zero or worse because no player has a board rank
+below 1", and mean raw value by chair runs −23 at seat 1 against +14 at seat
+5. `valueVsPar` is what the grade actually weighs and what removes it; the
+test never read it.
+
+`9d11465` adds the half that settles it: an **all-CPU room, with no autopick
+anywhere including seat 0**, produces the identical outlier on the identical
+seeds — and seat 0's whole fourteen-pick roster comes back byte-identical
+across all five seeds while 13 of the other 126 picks in the room differ.
+Neither fact involves `autoPickForMe()` at all. The test moved to seat 5,
+checked against the same five seeds first: real per-seed variation and never
+last.
+
+**The lesson is about which seat a claim is measured from.** The assertion is
+about whether the metric singles a seat out unfairly, and it was being asked
+from the one chair the metric is structurally unfair to. Nothing was wrong
+with the code under test, and nothing was wrong with the metric either — it
+was the wrong question asked from the wrong chair, which is a shape this file
+records elsewhere as a right value in the wrong column.
+
+### Six stale specs, one predicted failure, and the fix that outlives both
+
+The mobile pass turned six specs red. Five were stale in the ordinary way —
+a label moved, a tab became a section, an element changed from a `<span>` to
+a `<p>`. **The tell is the one this file already records**: they failed by
+not finding something, on properties that had nothing to do with what broke
+them. A test about whether the Start button is coverable failed on the
+button's name; a test about the gap under the fixed header failed on which
+element the eyebrow is; a test about pick codes failed because the position
+abbreviation became mono.
+
+**A seventh failure was mine, and it is the case trap again.** Replacing
+`/Randomize order/` with `/Randomize/` looked like the whole fix; the button
+is title case in the source and uppercased in CSS, so `innerText` hands back
+`RANDOMIZE` and the case-sensitive match found nothing. The *negative*
+assertion ("a guest is not offered the shuffle") passed either way, which is
+what hid it — a negative that matches nothing passes for the wrong reason,
+and it had been doing so since the label lost its second word. What caught it
+was adding the positive: **assert that the thing you are checking the absence
+of is present for somebody**, or the absence means nothing. That is the third
+appearance of this trap in this file, after `/nan/i` catching Monangai and the
+hero eyebrow's own uppercase slogan.
+
+**The repair was not to update the selectors.** Each of those three now
+matches a `data-*` attribute the app carries deliberately —
+`data-start-draft`, `data-hero-eyebrow`, `data-pick-code` — because updating
+a label match only buys until the next rename, and the start button alone has
+had four names. An attribute says what an element IS. That is this file's own
+"anchor on behaviour, not on class strings" rule, applied to the identity of
+the element rather than to how it is found.
+
+**The sixth was a real prediction coming true**, and it is the best argument
+in this file for writing down what an assertion rests on.
+`board-marks.spec.mjs` asserted that the board's ground is dark in both
+themes, with a comment saying that is the precondition a single gold ring
+rests on and "if this ever stops being true, the pair has to come back and
+this is the line that says so". It stopped being true from a direction the
+comment did not anticipate — the cells went light while the ground stayed
+dark — so **that assertion would have gone on passing** while gold measured
+1.06 on a real card. What actually caught it was the contrast assertion
+beside it. The precondition is no longer load-bearing and is no longer the
+guard; the pair is measured directly instead.
+
+**And one failed for being right.** The sheet's tallest snap was pinned to
+558 — a 664px viewport minus a header hardcoded at 106px. The header measures
+itself now, so the honest cap is 588, and that assertion would have gone red
+for the fix exactly as loudly as for a regression. It derives the cap from
+the header's real height now. **Assert the relationship, never an absolute
+offset** — the same rule this file already states about the padding that
+stands in for a fixed header's height, learned again on the number underneath
+it.
+
 ### `actionTimeout` was unset, and that is why a stale locator cost six minutes
 
 `playwright.config.mjs` set none, so the default was **no ceiling at all**. A
@@ -4392,6 +4994,16 @@ a room test flakes, suspect the fixture's definition of "ready" before
 suspecting the room.
 
 ### Desktop and mobile both mount, so a label matches twice
+
+**And there are two whole HOMEPAGES in the document now, not just two
+renderings of one control.** `journey.spec.mjs` clicked
+`a[href="#/drafts"]` and took `.first()`, which after the mobile pass is a
+link inside the phone homepage — `sm:hidden` at desktop width, first in
+document order, a zero box. It clicked nothing for a minute and timed out
+at the action. `:visible` is the same fix as everywhere else in this
+section; what is new is that the duplicate can be a page rather than a
+button, so a selector that names a destination rather than a control is
+just as exposed.
 
 `Analysis`, `Draft options` and the lobby gear each render in a desktop bar
 and again in a `lg:hidden` mobile one. Both are in the DOM — **CSS-hidden is

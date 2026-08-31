@@ -54,7 +54,8 @@ export default function Hero() {
               is what now owns the gap between the two. */}
           <div className="flex items-center gap-[14px] mb-[22px]">
             <span className="h-px w-8 shrink-0" style={{ background: '#3E9886' }} />
-            <span className="font-display text-[19px] font-extrabold italic uppercase tracking-[0.03em] text-mint">
+            {/* data-hero-eyebrow — see HomePhone.jsx's copy of this note. */}
+            <span data-hero-eyebrow className="font-display text-[19px] font-extrabold italic uppercase tracking-[0.03em] text-mint">
               Agility Through Analytics
             </span>
           </div>

@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { POS_CHALK, POS_RAIL, CELL_INK, CELL_SUB, INJURY_META } from './draftRoomPositions.js'
@@ -35,14 +36,24 @@ import { POS_CHALK, POS_RAIL, CELL_INK, CELL_SUB, INJURY_META } from './draftRoo
    own gap arithmetic near line 964 is its own copy for the ticker and is
    untouched. */
 
-// Snake direction, per cell — every cell carries it, not just drafted
+// Pick-order direction, per cell — every cell carries it, not just drafted
 // ones (CLAUDE.md: "it was on drafted ones only" was itself a shipped
 // bug — the turn matters most *before* a pick lands). Built only from
-// DraftEngine.pickInRound(), the one place the snake mirror is allowed
-// to live, never re-derived here.
-function boardArrow(DE, round, slot, teams) {
+// DraftEngine, the one place the mirror is allowed to live, never
+// re-derived here.
+//
+// Takes the whole `league`, not a team count. `round % 2 === 0` was the
+// direction test and it is only right for a plain snake: a linear draft
+// runs forward in every round and third-round reversal inverts the parity
+// from round three on, so a board asked for a team count alone would draw
+// confident arrows pointing the wrong way, on cells whose pick numbers
+// were simultaneously correct. That is the seat-versus-pick-number bug
+// exactly — two right numbers side by side disagreeing — so the answer
+// comes from DraftEngine.reversedRound().
+function boardArrow(DE, round, slot, league) {
   if (!DE) return null
-  return DE.pickInRound(round, slot, teams) === teams ? 'down' : (round % 2 === 0 ? 'left' : 'right')
+  if (DE.pickInRound(round, slot, league) === league.teams) return 'down'
+  return DE.reversedRound(round, league) ? 'left' : 'right'
 }
 
 /* One glyph, rotated - never three different characters. The down arrow is a
@@ -170,7 +181,59 @@ function RaiseLowerButton({ onClick, disabled, title, children }) {
   )
 }
 
-export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLabelOf, onTeamClick, shortNameOf, onClaimSeat, seats, onSelectPlayer, trayPos, onTrayUp, onTrayDown }) {
+/* Put the live pick in the middle of the board's own scroller.
+
+   Two things here are the hard-won rules this codebase already paid for
+   once, on the legacy board, and they are just as true of this one.
+
+   `offsetTop` is NOT a distance to the scroller. It is the distance to the
+   nearest *positioned* ancestor, and nothing between a board cell and this
+   scroll container is positioned — the legacy board read it anyway and sat
+   about four rounds past the live pick, twitching every time anything above
+   the board changed height. Two getBoundingClientRect() calls, differenced,
+   are a real distance between two real boxes whatever is positioned in
+   between. Do not "fix" a future version of this by adding `position:
+   relative` to the scroller: that makes offsetTop correct today and
+   silently wrong again the next time somebody changes positioning.
+
+   And do not re-ask for a scroll you are already at. `behavior: smooth`
+   starts an animation whether or not the target moved, so a caller that
+   fires this on every render would restart one every few hundred
+   milliseconds. 4px of slop is what turns "moves constantly" into "moves
+   once, when asked." */
+function centreOnLive(scroller, cell) {
+  if (!scroller || !cell) return
+  const box = scroller.getBoundingClientRect()
+  const target = cell.getBoundingClientRect()
+  const left = scroller.scrollLeft + (target.left - box.left) - (box.width - target.width) / 2
+  const top = scroller.scrollTop + (target.top - box.top) - (box.height - target.height) / 2
+  const x = Math.max(0, Math.min(left, scroller.scrollWidth - scroller.clientWidth))
+  const y = Math.max(0, Math.min(top, scroller.scrollHeight - scroller.clientHeight))
+  if (Math.abs(x - scroller.scrollLeft) < 4 && Math.abs(y - scroller.scrollTop) < 4) return
+  scroller.scrollTo({ left: x, top: y, behavior: 'smooth' })
+}
+
+export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLabelOf, onTeamClick, shortNameOf, onClaimSeat, seats, onSelectPlayer, trayPos, onTrayUp, onTrayDown, scrollToLiveSignal }) {
+  const scrollerRef = useRef(null)
+  const liveCellRef = useRef(null)
+
+  /* Driven by a counter the caller increments, not by a ref handed up or a
+     window event. A counter is the smallest thing that can express "the
+     crosshair was pressed again" — pressing it twice in a row has to scroll
+     twice, and a boolean cannot say that. It also keeps this a plain prop:
+     a window event would scroll every board that happened to be mounted,
+     and a forwarded imperative handle would have to be threaded through
+     DraftBoardPeekPhone and DraftRoomPhone to reach the header.
+
+     Deliberately skipped on the first render (signal 0 / undefined): a
+     caller that has never pressed it must not have the board jump on
+     mount, which is a different feature (auto-follow) with its own
+     "the board yanks while I'm reading round one" failure mode. */
+  useEffect(() => {
+    if (!scrollToLiveSignal) return
+    centreOnLive(scrollerRef.current, liveCellRef.current)
+  }, [scrollToLiveSignal])
+
   const byCell = new Map()
   picks.forEach((p) => byCell.set(p.round + '-' + p.slot, p))
 
@@ -268,7 +331,7 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
           one scrollbar on this screen rather than a nested one fighting an
           outer page scroll. flex-1 min-h-0 is what makes it claim exactly
           the remaining height rather than growing to its content. */}
-      <div className="no-scrollbar-below-lg min-h-0 w-full flex-1 overflow-x-auto overflow-y-auto">
+      <div ref={scrollerRef} className="no-scrollbar-below-lg min-h-0 w-full flex-1 overflow-x-auto overflow-y-auto">
       {/* pb-[7rem+tab bar] below lg: PlayerHub's sheet is fixed over the
           bottom edge there and would otherwise cover the last couple of
           rounds when scrolled all the way down. The 7rem (112px, pb-28's own
@@ -497,13 +560,13 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
                 const pick = byCell.get(round + '-' + s)
                 const isCurrent = !!onClock && onClock.round === round && onClock.slot === s
                 const isMine = s === mySlot
-                const overall = DE ? DE.overallOf(round, s, teams) : null
+                const overall = DE ? DE.overallOf(round, s, league) : null
                 // The label for a pick that has landed. Always via
                 // DraftEngine.pickCode() — the snake mirror lives there and
                 // nowhere else (CLAUDE.md: a pick number is not a seat
                 // number, and half the board agrees with the wrong answer).
-                const code = pick && DE ? DE.pickCode(pick.overall, teams) : null
-                const arrow = boardArrow(DE, round, s, teams)
+                const code = pick && DE ? DE.pickCode(pick.overall, league) : null
+                const arrow = boardArrow(DE, round, s, league)
                 return (
                   <div
                     key={round + '-' + s}
@@ -513,6 +576,12 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
                        on it. border-slate-rule/70 stays in the class list
                        whatever else this cell carries — it is how both
                        board specs find a real cell. */
+                    /* The crosshair centres on this element, so the ref
+                       goes on the grid cell rather than on the card inside
+                       it — centreOnLive() differences two rects and the
+                       cell is the box the board's own geometry is built
+                       from. */
+                    ref={isCurrent ? liveCellRef : undefined}
                     className={'h-[46px] lg:h-[50px] box-border border-b border-r border-slate-rule/70 p-[3px] ' + (isMine ? SEAT_BRACKET : '')}
                     /* The hit area is the whole grid cell, not the card
                        inside it. The 3px margin that makes the seat
@@ -631,8 +700,16 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
                           <p className="min-w-0 truncate text-[12px] font-semibold lg:text-[13px] lg:font-bold" title={pick.player.name}>
                             {shortNameOf ? shortNameOf(pick.player) : pick.player.name}
                           </p>
+                          {/* data-pick-code, not the font class it happens to
+                              carry. board-card.spec.mjs used to find these by
+                              `span.font-plex`, on the strength of a comment
+                              saying that class named nothing else on a card —
+                              true until the position abbreviation on the line
+                              below became mono too, which doubled the count
+                              and reported 86 codes against 43 picks. An
+                              attribute says what an element IS. */}
                           {code && (
-                            <span className="shrink-0 font-plex text-[10px]" style={{ color: CELL_SUB }}>
+                            <span data-pick-code className="shrink-0 font-plex text-[10px]" style={{ color: CELL_SUB }}>
                               {code}
                             </span>
                           )}

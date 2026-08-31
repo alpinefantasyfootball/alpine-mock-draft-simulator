@@ -166,22 +166,22 @@ async function openOrderTab(page) {
   await page.waitForFunction(() =>
     [...document.querySelectorAll("div")].some((d) =>
       (d.className || "").toString().includes("z-[70]")), null, { timeout: 15000 });
-  /* "Seats", not "Order". Renamed in DraftSettingsModal.jsx (TABS) and the
-     reasoning is written out beside it: "order" reads as the snake itself,
-     of which there is only one, where what this tab does is let a host swap
-     which person sits in which chair. Everything the tab says is unchanged —
-     "Only the host can set the draft order", "Tap a seat to pick it up" and
-     "Randomize order" are all still there, and this file still asserts them
-     below; it was only the label on the way in that moved.
+  /* There is no tab to press any more. The settings modal became the whole
+     Draft Settings screen — draft name, type, third-round reversal,
+     scoring, teams, player pool, clock, CPU autopick, roster, draft order,
+     scoring rules — one scrolling column rather than three tabs, so "Seats"
+     (itself a rename of "Order") is a section heading now and not a
+     control.
 
-     A locator again rather than a second one-shot evaluate, for the same
-     reason as the gear above: the modal's own contents mount a frame after
-     the overlay div this function just waited for, so find(...) could come
-     back undefined and throw on .click() instead of waiting. */
+     What this function has to guarantee is unchanged: that the draft-order
+     list is genuinely mounted before anything below reads or clicks it.
+     Waiting for the section's own <ol> is a stronger version of what
+     clicking a tab used to buy — the tab click could succeed against an
+     empty panel, this cannot. */
   await page
-    .locator('div[class*="z-[70]"] button:text-is("Seats")')
+    .locator('div[class*="z-[70]"] ol li button')
     .first()
-    .click({ timeout: 30000 });
+    .waitFor({ timeout: 30000 });
 }
 
 function orderPanelText(page) {
@@ -219,12 +219,30 @@ test("the host sets the draft order and a guest cannot", async ({ browser }) => 
     .poll(() => orderPanelText(guest), { timeout: 15000 })
     .toMatch(/Only the host can set the draft order/);
   const guestSeesRandomize = await orderPanelText(guest);
-  expect(guestSeesRandomize, "and is not offered the shuffle").not.toMatch(/Randomize order/);
+  /* "Randomize", not "Randomize order" — the label lost its second word
+     when draft order became a section with its own heading above it. Worth
+     noticing rather than just updating: the old string matched NOTHING on
+     the new screen, so this negative assertion would have gone on passing
+     for a guest who was being offered the shuffle. A negative assertion is
+     only worth its line if the positive one is also checked, which is what
+     the host's own case below now does.
+
+     And case-INSENSITIVE, which is the second half of the same lesson. The
+     button is title case in the source and uppercased in CSS, so innerText
+     hands back "RANDOMIZE" — the identical trap this file's own homepage
+     eyebrow already hit, and the identical shape as CLAUDE.md's note about
+     an assertion handed to a language model. Written case-sensitively, this
+     negative would ALSO have passed vacuously, and the host's positive
+     below is what caught it. */
+  expect(guestSeesRandomize, "and is not offered the shuffle").not.toMatch(/randomize/i);
 
   // The host swaps the two occupied chairs, through the real list.
   await openOrderTab(host);
   await expect.poll(() => orderPanelText(host), { timeout: 15000 })
     .toMatch(/Tap a seat to pick it up/);
+  // The other half of the guest's negative above: the shuffle really is on
+  // this screen for somebody, so its absence for the guest means something.
+  expect(await orderPanelText(host), "the host IS offered the shuffle").toMatch(/randomize/i);
 
   await host.evaluate(([a, b]) => {
     const m = [...document.querySelectorAll("div")]

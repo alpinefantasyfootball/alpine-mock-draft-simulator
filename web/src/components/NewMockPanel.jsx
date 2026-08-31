@@ -209,6 +209,12 @@ export default function NewMockPanel({
             ? 'cursor-not-allowed bg-white/5 text-white/25'
             : 'bg-gradient-to-r from-[#00E5FF] to-[#7B1FA2] text-white shadow-glass hover:scale-[1.02] hover:shadow-[0_0_15px_rgba(0,229,255,0.4)]')
         }
+        /* data-start-draft is a hook for the phone suite. This label has
+           moved three times — "Enter Draft Room", then "Start draft", then
+           "Start mock draft" — and each move failed a test about something
+           else; phone.spec.mjs still carries a regex of every name it has
+           ever had. An attribute says what the button IS. */
+        data-start-draft
       >
         {/* roomActive: this button doesn't start anything in a room — it
             calls enterDraftRoom() (DraftRoom.jsx's handleStartNew) and
