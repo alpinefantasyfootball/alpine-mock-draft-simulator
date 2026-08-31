@@ -257,7 +257,11 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
          LEGEND_POSITIONS is gone with it — nothing else read it, and an
          unused export of the position order is exactly the sort of thing
          a later pass wires back in without the reasoning that took it
-         out. POS_CHALK/POS_RAIL keep the order they always had. */}
+         out. POS_CHALK/POS_RAIL keep the order they always had.
+
+         The mobile redesign's own `hideLegend` prop went with it too —
+         there is nothing left for it to hide, on any caller, including
+         the phone board-peek that used to pass it. */}
 
       {/* The one scroll container, both axes — everything above this point
           is shrink-0 chrome that never scrolls with it, so there is exactly

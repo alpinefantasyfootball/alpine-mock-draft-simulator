@@ -465,6 +465,171 @@ check("a flood is refused", floodRejects() > 0, true);
 check("the socket is not closed for flooding", flooder.readyState, 1);
 flooder.close();
 
+/* ---- reply threading, over a real socket ----
+
+   room.js's own tests cover the pointer's own rules (a bogus id is stored
+   anyway, garbage is dropped); this only needs to prove a replyTo sent on
+   the wire survives the trip through the adapter and comes back on the
+   broadcast the same way any other field on a chat line does. */
+alice2.send(JSON.stringify({ type: "chat", text: "which RB?" }));
+const parent = await until("the parent message arrives", () => {
+  const c = (lastState(bob) || {}).chat || [];
+  const last = c[c.length - 1];
+  return last && last.text === "which RB?" ? last : false;
+}) || {};
+
+bob.send(JSON.stringify({ type: "chat", text: "Gibbs, easy", replyTo: parent.id }));
+const reply = await until("the reply arrives", () => {
+  const c = (lastState(alice2) || {}).chat || [];
+  const last = c[c.length - 1];
+  return last && last.text === "Gibbs, easy" ? last : false;
+}) || {};
+check("a replyTo sent over the socket lands on the broadcast line",
+      reply.replyTo, parent.id);
+
+/* ---- polls, over a real socket ----
+
+   Any member may open one — nothing here is host-only. What has to be
+   proven over a live socket rather than only against the pure room is that
+   the vote projection each client receives never carries the other one's
+   member id, the same reason test-sockets.mjs checks reactions and not
+   only test_engine.py. */
+alice2.send(JSON.stringify({
+  type: "poll-create", question: "Trade Bijan for two firsts?",
+  choices: ["Yes", "No"], multi: false, anon: false
+}));
+const pollState = await until("the poll arrives", () => {
+  const c = (lastState(bob) || {}).chat || [];
+  const last = c[c.length - 1];
+  return last && last.type === "poll" ? c : false;
+}) || [];
+const pollLine = pollState[pollState.length - 1];
+check("a poll carries its type over the wire", pollLine.type, "poll");
+check("choices arrive in order", pollLine.poll.options.map((o) => o.choice), ["Yes", "No"]);
+check("nobody has voted yet", pollLine.poll.options.map((o) => o.count), [0, 0]);
+
+bob.send(JSON.stringify({ type: "poll-vote", id: pollLine.id, choice: 0 }));
+const bobVoted = await until("bob's vote reaches alice", () => {
+  const line = (lastState(alice2) || {}).chat.find((m) => m.id === pollLine.id);
+  return line && line.poll.options[0].count === 1 ? line : false;
+}) || {};
+check("alice sees bob's vote counted", bobVoted.poll.options[0].count, 1);
+check("and that it was not her own", bobVoted.poll.options[0].you, false);
+check("bob sees it was him",
+      lastState(bob).chat.find((m) => m.id === pollLine.id).poll.options[0].you, true);
+check("a poll vote leaks no member id",
+      JSON.stringify(lastState(alice2)).includes('"bob"') === false, true);
+
+alice2.send(JSON.stringify({ type: "poll-vote", id: pollLine.id, choice: 99 }));
+await until("the bad choice is rejected", () => lastOfType(alice2, "rejected")?.code === "no-such-choice");
+check("an out-of-range choice is refused",
+      lastOfType(alice2, "rejected")?.code, "no-such-choice");
+
+// ---- anon: counts are visible, who voted never is ----
+alice2.send(JSON.stringify({
+  type: "poll-create", question: "Anonymous gut check", choices: ["Great pick", "Reach"],
+  anon: true
+}));
+const anonPollState = await until("the anon poll arrives", () => {
+  const c = (lastState(bob) || {}).chat || [];
+  const last = c[c.length - 1];
+  return last && last.poll && last.poll.question === "Anonymous gut check" ? c : false;
+}) || [];
+const anonPoll = anonPollState[anonPollState.length - 1];
+
+bob.send(JSON.stringify({ type: "poll-vote", id: anonPoll.id, choice: 1 }));
+const anonView = await until("the anon vote reaches alice", () => {
+  const line = (lastState(alice2) || {}).chat.find((m) => m.id === anonPoll.id);
+  return line && line.poll.options[1].count === 1 ? line : false;
+}) || {};
+check("an anonymous poll still shows a count", anonView.poll.options[1].count, 1);
+check("but names nobody", anonView.poll.options[1].voters, undefined);
+
+// ---- multi-choice: an index toggles rather than replacing ----
+alice2.send(JSON.stringify({
+  type: "poll-create", question: "Which needs help?", choices: ["RB", "WR", "TE"],
+  multi: true
+}));
+const multiPollState = await until("the multi poll arrives", () => {
+  const c = (lastState(bob) || {}).chat || [];
+  const last = c[c.length - 1];
+  return last && last.poll && last.poll.question === "Which needs help?" ? c : false;
+}) || [];
+const multiPoll = multiPollState[multiPollState.length - 1];
+
+bob.send(JSON.stringify({ type: "poll-vote", id: multiPoll.id, choice: [0, 2] }));
+await until("bob's multi vote lands", () => {
+  const line = (lastState(alice2) || {}).chat.find((m) => m.id === multiPoll.id);
+  return line && line.poll.options[0].count === 1 && line.poll.options[2].count === 1 ? line : false;
+});
+bob.send(JSON.stringify({ type: "poll-vote", id: multiPoll.id, choice: [0] }));
+const toggled = await until("the toggle-off lands", () => {
+  const line = (lastState(alice2) || {}).chat.find((m) => m.id === multiPoll.id);
+  return line && line.poll.options[0].count === 0 ? line : false;
+}) || {};
+check("a multi-choice vote toggles one option without touching the rest",
+      toggled.poll.options.map((o) => o.count), [0, 0, 1]);
+
+/* ---- voice and photo, through the real /media route ----
+
+   The full path: upload over plain HTTP, get a URL back, send it as a chat
+   action over the socket, and the room refuses to store anything that did
+   not come from this route. */
+const mediaOk = await fetch(`${HTTP}/media?kind=voice&room=${ROOM}`, {
+  method: "POST",
+  headers: { Origin: "https://jukeff.com", "content-type": "audio/webm" },
+  body: "not really audio, just bytes for the test"
+});
+check("an upload from our own origin is accepted", mediaOk.status, 200);
+const mediaBody = await mediaOk.json();
+
+if (mediaBody.configured === false) {
+  /* The bucket has not been created in this environment (see
+     worker/README.md's manual step) — real, and this run says so loudly
+     rather than reporting a pass that never touched R2. */
+  note.push("SKIP  media upload assertions (MEDIA bucket not bound — run `wrangler r2 bucket create juke-chat-media`)");
+} else {
+  check("an upload returns a URL", typeof mediaBody.url, "string");
+  check("the URL is served from our own worker, not R2's public bucket URL",
+        new URL(mediaBody.url).hostname, new URL(HTTP).hostname);
+
+  const fetched = await fetch(mediaBody.url);
+  check("the uploaded bytes are readable back", fetched.status, 200);
+  check("with a long-lived cache header — the key never changes content",
+        (fetched.headers.get("cache-control") || "").includes("immutable"), true);
+
+  const evilUpload = await fetch(`${HTTP}/media?kind=voice&room=${ROOM}`, {
+    method: "POST",
+    headers: { Origin: "https://evil.example", "content-type": "audio/webm" },
+    body: "x"
+  });
+  check("an upload from a foreign origin is refused", evilUpload.status, 403);
+
+  const badType = await fetch(`${HTTP}/media?kind=voice&room=${ROOM}`, {
+    method: "POST",
+    headers: { Origin: "https://jukeff.com", "content-type": "text/plain" },
+    body: "x"
+  });
+  check("an upload with the wrong content-type is refused", badType.status, 415);
+
+  alice2.send(JSON.stringify({ type: "voice", url: mediaBody.url, seconds: 8 }));
+  const voiceLine = await until("the voice message arrives", () => {
+    const c = (lastState(bob) || {}).chat || [];
+    const last = c[c.length - 1];
+    return last && last.type === "voice" ? last : false;
+  }) || {};
+  check("a voice message carries the uploaded URL", voiceLine.url, mediaBody.url);
+  check("and its length", voiceLine.seconds, 8);
+
+  // A crafted message naming a URL that never went through /media is
+  // refused, the same way a non-GIPHY gif already is.
+  alice2.send(JSON.stringify({ type: "voice", url: "https://evil.example/x.webm", seconds: 5 }));
+  await until("the foreign voice URL is rejected",
+              () => lastOfType(alice2, "rejected")?.code === "bad-voice");
+  check("a voice URL not on our own host is refused",
+        lastOfType(alice2, "rejected")?.code, "bad-voice");
+}
+
 /* ---- what only the host may do, over a real socket ----
 
    room.js is checked directly by scripts/test_engine.py, which is where the
