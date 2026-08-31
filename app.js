@@ -9988,6 +9988,36 @@ window.JukeEngine = {
       return false;
     }
     if (setupProblem()) return false;
+    /* Clear the last draft before building the next one. buildBoard() looks
+       like it already does this — it maps a fresh copy of every player with
+       `drafted = false` — but the board is not where a draft is recorded.
+       state.picks is, and nothing had ever emptied it: this function sets a
+       seat, a clock and a seed and starts drafting on top of whatever was
+       already there.
+
+       Reported as "Start mock draft takes me into an old insights report".
+       Finish a draft, press "Back to the locker" (a plain <a href="#/drafts">
+       — it changes the route and touches no state), change a setting, press
+       Start: state.picks still holds the finished draft's 140 entries, so
+       draftOver() is true on the first render and DraftRoom.jsx's insights
+       effect fires on the edge exactly as designed. Nothing looked broken
+       anywhere in between, because nothing was — the new draft was over
+       before it was drawn.
+
+       "Run another mock" on that same report has always worked, which is what
+       made it look intermittent: that one goes through restart() -> goHome(),
+       which clears all of this. The clear belongs here rather than on the way
+       out, because there is one way in and several ways out — the same reason
+       the retired-#/draft redirect lives at the router and not at its callers.
+
+       CLAUDE.md has recorded the missing reset since the seat-par work ("a
+       loop over seeds is a lie"), where it was diagnosed as a console-harness
+       hazard. It was the same defect reaching a user by a different route. */
+    state.picks    = [];
+    state.lastPick = null;
+    // Not inherited either: a draft abandoned while paused would otherwise
+    // start its replacement paused, with a clock that never counts.
+    state.paused   = false;
     state.mySlot      = opts.mySlot;
     state.clockLength = opts.clockLength;
     state.started     = true;

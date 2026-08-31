@@ -862,13 +862,16 @@ the grade falls **0.544 → 0.524 → 0.479 → 0.376**, away from the 50% it is
 supposed to carry. The deliberately unbuilt roster finishes last in 6 of 6
 seeded rooms at *every* floor, so nothing is bought for it either.
 
-### `startDraft()` does not clear `state.picks`, and a loop over seeds is a lie
+### `startDraft()` did not clear `state.picks`, and a loop over seeds is a lie
 
 The single most expensive thing in this whole pass, and it produced two
-confident, precise, wrong answers before anything caught it.
+confident, precise, wrong answers before anything caught it. **It is fixed as
+of 30 August 2026 — see the end of this section — and everything below
+describes the code before that.** The heading is past tense for that reason;
+the failure is kept because the way it hides has not changed.
 
-`JukeEngine.startDraft()` calls `buildBoard()`, sets the seed and applies the
-jitter — and never touches `state.picks`. So the *second* iteration of any
+`JukeEngine.startDraft()` called `buildBoard()`, set the seed and applied the
+jitter — and never touched `state.picks`. So the *second* iteration of any
 "run a draft per seed" loop finds 140 picks already sitting there,
 `draftOver()` is true immediately, the while loop never executes, and the
 "new" draft is byte-identical to the old one because **it is the old one**.
@@ -901,6 +904,70 @@ tooling wearing a bug's clothes.**
 
 Anything driving repeated drafts from the console resets both, or measures
 nothing.
+
+**It clears them itself now, and the reason that matters is that this was
+never only a harness problem.** Reported from the desktop app on 30 August
+2026: finish a mock, press "Back to the locker", change the league, press
+"Start mock draft" — and land on the *previous* draft's insights report. Same
+missing reset, reached by a person instead of a console loop. This section
+had it written down as a hazard for anyone measuring, which is how it stayed
+open: the diagnosis named the harness, so the fix went into the harness, and
+the defect was in `startDraft()` the whole time.
+
+**A bug found through the tooling is still a bug in the product until you
+check.** The two are hard to tell apart from inside the measurement — the
+wrangler crash-loop and the stale Tailwind config really were the tooling —
+and the tell here was that this one had a plain user-facing sentence
+available: *what happens if somebody just presses Start twice?* Nobody asked
+it for three weeks.
+
+`startDraft()` now empties `state.picks`, clears `state.lastPick` and drops
+`state.paused` before `buildBoard()`. The clear belongs on the way *in*
+because there is one door in and several ways out — "Run another mock" goes
+through `restart()` → `goHome()` and always worked, which is exactly what
+made the bug look intermittent, while "Back to the locker" is a plain
+`<a href="#/drafts">` that changes the route and touches no state. Same
+reasoning as the retired `#/draft` redirect living at the router rather than
+at its callers.
+
+**Two more leaks sat on that same path, and neither is in the engine.**
+`DraftRoom.jsx` does not unmount between drafts — the Lobby is one of its own
+branches — so anything it holds in React state survives a "new" draft:
+
+- **`view` stayed on `'insights'`.** The insights effect only ever watched the
+  rising edge of `draftIsOver`. With the engine fixed, a genuinely fresh draft
+  still rendered a report — grade A+, every lineup slot "Empty", and the
+  header beside it correctly reading ROUND 1 · PICK 1. A right value in the
+  wrong view, which is this file's own standings-column bug in React. It
+  watches the falling edge too now, through a ref rather than an `else`: that
+  effect also depends on `mySlot`, and an `else` would fire on any `mySlot`
+  change mid-draft and yank a reader off whatever tab they were on.
+- **Autopick stayed armed.** `soloAutopick` is React state, so a manager who
+  turned it on to step away from one draft had it still on for the next, which
+  then drafted their team without being asked. `state.autoMe` is already
+  deliberately never saved for exactly this reason ("coming back to a draft
+  still on autopilot is a nasty surprise"); the solo flag simply had no
+  equivalent rule. `armFreshDraft()` is the one place both start paths clear
+  it.
+
+**An edge on `started` or `draftIsOver` cannot fix either of these, and that
+was tried first.** "Back to the locker" leaves `state.started` true, so
+neither flag moves between finishing one draft and starting the next and no
+edge-triggered effect re-fires. Pressing Start is the only event that means
+"new draft" — which is the same lesson as the clear itself, one layer up.
+
+`tests/restart.spec.mjs` covers all three, each confirmed red against its own
+bug with the other two fixed. Its second test — "finishing a draft still opens
+its report" — is not redundant: a falling-edge reset is one `else` away from
+also suppressing the report entirely, and that would pass every assertion in
+the first test.
+
+**And the first version of that spec passed against the bug.** Pressing Start
+raises DraftRoom's `starting` loader for SonarLoader's full 2100ms ring, so an
+assertion made straight after the click finds no report because nothing at all
+is rendered yet. `phone.spec.mjs` already waits this out by waiting for the
+room's own nav to exist rather than for a duration; do that, or the check is
+green and empty.
 
 `tests/grade.spec.mjs` gained "the chair a manager drafts from does not decide
 their grade", which asserts both halves — chair-versus-rank near zero *and* the
@@ -4666,8 +4733,8 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   bump, v6 moved the credentials, v7 blocked fork checkouts for
   `pull_request_target` and `workflow_run`, which this repository does not use.
 
-- **End to end: `npm install` once, then `npx playwright test`.** Ninety tests
-  across nineteen spec files, and it starts the static server and
+- **End to end: `npm install` once, then `npx playwright test`.** 105 tests
+  across twenty-two spec files, and it starts the static server and
   `wrangler dev` itself when it is pointed at localhost.
 
   Measured 27 August 2026 against production: **89 passed, 1 skipped, 0
@@ -4676,6 +4743,30 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   used to say "about five minutes", which was true of a smaller suite and is
   the kind of figure that drifts silently — hence the date, the same rule the
   Juke score section states about any number written down here.
+
+  **Measured again 30 August 2026, locally, at 22.1 minutes** — and the run
+  is only readable if you know which failures are the environment. Eight of
+  the thirteen were `ECONNREFUSED 127.0.0.1:8787`: `wrangler dev` never came
+  up inside its 120s `webServer` timeout, which takes all five `room` specs,
+  `lobby`'s host check and both worker-side `news` tests with it, plus
+  `phone`'s entry-screen test, which needs a real room to reach the screen it
+  measures. Every one of those nine passed on a re-run with the worker
+  started by hand. **A failing spec that calls `createRoom()` is a question
+  about port 8787 before it is a question about the app** — `curl -s -o
+  /dev/null -w "%{http_code}" "http://127.0.0.1:8787/news?id=1"` should say
+  403, which is `originAllowed()` refusing before it reads a key, and is the
+  same probe the `webServer` entry uses as its readiness check.
+
+  The other four were stale in the way this section already describes, and
+  were confirmed stale by re-running them against unmodified `app.js` and
+  `DraftRoom.jsx` and watching them fail identically: `parity` wants "Master
+  the draft." where the page says "Master the Draft."; `journey` clicks an
+  `a[href="#/drafts"]` that is no longer the visible one; and
+  `autopick-adp`'s and `grade`'s statistical thresholds have drifted with the
+  nightly board — chair-versus-rank measured **0.382** against a bar of 0.35.
+  **Baseline before attributing.** Reverting the two changed files, rebuilding
+  and re-running the same specs is about six minutes and is the difference
+  between "my change broke four tests" and "four tests were already red".
 
   It drives the real pages in a real browser — a solo draft at both shapes, a
   full two-manager room draft to completion, a dropped socket reconnecting,
