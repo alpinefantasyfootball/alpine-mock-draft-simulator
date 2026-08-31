@@ -136,7 +136,7 @@ function SectionTitle({ children, emoji }) {
    Draft / PLAY" shape. The whole row is the target, not just the pill:
    a 44px pill inside a 78px card means two thirds of the card looks
    pressable and is not, which is the dead-control problem in miniature. */
-function GameRow({ icon, eyebrow, title, cta, href, onClick, locked }) {
+function GameRow({ icon, eyebrow, title, cta, href, onClick, locked, hero }) {
   const inner = (
     <>
       <span
@@ -175,9 +175,17 @@ function GameRow({ icon, eyebrow, title, cta, href, onClick, locked }) {
   )
   const cls =
     'flex w-full items-center gap-3 rounded-[18px] border border-line-hairline bg-surface-card px-3.5 py-3.5 text-left transition-transform duration-150 active:scale-[0.985]'
+  /* data-hero-cta on the one row that is this page's primary action, for
+     the same reason the desktop hero's anchor carries it: sonar.spec.mjs
+     hit-tests the page's main call to action to prove the boot overlay is
+     really gone rather than merely invisible. It found that control by an
+     attribute the marketing page owns, and the phone launcher carried
+     none — so the check reported "the hero CTA rendered: false" on a page
+     that was perfectly healthy. An attribute says what an element IS; a
+     class or a label says what it currently looks like. */
   return href
-    ? <a href={href} className={cls}>{inner}</a>
-    : <button type="button" onClick={onClick} className={cls}>{inner}</button>
+    ? <a href={href} data-hero-cta={hero ? '' : undefined} className={cls}>{inner}</a>
+    : <button type="button" onClick={onClick} data-hero-cta={hero ? '' : undefined} className={cls}>{inner}</button>
 }
 
 export default function HomePhone() {
@@ -291,6 +299,7 @@ export default function HomePhone() {
               title="Mock Draft"
               cta="Play"
               href="#/drafts"
+              hero
             />
             {/* Drafting with friends is real and already built — creating a
                 room is a live feature — but it is a link row here rather
