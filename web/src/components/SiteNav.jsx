@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { SignedIn, SignedOut, SignInButton, UserButton } from '@clerk/clerk-react'
+import { SignedIn, SignedOut, SignInButton, SignUpButton, UserButton } from '@clerk/clerk-react'
 import RoomsNavMenu from './RoomsNavMenu.jsx'
 import { CLERK_PUBLISHABLE_KEY, CLERK_APPEARANCE } from '../clerkConfig.js'
 
@@ -112,16 +112,24 @@ export function NavLinks({ linkClassName, currentRoomClassName, currentRoom, mod
 // slightly different "not live yet" paragraph — which was true and useless:
 // neither button could do anything, so a visitor had two ways to learn the
 // identical fact. Phase 0 of accounts collapsed both into "Get early
-// access", singular, taking an email. Real accounts exist now, so this is
-// the real thing: signed out, one "Log in" trigger opens Clerk's own modal
-// (which itself surfaces a "Sign up" toggle inside, rather than this file
-// going back to two separate buttons — collapsing two dead ends into one
-// useful control was the right lesson, and it's still right now that the
-// control does something). Signed in, it's Clerk's <UserButton/>. The
-// EarlyAccessModal/modalRef path this used to take is gone from here —
-// still very much alive elsewhere (RoomsNavMenu's per-room "notify me" for
-// rooms that aren't built yet, LockerTable's locker-specific pitch), just
-// not for the one thing that's no longer waitlist-only.
+// access", singular, taking an email. When real accounts first landed this
+// stayed collapsed into one "Log in" trigger (Clerk's modal surfaces its
+// own "Sign up" toggle inside), on the reasoning that two working buttons
+// were still one control's worth of choice. That reasoning was really only
+// about the old ComingSoonModal pair being fake, not about two real
+// buttons being redundant — and it cost a click for the exact visitor this
+// control most wants to convert: someone with no account yet has to open
+// "Log in" and then find the toggle, rather than landing straight in
+// sign-up. Split back into two triggers now, the ordinary pattern (see
+// Sleeper.com, and most consumer sites): "Sign up" stays the loud pill,
+// "Log in" is plain text beside it so the two don't compete for attention —
+// this file's own primary-action rule (one loud control per row) applies
+// here exactly as it does to `.draft-btn` in the legacy stylesheet. Signed
+// in, it's still just Clerk's <UserButton/>. The EarlyAccessModal/modalRef
+// path this used to take is gone from here — still very much alive
+// elsewhere (RoomsNavMenu's per-room "notify me" for rooms that aren't
+// built yet, LockerTable's locker-specific pitch), just not for the one
+// thing that's no longer waitlist-only.
 //
 // mounted exists for one reason: entry-server.jsx's Node prerender pass has
 // no window, which Clerk's frontend JS reaches for throughout, so it never
@@ -146,39 +154,57 @@ export function NavLinks({ linkClassName, currentRoomClassName, currentRoom, mod
 // ghost treatment into the Cockpit's nav too, which the handoff never asks
 // for and CLAUDE.md's scope note rules out ("the marketing homepage only").
 export function AccountButtons({ variant = 'filled' }) {
+  // buttonClass is Sign up's — the one loud control, exactly the "nav
+  // 'Sign Up' pill" §9's tap-target audit and the design handoff both
+  // already named it as (see the variant comment above). Log in sits
+  // beside it, deliberately plain: text only, no border or fill, so the
+  // two don't read as equally weighted. Two buttonClass pills side by
+  // side would be the "wallpaper" trap CLAUDE.md's own primary-action
+  // rule names for the legacy stylesheet's teal buttons, reached here in
+  // a different component — one loud control per row, not two.
   const buttonClass =
     variant === 'ghost'
       ? 'inline-flex h-11 items-center justify-center rounded-full border border-[#454D5E] px-[18px] text-[15px] font-semibold text-[#E6E8EB] transition-colors duration-150 hover:border-[#4892A8] md:h-9'
       : 'inline-flex h-11 items-center justify-center rounded-full bg-gradient-to-r from-[#22d3ee] to-[#a78bfa] px-4 text-sm font-semibold text-white shadow-glass transition-all duration-200 hover:scale-105 hover:shadow-[0_0_15px_rgba(34,211,238,0.4)] md:h-9'
 
+  // Same h-11/md:h-9 tap-target floor as Sign up (§9's audit again — a
+  // plain-text control is still a real tap target and still owes a phone
+  // 44px), just with no background or border to compete with it.
+  const loginButtonClass =
+    'inline-flex h-11 items-center justify-center rounded-full px-3 text-[15px] font-semibold text-[#B7BEC9] transition-colors duration-150 hover:text-white md:h-9 md:text-sm'
+
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
 
-  // h-11 (44px) below md, §9's own tap-target floor — py-2 alone measured
-  // 36px, found during homepage v4 pass 3's tap-target audit (this pill is
-  // the exact one §9 names: "the nav Sign Up pill"). md:h-9 keeps the
-  // shorter desktop nav pill AccountButtons shipped with, the same split
-  // CLAUDE.md documents ScoringDemoCard's own mobile pills already using
-  // ("h-11 ... not met by desktop's shorter chip") — one shared
-  // component, two heights, not two components.
   const loginTrigger = (
-    <button type="button" className={buttonClass}>
+    <button type="button" className={loginButtonClass}>
       Log in
+    </button>
+  )
+  const signUpTrigger = (
+    <button type="button" className={buttonClass}>
+      Sign up
     </button>
   )
 
   if (!mounted || !CLERK_PUBLISHABLE_KEY) {
-    // No Clerk (SSR, or a checkout with no key configured at all) — the
-    // trigger button still renders, it just doesn't open anything yet,
-    // matching every other "answer no to a missing binding" fallback in
-    // this app rather than throwing.
-    return loginTrigger
+    // No Clerk (SSR, or a checkout with no key configured at all) — both
+    // triggers still render, they just don't open anything yet, matching
+    // every other "answer no to a missing binding" fallback in this app
+    // rather than throwing.
+    return (
+      <>
+        {loginTrigger}
+        {signUpTrigger}
+      </>
+    )
   }
 
   return (
     <>
       <SignedOut>
         <SignInButton mode="modal">{loginTrigger}</SignInButton>
+        <SignUpButton mode="modal">{signUpTrigger}</SignUpButton>
       </SignedOut>
       <SignedIn>
         <UserButton appearance={CLERK_APPEARANCE} />
