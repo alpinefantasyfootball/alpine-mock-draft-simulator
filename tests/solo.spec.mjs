@@ -66,6 +66,17 @@ async function finishDraft(page) {
       sizes: Object.values(perSeat),
       qbEach: Object.keys(perSeat).map((s) => qbs[s] || 0),
       kickerRounds: state.picks.filter((p) => p.player.pos === "K").map((p) => p.round),
+      kdPerSeat: (function () {
+        const per = {};
+        state.picks.forEach(function (p) {
+          per[p.slot] = per[p.slot] || { K: 0, DST: 0 };
+          if (p.player.pos === "K" || p.player.pos === "DST") per[p.slot][p.player.pos]++;
+        });
+        return Object.values(per);
+      })(),
+      startsK: league.starters.K,
+      startsDST: league.starters.DST,
+      rounds: league.rounds,
       over: draftOver()
     };
   });
@@ -84,8 +95,15 @@ test("the default league drafts to the end", async ({ browser }) => {
   expect(out.seats).toBe(10);
   expect(out.sizes.every((n) => n === 14), "fourteen each").toBe(true);
   expect(out.over).toBe(true);
-  // The app picks the timing of a kicker, not the manager.
-  expect(out.kickerRounds.length ? Math.min(...out.kickerRounds) : 99).toBeGreaterThanOrEqual(13);
+  /* This asserted the first kicker landed no earlier than round 13, which was
+     the round gate rather than anything about a finished draft. The gate is
+     gone — a seat picks its own moment now, and tests/kd-timing.spec.mjs owns
+     the distribution that replaced it. What a completed draft still has to be
+     true of is the roster: everybody ends up with exactly the kicker and
+     defense the format starts, which is the promise the gate was really
+     protecting and the one thing a full-draft test here should check. */
+  expect(out.kdPerSeat.filter((r) => r.K !== out.startsK || r.DST !== out.startsDST),
+    "every seat finished with exactly the kicker and defense it starts").toEqual([]);
 
   await context.close();
 });
@@ -108,7 +126,8 @@ test("twelve teams, fifteen rounds, full PPR, bench six", async ({ browser }) =>
   expect(out.seats).toBe(12);
   expect(out.sizes.every((n) => n === 15), "fifteen each").toBe(true);
   expect(out.qbEach.every((n) => n >= 1), "everybody has a quarterback").toBe(true);
-  expect(out.kickerRounds.length ? Math.min(...out.kickerRounds) : 99).toBeGreaterThanOrEqual(14);
+  expect(out.kdPerSeat.filter((r) => r.K !== out.startsK || r.DST !== out.startsDST),
+    "every seat finished with exactly the kicker and defense it starts").toEqual([]);
 
   await context.close();
 });
@@ -179,8 +198,18 @@ for (const pos of ["ALL", "QB", "RB", "WR", "TE", "K", "DST"]) {
     expect(out.picks, "the draft finishes or the board is empty").toBe(168);
     expect(out.distinct).toBe(168);
     expect(out.sizes.every((n) => n === 14)).toBe(true);
-    // The fallback must not reach for a kicker to keep the loop moving.
-    expect(out.kickerRounds.length ? Math.min(...out.kickerRounds) : 99).toBeGreaterThanOrEqual(13);
+    /* The fallback must not reach for a kicker to keep the loop moving.
+
+       This used to read `>= 13`, which was needFromCount()'s round gate rather
+       than anything about the fallback — with the gate in place no path could
+       produce a kicker earlier, so the assertion could not fail. A seat picks
+       its own moment now: measured over 120 simulated drafts the first kicker
+       off the board lands between overall picks 103 and 128, so round 11 of 14
+       is the earliest one has ever appeared. Half the draft is the loose bound
+       that still says what this test means, with three rounds of margin rather
+       than none. */
+    expect(out.kickerRounds.length ? Math.min(...out.kickerRounds) : 99)
+      .toBeGreaterThan(out.rounds / 2);
 
     await context.close();
   });
@@ -410,14 +439,25 @@ test("auto-drafting the rest finishes the board, and the menu no longer offers i
         distinct: new Set(state.picks.map((p) => p.player.name)).size,
         sizes: [...new Set(Object.values(perSeat))],
         kickerRounds: state.picks.filter((p) => p.player.pos === "K").map((p) => p.round),
+        rounds: league.rounds,
       };
     });
 
     expect(out.picks, "it finishes the draft or the board is empty").toBe(140);
     expect(out.distinct, "and no player twice").toBe(140);
     expect(out.sizes, "fourteen a team").toEqual([14]);
-    // The fallback must not reach for a kicker to keep the loop moving.
-    expect(out.kickerRounds.length ? Math.min(...out.kickerRounds) : 99).toBeGreaterThanOrEqual(13);
+    /* The fallback must not reach for a kicker to keep the loop moving.
+
+       This used to read `>= 13`, which was needFromCount()'s round gate rather
+       than anything about the fallback — with the gate in place no path could
+       produce a kicker earlier, so the assertion could not fail. A seat picks
+       its own moment now: measured over 120 simulated drafts the first kicker
+       off the board lands between overall picks 103 and 128, so round 11 of 14
+       is the earliest one has ever appeared. Half the draft is the loose bound
+       that still says what this test means, with three rounds of margin rather
+       than none. */
+    expect(out.kickerRounds.length ? Math.min(...out.kickerRounds) : 99)
+      .toBeGreaterThan(out.rounds / 2);
 
     /* Still absent with the board full, which is a weaker claim than the
        one above and kept anyway: draftOver() opens the same full-screen
@@ -514,7 +554,18 @@ test.describe("a league deeper than real ADP alone can serve", () => {
     expect(out.seats).toBe(12);
     expect(out.sizes.every((n) => n === 20), "twenty each").toBe(true);
     expect(out.over).toBe(true);
-    expect(out.kickerRounds.length ? Math.min(...out.kickerRounds) : 99).toBeGreaterThanOrEqual(19);
+    /* This read `>= 19`, which was needFromCount()'s round gate — no kicker
+       before `rounds - 1` — restated back to itself, so it could not fail while
+       the gate stood. A seat picks its own moment for both positions now (see
+       tests/kd-timing.spec.mjs), and at twenty rounds it takes one earlier than
+       at fourteen because there are more picks to spare. What a finished draft
+       still has to be true of is the roster, which is what the gate was really
+       protecting. */
+    expect(out.kdPerSeat.filter((r) => r.K !== out.startsK || r.DST !== out.startsDST),
+      "every seat finished with exactly the kicker and defense it starts").toEqual([]);
+    expect(out.kickerRounds.length ? Math.min(...out.kickerRounds) : 99,
+      "and the fallback still did not reach for one to keep the loop moving")
+      .toBeGreaterThan(out.rounds / 2);
 
     await context.close();
   });

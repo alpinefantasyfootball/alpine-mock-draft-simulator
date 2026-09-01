@@ -5,8 +5,8 @@ import { POS_CHALK, POS_NAMES } from './draftRoomPositions.js'
 // CAPITAL_EARLY_ROUNDS in app.js — five rounds, named there once rather
 // than repeated here) went to each position, across every completed mock.
 // Normalised to 100% of early picks, kickers and defenses excluded since
-// neither is ever a real candidate for one (the app schedules them into
-// the closing rounds itself).
+// neither is ever a real candidate for one — their ADP comes from longer
+// drafts than these, so counting them would only dilute the shares that are.
 export default function DraftCapitalAllocationCard({ stats }) {
   const rows = stats.capitalAllocation
   if (!rows || !rows.length) {

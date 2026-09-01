@@ -10,7 +10,7 @@
        made next door rather than reverting to light halfway through a
        visit. The only other script here is the back-to-top control, at the
        foot of the page. -->
-  <script src="../theme.js?v=202609011636"></script>
+  <script src="../theme.js?v=202609012100"></script>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -19,8 +19,8 @@
   <!-- The app's stylesheet, for the brand colours, the fonts and the table
        styling. Everything below is layout for a page of prose, which the app
        has no use for, so it lives here rather than bloating style.css. -->
-  <!-- Same ?v=202609011636 as index.html, and bumped with it. See the note there. -->
-  <link rel="stylesheet" href="../style.css?v=202609011636">
+  <!-- Same ?v=202609012100 as index.html, and bumped with it. See the note there. -->
+  <link rel="stylesheet" href="../style.css?v=202609012100">
 
   <link rel="icon" href="../juke-favicon.svg" type="image/svg+xml">
   <link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png">
@@ -294,8 +294,9 @@
     <p>
       That matters more than it looks. Nothing on this page is written down
       separately from those settings, so switching to twelve teams moves
-      replacement level, the roster limits and the round a kicker becomes
-      legal along with it. Nothing is left behind describing your old league.
+      replacement level, the roster limits and the pick at which a kicker starts
+      being worth taking along with it. Nothing is left behind describing your
+      old league.
     </p>
 
     <h3>The setup screen refuses impossible leagues</h3>
@@ -392,30 +393,58 @@
         drafted by anyone and never suggested to you;</li>
       <li>it already has as many quarterbacks, kickers or defenses as the
         league starts. A superflex league that starts two quarterbacks gets
-        two;</li>
-      <li>it is too early for a kicker or a defense.</li>
+        two.</li>
     </ul>
 
-    <h3>Kickers and defenses go last</h3>
+    <h3>Kickers and defenses are priced, not scheduled</h3>
     <p>
-      Measured back from the final round rather than pinned to a fixed number,
-      so it holds at any league length: kickers become available for the last
-      two rounds, defenses for the last three.
+      There used to be a rule here: no kicker before the last two rounds, no
+      defense before the last three. It was tidy and it was wrong, and the
+      board's own data said so &mdash; Seattle's defense carries an average
+      draft position of about 81, which is round nine of a ten-team draft,
+      while the room refused to look at a defense until round twelve.
+    </p>
+    <p>
+      Worse, a calendar has no variety in it. Measured across 60 simulated
+      drafts at the default settings: <b>the first defense went between picks
+      111 and 112 in every one, and the first kicker between 121 and 123</b>,
+      with defenses landing in only two or three different rounds. Real rooms do
+      not look remotely like that &mdash; a one-pick spread is not a draft, it
+      is a schedule.
+    </p>
+    <p>
+      So the two positions are priced the way every other position already is
+      &mdash; what they cost against what else is on the board &mdash; plus one
+      thing a shared rule cannot capture: ten managers do not all decide they
+      need a defense on the same pick. Each computer team draws its own
+      appetite for each of the two, fixed for the draft by the same seed that
+      fixes the wobble, so one seat reaches, most take one about when the
+      market does, and one waits it out.
+    </p>
+    <p>
+      The one thing the old rule did buy is kept. A team that has run out of
+      picks to spare takes what it still has to start, so nobody finishes a
+      draft with an empty kicker or defense slot.
     </p>
     <div class="worked">
       <p class="worked-title">Worked through, at the default settings</p>
       <p>
-        Fourteen rounds, so defenses come off the board from round 12 and
-        kickers from round 13. Run a fifteen-round draft and both shift a round
-        later on their own.
+        Across 120 drafts: the first defense now goes between picks 72 and 89,
+        the first kicker between 103 and 128, defenses land across four to seven
+        different rounds and kickers across two to four, and about nine of the
+        final round's twenty picks are one or the other. No roster in 1,200
+        finished a kicker or a defense short.
       </p>
     </div>
 
     <h3>The wobble</h3>
     <p>
       A draft where every computer team took the best available player would
-      play out identically every time. So each player is nudged about three
-      draft places one way or the other, decided once when the draft starts.
+      play out identically every time. So each player is nudged off his average
+      draft position, by his own published standard deviation across the real
+      drafts that average came from &mdash; which is why the very top of the
+      board barely moves and the deep bench moves a lot. Decided once when the
+      draft starts.
       It is settled rather than rolled fresh each pick: the same nudge holds
       all draft, so undoing a pick does not reshuffle how the room thinks,
       and a resumed draft behaves exactly like the one you left.
@@ -564,13 +593,11 @@
 
     <h3>Why kickers and defenses sit out of draft value</h3>
     <p>
-      Because you do not choose when to take them. The room refuses a kicker
-      before the last two rounds and a defense before the last three, and the
-      suggestions never offer one earlier, so their draft slot is the room's
-      decision rather than yours.
+      Not because the room picks the moment &mdash; it used to, and does not any
+      more. Because of what their average draft position is measuring.
     </p>
     <p>
-      Their ADP makes it worse. It comes from drafts that run more rounds than
+      It comes from drafts that run more rounds than
       most leagues set up here, so a kicker's place on the board is often past
       the last pick that exists in your draft &mdash; which means taking one at
       all reads as taking him early. Measured across a full ten-team, fourteen
@@ -816,7 +843,7 @@
   <!-- This page is long enough that getting back to the contents is a real
        scroll. Same control and same stylesheet as the app, so it looks and
        behaves like one thing rather than a page that grew its own button. -->
-  <script src="../back-to-top.js?v=202609011636" data-auto></script>
+  <script src="../back-to-top.js?v=202609012100" data-auto></script>
 
 </body>
 </html>
