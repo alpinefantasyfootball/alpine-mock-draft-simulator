@@ -2741,6 +2741,57 @@ way, the whole app comes back clean at 375px and the board's three inner
 scrollers — the tab strip, the action bar and the grid — show up as the
 scrollers they are.
 
+**And a rotated glyph overflows sideways by however tall its font box is.**
+The board card's `Arrow` is a `1em` square with the glyph centred in it, and
+the square was doing only half the job: at `text-[14px]` the box is 14 x 14
+while the glyph's own layout box is **12.09 x 19**, because the layout
+overflow of inline text is the face's ascent+descent (1.357em in Hanken
+Grotesk) and `line-height: 1` does not shrink it. So 2.5px hangs above and
+below *every* arrow, harmlessly, for as long as it is vertical — and
+`rotate(90deg)` turns that 19px of height into 19px of **width** inside a
+14px box. `justify-between` parks the arrow flush against the row's right
+content edge, so 3px landed past it.
+
+**Which is one cell per round and no others**, the end-of-round pick being
+the only one whose arrow points down: 3 rows against 18 pointing right and
+14 pointing left, all of those at `over=0`. Three cells in thirty-five,
+and a defect that fires on a tenth of what a sweep looks at reads as noise
+in it — which is exactly what this was mistaken for.
+
+**The tell that it was real and not the sweep's own rounding is that it did
+not move with the device pixel ratio.** `sweepOverflow()` allows `slack = 2`
+at dpr > 1 for a measured reason of its own — see the note beside it — so
+the first question about any `over=3` is whether it is that. Measured in the
+same harness with only `deviceScaleFactor` varied: **clientWidth 82 against
+scrollWidth 85 at dpr 1 and at dpr 3 alike.** Subpixel rounding changes with
+the subpixel grid. This did not, so it was not.
+
+**Nothing was clipped on screen, and that is not a defence.** The cell's own
+`overflow-hidden` edge is 7px further right, so a reader lost no ink. The
+row still overflowed and could neither scroll nor ellipsise, which is the
+condition above, stated without reference to whether the bleed happens to
+land somewhere harmless today.
+
+`overflow: hidden` on the square box is the repair, and it is what makes the
+component's own comment true — that comment claimed all three directions
+"occupy the identical rectangle" and they did not: right and left painted
+12.09 x 19 and down painted 19 x 12.09. Clipping happens in the element's
+own coordinates *before* the transform, so the parent sees 14 x 14 whichever
+way the glyph is turned. Measured to cost nothing: **0 differing pixels of
+1170 x 1992** on the phone and **0 of 2880 x 1800** on the desktop board at
+`lg:text-[16px]`, where all 140 arrows are on screen at once. Not
+`overflow: clip`, which is Safari 16+ — on iOS 15 the declaration is
+dropped and the bug comes back silently, on the devices this test exists
+for.
+
+**Take the control shot.** The desktop diff first reported ~25,000 changed
+pixels and none of them were the change: framer-motion drives the live
+cell's opacity pulse from JavaScript, so it survives
+`* { animation: none }`, and a stylesheet `!important` is what pins it. Two
+shots with nothing changed between them is what says whether the noise floor
+is zero — the same lesson as killing transitions before measuring a colour,
+one layer along.
+
 **A monospace box stops being code the moment its lines become sentences.**
 The formulas on the how-it-works page are prose now, which made them long
 enough to wrap on a phone, and a wrapped line starting hard against the left
@@ -2840,13 +2891,39 @@ narrower than K/DST's `UNRANKED_POSITIONS`.** A kicker or a defense is
 withheld — `overallScore()` returns `null` — because three seasons of
 backtesting found the ranking no better than chance. There is no equivalent
 finding here, only the fact that no real draft has ever priced this player.
-So the Juke score is never withheld for a deep player; `jukeReadout()`
-adds `deep`/`deepNote` alongside the existing `unranked`/`unrankedNote`
-pair, and the UI adds a note rather than swapping the number for a dash —
-the same "replaced, not fed a null" rule, applied one notch more gently
-because the underlying claim is weaker, not absent. `survivalProbability()`
-needs no equivalent change: a synthetic row's `sd`/`td` are both `0`, which
-the function already treats as "no real sample," the same as a thin one.
+So being deep is never **on its own** a reason to withhold the Juke score;
+`jukeReadout()` adds `deep`/`deepNote` alongside the existing
+`unranked`/`unrankedNote` pair, and the UI adds a note rather than swapping
+the number for a dash — the same "replaced, not fed a null" rule, applied
+one notch more gently because the underlying claim is weaker, not absent.
+`survivalProbability()` needs no equivalent change: a synthetic row's
+`sd`/`td` are both `0`, which the function already treats as "no real
+sample," the same as a thin one.
+
+**"On its own" is load-bearing, and this paragraph used to say "the Juke
+score is never withheld for a deep player" instead.** That is true of
+deepness and false of players, because a player can be both — and not
+rarely. `FULL_POSITION_COVER` pulls K and DST to the *front* of the
+extension queue on purpose, so the **first** deep player on a real board is
+one of them: 25 of the 249 deep players on the 31 August 2026 board, with
+the other 224 scored normally. The two refusals are independent, both fire,
+and the stricter one wins the number — which is what "alongside the
+existing pair" already says, one clause later.
+
+**It cost a standing red that read as a product bug.**
+`deep-board.spec.mjs` picked its sample with
+`board.find(p => p.deep && p.projPts !== null)`, was handed Chris Boswell,
+and then asserted the deep rule against a player the K/DST rule owns. The
+test was right that the score was `null` and wrong about whose rule had
+made it so, and nothing in the failure said which. The selector asks
+`UNRANKED_POSITIONS` now rather than writing `"K"`/`"DST"` down a second
+time, and a sibling test pins the precedence rather than dodging it —
+because withholding has to be complete, and a sheet printing "no real draft
+has ever taken this player" beside a Juke score has told the reader to
+distrust a number and then handed them one. **A sentence naming one rule as
+the exception to another is a claim that the two cannot both apply.** Check
+that before writing it: here they can, and the board puts the overlap
+first.
 
 **Replacement level did not need to change to handle a deeper board, and
 that is a property worth stating rather than assuming.** `replacementRank()`
@@ -4400,6 +4477,20 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   counts 400–403 as ready, while a stray server answers 404 and is refused.
   Verified in both directions, which is the only way a check like this means
   anything.
+
+- **The site's entry reuses by port too, and its command is the build.**
+  `reuseExistingServer` adopting a static server somebody started by hand is
+  fine as far as identity goes — it is serving `web/dist` either way — but
+  the `webServer` command is `npm --prefix web run build && … http.server`,
+  so **adopting a running server skips the build**. Edit a component, run the
+  suite, and it tests the previous bundle: the `Arrow` overflow fix — see
+  "a rotated glyph overflows sideways" in the truncation rules — came back
+  5/5 red on a run where it was already correct in the source, which reads as
+  "the fix does not work" rather than "nothing rebuilt it". Same family as
+  the `vite dev` serving a deleted Tailwind config, and the same repair —
+  rebuild, or stop the server and let the suite start its own. `curl` the
+  bundle for the change before believing a red run: the built JS names what
+  it contains, exactly as the deployed stylesheet does.
 
 - Room over sockets: `cd worker && wrangler dev --port 8787 --local`, then
   `node worker/test-sockets.mjs` in another terminal. Seventy-six assertions
