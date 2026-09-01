@@ -226,6 +226,45 @@ function maxAt(pos, lg) {
   return L.starters[pos] + flexShare + superShare + DEPTH_ALLOWANCE[pos];
 }
 
+/* How many at a position this lineup can actually START — Infinity where the
+   question does not arise, which is every position a bench body is a
+   perfectly ordinary pick at.
+
+   Three positions have an answer and it is the same rule the grade charges
+   nine points a head for: a second kicker or a second defense can never be
+   played, and nor can a second quarterback unless the format opened a seat
+   for one. `league.starters.QB` is 1 in a superflex league too — the extra
+   seat is a SFLEX, not a second QB slot — which is exactly the drift that
+   caused the superflex grading bug, and this expression was written out by
+   hand in three places at once when that bug was found: needFromCount(),
+   analyseTeam()'s construction charge and buildText()'s caption. One rule,
+   one place; the rest ask.
+
+   Infinity rather than a big number, so the callers that subtract from it
+   (`count - startableCap(pos)`) come out at or below zero for RB, WR and TE
+   and need no list of which three positions this applies to. */
+function startableCap(pos, lg) {
+  const L = lg || league;
+  if (pos === "QB") return L.starters.QB + L.superflex;
+  if (pos === "K" || pos === "DST") return L.starters[pos];
+  return Infinity;
+}
+
+/* How many at a position one roster may legally hold, which is the tighter of
+   the two ceilings above: the depth allowance that stops a team hoarding
+   backs, and — for the three positions that have one — the number it could
+   ever start. For QB, K and DST the second always wins, so holdCap() and
+   startableCap() are the same number there by construction.
+
+   needFromCount() is the caller that matters: this is precisely the line
+   above which it refuses a position outright. Everything that wants to know
+   what a roster is allowed to contain asks here rather than restating either
+   half. */
+function holdCap(pos, lg) {
+  const L = lg || league;
+  return Math.min(maxAt(pos, L), startableCap(pos, L));
+}
+
 // Replacement level: the last player at a position who would realistically
 // start somewhere in the league. It has to be derived, because it moves with
 // team count and FLEX slots, and it feeds the draft grade, the Juke score
@@ -1137,10 +1176,58 @@ function inPool(player) {
   return pool === "rookies" ? exp === 0 : exp > 0;
 }
 
-// How many picks the selected set can actually support. A 14-team, 15-round
-// draft wants 210 players and the standard set only carries 205, so this is
-// what the setup screen validates against.
+// How many players the selected set carries at all. A 14-team, 15-round draft
+// wants 210 players and the standard set only carries 205.
 function poolSize() { return adpSet().length; }
+
+/* How many of them this room could legally hold, which is a smaller number and
+   is the one a draft is actually limited by.
+
+   poolSize() counts every row on the board, and a board is not inventory. A
+   22-team room may hold twenty-two quarterbacks and the half-PPR board carries
+   fifty-six; it may hold sixty-six tight ends and the board carries ninety-two.
+   Those spare thirty-four and twenty-six are on the board and can never be
+   drafted by anybody, so counting them as picks the league has room for is the
+   same class of error as posRank standing in for value — a right number
+   answering the wrong question.
+
+   Measured 1 September 2026 on the 480-player half-PPR board. The clearest
+   case is the deepest league the setup screen offers: **24 teams over 20 rounds
+   is 480 picks against a 480-player board**, which poolSize() waves through on
+   a dead heat, and 411 the room can actually hold. The other 69 picks are spent
+   by construction on somebody nobody can start — and roster construction then
+   docks nine points a head for a pick the format left no alternative to.
+
+   **This example used to be 16 teams over 14 rounds, and that is worth keeping
+   as a warning.** It was true of the 232-player board this was written against
+   — 224 picks, 214 absorbable — and the deep bench landed the next day, taking
+   the pool to 480 and 16-team capacity to 334. The bug did not move; the board
+   grew out from under the number chosen to illustrate it. A measurement is true
+   of the board it was taken on, and this project regenerates the board nightly.
+
+   **It is a necessary condition and not a sufficient one, which is a real
+   limit rather than a rounding error.** This is an aggregate ceiling: it says
+   how many players the room could hold if every pick went to a seat that could
+   still use it. A snake draft is greedy and strands scarce positions late, so
+   a league can clear this bar and still waste picks — measured across all 44
+   shapes the screen offers, at the largest bench each still allows, sixteen of
+   them land 7 to 19 picks on somebody unstartable even though capacity said
+   yes. What holds everywhere is the part that breaks a roster rather than
+   merely wasting a bench spot: every draft completes, and **no seat is ever
+   short of the kicker or defense its format starts** (0 across all 44). See
+   tests/pool-capacity.spec.mjs, which asserts exactly that split.
+
+   Per position, because that is where the ceiling is: holdCap() is exactly the
+   count above which needFromCount() refuses, so this is the board filtered
+   through the same rule the draft itself runs on rather than a second opinion
+   about what a roster may contain. */
+function absorbableSize() {
+  const counts = {};
+  adpSet().forEach(function (p) { counts[p.pos] = (counts[p.pos] || 0) + 1; });
+  return POSITIONS.reduce(function (n, pos) {
+    return n + Math.min(counts[pos] || 0, holdCap(pos) * league.teams);
+  }, 0);
+}
 
 function buildBoard() {
   // Copied, not referenced: posRank, tier and drafted belong to this draft,
@@ -1272,19 +1359,20 @@ function countAt(slot, pos) {
 // seat to name passes one.
 function needFromCount(have, pos, round, lg, ctx) {
   const L = lg || league;
-  if (have >= maxAt(pos, L)) return 999;           // roster limit
-
-  // One of each is enough, whatever "enough" is set to. A superflex league
-  // that starts two quarterbacks gets two.
-  if (pos === "QB"  && have >= L.starters.QB + L.superflex) return 999;
-  if (pos === "K"   && have >= L.starters.K)   return 999;
-  if (pos === "DST" && have >= L.starters.DST) return 999;
+  // The roster limit, both halves of it: the depth allowance, and — for a
+  // quarterback, a kicker or a defense — the number this lineup could ever
+  // start. holdCap() is the one place either is written down.
+  if (have >= holdCap(pos, L)) return 999;
 
   /* No round gate — see KD_ARCHETYPES for what used to be here and what it
      measured. A kicker at ADP 131 cannot out-value a receiver at ADP 40 on his
      own, so the board prices these two player by player like everything else
      and what is left is each seat's own appetite, plus a closing safety net so
-     nobody finishes with an empty mandatory slot. */
+     nobody finishes with an empty mandatory slot.
+
+     The one-each ceiling that used to be spelled out here for QB, K and DST is
+     gone from this function rather than deleted: holdCap() above is that rule
+     now, for every caller, which is the whole point of it existing. */
   if (pos === "K" || pos === "DST") {
     let m = kdAppetite(ctx && ctx.slot, pos, ctx && ctx.seed);
 
@@ -4265,9 +4353,11 @@ function buildText(t) {
   const gaps = [];
   const holes = t.lineup.filter((s) => !s.player).length;
   if (holes) gaps.push(holes + (holes === 1 ? " empty starting slot" : " empty starting slots"));
-  ["QB", "K", "DST"].forEach(function (pos) {
-    const allowed = league.starters[pos] + (pos === "QB" ? league.superflex : 0);
-    const over = Math.max(0, countAt(t.slot, pos) - allowed);
+  // Every position, not a list of the three that can overflow: startableCap()
+  // is Infinity everywhere else, so `over` is zero there and the three name
+  // themselves. Same rule the charge below it reads.
+  POSITIONS.forEach(function (pos) {
+    const over = Math.max(0, countAt(t.slot, pos) - startableCap(pos));
     if (over) gaps.push(over + " spare " + posLabel(pos));
   });
   /* Cover is graded rather than a cliff — the penalty scales with how far past
@@ -4385,7 +4475,7 @@ function analyseTeam(slot, extra) {
 
   let build = 100;
   lineup.forEach(function (s) { if (!s.player) build -= 14; });          // hole in the lineup
-  ["QB", "K", "DST"].forEach(function (pos) {
+  POSITIONS.forEach(function (pos) {
     /* A second kicker is wasted; a second quarterback is only wasted in a
        league that starts one. That was always the intent and the sum did not
        carry it: `league.starters.QB` is 1 in a superflex league too, since
@@ -4396,11 +4486,13 @@ function analyseTeam(slot, extra) {
        quarterback out and putting a spare receiver there cost five points of
        starter strength and gained seven of construction.
 
-       `cpuScore()` has had the right expression all along, which is why the
-       CPU drafts two and then got marked down for it. */
-    const allowed = league.starters[pos] + (pos === "QB" ? league.superflex : 0);
+       That expression lived here, in buildText() and in needFromCount() at
+       once — the same league rule written down three times, which is how it
+       drifted in the first place. startableCap() is the one copy now, and it
+       answers Infinity for RB, WR and TE, so this walks every position rather
+       than carrying its own list of which three can overflow. */
     const extraCount = extra && extra.pos === pos ? 1 : 0;
-    build -= Math.max(0, countAt(slot, pos) + extraCount - allowed) * 9;
+    build -= Math.max(0, countAt(slot, pos) + extraCount - startableCap(pos)) * 9;
   });
 
   const benched = roster.filter(function (p) {
@@ -8767,7 +8859,17 @@ function fillSlotOptions() {
   slotSelect.value = keep;
 }
 
-const SLOT_LIMITS = { QB: 2, RB: 4, WR: 5, TE: 3, K: 2, DST: 2 };
+/* How high the hidden legacy starter <select>s count.
+
+   It was per position — QB 2, RB 4, WR 5, TE 3, K 2, DST 2 — which was that
+   screen's own taste about a sane lineup and is enforced nowhere else in the
+   app. DraftSettingsModal.jsx's steppers go to 9, and since setLeague()
+   mirrors the roster back onto these controls (see mirrorToLegacy), a range
+   narrower than the control writing to it is a mirror that fails without
+   saying so: a <select> silently keeps its old value, and readSetup() reads
+   that back on the next refreshSetup(). One number, matching the screen that
+   is actually reachable. */
+const SLOT_LIMIT = 9;
 
 /* ---- the scoring editor ----
 
@@ -8940,16 +9042,50 @@ function fillSetupControls() {
   // dropdown cannot drift from the labels the rest of the app prints.
   fillList($("scoring"), Object.keys(SCORING_NAMES), league.scoring,
            (k) => SCORING_NAMES[k]);
-  fillRange($("roundCount"), 8, 20, league.rounds, (i) => i + " rounds");
+  fillRange($("roundCount"), 8, 24, league.rounds, (i) => i + " rounds");
   POSITIONS.forEach(function (pos) {
     const label = posLabel(pos);
-    fillRange($("start" + pos), 0, SLOT_LIMITS[pos], league.starters[pos],
+    fillRange($("start" + pos), 0, SLOT_LIMIT, league.starters[pos],
               (i) => label + " " + i);
   });
   fillRange($("startFLEX"), 0, 3, league.flex, (i) => "FLEX " + i);
   fillRange($("startSFLEX"), 0, 2, league.superflex, (i) => "SFLEX " + i);
-  fillRange($("benchCount"), 0, 12, league.bench, (i) => "BN " + i);
+  /* 15 and 24 rather than 12 and 20, to cover everything the React settings
+     screen can produce: its bench stepper goes to 15, and rounds is the roster
+     size, so 8 starters + 1 FLEX + 15 bench is a 24-round draft. A <select>
+     silently refuses a value that is not one of its options — `.value` stays
+     put and readSetup() then reads the old number back — so a range narrower
+     than the control that writes to it is a mirror that fails without saying
+     so. TEAM_COUNTS already tops out at 24 for its own reasons. */
+  fillRange($("benchCount"), 0, 15, league.bench, (i) => "BN " + i);
   fillSlotOptions();
+}
+
+/* Which keys of `league` the roster is made of, and therefore which ones
+   `rounds` is derived from. Named once because setLeague() asks twice — once
+   to re-derive rounds and once to mirror the values back to the legacy
+   controls readSetup() reads. */
+const ROSTER_KEYS = ["starters", "flex", "superflex", "bench"];
+
+/* Write the league back onto the hidden legacy <select>s.
+
+   Not decoration: readSetup() reads every one of these on the next
+   refreshSetup(), so a value React set and this did not mirror is a value the
+   next trip home quietly discards. See setLeague()'s own note.
+
+   From `league` rather than from the patch that caused the call, which is the
+   version that cannot miss: a scoring preset moves `superflex` without
+   `superflex` ever appearing in the patch, and setLeague() re-derives `rounds`
+   from the roster rather than being handed it. Reading the object everything
+   else already agrees is the source of truth removes both special cases. */
+function mirrorToLegacy() {
+  $("teamCount").value  = String(league.teams);
+  $("scoring").value    = league.scoring;
+  $("roundCount").value = String(league.rounds);
+  $("startFLEX").value  = String(league.flex);
+  $("startSFLEX").value = String(league.superflex);
+  $("benchCount").value = String(league.bench);
+  POSITIONS.forEach(function (pos) { $("start" + pos).value = String(league.starters[pos]); });
 }
 
 // Tracks the format across reads, so the reception preset applies once when
@@ -9004,6 +9140,30 @@ function setupProblem() {
     return `${league.teams} teams over ${league.rounds} rounds is ${totalPicks()} picks, ` +
            `and the ${scoringLabel(league.scoring)} board only ` +
            `carries ${poolSize()} players.`;
+  }
+  /* And the same refusal for the case the count above cannot see: enough
+     players on the board, not enough that this room is allowed to hold.
+
+     absorbableSize() is always the smaller of the two, so this branch is only
+     ever reached when the raw pool was sufficient — which is why the message
+     names the lineup rather than the board. The shortfall is not a rounding
+     error and it is not the drafter's to avoid: every pick past the ceiling
+     has to go on a second kicker, a second defense or a spare quarterback,
+     roster construction docks nine for each of them, and no ordering rule
+     inside cpuChoice() can make the total any smaller — the waste is
+     conserved. Measured across the whole (scoring x teams x bench 0-15) space,
+     60 of 528 configurations are in it, worst 40 unstartable roster spots in a
+     single draft; the reported one is 16 teams over 14 rounds, at 10.
+
+     "A control that cannot act must not merely fail; it must not be offered."
+     The draft it would run does finish, which is exactly what made this hard
+     to see — it finishes with ten roster spots nobody chose to waste. */
+  if (totalPicks() > absorbableSize()) {
+    return `${league.teams} teams over ${league.rounds} rounds is ${totalPicks()} picks, ` +
+           `but a ${league.teams}-team room can only hold ${absorbableSize()} of the ` +
+           `${poolSize()} players on this board — so ${totalPicks() - absorbableSize()} ` +
+           `picks would have to go on somebody nobody can start. ` +
+           `Run fewer teams, or a shorter roster.`;
   }
   return "";
 }
@@ -10170,31 +10330,53 @@ window.JukeEngine = {
        the same side effect readSetup() has always had for `rec`, kept in one
        place.
 
-       The lineup patch has to move `rounds` with it, for the reason
-       DraftSettingsModal's own setLineup() already documents: setupProblem()
-       refuses a draft whose roster size and round count disagree, so a
-       preset that adds a starting slot without adding a round would leave
-       the Start button refusing and nothing on screen saying which control
-       caused it. Derived here rather than left to the caller, because the
-       caller is a settings screen that did not choose to change the roster. */
+       The lineup patch has to move `rounds` with it: setupProblem() refuses a
+       draft whose roster size and round count disagree, so a preset that adds
+       a starting slot without adding a round would leave the Start button
+       refusing and nothing on screen saying which control caused it. Derived
+       here rather than left to the caller, because the caller is a settings
+       screen that did not choose to change the roster. */
+    let rosterMoved = ROSTER_KEYS.some(function (k) { return patch[k] !== undefined; });
     if (patch.scoring) {
       league.rules.rec = REC_BY_FORMAT[patch.scoring] === undefined ? 0.5 : REC_BY_FORMAT[patch.scoring];
       const preset = SCORING_PRESET[patch.scoring];
-      if (preset && preset.lineup) {
-        Object.assign(league, preset.lineup);
-        league.rounds = rosterSize();
-      }
+      // A preset that moves the lineup moves the roster, even though nothing
+      // in `patch` says so — superflex is set here, not by the caller.
+      if (preset && preset.lineup) { Object.assign(league, preset.lineup); rosterMoved = true; }
     }
-    // readSetup() re-reads teams/scoring off these same two legacy <select>
-    // elements every time refreshSetup() runs — goHome() among other places
-    // — and until this line it always won: the legacy controls are hidden
-    // and nothing else in this file writes to them any more, so they sat
-    // frozen at whatever fillSetupControls() drew at boot, and the next
-    // refreshSetup() silently reverted whatever this function had just set.
-    // Mirroring the value here is what makes `league` the one real object in
-    // both directions, not just this one.
-    if (patch.teams !== undefined)   $("teamCount").value = String(patch.teams);
-    if (patch.scoring !== undefined) $("scoring").value = patch.scoring;
+
+    /* And from every other direction too, which is what the paragraph above
+       had only ever done for a scoring preset.
+
+       DraftSettingsModal.jsx's Roster steppers write `bench`, `flex`,
+       `superflex` and `starters` straight through here, and nothing moved
+       `rounds` with them — so stepping the bench from 5 to 4 produced
+       "13 roster spots, but the draft runs 14 rounds" on the spot, with no
+       rounds control anywhere on the screen to answer it with. The whole
+       Roster section was a dead control: every press refused the draft and
+       the only way back was to undo it. Confirmed on the deployed site
+       before it was fixed here, and both this file and that component
+       carried comments crediting the derivation to a `setLineup()` that has
+       never existed.
+
+       It is the same rule the preset already followed, applied to the keys
+       the roster is actually made of. `rounds` is never a second number kept
+       equal to the roster by hand — it IS the roster's size. */
+    if (rosterMoved) league.rounds = rosterSize();
+
+    // readSetup() re-reads all of these off the legacy <select> elements every
+    // time refreshSetup() runs — goHome() among other places — and until this
+    // line it always won: the legacy controls are hidden and nothing else in
+    // this file writes to them any more, so they sat frozen at whatever
+    // fillSetupControls() drew at boot, and the next refreshSetup() silently
+    // reverted whatever this function had just set. Mirroring the values here
+    // is what makes `league` the one real object in both directions.
+    //
+    // It was teams and scoring only, which was the whole of what React could
+    // reach at the time. The roster steppers reach the other seven, and a
+    // bench trimmed in the settings screen was reverted by the next trip home
+    // — silently, since nothing on that screen reads the legacy controls.
+    mirrorToLegacy();
 
     /* And draw the result. setClockLength() has always done this and this one
        never did, so the settings modal's own redraw() re-rendered the modal
@@ -10222,9 +10404,12 @@ window.JukeEngine = {
   // What a preset does beyond its rec value, plus the caveat it carries.
   scoringPreset: (key) => SCORING_PRESET[key] || null,
   // How many players the current league/pool combination actually has to
-  // draft from — the same number setupProblem() validates against, so a
-  // screen can show the constraint rather than only the refusal.
+  // draft from, and how many of them this many teams are allowed to hold —
+  // the two numbers setupProblem() validates against, so a screen can show
+  // the constraint rather than only the refusal. They are different numbers
+  // and the second is the binding one; see absorbableSize().
   poolSize: poolSize,
+  absorbableSize: absorbableSize,
   // Draft order, as the settings screen's own list: seat, who sits there,
   // and which overall pick they hold first. cpuName() rather than
   // teamLabel() for the reason the bridge already records beside it —
