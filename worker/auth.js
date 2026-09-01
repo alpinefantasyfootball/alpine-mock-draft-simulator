@@ -24,32 +24,48 @@ export async function verifiedUser(request, env) {
   const token = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
   if (!token) return null;
 
-  /* verifyToken() does not throw on an invalid token — its own type
-     signature says so, `{ data } | { errors }`, which disagrees with the
-     try/catch shown in Clerk's own doc comment for this function. Both
-     are handled rather than trusting either: the explicit `errors` check
-     is what actually catches an expired or forged token, and the
-     try/catch is what stands in if a network call to fetch Clerk's JWKS
-     fails outright. Either way this returns null, never throws — a caller
-     here has to be able to treat "invalid token" and "no token at all"
-     identically, the same way originAllowed()'s callers do. */
+  /* This was written against the `{ data } | { errors }` union that
+     @clerk/backend's own internal src/tokens/verify.ts documents for
+     verifyToken() — and that union is real, but it belongs to a function
+     one layer further in than the one this import actually names.
+     `@clerk/backend`'s package root (dist/index.mjs, what
+     `import { verifyToken } from "@clerk/backend"` resolves to) exports
+     `withLegacyReturn(verifyToken)`, not the raw function: on success it
+     resolves to the JWT payload directly (no `.data` wrapper — `sub` sits
+     at the top level), and on failure it *throws* `errors[0]` rather than
+     returning an `{ errors }` object. dist/index.d.ts's own declared
+     return type says so — `Promise<JwtPayload>`, not a union.
+
+     Every previous version of this function destructured `{ data, errors }`
+     off that result. On a genuinely valid, successful sign-in, `result` is
+     the payload itself, so `result.data` and `result.errors` are both
+     `undefined` — and `errors || !data || !data.sub` reads that as a
+     refusal. That is not an edge case: it fired on every single successful
+     verification, which is why every real login was being rejected while
+     `wrangler tail` showed "verifyToken refused: []" — an empty errors
+     array wasn't Clerk reporting zero problems, it was this file never
+     reading a real one because there wasn't one to read; the union it was
+     checking against does not apply to this export. */
   try {
-    const { data, errors } = await verifyToken(token, { secretKey: env.CLERK_SECRET_KEY });
-    if (errors || !data || !data.sub) {
+    const payload = await verifyToken(token, { secretKey: env.CLERK_SECRET_KEY });
+    if (!payload || !payload.sub) {
       // Logged, never returned to the caller — the client only ever sees
-      // { error: "unauthorized" } either way (requireUser(), draft-room.js),
-      // the same refusal for an expired token as for a forged one. This is
-      // purely for wrangler tail: a verification that fails for the wrong
-      // reason (a secret key mismatch, say) looks identical to a normal
-      // expired-token refusal from the outside, and the two need different
-      // fixes.
-      console.error("verifyToken refused:", JSON.stringify((errors || []).map((e) => ({
-        message: e && e.message, reason: e && e.reason
-      }))));
+      // { error: "unauthorized" } either way (requireUser(), draft-room.js).
+      // This is purely for wrangler tail: verifyToken() resolving at all
+      // but with no usable `sub` would be Clerk changing its own contract,
+      // not an expired or forged token (those throw, and land below).
+      console.error("verifyToken resolved without a usable subject:", JSON.stringify({
+        hasPayload: !!payload,
+        payloadKeys: payload ? Object.keys(payload) : null,
+      }));
       return null;
     }
-    return { id: data.sub };
+    return { id: payload.sub };
   } catch (err) {
+    // The expected path for an expired, forged, or otherwise invalid
+    // token — withLegacyReturn() throws errors[0] rather than returning
+    // it, so this is not a fallback for a network failure, it is where
+    // every ordinary refusal actually arrives.
     console.error("verifyToken threw:", err && err.message);
     return null;
   }
