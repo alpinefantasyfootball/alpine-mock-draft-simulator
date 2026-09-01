@@ -1,4 +1,7 @@
+import { useEffect, useState } from 'react'
+import { SignedIn, SignedOut, SignInButton, UserButton } from '@clerk/clerk-react'
 import RoomsNavMenu from './RoomsNavMenu.jsx'
+import { CLERK_PUBLISHABLE_KEY, CLERK_APPEARANCE } from '../clerkConfig.js'
 
 // The one canonical top-nav link list and account-controls pair. Before
 // this file existed, LobbyBar.jsx (the Draft Room / Locker screen) had
@@ -108,15 +111,29 @@ export function NavLinks({ linkClassName, currentRoomClassName, currentRoom, mod
 // two separate dead ends, each opening the same ComingSoonModal with a
 // slightly different "not live yet" paragraph — which was true and useless:
 // neither button could do anything, so a visitor had two ways to learn the
-// identical fact. Phase 0 of accounts replaces both with the one thing
-// either button *could* usefully do today — take an email — so this is
-// "Get early access" now, singular, opening EarlyAccessModal.jsx rather
-// than ComingSoonModal.jsx. Takes the modal's ref rather than owning one, so
-// each caller decides where its own <EarlyAccessModal/> instance lives in
-// the tree — the same modalRef-as-prop pattern this file's own NavLinks
-// already uses for RoomsNavMenu's coming-soon rooms, which share this exact
-// ref: one modal instance per header, several triggers, each opening it
-// with its own copy and source tag.
+// identical fact. Phase 0 of accounts collapsed both into "Get early
+// access", singular, taking an email. Real accounts exist now, so this is
+// the real thing: signed out, one "Log in" trigger opens Clerk's own modal
+// (which itself surfaces a "Sign up" toggle inside, rather than this file
+// going back to two separate buttons — collapsing two dead ends into one
+// useful control was the right lesson, and it's still right now that the
+// control does something). Signed in, it's Clerk's <UserButton/>. The
+// EarlyAccessModal/modalRef path this used to take is gone from here —
+// still very much alive elsewhere (RoomsNavMenu's per-room "notify me" for
+// rooms that aren't built yet, LockerTable's locker-specific pitch), just
+// not for the one thing that's no longer waitlist-only.
+//
+// mounted exists for one reason: entry-server.jsx's Node prerender pass has
+// no window, which Clerk's frontend JS reaches for throughout, so it never
+// gets wrapped in a <ClerkProvider> at all (main.jsx's own comment). If this
+// rendered <SignedIn>/<SignedOut> on the very first client pass, that pass
+// is the one hydrateRoot() uses to reconcile against the server's markup —
+// and the server rendered neither, because it can't. Waiting for an effect
+// (which never runs during SSR, and never runs before that first client
+// pass either) keeps the first client render byte-for-byte the same
+// fallback the server sent, then swaps in the real thing a tick later —
+// the same shape main.jsx's own hydrateRoot/createRoot branch exists for,
+// one component down.
 //
 // variant="ghost" (design_handoff_homepage_cosmetic §10's "Nav 'Sign Up'"
 // row) is opt-in and homepage-only — Header.jsx passes it explicitly, both
@@ -128,32 +145,44 @@ export function NavLinks({ linkClassName, currentRoomClassName, currentRoom, mod
 // the shared default in place would have silently carried the homepage's
 // ghost treatment into the Cockpit's nav too, which the handoff never asks
 // for and CLAUDE.md's scope note rules out ("the marketing homepage only").
-export function AccountButtons({ modalRef, variant = 'filled' }) {
+export function AccountButtons({ variant = 'filled' }) {
   const buttonClass =
     variant === 'ghost'
       ? 'inline-flex h-11 items-center justify-center rounded-full border border-[#454D5E] px-[18px] text-[15px] font-semibold text-[#E6E8EB] transition-colors duration-150 hover:border-[#4892A8] md:h-9'
       : 'inline-flex h-11 items-center justify-center rounded-full bg-gradient-to-r from-[#22d3ee] to-[#a78bfa] px-4 text-sm font-semibold text-white shadow-glass transition-all duration-200 hover:scale-105 hover:shadow-[0_0_15px_rgba(34,211,238,0.4)] md:h-9'
 
-  return (
-    // h-11 (44px) below md, §9's own tap-target floor — py-2 alone measured
-    // 36px, found during homepage v4 pass 3's tap-target audit (this pill is
-    // the exact one §9 names: "the nav Sign Up pill"). md:h-9 keeps the
-    // shorter desktop nav pill AccountButtons shipped with, the same split
-    // CLAUDE.md documents ScoringDemoCard's own mobile pills already using
-    // ("h-11 ... not met by desktop's shorter chip") — one shared
-    // component, two heights, not two components.
-    <button
-      type="button"
-      onClick={() =>
-        modalRef.current?.open(
-          "Accounts aren't live yet. Leave an email and we'll tell you the day your " +
-            'locker follows you between devices.',
-          'header'
-        )
-      }
-      className={buttonClass}
-    >
-      Get early access
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
+
+  // h-11 (44px) below md, §9's own tap-target floor — py-2 alone measured
+  // 36px, found during homepage v4 pass 3's tap-target audit (this pill is
+  // the exact one §9 names: "the nav Sign Up pill"). md:h-9 keeps the
+  // shorter desktop nav pill AccountButtons shipped with, the same split
+  // CLAUDE.md documents ScoringDemoCard's own mobile pills already using
+  // ("h-11 ... not met by desktop's shorter chip") — one shared
+  // component, two heights, not two components.
+  const loginTrigger = (
+    <button type="button" className={buttonClass}>
+      Log in
     </button>
+  )
+
+  if (!mounted || !CLERK_PUBLISHABLE_KEY) {
+    // No Clerk (SSR, or a checkout with no key configured at all) — the
+    // trigger button still renders, it just doesn't open anything yet,
+    // matching every other "answer no to a missing binding" fallback in
+    // this app rather than throwing.
+    return loginTrigger
+  }
+
+  return (
+    <>
+      <SignedOut>
+        <SignInButton mode="modal">{loginTrigger}</SignInButton>
+      </SignedOut>
+      <SignedIn>
+        <UserButton appearance={CLERK_APPEARANCE} />
+      </SignedIn>
+    </>
   )
 }

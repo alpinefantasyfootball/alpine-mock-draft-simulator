@@ -1,9 +1,36 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
+import { ClerkProvider } from '@clerk/clerk-react'
 import App from './App.jsx'
 import AppHeader from './components/AppHeader.jsx'
 import DraftRoom from './components/DraftRoom.jsx'
+import { CLERK_PUBLISHABLE_KEY, CLERK_APPEARANCE } from './clerkConfig.js'
 import './index.css'
+
+// #root, #appbar-root and #draftroom-root below are three independent
+// React trees (three separate ReactDOM.createRoot() calls), not one tree
+// with three mount points — so a <ClerkProvider> around #root's App alone
+// would leave AppHeader and DraftRoom with no Clerk context at all, even
+// though AccountButtons (SiteNav.jsx) renders inside all three of them.
+// Wrapping each root individually is the supported shape for exactly this
+// — several independent React roots on one page sharing one publishableKey
+// — rather than something to route around.
+//
+// Only wraps when a key exists. entry-server.jsx's Node prerender pass
+// never has one (there's no window there, which Clerk's frontend JS reaches
+// for throughout), and a real browser with no key configured is just a
+// clone or CI run that hasn't set one up — AccountButtons' own fallback
+// (unchanged today's button) covers that case without a provider at all,
+// the same "answer no to a missing binding" contract store.js already uses
+// for D1/GIPHY/Tank01.
+const withClerk = (node) =>
+  CLERK_PUBLISHABLE_KEY ? (
+    <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY} appearance={CLERK_APPEARANCE}>
+      {node}
+    </ClerkProvider>
+  ) : (
+    node
+  )
 
 // scripts/prerender.mjs (homepage v4 pass 0) fills #root with real,
 // server-rendered markup as part of `npm run build` — see its own header
@@ -21,7 +48,7 @@ import './index.css'
 // actually matters: `vite preview` serving a real dist/ build locally,
 // which DEV cannot distinguish from dev but a filled #root can.
 const rootEl = document.getElementById('root')
-const app = (
+const app = withClerk(
   <React.StrictMode>
     <App />
   </React.StrictMode>
@@ -37,9 +64,11 @@ if (rootEl.innerHTML.trim()) {
 const appbarRoot = document.getElementById('appbar-root')
 if (appbarRoot) {
   ReactDOM.createRoot(appbarRoot).render(
-    <React.StrictMode>
-      <AppHeader />
-    </React.StrictMode>,
+    withClerk(
+      <React.StrictMode>
+        <AppHeader />
+      </React.StrictMode>,
+    ),
   )
 }
 
@@ -50,9 +79,11 @@ if (appbarRoot) {
 const draftRoomRoot = document.getElementById('draftroom-root')
 if (draftRoomRoot) {
   ReactDOM.createRoot(draftRoomRoot).render(
-    <React.StrictMode>
-      <DraftRoom />
-    </React.StrictMode>,
+    withClerk(
+      <React.StrictMode>
+        <DraftRoom />
+      </React.StrictMode>,
+    ),
   )
 }
 

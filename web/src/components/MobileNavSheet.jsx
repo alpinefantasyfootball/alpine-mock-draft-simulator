@@ -143,7 +143,7 @@ export default function MobileNavSheet({ open, onClose, modalRef, variant, curre
             </nav>
 
             <div className="mt-auto flex shrink-0 flex-col gap-2 border-t border-white/[0.06] p-3">
-              <AccountButtons modalRef={modalRef} variant={variant} />
+              <AccountButtons variant={variant} />
             </div>
           </motion.div>
         </div>
