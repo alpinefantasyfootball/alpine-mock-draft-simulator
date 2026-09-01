@@ -86,6 +86,44 @@ check("a well-formed but unsigned JWT reads as signed out, not a 500",
       await me({ Origin: LOCAL_ORIGIN, Authorization: "Bearer " + fakeJwt }),
       { status: 200, body: { signedIn: false } });
 
+/* /me/draft and /me/history draw a harder line than /me does: a save or a
+   read needs somebody signed in to mean anything, so these 401 rather
+   than answering a friendly `{ signedIn: false }`. Same origin check
+   first, same never-a-500 guarantee on a garbage token — verified here
+   rather than assumed, since requireUser() is a second, separate call
+   site for verifiedUser() and the point of testing it is to catch the
+   two call sites disagreeing. */
+async function authed(path, headers, opts) {
+  const res = await fetch(BASE + path, Object.assign({ headers }, opts || {}));
+  let body = null;
+  try { body = await res.json(); } catch (err) { /* not every status has one */ }
+  return { status: res.status, body };
+}
+
+for (const path of ["/me/draft", "/me/history"]) {
+  check(`${path} with no Origin is refused outright`,
+        (await authed(path, {})).status, 403);
+
+  check(`${path} with a valid origin but no token is unauthorized, not signed-out`,
+        (await authed(path, { Origin: LOCAL_ORIGIN })).status, 401);
+
+  check(`${path} with a garbage Bearer token is unauthorized, not a 500`,
+        (await authed(path, { Origin: LOCAL_ORIGIN, Authorization: "Bearer not-a-real-token" })).status, 401);
+}
+
+// OPTIONS preflight has to answer before verifiedUser() ever runs — a
+// browser sends it with no Authorization header at all, so gating it
+// behind the same auth check this route uses for GET/POST/DELETE would
+// 401 every real request's own preflight.
+const preflight = await fetch(BASE + "/me/draft", {
+  method: "OPTIONS",
+  headers: { Origin: LOCAL_ORIGIN }
+});
+check("OPTIONS on /me/draft answers without needing a token",
+      preflight.status, 200);
+check("OPTIONS on /me/draft names DELETE among the allowed methods",
+      (preflight.headers.get("access-control-allow-methods") || "").includes("DELETE"), true);
+
 console.log(note.join("\n"));
 console.log("");
 if (fails.length) {

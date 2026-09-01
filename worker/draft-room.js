@@ -28,7 +28,11 @@ import Room from "../room.js";
 /* The D1 cache. Every function in there answers "no" to a missing binding
    rather than throwing, so this file works unchanged with no database — which
    is what keeps `wrangler dev --local` and the keyless news test running. */
-import { syncPlayerPool, cachedNews, storeNews, usableNews, storeSignup, touchUser } from "./store.js";
+import {
+  syncPlayerPool, cachedNews, storeNews, usableNews, storeSignup, touchUser,
+  getSavedDraft, putSavedDraft, deleteSavedDraft,
+  listDraftHistory, putHistoryEntry, deleteHistoryEntry
+} from "./store.js";
 
 /* Clerk session verification — see that file's own header for the shape.
    Kept separate from store.js on purpose: that file owns D1 and nothing
@@ -957,8 +961,8 @@ async function captureSignup(request, env) {
 /* GET /me — who does the worker think is asking, if anyone.
 
    The first authenticated route, and deliberately the simplest possible
-   one: verify, record that this person was seen, answer. Nothing here
-   saves or reads a draft yet — that is Phase 4, and it will call
+   one: verify, record that this person was seen, answer. /me/draft and
+   /me/history below are what actually save or read anything; both call
    verifiedUser() the same way this does rather than re-deriving "who is
    this" a second time.
 
@@ -986,6 +990,118 @@ async function meRoute(request, env, ctx) {
   return new Response(JSON.stringify({ signedIn: true, userId: user.id }), { headers });
 }
 
+/* Both routes below share one shape: refuse the origin, verify the token,
+   401 if either fails — and only past that point do they touch D1. A 401
+   here (not the `signedIn: false` /me answers with) is deliberate: /me
+   exists precisely so a caller can ask "am I logged in" without it being
+   an error either way, but a save or a read *needs* somebody signed in to
+   mean anything, so the two routes that can actually lose or leak a
+   draft draw the harder line. */
+async function requireUser(request, env) {
+  if (!originAllowed(request)) {
+    return { error: new Response(JSON.stringify({ error: "forbidden" }),
+                        { status: 403, headers: { "content-type": "application/json" } }) };
+  }
+  const user = await verifiedUser(request, env);
+  if (!user) {
+    return { error: new Response(JSON.stringify({ error: "unauthorized" }),
+                        { status: 401, headers: Object.assign({ "content-type": "application/json" }, corsFor(request)) }) };
+  }
+  return { user };
+}
+
+// A real save is a couple of hundred names, a league config and two short
+// lists (queue, watchlist) — nowhere near this. Sized to reject abuse, the
+// same reasoning MEDIA_KINDS' byte caps use, not to constrain a real one.
+const DRAFT_BODY_MAX = 200 * 1024;
+// History entries additionally carry a frozen Insights report
+// (recordHistory()'s own comment), which is bigger but still text — a
+// season of them is nowhere near this either.
+const HISTORY_BODY_MAX = 400 * 1024;
+
+/* GET/POST/DELETE /me/draft — the one in-progress draft a signed-in
+   person has, mirroring SAVE_KEY exactly. The body of a POST is stored
+   whole and unopened: see store.js's own note on why this route has no
+   opinion about what is inside it, only whose it is. */
+async function meDraftRoute(request, env) {
+  const { user, error } = await requireUser(request, env);
+  if (error) return error;
+
+  const headers = Object.assign({ "content-type": "application/json" }, corsFor(request));
+
+  if (request.method === "GET") {
+    return new Response(JSON.stringify({ data: await getSavedDraft(env, user.id) }), { headers });
+  }
+
+  if (request.method === "DELETE") {
+    const ok = await deleteSavedDraft(env, user.id);
+    return new Response(JSON.stringify({ ok }), { headers });
+  }
+
+  const text = await request.text();
+  if (!text || text.length > DRAFT_BODY_MAX) {
+    return new Response(JSON.stringify({ error: "bad-request" }), { status: 400, headers });
+  }
+  try {
+    const parsed = JSON.parse(text);
+    if (!parsed || typeof parsed !== "object") throw new Error("not an object");
+  } catch (err) {
+    return new Response(JSON.stringify({ error: "bad-json" }), { status: 400, headers });
+  }
+
+  const ok = await putSavedDraft(env, user.id, text);
+  return new Response(JSON.stringify(ok ? { ok: true } : { ok: false, error: "store-failed" }), { headers });
+}
+
+/* GET/POST/DELETE /me/history — finished drafts, mirroring HISTORY_KEY.
+   GET returns every entry; POST adds or replaces exactly one (the id
+   already lives inside the body, minted client-side by recordHistory());
+   DELETE removes one by `?id=`. There is no bulk write here on purpose —
+   HISTORY_KEY's own writeHistory() rewrites the whole array on every
+   change, but the server only ever needs the one entry that changed, and
+   sending the other 199 back down every time would be all cost and no
+   benefit. */
+async function meHistoryRoute(request, env) {
+  const { user, error } = await requireUser(request, env);
+  if (error) return error;
+
+  const headers = Object.assign({ "content-type": "application/json" }, corsFor(request));
+
+  if (request.method === "GET") {
+    return new Response(JSON.stringify({ entries: await listDraftHistory(env, user.id) }), { headers });
+  }
+
+  if (request.method === "DELETE") {
+    const id = (new URL(request.url).searchParams.get("id") || "").slice(0, 64);
+    if (!id) return new Response(JSON.stringify({ error: "bad-request" }), { status: 400, headers });
+    const ok = await deleteHistoryEntry(env, user.id, id);
+    return new Response(JSON.stringify({ ok }), { headers });
+  }
+
+  const text = await request.text();
+  if (!text || text.length > HISTORY_BODY_MAX) {
+    return new Response(JSON.stringify({ error: "bad-request" }), { status: 400, headers });
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch (err) {
+    return new Response(JSON.stringify({ error: "bad-json" }), { status: 400, headers });
+  }
+  const id = String((parsed && parsed.id) || "").slice(0, 64);
+  // completedAt is milliseconds (Date.now(), recordHistory()'s own
+  // field) and every D1 timestamp in this project is epoch seconds
+  // (nowSeconds()) — converted once, here, rather than asking store.js
+  // to know which unit a caller meant.
+  const completedAtMs = Number((parsed && parsed.completedAt) || 0);
+  if (!id || !completedAtMs) {
+    return new Response(JSON.stringify({ error: "bad-request" }), { status: 400, headers });
+  }
+
+  const ok = await putHistoryEntry(env, user.id, id, text, Math.floor(completedAtMs / 1000));
+  return new Response(JSON.stringify(ok ? { ok: true } : { ok: false, error: "store-failed" }), { headers });
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -999,6 +1115,28 @@ export default {
         }, corsFor(request)) });
       }
       return meRoute(request, env, ctx);
+    }
+
+    if (url.pathname === "/me/draft") {
+      if (request.method === "OPTIONS") {
+        return new Response(null, { headers: Object.assign({
+          "access-control-allow-methods": "GET, POST, DELETE",
+          "access-control-allow-headers": "authorization, content-type",
+          "access-control-max-age": "86400"
+        }, corsFor(request)) });
+      }
+      return meDraftRoute(request, env);
+    }
+
+    if (url.pathname === "/me/history") {
+      if (request.method === "OPTIONS") {
+        return new Response(null, { headers: Object.assign({
+          "access-control-allow-methods": "GET, POST, DELETE",
+          "access-control-allow-headers": "authorization, content-type",
+          "access-control-max-age": "86400"
+        }, corsFor(request)) });
+      }
+      return meHistoryRoute(request, env);
     }
 
     if (url.pathname === "/news") {

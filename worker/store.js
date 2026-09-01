@@ -487,6 +487,139 @@ export async function touchUser(env, clerkId) {
 }
 
 /* ----------------------------------------------------------
+   Saved drafts and history
+
+   app.js already owns two localStorage keys and a versioned shape for
+   each — SAVE_KEY (one in-progress draft) and HISTORY_KEY (an array of
+   finished ones). Every function below stores or returns that exact JSON
+   whole, in a `data` column, rather than decomposing it into columns of
+   our own — see migrations/0004_drafts.sql's own comment for why. This
+   file's job stops at "whose row is this and when did it change"; what
+   the JSON inside means is entirely app.js's business, on both ends.
+   ---------------------------------------------------------- */
+
+/* The one in-progress draft a signed-in person has, already parsed, or
+   null. Deliberately not `{ data, updatedAt }`: saveDraft() already writes
+   its own `savedAt` (ms, Date.now()) inside the blob, so a second,
+   server-timestamped `updatedAt` alongside it would be the same fact
+   twice, in two different units, under two different names — exactly the
+   trap this project's CLAUDE.md keeps finding bugs from. Whatever
+   compares "is the server's copy newer than mine" reads `data.savedAt`
+   on both sides. `updated_at` still exists as a real column, for D1's own
+   bookkeeping — it is just never handed back out. */
+export async function getSavedDraft(env, clerkId) {
+  if (!env.DB) return null;
+
+  try {
+    const row = await env.DB.prepare(
+      "SELECT data FROM saved_drafts WHERE clerk_id = ?"
+    ).bind(clerkId).first();
+    return row ? JSON.parse(row.data) : null;
+  } catch (err) {
+    console.error("saved-draft read failed:", err && err.message);
+    return null;
+  }
+}
+
+/* Replace the one saved draft, whole — the same "there is only ever one"
+   contract saveDraft() already enforces client-side by writing to a
+   single localStorage key rather than appending to a list. `dataText` is
+   the already-serialised JSON string the route handler validated, not
+   re-serialised here, so this function never has an opinion about what is
+   inside it. */
+export async function putSavedDraft(env, clerkId, dataText) {
+  if (!env.DB) return false;
+
+  try {
+    await env.DB.prepare(
+      "INSERT INTO saved_drafts (clerk_id, data, updated_at) VALUES (?, ?, ?)" +
+      " ON CONFLICT(clerk_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at"
+    ).bind(clerkId, dataText, nowSeconds()).run();
+    return true;
+  } catch (err) {
+    console.error("saved-draft write failed:", err && err.message);
+    return false;
+  }
+}
+
+export async function deleteSavedDraft(env, clerkId) {
+  if (!env.DB) return false;
+
+  try {
+    await env.DB.prepare("DELETE FROM saved_drafts WHERE clerk_id = ?").bind(clerkId).run();
+    return true;
+  } catch (err) {
+    console.error("saved-draft delete failed:", err && err.message);
+    return false;
+  }
+}
+
+/* Every finished draft a signed-in person has, newest first — the same
+   order readHistory() already returns, so the route handler can hand the
+   array straight to the client with no re-sort. Each element is the
+   parsed entry exactly as recordHistory() built it (id, completedAt and
+   all), for the same reason getSavedDraft() stops at one blob rather than
+   a `{ data, updatedAt }` wrapper — the id and timestamp the client wants
+   are already inside it. */
+export async function listDraftHistory(env, clerkId) {
+  if (!env.DB) return [];
+
+  try {
+    const rows = await env.DB.prepare(
+      "SELECT data FROM draft_history WHERE clerk_id = ? ORDER BY completed_at DESC"
+    ).bind(clerkId).all();
+    return (rows.results || []).map((row) => JSON.parse(row.data));
+  } catch (err) {
+    console.error("history read failed:", err && err.message);
+    return [];
+  }
+}
+
+/* One entry, added or replaced whole by its own id — recordHistory()
+   mints that id client-side and it never changes, so this is always an
+   insert in practice; ON CONFLICT DO UPDATE exists for the same reason
+   touchUser()'s does, a retried request landing twice rather than a real
+   edit. */
+export async function putHistoryEntry(env, clerkId, id, dataText, completedAt) {
+  if (!env.DB) return false;
+
+  try {
+    const stamp = nowSeconds();
+    await env.DB.prepare(
+      "INSERT INTO draft_history (id, clerk_id, data, completed_at, updated_at)" +
+      " VALUES (?, ?, ?, ?, ?)" +
+      " ON CONFLICT(id) DO UPDATE SET data = excluded.data," +
+      "   completed_at = excluded.completed_at, updated_at = excluded.updated_at"
+    ).bind(id, clerkId, dataText, completedAt, stamp).run();
+    return true;
+  } catch (err) {
+    console.error("history write failed:", err && err.message);
+    return false;
+  }
+}
+
+/* Scoped to the caller's own id in the WHERE clause, not just the entry
+   id — the same reason a room checks that a message came from a seat it
+   actually seated, rather than trusting a client-supplied id alone. A
+   DELETE that matched zero rows because the id belonged to someone else
+   is indistinguishable here from one that matched zero because the entry
+   never existed, which is the point: neither leaks whether the id was
+   real. */
+export async function deleteHistoryEntry(env, clerkId, id) {
+  if (!env.DB) return false;
+
+  try {
+    await env.DB.prepare(
+      "DELETE FROM draft_history WHERE clerk_id = ? AND id = ?"
+    ).bind(clerkId, id).run();
+    return true;
+  } catch (err) {
+    console.error("history delete failed:", err && err.message);
+    return false;
+  }
+}
+
+/* ----------------------------------------------------------
    Small things
    ---------------------------------------------------------- */
 

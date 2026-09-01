@@ -4,6 +4,7 @@ import { ClerkProvider } from '@clerk/clerk-react'
 import App from './App.jsx'
 import AppHeader from './components/AppHeader.jsx'
 import DraftRoom from './components/DraftRoom.jsx'
+import AuthBridge from './components/AuthBridge.jsx'
 import { CLERK_PUBLISHABLE_KEY, CLERK_APPEARANCE } from './clerkConfig.js'
 import './index.css'
 
@@ -23,9 +24,17 @@ import './index.css'
 // (unchanged today's button) covers that case without a provider at all,
 // the same "answer no to a missing binding" contract store.js already uses
 // for D1/GIPHY/Tank01.
-const withClerk = (node) =>
+// `bridge` is AuthBridge, and only the #root call below passes it — one
+// instance of a global is enough (see that component's own comment), and
+// it renders nothing, so it has to live inside the same conditional that
+// decides whether a ClerkProvider exists at all: useAuth() throws without
+// one, and unlike SiteNav.jsx's AccountButtons (which has its own mounted
+// gate to fall back before ever calling a Clerk hook) this component has
+// no reason to run at all when there is no key.
+const withClerk = (node, bridge) =>
   CLERK_PUBLISHABLE_KEY ? (
     <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY} appearance={CLERK_APPEARANCE}>
+      {bridge}
       {node}
     </ClerkProvider>
   ) : (
@@ -51,7 +60,8 @@ const rootEl = document.getElementById('root')
 const app = withClerk(
   <React.StrictMode>
     <App />
-  </React.StrictMode>
+  </React.StrictMode>,
+  <AuthBridge />
 )
 if (rootEl.innerHTML.trim()) {
   ReactDOM.hydrateRoot(rootEl, app)
