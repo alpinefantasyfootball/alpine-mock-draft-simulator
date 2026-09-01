@@ -116,7 +116,7 @@ that outlasts a trend.
 ### 02. There is no colour language for time
 
 The palette encodes two things. **Position** — six solids, darkened until white
-clears 4.5:1 on each. **Intent** — orange acts, blue states, one primary action
+clears 4.5:1 on each. **Intent** — teal acts, blue states, one primary action
 per screen.
 
 Nothing encodes *when*. Juke is a seasonal product with six rooms strung across

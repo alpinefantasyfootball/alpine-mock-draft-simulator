@@ -1,0 +1,25 @@
+{
+  "name": "juke-web",
+  "private": true,
+  "version": "0.0.0",
+  "description": "The React/Vite build for jukeff.com. app.js and the other legacy files still have no build step of their own — copy-legacy-assets.mjs just places them alongside the Vite output so Cloudflare Pages deploys one complete site.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && node scripts/prerender.mjs && node scripts/copy-legacy-assets.mjs",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "framer-motion": "^13.1.0",
+    "lucide-react": "^1.32.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
+    "autoprefixer": "^10.4.19",
+    "postcss": "^8.4.39",
+    "tailwindcss": "^3.4.4",
+    "vite": "^5.3.1"
+  }
+}

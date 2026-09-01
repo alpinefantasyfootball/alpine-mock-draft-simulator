@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Privacy Policy &middot; Juke</title>
+
+  <!-- Same pre-paint theme switch every other page here uses, for the same
+       reason: this page shares style.css and has no toggle of its own, so it
+       has to honour a choice made next door rather than reverting to light
+       halfway through a visit. -->
+  <script src="../theme.js?v=202608222306"></script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="../style.css?v=202608222306">
+
+  <link rel="icon" href="../juke-favicon.svg" type="image/svg+xml">
+  <link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="../favicon-16.png">
+  <link rel="icon" href="../favicon.ico" sizes="any">
+
+  <style>
+    /* Identical to draft-room-how-it-works.html's own <style> block — same
+       page shape, same reason: this is layout for a page of prose, which the
+       app has no use for, so it lives here rather than in style.css. Not
+       pulled into a shared file, for the same reason the how-it-works page
+       never was: there is exactly one other page this could serve today,
+       and a shared stylesheet for two consumers is the kind of abstraction
+       this project's own conventions argue against building early. */
+    .doc { max-width: 720px; margin: 0 auto; padding: 26px 18px 70px; }
+    .appbar-inner { max-width: 720px; }
+    .doc-intro { font-size: var(--fs-base); line-height: 1.7; color: var(--ink-mid); margin: 0 0 10px; }
+    .doc h2 {
+      margin: 40px 0 12px; padding-top: 18px;
+      border-top: 1px solid var(--line);
+      font-family: var(--font-display); font-size: var(--fs-lg);
+      font-weight: 700; letter-spacing: -0.01em;
+    }
+    .doc h2 .no {
+      display: block; margin-bottom: 5px;
+      font-family: Inter, sans-serif; font-size: var(--fs-2xs); font-weight: 700;
+      letter-spacing: .12em; color: var(--cyan);
+    }
+    .doc h3 { margin: 22px 0 8px; font-size: var(--fs-sm); font-weight: 700; color: var(--ink); }
+    .doc p  { line-height: 1.72; margin: 0 0 13px; }
+    .doc ul { line-height: 1.72; margin: 0 0 13px; padding-left: 20px; }
+    .doc li { margin-bottom: 5px; }
+    .doc table { margin: 0 0 16px; }
+    .doc td { padding: 9px 12px; border-bottom: 1px solid var(--line); font-size: var(--fs-sm); vertical-align: top; }
+    .doc tr:last-child td { border-bottom: 0; }
+    .doc td.k { font-weight: 600; white-space: nowrap; }
+    .doc code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: .89em; background: var(--fill); border-radius: var(--r-xs); padding: 1px 5px;
+    }
+    .note {
+      border-left: 3px solid var(--te); background: var(--t-bye-bg);
+      border-radius: 0 var(--r-sm) var(--r-sm) 0; padding: 12px 15px; margin: 0 0 14px;
+      font-size: var(--fs-sm); line-height: 1.65; color: var(--ink-mid);
+    }
+    .toc { background: var(--card); border: 1px solid var(--line); border-radius: var(--r-md); padding: 14px 18px; margin: 22px 0 6px; }
+    .toc ol { margin: 0; padding-left: 20px; line-height: 1.95; font-size: var(--fs-sm); }
+    .toc a { color: var(--link); text-decoration: none; }
+    .toc a:hover { text-decoration: underline; }
+    .backlink { display: inline-block; margin-top: 30px; margin-right: 22px; font-size: var(--fs-sm); color: var(--link); text-decoration: none; }
+    .backlink:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+
+  <header class="appbar">
+   <div class="appbar-inner">
+    <a class="home" href="../index.html" title="Back to the Draft Room"
+       aria-label="Back to the Draft Room">
+    <!-- class="mark" is kept so .home's layout rules and the 560px hide rule
+         still find it, and the size is overridden inline because .mark is
+         31x36 - the shield's portrait aspect. The shark is 564:352, so 36
+         tall is 58 wide and squashing it into 31 is the one thing the mark
+         may never do. The file carries its own colours, so --mark-ink and
+         --teal no longer reach it: this header is navy under both themes,
+         which is the ground the two-value mark is drawn for. -->
+    <img class="mark" src="/juke-mark.svg" width="58" height="36"
+         style="width:58px;height:36px;min-width:58px"
+         alt="" aria-hidden="true">
+    </a>
+    <div class="appbar-text">
+      <h1>Privacy Policy</h1>
+      <p>What Juke does and doesn't do with anything of yours</p>
+    </div>
+   </div>
+  </header>
+
+  <main class="doc">
+
+    <p class="doc-intro">
+      Juke has no accounts, no sign-up and nowhere to enter a password, an
+      email address or a card number &mdash; there has never been a form on
+      this site that asks for any of them. What follows is a complete,
+      specific account of what the app actually does, not a template filled
+      in with the usual disclaimers.
+    </p>
+
+    <div class="note">
+      This is a first version, written to describe what the code actually
+      does rather than to read like a generic policy &mdash; every claim
+      below was checked against the source and the live configuration before
+      being written down. It hasn't been reviewed by a lawyer. Last updated
+      21 August 2026.
+    </div>
+
+    <div class="toc">
+      <ol>
+        <li><a href="#s01">A mock draft on your own</a></li>
+        <li><a href="#s02">Drafting with your league</a></li>
+        <li><a href="#s03">What your browser talks to directly</a></li>
+        <li><a href="#s04">What goes through Juke's own server</a></li>
+        <li><a href="#s05">Hosting, and Cloudflare's own analytics</a></li>
+        <li><a href="#s06">What we never collect</a></li>
+        <li><a href="#s07">Cookies</a></li>
+        <li><a href="#s08">Children</a></li>
+        <li><a href="#s09">Changes to this page</a></li>
+        <li><a href="#s10">Contact</a></li>
+      </ol>
+    </div>
+
+    <h2 id="s01"><span class="no">01</span>A mock draft on your own</h2>
+    <p>
+      Drafting solo, the whole app runs in your browser and nothing about
+      your draft is sent to a server at all &mdash; there is no server in that
+      path to send it to. The board, the projections, the scoring and the
+      grade are all computed on your own machine from files the page already
+      downloaded.
+    </p>
+    <p>
+      Your progress &mdash; the seat you picked, every pick made, your league
+      settings, your queue and watchlist, and any draft you've finished
+      &mdash; is written to your browser's own local storage
+      (<code>localStorage</code>), on your device only. Juke has no way to
+      read it back, because there is nowhere for it to be read back from
+      except the browser it was written on. Clearing your browser's site data
+      deletes it permanently, the same as clearing it for any other site.
+    </p>
+
+    <h2 id="s02"><span class="no">02</span>Drafting with your league</h2>
+    <p>
+      Sending an invite link creates a shared room, and a room is the one
+      case where drafting does involve a server &mdash; everyone in it has to
+      agree on what happened, which your browser alone can't arbitrate.
+      While that room is open, it holds:
+    </p>
+    <ul>
+      <li>who's sitting in which seat, and the display name each person typed in;</li>
+      <li>every pick that's been made;</li>
+      <li>the chat messages sent in that room.</li>
+    </ul>
+    <p>
+      There's still no account behind any of this. Your browser generates a
+      random id the first time you join a room, stored the same way as
+      everything in section 01, and that id is what the room uses to tell you
+      apart from the person in the next seat &mdash; it isn't tied to your
+      name, an email address, or anything else about you.
+    </p>
+    <p>
+      A room isn't kept forever. Once every participant has been disconnected
+      for six hours, the room and everything in it &mdash; seats, picks, chat,
+      display names &mdash; is deleted automatically.
+    </p>
+
+    <h2 id="s03"><span class="no">03</span>What your browser talks to directly</h2>
+    <p>
+      A few things load straight from someone else's server, the same way an
+      embedded video or a web font does on most sites &mdash; that server sees
+      the request come from your browser directly, including your IP address,
+      the same as it would for any site using it:
+    </p>
+    <table>
+      <tr><td class="k">Player photos</td><td>Sleeper's own image server, linked directly rather than copied onto ours.</td></tr>
+      <tr><td class="k">Live scores</td><td>ESPN's public scoreboard, only fetched while there are games actually being played.</td></tr>
+      <tr><td class="k">Fonts</td><td>Google Fonts (Barlow Condensed, Inter, Archivo).</td></tr>
+    </table>
+    <p>
+      None of these get anything from Juke beyond the ordinary fact that your
+      browser asked for a file &mdash; no draft data, no room data, nothing
+      you've typed.
+    </p>
+
+    <h2 id="s04"><span class="no">04</span>What goes through Juke's own server</h2>
+    <p>
+      Two things are proxied through Juke's server instead of being called
+      directly, specifically so the provider's own access key never has to
+      sit in a page your browser can read:
+    </p>
+    <ul>
+      <li><b>Player news headlines</b>, from Tank01 &mdash; fetched when you open a
+        player's sheet, cached briefly (fifteen minutes) so the same headline
+        isn't fetched fresh from the provider every time.</li>
+      <li><b>GIF search in room chat</b>, from GIPHY &mdash; only if you actually
+        search for one.</li>
+    </ul>
+    <p>
+      Both requests carry Juke's own server as the visible caller, not your
+      browser, and neither is told anything about you beyond what's needed
+      to answer that one request (a player id, or a search term).
+    </p>
+
+    <h2 id="s05"><span class="no">05</span>Hosting, and Cloudflare's own analytics</h2>
+    <p>
+      The site is hosted on Cloudflare, which sees the same standard request
+      information &mdash; your IP address, browser and the page requested
+      &mdash; that any hosting provider sees for any site it serves. Separately,
+      Cloudflare injects its own Web Analytics beacon into every page on this
+      site to measure real-world load times and errors. That beacon is
+      Cloudflare's, added at their network edge rather than by anything in
+      Juke's own code; it doesn't use cookies and isn't the kind of beacon
+      that follows you across other, unrelated sites.
+    </p>
+
+    <h2 id="s06"><span class="no">06</span>What we never collect</h2>
+    <ul>
+      <li>No sign-up, no password, no email address &mdash; there is no form
+        anywhere in the app that asks for one.</li>
+      <li>No payment information. Juke is free and nothing in it is for sale.</li>
+      <li>No advertising trackers, and nothing here is sold or shared with
+        anyone for marketing.</li>
+      <li>No location data beyond the coarse, IP-level location any web
+        request already carries.</li>
+    </ul>
+
+    <h2 id="s07"><span class="no">07</span>Cookies</h2>
+    <p>
+      Juke's own code sets none. Everything in sections 01 and 02 is held in
+      local storage, which is not a cookie and is never sent to a server
+      automatically the way a cookie is &mdash; it only leaves your browser
+      when the app deliberately sends it, as in a room.
+    </p>
+
+    <h2 id="s08"><span class="no">08</span>Children</h2>
+    <p>
+      Juke isn't directed at children and isn't built to identify anyone's
+      age &mdash; there's no sign-up to ask at. It's a fantasy football tool,
+      built with an adult fantasy-football audience in mind.
+    </p>
+
+    <h2 id="s09"><span class="no">09</span>Changes to this page</h2>
+    <p>
+      If what the app actually does changes, this page changes with it
+      &mdash; the same rule the rest of the app follows: nothing here should
+      describe a version of Juke that no longer exists. The date at the top
+      moves when it does.
+    </p>
+
+    <h2 id="s10"><span class="no">10</span>Contact</h2>
+    <p>
+      Questions about this page, or a request about your own data: <a href="mailto:PLACEHOLDER@jukeff.com">[owner &mdash; add a real contact address here before this goes live]</a>.
+    </p>
+
+    <a class="backlink" href="../index.html">&larr; Back to the Draft Room</a>
+    <a class="backlink" href="terms.html">Terms of Service &rarr;</a>
+
+  </main>
+
+  <script src="../back-to-top.js?v=202608222306" data-auto></script>
+
+</body>
+</html>

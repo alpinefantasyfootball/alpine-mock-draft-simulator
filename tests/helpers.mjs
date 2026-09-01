@@ -113,7 +113,35 @@ function instrumentation() {
   };
 }
 
-export async function openApp(context, path = "#/draft") {
+/* The legacy setup screen — readSetup(), setupProblem(), #startBtn's own
+   click handler — is unchanged and still what most of these tests exercise;
+   it is only hidden now, in favour of the React lobby and settings modal
+   (see CLAUDE.md's "setup screen" section). Playwright's real click() and
+   selectOption() wait on visibility, which a deliberately display:none
+   element never satisfies — a test that needs this exact mechanism (rounds,
+   bench, starters: settings the new page does not expose) drives it via
+   evaluate() instead, same as it always read/wrote these ids, just without
+   the actionability wait. */
+export function setLegacyField(page, id, value) {
+  return page.evaluate(([id, value]) => {
+    const el = document.getElementById(id);
+    el.value = String(value);
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  }, [id, value]);
+}
+
+export function clickLegacyStart(page) {
+  return page.evaluate(() => document.getElementById("startBtn").click());
+}
+
+// Same reasoning, generalised: any id inside the hidden .setup or
+// .appbar-inner subtrees (#homeBtn, #soundBtn, #themeBtn, ...) needs this
+// rather than page.click(), which waits on visibility that is never coming.
+export function clickHidden(page, id) {
+  return page.evaluate((id) => document.getElementById(id).click(), id);
+}
+
+export async function openApp(context, path = "#/draft-room") {
   const page = await context.newPage();
   await page.addInitScript(instrumentation);
   await page.goto(`${SITE}/index.html${path}`);
@@ -124,16 +152,144 @@ export async function openApp(context, path = "#/draft") {
      a page that is working perfectly. */
   await page.waitForFunction(
     () => typeof state === "object" && typeof Live === "object" && typeof suggestions === "function");
+
+  /* Then wait for the cold-load overlay to leave.
+
+     #boot-sonar is fixed at z-index 9999 over the whole page, and since it
+     started being held for a minimum of 900ms rather than removed as soon as
+     React paints, it genuinely covers the page for about a second after load.
+     Every test that clicks or hit-tests immediately was racing it — phone
+     .spec.mjs's "nothing is sitting on top of the Start button" caught it
+     first, reporting the overlay's own wordmark as the thing covering the
+     button, which was true and not the bug that test exists to find.
+
+     Handled here rather than per-test because it is not one test's problem:
+     it is a property of every page load, and a person cannot click through the
+     overlay either. Waiting for it is what makes a test's timing match a
+     user's.
+
+     Tolerant of the overlay not existing at all — 404.html and the docs pages
+     have no loader — and of it never leaving, which is the failure sonar
+     .spec.mjs owns; a hard wait here would turn that into a timeout in every
+     other file instead. */
+  await page
+    .waitForFunction(() => !document.getElementById("boot-sonar"), null, { timeout: 12000 })
+    .catch(() => {});
+
   await page.evaluate(() => window.__watchSends());
   return page;
 }
 
+/* Through the bridge rather than through #createRoomBtn.
+
+   That button is in the legacy invite panel, which the full-bleed lobby no
+   longer renders inline - "Draft with friends" is the settings modal's Invite
+   tab now. Clicking it would mean opening a modal and switching a tab to set
+   up a fixture, which is three interactions of ceremony before the thing
+   under test. engine.createRoom() is what that button calls.
+
+   Polled rather than slept on: a room is created when the worker answers, and
+   how long that takes is the network's business.
+
+   It waits for the host to be *seated*, not just for the code to exist, and
+   that second condition is the whole point of this comment.
+
+   codeInUrl() goes true the moment the worker answers with a code, because
+   createRoom() writes the hash itself at that instant. The host's own seat
+   arrives later, on the broadcast that follows their join. Between those two
+   moments the room is real, reachable by its link, and seat 0 is still empty
+   - and join() hands a new member the first free chair (freeSeat(), room.js).
+   So a guest who got in during that window took the host's seat, and
+   room.spec.mjs's "the guest is seat 1" failed with 0.
+
+   Intermittent, and it read as a flake in the room rather than as a fixture
+   handing out the code before it was safe to use. In life the window is
+   unreachable: a person has to copy the link and send it, which is seconds,
+   and the host is seated long before anyone clicks. A test hands the code
+   straight to a second browser, so it hits the one race a human cannot.
+
+   Returning "a room you are in" rather than "a code that exists" is what the
+   callers all assumed they were getting anyway. */
 export function createRoom(page) {
   return page.evaluate(async () => {
-    document.getElementById("createRoomBtn").click();
-    await new Promise((r) => setTimeout(r, 1500));
-    return Live.state().code;
+    window.JukeEngine.createRoom();
+    for (let i = 0; i < 120 && !window.JukeEngine.codeInUrl(); i++) {
+      await new Promise((r) => setTimeout(r, 250));
+    }
+    const seated = () => {
+      const room = typeof Live !== "undefined" && Live.room();
+      return !!room && room.yourSeat >= 0;
+    };
+    for (let i = 0; i < 120 && !seated(); i++) {
+      await new Promise((r) => setTimeout(r, 250));
+    }
+    return window.JukeEngine.codeInUrl();
   });
+}
+
+/* The real path from a cold Locker to a running solo draft, through every
+   screen a person actually passes through — this used to be a handful of
+   near-identical copies, one per spec file, and today's own Locker
+   consolidation (NewMockPanel.jsx replacing LobbyBar's old "Enter Draft
+   Room" button with a single "Start mock draft" launcher, to fix a
+   two-primaries bug) broke every one of them at once: each copy still
+   only looked for "Enter Draft Room" — now dead text nothing renders —
+   before jumping straight to "start draft"/"start for everyone", with no
+   step in between for the button that actually launches a mock now.
+   That's the same "second copy that drifted" failure this project's own
+   code has a rule against; the fix is one helper, not seven patches.
+
+   Playwright locators rather than a one-shot page.evaluate() query, on
+   purpose: `.click()` on a text locator auto-waits for the button to
+   exist and be actionable, where the old evaluate()-based check ran once,
+   synchronously, and reported "no button" the instant it was a render
+   frame early rather than actually wrong.
+
+   Every step is optional except the last, checked by count() rather than
+   assumed present — a page that starts already past the Locker (a room,
+   or a test driving a second client) simply won't have "Start mock
+   draft" to click, the same way it might not have "Enter Draft Room". */
+export async function startSoloDraft(page) {
+  const enter = page.locator('#draftroom-root button:text-is("Enter Draft Room")');
+  if (await enter.count()) await enter.click();
+
+  // Checked before clicking, not inferred from the click failing to start
+  // a draft afterward — a disabled button and a missing one are different
+  // facts, and only one of them is "this league configuration is invalid".
+  // A thrown Error rather than an expect(): this file's own opening
+  // comment is what the tests need from a page, not what they assert, and
+  // waitForRoom() below already sets the precedent for surfacing "the
+  // condition was never satisfied" this way instead.
+  //
+  // This check used to live on the Start button below, and had to move up
+  // here with the behaviour: the Lobby's "Start mock draft" now starts the
+  // draft outright, so it is the control that refuses an illegal league
+  // (15 rounds against a 14-slot roster, say) and there is no second
+  // button left to ask.
+  const startMock = page.locator('#draftroom-root button:text-is("Start mock draft")');
+  if (await startMock.count()) {
+    if (!(await startMock.isEnabled())) throw new Error("the Start button refused this league");
+    await startMock.click();
+  }
+
+  // Optional, like every step above it, and it did not use to be. A room
+  // still has a real second Start ("Start for everyone", host-only), so
+  // this stays rather than being deleted — but a solo draft is already
+  // started by the time it gets here, and the locator then matches
+  // nothing.
+  //
+  // count() rather than isEnabled() is the whole fix. No actionTimeout is
+  // set in playwright.config.mjs, so isEnabled() on a locator matching
+  // nothing waits for ever instead of returning false, and every spec
+  // that drives a draft — grade, journey, solo — sat here until the
+  // 6-minute test timeout killed it. A hang, not an assertion: nothing in
+  // the output named this line, and the app was fine throughout.
+  const startBtn = page.locator('#draftroom-root >> text=/Start for everyone|Start draft/');
+  if (await startBtn.count()) {
+    if (!(await startBtn.isEnabled())) throw new Error("the Start button refused this league");
+    await startBtn.click();
+  }
+  await page.waitForFunction(() => state.started, null, { timeout: 15000 });
 }
 
 export function roomView(page) {

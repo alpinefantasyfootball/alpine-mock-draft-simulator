@@ -38,10 +38,68 @@ export default defineConfig({
 
   use: {
     baseURL: SITE,
+
+    /* A ceiling on a single action, because the default is no ceiling at all.
+
+       Without it a locator action against an element that never appears waits
+       for ever and the *test* timeout is what eventually fires - six minutes
+       later, blaming the whole test rather than the line, with nothing in the
+       output naming what was being waited for. That is how a "Start draft"
+       button that had been removed from the app took down grade, journey and
+       solo at once, and it read as three broken tests rather than one stale
+       locator. isEnabled() on a locator matching nothing is the sharpest form
+       of it: the question has an answer (false) and the default behaviour is
+       to wait for a different one instead.
+
+       30s, and the number is not free choice: this option is not scoped to
+       actions the way its name suggests. Playwright applies it through
+       setDefaultTimeout(), which is the default for *every* method taking a
+       timeout - page.waitForFunction() included. So a value below Playwright's
+       own 30s default does not merely bound what was unbounded, it quietly
+       shortens every wait in the suite that never asked for a timeout.
+
+       This was set to 15s first, and room.spec.mjs said so within one run:
+       "leaving the draft leaves the room" waits for the first pick of a real
+       two-manager draft against the deployed worker, has no explicit timeout,
+       and had been passing in 1.3 minutes. It failed at 15s - a wait that was
+       always going to take longer than that, cut in half by a change that
+       claimed in this very comment not to touch waits. Eleven of that file's
+       sixteen waitForFunction calls have no timeout of their own.
+
+       At 30s nothing that already worked is shortened, because 30s is what
+       those calls were getting anyway, and the unbounded case still collapses
+       from six minutes to thirty seconds while naming the action that failed.
+       That is the whole win; buying another fifteen seconds off it is not
+       worth being wrong about the rest of the suite.
+
+       Anything that genuinely needs longer passes its own timeout at the call
+       site - lobby.spec.mjs and journey.spec.mjs both do, for controls that
+       render a beat after the socket answers - and an explicit timeout there
+       overrides this. */
+    actionTimeout: 30 * 1000,
     // Nothing here is a visual test, and a trace on a two-minute draft is
     // large. Kept for failures only, where it is the whole point.
     trace: "retain-on-failure",
-    video: "off"
+    video: "off",
+
+    /* No HTTP cache, and this is not belt and braces.
+
+       app.js sits at a fixed address between deploys - that is the whole
+       point of the ?v= stamp - so a browser is entitled to serve the body it
+       already has. Pointed at production, that means a run can test the
+       previous deploy and report the new one's fix as missing: it happened,
+       on the news attribution fix, which was live in production's app.js
+       while the suite insisted it was not. It is worse for a bug-back run,
+       where five mutations in a row once came back failing tests they could
+       not possibly reach, because each was measuring some mixture of the
+       patched file and the cached one.
+
+       CLAUDE.md has said to launch this way for a while; the config never
+       did. */
+    launchOptions: {
+      args: ["--disable-application-cache", "--disk-cache-size=1"]
+    },
+    extraHTTPHeaders: { "Cache-Control": "no-cache" }
   },
 
   /* Both are waited on by `port` rather than by `url`, which matters for the
@@ -56,21 +114,40 @@ export default defineConfig({
      so what counts as local is decided in one place. */
   webServer: !LOCAL_SITE ? undefined : [
     {
-      /* `py` is the Windows launcher and is the only thing that works there;
-         it does not exist anywhere else, so the suite could not start its own
-         static server on Linux or macOS at all — it failed with "py: not
-         found" before a single test ran. Same reason CLAUDE.md tells you to
-         run the pipeline as `py scripts/build_players.py`: this project is
-         developed on Windows. Picked per platform rather than changed, so the
-         Windows path is untouched. */
-      command: (process.platform === "win32" ? "py" : "python3") + " -m http.server 8765",
+      /* index.html moved to web/index.html and picked up a real build step —
+         see CLAUDE.md's Stack section. So "start the static server" is now
+         "build the React bundle, copy the legacy files beside it, then serve
+         that output" rather than serving the repo root as-is; every spec
+         navigates through the built artifact, the same thing a Cloudflare
+         Pages deploy produces, not raw source.
+
+         `py` is the Windows launcher and is the only thing that works there;
+         it does not exist anywhere else, so this failed with "py: not found"
+         on Linux/macOS before a single test ran. Same reason CLAUDE.md tells
+         you to run the pipeline as `py scripts/build_players.py`. Picked per
+         platform rather than changed, so the Windows path is untouched. */
+      command: "npm --prefix web run build && " +
+        (process.platform === "win32" ? "py" : "python3") + " -m http.server 8765 --directory web/dist",
       port: 8765,
       reuseExistingServer: true,
-      timeout: 30 * 1000
+      timeout: 120 * 1000
     },
     {
       command: "npx --yes wrangler@4 dev -c worker/wrangler.toml --port 8787 --local",
-      port: 8787,
+      /* `url`, not `port`, and the difference is the whole point.
+
+         With `port`, reuseExistingServer accepts whatever happens to be
+         listening on 8787 - which during one debugging session was a plain
+         `python -m http.server`, cheerfully adopted as the draft room. The
+         suite then tests a static file server and fails in ways that name
+         nothing.
+
+         /news answers 403 without an Origin header, which is the worker
+         refusing before it reads a key, and Playwright counts 400-403 as
+         "ready" while a 404 is not ready at all. So our worker satisfies this
+         and anything else on the port does not: a stray listener now fails
+         fast with a port conflict instead of quietly poisoning the run. */
+      url: "http://127.0.0.1:8787/news?id=1",
       reuseExistingServer: true,
       timeout: 120 * 1000
     }

@@ -13,12 +13,12 @@
    strength in a column sorted by the weighted total. */
 
 import { test, expect } from "@playwright/test";
-import { openApp } from "./helpers.mjs";
+import { openApp, clickLegacyStart } from "./helpers.mjs";
 
 // The sheet renders without a draft, but the tab strip does not, so every
 // test here starts one and then opens a player directly.
 async function start(page) {
-  await page.click("#startBtn");
+  await clickLegacyStart(page);
   expect(await page.evaluate(() => state.started), "draft started").toBe(true);
 }
 

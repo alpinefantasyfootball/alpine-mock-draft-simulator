@@ -1,0 +1,1272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Juke &middot; Fantasy Football</title>
+
+  <!-- Without these, Google writes its own snippet from whatever page text it
+       likes, and a link pasted into Slack or iMessage renders as a bare URL.
+       og:image has to be absolute, so it points at the live domain even when
+       you are testing locally. -->
+  <meta name="description" content="Free fantasy football mock drafts against opponents that understand ADP, tiers and replacement level, plus a draft grade that shows its working.">
+  <link rel="canonical" href="https://jukeff.com/">
+  <meta name="theme-color" content="#0B0E14">
+
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Juke">
+  <meta property="og:url" content="https://jukeff.com/">
+  <meta property="og:title" content="Juke &middot; Fantasy Football">
+  <meta property="og:description" content="Free fantasy football mock drafts against opponents that understand ADP, tiers and replacement level, plus a draft grade that shows its working.">
+  <meta property="og:image" content="https://jukeff.com/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="The Juke shark on obsidian, above the line: fantasy football mock drafts, free and without an account.">
+  <meta name="twitter:card" content="summary_large_image">
+
+  <!-- The theme is set before anything paints, rather than in app.js at the
+       foot of the body, because by then the page has already been drawn: a
+       reader who chose light would watch it flash dark first. No stored
+       choice means no attribute, and no attribute means the dark default
+       that lives in :root.
+
+       A file rather than an inline script, so a Content-Security-Policy can
+       say script-src 'self' without either giving away 'unsafe-inline' or
+       pinning a hash that breaks the site the first time somebody edits it.
+       No defer, no async: it must run before the body is drawn.
+
+       Root-relative (/theme.js, not theme.js): this file is built by Vite
+       now, and Vite's HTML transform only leaves absolute (leading-/) asset
+       references alone — a relative one it tries to resolve against this
+       project's own source tree, where this file does not live. Root-
+       relative is also just correct at runtime regardless of the build: it
+       resolves the same way whether you are at "/" or "/#/draft". -->
+  <script src="/theme.js?v=202609011104"></script>
+
+  <!-- Homepage v4 pass 1: Archivo and IBM Plex Mono moved off Google Fonts
+       entirely — self-hosted from /fonts/, @font-face declared in
+       web/src/index.css. Barlow Condensed and Inter stay here: they are
+       font-display/font-body (tailwind.config.js), shared with the whole
+       Draft Room, which this pass does not touch. Two families instead of
+       four on this one request now, and the two preconnects below still
+       earn their keep for it.
+
+       Homepage cosmetic revision (design_handoff_homepage_cosmetic) §3
+       added Hanken Grotesk and Montserrat to this same request —
+       voidBody/voidNumeral (tailwind.config.js), homepage-only. And it
+       widened Barlow Condensed's own weight list: every font-display
+       heading on this page (and several in the Draft Room) has always
+       been styled `italic`, but only upright 600/700 were ever actually
+       requested — so every one of them has been rendering a
+       browser-synthesized oblique this whole time, not Barlow Condensed's
+       real italic. `ital,wght@0,600;0,700;1,700;1,800` adds true italic at
+       the two weights actually used (700/800), without dropping the
+       existing upright 600/700 that everything else on the page reads. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,600;0,700;1,700;1,800&family=Hanken+Grotesk:wght@400;500;600;700&family=Montserrat:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <!-- The two self-hosted faces actually on screen before anything else
+       loads: the JUKE wordmark in the nav (Archivo, every weight in one
+       variable file) and the header ticker's "N players" badge (IBM Plex
+       Mono 500 — font-medium in Ticker.jsx). preload warms the fetch in
+       parallel with everything else in <head>; the @font-face rule that
+       makes the browser actually use it lives in index.css, wherever that
+       stylesheet happens to load from. as="font" and crossorigin are both
+       required for a font preload to be picked up rather than silently
+       ignored — a bare <link rel="preload" href="...woff2"> with neither
+       fetches the file and then fetches it *again* when @font-face asks,
+       because the browser has no way to know the two requests should share
+       a cache entry without crossorigin matching on both. -->
+  <link rel="preload" as="font" type="font/woff2" href="/fonts/archivo-variable-latin.woff2" crossorigin>
+  <link rel="preload" as="font" type="font/woff2" href="/fonts/ibm-plex-mono-500-latin.woff2" crossorigin>
+  <!-- ?v=202609011104 on every local file below, and it has to be bumped on any deploy
+       that changes one of them.
+
+       Without a version in the address a returning visitor runs today's HTML
+       against last week's JavaScript — which is not a blank page but
+       something worse: a page that half works. It is how the room lost its
+       chat window entirely, because the markup hides the panel and only the
+       newer app.js knows to show it.
+
+       A query string rather than a renamed file, because renaming means a
+       manifest and a manifest means a build step for these files — and it
+       still does not, on purpose: only the legacy Draft Room files below
+       keep this convention. The React homepage bundle is Vite's own
+       content-hashed output, injected automatically, which makes this exact
+       bug structurally impossible for that half of the page. -->
+  <link rel="stylesheet" href="/style.css?v=202609011104">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/juke-app-icon-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Juke">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <!-- The SVG is what a modern tab actually draws; the PNGs and the .ico are
+       the fallback, and 16/32 are the sizes a browser reaches for when it
+       cannot use the SVG. The 192x192 that used to sit here was doing nothing
+       for a tab - that is a launcher size, and manifest.json declares it.
+       Unstamped, like every other file under web/public: these are Vite
+       assets rather than legacy no-build files, so the ?v= convention above
+       does not reach them. -->
+  <link rel="icon" href="/juke-favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png">
+  <link rel="icon" href="/favicon-16.png" sizes="16x16" type="image/png">
+  <link rel="icon" href="/favicon.ico" sizes="any">
+
+  <!-- ================== Breach, the cold-load overlay ==================
+       These style the #boot-sonar element, which is the first child of <body>.
+       See the comment there for why the loader is markup rather than a
+       component. The element id stayed "boot-sonar" through this pass on
+       purpose — theme.js's comment, main.jsx's teardown and tests/sonar.spec.mjs
+       all key off that exact id, and none of that had to change; only what
+       plays inside it did. "Sonar" — the ring-and-mark treatment — is still
+       exactly what SonarLoader.jsx shows everywhere else in the app (the
+       Lobby → Draft Room transition, share buttons, the chat GIF search).
+       This overlay alone moved to "Breach": the shark leaps through a
+       waterline instead of the mark fading up inside a ring sweep. Sonar's
+       own keyframes (sonar-ring, sonar-label, sonar-fade) are still used
+       below — for the idle fallback and the wordmark — so the duplication
+       note two paragraphs down still applies to those three.
+
+       It plays on every cold load now, browser tab or installed app alike —
+       reversed from Homepage v4 pass 0, which scoped this overlay to the
+       installed app's cold launch only and hid it outright everywhere else
+       via a data-standalone attribute theme.js stamped from
+       matchMedia('(display-mode: standalone)'). That gate is the reason
+       Breach shipped invisible on an ordinary desktop or mobile browser
+       visit: reported directly, from someone who had just watched it not
+       happen either way. The owner reversed the scoping rather than have it
+       be a second, quieter version of the exact "nobody on a fast
+       connection ever sees this" problem the no-skip-gate paragraph below
+       already describes solving once — an overlay restricted to installed
+       users is an overlay almost nobody sees at all. theme.js no longer
+       stamps data-standalone (nothing reads it any more); main.jsx's
+       teardown runs unconditionally to match.
+
+       There is also no skip-gate for a fast boot, and carrying that forward
+       is a deliberate choice rather than an oversight. The overlay used to
+       delay 300ms so a fast load never painted it at all; the owner measured
+       that production traffic on a fast connection never once saw it that
+       way — only Fast 4G and slower did — and removed the gate. Breach
+       inherits that reversal rather than reintroducing the thing it undid.
+
+       Inline rather than in index.css, because Tailwind's stylesheet is a Vite
+       artefact: a production build injects it as a <link>, but under `vite dev`
+       it arrives via JavaScript. A dev cold load would therefore paint an
+       unstyled overlay, and a loader that does not look the same in both places
+       is not testable. Self-contained is the only version that behaves.
+
+       An inline <style> is legal here; an inline <script> would not be.
+       _headers sets script-src 'self' with style-src 'unsafe-inline', so the
+       teardown lives in main.jsx - a module served from origin - and nothing in
+       this block is script-shaped.
+
+       Three of the keyframes below - sonar-ring, sonar-label and sonar-fade -
+       get a second, identical copy in web/tailwind.config.js, because
+       SonarLoader.jsx uses all three too. That duplication is deliberate
+       rather than drift: this copy has to be readable before any bundle is.
+       They are global @keyframes under one name each, so if the two ever
+       disagree, whichever stylesheet the document loads later wins for the
+       overlay *and* for the components. Change one, change the other.
+       sonar-boot-failsafe and the four breach* keyframes have no Tailwind
+       counterpart; they belong to this overlay alone. sonar-focus, which
+       used to be the fifth shared keyframe, is gone from this file — nothing
+       here uses it any more now that the mark is breachMark instead, and it
+       stays exactly where it always has in tailwind.config.js
+       for SonarLoader.jsx's own benefit. -->
+  <style>
+    #boot-sonar {
+      /* Breach II: a single --total rather than Breach I's two-variable
+         --breach-total/--breach-start-delay pair. --wave1/--wave2/--ripple
+         are calc()s off --total alone, exactly as the second handoff
+         specifies — "derived delays, computed from --total, never
+         hard-coded" is the fix for the sync drift that caused the earlier
+         glitching, and layering this file's old start-delay convention back
+         on top of that would reintroduce the same class of drift the
+         handoff exists to close out. Retiming is one number again. */
+      --total: 4000ms;
+      --wave1: calc(var(--total) * .06);
+      --wave2: calc(var(--total) * .41);
+      --ripple: calc(var(--total) * .55);
+      position: fixed; inset: 0; z-index: 9999;
+      display: flex; flex-direction: column;
+      /* stretch, not center — .breach-scene has no explicit width of its own
+         any more specifically so this default fills it edge to edge, which
+         is what lets breach-water and breach-underwater reach the true
+         browser width via a plain left:0/right:0 rather than a 100vw hack.
+         100vw was tried and rejected: this project already has one full-bleed
+         band elsewhere in the app that learned the hard way that vw units
+         count the scrollbar and overflow sideways on whichever machine shows
+         one, and #boot-sonar sits behind a real, potentially-scrolling page
+         for its whole lifetime. left:0/right:0 against an actually-full-width
+         parent has no such gutter to miscount. The wordmark below opts back
+         out with its own align-self, since it still wants its natural,
+         centred width rather than the stretch this now hands out by
+         default. */
+      align-items: stretch; justify-content: center; gap: 30px;
+      background: #0B0E14; overflow: hidden;
+      /* opacity: 1, not 0-animating-to-1 — this used to fade in over 200ms
+         (sonar-boot-in), and that was a real bug, not just a cosmetic one.
+         #boot-sonar is the first child of body, position:fixed over the
+         actual homepage markup sitting right behind it in the same
+         document — prerendered, real, already in the DOM before a single
+         line of JS has run (see scripts/prerender.mjs). An element's own
+         `opacity` is not the same question as its background colour's
+         alpha: #0B0E14 has none, but CSS opacity applies to the whole
+         subtree's compositing regardless, so for that entire 200ms the
+         real marketing page was visibly bleeding through a panel that
+         looked like it was supposed to already be hiding it. Reported
+         directly from production, where it is unmissable, because
+         `vite dev` never prerenders #root at all — there was nothing behind
+         the fade to see locally, which is exactly why this survived the
+         first round of testing. Content still gets its own entrance — the
+         mark, water and droplets all start moving immediately at 0% of
+         --total rather than waiting out a container fade that no longer
+         exists — only the container's own fade is gone, because the
+         container was never supposed to be see-through in the first place.
+         If a soft entrance is wanted back, it has to be a second, solid
+         element crossfading over this one, never this
+         element's own opacity. */
+      opacity: 1;
+      /* One animation now instead of two: the failsafe, and it is not
+         optional.
+
+         The teardown that normally removes this element is the last statement
+         in main.jsx, so it runs only if that module runs. CLAUDE.md documents
+         the exact deploy shape where it does not: Vite content-hashes the
+         bundle into its filename, so a browser holding the previous
+         index.html asks for an `assets/index-<hash>.js` that no longer exists
+         and gets a 404. That has already happened once here. Without this
+         rule the same event leaves a fixed, fully opaque, z-index 9999 panel
+         over the whole site — opacity: 1 is this element's resting state,
+         not an animation's end point, so there is nothing to fall back out
+         of on its own — it stays there for ever.
+
+         A page that looks like it is loading for ever is a worse failure than
+         one that looks broken, because nobody reports it as a bug. Eight
+         seconds is far past any real load and far short of a visitor giving
+         up. `forwards` rather than `both`: this element's own opacity is 1
+         from its very first frame now (see above), so there is no earlier
+         state left for a backwards fill to reach into.
+
+         visibility, not just opacity — a transparent element still answers a
+         hit test, which is the half of this failure that swallows clicks. */
+      animation: sonar-boot-failsafe 600ms ease-in 8s forwards;
+      /* Declared here on the base rule rather than beside the opacity change in
+         [data-sonar-out] below, so the fade-out has somewhere settled to start
+         from. main.jsx pins the animated opacity and drops the animation before
+         it sets that attribute - see the teardown for why the order matters. */
+      transition: opacity 220ms ease-out;
+    }
+    #boot-sonar[data-sonar-out] { opacity: 0; animation: none; }
+
+    /* Never reached on a healthy load: main.jsx removes the element within a
+       frame or two of React's first paint, long before 8s. This is only for
+       the load that never finishes. */
+    @keyframes sonar-boot-failsafe {
+      from { opacity: 1; }
+      to   { opacity: 0; visibility: hidden; }
+    }
+
+    /* There is no light-theme override here, deliberately. index.css pins
+       `body` to obsidian unconditionally - there is no [data-theme] guard on it
+       - so an #F7F7F6 overlay would tear down onto a dark page and flash
+       light-to-dark at exactly the moment this element exists to smooth over.
+       The overlay is obsidian because the page underneath always is. If body
+       ever becomes theme-aware, this is the block that has to follow it. */
+
+    /* Sonar's own idle ring, reused rather than reinvented for the case
+       Breach has no answer for on its own: a fixed one-shot has nothing left
+       to show if the JS bundle still hasn't run by the time it finishes.
+       Silent for the whole breach sequence (delayed past --total), then
+       picking up the ordinary infinite sweep exactly where the settled mark
+       holds below — so on the fast path, where main.jsx tears the overlay
+       down soon after --total, a ring is only just leaving opacity 0 when
+       the whole element starts fading with it, and is not perceptible. Only
+       a boot slow enough to still be here past --total ever actually
+       watches one complete a sweep. */
+    #boot-sonar i {
+      position: absolute; width: 150px; height: 150px; border-radius: 50%;
+      animation: sonar-ring 2100ms ease-out infinite both;
+      animation-delay: var(--total);
+    }
+    /* purple-400 rather than the base purple — unchanged from Sonar's own
+       ring, and the reasoning is the same reasoning the ripple below reuses:
+       composited on obsidian, #7B1FA2 at .75 measures 1.79:1 against 4.37 and
+       3.28 for the two teals; even at full alpha it only reaches 2.35, so no
+       alpha rescues it. purple-400 #9A3FC0 is already a token in
+       tailwind.config.js and at .9 measures 3.07.
+
+       Keep this in step with the RINGS array in SonarLoader.jsx, which
+       carries the same three colours for the panel tier. */
+    #boot-sonar i:nth-of-type(1) { border: 1px solid rgba(0,229,255,.55); }
+    #boot-sonar i:nth-of-type(2) { border: 1px solid rgba(0,229,255,.45); animation-delay: calc(var(--total) + 700ms); }
+    #boot-sonar i:nth-of-type(3) { border: 1px solid rgba(154,63,192,.9); animation-delay: calc(var(--total) + 1400ms); }
+
+    /* Breach II's own reference frame, height only — width is deliberately
+       absent so #boot-sonar's align-items: stretch fills it edge to edge.
+       That reversed a first version of this file, which gave the scene an
+       explicit 480px so it would read as "a moment" rather than a hairline
+       across a 1440px monitor — a reasonable-sounding call that was still
+       this file overriding what both Breach II prompts actually ask for:
+       "full-width" (desktop) and "full-bleed" as the thing 70% is explicitly
+       relative to (mobile). Reported back directly after the first push: the
+       water was still boxed to the scene, not the browser.
+
+       Full width does not mean the mark, ripple and droplets move — they
+       stay exactly where they were, because every one of them is positioned
+       by left:50% plus a fixed pixel margin, and left:50% of a horizontally
+       centred parent lands on the viewport's own centre whether that parent
+       is 480px or 3440px wide. Only the two elements that actually ask for
+       left:0/right:0 - breach-underwater and breach-water - are stretch's
+       intended beneficiaries, and they need no changes of their own to get
+       it; they already read the scene's full width, which is now the real
+       one.
+
+       height stays explicit at 520px (desktop) / 604px (mobile, below)
+       because it is what the water's own top:58% and the whole flex block's
+       vertical centring are actually measured against — none of that changed
+       here, only the cross-axis did. position:relative is what puts the
+       whole scene above the idle rings in paint order, same as the wordmark
+       — a positioned element draws over a non-positioned one, so the rings
+       pass behind the lockup rather than across its face. overflow:hidden
+       matches the handoff's own outer wrapper and is still a backstop for
+       the mark's own travel (down to 190px below rest, up to 118px above
+       it), not something the width change needed to touch — nothing was
+       ever asked to overflow a stretched box, only a 480px one. */
+    /* Reported directly against the live site, next to the other splash
+       that shows this same lockup (SonarLoader.jsx's tier="screen", used
+       for the Lobby -> Draft Room transition): that one holds the mark and
+       the wordmark 30px apart in one flex column, no third element between
+       them, so JUKE sits right under the mark. This one held the wordmark
+       roughly 260px below the shark, because the flex column holding the
+       wordmark measures from breach-scene's own bottom edge, and
+       breach-scene is a full 520px (604 on phone) tall to give the water
+       animation room - most of which is not "the water animation" by the
+       time it plays out. breach-underwater's own comment already states
+       where its gradient finishes fading to the container's flat
+       background colour: 58% of breach-scene's height (the waterline) plus
+       130px (90 on phone). Past that point the box is pixel-identical to
+       its own background for the rest of its height, on purpose, which is
+       what makes it safe to crop there - cropping a solid colour to itself
+       changes nothing you can see. Checked against every keyframe that
+       moves inside breach-scene, not just the gradient: the ripple
+       (breachRipple) is a 240px circle centred at 46%, scaling to 2x while
+       fading to opacity 0 in the same stretch, so its own faint tail
+       reaches this line at the same moment it is already indistinguishable
+       from off; the droplets (breachDroplet) translate upward, away from
+       this line, never past the waterline they start at.
+
+       breach-crop is that crop: a plain height in pixels, not a percentage
+       - a % height resolves against breach-crop's own containing block
+       (#boot-sonar, the full viewport), not against breach-scene sitting
+       inside it, so it cannot read the 58% the way this comment does.
+       432px is 520 * 0.58 + 130, rounded; 440px (below) is 604 * 0.58 + 90.
+       Retime either card's own height or gradient distance and this needs
+       the same arithmetic re-run - it is not derived live because nothing
+       here shares a custom property with breach-underwater's own
+       hard-coded gradient to derive it from, the same reason the mark's
+       own 150px top has never been a calc() off anything either.
+
+       breach-scene keeps its declared height and everything inside it
+       keeps the same top:58%/46%/etc. it always had, unchanged and
+       unmoved - overflow:hidden on the wrapper only stops the now-
+       invisible remainder from claiming layout space the wordmark is
+       waiting on, exactly the way overflow:hidden on breach-scene itself
+       already stops the mark's own entrance travel from doing the same
+       thing one level in. */
+    #boot-sonar .breach-crop {
+      overflow: hidden;
+      height: 432px;
+    }
+    #boot-sonar .breach-scene {
+      position: relative; overflow: hidden; height: 520px;
+    }
+
+    /* An <img>, not a background-image — Breach II's own asset reference,
+       juke-mark-v2.svg, kept as a plain file the way the handoff gives it
+       rather than inlined, so this stays a one-line swap if the mark is
+       revised again. No alt text needed - #boot-sonar carries
+       aria-hidden="true" on the whole overlay - but the attribute is still
+       present empty, matching how every other decorative mark in this file
+       is written.
+
+       There is only one copy of the mark now, where Breach I carried two (an
+       animated one and a motionless understudy crossfaded in at the end).
+       That existed because breachMark's 100% keyframe fades the shark to
+       opacity 0, which needed covering on the slow path where nothing tears
+       the overlay down for several more seconds. Breach II's own keyframe
+       still ends at opacity 0, but not until a slow, 12%-of-total dissolve
+       from 88% to 100% — by the time it is gone, --total has already
+       elapsed and main.jsx's hold is already at or past that mark on any
+       normal load, so there is no longer a "blank dark screen" state for a
+       second element to cover. If a slow-load frame is ever wanted back, add
+       it back the same way — never by feeding this element a shorter, fake
+       version of breachMark. */
+    #boot-sonar .breach-mark {
+      position: absolute; left: 50%; top: 150px; margin-left: -110px;
+      width: 220px; height: 137px; z-index: 1;
+      will-change: transform, opacity;
+      animation: breachMark var(--total) cubic-bezier(.33,0,.5,1) both;
+    }
+
+    /* The waterline is two layers now, not a line plus a soft radial wash.
+       breach-underwater is a static gradient band - #0e2b33 fading to this
+       file's own #0B0E14 over 130px and then staying there, so past that
+       130px it is pixel-identical to the container's own background and
+       costs nothing to extend all the way to the bottom of the scene. That
+       reads as "there is actually water below this line" in a way the old
+       wash (a soft glow floating with nothing under it) did not, which is
+       the whole reason Breach II changes it: measured directly against
+       recordings of Breach I, a glow with nothing solid beneath it read as
+       a smear rather than a surface, the same failure the old comment here
+       already named for the line itself.
+
+       breach-water is the bright line on top of that band. width is 100%
+       here and 70% under the phone breakpoint below, both centred by auto
+       margins against the full-width left:0/right:0 box - no separate
+       flex-centring wrapper needed, since 100% collapses that centring to a
+       no-op on desktop anyway. */
+    #boot-sonar .breach-underwater {
+      position: absolute; left: 0; right: 0; top: 58%; bottom: 0; z-index: 2;
+      background: linear-gradient(180deg, #0e2b33, #0B0E14 130px);
+    }
+    #boot-sonar .breach-water {
+      position: absolute; left: 0; right: 0; top: 58%; z-index: 3; pointer-events: none;
+      width: 100%; height: 1px; margin: 0 auto;
+      background: #00E5FF;
+      box-shadow: 0 0 24px 3px rgba(0,229,255,.7);
+      will-change: transform, opacity;
+      animation: breachWaterPulse var(--total) ease-out both;
+    }
+
+    /* Six droplets, two waves of three, each a static zero-size rotate
+       wrapper (breach-drop) holding one animated dot (breach-drop-dot) -
+       never rotate and translateY on the same animated element. breachDroplet
+       is translateY-only, so it moves straight "up" along whatever direction
+       the wrapper's own rotation already points; flattening the two onto one
+       element sends every droplet the same direction regardless of its
+       intended angle, which the handoff calls out as the most likely source
+       of visible glitching, and matches what this file's own two prior
+       recordings actually showed.
+
+       breach-drops is the zero-height row both waves hang from, positioned
+       once at the waterline rather than repeating top:58% on all six
+       wrappers. :nth-child counts against it rather than against
+       .breach-scene's other children, which is why the droplets need this
+       wrapper and the ripple below does not. */
+    #boot-sonar .breach-drops {
+      position: absolute; left: 0; right: 0; top: 58%; height: 0; z-index: 4; pointer-events: none;
+    }
+    #boot-sonar .breach-drop {
+      position: absolute; left: 50%; top: 0; width: 0; height: 0;
+    }
+    #boot-sonar .breach-drop-dot {
+      position: absolute; border-radius: 50%;
+      will-change: transform, opacity;
+      animation: breachDroplet var(--total) cubic-bezier(.3,0,.6,1) both;
+    }
+    #boot-sonar .breach-drop:nth-child(1) { transform: rotate(-62deg); }
+    #boot-sonar .breach-drop:nth-child(2) { transform: rotate(-20deg); }
+    #boot-sonar .breach-drop:nth-child(3) { transform: rotate(22deg); }
+    #boot-sonar .breach-drop:nth-child(4) { transform: rotate(64deg); }
+    #boot-sonar .breach-drop:nth-child(5) { transform: rotate(-48deg); }
+    #boot-sonar .breach-drop:nth-child(6) { transform: rotate(30deg); }
+    /* Wave 1 fires with the water's first pulse (the shark breaking the
+       surface on the way up); wave 2 with its second (the re-entry). */
+    #boot-sonar .breach-drop:nth-child(-n+4) .breach-drop-dot { animation-delay: var(--wave1); }
+    #boot-sonar .breach-drop:nth-child(n+5)  .breach-drop-dot { animation-delay: var(--wave2); }
+    #boot-sonar .breach-drop:nth-child(1) .breach-drop-dot { left: -2px;   top: -4px; width: 5px; height: 9px;  background: #7CE9FA; }
+    #boot-sonar .breach-drop:nth-child(2) .breach-drop-dot { left: -3px;   top: -6px; width: 6px; height: 10px; background: #00E5FF; }
+    #boot-sonar .breach-drop:nth-child(3) .breach-drop-dot { left: -3px;   top: -6px; width: 6px; height: 10px; background: #7CE9FA; }
+    #boot-sonar .breach-drop:nth-child(4) .breach-drop-dot { left: -2px;   top: -4px; width: 5px; height: 9px;  background: #00E5FF; }
+    #boot-sonar .breach-drop:nth-child(5) .breach-drop-dot { left: -2px;   top: -4px; width: 5px; height: 9px;  background: #00E5FF; }
+    #boot-sonar .breach-drop:nth-child(6) .breach-drop-dot { left: -2px;   top: -4px; width: 5px; height: 10px; background: #7CE9FA; }
+
+    /* The closing ripple: rgba(154,63,192,.9), not the handoff's own
+       rgba(168,85,247,.5). Measured against #0B0E14, the handoff's exact
+       value comes out 2.04:1 — under this project's own 3:1 bar for a
+       decorative ring, the identical failure mode the purple-400 note above
+       already measured once for the idle rings, and the identical deviation
+       Breach I already made here for the identical reason - this is a
+       property of the colour against this background, not of Breach I's
+       choreography, so a new size and position for the ring do not reopen
+       the question. purple-400 at the same .9 alpha the idle rings use:
+       3.07:1, and no colour jump at the moment the ripple hands off to the
+       rings sitting right beside it. */
+    #boot-sonar .breach-ripple {
+      position: absolute; left: 50%; top: 46%;
+      width: 240px; height: 240px; margin-left: -120px; margin-top: -120px;
+      border-radius: 50%; border: 1px solid rgba(154,63,192,.9);
+      z-index: 3;
+      will-change: transform, opacity;
+      animation: breachRipple var(--total) ease-out both;
+      animation-delay: var(--ripple);
+    }
+
+    /* The phone card, at the handoff's own 604px reference height rather
+       than a rescale of the desktop number - the two prompts give genuinely
+       different proportions (a taller card; a waterline at 70% width instead
+       of full-bleed; a mark positioned lower in its frame), not the same
+       scene shrunk down. There is no width to override here any more:
+       breach-scene has none at either breakpoint (see its own comment), so
+       it stretches to the real, narrower phone viewport the same way it
+       stretches to a desktop one, and breach-water's 70% below is 70% of
+       that actual width - not of a fixed 296px reference card, which is the
+       same correction as the desktop side of this change and the more
+       faithful reading of "70% instead of full-bleed" besides: a phone's own
+       screen is the thing being measured against, not a stand-in for one.
+       600px rather than a device-specific width because this is a
+       full-viewport overlay, not a component with its own container query -
+       it only has the viewport to key off, and 600px sits between the widest
+       phone this project tests against (iPhone 13, 390px) and the narrowest
+       desktop viewport in that same suite (1440px), so it cannot land inside
+       either. */
+    @media (max-width: 600px) {
+      #boot-sonar .breach-crop { height: 440px; } /* 604 * 0.58 + 90, see breach-crop's own comment */
+      #boot-sonar .breach-scene { height: 604px; }
+      #boot-sonar .breach-mark { top: 220px; margin-left: -95px; width: 190px; height: 118px; }
+      #boot-sonar .breach-underwater { background: linear-gradient(180deg, #0e2b33, #0B0E14 90px); }
+      #boot-sonar .breach-water { width: 70%; }
+      #boot-sonar .breach-ripple { width: 200px; height: 200px; margin-left: -100px; margin-top: -100px; }
+      #boot-sonar .breach-drop:nth-child(1) .breach-drop-dot,
+      #boot-sonar .breach-drop:nth-child(4) .breach-drop-dot,
+      #boot-sonar .breach-drop:nth-child(5) .breach-drop-dot { left: -2px; top: -4px; width: 4px; height: 8px; }
+      #boot-sonar .breach-drop:nth-child(2) .breach-drop-dot,
+      #boot-sonar .breach-drop:nth-child(3) .breach-drop-dot { left: -2.5px; top: -5px; width: 5px; height: 9px; }
+      #boot-sonar .breach-drop:nth-child(6) .breach-drop-dot { left: -2px; top: -4px; width: 4px; height: 9px; }
+    }
+
+    /* The wordmark at the stacked lockup's own proportions: Archivo 900,
+       uppercase, -0.045em, sized at the mark width over 2.4 - the ratio
+       JukeLogo's variant="stacked" already computes (212 / 2.4 = 88). The 30px
+       gap on the flex parent is size * 0.34, from the same component. Archivo
+       is already requested in this file's Google Fonts link.
+
+       That request carries display=swap, so on a slow load this word can paint
+       in the fallback face first and swap when Archivo lands. Accepted rather
+       than worked around: it is one centred word, so the swap changes glyphs
+       without moving anything else on screen, and the alternatives both cost
+       more than they buy - font-display:optional would pin the whole first load
+       to system-ui and never swap, and dropping the wordmark would throw away
+       the one thing this screen exists to say. */
+    #boot-sonar b {
+      position: relative; font: 900 88px/0.9 'Archivo', system-ui, sans-serif;
+      letter-spacing: -.045em; text-transform: uppercase; color: #F2F5FA;
+      /* #boot-sonar's own align-items is stretch now, for breach-scene's
+         benefit (see that comment) — this opts back out to its own natural
+         width, centred, which is the one thing align-items: center used to
+         give every flex child for free. */
+      align-self: center;
+      /* .65 * --total, not a number the handoff states — the wordmark is not
+         part of either Breach II prompt at all, so there is no value to copy
+         and this is this file's own placement. The mark reaches full rest at
+         62% and holds there until 88%, when its own 12%-of-total dissolve
+         begins (see breach-mark and breachMark below); .65 lands the word
+         just after that settle, giving it a beat as the only thing moving
+         before it finishes, and its own 500ms puts it fully in by 82.5% -
+         comfortably inside the hold, before the mark starts fading under it.
+         calc() off --total rather than a literal for the same reason as
+         everything else on this element: a retime is one number. */
+      animation: sonar-label 500ms ease-out calc(var(--total) * .65) both;
+    }
+
+    @keyframes sonar-ring {
+      0%   { transform: scale(.3); opacity: 0; }
+      12%  { opacity: .65; }
+      100% { transform: scale(2.2); opacity: 0; }
+    }
+    @keyframes sonar-label {
+      0%   { opacity: 0; transform: translateY(8px); }
+      100% { opacity: 1; transform: translateY(0); }
+    }
+    /* Opacity only - no blur, no travel. This is the reduced-motion substitute
+       for sonar-label and for breach-mark itself (see the media query below),
+       which is why it states its own 0%: a keyframe that declared only a `to`
+       would take its implied start from whatever the element already
+       computes - opacity 1 for both of these - and animate 1 to 1, fading
+       nothing at all. */
+    @keyframes sonar-fade { 0% { opacity: 0; } 100% { opacity: 1; } }
+
+    /* Exact motion, from the Breach II handoff verbatim — identical to
+       Breach I's own breachMark/breachDroplet/breachWaterPulse/breachRipple,
+       which is worth stating plainly since so much else about this file
+       changed: the second handoff hardened how the delays are computed and
+       revised the ripple's own delay fraction, not these four shapes. The
+       percentages are duration-independent — --total above is the only
+       number that needs to change to retime the whole sequence; see its own
+       comment and the calc()s on --wave1/--wave2/--ripple. */
+    @keyframes breachMark {
+      0%   { transform: translate(-30px,190px) rotate(-16deg) scale(.92); }
+      8%   { transform: translate(-18px,60px) rotate(-10deg) scale(.96); }
+      22%  { transform: translate(6px,-118px) rotate(8deg) scale(1); }
+      34%  { transform: translate(14px,-20px) rotate(16deg) scale(1); }
+      42%  { transform: translate(10px,74px) rotate(10deg) scale(1); }
+      54%  { transform: translate(0,-10px) rotate(-2deg) scale(1.02); }
+      62%  { transform: translate(0,0) rotate(0deg) scale(1); opacity: 1; }
+      88%  { transform: translate(0,0) rotate(0deg) scale(1); opacity: 1; }
+      100% { transform: translate(0,-14px) rotate(0deg) scale(.98); opacity: 0; }
+    }
+    @keyframes breachDroplet {
+      0%   { transform: translateY(0) scale(0); opacity: 0; }
+      2%   { transform: translateY(-8px) scale(1); opacity: 1; }
+      12%  { transform: translateY(-54px) scale(.45); opacity: 0; }
+      100% { transform: translateY(-54px) scale(.45); opacity: 0; }
+    }
+    @keyframes breachWaterPulse {
+      0%   { transform: scaleY(1); opacity: .55; }
+      7%   { transform: scaleY(3); opacity: 1; }
+      16%  { transform: scaleY(1); opacity: .6; }
+      40%  { transform: scaleY(1); opacity: .6; }
+      45%  { transform: scaleY(4); opacity: 1; }
+      56%  { transform: scaleY(1); opacity: .7; }
+      88%  { opacity: .55; }
+      100% { opacity: 0; }
+    }
+    @keyframes breachRipple {
+      0%   { transform: scale(.25); opacity: 0; }
+      28%  { opacity: .5; }
+      62%  { transform: scale(2); opacity: 0; }
+      100% { opacity: 0; }
+    }
+    /* The rings go, and so does the launch, the splash and the ripple —
+       everything that was travel or scale under motion becomes a single
+       settled mark. style.css already draws this line for .to-top ("the fade
+       stays - it is an opacity change, not motion") and this follows it:
+       breach-mark fades straight in at its resting position - no transform
+       of its own, since breachMark is skipped outright and rest is what its
+       base styles already draw - and nothing else plays. There is no second,
+       motionless copy to crossfade from any more (see breach-mark's own
+       comment above for why Breach II dropped it), which actually simplifies
+       this block from what Breach I needed: one mark, one fade, same as the
+       wordmark beside it. */
+    @media (prefers-reduced-motion: reduce) {
+      #boot-sonar i { display: none; }
+      #boot-sonar .breach-water, #boot-sonar .breach-underwater,
+      #boot-sonar .breach-drops, #boot-sonar .breach-ripple { display: none; }
+      #boot-sonar .breach-mark { animation: sonar-fade 300ms ease-out 300ms both; }
+      #boot-sonar b { animation: sonar-fade 300ms ease-out 420ms both; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Breach, the cold-load overlay. It is markup rather than a component
+       because it has to cover React's own boot: everything below this element
+       is a blocking classic script, and Vite's module bundle runs after all of
+       them, so React cannot draw its own loading state. main.jsx removes this
+       element after its first paint. Its styles are inline in <head>.
+
+       Not inside #view-home, #view-app or #root - all three are toggled or
+       overwritten by something else (applyRoute() for the first two, React's
+       createRoot for the third). Same reasoning as #draftroom-root at the foot
+       of this file: a mount app.js can neither show, hide, nor tear down by
+       accident. It is position:fixed, so being first in the flow costs nothing.
+
+       Nothing in this block is a script. _headers says script-src 'self', so an
+       inline <script> here would be blocked outright and the overlay would
+       silently never come down - a fixed element at z-index 9999 that swallows
+       every click on the page. The teardown lives in main.jsx.
+
+       The <b> is the wordmark, not a caption, and the string is exactly `Juke`.
+       This is a brand moment - the shark and nothing else under it - and
+       carries no line under it. A visitor who arrived from a pasted link needs
+       to know whose product this is; what the product does is the homepage's
+       job and it is one second behind. Naming the category here would also pin
+       the brand to the one room that exists today, against this project's own
+       rule that Juke is the brand and The Draft Room is one of several planned
+       rooms. The design mockup this animation was built from labelled the
+       overlay "MOCK DRAFT" - dropped rather than shipped, for the same reason
+       this comment already gave the Sonar version of this screen: do not add
+       a tagline here.
+
+       breach-underwater/-water/-drops/-ripple are the splash; breach-mark is
+       the shark, now the only copy of it - see its own comment in the
+       <style> above for why Breach II no longer needs a second, motionless
+       one crossfaded in at the end. The three <i> rings are Sonar's own idle
+       loop, silent until the mark settles, for the boot slow enough to still
+       be waiting past --total. -->
+  <div id="boot-sonar" aria-hidden="true">
+    <i></i><i></i><i></i>
+    <div class="breach-crop">
+      <div class="breach-scene">
+        <img class="breach-mark" src="/juke-mark-v2.svg" alt="">
+        <div class="breach-underwater"></div>
+        <span class="breach-water"></span>
+        <div class="breach-drops">
+          <span class="breach-drop"><span class="breach-drop-dot"></span></span>
+          <span class="breach-drop"><span class="breach-drop-dot"></span></span>
+          <span class="breach-drop"><span class="breach-drop-dot"></span></span>
+          <span class="breach-drop"><span class="breach-drop-dot"></span></span>
+          <span class="breach-drop"><span class="breach-drop-dot"></span></span>
+          <span class="breach-drop"><span class="breach-drop-dot"></span></span>
+        </div>
+        <span class="breach-ripple"></span>
+      </div>
+    </div>
+    <b>Juke</b>
+  </div>
+
+  <!-- The shield <symbol> that used to live here is gone. It was 2.7KB of
+       traced path data on every page load, cloned by <use> into the two
+       legacy headers below - and both of those headers are
+       display:none !important, so it had not been drawn on screen since the
+       React header took over. It was also the goalpost's predecessor, which
+       is to say two brand generations behind what the app actually shows.
+
+       The two <img> tags that replaced it name /juke-mark.svg, the same file
+       the React header loads, so they cost no extra request. Nothing in
+       app.js, theme.js or back-to-top.js ever referenced #jukeMark, .mark,
+       .mark-body or .mark-accent - checked before removing it, because the
+       rule about this file is that an unguarded lookup against missing
+       markup throws and takes the whole boot sequence down with it. This is
+       markup no script touches, which is the only kind that is safe to
+       delete here. -->
+
+  <!-- ============ EVERYTHING THAT STAYS PINNED TO THE TOP ============ -->
+  <div class="sticky-top">
+
+    <!-- The landing header. Superseded by the React Header component (see
+         #view-home below) — the rebrand replaces it visually — but the
+         element stays in the document, hidden, because app.js's routing and
+         event-wiring code looks it up unconditionally (applyRoute() sets
+         shellbar.hidden on every route change; closeRooms(), called from
+         inside applyRoute() and from two permanent document-level
+         listeners, looks up its children the same way). Deleting it outright
+         throws on the very first route render and takes the Draft Room down
+         with it, home route or not — a plain `hidden` attribute is not
+         enough on its own, since applyRoute() actively sets it to `false`
+         on the home route. The inline style wins over that regardless of
+         what app.js does to the attribute. -->
+    <header class="shellbar" id="shellbar" style="display:none !important" aria-hidden="true">
+      <div class="shell-inner">
+
+        <div class="shell-side">
+          <button class="navbtn" id="roomsBtn" type="button"
+                  aria-expanded="false" aria-controls="roomsPanel">
+            <span class="burger" aria-hidden="true"><i></i><i></i><i></i></span>
+            <span class="rooms-label">Rooms <span class="chev" aria-hidden="true"></span></span>
+          </button>
+        </div>
+
+        <a class="shell-brand" href="#/" aria-label="Juke home">
+          <img class="mark sm" src="/juke-mark.svg" width="51" height="32"
+               style="width:51px;height:32px;min-width:51px"
+               alt="" aria-hidden="true">
+          <span class="wordmark">JUKE</span>
+        </a>
+
+        <div class="shell-side end">
+          <button class="navbtn js-install" id="installBtn" type="button" hidden>Install</button>
+          <button class="navlink js-login" id="loginBtn" type="button">Log in</button>
+          <button class="cta" id="signupBtn" type="button">Sign up</button>
+          <button class="hdrbtn theme-toggle" type="button" aria-pressed="true">
+            <svg class="i-sun" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"
+                 fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <circle cx="12" cy="12" r="4.2"/>
+              <path d="M12 2.4v2.2M12 19.4v2.2M4.2 12H2M22 12h-2.2M6.5 6.5 4.9 4.9M19.1 19.1l-1.6-1.6M17.5 6.5l1.6-1.6M4.9 19.1l1.6-1.6"/>
+            </svg>
+            <svg class="i-moon" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M20.5 14.9A8.7 8.7 0 0 1 9.1 3.5a8.7 8.7 0 1 0 11.4 11.4Z" fill="currentColor"/>
+            </svg>
+          </button>
+        </div>
+
+      </div>
+      <div class="rooms-panel" id="roomsPanel" hidden></div>
+    </header>
+
+    <!-- Redesigned as web/src/components/AppHeader.jsx, mounted into
+         #appbar-root below. Kept in the DOM, hidden rather than deleted —
+         app.js has unguarded top-level listeners on #homeBtn/#soundBtn/
+         themeBtns() and renderHeader() writes into #statusLine/#pickText/
+         etc. on every tick, same reason #setup and #shellbar are hidden
+         this way rather than removed. -->
+    <header class="appbar" id="appbar" hidden>
+      <div class="appbar-inner" style="display:none !important" aria-hidden="true">
+
+        <button class="home" id="homeBtn" type="button" title="Leave the draft"
+                aria-label="Leave the draft">
+          <svg class="i-back" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"
+               fill="none" stroke="currentColor" stroke-width="2.4"
+               stroke-linecap="round" stroke-linejoin="round">
+            <path d="M15 5 8 12l7 7"/>
+          </svg>
+          <img class="mark" src="/juke-mark.svg" width="58" height="36"
+               style="width:58px;height:36px;min-width:58px"
+               alt="" aria-hidden="true">
+        </button>
+
+        <div class="appbar-text">
+          <h1 id="statusLine">The Draft Room</h1>
+          <p class="appbar-meta" id="pickLabel" hidden>
+            <span id="pickText"></span><span class="appbar-league" id="leagueLabel"></span>
+          </p>
+        </div>
+
+        <div class="appbar-right">
+          <div class="count" id="countBlock" hidden>
+            <span class="count-label" id="rightLabel">Players</span>
+            <span class="count-value" id="rightValue"></span>
+          </div>
+
+          <button class="hdrbtn sound-toggle" id="soundBtn" type="button"
+                  aria-pressed="false" title="Sound" aria-label="Sound">
+            <svg class="i-sound-on" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"
+                 fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 9.5h3.2L12 5.6v12.8L7.2 14.5H4z" fill="currentColor" stroke="none"/>
+              <path d="M15.6 9.2a4 4 0 0 1 0 5.6M18.2 6.6a7.6 7.6 0 0 1 0 10.8"/>
+            </svg>
+            <svg class="i-sound-off" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"
+                 fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 9.5h3.2L12 5.6v12.8L7.2 14.5H4z" fill="currentColor" stroke="none"/>
+              <path d="m16 9.5 5 5M21 9.5l-5 5"/>
+            </svg>
+          </button>
+
+          <button class="hdrbtn theme-toggle" id="themeBtn" type="button" aria-pressed="true">
+            <svg class="i-sun" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"
+                 fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <circle cx="12" cy="12" r="4.2"/>
+              <path d="M12 2.4v2.2M12 19.4v2.2M4.2 12H2M22 12h-2.2M6.5 6.5 4.9 4.9M19.1 19.1l-1.6-1.6M17.5 6.5l1.6-1.6M4.9 19.1l1.6-1.6"/>
+            </svg>
+            <svg class="i-moon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M20.5 14.9A8.7 8.7 0 0 1 9.1 3.5a8.7 8.7 0 1 0 11.4 11.4Z" fill="currentColor"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div id="appbar-root"></div>
+    </header>
+
+    <div class="tabrow" id="tabrow" hidden>
+      <nav class="tabs" id="tabs">
+      <button class="on" data-tab="tab-suggest">Suggestions</button>
+      <button data-tab="tab-players">Players</button>
+      <button data-tab="tab-team">My Team</button>
+      <button data-tab="tab-picks">Picks</button>
+      <button data-tab="tab-grades">Analysis</button>
+    </nav>
+
+      <div class="actionbar" id="actionbar">
+      <button class="mini go" data-action="new-draft" id="newDraftBtn" hidden>New mock draft</button>
+      <button class="mini" id="pauseBtn">Pause clock</button>
+      <button class="mini" id="undoBtn">Undo</button>
+      <button class="mini" id="autoBtn">Auto-draft the rest</button>
+      <button class="mini danger" id="restartBtn">Discard draft</button>
+    </div>
+    </div>
+
+    <div class="ticker" id="ticker" hidden></div>
+
+  </div>
+
+  <main>
+
+    <!-- ---------- LANDING ---------- -->
+    <!-- The id stays here on purpose: applyRoute() already does
+         $("view-home").hidden = onDraft, so mounting the new homepage into
+         this element's existing id needs zero changes to routing. Only the
+         contents changed — everything that used to render in here
+         (renderRooms/startRoomDoor, renderProof/startProofCycle,
+         renderHeroShot) is gone, replaced by the React tree mounted below. -->
+    <section class="landing" id="view-home">
+      <div id="root"></div>
+    </section>
+
+    <!-- Elements app.js's routing/home code touches unconditionally —
+         renderHome() (called from applyRoute() on every non-draft route)
+         and the score-strip listeners wired once at boot. Not part of the
+         page anyone sees; permanently hidden. They have to exist anyway, or
+         app.js throws on the first unguarded lookup and the Draft Room never
+         boots, on any route. See the note on #shellbar above — same reason. -->
+    <div id="legacy-home" style="display:none !important" aria-hidden="true">
+      <div class="scores-wrap" id="scoreWrap" hidden>
+        <button class="scores-arrow left" id="scoreLeft" type="button"
+                aria-label="Scroll scores left">&#8249;</button>
+        <div class="scores" id="scoreStrip"></div>
+        <button class="scores-arrow right" id="scoreRight" type="button"
+                aria-label="Scroll scores right">&#8250;</button>
+      </div>
+      <div class="landing-resume" id="homeResume" hidden></div>
+      <p id="homeMeta"></p>
+    </div>
+
+    <!-- ---------- THE DRAFT ROOM ---------- -->
+    <div id="view-app" hidden>
+
+    <!-- ---------- SETUP ---------- -->
+    <section class="panel on" id="tab-setup">
+      <!-- Unreachable. #/draft redirects to the React lobby, and everything
+           this screen offered is on that lobby and the settings modal now.
+           Everything from here through the matching closing </div> stays in
+           the DOM, hidden rather than deleted: app.js
+           has unguarded top-level listeners on these exact ids (#randomizeBtn,
+           #startBtn, the LOCKABLE list, etc.) that throw on a missing element
+           and take the rest of app.js's boot sequence down with them — the
+           same reason #shellbar is hidden this way rather than removed. -->
+      <div class="resume" id="resumeBar" hidden style="display:none !important" aria-hidden="true"></div>
+
+      <div class="setup" style="display:none !important" aria-hidden="true">
+        <h2>Draft setup</h2>
+
+        <div class="field">
+          <label for="draftSlot">Draft position</label>
+          <div class="field-row">
+            <select id="draftSlot"></select>
+            <button class="ghost" id="randomizeBtn">Randomize</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="pickClock">Pick clock</label>
+          <select id="pickClock">
+            <option value="0">None</option>
+            <option value="30">30 seconds</option>
+            <option value="45">45 seconds</option>
+            <option value="60" selected>60 seconds</option>
+            <option value="120">120 seconds</option>
+          </select>
+          <p class="hint">When the clock runs out, the top suggestion is drafted for you. You can pause it at any time once the draft starts.</p>
+        </div>
+
+        <details class="setupbox" id="leagueBox">
+          <summary>
+            <span>League</span>
+            <span class="box-sum" id="leagueSummary"></span>
+          </summary>
+
+        <div class="field">
+          <label for="teamCount">Teams, rounds and scoring</label>
+          <div class="field-row wordy">
+            <select id="teamCount"></select>
+            <select id="roundCount"></select>
+            <select id="scoring"></select>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Starting lineup</label>
+          <div class="field-row">
+            <select id="startQB"></select>
+            <select id="startRB"></select>
+            <select id="startWR"></select>
+          </div>
+          <div class="field-row" style="margin-top:8px">
+            <select id="startTE"></select>
+            <select id="startFLEX"></select>
+            <select id="startDST"></select>
+          </div>
+          <div class="field-row" style="margin-top:8px">
+            <select id="startK"></select>
+            <select id="startSFLEX"></select>
+            <select id="benchCount"></select>
+          </div>
+          <p class="hint" id="rosterSum"></p>
+        </div>
+
+        </details>
+
+        <details class="setupbox scoring" id="scoringBox">
+          <summary>
+            <span>Scoring</span>
+            <span class="box-sum" id="scoringSummary"></span>
+          </summary>
+          <div id="scoringFields"></div>
+          <button class="ghost" type="button" id="resetScoring">Reset to defaults</button>
+        </details>
+
+        <details class="setupbox" id="friendsBox">
+          <summary>
+            <span id="friendsTitle">Draft with friends</span>
+            <span class="box-sum" id="friendsSum">Send a link and draft together</span>
+          </summary>
+
+        <div class="field" id="inviteBox">
+          <p class="hint" id="inviteHint">Create a room and send the link. Anyone who opens
+            it takes a seat; the rest are drafted by the CPU.</p>
+
+          <div class="namerow">
+            <input type="text" id="displayName" maxlength="20" autocomplete="nickname"
+                   placeholder="Your name" aria-label="Your name in the room">
+          </div>
+
+          <div class="field-row" id="inviteStart">
+            <button class="ghost" type="button" id="createRoomBtn">Create a room</button>
+          </div>
+
+          <div id="inviteLive" hidden>
+            <div class="linkrow">
+              <input type="text" id="inviteLink" readonly aria-label="Invite link">
+              <button class="ghost" type="button" id="copyLinkBtn">Copy</button>
+            </div>
+            <p class="hint" id="inviteStatus"></p>
+            <div class="seatlist" id="seatList"></div>
+            <button class="ghost" type="button" id="leaveRoomBtn">Leave the room</button>
+          </div>
+        </div>
+
+        </details>
+
+        <div class="chatslot" id="lobbyChatSlot"></div>
+
+        <p class="hint bad" id="setupProblemMsg" hidden></p>
+
+        <button class="primary big" id="startBtn">Start your draft</button>
+        <p class="freshness" id="freshness"></p>
+        <p class="freshness"><a href="docs/draft-room-how-it-works.html">How the Draft Room works</a></p>
+      </div>
+
+    </section>
+
+    <div class="draftshell" id="draftShell" hidden>
+
+      <div class="draftmain">
+        <div class="boardpane">
+          <div class="board-scroll" id="boardScroll">
+            <div class="board" id="boardGrid"></div>
+          </div>
+          <div class="legend">
+            <span><i class="sw QB"></i>QB</span><span><i class="sw RB"></i>RB</span>
+            <span><i class="sw WR"></i>WR</span><span><i class="sw TE"></i>TE</span>
+            <span><i class="sw K"></i>K</span><span><i class="sw DST"></i>D/ST</span>
+          </div>
+        </div>
+
+        <div class="worksplit">
+          <div class="workmain" id="workMain"><!-- panels are moved in here by app.js --></div>
+
+          <aside class="rail" id="rail">
+            <button class="raildismiss" id="railDismiss" type="button"
+                    aria-label="Close">&times;</button>
+            <section class="railcard">
+              <h3 class="railhead" id="railRosterHead">Your roster</h3>
+              <ul class="railslots" id="railRoster"></ul>
+            </section>
+
+            <section class="railcard">
+              <h3 class="railhead" id="railQueueHead">Your queue</h3>
+              <div id="queueList"></div>
+            </section>
+          </aside>
+        </div>
+      </div>
+
+      <div class="chatslot" id="draftChatSlot"></div>
+    </div>
+
+    <section class="chatdock" id="chatDock" hidden aria-label="Room chat">
+      <header class="chathead">
+        <h3>Room chat</h3>
+        <span class="chatpresence" id="chatPresence"></span>
+        <button class="chatdismiss" id="chatDismiss" type="button"
+                aria-label="Close chat">&times;</button>
+      </header>
+
+      <div class="chatscroll" id="chatLog" aria-live="polite" aria-label="Messages"></div>
+
+      <button class="chatjump" id="chatJump" type="button" hidden></button>
+
+      <p class="chattyping" id="chatTyping" aria-live="polite"></p>
+
+      <p class="chatoffline" id="chatOffline" role="status" hidden>
+        Reconnecting to the room…</p>
+
+      <div class="gifbox" id="gifBox" hidden>
+        <div class="chatform">
+          <input type="text" id="gifQuery" maxlength="60" autocomplete="off"
+                 placeholder="Search GIFs" aria-label="Search GIFs">
+          <button class="ghost" type="button" id="gifClose">Close</button>
+        </div>
+        <div class="gifresults" id="gifResults"></div>
+      </div>
+
+      <div class="chatfoot">
+        <div class="quicksay" id="chatReactions">
+          <button type="button" data-say="Nice pick">Nice pick</button>
+          <button type="button" data-say="Reach.">Reach.</button>
+          <button type="button" data-say="Wow.">Wow.</button>
+        </div>
+
+        <form class="chatform" id="chatForm">
+          <input type="text" id="chatInput" maxlength="500" autocomplete="off"
+                 placeholder="Say something" aria-label="Message the room">
+          <button class="ghost gifbtn" type="button" id="gifBtn" aria-label="Add a GIF">GIF</button>
+          <button class="primary sendbtn" type="submit" id="chatSend" aria-label="Send">Send</button>
+        </form>
+      </div>
+    </section>
+
+    <button class="chatfab" id="chatFab" type="button" hidden>
+      <span>Chat</span>
+      <span class="chatbadge" id="chatBadge" hidden></span>
+    </button>
+
+    <button class="railfab" id="railFab" type="button" hidden>
+      <span id="railFabText">Roster</span>
+    </button>
+
+    <!-- ---------- SUGGESTIONS ---------- -->
+    <section class="panel" id="tab-suggest">
+      <div class="pos-filter" id="suggestFilter">
+        <button class="on" data-pos="ALL">All</button>
+        <button data-pos="QB">QB</button>
+        <button data-pos="RB">RB</button>
+        <button data-pos="WR">WR</button>
+        <button data-pos="TE">TE</button>
+        <button data-pos="K">K</button>
+        <button data-pos="DST">D/ST</button>
+      </div>
+      <div id="suggestList"></div>
+    </section>
+
+    <!-- ---------- PLAYERS ---------- -->
+    <section class="panel" id="tab-players">
+      <div class="toolbar">
+        <input type="search" id="playerSearch" placeholder="Search players or teams" autocomplete="off">
+        <label class="check">
+          <input type="checkbox" id="hideDrafted">
+          <span>Hide drafted</span>
+        </label>
+        <label class="check">
+          <input type="checkbox" id="roomyRows">
+          <span>Roomy rows</span>
+        </label>
+      </div>
+
+      <div class="pos-filter" id="playerFilter">
+        <button class="on" data-pos="ALL">All</button>
+        <button data-pos="QB">QB</button>
+        <button data-pos="RB">RB</button>
+        <button data-pos="WR">WR</button>
+        <button data-pos="TE">TE</button>
+        <button data-pos="K">K</button>
+        <button data-pos="DST">D/ST</button>
+      </div>
+
+      <div class="tblscroll">
+        <table id="playerTable" class="compact stats">
+          <thead id="playerHead"></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ---------- MY TEAM ---------- -->
+    <section class="panel" id="tab-team">
+      <p class="section-label">Starters</p>
+      <ul class="roster" id="startersList"></ul>
+      <p class="section-label">Bench</p>
+      <ul class="roster" id="benchList"></ul>
+    </section>
+
+    <!-- ---------- ANALYSIS ---------- -->
+    <section class="panel" id="tab-grades">
+      <div id="gradesBody"></div>
+    </section>
+
+    <!-- ---------- PICKS ---------- -->
+    <section class="panel" id="tab-picks">
+      <div id="picksList"></div>
+    </section>
+
+    </div>
+
+  </main>
+
+  <!-- The new React draft room page (web/src/components/DraftRoom.jsx),
+       reached at #/draft-room. Deliberately outside #view-app/#view-home's
+       hidden toggle: applyRoute() shows/hides neither this id nor the
+       room/clock/sim state DraftRoom shares with the legacy engine when
+       the hash is #/draft-room (see onDraftRoomRoute() in app.js) — so
+       mounting here carries none of the "unguarded lookup throws" risk the
+       other React mounts guard against, and app.js's routing can neither
+       show, hide, nor tear it down by accident. DraftRoom watches the hash
+       itself and renders nothing when it doesn't match. Its Draft button
+       is real: engine.draftPlayer() is the same draftAndAdvance() the
+       legacy Draft button calls, so a pick here is a real pick. Nothing
+       here links to it yet, and it is still missing real features
+       (chat/GIF, a mobile layout, scouting chips, test coverage) — see
+       CLAUDE.md and the plan history for the current gap list.
+
+       font-body: the sitewide font-consistency pass that followed the
+       homepage cosmetic revision. This is the ONE real DOM container the
+       whole Cockpit mounts into — DraftRoom.jsx's four top-level screen
+       branches (the transition screen, the Locker/Lobby, the pre-draft
+       Entry screen, the live draft screen) are all descendants of it, and
+       none of them reset font-family on their own `fixed inset-0` wrapper
+       divs, so Hanken Grotesk cascades here once rather than needing a
+       class on each of the four. Verified none of the Cockpit's own body
+       prose already carries an explicit font-family override that this
+       would fight — the ~140 font-plex call sites across the Cockpit are
+       pick codes, team/position abbreviations and board/stat-table grid
+       cells, all more specific than this ancestor rule and therefore
+       unaffected by it. -->
+  <div id="draftroom-root" class="font-body"></div>
+
+  <!-- ============ PLAYER DETAIL ============ -->
+  <div class="sheet-backdrop" id="sheetBackdrop" hidden></div>
+  <div class="sheet" id="sheet" hidden>
+    <div class="sheet-head" id="sheetHead"></div>
+    <nav class="sheet-tabs" id="sheetTabs">
+      <button class="on" data-view="v-overview">Overview</button>
+      <button data-view="v-news" id="newsTab" hidden>Latest News</button>
+      <button data-view="v-logs">Game Logs</button>
+      <button data-view="v-seasons">Seasons</button>
+      <button data-view="v-depth">Depth Chart</button>
+    </nav>
+    <div class="sheet-body" id="sheetBody"></div>
+  </div>
+
+  <dialog class="dlg" id="soonDlg">
+    <h3 id="soonTitle"></h3>
+    <p id="soonBody"></p>
+    <form method="dialog"><button class="primary">Got it</button></form>
+  </dialog>
+
+  <!-- Every one of these carries the same ?v=202609011104 as the stylesheet. See the note
+       beside it in <head>: bump them together or don't bump them at all.
+       Root-relative for the same reason theme.js and style.css are above.
+
+       players.js, stats.js and draft-engine.js used to load here too, as
+       three more blocking classic scripts — 636KB combined, most of this
+       page's weight, fetched before first paint on every marketing-site
+       load. app.js's own boot now loads them itself, off
+       requestIdleCallback, once it's already running (see the
+       "deferred data" block near the foot of app.js) — keeping them off
+       the homepage's critical path while still landing in time for the
+       ticker and the hero scoring demo to fill in with real data.
+
+       The three tags below stay blocking classic scripts, not defer — that
+       was tried and measured broken. Vite's production build always
+       injects the entry <script type="module"> into <head>, regardless of
+       where main.jsx's own tag sits in this source file — confirmed by
+       reading a real `vite build` output, not assumed. A blocking script
+       still executes the moment the parser reaches it, before parsing (and
+       therefore every deferred/module script, wherever it landed) even
+       finishes — which is the one guarantee this page actually needs:
+       window.JukeEngine assigned before React's first effects run. `defer`
+       here would put these three in the same document-order queue as a
+       script Vite relocates out from under them, and in that build
+       window.JukeEngine did not exist yet when Ticker.jsx's and
+       ScoringDemoCard.jsx's mount effects ran — confirmed with a
+       throwaway console.log, not inferred: "effect ran, engine= false".
+       Their listeners never got attached, so neither one ever picked up
+       real data, deferred-load or not. -->
+  <!-- The socket to a shared room. Loaded always, connected never unless a
+       manager asks for it: a solo draft touches nothing. -->
+  <script src="/live.js?v=202609011104"></script>
+  <!-- Before app.js, which calls backToTop() on the last line of its setup. -->
+  <script src="/back-to-top.js?v=202609011104"></script>
+  <script src="/app.js?v=202609011104"></script>
+
+  <!-- The React homepage. A module script, so it runs after the classic
+       scripts above regardless of source order — modules always behave as
+       if deferred — which is what guarantees window.JukeEngine (set near
+       the end of app.js's boot sequence) exists before this ever runs. -->
+  <script type="module" src="/src/main.jsx"></script>
+</body>
+</html>

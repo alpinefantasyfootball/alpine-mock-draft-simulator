@@ -18,7 +18,7 @@
 */
 
 import { test, expect } from "@playwright/test";
-import { openApp } from "./helpers.mjs";
+import { openApp, clickHidden } from "./helpers.mjs";
 
 async function startDraft(page) {
   await page.evaluate(() => {
@@ -69,7 +69,7 @@ test.describe("the draft room header", () => {
     expect(r.buttons).toBe(1);
     expect(r.label).toMatch(/leave|back/i);
 
-    await page.click("#homeBtn");
+    await clickHidden(page, "homeBtn");
     await page.waitForTimeout(400);
     expect(await page.evaluate(() => location.hash), "and it leaves").not.toContain("draft");
   });
@@ -90,7 +90,7 @@ test.describe("the draft room header", () => {
          state onto everything it selects. */
       expect(before.sound, "sound is off until somebody asks for it").toBe("false");
 
-      await page.click("#soundBtn");
+      await clickHidden(page, "soundBtn");
       await page.waitForTimeout(150);
 
       const after = await page.evaluate(() => ({
@@ -106,7 +106,7 @@ test.describe("the draft room header", () => {
       expect(after.themeBtn, "nor did the theme button").toBe(before.themeBtn);
 
       // And the theme toggle still works, which the shared class also risked.
-      await page.click("#themeBtn");
+      await clickHidden(page, "themeBtn");
       await page.waitForTimeout(150);
       const t = await page.evaluate(() => ({
         theme: document.documentElement.getAttribute("data-theme"),

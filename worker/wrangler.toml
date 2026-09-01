@@ -31,6 +31,26 @@ database_name = "juke_db"
 database_id = "89995115-4083-4dc6-ad4a-0344345a1205"
 migrations_dir = "migrations"
 
+# Chat attachments: voice notes and photos. Neither belongs in the Durable
+# Object (a room's storage value has a hard ceiling, and the whole room —
+# league, picks, chat — is written to it on every action; a recording is
+# real binary payload, not the couple of hundred lines of text the chat log
+# is bounded to) or in D1 (a cache of somebody else's data, and an upload
+# is the opposite of that — it exists nowhere but here). R2 is the piece of
+# Cloudflare storage built for exactly this, and draft-room.js serves it
+# back out itself from /media/<key> rather than through R2's own
+# public-bucket URL — see that route's own comment for why.
+#
+# MANUAL STEP, the same shape as GIPHY_KEY and TANK01_KEY being set with
+# `wrangler secret put` (see worker/README.md): this binding does nothing
+# until the bucket exists. From an account with R2 enabled, once:
+#   wrangler r2 bucket create juke-chat-media
+#   wrangler deploy
+# See "Chat media (voice and photos)" in worker/README.md.
+[[r2_buckets]]
+binding = "MEDIA"
+bucket_name = "juke-chat-media"
+
 # The pool sync is NOT scheduled yet, deliberately, and this comment is the
 # note explaining why rather than a leftover.
 #

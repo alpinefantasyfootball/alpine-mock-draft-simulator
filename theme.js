@@ -21,3 +21,13 @@
     }
   } catch (err) {}   // private browsing can make localStorage throw
 })();
+
+/* This file used to carry a second IIFE here, stamping data-standalone from
+   matchMedia('(display-mode: standalone)') so #boot-sonar (index.html)
+   could tell an installed-app cold launch apart from an ordinary browser
+   visit before its CSS applied. That overlay — Sonar, then Breach — was
+   scoped to the installed case only, which meant it never played on a
+   regular desktop or mobile browser visit at all: reported directly, from
+   someone who opened the site expecting to see it and did not. The owner
+   reversed the scoping rather than the gate, so the overlay now plays on
+   every cold load and nothing here needs to tell the two apart any more. */

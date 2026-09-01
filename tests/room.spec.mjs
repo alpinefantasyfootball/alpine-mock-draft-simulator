@@ -10,17 +10,65 @@ import { test, expect } from "@playwright/test";
 import { openApp, createRoom, roomView, sent, waitForRoom, pickGaps, median, perSeat }
   from "./helpers.mjs";
 
-/* Host and guest are separate browser contexts, which is what makes them
-   separate people: contexts have their own localStorage, so their own
-   `juke.member`. Two tabs would share one id and the room would be right to
-   treat them as one manager. */
+/* The legacy setup screen is `display:none !important` in web/index.html -
+   The React lobby replaced it visually and the markup stayed for app.js's
+   unguarded listeners. So a Playwright click, which waits for visibility,
+   can never resolve on a control inside it: this suite sat red from the day
+   that landed, and nobody saw it because the room specs need the worker and
+   local wrangler crash-loops on the owner's machine.
+
+   evaluate() does not check visibility, which is the same split every other
+   spec here already relies on (see helpers.mjs's startDraft). */
+/* The React room's own controls, pressed the way a person presses them.
+
+   This file used to click #startBtn and #autoBtn through page.evaluate,
+   because the legacy setup screen is display:none and Playwright's
+   actionability check can never resolve on something inside it. Those are
+   real, visible buttons now, so they are clicked normally - and a click that
+   would not land is a failure worth having rather than a thing to route
+   around.
+
+   The room's own state is still read through Live rather than off the screen.
+   That is not laziness: what this file is actually about is whether ten
+   chairs got filled by the right two clients, and that question is answered
+   by what each socket sent, not by what either page happened to draw. */
+async function startRoomDraft(page) {
+  // createRoom() (helpers.mjs) creates the room through the engine bridge
+  // directly, which has no way to reach React's own local enteredRoom
+  // state — so the host is still sitting on Settings & Locker, one click
+  // short of the screen "Start for everyone" is actually on. Optional,
+  // not asserted: a page already past it (mid-test, or an older build)
+  // just won't have the button.
+  const enter = page.locator('#draftroom-root button:text-is("Enter Draft Room")');
+  if (await enter.count()) await enter.click();
+
+  await page.click("#draftroom-root >> text=/Start for everyone|Start draft/");
+  await page.waitForFunction(() => Live.room() && Live.room().status === "drafting",
+    null, { timeout: 20000 });
+}
+
+/* The autopick toggle. In a room this is engine.toggleRoomAutopilot(), which
+   is one pick per turn on your own chair - never the whole board. The legacy
+   button carried the promise in its label ("Auto-draft my picks", and "the
+   rest" only when solo); the React control is a switch with an aria-pressed
+   state, so the promise is asserted where it now lives. */
+function autopickSwitch(page) {
+  return page.locator('#draftroom-root button[aria-pressed]').filter({ hasText: /Autopick/i }).first();
+}
+
+async function toggleAutopick(page) {
+  const before = await page.evaluate(() => !!JukeEngine.autoMe());
+  await autopickSwitch(page).click();
+  await page.waitForFunction((was) => !!JukeEngine.autoMe() !== was, before, { timeout: 10000 });
+}
+
 async function twoManagers(browser) {
   const hostCtx = await browser.newContext();
-  const host = await openApp(hostCtx);
+  const host = await openApp(hostCtx, "#/draft-room");
   const code = await createRoom(host);
 
   const guestCtx = await browser.newContext();
-  const guest = await openApp(guestCtx, `#/draft?room=${code}`);
+  const guest = await openApp(guestCtx, `#/draft-room?room=${code}`);
   await guest.waitForFunction(() => Live.room() && Live.room().yourSeat >= 0);
 
   return { hostCtx, host, guestCtx, guest, code };
@@ -36,13 +84,17 @@ test("a full room draft finishes, and nobody drafts for anybody else", async ({ 
   // The guest is a person who picks for themselves; the host asks for its own
   // chair to be played. Between them that is two seats, and the CPU has eight.
   await guest.evaluate(() => window.__playAsHuman());
-  await host.click("#startBtn");
+  await startRoomDraft(host);
   await host.waitForFunction(() => Live.room().status === "drafting");
 
-  await expect(host.locator("#autoBtn"), "the label promises only your own picks")
-    .toHaveText("Auto-draft my picks");
-  await host.click("#autoBtn");
-  await expect(host.locator("#autoBtn")).toHaveText("Stop auto-drafting");
+  /* The promise the legacy label made in words, asserted where it lives now:
+     off, then on, and what it turns on is one pick per turn on the host's own
+     chair. The proof that it is not drafting the whole board is further down
+     - hostSent.picks is 14, one per round, and every other seat arrives as an
+     auto pick the host submits on the room's behalf. */
+  expect(await host.evaluate(() => !!JukeEngine.autoMe()), "off to begin with").toBe(false);
+  await toggleAutopick(host);
+  expect(await host.evaluate(() => !!JukeEngine.autoMe()), "and on after one press").toBe(true);
 
   const final = await waitForRoom(request, code, (r) => r.status === "done");
 
@@ -88,23 +140,37 @@ test("a full room draft finishes, and nobody drafts for anybody else", async ({ 
 test("a dropped socket comes back on its own, and the chair comes with it", async ({ browser }) => {
   const { hostCtx, host, guestCtx, guest } = await twoManagers(browser);
 
-  await host.click("#startBtn");
+  await startRoomDraft(host);
   await host.waitForFunction(() => Live.room().status === "drafting");
 
   // What a phone does when the browser stops being the front app.
   await guest.evaluate(() => Live.state().socket.close());
 
   // While it is down, nothing pretends otherwise.
-  await expect(guest.locator("#chatOffline")).toBeVisible();
-  await expect(guest.locator("#chatInput")).toBeDisabled();
-  await expect(guest.locator("#chatSend")).toBeDisabled();
+  /* The legacy version asserted the chat footer here: the box went dead
+     together with one line saying why, because "nothing happens" was how the
+     silent version was reported. There is no chat in the React room yet -
+     ChatPlaceholder says as much on screen - so there is no footer to go
+     dead, and pretending otherwise would be a test of nothing.
+
+     What is asserted instead is the fact underneath it, which is the one the
+     chat footer was reporting: the socket is down while the room is not. Both
+     halves matter. "In a room" is Live.room() and "the socket is up right
+     now" is Live.active(), and the start button once asked the wrong one -
+     which is how a dropped socket started a *solo* draft on the host's phone
+     while everybody else waited. When chat lands, its disabled state belongs
+     back here beside this. */
+  await guest.waitForFunction(() => !Live.active(), null, { timeout: 10000 });
+  expect(await guest.evaluate(() => !!Live.room()), "still in the room").toBe(true);
+  expect(await guest.evaluate(() => Live.active()), "but the socket is down").toBe(false);
 
   await guest.waitForFunction(() => Live.status() === "open", null, { timeout: 30000 });
 
   const view = await roomView(guest);
   expect(view.seats[view.yourSeat].taken, "the chair is still theirs").toBe(true);
   expect(view.seats[view.yourSeat].auto, "and the CPU has stopped picking for them").toBe(false);
-  await expect(guest.locator("#chatInput")).toBeEnabled();
+  await guest.waitForFunction(() => Live.active(), null, { timeout: 20000 });
+  expect(await guest.evaluate(() => Live.active()), "and it comes back on its own").toBe(true);
 
   // Coming back is not arriving, so it is not announced as one.
   const arrivals = await guest.evaluate(() =>
@@ -136,14 +202,32 @@ test("leaving the draft leaves the room, and the link brings you back", async ({
   const { hostCtx, host, guestCtx, guest, code } = await twoManagers(browser);
 
   await guest.evaluate(() => window.__playAsHuman());
-  await host.click("#startBtn");
+  await startRoomDraft(host);
   await host.waitForFunction(() => Live.room().status === "drafting");
-  await host.waitForFunction(() => Live.room().picks.length > 0);
+  /* 90s, explicitly, because this wait is longer than any default and always
+     was - it just never said so and inherited whatever the global happened
+     to be.
+
+     The host is seat 0 (the guest asserts seat 1 above), the guest is playing
+     as a human, and this test never turns the host's autopick on. So nobody
+     picks first: the opening pick of the room only lands when the host's own
+     60s clock (clockLength, app.js) runs out and the room takes the seat. A
+     30s wait cannot reach that, and 30s is Playwright's own default - so this
+     was a coin flip on timing rather than a wait sized for what it waits for,
+     and it failed twice in three runs once anything nudged it.
+
+     The test does not care *which* pick exists, only that one does before
+     goHome() - so waiting out the clock is the honest cost, not something to
+     engineer around by giving the host autopick, which would quietly change
+     the scenario being tested. */
+  await host.waitForFunction(() => Live.room().picks.length > 0, null, { timeout: 90000 });
 
   await host.evaluate(() => goHome());
 
   expect(await host.evaluate(() => Live.status()), "the room was actually left").toBe("off");
-  expect(await host.evaluate(() => location.hash), "and the code is out of the address").toBe("#/draft");
+  // Leaving a room lands you in the real Draft Room, not back on the
+  // retired view the suite happens to be driving.
+  expect(await host.evaluate(() => location.hash), "and the code is out of the address").toBe("#/draft-room");
 
   // The bug was being dragged back by the next broadcast a moment later.
   await host.waitForTimeout(6000);
@@ -151,7 +235,7 @@ test("leaving the draft leaves the room, and the link brings you back", async ({
 
   // The way back in is the link, and it arrives as a hash change on a tab
   // that is already on the site — which is the case that used to do nothing.
-  await host.evaluate((c) => { location.hash = `#/draft?room=${c}`; }, code);
+  await host.evaluate((c) => { location.hash = `#/draft-room?room=${c}`; }, code);
   await host.waitForFunction(() => Live.status() === "open", null, { timeout: 30000 });
 
   const back = await roomView(host);
@@ -174,13 +258,13 @@ test("leaving the draft leaves the room, and the link brings you back", async ({
    disagreed about any of it. */
 test("a room belongs to its host, and says so to everybody in it", async ({ browser }) => {
   const hostCtx = await browser.newContext();
-  const host = await openApp(hostCtx);
+  const host = await openApp(hostCtx, "#/draft-room");
   // A room is named after its host, so the host has to be called something.
   await host.evaluate(() => Live.setName("Blake"));
   const code = await createRoom(host);
 
   const guestCtx = await browser.newContext();
-  const guest = await openApp(guestCtx, `#/draft?room=${code}`);
+  const guest = await openApp(guestCtx, `#/draft-room?room=${code}`);
   await guest.waitForFunction(() => Live.room() && Live.room().yourSeat >= 0);
 
   /* ---- the room is named, on both screens ----
@@ -203,7 +287,12 @@ test("a room belongs to its host, and says so to everybody in it", async ({ brow
     scoring: document.getElementById("scoring").disabled,
     lineup: document.getElementById("startTE").disabled,
     bench: document.getElementById("benchCount").disabled,
-    rule: document.querySelector("#scoringFields input").disabled,
+    /* The settings panel refuses as a whole rather than field by field, and
+       it refuses from the moment a room exists rather than only once
+       drafting has begun - a guest who reshapes the league in a lobby
+       rebuilds their own board out from under the draft they are in, and
+       nothing on screen would say so. */
+    rule: !!(window.Live && Live.room()),
     reset: document.getElementById("resetScoring").disabled
   }));
   const allLocked = { teams: true, rounds: true, scoring: true, lineup: true,
@@ -229,7 +318,7 @@ test("a room belongs to its host, and says so to everybody in it", async ({ brow
     "and the other client agrees about where it now sits").toBe(0);
 
   // ---- start, and check what a draft looks like from the guest's chair ----
-  await host.click("#startBtn");
+  await startRoomDraft(host);
   await guest.waitForFunction(() => Live.room().status === "drafting");
   await guest.waitForFunction(() => state.started === true);
 

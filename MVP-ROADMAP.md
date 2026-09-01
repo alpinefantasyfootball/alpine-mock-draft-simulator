@@ -173,7 +173,7 @@ Ordered by drafters gained per week of effort.
   outlines your own picks in an accent and everybody else's in a thin neutral.
   Juke has the first already — `.cell.mine` is a blue inset outline — and not
   the second, which is what gives the board definition as it fills. Keep the
-  blue: orange means act, blue means state. An inset `box-shadow`, not a
+  blue: teal means act, blue means state. An inset `box-shadow`, not a
   border, because everything here is `border-box`.
 
 **Done when** a keeper league can run its real draft on Juke without anyone

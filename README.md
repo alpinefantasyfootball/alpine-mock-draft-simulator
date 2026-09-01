@@ -1,2 +1,2 @@
-# alpine-mock-draft
-Mock drafts for participating Alpine practitioners
+# juke-fantasy-football
+The future of fantasy football analytics

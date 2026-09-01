@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Terms of Service &middot; Juke</title>
+
+  <script src="../theme.js?v=202608222306"></script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="../style.css?v=202608222306">
+
+  <link rel="icon" href="../juke-favicon.svg" type="image/svg+xml">
+  <link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="../favicon-16.png">
+  <link rel="icon" href="../favicon.ico" sizes="any">
+
+  <style>
+    /* Byte-identical to privacy.html's own block — see the comment there on
+       why this isn't shared out to its own file yet. */
+    .doc { max-width: 720px; margin: 0 auto; padding: 26px 18px 70px; }
+    .appbar-inner { max-width: 720px; }
+    .doc-intro { font-size: var(--fs-base); line-height: 1.7; color: var(--ink-mid); margin: 0 0 10px; }
+    .doc h2 {
+      margin: 40px 0 12px; padding-top: 18px;
+      border-top: 1px solid var(--line);
+      font-family: var(--font-display); font-size: var(--fs-lg);
+      font-weight: 700; letter-spacing: -0.01em;
+    }
+    .doc h2 .no {
+      display: block; margin-bottom: 5px;
+      font-family: Inter, sans-serif; font-size: var(--fs-2xs); font-weight: 700;
+      letter-spacing: .12em; color: var(--cyan);
+    }
+    .doc h3 { margin: 22px 0 8px; font-size: var(--fs-sm); font-weight: 700; color: var(--ink); }
+    .doc p  { line-height: 1.72; margin: 0 0 13px; }
+    .doc ul { line-height: 1.72; margin: 0 0 13px; padding-left: 20px; }
+    .doc li { margin-bottom: 5px; }
+    .doc code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: .89em; background: var(--fill); border-radius: var(--r-xs); padding: 1px 5px;
+    }
+    .note {
+      border-left: 3px solid var(--te); background: var(--t-bye-bg);
+      border-radius: 0 var(--r-sm) var(--r-sm) 0; padding: 12px 15px; margin: 0 0 14px;
+      font-size: var(--fs-sm); line-height: 1.65; color: var(--ink-mid);
+    }
+    .toc { background: var(--card); border: 1px solid var(--line); border-radius: var(--r-md); padding: 14px 18px; margin: 22px 0 6px; }
+    .toc ol { margin: 0; padding-left: 20px; line-height: 1.95; font-size: var(--fs-sm); }
+    .toc a { color: var(--link); text-decoration: none; }
+    .toc a:hover { text-decoration: underline; }
+    .backlink { display: inline-block; margin-top: 30px; margin-right: 22px; font-size: var(--fs-sm); color: var(--link); text-decoration: none; }
+    .backlink:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+
+  <header class="appbar">
+   <div class="appbar-inner">
+    <a class="home" href="../index.html" title="Back to the Draft Room"
+       aria-label="Back to the Draft Room">
+    <!-- class="mark" is kept so .home's layout rules and the 560px hide rule
+         still find it, and the size is overridden inline because .mark is
+         31x36 - the shield's portrait aspect. The shark is 564:352, so 36
+         tall is 58 wide and squashing it into 31 is the one thing the mark
+         may never do. The file carries its own colours, so --mark-ink and
+         --teal no longer reach it: this header is navy under both themes,
+         which is the ground the two-value mark is drawn for. -->
+    <img class="mark" src="/juke-mark.svg" width="58" height="36"
+         style="width:58px;height:36px;min-width:58px"
+         alt="" aria-hidden="true">
+    </a>
+    <div class="appbar-text">
+      <h1>Terms of Service</h1>
+      <p>The plain-language version, because there's no fine print behind it</p>
+    </div>
+   </div>
+  </header>
+
+  <main class="doc">
+
+    <p class="doc-intro">
+      Juke is a free fantasy football mock draft simulator. There's no
+      account, nothing to buy, and nothing here that scales up into
+      something more serious than a draft board &mdash; these terms are
+      short because the product is.
+    </p>
+
+    <div class="note">
+      This is a first version, matched to what the app actually does today
+      rather than copied from a template. It hasn't been reviewed by a
+      lawyer. Last updated 21 August 2026.
+    </div>
+
+    <div class="toc">
+      <ol>
+        <li><a href="#s01">Using Juke</a></li>
+        <li><a href="#s02">Rooms and other people</a></li>
+        <li><a href="#s03">Where the data comes from</a></li>
+        <li><a href="#s04">No guarantees about the football</a></li>
+        <li><a href="#s05">The service as it is</a></li>
+        <li><a href="#s06">Limits on what we owe you</a></li>
+        <li><a href="#s07">Changes</a></li>
+        <li><a href="#s08">Contact</a></li>
+      </ol>
+    </div>
+
+    <h2 id="s01"><span class="no">01</span>Using Juke</h2>
+    <p>
+      Open the page and draft &mdash; that's the whole of it. There's no
+      sign-up, no age gate and nothing to install. By using the site you're
+      agreeing to these terms; if that's not something you're willing to do,
+      the only thing to do differently is not use it, since there's no
+      account to cancel or delete.
+    </p>
+    <p>
+      Don't try to abuse the service &mdash; scripting requests at it,
+      attempting to bypass the room's rate limits, or trying to break into a
+      room you weren't invited to. See the <a href="privacy.html">Privacy
+      Policy</a> for exactly what a room holds and for how long.
+    </p>
+
+    <h2 id="s02"><span class="no">02</span>Rooms and other people</h2>
+    <p>
+      A shared room is other people's picks and other people's chat messages,
+      not just yours. Juke mechanically strips anything that isn't plain text
+      or a real GIPHY link out of chat, and rate-limits how fast any one
+      person can act &mdash; but it does not moderate what people say to each
+      other beyond that. You're responsible for what you type, and for who
+      you send an invite link to.
+    </p>
+
+    <h2 id="s03"><span class="no">03</span>Where the data comes from</h2>
+    <p>
+      Player data, ADP and statistics come from Sleeper and Fantasy Football
+      Calculator's public feeds; player news headlines come from Tank01.
+      Juke links to that news rather than republishing it, and doesn't claim
+      to have written any of it. Every rating, grade and suggestion on the
+      site is Juke's own calculation on top of that public data, not an
+      endorsement from any of those providers, and not expert analysis from
+      anybody on staff &mdash; there isn't one. See
+      <a href="../draft-room-how-it-works.html">how it works</a> for exactly
+      how each number is computed.
+    </p>
+
+    <h2 id="s04"><span class="no">04</span>No guarantees about the football</h2>
+    <p>
+      Every grade, projection and suggestion in Juke is a model's best guess
+      at a game that hasn't been played yet, offered for a mock draft &mdash;
+      practice, not the real thing. None of it is a promise about how any
+      player will actually perform, and none of it is advice for money on the
+      line, in a real draft or anywhere else.
+    </p>
+
+    <h2 id="s05"><span class="no">05</span>The service as it is</h2>
+    <p>
+      Juke is provided as it stands, with no warranty that it will be
+      available, uninterrupted or error-free. It depends on other people's
+      servers &mdash; Sleeper, Fantasy Football Calculator, Tank01, ESPN,
+      Cloudflare &mdash; and an outage on their end can mean a feature here
+      goes quiet. The app is built to keep drafting even when that happens,
+      but that's an engineering goal, not a guarantee.
+    </p>
+
+    <h2 id="s06"><span class="no">06</span>Limits on what we owe you</h2>
+    <p>
+      Juke is free, and to the extent the law allows it, is offered without
+      liability for damages arising from your use of it. Nothing here is
+      meant to override rights you have that can't be signed away where you
+      live.
+    </p>
+
+    <h2 id="s07"><span class="no">07</span>Changes</h2>
+    <p>
+      The app changes, and these terms move with it when they need to
+      &mdash; same rule as the Privacy Policy. The date at the top is when
+      this page last changed.
+    </p>
+
+    <h2 id="s08"><span class="no">08</span>Contact</h2>
+    <p>
+      Questions about these terms: <a href="mailto:PLACEHOLDER@jukeff.com">[owner &mdash; add a real contact address here before this goes live]</a>.
+    </p>
+
+    <a class="backlink" href="../index.html">&larr; Back to the Draft Room</a>
+    <a class="backlink" href="privacy.html">&larr; Privacy Policy</a>
+
+  </main>
+
+  <script src="../back-to-top.js?v=202608222306" data-auto></script>
+
+</body>
+</html>

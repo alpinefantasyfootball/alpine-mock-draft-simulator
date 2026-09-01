@@ -1,0 +1,167 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Self-hosted, homepage v4 pass 1. Archivo and IBM Plex Mono used to load
+   from Google Fonts, bundled into the same CSS2 request as Barlow
+   Condensed and Inter (index.html's font <link>) — a third-party origin
+   round trip for two faces this page controls the only two uses of that
+   actually matter for load time: the JUKE wordmark and the mono/tabular
+   text the status strip and share card use. Barlow Condensed and Inter
+   stay on Google Fonts, untouched — font-display/font-body
+   (tailwind.config.js) are shared with the Draft Room, which this pass
+   does not touch. See index.html for the matching <link rel="preload">
+   on the two above-the-fold files (the wordmark's Archivo weight and the
+   header ticker's IBM Plex Mono 500).
+
+   Latin subset only, matching what Google's own CSS2 API serves for a
+   plain `display=swap` request with no unicode-range override — the same
+   bytes as before, just fetched from this origin instead of
+   fonts.gstatic.com. font-display: swap is set here explicitly rather
+   than assumed, since nothing about self-hosting carries it over
+   automatically the way the Google-served CSS did.
+
+   One file for all of Archivo: it is Google's own variable font, not
+   three static instances — confirmed by fetching the CSS2 API for
+   wght@600, @700 and @900 and finding all three "latin" blocks pointing
+   at the identical URL, matching what a wght@400..900 request returns
+   with font-weight: 400 900. A single @font-face with a weight range is
+   the correct declaration for that, not three copies of one file under
+   three names. IBM Plex Mono has no such registered axis — Google serves
+   400/500/600 as three distinct static files, so it stays three rules. */
+@font-face {
+  font-family: 'Archivo';
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url('/fonts/archivo-variable-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/ibm-plex-mono-400-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/ibm-plex-mono-500-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/ibm-plex-mono-600-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+/* Header.jsx's row is `fixed`, so an anchor landing at its natural scroll
+   position would have its top slice of content — a heading, a card's first
+   row — sitting behind it. scroll-padding-top reserves that height on
+   every scroll-into-view, anchor click included; 8px of slack beyond the
+   exact header height so a section's own heading isn't flush against its
+   bottom edge — main's own pt in Homepage.jsx carries no such slack, since
+   clearing the fixed header at initial load has no anchor to breathe under.
+
+   Two values, tracking Homepage.jsx's own `pt-14 md:pt-16` plus 8px each:
+   md (768px) is where the nav row itself steps from h-14 to h-16, and
+   nothing else in the header changes height at any other breakpoint. */
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 64px;
+}
+
+@media (min-width: 768px) {
+  html {
+    scroll-padding-top: 72px;
+  }
+}
+
+body {
+  background-color: theme('colors.obsidian');
+  color: #E7ECF3;
+}
+
+/* Tailwind 3 has no backdrop: variant, so ::backdrop is styled directly.
+   ComingSoonModal.jsx and EarlyAccessModal.jsx are the two <dialog>s in
+   web/src, and both want the identical treatment — one rule for both rather
+   than two copies of the same three lines. */
+.coming-soon-dialog::backdrop,
+.early-access-dialog::backdrop {
+  background: rgba(11, 14, 20, 0.7);
+  backdrop-filter: blur(4px);
+}
+
+/* A backgrounded tab would otherwise run Sonar's ring loop indefinitely on
+   somebody's battery. SonarLoader.jsx toggles the attribute on
+   visibilitychange; animation-play-state rather than unmounting, so the ring
+   loop resumes mid-flight and the mark's entrance is not replayed when the tab
+   comes back. Both attributes sit on the same element - the component's own
+   root - and the rings are its descendants. */
+[data-sonar][data-sonar-paused] [data-sonar-ring] {
+  animation-play-state: paused;
+}
+
+/* PickTicker.jsx's ribbon: it advances on its own as picks land (an inner
+   strip translated by the width of whatever it has consumed), and stays a
+   real overflow-x-auto container underneath that so trackpad/wheel scroll
+   still reaches rounds the auto-advance hasn't gotten to. A visible
+   scrollbar on a strip that also animates its own position reads as
+   broken — two different things moving the same element — so it's hidden
+   here, scoped to the one attribute this element carries rather than a
+   global rule that would hide it everywhere a page scrolls. */
+[data-ticker] {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+[data-ticker]::-webkit-scrollbar {
+  display: none;
+}
+
+/* PlayersTab.jsx's phone/app screen: no phone draws an OS scrollbar inside
+   its own app frame, and this screen has four independently-scrolling
+   panes (the pool, the queue, the roster, the picks feed) plus a
+   horizontal filter-selects row, all in normal in-flow layout rather than
+   the ribbon's one special case above — a reusable class rather than a
+   fifth `[data-x]` attribute selector for the same rule. */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* DraftBoardGrid.jsx's own scroll container, unlike every other one this
+   file hides a scrollbar on, is the SAME element at every breakpoint —
+   desktop's mouse-driven board is meant to show its own scrollbar (every
+   other panel on that layout does), only the phone/app frame is not
+   supposed to draw one. `.no-scrollbar` is unconditional, so this is a
+   second class rather than a prop threading a mobile flag through a
+   component that has never needed one before. 1023.98px matches
+   Tailwind's own `max-lg:` breakpoint exactly (lg is the default 1024px,
+   untouched in tailwind.config.js), so this stops applying at the same
+   width the grid's own column/row templates already switch to their
+   desktop values. */
+@media (max-width: 1023.98px) {
+  .no-scrollbar-below-lg {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .no-scrollbar-below-lg::-webkit-scrollbar {
+    display: none;
+  }
+}

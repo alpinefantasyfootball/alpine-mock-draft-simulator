@@ -44,6 +44,21 @@ jobs:
           # merge before the secret exists.
           TANK01_KEY: ${{ secrets.TANK01_KEY }}
 
+      - name: Guard the frozen baseline
+        # data/baselines/2026/preseason/ is a one-shot, hand-frozen snapshot
+        # (scripts/freeze_baseline.mjs) that this nightly rebuild must never
+        # touch -- see its own README.md for why. Nothing above stages that
+        # path (the commit step below adds three named files, never a
+        # wildcard), so this should always be a no-op; it exists so a future
+        # edit to build_players.py that starts writing there fails loudly in
+        # CI instead of silently invalidating the baseline.
+        run: |
+          if [ -n "$(git status --porcelain data/baselines)" ]; then
+            echo "::error::scripts/build_players.py touched data/baselines/ -- the frozen baseline must never be regenerated. See data/baselines/2026/preseason/README.md."
+            git status --porcelain data/baselines
+            exit 1
+          fi
+
       - name: Commit if anything changed
         run: |
           git config user.name  "alpine-draft-bot"
@@ -59,16 +74,16 @@ jobs:
 
           # New data behind an unchanged address is data nobody sees, so
           # bumping the stamp is what actually ships the rebuild — see the
-          # note beside ?v= in index.html. Down to the minute, because this
-          # workflow also has a Run button and can fire twice in a day.
+          # note beside ?v= in web/index.html. Down to the minute, because
+          # this workflow also has a Run button and can fire twice in a day.
           #
           # 404.html is in this list for the same reason the other two are: it
           # loads style.css and theme.js by the same versioned address. It is
           # the easiest one to forget, because nobody visits it on purpose.
           STAMP=$(date -u +%Y%m%d%H%M)
           sed -i -E "s/\?v=[0-9A-Za-z._-]+/?v=$STAMP/g" \
-            index.html 404.html docs/draft-room-how-it-works.html
-          git add index.html 404.html docs/draft-room-how-it-works.html
+            web/index.html 404.html docs/draft-room-how-it-works.html
+          git add web/index.html 404.html docs/draft-room-how-it-works.html
 
           git commit -m "Update player data ($(date -u +%Y-%m-%d))"
           git push
