@@ -77,7 +77,37 @@ const ARROW_SPIN = { right: 'rotate(0deg)', down: 'rotate(90deg)', left: 'rotate
    anybody works out it is an alignment problem rather than a weight one.
 
    A square box with leading-none and the glyph centred inside it rotates
-   symmetrically, so all three directions occupy the identical rectangle. */
+   symmetrically - but only once the box actually contains the glyph, and
+   `line-height` is not what makes it. Measured on the phone board, 31 August
+   2026: at `text-[14px]` the box is 14 x 14 and the glyph's own box is
+   12.09 x 19, because the layout overflow of inline text is the face's
+   ascent+descent (1.357em in Hanken Grotesk) rather than its line-height. So
+   2.5px of it hangs out above and below every arrow - invisible while it is
+   vertical, since the cell clips it - and rotating 90 degrees turns that into
+   19px of width inside a 14px box. The down arrow therefore reached 3px past
+   the right edge of the flex row it sits at the end of, which is one cell per
+   round: the end-of-round pick is the only one whose arrow points down.
+
+   That is what phone.spec.mjs's overflow sweep reads as a row that can
+   neither scroll nor ellipsise, and it is right to. The tell that it is a
+   real overflow rather than the subpixel rounding that sweep's own `slack`
+   exists to forgive: the numbers do not move with the device pixel ratio at
+   all - clientWidth 82 against scrollWidth 85 at dpr 1 and at dpr 3 alike.
+
+   `overflow: hidden` is what makes the promise above true, and it costs
+   nothing on screen. Clipping happens in the element's own coordinates before
+   the transform, so the parent sees a 14 x 14 box whichever way the glyph is
+   turned, and what gets clipped is ascent/descent whitespace rather than ink.
+   Measured as a whole-viewport pixel diff with and without it: 0 differing
+   pixels of 1170 x 1992 on the phone, and 0 of 2880 x 1800 on the desktop
+   board at `lg:text-[16px]`, where all 140 arrows are on screen at once. The
+   desktop run took a control pair first - two shots with nothing changed
+   between them - because framer-motion drives the live cell's opacity pulse
+   from JavaScript and it survives `animation: none`, so an uncontrolled diff
+   reports 25,000 pixels of pulse and calls it a change.
+
+   Widening the sweep's tolerance instead would have hidden a genuinely
+   clipped short label somewhere else and fixed nothing here. */
 function Arrow({ dir, className }) {
   if (!dir) return null
   return (
@@ -91,6 +121,10 @@ function Arrow({ dir, className }) {
         width: '1em',
         height: '1em',
         lineHeight: 1,
+        // Not decoration on the rule above - it is what enforces it. See the
+        // note: without it the glyph's font box is taller than this box and
+        // rotation turns that into width.
+        overflow: 'hidden',
         transform: ARROW_SPIN[dir],
       }}
     >
