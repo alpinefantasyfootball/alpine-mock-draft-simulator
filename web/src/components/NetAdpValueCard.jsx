@@ -8,15 +8,14 @@ import AnalyticsCard from './AnalyticsCard.jsx'
 // bar only ever *appears* in a slot, it never resizes the ones beside it.
 const SLOT_COUNT = 10
 
-// One column per mock — green growing up from the centre line for a
-// bargain, pink growing down for a reach. Green rather than this grid's
-// earlier teal: green is otherwise unused for meaning anywhere in Juke
-// (RB's emerald in the position palette is identity, not a "good/bad"
-// signal, and it is a pale chalk green rather than this one), so it's
-// free to carry "positive" here without colliding with an existing rule.
-// Pink instead of the heatmap's red on purpose — a reach here is an
-// ordinary outcome, not the kind of real problem the heatmap's red is
-// flagging, and borrowing its alarm colour for it would overstate that.
+// One column per mock — steel blue growing up from the centre line for a
+// bargain, oxblood growing down for a reach. Neither hue names a POSITION
+// (draftRoomPositions.js owns that vocabulary), so both are free to carry
+// "positive"/"negative" here without colliding with an existing rule.
+// Oxblood instead of the heatmap's alarm red on purpose — a reach here is
+// an ordinary outcome, not the kind of real problem the heatmap's red is
+// flagging, and borrowing that colour for it would overstate that; #BE6153
+// is a muted oxblood, not #F87171.
 // flex-1 rather than a fixed pixel width: a fixed width is what "tucked to
 // the left" in a wide card actually was — ten bars each claiming exactly
 // 5px left the other 90% of the card as bare background. flex-1 makes
@@ -40,7 +39,7 @@ function Bar({ entry, index, maxAbs }) {
       <div
         className="absolute left-0 right-0 rounded-[1px]"
         style={{
-          background: positive ? '#34D399' : '#F472B6',
+          background: positive ? '#8AA6BE' : '#BE6153',
           ...(positive ? { bottom: '50%', height: `${pct}%` } : { top: '50%', height: `${pct}%` }),
         }}
       />
@@ -104,7 +103,7 @@ export default function NetAdpValueCard({ stats }) {
         typeof agg === 'number' ? (
           <span
             className="font-display text-sm font-bold tabular-nums"
-            style={{ color: agg >= 0 ? '#34D399' : '#F472B6' }}
+            style={{ color: agg >= 0 ? '#8AA6BE' : '#BE6153' }}
           >
             {agg >= 0 ? '+' : ''}{Math.round(agg)}
           </span>
