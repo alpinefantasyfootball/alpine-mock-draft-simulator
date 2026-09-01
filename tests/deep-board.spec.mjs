@@ -4,10 +4,25 @@
    claim as one FFC's real drafts priced. See CLAUDE.md's "Take the board
    past 228 players" and extend_deep_bench() in scripts/build_players.py.
 
-   Unlike K/DST, a deep-bench player's score is never withheld — there is
-   no three-season finding that the ranking is wrong, only the fact that
-   no real draft has ever taken this player. So these tests check for a
-   note and a marker, never a null.
+   Being deep is never on its own a reason to withhold the score — there is
+   no three-season finding that the ranking is wrong, only the fact that no
+   real draft has ever taken this player. So these tests check for a note and
+   a marker rather than a null.
+
+   "Unlike K/DST" is the wrong way to say that, though, and saying it that
+   way is what left a standing red in this file. A player can be both. On the
+   31 August 2026 board 25 of the 249 deep players are kickers or defenses,
+   and FULL_POSITION_COVER pulls K and DST to the FRONT of the extension
+   queue on purpose — so the FIRST deep player on a real board is one of
+   them, and `board.find(p => p.deep && p.projPts !== null)` handed this
+   file's first test Chris Boswell and then asserted the deep rule against a
+   player the K/DST rule owns.
+
+   The two rules are independent and both fire: jukeReadout() returns
+   deep/deepNote alongside unranked/unrankedNote, and the stricter one wins
+   the number. A test that means "deep" has to say so — see the filter in
+   the first test, and the precedence pinned in the second rather than
+   dodged.
 
    Gated on the board actually carrying a deep player: players.js only
    reaches past real ADP once the pipeline has run with real network
@@ -36,8 +51,18 @@ test.describe("deep-bench players carry no real ADP, and say so", () => {
       "no deep-bench players on this board yet -- needs a data pipeline run");
 
     const r = await page.evaluate(() => {
-      const deep = board.find((p) => p.deep && p.projPts !== null);
-      const real = board.find((p) => !p.deep && p.projPts !== null);
+      /* UNRANKED_POSITIONS is asked for rather than "K"/"DST" written out
+         again: app.js is the one place that decides which positions go
+         unranked, and a second copy here drifts the day a third joins it.
+
+         Applied to the real-ADP player too, so the pair is like for like.
+         It changes nothing that is asserted today — deep and deepNote are
+         position-independent — and it is what stops the obvious symmetric
+         assertion (that a real player's score is NOT null) walking into the
+         same trap from the other side. */
+      const rankable = (p) => UNRANKED_POSITIONS.indexOf(p.pos) < 0;
+      const deep = board.find((p) => p.deep && p.projPts !== null && rankable(p));
+      const real = board.find((p) => !p.deep && p.projPts !== null && rankable(p));
       return {
         deepReadout: deep ? window.JukeEngine.jukeReadout(deep) : null,
         realReadout: real ? window.JukeEngine.jukeReadout(real) : null,
@@ -54,6 +79,36 @@ test.describe("deep-bench players carry no real ADP, and say so", () => {
     expect(r.realReadout, "there is a real-ADP player with a projection to compare against").not.toBeNull();
     expect(r.realReadout.deep, "a real-ADP player carries no deep flag").toBe(false);
     expect(r.realReadout.deepNote).toBeNull();
+  });
+
+  /* The intersection, pinned rather than avoided. Withholding has to be
+     complete or it is worse than not withholding: a sheet that prints
+     "no real draft has ever taken this player" and a Juke score beside it
+     has told the reader to distrust a number and then handed them one. */
+  test("a deep player the K/DST rule also covers keeps the stricter refusal", async ({ context }) => {
+    const page = await openApp(context);
+    test.skip(!(await hasDeepBench(page)),
+      "no deep-bench players on this board yet -- needs a data pipeline run");
+
+    const r = await page.evaluate(() => {
+      const p = board.find((x) => x.deep && UNRANKED_POSITIONS.indexOf(x.pos) >= 0);
+      return p ? { pos: p.pos, readout: window.JukeEngine.jukeReadout(p) } : null;
+    });
+    test.skip(r === null, "no deep K/DST on this board -- needs a data pipeline run");
+
+    /* Both facts are true of this player, and both are said. Whichever of
+       the two positions turns up first is fine and the wording has to suit
+       either: a defense is eleven people, which is why app.js's ourRead()
+       says "this defense" rather than "him". */
+    expect(r.readout.deep, `${r.pos} is still flagged deep`).toBe(true);
+    expect(typeof r.readout.deepNote).toBe("string");
+    expect(r.readout.deepNote.length).toBeGreaterThan(0);
+    expect(r.readout.unranked, `${r.pos} is still unranked`).toBe(true);
+    expect(typeof r.readout.unrankedNote).toBe("string");
+    expect(r.readout.unrankedNote.length).toBeGreaterThan(0);
+    // And the K/DST refusal is the one that decides the number.
+    expect(r.readout.score, "the score stays withheld, deep or not").toBeNull();
+    expect(r.readout.label, "so there is no verdict word beside it either").toBeNull();
   });
 
   test("survivalProbability() withholds rather than divide by a fabricated sample", async ({ context }) => {
