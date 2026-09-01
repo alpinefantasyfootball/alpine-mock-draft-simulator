@@ -153,27 +153,58 @@ export async function openApp(context, path = "#/draft-room") {
   await page.waitForFunction(
     () => typeof state === "object" && typeof Live === "object" && typeof suggestions === "function");
 
-  /* Then wait for the cold-load overlay to leave.
+  /* Then wait for the cold-load overlay to leave — but only when it could
+     possibly still be up.
 
-     #boot-sonar is fixed at z-index 9999 over the whole page, and since it
-     started being held for a minimum of 900ms rather than removed as soon as
-     React paints, it genuinely covers the page for about a second after load.
-     Every test that clicks or hit-tests immediately was racing it — phone
-     .spec.mjs's "nothing is sitting on top of the Start button" caught it
-     first, reporting the overlay's own wordmark as the thing covering the
-     button, which was true and not the bug that test exists to find.
+     #boot-sonar is fixed at z-index 9999 over the whole page, and when it was
+     unconditional it was genuinely held for the better part of a second after
+     React painted. Every test that clicked or hit-tested immediately was
+     racing it — phone.spec.mjs's "nothing is sitting on top of the Start
+     button" caught it first, reporting the overlay's own wordmark as the
+     thing covering the button, which was true and not the bug that test
+     exists to find.
 
      Handled here rather than per-test because it is not one test's problem:
-     it is a property of every page load, and a person cannot click through the
-     overlay either. Waiting for it is what makes a test's timing match a
+     it is a property of every page load, and a person cannot click through
+     the overlay either. Waiting for it is what makes a test's timing match a
      user's.
+
+     It stopped being unconditional when the overlay was scoped to the
+     installed app's cold launch: index.html now hides it outright with
+     `html:not([data-standalone]) #boot-sonar { display: none }`, and
+     `data-standalone` is stamped on <html> by theme.js only when
+     `matchMedia('(display-mode: standalone)')` matches. A plain
+     `browser.newContext()` never reports standalone — confirmed empirically,
+     and CDP's Emulation.setEmulatedMedia with a display-mode feature is a
+     silent no-op in this Chromium build — so on every page this suite loads
+     today, main.jsx's teardown (gated on that identical attribute) never
+     runs because there is nothing for it to tear down: the element the old
+     predicate waited on was never going to be removed, ever, because it was
+     display:none and inert from the very first frame. The predicate below
+     polled the full 12000ms out on every single call regardless — measured at
+     12.06s, every time, in every spec file that loads a page — before the
+     .catch swallowed the timeout and the test carried on anyway.
+
+     So the predicate asks the same question main.jsx already answers rather
+     than re-deriving it, and short-circuits on it: with `data-standalone`
+     absent, the left side of the || is already true on the first raf tick,
+     which resolves in a few milliseconds rather than 12 seconds. With it
+     present — nothing in this suite can do that today, but the day something
+     can, this is what it needs — the 5000ms ceiling is real headroom over the
+     overlay's own documented worst case (2100ms MIN_VISIBLE_MS plus the fade
+     and removal, call it 2.5s), not a resigned "wait as long as possible and
+     hope."
 
      Tolerant of the overlay not existing at all — 404.html and the docs pages
      have no loader — and of it never leaving, which is the failure sonar
      .spec.mjs owns; a hard wait here would turn that into a timeout in every
      other file instead. */
   await page
-    .waitForFunction(() => !document.getElementById("boot-sonar"), null, { timeout: 12000 })
+    .waitForFunction(
+      () => !document.documentElement.hasAttribute("data-standalone") || !document.getElementById("boot-sonar"),
+      null,
+      { timeout: 5000 }
+    )
     .catch(() => {});
 
   await page.evaluate(() => window.__watchSends());
