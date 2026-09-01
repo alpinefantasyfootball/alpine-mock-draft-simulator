@@ -35,9 +35,22 @@ export async function verifiedUser(request, env) {
      identically, the same way originAllowed()'s callers do. */
   try {
     const { data, errors } = await verifyToken(token, { secretKey: env.CLERK_SECRET_KEY });
-    if (errors || !data || !data.sub) return null;
+    if (errors || !data || !data.sub) {
+      // Logged, never returned to the caller — the client only ever sees
+      // { error: "unauthorized" } either way (requireUser(), draft-room.js),
+      // the same refusal for an expired token as for a forged one. This is
+      // purely for wrangler tail: a verification that fails for the wrong
+      // reason (a secret key mismatch, say) looks identical to a normal
+      // expired-token refusal from the outside, and the two need different
+      // fixes.
+      console.error("verifyToken refused:", JSON.stringify((errors || []).map((e) => ({
+        message: e && e.message, reason: e && e.reason
+      }))));
+      return null;
+    }
     return { id: data.sub };
   } catch (err) {
+    console.error("verifyToken threw:", err && err.message);
     return null;
   }
 }
