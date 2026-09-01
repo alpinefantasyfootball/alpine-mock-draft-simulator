@@ -2753,10 +2753,12 @@ below *every* arrow, harmlessly, for as long as it is vertical — and
 content edge, so 3px landed past it.
 
 **Which is one cell per round and no others**, the end-of-round pick being
-the only one whose arrow points down: 3 rows against 18 pointing right and
-14 pointing left, all of those at `over=0`. Three cells in thirty-five,
-and a defect that fires on a tenth of what a sweep looks at reads as noise
-in it — which is exactly what this was mistaken for.
+the only one whose arrow points down. On the sweep's own fixture — thirty
+picks into a ten-team draft — that is **3 rows against 18 pointing right
+and 9 pointing left**, every one of those at `over=0`. The ratio is the
+durable part rather than the counts, which move with whatever the fixture
+drives: a defect firing on a tenth of what a sweep looks at reads as noise
+in it, and that is exactly what this was mistaken for.
 
 **The tell that it was real and not the sweep's own rounding is that it did
 not move with the device pixel ratio.** `sweepOverflow()` allows `slack = 2`
