@@ -28,7 +28,15 @@ import Room from "../room.js";
 /* The D1 cache. Every function in there answers "no" to a missing binding
    rather than throwing, so this file works unchanged with no database — which
    is what keeps `wrangler dev --local` and the keyless news test running. */
-import { syncPlayerPool, cachedNews, storeNews, usableNews, storeSignup } from "./store.js";
+import { syncPlayerPool, cachedNews, storeNews, usableNews, storeSignup, touchUser } from "./store.js";
+
+/* Clerk session verification — see that file's own header for the shape.
+   Kept separate from store.js on purpose: that file owns D1 and nothing
+   else, this owns "who sent this request" and nothing else, and the two
+   meet only in the route handler below, the same way the room's own rules
+   (draft-engine.js) and its storage (this file) meet in DraftRoom rather
+   than either one reaching into the other. */
+import { verifiedUser } from "./auth.js";
 
 /* How long after the last socket closes before the room is forgotten. Long
    enough that a phone locking, a tunnel, or closing a laptop for lunch does
@@ -423,10 +431,19 @@ const ALLOWED = [
    nobody: `curl -H "Origin: https://evil.example"` came back with a full set
    of results and a little more of the GIPHY quota spent. The check below is
    the one that refuses. */
+/* Every branch push gets its own preview build at a fresh <hash>.juke-1mw
+   .pages.dev address — there is no fixed list of those the way ALLOWED
+   above is a fixed list of the real domains, so this is a pattern rather
+   than an entry. Scoped to this project's own pages.dev subdomain
+   specifically, not *.pages.dev generally, which would accept a request
+   from anyone else's Pages project too. */
+const PREVIEW_ORIGIN_RE = /^https:\/\/[a-z0-9-]+\.juke-1mw\.pages\.dev$/;
+
 function originAllowed(request) {
   const origin = request.headers.get("Origin") || "";
   return ALLOWED.indexOf(origin) >= 0 ||
-         /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin);
+         /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin) ||
+         PREVIEW_ORIGIN_RE.test(origin);
 }
 
 /* Where a voice or photo message's URL is allowed to point.
@@ -937,9 +954,52 @@ async function captureSignup(request, env) {
                       { headers });
 }
 
+/* GET /me — who does the worker think is asking, if anyone.
+
+   The first authenticated route, and deliberately the simplest possible
+   one: verify, record that this person was seen, answer. Nothing here
+   saves or reads a draft yet — that is Phase 4, and it will call
+   verifiedUser() the same way this does rather than re-deriving "who is
+   this" a second time.
+
+   `signedIn: false` is the answer for a missing token, an expired one, a
+   forged one and no CLERK_SECRET_KEY configured at all — four different
+   situations, one response shape, because a caller only ever needs to
+   know whether to treat this visitor as logged in, never why not. */
+async function meRoute(request, env, ctx) {
+  const cors = corsFor(request);
+  const headers = Object.assign({ "content-type": "application/json" }, cors);
+
+  if (!originAllowed(request)) {
+    return new Response(JSON.stringify({ error: "forbidden" }),
+                        { status: 403, headers: { "content-type": "application/json" } });
+  }
+
+  const user = await verifiedUser(request, env);
+  if (!user) return new Response(JSON.stringify({ signedIn: false }), { headers });
+
+  // Off the response path, same as storeNews() above: a caller asking "am
+  // I signed in" is not waiting on a write succeeding, and a D1 hiccup
+  // must not turn a real yes into an error.
+  after(ctx, touchUser(env, user.id));
+
+  return new Response(JSON.stringify({ signedIn: true, userId: user.id }), { headers });
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+
+    if (url.pathname === "/me") {
+      if (request.method === "OPTIONS") {
+        return new Response(null, { headers: Object.assign({
+          "access-control-allow-methods": "GET",
+          "access-control-allow-headers": "authorization",
+          "access-control-max-age": "86400"
+        }, corsFor(request)) });
+      }
+      return meRoute(request, env, ctx);
+    }
 
     if (url.pathname === "/news") {
       if (request.method === "OPTIONS") {

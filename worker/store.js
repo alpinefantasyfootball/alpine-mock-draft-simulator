@@ -1,29 +1,33 @@
 /* ==========================================================
-   Juke — the cache database
+   Juke — the cache database, and now one real table
 
-   D1, bound as `DB`. Two things live in it: Sleeper's player pool,
-   refreshed on a cron, and Tank01 headlines, written as a
-   side-effect of serving them.
+   D1, bound as `DB`. Sleeper's player pool and Tank01 headlines live here,
+   refreshed on a cron and as a side-effect of serving them respectively —
+   and, since real accounts, one row per signed-in person (see "Accounts"
+   below).
 
-   Three rules hold everywhere in this file.
+   Two rules hold everywhere in this file.
 
    **A missing binding is a normal condition, not a fault.** `wrangler dev`
    with no database_id, a keyless local run, the tests that drive the news
    path against a stub — none of those have a database and all of them must
    keep working exactly as they did. Every function here answers "no" to an
    absent `env.DB` rather than throwing, so nothing above it needs to know
-   whether the cache exists.
+   whether the database exists.
 
    **Nothing here ever throws.** The news route's contract is that it fails by
    disappearing — the same contract the score strip has. A rejected promise on
    this path is an unhandled rejection on a page that is otherwise fine, so
    every call is wrapped and the failure is a return value.
 
-   **This is a cache and never a source of truth.** players.js and stats.js are
-   the board, generated nightly, and a room pins the version it started on
-   because the CPU wobble reads a player's position in that array. A board
-   built from here instead would be the league shape written down twice, in
-   the one place where two clients disagreeing forks a live draft.
+   **A third rule — "this is a cache and never a source of truth" — used to
+   hold everywhere in this file and no longer does.** It is still exactly
+   true of the player pool (players.js/stats.js are the board, generated
+   nightly, and a room pins the version it started on) and of the headline
+   cache. It was never true of `signups`, a real list with nothing upstream
+   to be a cache of, and `users` (below) is the same shape: Clerk is the
+   source of truth for identity, but the row itself — that this person has
+   an account at all, in this database — belongs to Juke and nowhere else.
    ========================================================== */
 
 /* SQLite has no date type, so every timestamp in this database is epoch
@@ -442,6 +446,42 @@ export async function storeSignup(env, email, source) {
     return true;
   } catch (err) {
     console.error("signup write failed:", err && err.message);
+    return false;
+  }
+}
+
+/* ----------------------------------------------------------
+   Accounts
+   ---------------------------------------------------------- */
+
+/* Record that a verified Clerk user was seen, and return whether the row
+   is new. auth.js decides *who* this is (Clerk's own signature check);
+   this function only ever runs after that has already succeeded, so
+   `clerkId` here is trusted the same way a room's own `member` id is
+   trusted once a socket has been accepted — verification is somebody
+   else's job and already done by the time this is called.
+
+   One statement, not a SELECT-then-INSERT: two round trips racing each
+   other on somebody's first request is exactly the kind of thing this
+   project's CLAUDE.md keeps finding as a bug once two clients (or two
+   in-flight requests from one impatient tab) disagree about which one
+   created the row. `ON CONFLICT DO UPDATE` makes it one statement and one
+   answer regardless of how many requests get here first — `created_at` is
+   `excluded.created_at` only when the row does not yet exist, because a
+   real INSERT can't happen twice; every later call is only ever a
+   `last_seen_at` bump. */
+export async function touchUser(env, clerkId) {
+  if (!env.DB) return false;
+
+  try {
+    const stamp = nowSeconds();
+    await env.DB.prepare(
+      "INSERT INTO users (clerk_id, created_at, last_seen_at) VALUES (?, ?, ?)" +
+      " ON CONFLICT(clerk_id) DO UPDATE SET last_seen_at = excluded.last_seen_at"
+    ).bind(clerkId, stamp, stamp).run();
+    return true;
+  } catch (err) {
+    console.error("user touch failed:", err && err.message);
     return false;
   }
 }
