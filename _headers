@@ -21,10 +21,15 @@
 # Clerk needs six allowances, added when real accounts landed. Its SDK loads
 # its own script from the frontend API host encoded in the publishable key
 # (script-src) and makes its own XHR/fetch calls to that same host
-# (connect-src) — both dev and production Clerk instances live under
-# *.clerk.accounts.dev unless a custom domain is configured later, so this is
-# a host wildcard the same way *.giphy.com already is below, not a one-off
-# pinned to today's dev instance. img-src is Clerk's own avatar CDN
+# (connect-src) — the dev instance lives under *.clerk.accounts.dev (kept as
+# a host wildcard the same way *.giphy.com already is below, so local dev
+# and any future dev-instance subdomain keep working with no edit here).
+# Production moved to a verified custom domain on 1 Sep 2026 — clerk.jukeff.com,
+# the exact host named in the CNAME record Clerk's own Domains page issued
+# (`clerk` -> frontend-api.clerk.services), not decoded out of the
+# publishable key by hand; that is one CNAME under jukeff.com, not a
+# subdomain of clerk.accounts.dev, so it needed its own entry rather than
+# matching the existing wildcard. img-src is Clerk's own avatar CDN
 # (img.clerk.com), for <UserButton/>'s profile picture. frame-src is for
 # Cloudflare Turnstile, which Clerk's sign-up flow embeds as a bot check;
 # without it the widget is silently blocked by `default-src 'self'` the same
@@ -46,4 +51,4 @@
   X-Frame-Options: DENY
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
-  Content-Security-Policy: default-src 'self'; script-src 'self' https://static.cloudflareinsights.com https://*.clerk.accounts.dev https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' https://sleepercdn.com https://*.giphy.com https://img.clerk.com; connect-src 'self' https://juke-draft-room.jukeff.workers.dev wss://juke-draft-room.jukeff.workers.dev https://site.api.espn.com https://*.clerk.accounts.dev https://clerk-telemetry.com; worker-src 'self' blob:; frame-src https://challenges.cloudflare.com; manifest-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://static.cloudflareinsights.com https://*.clerk.accounts.dev https://clerk.jukeff.com https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' https://sleepercdn.com https://*.giphy.com https://img.clerk.com; connect-src 'self' https://juke-draft-room.jukeff.workers.dev wss://juke-draft-room.jukeff.workers.dev https://site.api.espn.com https://*.clerk.accounts.dev https://clerk.jukeff.com https://clerk-telemetry.com; worker-src 'self' blob:; frame-src https://challenges.cloudflare.com; manifest-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'
