@@ -57,6 +57,13 @@ start, wrong-seat refusal, chat, a reconnect mid-draft, a stale build being
 turned away — and the one that matters, two submits of the same player on
 one turn producing exactly one pick.
 
+```bash
+node worker/test-auth.mjs
+```
+
+Eight assertions over `/me` — every way of being signed out, none of them a
+500. See **Accounts** below for what it cannot cover and why.
+
 `wrangler deploy --dry-run --outdir=<dir>` compiles without an account and is
 the quickest check that the bundle is still valid.
 
@@ -149,6 +156,46 @@ swapping provider is a change to `fetchUpstreamNews()` and nothing else, and
 it keeps the number of fields the page has to escape down to what it draws.
 **`source` is never dropped** — we link and attribute rather than republish,
 and an unattributed headline is the version of this that is not allowed.
+
+## Accounts
+
+Clerk (`web/src/clerkConfig.js`) owns login, signup and sessions entirely on
+the client. This worker's whole job is `auth.js`'s `verifiedUser()`: given a
+request, decide whether `Authorization: Bearer <token>` is a session Clerk
+actually issued, and answer null rather than throwing if it is missing,
+malformed, expired or simply absent — no key configured included, same
+"answer no to a missing binding" contract `store.js` already uses for D1.
+
+**`GET /me`** is the first route built on it, and deliberately the simplest
+one possible: verify, record that this person was seen (`touchUser()` in
+`store.js`), answer `{ signedIn }`. Nothing saves or loads a draft yet — that
+is a later change, and it will call `verifiedUser()` the same way rather than
+re-deriving "who is this" a second time.
+
+`wrangler secret put CLERK_SECRET_KEY` in production, same shape as
+`GIPHY_KEY`/`TANK01_KEY`; locally it goes in `.dev.vars` (see above).
+
+**The `users` table has no email or name column, on purpose.** The client
+already has both, verified, straight from its own Clerk session the moment
+someone is signed in — fetching and caching a second copy worker-side would
+be exactly the "two sources of truth for one fact" this project keeps
+finding bugs from elsewhere. If a feature ever needs Juke's own copy, that
+is the moment to add the columns and the fetch that fills them.
+
+**`PREVIEW_ORIGIN_RE`** allows any `https://<hash>.juke-1mw.pages.dev`
+origin through `originAllowed()`, alongside the fixed `ALLOWED` list and the
+localhost regex. Every branch push gets its own preview build at a fresh
+address, which is where this feature is actually tested from before a merge
+— without this, every authenticated route 403s on a preview deploy with
+nothing in the browser to say why beyond the network tab.
+
+`node worker/test-auth.mjs` (against a `wrangler dev --local` already
+running) covers every way of being signed out — no Origin, a wrong Origin,
+no token, a malformed token, a well-formed-but-unsigned one — and asserts
+none of them ever produce anything but a clean `signedIn: false`. It cannot
+cover the signed-in path: that needs a token actually signed by Clerk, which
+nothing offline can produce. That half is verified by hand, against a real
+deploy, with a real sign-in.
 
 ## Chat media (voice and photos)
 
@@ -311,6 +358,7 @@ A local key goes in `worker/.dev.vars`, which is gitignored:
 ```
 TANK01_KEY = "…"
 GIPHY_KEY = "…"
+CLERK_SECRET_KEY = "…"
 ```
 
 **`--var` on the command line works and a stale `workerd` will make you think

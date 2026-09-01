@@ -223,7 +223,7 @@ export default function Header() {
         </div>
 
         <div className="ml-auto hidden shrink-0 items-center gap-2 md:flex">
-          <AccountButtons modalRef={modalRef} variant="ghost" />
+          <AccountButtons variant="ghost" />
         </div>
       </div>
 

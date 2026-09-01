@@ -1,9 +1,67 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
+import { createPortal } from 'react-dom'
+import { ClerkProvider } from '@clerk/clerk-react'
 import App from './App.jsx'
 import AppHeader from './components/AppHeader.jsx'
 import DraftRoom from './components/DraftRoom.jsx'
+import AuthBridge from './components/AuthBridge.jsx'
+import { CLERK_PUBLISHABLE_KEY, CLERK_APPEARANCE } from './clerkConfig.js'
 import './index.css'
+
+// #root, #appbar-root and #draftroom-root are three separate DOM nodes,
+// which used to mean three separate ReactDOM.createRoot() calls, each
+// wrapped in its own <ClerkProvider> so AccountButtons (SiteNav.jsx, which
+// renders inside all three) had Clerk context wherever it landed. That
+// shipped and crashed the whole page: @clerk/clerk-react hard-limits to
+// exactly one <ClerkProvider> per page — a module-level singleton counter
+// with maxCount = 1, nothing in ClerkProvider's own public props raises it
+// — so "one provider per independent root" was never a supported pattern,
+// three of them threw "multiple <ClerkProvider> components", and the
+// throw took down React's own boot before anything painted. Verified
+// directly against the installed package (web/node_modules/@clerk/
+// clerk-react/dist/index.js's useMaxAllowedInstancesGuard), not assumed a
+// second time.
+//
+// The fix is one React tree instead of three. A single
+// ReactDOM.createRoot() at #root carries the one and only ClerkProvider;
+// AppHeader and DraftRoom mount into their own DOM nodes via
+// createPortal() rather than their own createRoot() call. A portal
+// changes *where* a subtree paints, never which tree or which context it
+// belongs to — so all three now share one ClerkProvider (and are
+// otherwise one ordinary React application, one StrictMode boundary
+// included) while still rendering into the same three places in the page
+// app.js already expects and touches unconditionally.
+const appbarRoot = document.getElementById('appbar-root')
+const draftRoomRoot = document.getElementById('draftroom-root')
+
+// Only wraps when a key exists. entry-server.jsx's Node prerender pass
+// never has one (there's no window there, which Clerk's frontend JS
+// reaches for throughout), and a real browser with no key configured is
+// just a clone or CI run that hasn't set one up — AccountButtons' own
+// fallback (unchanged today's button) covers that case without a
+// provider at all, the same "answer no to a missing binding" contract
+// store.js already uses for D1/GIPHY/Tank01. AuthBridge is skipped
+// outright in that branch for the same reason: useAuth() throws without
+// a ClerkProvider ancestor, and there is nothing for it to bridge yet.
+const tree = (
+  <React.StrictMode>
+    {CLERK_PUBLISHABLE_KEY ? (
+      <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY} appearance={CLERK_APPEARANCE}>
+        <AuthBridge />
+        <App />
+        {appbarRoot && createPortal(<AppHeader />, appbarRoot)}
+        {draftRoomRoot && createPortal(<DraftRoom />, draftRoomRoot)}
+      </ClerkProvider>
+    ) : (
+      <>
+        <App />
+        {appbarRoot && createPortal(<AppHeader />, appbarRoot)}
+        {draftRoomRoot && createPortal(<DraftRoom />, draftRoomRoot)}
+      </>
+    )}
+  </React.StrictMode>
+)
 
 // scripts/prerender.mjs (homepage v4 pass 0) fills #root with real,
 // server-rendered markup as part of `npm run build` — see its own header
@@ -11,6 +69,12 @@ import './index.css'
 // hydrateRoot() attaches to that markup instead of discarding and
 // re-rendering it, which is the entire point: the browser already has
 // pixels for the hero before this module has even finished parsing.
+//
+// A portal contributes no DOM nodes to its own tree's root container —
+// its content appears in whatever node createPortal() names, not in
+// #root — so AppHeader/DraftRoom joining this tree changes nothing about
+// what #root's own hydration has to match: still exactly what <App/>
+// renders, the same as before this file carried any of them.
 //
 // `vite dev` never runs the prerender step (only the production build
 // script does), so #root is genuinely empty there — hydrating empty
@@ -21,39 +85,10 @@ import './index.css'
 // actually matters: `vite preview` serving a real dist/ build locally,
 // which DEV cannot distinguish from dev but a filled #root can.
 const rootEl = document.getElementById('root')
-const app = (
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-)
 if (rootEl.innerHTML.trim()) {
-  ReactDOM.hydrateRoot(rootEl, app)
+  ReactDOM.hydrateRoot(rootEl, tree)
 } else {
-  ReactDOM.createRoot(rootEl).render(app)
-}
-
-// #appbar-root lives inside #appbar, which applyRoute() already shows and
-// hides (home vs. draft route) — same contract as the two mounts above.
-const appbarRoot = document.getElementById('appbar-root')
-if (appbarRoot) {
-  ReactDOM.createRoot(appbarRoot).render(
-    <React.StrictMode>
-      <AppHeader />
-    </React.StrictMode>,
-  )
-}
-
-// #draftroom-root is not inside #view-home or #view-app, and nothing in
-// app.js shows or hides it — DraftRoom itself watches location.hash and
-// renders null off the #/draft-room route, so this mount is always safe to
-// create regardless of which route is active.
-const draftRoomRoot = document.getElementById('draftroom-root')
-if (draftRoomRoot) {
-  ReactDOM.createRoot(draftRoomRoot).render(
-    <React.StrictMode>
-      <DraftRoom />
-    </React.StrictMode>,
-  )
+  ReactDOM.createRoot(rootEl).render(tree)
 }
 
 // Breach (see #boot-sonar at the top of index.html) covers the blocking

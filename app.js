@@ -7077,30 +7077,37 @@ function saveDraft() {
   // continuation against CPUs while the real room carried on without
   // this seat, with nothing on screen saying that had happened.
   if (!state.started || hasRoom()) return;
+  // Built once and reused for the network push below, rather than reading
+  // it back out of localStorage a second time — that would also silently
+  // skip the sync on exactly the browsers where the write above just
+  // failed (private browsing, a full quota), which is the one case a
+  // server copy is worth the most.
+  const data = {
+    v: 2,
+    mySlot: state.mySlot,
+    clockLength: state.clockLength,
+    paused: state.paused,
+    seed: state.seed,
+    // Stored whole, not just as a fingerprint, so the resume banner can
+    // describe the saved league and the refusal can name what it wants.
+    league: JSON.parse(JSON.stringify(league)),
+    fingerprint: settingsFingerprint(league),
+    picks: state.picks.map((p) => p.player.name),
+    queue: state.queue.slice(),
+    watchlist: state.watchlist.slice(),
+    savedAt: Date.now(),
+    // When the draft actually began, not when it was last saved (savedAt,
+    // above) — the Locker's in-progress band wants "Started 14 min ago",
+    // which has to survive every autosave between now and a resume.
+    startedAt: state.startedAt
+  };
   try {
-    localStorage.setItem(SAVE_KEY, JSON.stringify({
-      v: 2,
-      mySlot: state.mySlot,
-      clockLength: state.clockLength,
-      paused: state.paused,
-      seed: state.seed,
-      // Stored whole, not just as a fingerprint, so the resume banner can
-      // describe the saved league and the refusal can name what it wants.
-      league: JSON.parse(JSON.stringify(league)),
-      fingerprint: settingsFingerprint(league),
-      picks: state.picks.map((p) => p.player.name),
-      queue: state.queue.slice(),
-      watchlist: state.watchlist.slice(),
-      savedAt: Date.now(),
-      // When the draft actually began, not when it was last saved (savedAt,
-      // above) — the Locker's in-progress band wants "Started 14 min ago",
-      // which has to survive every autosave between now and a resume.
-      startedAt: state.startedAt
-    }));
+    localStorage.setItem(SAVE_KEY, JSON.stringify(data));
   } catch (err) {
     // Private browsing and full quotas both land here. Losing the save is
     // not worth breaking the draft over.
   }
+  pushSavedDraft(data);
 }
 
 // Version 1 saves carry no league at all and were all ten-team, fourteen
@@ -7123,6 +7130,7 @@ function readSave() {
 
 function clearSave() {
   try { localStorage.removeItem(SAVE_KEY); } catch (err) {}
+  pushDraftCleared();
 }
 
 function resumeDraft(data) {
@@ -7527,7 +7535,7 @@ function recordHistory() {
     : null;
   const round1 = state.picks.find((p) => p.slot === state.mySlot && p.round === 1);
   const list = readHistory();
-  list.unshift({
+  const entry = {
     id: "h" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
     completedAt: Date.now(),
     mySlot: state.mySlot,
@@ -7582,8 +7590,10 @@ function recordHistory() {
     // without it. historyStats() reconstructs them against today's board
     // now, same as everything else per-mock in that function — see its
     // own comment on exactly this trade.
-  });
+  };
+  list.unshift(entry);
   writeHistory(list.slice(0, HISTORY_LIMIT));
+  pushHistoryEntry(entry);
 }
 
 // What a Locker card actually shows, derived rather than stored, so a label
@@ -8376,6 +8386,118 @@ function showResumeBar() {
       <button class="ghost" id="discardBtn">Discard</button>
     </div>`;
 }
+
+
+/* ---- 11e. Cross-device sync ------------------------------
+
+   Everything above still writes SAVE_KEY and HISTORY_KEY first, and only
+   ever that — a solo mock draft must not depend on anything being up, and
+   nothing below changes what happens with no account, no network, or no
+   worker deployed. This section is what happens *in addition*, once
+   someone is signed in: the same two localStorage payloads, mirrored to
+   the worker's /me/draft and /me/history through window.Live (live.js —
+   see that file's own note on why draft sync lives there rather than a
+   third copy of "where is the worker").
+
+   window.JukeAuth is written by AuthBridge.jsx (web/src/components/) —
+   this is a classic script and Clerk only runs inside React, so reading
+   it defensively here is the same hazard, and the same fix, CLAUDE.md
+   already records for window.JukeEngine read the other direction: a
+   bridge global is only as safe as its own guard, never its caller's. */
+
+function authToken() {
+  return (window.JukeAuth && window.JukeAuth.isSignedIn && window.JukeAuth.getToken)
+    ? window.JukeAuth.getToken()
+    : Promise.resolve(null);
+}
+
+// Fire-and-forget, always. A save already happened in localStorage by the
+// time any of these run — see saveDraft()/clearSave()/recordHistory()
+// below — so a slow or failed network call must never hold up the thing
+// that actually keeps a draft from being lost, and Live's own methods
+// already resolve rather than reject on every failure mode. This wrapper
+// exists only to keep "no token" from even attempting a call.
+function syncUp(promiseFn) {
+  authToken().then(function (token) { if (token) promiseFn(token); });
+}
+
+function pushSavedDraft(data) { syncUp((token) => Live.saveDraft(token, data)); }
+function pushDraftCleared()   { syncUp((token) => Live.clearDraft(token)); }
+function pushHistoryEntry(entry) { syncUp((token) => Live.saveHistoryEntry(token, entry)); }
+function pushHistoryDeleted(id)  { syncUp((token) => Live.deleteHistoryEntry(token, id)); }
+
+/* Runs once per sign-in, not once per juke:auth event — AuthBridge fires
+   that event on any change to isSignedIn/userId/getToken, and getToken is
+   a new function reference on renders that are not a real sign-in/out
+   transition, which would otherwise reconcile on every one of them. */
+let reconciledForThisSession = false;
+
+/* The one moment a merge decision gets made. Both halves compare what
+   this browser already has against what the account already has and pick
+   a winner — never assume the server should simply replace local, or a
+   phone that has been offline all week would nuke a laptop's draft from
+   an hour ago the next time it happened to sync first.
+
+   The saved draft is last-write-wins by `savedAt`, because there is only
+   ever one — the same "one save, one localStorage key" contract
+   saveDraft() already enforces on one device, extended across devices
+   rather than changed. History is not: every entry is a frozen record of
+   a draft that already finished, so two entries with the same id are
+   always identical and there is nothing to pick a winner between —
+   merging is a union by id, and whichever side is missing an entry the
+   other side has gets it pushed there. */
+function reconcileWithServer() {
+  if (reconciledForThisSession) return;
+  reconciledForThisSession = true;
+
+  authToken().then(function (token) {
+    if (!token) return;
+
+    Live.loadDraft(token).then(function (remote) {
+      const local = readSave();
+      if (remote && (!local || (remote.savedAt || 0) > (local.savedAt || 0))) {
+        try { localStorage.setItem(SAVE_KEY, JSON.stringify(remote)); } catch (err) {}
+        showResumeBar();
+      } else if (local && (!remote || (local.savedAt || 0) > (remote.savedAt || 0))) {
+        Live.saveDraft(token, local);
+      }
+    });
+
+    Live.loadHistory(token).then(function (remoteList) {
+      const localList = readHistory();
+      const localIds = new Set(localList.map((e) => e.id));
+      const remoteIds = new Set(remoteList.map((e) => e.id));
+
+      const merged = localList.concat(remoteList.filter((e) => !localIds.has(e.id)));
+      merged.sort((a, b) => (b.completedAt || 0) - (a.completedAt || 0));
+      if (remoteList.some((e) => !localIds.has(e.id))) {
+        writeHistory(merged.slice(0, HISTORY_LIMIT));
+      }
+
+      // The other direction: anything this browser has that the account
+      // does not yet, one at a time — same as a fresh recordHistory()
+      // push, because as far as the server is concerned that is exactly
+      // what this is.
+      localList.forEach(function (entry) {
+        if (!remoteIds.has(entry.id)) pushHistoryEntry(entry);
+      });
+    });
+  });
+}
+
+// Never runs synchronously at boot — Clerk has not loaded by the time this
+// classic script does, so the first real answer arrives as an event,
+// exactly like headerInfo()'s juke:header. Resets the once-per-session
+// flag on a sign-out, so a later sign-in (a different account, or the
+// same one again) reconciles again rather than staying silently stale for
+// the rest of the tab's life.
+window.addEventListener("juke:auth", function () {
+  if (window.JukeAuth && window.JukeAuth.isSignedIn) {
+    reconcileWithServer();
+  } else {
+    reconciledForThisSession = false;
+  }
+});
 
 
 /* ---- 12. Tabs ------------------------------------------ */
@@ -9946,7 +10068,10 @@ window.JukeEngine = {
   // The Locker's completed drafts had a way to open one and no way to
   // remove one — this is the plain filter-and-rewrite clearSave() already
   // does for the single in-progress save, extended to one entry among many.
-  deleteHistoryDraft: (id) => writeHistory(readHistory().filter((e) => e.id !== id)),
+  deleteHistoryDraft: (id) => {
+    writeHistory(readHistory().filter((e) => e.id !== id));
+    pushHistoryDeleted(id);
+  },
   // The frozen report recordHistory() saved when this draft finished, or
   // null for an entry recorded before freezeReport() existed and for an id
   // that no longer exists — either way, a plain localStorage read with no

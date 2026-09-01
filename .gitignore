@@ -39,6 +39,12 @@ worker/.wrangler/
 # this repository and there must not be.
 worker/.dev.vars
 
+# Clerk's publishable key is public by design (see web/src/clerkConfig.js),
+# but a local .env is still where a contributor's own dev-instance key lives
+# — web/.env.example documents the variable name without a real value.
+web/.env
+web/.env.local
+
 # Folder metadata the operating system writes on its own. This repository
 # lives inside OneDrive, which drops a desktop.ini in any folder it has
 # been given an icon or a localised name for — so it reappears on its own

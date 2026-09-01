@@ -478,6 +478,93 @@
       })
         .then((r) => r.json())
         .catch(() => ({ ok: false }));
+    },
+
+    /* A signed-in account's own saved draft and locker history, through
+       the worker's /me/draft and /me/history routes. Same reasoning as
+       news()/signup() above — this is the file that knows where the
+       worker is — and the same "nothing to do with being in a room": a
+       solo draft is exactly what these exist for, and the worker's own
+       origin check (originAllowed()) treats a plain page load identically
+       whether or not anyone happens to be in a room right now.
+
+       `token` is a Clerk session token, gotten by the caller from
+       window.JukeAuth.getToken() — this file has no Clerk of its own and
+       no opinion about who is signed in, only how to ask the worker once
+       somebody hands it a token. Every method below resolves to a safe,
+       falsy-ish answer (false, null, []) rather than rejecting, on a
+       missing token exactly as much as on a network failure — a caller
+       that is not signed in and a caller that could not reach the worker
+       need to be handled identically, which they cannot be if only one of
+       them throws. */
+    saveDraft: function (token, data) {
+      if (!token) return Promise.resolve(false);
+      const http = WORKER.replace(/^ws/, "http");
+      return fetch(http + "/me/draft", {
+        method: "POST",
+        headers: { "content-type": "application/json", "authorization": "Bearer " + token },
+        body: JSON.stringify(data)
+      })
+        .then((r) => r.json())
+        .then((body) => !!(body && body.ok))
+        .catch(() => false);
+    },
+
+    loadDraft: function (token) {
+      if (!token) return Promise.resolve(null);
+      const http = WORKER.replace(/^ws/, "http");
+      return fetch(http + "/me/draft", { headers: { "authorization": "Bearer " + token } })
+        .then((r) => r.json())
+        .then((body) => (body && body.data) || null)
+        .catch(() => null);
+    },
+
+    clearDraft: function (token) {
+      if (!token) return Promise.resolve(false);
+      const http = WORKER.replace(/^ws/, "http");
+      return fetch(http + "/me/draft", {
+        method: "DELETE",
+        headers: { "authorization": "Bearer " + token }
+      })
+        .then((r) => r.json())
+        .then((body) => !!(body && body.ok))
+        .catch(() => false);
+    },
+
+    loadHistory: function (token) {
+      if (!token) return Promise.resolve([]);
+      const http = WORKER.replace(/^ws/, "http");
+      return fetch(http + "/me/history", { headers: { "authorization": "Bearer " + token } })
+        .then((r) => r.json())
+        .then((body) => (body && Array.isArray(body.entries)) ? body.entries : [])
+        .catch(() => []);
+    },
+
+    // One entry, added or replaced — see worker/README.md on why there is
+    // no bulk write: the server only ever needs the one that changed.
+    saveHistoryEntry: function (token, entry) {
+      if (!token) return Promise.resolve(false);
+      const http = WORKER.replace(/^ws/, "http");
+      return fetch(http + "/me/history", {
+        method: "POST",
+        headers: { "content-type": "application/json", "authorization": "Bearer " + token },
+        body: JSON.stringify(entry)
+      })
+        .then((r) => r.json())
+        .then((body) => !!(body && body.ok))
+        .catch(() => false);
+    },
+
+    deleteHistoryEntry: function (token, id) {
+      if (!token) return Promise.resolve(false);
+      const http = WORKER.replace(/^ws/, "http");
+      return fetch(http + "/me/history?id=" + encodeURIComponent(id), {
+        method: "DELETE",
+        headers: { "authorization": "Bearer " + token }
+      })
+        .then((r) => r.json())
+        .then((body) => !!(body && body.ok))
+        .catch(() => false);
     }
   };
 })(window);
