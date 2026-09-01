@@ -22,8 +22,39 @@ const league = {
   flex: 1,           // one FLEX, drawn from RB / WR / TE
   superflex: 0,      // a FLEX a quarterback may also fill; 1 makes it 2QB
   bench: 5,
-  scoring: "half",   // "standard" | "half" | "ppr" — also picks the ADP set
-  rules: null        // the scoring table; filled in below, editable on setup
+  scoring: "half",   // see SCORING_NAMES — also picks the ADP set
+  rules: null,       // the scoring table; filled in below, editable on setup
+
+  /* ---- The three fields the draft-settings screen added ----
+
+     All three are read by draft-engine.js rather than by anything here,
+     which is why they sit on `league` and not on `state`: the engine's
+     whole contract is that a config decides what is LEGAL, and every
+     client and the server have to reach the same answer from the same
+     config. A per-drafter setting (the pick clock) lives on `state`; a
+     property of the board everyone shares lives here.
+
+     `name` is the exception and is here for a duller reason: a room
+     broadcasts its league whole (see adoptRoom's own note on why joining
+     a room means taking ALL of it), so a draft's name arrives with it and
+     everybody sees the same one. */
+  draftType: "snake",         // "snake" | "linear" — see DraftEngine.reversedRound
+  thirdRoundReversal: false,  // snake only; round 3 repeats round 2's direction
+  playerPool: "all",          // "all" | "rookies" | "vets" — see inPool()
+  name: "",                   // what this draft is called; blank means unnamed
+
+  /* Whether a human seat whose clock runs out gets drafted for.
+
+     This has always happened and was never a setting: startTicking() hits
+     zero and calls autoPickForMe(). Turning it off is a real, describable
+     behaviour rather than a stall dressed up as one — the clock reaches
+     0:00 and the seat stays yours until you pick, which is what a league
+     with a commissioner actually does when somebody misses their window.
+
+     CPU seats are untouched by it in both states. They are not users
+     running out of time; they are the room, and a room that stops moving
+     because a setting about humans was switched off is a deadlock. */
+  cpuAutopick: true
 };
 
 const POSITIONS = ["QB", "RB", "WR", "TE", "K", "DST"];
@@ -68,6 +99,19 @@ function slotCount(slot) {
 // arrived, rather than throwing and taking the rest of the boot sequence
 // down with it.
 function totalPicks()   { return typeof DraftEngine === "undefined" ? 0 : DraftEngine.totalPicks(league); }
+
+// The one place "are the three deferred files here yet" gets answered —
+// window.JukeEngine.dataReady() (near the foot of this file) hands this
+// straight out rather than keeping its own second copy, and onRoomChange()
+// below reads it directly, which is the reason this needs a name instead of
+// staying an inline arrow function on the bridge object: the bridge is
+// declared hundreds of lines after onRoomChange() runs for the first time,
+// but a function declaration is hoisted and callable from anywhere in this
+// file regardless of where onRoomChange() itself sits in the source.
+function dataReady() {
+  return typeof DraftEngine !== "undefined" && typeof PLAYERS !== "undefined" &&
+         typeof STAT_KEYS !== "undefined";
+}
 function starterCount() { return POSITIONS.reduce((n, pos) => n + league.starters[pos], 0); }
 function flexCount()    { return league.flex + league.superflex; }
 function rosterSize()   { return starterCount() + flexCount() + league.bench; }
@@ -95,13 +139,24 @@ const RISKY = ["D", "PUP"];
 // on TE, K and DST are what stop a team hoarding them.
 const DEPTH_ALLOWANCE = { QB: 3, RB: 5, WR: 5, TE: 2, K: 2, DST: 2 };
 
-function maxAt(pos) {
-  const flexShare = (pos === "RB" || pos === "WR") ? league.flex : 0;
+/* `lg` is an explicit league for the one caller that has to ask about a shape
+   that is not the one on screen: the Locker reconstructs a mock played at 12
+   teams while you are sitting in a 10-team league, and par for that mock has
+   to be par for *its* shape. Defaults to the live league, so every other
+   caller is unchanged.
+
+   Threaded rather than swapped. Assigning to the global `league` around a
+   computation and restoring it afterwards is the shape gradeAndRosterAt()
+   already documents as dangerous — one shared object, many readers, and a
+   restore that is only correct if nothing ran in between. */
+function maxAt(pos, lg) {
+  const L = lg || league;
+  const flexShare = (pos === "RB" || pos === "WR") ? L.flex : 0;
   // A superflex is a second startable quarterback, so it lifts the ceiling on
   // how many a team will hold. Without this a CPU stops at one and a
   // superflex league drafts like a normal one.
-  const superShare = pos === "QB" ? league.superflex : 0;
-  return league.starters[pos] + flexShare + superShare + DEPTH_ALLOWANCE[pos];
+  const superShare = pos === "QB" ? L.superflex : 0;
+  return L.starters[pos] + flexShare + superShare + DEPTH_ALLOWANCE[pos];
 }
 
 // Replacement level: the last player at a position who would realistically
@@ -614,6 +669,21 @@ function onDraftRoomRoute() {
   return path === "draft-room";
 }
 
+/* Split out of applyRoute() so the hashchange listener's bare-anchor guard
+   (below) can restore view-home/shellbar without running the rest of
+   applyRoute() — its scrollTo(0, 0) and its closeRooms()/stopSim()/
+   renderHome() teardown branch. Recomputes hideHome fresh off the hash
+   rather than the guard hardcoding "false": a bare fragment's legacyPath
+   can never be "drafts" or "draft-room", so it always resolves to false
+   here, but the point is not writing that fact down a second time next to
+   this one. */
+function syncHomeVisibility() {
+  const legacyPath = location.hash.replace(/^#\/?/, "").split("?")[0];
+  const hideHome = onDraftRoomRoute() || legacyPath === "drafts";
+  shellbar.hidden = hideHome;
+  $("view-home").hidden = hideHome;
+}
+
 function applyRoute() {
   /* #/draft is retired. Every Draft Room feature built since the React
      rewrite lives only on #/draft-room, so the old route was a second,
@@ -689,13 +759,9 @@ function applyRoute() {
      would silently undo that on every trip to the Locker. Two questions,
      two answers, even though today they overlap partway. */
   const onLegacyDraft = false;
-  const legacyPath = location.hash.replace(/^#\/?/, "").split("?")[0];
-  const hideHome = onDraftRoomRoute() || legacyPath === "drafts";
-
-  shellbar.hidden = hideHome;
-  appbar.hidden   = !onLegacyDraft;
-  $("view-home").hidden = hideHome;
-  $("view-app").hidden  = !onLegacyDraft;
+  syncHomeVisibility();
+  appbar.hidden  = !onLegacyDraft;
+  $("view-app").hidden = !onLegacyDraft;
   tabrow.hidden = !(onLegacyDraft && state.started);
 
   /* !onDraftRoomRoute() here, not the old `onDraft` (route() === "draft",
@@ -955,8 +1021,52 @@ function adpSet() {
   // when this runs. An empty board is a real, renderable state everywhere
   // this gets called; a ReferenceError is not.
   const fallback = typeof PLAYERS === "undefined" ? [] : PLAYERS;
-  if (typeof ADP_SETS === "undefined") return fallback;
-  return ADP_SETS[league.scoring] || ADP_SETS[DEFAULT_SET] || fallback;
+  if (typeof ADP_SETS === "undefined") return fallback.filter(inPool);
+  const set = ADP_SETS[adpFormat(league.scoring)] || ADP_SETS[DEFAULT_SET] || fallback;
+  return set.filter(inPool);
+}
+
+/* Which ADP set a scoring preset draws from.
+
+   Fantasy Football Calculator publishes exactly three — standard, half and
+   full PPR — and the preset list is longer than three now. A superflex
+   league is not a fourth ADP set here; it is full PPR's board with a second
+   startable quarterback, which is a roster shape rather than a scoring one.
+   The market's own quarterback ADP is therefore wrong for it, and the note
+   under SCORING_NAMES says so on screen rather than the app pretending
+   otherwise.
+
+   Mapping through a named function rather than indexing ADP_SETS directly
+   is what stops a new preset silently falling through to DEFAULT_SET: a
+   preset with no entry here is a preset nobody decided the board for. */
+const ADP_FORMAT = { standard: "standard", half: "half", ppr: "ppr", superflex: "ppr" };
+function adpFormat(scoring) { return ADP_FORMAT[scoring] || DEFAULT_SET; }
+
+/* ---- The available-players filter -------------------------------------
+
+   Rookies-only and vets-only, asked of the data rather than of a list of
+   names. `exp` is Sleeper's own years_exp and is already in stats.js on
+   every player the crosswalk matched — 0 for a rookie, counting up from
+   there — so this needs no pipeline change and no second source: the
+   filter is reading the same record the Seasons tab and the bust score
+   already read.
+
+   A player with no `exp` at all is kept in BOTH filtered pools, and that
+   is deliberate rather than lazy. 27 of the board's rows have no stats
+   record — team defenses have no years of experience, and a handful of
+   skill players never matched — and a defense is neither a rookie nor a
+   veteran in any sense a drafter means. Dropping them would take every
+   D/ST off a rookies board and off a vets board alike, which would leave a
+   league that starts one with no legal pick for the slot. "Treat 0 from an
+   API as missing" is the rule this is the other half of: `undefined` is
+   missing, and missing is not evidence of anything. */
+function inPool(player) {
+  const pool = league.playerPool;
+  if (!pool || pool === "all") return true;
+  const stat = typeof PLAYER_STATS === "undefined" || !player.id ? null : PLAYER_STATS[player.id];
+  const exp = stat ? stat.exp : undefined;
+  if (typeof exp !== "number") return true;
+  return pool === "rookies" ? exp === 0 : exp > 0;
 }
 
 // How many picks the selected set can actually support. A 14-team, 15-round
@@ -1042,7 +1152,7 @@ const state = {
 // begun, every one of these can be — and, on a marketing-homepage load
 // before draft-engine.js has landed, is — reached while board is still [].
 // "No draft is happening" is the correct answer here, not a thrown error.
-function pickInfo(overall)  { return typeof DraftEngine === "undefined" ? null : DraftEngine.pickInfo(overall, league.teams); }
+function pickInfo(overall)  { return typeof DraftEngine === "undefined" ? null : DraftEngine.pickInfo(overall, league); }
 function currentOverall()   { return state.picks.length + 1; }
 function draftOver()        { return typeof DraftEngine === "undefined" ? false : DraftEngine.draftOver(league, state.picks.length); }
 function onTheClock()       { return typeof DraftEngine === "undefined" ? null : DraftEngine.onTheClock(league, state.picks.length); }
@@ -1052,7 +1162,7 @@ function teamLabel(slot) {
   return slot === state.mySlot ? "Your Team" : cpuName(slot);
 }
 
-function pickCode(overall) { return typeof DraftEngine === "undefined" ? "" : DraftEngine.pickCode(overall, league.teams); }
+function pickCode(overall) { return typeof DraftEngine === "undefined" ? "" : DraftEngine.pickCode(overall, league); }
 
 function picksUntilMyTurn() {
   return typeof DraftEngine === "undefined" ? 0 : DraftEngine.picksUntil(league, state.picks.length, state.mySlot);
@@ -1081,21 +1191,24 @@ function countAt(slot, pos) {
    which has no slots to look up and must not touch the real draft. Every
    league-shape decision stays here rather than being restated by the caller,
    which is the point — the superflex bug was this rule written down twice. */
-function needFromCount(have, pos, round) {
-  if (have >= maxAt(pos)) return 999;              // roster limit
+// `lg` as in maxAt() above — an explicit shape for the Locker's par, the live
+// league for everybody else.
+function needFromCount(have, pos, round, lg) {
+  const L = lg || league;
+  if (have >= maxAt(pos, L)) return 999;           // roster limit
 
   // Kickers and defenses go at the very end of any draft, so the cutoffs are
   // measured back from the last round rather than written down as 13 and 12.
-  if (pos === "K"   && round < league.rounds - 1) return 999;
-  if (pos === "DST" && round < league.rounds - 2) return 999;
+  if (pos === "K"   && round < L.rounds - 1) return 999;
+  if (pos === "DST" && round < L.rounds - 2) return 999;
 
   // One of each is enough, whatever "enough" is set to. A superflex league
   // that starts two quarterbacks gets two.
-  if (pos === "QB"  && have >= league.starters.QB + league.superflex) return 999;
-  if (pos === "K"   && have >= league.starters.K)   return 999;
-  if (pos === "DST" && have >= league.starters.DST) return 999;
+  if (pos === "QB"  && have >= L.starters.QB + L.superflex) return 999;
+  if (pos === "K"   && have >= L.starters.K)   return 999;
+  if (pos === "DST" && have >= L.starters.DST) return 999;
 
-  const need = league.starters[pos] || 0;
+  const need = L.starters[pos] || 0;
   if (have < need)       return 0.80;   // still filling a starting slot
   if (have < need + 2)   return 1.00;   // sensible depth
   return 1.45;                          // hoarding
@@ -1156,7 +1269,27 @@ function makePick(player) {
 const CPU_DELAY = 350;
 
 // Deterministic pseudo-random offset of roughly -3 to +3 ADP places.
+//
+// Four of this function's five callers fire in response to a click (Start,
+// Resume, a history entry), by which point draft-engine.js's deferred boot
+// has always already landed — the same reasoning that lets nextPicksFor()/
+// inProgressSummary() go unguarded on window.JukeEngine's own bridge,
+// documented at length elsewhere in this file. adoptRoom()'s call is not
+// one of the four: it runs from onRoomChange(), off the room's own "state"
+// broadcast, which reaches a client the instant its socket is open — live.js
+// connects at boot, ahead of the requestIdleCallback that loads
+// draft-engine.js at all. Confirmed live: a reload of an already-known room
+// reached this function before DraftEngine existed and threw a
+// ReferenceError out of onRoomChange(), which aborted that call before it
+// reached render()/driveRoomCPUs()/resetClock() a few lines later — the
+// board stuck at zero players and the clock at 0:00 until some later
+// broadcast happened to arrive and get a clean run. Guarded here rather
+// than at that one call site, same rule as everywhere else in this file:
+// the guard belongs on the function, not on each caller. Jitter simply
+// stays at buildBoard()'s own zero-fill until the next call succeeds,
+// which is a quieter CPU wobble for a moment, not a crash.
 function applyJitter() {
+  if (typeof DraftEngine === "undefined") return;
   board.forEach(function (p) {
     p.jitter = DraftEngine.jitter(p.overall, state.seed);
   });
@@ -1491,6 +1624,26 @@ function safeGif(value) {
   }
 }
 
+/* A voice/photo URL from chat is a claim, not a fact — same rule as a GIF
+   address, and for the same reason: it arrives from another manager and
+   ends up in an <audio>/<img src>. The room already refused anything not
+   served from its own worker (room.js's cleanMediaUrl()); this is the
+   second check, on the browser's own side, before a URL is ever handed to
+   an element that fetches it. `typeof window.Live` guards the same way
+   every other DraftEngine/Live reference in this file does — see CLAUDE.md
+   on why a bridge entry is only as safe as its own guard. */
+function safeMediaUrl(value) {
+  if (!value || typeof window === "undefined" || !window.Live) return null;
+  try {
+    const url = new URL(String(value));
+    const origin = Live.workerHttpOrigin();
+    if (!origin || url.origin !== new URL(origin).origin) return null;
+    return url.href;
+  } catch (err) {
+    return null;
+  }
+}
+
 /* ---- room chat ------------------------------------------
 
    What the room stores is a flat list of things people said. What a draft
@@ -1584,7 +1737,16 @@ function chatStream(room) {
     out.push({
       kind: m.system ? "system" : "said",
       id: m.id, seat: m.seat, name: m.name, text: m.text,
-      gif: m.gif, at: m.at, reacts: m.reacts
+      gif: m.gif, at: m.at, reacts: m.reacts,
+      // Poll/voice/photo/reply — the mobile redesign's own chat types.
+      // chatSaidHtml() (the legacy renderer) never reads these, so an old
+      // message keeps rendering exactly as it always has; a new one used to
+      // come through as an empty text-and-gif-less bubble because this
+      // function stripped every field it didn't already know the name of.
+      // Voice/photo are flat fields on the entry (url/seconds, url/w/h) —
+      // only a poll carries a nested object — see room.js's own view shape.
+      type: m.type, poll: m.poll, url: m.url, seconds: m.seconds,
+      w: m.w, h: m.h, replyTo: m.replyTo
     });
   });
 
@@ -1663,7 +1825,7 @@ function chatPickHtml(entry, room) {
   const teams = (room.league && room.league.teams) || league.teams;
 
   return `<div class="pickline${mine ? " mine" : ""}">
-      <span class="pickno">${DraftEngine.pickCode(entry.overall, teams)}</span>
+      <span class="pickno">${DraftEngine.pickCode(entry.overall, (room.league || league))}</span>
       <span class="picktext"><b>${escHtml(who)}</b> drafted ${escHtml(entry.player)}</span>
       <span class="msgwhen">${escHtml(chatTime(entry.at))}</span>
     </div>`;
@@ -1711,8 +1873,28 @@ function checkDraftFinished() {
 /* Off the setup screen and into the draft. Its own function because two
    things reach it: pressing Start in a solo draft, and — in a room — the
    broadcast saying the host has begun, which is the only signal a guest
-   ever gets. */
+   ever gets.
+
+   The second caller is not unreachable the way the first one is. #/draft
+   redirects to the React lobby, so nothing in the UI can press a solo
+   Start button that still calls this — but a room's "host has begun"
+   broadcast is real traffic every guest's client still receives today,
+   React draft room included, and it was still calling straight through to
+   this function's legacy DOM work on every one of them. Confirmed live:
+   starting a real room draft left #tabrow with hidden=false, display:flex,
+   sized 375x105 at the very top of the page — invisible only because
+   DraftRoom.jsx's own `fixed inset-0 z-[60]` overlay happens to paint over
+   exactly that region. A coincidence of stacking order is not the same
+   claim as "unreachable", which is the whole rule the rest of this file
+   applies to #view-app/#tabrow/#appbar — so this stops being one instead
+   of relying on it looking like one. Same two routes syncHomeVisibility()
+   already treats as "the React draft room owns this screen": #/draft-room
+   itself and #/drafts, the pre-draft Locker/seat-picker this same
+   broadcast can also land on. */
 function enterDraftUI() {
+  const legacyPath = location.hash.replace(/^#\/?/, "").split("?")[0];
+  if (onDraftRoomRoute() || legacyPath === "drafts") return;
+
   tabrow.hidden = false;
   showPanel("tab-suggest");
   document.querySelectorAll(".tabs button").forEach(function (b) { b.classList.remove("on"); });
@@ -1884,6 +2066,31 @@ function placeChat() {
 }
 
 function onRoomChange() {
+  /* live.js connects the instant its socket is open, ahead of the
+     requestIdleCallback that loads draft-engine.js/players.js/stats.js at
+     all — so the room's very first "state" broadcast can land, and this
+     function fire, before any of the three exist. Everything below reaches
+     DraftEngine sooner or later (adoptRoom()'s applyJitter() first, then
+     render() many times over), most of it unguarded, because none of it
+     was ever meant to run before a draft — of any kind — is on screen, and
+     every other way of getting here (pressing Start, resuming a save,
+     opening a history entry) already waits for a click, by which point the
+     deferred boot has always finished. A room's own broadcast is the one
+     path that doesn't wait for anything.
+
+     Confirmed live: reloading a tab already in a room threw
+     "ReferenceError: DraftEngine is not defined" out of this function on
+     the very first broadcast, which aborted the call before it reached
+     render()/driveRoomCPUs()/resetClock() below — the board stuck empty
+     and the clock at 0:00 until something else happened to call this
+     again. live.js already stores the raw broadcast in live.room the
+     moment it arrives (see announce()'s own caller), regardless of whether
+     anything downstream can use it yet, so skipping the processing here
+     costs nothing: the juke:data-loaded listener near the foot of this
+     file re-runs this exact function once dataReady() is finally true,
+     against whatever live.room already holds. */
+  if (!dataReady()) return;
+
   const room = Live.room();
 
   /* Whether the draft has begun, asked before and after, because the answer
@@ -1991,46 +2198,55 @@ function pruneQueue() {
   });
 }
 
-// The first player in your queue still on the board. This is what the clock
-// takes when it runs out, in preference to the computed suggestion — being
-// away from the screen should not throw away the plan you made before you
-// left it.
-function queueTop() {
+// The first player in your queue that is still on the board, not ruled
+// out, and not currently illegal to draft. This is what the clock takes
+// when it runs out, in preference to cpuChoice() — being away from the
+// screen should not throw away the plan you made before you left it.
+//
+// A star can go stale: queued in round 3 for a position that fills up by
+// round 8, or for a kicker before he is legal at all. needFromCount() is
+// the same refusal cpuChoice() and atPositionCap()'s own fraction already
+// ask — a roster limit, a still-too-early K or DST, a superflex-aware
+// quarterback cap — so an entry that would now be illegal is skipped
+// rather than drafted into a roster the engine would reject.
+function queueTop(round) {
   for (let i = 0; i < state.queue.length; i++) {
     const player = board.find((p) => p.name === state.queue[i]);
-    if (player && !player.drafted && !isRuledOut(player)) return player;
+    if (!player || player.drafted || isRuledOut(player)) continue;
+    if (needFromCount(countAt(state.mySlot, player.pos), player.pos, round) === 999) continue;
+    return player;
   }
   return null;
 }
 
-// What to take on my behalf when I am not the one choosing. Order matters:
-// my own list first, the model's opinion second.
 /* What to take on my behalf when I am not the one choosing.
 
-   Four answers, in falling order of how much they know about what you want,
-   because this must always have one. It used to be
-   `queueTop() || suggestions()[0] || null`, and that `null` stopped a draft
-   dead: `suggestions()` is filtered by the position chip on the panel, so a
-   manager who tapped "TE" and already held their three tight ends had an
-   empty list — and "Auto-draft the rest" read that as "there is nothing left
-   to draft" and abandoned the remaining rounds without a word. Reported from
-   a real draft, stopping in the ninth round of fourteen.
+   Two answers now, in falling order of how much they know about what you
+   want. It used to fall through to `suggestions("ALL")[0]`, and that is
+   wrong for an autopick specifically: suggestions() applies
+   modelMultipliers() — up to a quarter off a player's ADP — whenever
+   scoringIsStock() is false, and that discount is the Decide tab's own
+   opinion for a human reading it, not a rule every seat at the table has
+   agreed to. cpuChoice() never applies it, because an empty chair's opinion
+   has to be the same for every client in a room — and an autopicked seat is
+   exactly that kind of seat, discount or not. Falling through to the
+   model's opinion let an autopick reach for a player no CPU at the table
+   would ever take, on a discount nobody else gets.
 
-   The chip is a way of *looking* at the board, not a rule about what may be
-   drafted, so it is not consulted here at all — `suggestions("ALL")`, always.
-
-   Consulting it first and falling back looked like the respectful version and
-   was worse: leave the panel on K, walk away, and the clock hands you a
-   kicker in the fifth round. Caught by the test written for the bug above,
-   which is the argument for writing it. A filter that can lose you a draft is
-   not deference, and the queue is already where "what I actually want" lives.
-
-   The roster caps go the same way at the last step: they exist to stop the
-   CPU hoarding tight ends, not to decide that your draft is over. */
+   It was `queueTop() || suggestions()[0] || null` even further back, and
+   that bare `null` stopped a draft dead — see CLAUDE.md's "A filter is a
+   lens, never a decision". `suggestions("ALL")` closed that hole by
+   ignoring the position chip; cpuChoice() closes it more completely still,
+   because it has no filter of its own to empty in the first place — it
+   weighs the whole board every time. bestLeft() stays as the very last
+   resort, for the rare case the board holds nothing cpuChoice() itself
+   would take. */
 function autoPickForMe() {
-  return queueTop()               // the plan you actually made
-      || suggestions("ALL")[0]    // the model's opinion, whatever you were looking at
-      || bestLeft();              // and failing that, simply the best man left
+  const c = onTheClock();
+  const round = c ? c.round : league.rounds;
+  return queueTop(round)                 // the plan you actually made, if it still holds
+      || cpuChoice(state.mySlot, round)  // exactly what a CPU in this chair would take
+      || bestLeft();                     // and failing that, simply the best man left
 }
 
 /* The best player still on the board, ignoring every preference there is.
@@ -2230,6 +2446,16 @@ function startTicking() {
     state.timeLeft--;
     if (state.timeLeft <= 0) {
       stopClock();
+      /* league.cpuAutopick off means the clock is a stopwatch rather than a
+         deadline: it runs out, it stops, and the seat is still yours. The
+         header keeps drawing 0:00 and the Draft buttons keep working,
+         because whose turn it is never changed — only whether anything
+         happened when the number hit zero.
+
+         Rendering rather than returning silently is the difference between
+         "the clock expired" and "the app froze": without it the last tick
+         paints 0:01 and nothing ever repaints 0:00. */
+      if (league.cpuAutopick === false) { renderHeader(); tickBoardClock(); return; }
       const auto = autoPickForMe();
       if (auto) draftAndAdvance(auto);
     } else {
@@ -2649,22 +2875,6 @@ function draftFit(player) {
 // drafted in the first several rounds.
 const MIN_ADP_SAMPLE = 20;
 
-// Abramowitz & Stegun 7.1.26 — |error| < 1.5e-7, plenty for a pick
-// probability nobody is reading past two significant figures.
-function erf(x) {
-  const sign = x < 0 ? -1 : 1;
-  const ax = Math.abs(x);
-  const a1 = 0.254829592, a2 = -0.284496736, a3 = 1.421413741,
-        a4 = -1.453152027, a5 = 1.061405429, p = 0.3275911;
-  const t = 1 / (1 + p * ax);
-  const y = 1 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-ax * ax);
-  return sign * y;
-}
-
-function normalCdf(z) {
-  return 0.5 * (1 + erf(z / Math.SQRT2));
-}
-
 /* P(player still on the board at a given overall pick) — the Cockpit's
    "gone before pick 43 in 87% of boards" copy, and the reason it can say
    that honestly. draftFit()'s own adp field above is deliberately not a
@@ -2800,6 +3010,34 @@ const DEFAULT_RULES = {
   rec: 0.5, rec_yd: 0.1, rec_td: 6, rec_2pt: 2, rec_fd: 0, rec_40p: 0,
   fum_lost: -2, kr_td: 6, pr_td: 6,
   xpm: 1, xpmiss: -1, fgmiss: -1,
+  // The five bands are an EXTRA on top of fgmiss, not a replacement for it,
+  // and the counts overlap completely: a missed 45-yarder increments fgmiss
+  // AND fgmiss_40_49. So they start at zero — nothing double-charges until
+  // somebody asks it to — and a league that scales a miss by distance sets
+  // the base on fgmiss and the increment here.
+  //
+  // This is the opposite of fgm, which is stored but deliberately not
+  // scoreable so that a made kick can only ever be charged through its band.
+  // fgmiss cannot be demoted the same way: it defaults to -1, so removing it
+  // would silently rescore every league rather than the few that opted in,
+  // and it would take the miss penalty out of the projection entirely —
+  // Sleeper forecasts misses only as fgmiss_50p, so no band ever reaches
+  // PROJECTED_KEYS.
+  //
+  // And a band is not a complete substitute for the total on the history
+  // either, which is the reason that matters most. Measured over every
+  // season we store: the bands account for every miss from 2024 on and for
+  // only 52-63% of them before that, because Sleeper populated them
+  // sparsely in its older seasons. fgmiss is whole in every season —
+  // fga == fgm + fgmiss reconciles without exception — so it is the number
+  // that can be trusted on an old line, blocked kicks included. See
+  // check_miss_bands() in build_players.py, which prints the split every
+  // run.
+  //
+  // There is no fgmiss_0_19 because Sleeper sends none. Nobody missed from
+  // inside twenty yards last season.
+  fgmiss_20_29: 0, fgmiss_30_39: 0, fgmiss_40_49: 0,
+  fgmiss_50_59: 0, fgmiss_60p: 0,
   fgm_0_19: 3, fgm_20_29: 3, fgm_30_39: 3,
   fgm_40_49: 4, fgm_50_59: 5, fgm_60p: 6,
   sack: 1, int: 2, fum_rec: 2, safe: 2,
@@ -2811,7 +3049,16 @@ const DEFAULT_RULES = {
 
 // The format dropdown is a preset over one rule. Everything else it leaves
 // alone, so a custom table survives switching between standard and PPR.
-const REC_BY_FORMAT = { standard: 0, half: 0.5, ppr: 1 };
+/* Receptions per catch, per preset. This is the one rule a preset owns
+   outright — everything else in the scoring table is the same 49 rules,
+   editable, and a preset only ever sets a starting point for them.
+
+   Superflex is full PPR's rec value on purpose: it is not a scoring format
+   at all, it is a roster shape (a second startable quarterback), and
+   pretending it scored differently would be inventing a rule to justify a
+   name. What it actually changes is league.superflex, which SCORING_PRESET
+   below applies alongside this. */
+const REC_BY_FORMAT = { standard: 0, half: 0.5, ppr: 1, superflex: 1 };
 
 function rulesForFormat(fmt) {
   const rec = REC_BY_FORMAT[fmt];
@@ -2856,7 +3103,69 @@ function scoringIsStock() {
    Title Case throughout, because "Half PPR" is the industry's name for the
    thing rather than a description of it, and because a format name appears
    far more often as a label or a chip than inside a sentence. */
-const SCORING_NAMES = { standard: "Standard", half: "Half PPR", ppr: "Full PPR" };
+const SCORING_NAMES = {
+  standard: "Standard",
+  half: "Half PPR",
+  ppr: "Full PPR",
+  superflex: "Superflex (2QB)"
+};
+
+/* What a preset does beyond its `rec` value, and the caveat each one
+   carries.
+
+   `note` is shown beside the preset on the settings screen rather than
+   kept as a comment, because it is the honest half of offering a preset
+   whose ADP the market never published. Superflex draws full PPR's board
+   (see adpFormat) and a real superflex room takes quarterbacks far
+   earlier than that board says — the preset gets the roster right and
+   cannot get the market right, and a drafter is better off being told
+   than finding out in round three.
+
+   `lineup` is applied by setScoring() and is a patch, not a whole roster:
+   a preset may say "one superflex slot" without also having an opinion
+   about how many receivers somebody starts. */
+/* The three draft types, and the honest state of each.
+
+   Snake and linear are both real: DraftEngine.reversedRound() is the whole
+   of the difference between them and the engine runs either one today.
+
+   Auction is listed and NOT available, which is a deliberate choice rather
+   than an oversight. It is not a setting — it is a second draft mode end to
+   end (a budget per team, a nomination order, live bidding, a bid clock,
+   and a CPU that has to value a player in dollars rather than in board
+   position), and none of that exists here. Shipping a control that silently
+   ran a snake draft under an "Auction" label would be worse than not
+   offering it: this project's own rule is that a right number in the wrong
+   place is a bug, and this would be a whole wrong product behind a right
+   label. Listed rather than hidden because a settings screen that shows two
+   options where the category has three tells a visitor Juke does not know
+   about the third. */
+const DRAFT_TYPES = [
+  { key: "snake", label: "Snake", sub: "Serpentine", available: true },
+  { key: "linear", label: "Linear", sub: "Non-snaking", available: true },
+  { key: "auction", label: "Auction", sub: "Salary cap", available: false,
+    note: "Auction drafting is a different draft entirely — a budget, nominations and live bidding — not a setting on this one. It is in build." }
+];
+
+/* Who is on the board. Read off Sleeper's own years_exp (`exp` in
+   stats.js), which is already there on every matched player — see
+   inPool() for what happens to a row that has none, and why that is the
+   only defensible answer rather than the lazy one. */
+const PLAYER_POOLS = [
+  { key: "all", label: "All", sub: "Players", available: true },
+  { key: "rookies", label: "Rookies", sub: "Only", available: true },
+  { key: "vets", label: "Vets", sub: "Only", available: true }
+];
+
+const SCORING_PRESET = {
+  standard: { lineup: { superflex: 0 } },
+  half: { lineup: { superflex: 0 } },
+  ppr: { lineup: { superflex: 0 } },
+  superflex: {
+    lineup: { superflex: 1 },
+    note: "Adds a SUPERFLEX slot a quarterback can fill. ADP still comes from full-PPR drafts, so the market underrates quarterbacks here — the projection does not."
+  }
+};
 
 function scoringLabel(scoring) {
   const s = scoring || league.scoring;
@@ -3408,10 +3717,53 @@ const WEIGHTS = { starters: 0.50, value: 0.25, build: 0.15, byes: 0.10 };
 const GRADE_SCALE = ["A+", "A", "A−", "B+", "B", "B−", "C+", "C", "C−",
                      "D+", "D", "D−", "F+", "F"];
 
-// How much better than a replacement-level starter this player is,
-// measured in places up the positional board.
+/* How much better than a replacement-level starter this player is, in
+   projected points.
+
+   It used to return *places up the positional board* — `replacementRank(pos)
+   - player.posRank` — and that is a different quantity in two ways, both of
+   which flattered and punished the wrong rosters.
+
+   First, `posRank` is ADP rank. `buildBoard()` sorts the board by `adp` and
+   numbers each position off that order, so the old expression asked "how
+   early does the market take him within his position", never "how good is he".
+   The projection's own within-position rank has existed all along, on every
+   player, as `projPosRank`, and the grade never read it. Measured on the
+   26 August board: Sam LaPorta is TE12 by ADP and TE5 by projection, so the
+   grade credited him 0 for a player it privately rates seven places inside
+   the starting cut.
+
+   Second, and worse, places are not points. Replacement rank is
+   `teams x slots + 1`, so the *ceiling* on this quantity is set by how deep a
+   position is drafted, not by how much a player is worth: measured on the
+   same board, QB tops out at 10 places and TE at 11, against 24 for RB and 26
+   for WR. Josh Allen at +60.2 projected points over replacement therefore
+   scored 10, while Drake London at +18.0 scored 22. Half the grade rated
+   London at better than twice Allen, on a board that privately rates Allen at
+   over three times London.
+
+   That is the same "a within-position measure cannot answer a between-position
+   question" mistake bestLineup() below already records — one level deeper,
+   because it is not merely the wrong ordering but the wrong unit. Points are
+   the unit the rest of the app already reports to the user: replacementGap()
+   on the player sheet, the Juke score, the VORP column. Grading in one
+   currency while showing another is why a roster could hold the room's best
+   projected starters and read as the room's worst draft.
+
+   Deliberately not replacementGap() itself, which refuses K and DST. That
+   refusal is about *ranking* them — see UNRANKED_POSITIONS, where the
+   measured correlation between projected and finishing order collapses — and
+   the note there already says the grade is untouched by it on purpose,
+   because a kicker really did score those points. This is the same
+   arithmetic without the ranking refusal, so a kicker still counts here and
+   still gets a dash everywhere a rank is claimed.
+
+   A player with no projection scores 0 rather than falling back to his ADP
+   rank: "we don't know" may not quietly become "he is worth his draft slot",
+   which is the same rule the pipeline already applies to a missing season. */
 function aboveReplacement(player) {
-  return Math.max(0, replacementRank(player.pos) - player.posRank);
+  if (!player || player.projPts === null || player.projPts === undefined) return 0;
+  return Math.max(0, player.projPts - (REPLACEMENT_PTS[player.pos] || 0));
 }
 
 // The best legal starting lineup a roster can field.
@@ -3424,16 +3776,18 @@ function aboveReplacement(player) {
    asked to fill a FLEX from TE19, RB25 and WR28 it takes the tight end,
    because 19 is a smaller number than 25.
 
-   Measured on a real roster, that put Juwan Johnson (TE19, and TE
-   replacement is 14, so he is *below* a startable tight end and worth 0) in
-   the FLEX ahead of David Montgomery (RB25 against an RB replacement of 30,
-   so worth 5). Five points of starter strength left on the bench, in the
-   component that is half the grade, on a team that came last in its room.
+   Measured on a real roster, that put Juwan Johnson (below a startable tight
+   end, and so worth nothing) in the FLEX ahead of David Montgomery, who was
+   comfortably inside the running-back cut. Starter strength read off a lineup
+   nobody would field, in the component that is half the grade, on a team that
+   came last in its room.
 
-   `aboveReplacement` is the currency the rest of the grade already counts in
-   and it knows how deep each position runs, which is the whole reason it
-   exists. Inside a single-position slot the two orderings are identical, so
-   nothing else moves.
+   `aboveReplacement` is the currency the rest of the grade already counts in,
+   and since it became projected points over replacement it is also the
+   currency the player sheet and the Juke score report — so the FLEX is now
+   filled by who is actually worth more, not by whose position happens to run
+   deeper. Inside a single-position slot the two orderings are near enough
+   identical that nothing else moves.
 
    This is the same mistake the suggestions had, in a different function: a
    within-position measure cannot answer a between-position question. */
@@ -3514,6 +3868,268 @@ function byeSummary(badWeeks) {
   return `${first}, and ${badWeeks.length - 1} more bad weeks`;
 }
 
+/* ---- par: what each chair was worth before anybody drafted from it ----
+
+   Starter strength in points exposed something the old rank-places unit was
+   too coarse to see: a snake seat is worth a great deal on its own. Measured
+   with every seat running the identical CPU rule, so no seat out-drafted any
+   other, raw starter strength spanned 191 points — seat 1 fielded 362 and
+   seat 5 fielded 171 — and correlated with seat at r -0.6. A grade meant to
+   judge drafting was handing out most of a letter for where somebody sat.
+
+   Both halves of that are real, which is why the answer is not to shrink the
+   number. An early seat's lineup genuinely is worth ~190 more projected
+   points; the grade simply should not credit the manager for it. So starter
+   strength is scored against par — what a straight consensus drafter would
+   have got from that same chair — exactly the way golf scores a hole or WAR
+   scores a player, and the component becomes "how much did you beat your own
+   seat by".
+
+   Par is simulated the way generateThirdRoundScenario() and shotPicks()
+   already simulate a room: a local `taken`/`have` pair, never board[].drafted
+   or state.picks, so this can run during a live draft without touching it.
+   `bestAvailable()` is asked for each pick rather than a second opinion of
+   what a seat would take.
+
+   Three things about it that matter:
+
+   - **No jitter.** Par has to be a property of the board, not of a draft.
+     With the wobble in, the same roster would score differently because a
+     reference draft it was never in happened to wobble differently.
+   - **It is a table, not a number.** A team three rounds in has three picks,
+     and par for three picks is not par for fourteen — comparing a partial
+     roster against a finished par is the "a component written for a finished
+     roster behaves least like itself mid-draft" trap this file already
+     records. `table[slot][k]` is par after that seat's (k+1)th pick.
+   - **It is cached on the board, and it has to be.** bestUpgrade() calls
+     analyseTeam() once per available player, so an uncached simulation here
+     would run a full draft a hundred times for one panel. The key carries
+     everything that can move par, BEST_VOR included — that one is the tell
+     for a rescoring, since editing the scoring table rewrites every projPts
+     and therefore every par. */
+/* Keyed by shape, not a single slot. The Locker asks for par for every league
+   shape in its window — a 10-team half-PPR mock and a 12-team one are two
+   different pars off the same board — so a one-entry cache would thrash
+   between them and pay 30ms per entry per render. Bounded because the number
+   of distinct shapes a person actually drafts is small; cleared wholesale when
+   the board moves, which is what BEST_VOR in the key detects. */
+const PAR_CACHE = new Map();
+
+function parKey(lg) {
+  const L = lg || league;
+  return [board.length, L.teams, L.rounds, L.scoring, L.flex,
+          L.superflex, POSITIONS.map((p) => L.starters[p]).join(","),
+          Math.round((BEST_VOR || 0) * 100)].join("|");
+}
+
+/* Par is an average over wobbles, not one draft.
+
+   The first version ran a single unwobbled draft and used it as the
+   expectation, and a single draft is not an expectation — it is one sample
+   with its own luck in it. Measured: run par under twelve different wobbles
+   and a chair's own par moves with a standard deviation of **18.9 points**,
+   the same magnitude as the wobble noise the grade is trying to see through.
+   Freezing one of those samples bakes that chair's luck in permanently, so it
+   shows up as a fixed per-chair bias in every draft ever graded against it.
+
+   It was visible and was misread first as "chair-specific board interaction".
+   The single unwobbled realization sat −4, −37, +30, +19, +23, −28, −12, +24,
+   −18, −5 away from the twelve-wobble mean, and the residual `startersVsPar`
+   by chair came out +4, +40, −39, −9, −23, +32, +7, −31, +26, +7 — the same
+   numbers with the sign flipped, chair for chair. The residue was not a fact
+   about the chairs at all. It was the error in par.
+
+   `PAR_SEEDS` is fixed and hard-coded rather than drawn from `state.seed`, for
+   the reason par exists: it has to be a property of the board, identical for
+   every client in a room and for the same board tomorrow. Twelve puts the
+   standard error of each chair's par at 18.9/sqrt(12) = 5.5 points, comfortably
+   inside `MIN_SPAN.startersVsPar`; twenty-four would buy 3.9 for twice the
+   work, which is not worth paying on a cache miss a person is waiting through. */
+const PAR_SEEDS = [1, 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31];
+
+/* One full simulated draft under one wobble. Returns, per seat, two running
+   tables: the lineup strength after each of that seat's picks, and the draft
+   value it had accrued by then. Both are tables rather than totals because par
+   after three picks is not par after fourteen.
+
+   **The value side applies `freelyChosen()` and `reachableRank()` by calling
+   them**, on a pick-shaped object, rather than repeating what they test.
+   analyseTeam() filters the real picks through exactly those two before
+   summing value, so a par that counted a different set of picks would not be
+   comparable to it — and the two drifting apart is the sort of thing that
+   reads as a working grade for months. */
+/* `lg` is an explicit shape; `strength` is only computed for the live league.
+
+   The value table needs nothing but the board, the snake and the roster rules,
+   so it is computable for any shape. The strength table is not: it runs
+   through bestLineup() and aboveReplacement(), which read lineupSlots() and
+   REPLACEMENT_PTS — and REPLACEMENT_PTS is a module-level table
+   buildProjections() derives from the *live* league's replacement ranks.
+   Computing it for a foreign shape would mean rebuilding that table, which is
+   the board-wide recompute this whole function exists to avoid triggering
+   while a draft is on screen.
+
+   So a foreign shape gets `strength: null` rather than a table of numbers
+   quietly derived from the wrong league. seatPar() returns null for it too,
+   which is a guard rather than a behaviour: the only caller that passes a
+   foreign shape (the Locker's net ADP chart) asks for value and never
+   strength. */
+function parRun(jitterOf, lg) {
+  const L = lg || league;
+  const liveShape = !lg || lg === league;
+  const teams = L.teams;
+  const taken = {}, have = [], rosters = [], strength = [], value = [];
+  for (let s = 0; s < teams; s++) {
+    have.push({}); rosters.push([]); strength.push([]); value.push([]);
+  }
+
+  const total = teams * L.rounds;
+  const lastPick = total;
+  const running = new Array(teams).fill(0);
+
+  for (let n = 1; n <= total; n++) {
+    const c = DraftEngine.pickInfo(n, L);
+    const pool = board.filter((p) => !taken[p.name] && !isRuledOut(p));
+    if (!pool.length) break;
+    const best = bestAvailable(pool, have, c.slot, c.round, { jitterOf: jitterOf, model: false, league: L });
+    if (!best) break;
+
+    taken[best.name] = true;
+    have[c.slot][best.pos] = (have[c.slot][best.pos] || 0) + 1;
+    rosters[c.slot].push(best);
+    if (liveShape) strength[c.slot].push(lineupStrength(rosters[c.slot]));
+
+    const pick = { player: best, overall: n, slot: c.slot, round: c.round };
+    if (freelyChosen(pick) && reachableRank(pick, lastPick)) {
+      running[c.slot] += n - best.overall;
+    }
+    value[c.slot].push(running[c.slot]);
+  }
+  return { strength: liveShape ? strength : null, value: value };
+}
+
+function seatParTable(lg) {
+  // Same guard every other DraftEngine caller carries. A bridge entry is only
+  // as safe as its own guard: analyseTeam() is reached from React on mount,
+  // and draft-engine.js is deferred.
+  if (typeof DraftEngine === "undefined" || !board.length) return null;
+
+  const L = lg || league;
+  if (!L || !L.teams || !L.rounds || !L.starters) return null;
+
+  const key = parKey(L);
+  if (PAR_CACHE.has(key)) return PAR_CACHE.get(key);
+
+  const runs = PAR_SEEDS.map(function (seed) {
+    return parRun(function (p) { return DraftEngine.jitter(p.overall, seed); }, L);
+  });
+
+  /* Averaged pick by pick. The runs can differ in length — a pool that runs
+     dry stops that run early — so each cell is divided by how many runs
+     actually reached it rather than by PAR_SEEDS.length, which would quietly
+     drag the tail of the table toward zero and make the closing rounds look
+     like a bargain against par. */
+  function averaged(which) {
+    if (!runs[0] || !runs[0][which]) return null;
+    const table = [];
+    for (let s = 0; s < L.teams; s++) {
+      const rows = runs.map((r) => (r[which][s] || []));
+      const row = [], longest = Math.max.apply(null, rows.map((r) => r.length));
+      for (let k = 0; k < longest; k++) {
+        let sum = 0, seen = 0;
+        rows.forEach(function (r) {
+          if (typeof r[k] === "number") { sum += r[k]; seen++; }
+        });
+        row.push(seen ? sum / seen : 0);
+      }
+      table.push(row);
+    }
+    return table;
+  }
+
+  const table = { strength: averaged("strength"), value: averaged("value") };
+  PAR_CACHE.set(key, table);
+  return table;
+}
+
+/* The caption under the starter-strength bar, in one place because both the
+   legacy panel and AnalysisTab.jsx draw it and a bar whose caption describes a
+   different quantity from the bar is this file's own "right value, wrong
+   column" bug. It reports the number the grade scores — points against par —
+   with the raw total kept alongside, since that is the figure the VORP matrix
+   adds up to. */
+function parText(t) {
+  const raw = Math.round(t.starters) + " pts above replacement";
+  if (!t.par) return raw;
+  const d = Math.round(t.startersVsPar);
+  return `${d >= 0 ? "+" : "−"}${Math.abs(d)} vs par for this seat · ${raw}`;
+}
+
+/* The same, for draft value, and it exists for the same reason: the bar is
+   scored against par for the chair and the raw figure is what the timeline
+   panel's own bars add up to, so one caption has to carry both or the two
+   screens disagree about what "draft value" is. */
+/* The caption under the roster-construction bar. The headline is now the raw
+   score itself, so "76 / 100" underneath it was the same number twice; this
+   says what actually cost the points instead. Named in the engine, beside the
+   arithmetic that assigns them, for the same reason parText() is: a component
+   that composes its own explanation drifts from the number it explains. */
+function buildText(t) {
+  if (!t.lineup) return t.build + " / 100";
+  const gaps = [];
+  const holes = t.lineup.filter((s) => !s.player).length;
+  if (holes) gaps.push(holes + (holes === 1 ? " empty starting slot" : " empty starting slots"));
+  ["QB", "K", "DST"].forEach(function (pos) {
+    const allowed = league.starters[pos] + (pos === "QB" ? league.superflex : 0);
+    const over = Math.max(0, countAt(t.slot, pos) - allowed);
+    if (over) gaps.push(over + " spare " + posLabel(pos));
+  });
+  /* Cover is graded rather than a cliff — the penalty scales with how far past
+     replacement the best benched player is — so this has to name a partial
+     charge too. Naming only total absence produced "nothing missing" on a
+     roster scoring 86, which is the caption disagreeing with its own headline
+     by fourteen points. */
+  const benched = t.roster.filter((p) => !t.lineup.some((s) => s.player === p));
+  ["RB", "WR"].forEach(function (pos) {
+    if (!league.starters[pos]) return;
+    const rankOf = (p) => p.projPosRank || Infinity;
+    const best = benched.filter((p) => p.pos === pos)
+      .sort((a, b) => rankOf(a) - rankOf(b))[0];
+    const past = best ? rankOf(best) - replacementRank(pos) : 15;
+    if (past >= 15) gaps.push("no " + pos + " cover");
+    else if (past > 0) gaps.push("thin " + pos + " cover");
+  });
+  return gaps.length ? gaps.join(" · ") : "nothing missing";
+}
+
+function parValueText(t) {
+  // One minus glyph in one string. Number#toString gives an ASCII hyphen and
+  // the vs-par half is built with a real minus (U+2212, the same one
+  // GRADE_SCALE uses and for the same reason), so composing them naively read
+  // "−10 vs par for this seat · -35 picks" — two different characters for one
+  // idea, side by side.
+  const signed = (n) => (n >= 0 ? "+" : "−") + Math.abs(Math.round(n));
+  const raw = signed(t.value) + " picks, K and D/ST aside";
+  if (!t.parValue) return raw;
+  return `${signed(t.valueVsPar)} vs par for this seat · ${raw}`;
+}
+
+// Par for this seat at this many picks, or 0 when the engine has not landed
+// yet — an unscored seat is the same for everybody, so it cannot bias a room.
+function seatPar(slot, picksMade, which, lg) {
+  if (picksMade <= 0) return 0;
+  const table = seatParTable(lg);
+  const wanted = which || "strength";
+  if (!table) return 0;
+  /* null, not 0, when the table genuinely has nothing to say — a foreign
+     shape has no strength side (see parRun). Zero would read as "par is
+     zero here" and quietly turn a vsPar figure back into a raw one. */
+  if (!table[wanted]) return null;
+  const row = table[wanted][slot];
+  if (!row || !row.length) return 0;
+  return row[Math.min(picksMade, row.length) - 1];
+}
+
 function analyseTeam(slot, extra) {
   // extra: an optional hypothetical additional player, for simulating "what
   // would this component become if I drafted him" (see bestUpgrade() below)
@@ -3529,9 +4145,23 @@ function analyseTeam(slot, extra) {
   const judged = picks.filter((p) => freelyChosen(p) && reachableRank(p, lastPick));
   const lineup = bestLineup(roster);
 
-  // 1. starter strength
+  /* 1. starter strength, and the same figure against par for this chair.
+
+     `starters` stays the raw sum, because that is what the Insights VORP
+     matrix prints per player and a reader has to be able to add that panel up.
+     `startersVsPar` is what the grade actually scores — see seatParTable()
+     for why the raw number is most of a letter's worth of draft position. */
   let starters = 0;
   lineup.forEach(function (s) { if (s.player) starters += aboveReplacement(s.player); });
+  /* extra is a hypothetical additional pick, so it costs a pick of par too —
+     for starter strength, which counts him, and deliberately *not* for value,
+     which does not. `judged` is built from state.picks and never sees him, so
+     advancing value's par by a pick he did not contribute to would charge a
+     simulated bargain against a roster that never took one. Nothing reads
+     valueVsPar for a hypothetical today (bestUpgrade only simulates starters
+     and build), which is exactly why it would go unnoticed. */
+  const par = seatPar(slot, picks.length + (extra ? 1 : 0));
+  const parValue = seatPar(slot, picks.length, "value");
 
   /* 2. draft value: taken later than the board said = a bargain.
 
@@ -3592,11 +4222,18 @@ function analyseTeam(slot, extra) {
   });
   ["RB", "WR"].forEach(function (pos) {
     if (!league.starters[pos]) return;      // a league that starts none needs none
+    /* Ranked by projection, not by ADP, for the same reason aboveReplacement()
+       is: `posRank` is where the market takes him and `projPosRank` is what we
+       think he is worth, and this asks the second question. A bench receiver
+       the room drafts late and the projection likes is exactly the cover a
+       manager wants and the ADP ordering could not see. Players with no
+       projection sort last rather than being read at their draft slot. */
+    const rankOf = (p) => p.projPosRank || Infinity;
     const best = benched
       .filter(function (p) { return p.pos === pos; })
-      .sort(function (a, b) { return a.posRank - b.posRank; })[0];
+      .sort(function (a, b) { return rankOf(a) - rankOf(b); })[0];
     // Nobody behind them is the same as cover that could never play.
-    const past = best ? best.posRank - replacementRank(pos) : COVER_NONE;
+    const past = best ? rankOf(best) - replacementRank(pos) : COVER_NONE;
     build -= COVER_COST * Math.min(1, Math.max(0, past) / COVER_NONE);
   });
   /* Floored, because it is printed as "x / 100" and a negative score out of
@@ -3661,7 +4298,9 @@ function analyseTeam(slot, extra) {
   if (reach && reach.gap >= 0) reach = null;
 
   return { slot: slot, roster: roster, lineup: lineup, byes: byes,
-           starters: starters, value: value, build: build,
+           starters: starters, par: par, startersVsPar: starters - par,
+           value: value, parValue: parValue, valueVsPar: value - parValue,
+           build: build,
            byePenalty: -byeCost * 20,
            worstBye: worstBye, worstWeek: worstWeek, badWeeks: badWeeks,
            bargain: bargain, reach: reach };
@@ -3712,7 +4351,51 @@ function analyseTeam(slot, extra) {
    somebody still finishes first and the standings still rank the room. What
    stops is manufacturing an elite grade out of a one-point edge — a close room
    now reads as a close room. */
-const MIN_SPAN = { starters: 20, build: 20 };
+/* Every component gets a floor, in its own units, or the printed weights are
+   not the weights that run.
+
+   Only starters and build had one, and the two that did not are the two with
+   the widest natural spread — so `value` and `byes` were stretched across the
+   full 0-100 on every draft while `starters` was compressed into whatever
+   fraction of it a floored denominator allowed. Measured across two rooms
+   before this change, the share of the finishing order each component
+   actually explained came out:
+
+       starters   ~35%   against a stated 50%
+       value      ~36%   against a stated 25%
+       build      ~13%   against a stated 15%
+       byes       ~15%   against a stated 10%
+
+   Draft value decided the grade more than starter strength did, in a grade
+   that says on its own face that starters are worth double. A floor on one
+   component is not a local adjustment: it silently reweights every other one,
+   because scaling is what converts a raw spread into the 0-100 the weights
+   are then applied to.
+
+   Each number below is that component's own resolution, not a taste:
+
+   - starters: the projection runs at MAE 6.8 a player, so a nine-man lineup
+     total carries 6.8 x sqrt(9) = 20 points of error. This is the same
+     arithmetic the old comment gave — it was simply being applied to a count
+     of ADP rank places, which is not measured in points and never was. Now
+     that aboveReplacement() returns points, 20 is a floor in the unit it was
+     derived for. It rarely binds: a real room spans 150-odd points.
+   - value: MISS_FLOOR already refuses to call a single-digit ADP delta a
+     reach, and a team's value is the sum over the dozen-odd picks it was free
+     to time, so 10 x sqrt(12) = 35.
+   - byes: byePenalty is -20 per squared starter beyond the second, so 20 is
+     one starter, in one week — the smallest difference the component can
+     express. Below that two rosters are the same roster.
+   - build: unchanged, and its justification is still the weaker one. It is
+     derived from replacement-relative rank distances rather than from an
+     independent error model, and it is calibrated from observed spans. If
+     build ever gets a real error model, this is the number to revisit. */
+/* No `build` key any more: it is not scaled at all (see analyseDraft), so a
+   floor for it would be a number nothing reads. Its old entry was already the
+   weakest-justified of the four by this file's own admission — calibrated from
+   observed spans rather than an error model — and it was the mechanism behind
+   the roster-construction 0. */
+const MIN_SPAN = { startersVsPar: 20, valueVsPar: 35, byePenalty: 20 };
 
 function scaleAcross(all, key) {
   const values = all.map((t) => t[key]);
@@ -3737,7 +4420,49 @@ function analyseDraft() {
   const all = [];
   for (let i = 0; i < league.teams; i++) all.push(analyseTeam(i));
 
-  ["starters", "value", "build", "byePenalty"].forEach((k) => scaleAcross(all, k));
+  /* startersVsPar, not starters — the seat is priced out before the room is
+     ranked. `startersScaled` is then aliased to it rather than computed
+     separately, because every consumer (the share card, both dashboards, the
+     specs' own reconciliation) reads that name and there must not be two
+     scaled starter figures on one object for somebody to pick the wrong one
+     out of. The raw `starters` and `par` are both still on there for anything
+     that wants to show the working. */
+  /* build is deliberately not scaled, and it is the one component that never
+     should have been.
+
+     The other three are in their own units — points over par, picks over par,
+     squared starters off in a week — so they have to be projected onto the
+     0-100 the weights are applied to. `build` is already that: it starts at
+     100 and subtracts named penalties, so it is an absolute score, comparable
+     across rooms, before scaleAcross() ever sees it. Putting it through a
+     second transform is what produced the number the owner reported.
+
+     What that second transform did, measured over ten rooms with one
+     realistically imperfect human in each: the human read **0 on eight of
+     ten**, with raw builds of 44, 47, 54, 60, 67, 73, 76 and 79. A roster
+     worth 79 and one worth 44 printed the same 0. That is not a harsh number,
+     it is an empty one — scaleAcross() is min-max, the nine CPU seats build to
+     one rule and cluster at the top, so the human is the minimum almost every
+     time and the minimum is 0 by construction. Reported as "roster
+     construction 0 on a mock I got a B and finished 5th in", which reproduces
+     exactly: raw 79, scaled 0, grade B, 5th of 10.
+
+     The cost is real and is not hidden: build's share of the finishing order
+     falls from 13.8% to 5.1%, against a stated 15%. That is the honest
+     consequence of a component that genuinely varies less than the scaling
+     was making it appear to, and it is the trade this file's own rule asks
+     for — a number nobody can act on is worth less than a number that moves
+     the grade. Whether 15% is still the right weight for it is a separate
+     question and has not been answered here. */
+  ["startersVsPar", "valueVsPar", "byePenalty"].forEach((k) => scaleAcross(all, k));
+  all.forEach(function (t) {
+    t.startersScaled = t.startersVsParScaled;
+    t.valueScaled    = t.valueVsParScaled;
+    /* Aliased rather than left absent, because every consumer reads this name
+       — the bars, the weighted-sum line that has to reconcile against them,
+       the share card, the specs. One name, one number, and the panel adds up. */
+    t.buildScaled    = t.build;
+  });
 
   all.forEach(function (t) {
     t.total = t.startersScaled  * WEIGHTS.starters
@@ -3795,7 +4520,13 @@ function analyseDraft() {
    he produces — not a second copy of the same "before" figure. */
 function bestUpgrade(slot, componentKey) {
   if (componentKey !== "starters" && componentKey !== "build") return null;
-  const scaledKey = componentKey + "Scaled";
+  /* The caller names the component the way the panel labels it, and starter
+     strength is scored against par rather than raw — so the simulation has to
+     scale the same quantity analyseDraft() scales, or "draft this player, get
+     this score" would quote a number the grade never uses. Adding a player
+     costs a pick of par, which analyseTeam() already charges via `extra`. */
+  const rawKey = componentKey === "starters" ? "startersVsPar" : componentKey;
+  const scaledKey = rawKey + "Scaled";
 
   const baseline = [];
   for (let i = 0; i < league.teams; i++) baseline.push(analyseTeam(i));
@@ -3811,13 +4542,80 @@ function bestUpgrade(slot, componentKey) {
   pool.forEach(function (candidate) {
     const withHim = analyseTeam(slot, candidate);
     const trial = baseline.map((t, i) => (i === slot ? withHim : t));
-    scaleAcross(trial, componentKey);
+    scaleAcross(trial, rawKey);
     const after = trial[slot][scaledKey];
     if (!best || after > best.after) best = { player: candidate, after: after };
   });
 
   if (!best) return null;
   return { player: best.player, after: Math.round(best.after) };
+}
+
+/* The one that got away: at each of this team's turns, the player somebody
+   else took before their next turn who would have improved this roster most.
+
+   The measure is what he would have done to *this lineup*, not what he is
+   worth in the abstract. It lived in DraftInsightsDashboard.jsx and compared
+   two bare replacementGap() figures — his against the pick actually made —
+   which is a fact about the player pool with no reference to the roster it is
+   being recommended to.
+
+   That reads as nonsense the moment a manager has a position covered. Reported
+   from a real draft: a team holding two elite tight ends was told it had missed
+   Sam LaPorta. The arithmetic was right and the advice was absurd — a third
+   tight end cannot start, so his points over replacement were never available
+   to that roster at any price. Naming him is the same failure as naming a
+   kicker the biggest reach: a correct number that no reader can arrive at the
+   right conclusion from.
+
+   So the delta is a substitution run through bestLineup(): the roster as
+   drafted, against the roster with his pick swapped for theirs. A player who
+   would not crack the lineup scores 0 and cannot be named, however gaudy his
+   projection, and one who displaces a starter scores exactly what he adds.
+   That also makes the panel's own number honest — "points forgone" is now
+   points this team would actually have started.
+
+   It reuses aboveReplacement() and bestLineup() rather than restating either,
+   which is the same reason bestUpgrade() simulates through analyseTeam()
+   instead of carrying its own formula for "how much would this help".
+
+   MISS_FLOOR lives in the component and still gates the result there: both
+   sides of this subtraction are projected points, the unit that floor was
+   always written in. */
+function lineupStrength(roster) {
+  let total = 0;
+  bestLineup(roster).forEach(function (s) { if (s.player) total += aboveReplacement(s.player); });
+  return total;
+}
+
+function oneThatGotAway(slot) {
+  if (!state.started) return null;
+
+  const mine = state.picks.filter((p) => p.slot === slot)
+    .slice().sort((a, b) => a.overall - b.overall);
+  if (mine.length < 2) return null;
+
+  const roster = rosterOf(slot);
+  const base = lineupStrength(roster);
+  let best = null;
+
+  mine.forEach(function (teamPick, i) {
+    const next = mine[i + 1];
+    if (!next) return;                    // the last pick has no window after it
+    state.picks.forEach(function (p) {
+      if (p.slot === slot) return;
+      if (p.overall <= teamPick.overall || p.overall >= next.overall) return;
+      /* Swap, not add. He would have cost this pick, so a roster carrying
+         both of them is a team that never existed — and adding rather than
+         substituting is what would let a third tight end look like a gain
+         by quietly occupying a bench spot nobody was choosing between. */
+      const swapped = roster.filter((r) => r !== teamPick.player).concat([p.player]);
+      const delta = lineupStrength(swapped) - base;
+      if (delta > (best ? best.delta : 0)) best = { theirs: p, mine: teamPick, delta: delta };
+    });
+  });
+
+  return best;
 }
 
 /* ---- Take a pick: homepage v4 pass 2's three real, seeded scenarios ---
@@ -3866,14 +4664,46 @@ function bestUpgrade(slot, componentKey) {
 
 // The exact scoring shotPicks() uses for its own simulated draft, factored
 // out so both can call it rather than one drifting from the other.
-function bestAvailable(pool, have, slot, round) {
-  const modelMultiplier = modelMultipliers(pool);
+/* `opts` is opt-out for one caller: seatParTable(), which turns both of these
+   off to get the plain consensus drafter.
+
+   `wobble:false` because par has to be a property of the board rather than of
+   a particular draft — the jitter is deterministic and shared across a room,
+   so leaving it in would still agree between clients, it would just mean the
+   same roster grading differently because of a wobble in a reference draft it
+   was never part of.
+
+   `model:false` because the model multiplier is *Juke's own opinion*, and par
+   is supposed to be the market's. Leaving it in made par a better drafter than
+   anybody in the room actually is — `cpuChoice()` has never applied it — so
+   par was benchmarking every seat against an advised draft rather than a
+   consensus one, and it did that unevenly by seat. Measured over ten seeds
+   before the change, mean `startersVsPar` ran +80 at seat 1 and −83 at seat 5:
+   a 163-point systematic residue in the very component that exists to remove
+   seat bias.
+
+   Everyone else keeps both. shotPicks() in particular wants the model on
+   deliberately — see CLAUDE.md on why the hero shot is not an ADP slice. */
+function bestAvailable(pool, have, slot, round, opts) {
+  /* `jitterOf` lets seatParTable() run this under a wobble that is not the
+     live draft's, without writing to `board[].jitter` — which is shared state
+     that a real draft is reading from at the same time. Saving and restoring
+     it around the loop would work and is the trap gradeAndRosterAt() already
+     documents: one shared flag, several callers, and a restore that is only
+     correct if nothing else touched it in between. Passing the function is
+     simply not that shape. */
+  const jitterOf = opts && typeof opts.jitterOf === "function" ? opts.jitterOf
+    : (opts && opts.wobble === false) ? function () { return 0; }
+    : function (p) { return p.jitter; };
+  const modelMultiplier = (!opts || opts.model !== false)
+    ? modelMultipliers(pool)
+    : null;
   let best = null, bestScore = Infinity;
   pool.forEach(function (p) {
-    const score = (p.adp + p.jitter)
-      * needFromCount(have[slot][p.pos] || 0, p.pos, round)
+    const score = (p.adp + jitterOf(p))
+      * needFromCount(have[slot][p.pos] || 0, p.pos, round, opts && opts.league)
       * (isRisky(p) ? 1.35 : 1)
-      * modelMultiplier(p);
+      * (modelMultiplier ? modelMultiplier(p) : 1);
     if (score < bestScore) { bestScore = score; best = p; }
   });
   return best;
@@ -3889,7 +4719,10 @@ function generateThirdRoundScenario(targetSlot) {
   let targetOverall = null;
   const total = teams * league.rounds;
   for (let n = 1; n <= total; n++) {
-    const c = DraftEngine.pickInfo(n, teams);
+    // `league`, not `league.teams` — the whole point of this simulation is
+    // which picks the target seat holds, and under linear or third-round
+    // reversal that is a different set of picks entirely.
+    const c = DraftEngine.pickInfo(n, league);
     const pool = board.filter(function (p) { return !taken[p.name] && !isRuledOut(p); });
     if (!pool.length) break;
     const best = bestAvailable(pool, have, c.slot, c.round);
@@ -3973,7 +4806,7 @@ function generateThirdRoundScenario(targetSlot) {
   const after = gradeAndRosterAt(myIndex + 3);
 
   return {
-    pickCode: DraftEngine.pickCode(myPick.overall, teams),
+    pickCode: DraftEngine.pickCode(myPick.overall, league),
     overall: myPick.overall,
     round: myPick.round,
     slot: targetSlot,
@@ -4026,7 +4859,19 @@ function shortName(player) {
 }
 
 function initials(name) {
-  const parts = name.replace(/[^A-Za-z .'-]/g, "").split(" ");
+  // filter(Boolean) drops the empty strings a stripped-then-split name can
+  // leave behind — "Lambo No. 5" (a real CPU team name, TEAM_NAMES above)
+  // strips its trailing digit to "Lambo No. ", and splitting that on " "
+  // ends in "", so parts[parts.length - 1][0] read `undefined` and string
+  // concatenation coerced it to the literal text "LUNDEFINED". Every real
+  // player name already survives this unchanged; only a name that strips to
+  // a trailing (or leading, or doubled) space could ever have hit it, and
+  // team names are exactly the shape that does. Found via
+  // TeamTabPhone.jsx's 26px chip, the first caller with no truncation to
+  // hide it — but the defect was always here, for every caller of
+  // initials(), not something the phone redesign introduced.
+  const parts = name.replace(/[^A-Za-z .'-]/g, "").split(" ").filter(Boolean);
+  if (parts.length === 0) return "";
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
@@ -4670,9 +5515,17 @@ function boardArrow(round, slot, teams) {
   // Same guard as the wrappers above: the board grid draws league.teams x
   // league.rounds empty cells from league shape alone, with no dependence
   // on board/state, so it runs during the deferred-data window too.
+  //
+  // `round % 2 === 0` was the direction test here, written when a snake was
+  // the only draft this app had. It is wrong for both of the formats added
+  // since — a linear draft runs forward in every round, and third-round
+  // reversal inverts the parity from round three on — so the answer comes
+  // from DraftEngine.reversedRound(), the one place the rule lives. The
+  // pre-load fallback still has to guess, and guesses snake, because that
+  // is what an unconfigured league is.
   if (typeof DraftEngine === "undefined") return round % 2 === 0 ? "&larr;" : "&rarr;";
-  if (DraftEngine.pickInRound(round, slot, teams) === teams) return "&darr;";
-  return round % 2 === 0 ? "&larr;" : "&rarr;";
+  if (DraftEngine.pickInRound(round, slot, league) === teams) return "&darr;";
+  return DraftEngine.reversedRound(round, league) ? "&larr;" : "&rarr;";
 }
 
 /* The headshot, or nothing at all.
@@ -4738,7 +5591,7 @@ function renderBoard() {
         // above, and this cell gets rebuilt from scratch the moment real
         // data lands (see the deferred-data boot), so there's nothing to
         // gain from an approximation here, correct or not.
-        const inRound = typeof DraftEngine === "undefined" ? "?" : DraftEngine.pickInRound(r, s, league.teams);
+        const inRound = typeof DraftEngine === "undefined" ? "?" : DraftEngine.pickInRound(r, s, league);
 
         /* `mine` goes on an empty cell too, and that is the half of this
            that was missing. The class only ever went on a filled one, so the
@@ -4778,7 +5631,7 @@ function renderBoard() {
            DraftEngine.overallOf() rather than the sum written out here: the
            mirror is inside it, and a caller holding a round and a seat must
            never work that out again. */
-        const ovr = `<span class="cell-ovr">${typeof DraftEngine === "undefined" ? "" : DraftEngine.overallOf(r, s, league.teams)}</span>`;
+        const ovr = `<span class="cell-ovr">${typeof DraftEngine === "undefined" ? "" : DraftEngine.overallOf(r, s, league)}</span>`;
 
         // The cell on the clock is the clock. Looking away from where the
         // pick lands to find out how long is left is the thing this removes.
@@ -5122,11 +5975,11 @@ function renderGrades() {
     </div>
 
     <div class="bars">
-      ${bar("Starter strength", Math.round(me.starters) + " pts above replacement",
+      ${bar("Starter strength", parText(me),
             me.startersScaled, tone(me.startersScaled))}
-      ${bar("Draft value", (me.value >= 0 ? "+" : "") + me.value + " picks, K and D/ST aside",
+      ${bar("Draft value", parValueText(me),
             me.valueScaled, tone(me.valueScaled))}
-      ${bar("Roster construction", me.build + " / 100",
+      ${bar("Roster construction", buildText(me),
             me.buildScaled, tone(me.buildScaled))}
       ${bar("Bye week safety", byeSummary(me.badWeeks),
             me.byePenaltyScaled, tone(me.byePenaltyScaled))}
@@ -5164,19 +6017,25 @@ function renderGrades() {
   // standings
   html += `<p class="section-label" style="margin-top:20px">Room standings</p>
     <table class="standings"><tbody>`;
-  /* The number between the rank and the letter is the weighted total, which
-     is what the room is ordered by and what the letter is handed out for.
-     It used to print starter strength — one component of four — so the
-     column climbed and fell down a table that was strictly ranked, and four
+  /* No score column between the rank and the letter any more.
+
+     The rule it used to satisfy was that whatever sits there has to be the
+     weighted total: it once printed starter strength — one component of four
+     — so the column climbed and fell down a strictly ranked table, and four
      teams sharing a starter strength of 90 sat at ranks 1, 4, 5 and 7 with
-     four different grades. It read as a sorting bug. The other three
-     components are on the bars above; this column is the answer they add up
-     to. */
+     four different grades. It read as a sorting bug.
+
+     Removing the column satisfies that rule from the other end. A letter
+     grade beside an x/100 is read against the scale everybody was taught, and
+     the letter here is finishing position while the number was a
+     room-relative composite — so they disagreed by construction, on every row.
+     The row is ordered by rank and labelled by a letter that means rank, and
+     there is nothing left for a third number to contradict. The components
+     still add up in the bars above. */
   all.slice().sort((a, b) => a.rank - b.rank).forEach(function (t) {
     html += `<tr class="${t.slot === state.mySlot ? "me" : ""}">
         <td class="rk">${t.rank}</td>
         <td>${teamLabel(t.slot)}</td>
-        <td class="num">${Math.round(t.total)}</td>
         <td class="gr">${t.grade}</td>
       </tr>`;
   });
@@ -5841,6 +6700,117 @@ function depthChartFor(player) {
   });
 }
 
+/* Usage, from the `u` block nflverse writes. This is the only data on the
+   sheet that does not come from Sleeper, and the only thing on it that
+   answers "why did he score that" rather than "how much is he worth".
+
+   It is never scored. `u` is not in STAT_FIELDS or SCOREABLE, pointsUnder()
+   never sees it, and nothing here feeds overallScore(), suggestions() or
+   cpuChoice() — measured at the time it was added, no usage metric beat
+   points per game as a predictor of next season's points, and the best any
+   of them managed on top of points per game was +0.008 r. So it explains a
+   number the app already shows and does not become one.
+
+   Which columns are meaningful is a football question, so it is answered
+   here beside logColumns() rather than in a component. A quarterback has no
+   target share; a kicker has nothing but his game-winners. */
+/* xFP leads and its delta sits beside it, because together they are the
+   sentence the whole tab exists to say: what his role was worth, and how far
+   he beat or trailed it. The shares and EPA that follow are the explanation.
+   Backtested (2018-2025, ffopportunity data): an xFP composite is the best
+   backward-looking predictor at every position and still loses to the
+   projection the Juke score runs on, so these stay display-only like
+   everything else here. */
+const USAGE_COLUMNS = {
+  QB:  ["xf", "xd", "pep", "cpo", "rep", "r20"],
+  RB:  ["xf", "xd", "ts", "rep", "ep", "r20"],
+  WR:  ["xf", "xd", "ts", "ays", "wo", "ep"],
+  TE:  ["xf", "xd", "ts", "ays", "wo", "ep"],
+  K:   ["gwa", "gwm"]
+};
+
+const USAGE_LABELS = {
+  ts: "TGT%", ays: "AY%", wo: "WOPR", ep: "REC EPA", rep: "RUSH EPA",
+  pep: "PASS EPA", cpo: "CPOE", r20: "20+ RUN", gwa: "GW ATT", gwm: "GW MADE",
+  xf: "xFP", xd: "±xFP"
+};
+
+// A share is a proportion and reads as a percentage; EPA is a points figure
+// and carries its sign, because a negative one is the whole point of it.
+// WOPR is a conventional index and is left as the number everyone quotes.
+const USAGE_SHARES = { ts: true, ays: true };
+
+// The two expected-points figures, which carry a caveat the others do not:
+// they are the ffopportunity model's own scoring, so the scoring editor
+// cannot move them. usageFor() flags it so the tab can say so.
+const USAGE_MODEL = { xf: true, xd: true };
+
+function usageCell(key, value) {
+  if (value === undefined || value === null) return null;
+  if (USAGE_SHARES[key]) return (value * 100).toFixed(1) + "%";
+  if (key === "cpo") return (value > 0 ? "+" : "") + value.toFixed(1);
+  // xd is actual minus expected, signed for the same reason EPA is: which
+  // side of his role's worth he landed on is the whole fact.
+  if (key === "ep" || key === "rep" || key === "pep" || key === "xd") {
+    return (value > 0 ? "+" : "") + value.toFixed(1);
+  }
+  if (key === "xf") return value.toFixed(1);
+  return String(value);
+}
+
+function usageFor(player) {
+  // Guarded here rather than at the call site, the same way draftFit() is:
+  // statOf() already answers null before PLAYER_STATS has landed, so the
+  // only thing left to refuse is having no player at all.
+  if (!player) return null;
+  const s = statOf(player);
+  const u = s && s.u;
+  const allKeys = USAGE_COLUMNS[player.pos];
+  if (!u || !allKeys) return null;
+
+  /* The model columns are absent, not dashes, until the data exists. This
+     app.js can deploy ahead of the stats.js the nightly regenerates, and an
+     unjoined player never gets `xf` at all -- either way a column of em
+     dashes under a header is a promise the data is not keeping, the same
+     rule that hides the whole tab rather than showing it empty. The other
+     columns keep their dashes: a missing single year inside a column that
+     exists is a fact about that year, not about the column. */
+  const years = Object.keys(u);
+  const keys = allKeys.filter(function (k) {
+    return !USAGE_MODEL[k] || years.some((y) => u[y][k] !== undefined);
+  });
+
+  const rows = Object.keys(u).sort().reverse().map(function (year) {
+    const block = u[year];
+    const cells = keys.map((k) => usageCell(k, block[k]));
+    if (!cells.some((c) => c !== null)) return null;
+    const season = (s.s || {})[year];
+    return {
+      year: year,
+      // The denominator honesty. A share is over the team's whole season,
+      // never over the games he played, so a player who missed six weeks
+      // shows a depressed share that is arithmetically right and answers a
+      // different question from the one being asked. Same rule as
+      // projectionRecord()'s own games column, and a DST never gets here.
+      games: season && season.gp ? season.gp : null,
+      cells: cells
+    };
+  }).filter(Boolean);
+
+  if (!rows.length) return null;
+  return {
+    head: keys.map((k) => USAGE_LABELS[k]),
+    rows: rows,
+    // So the component knows whether the denominator caveat is worth saying:
+    // a quarterback's row carries no share and the note would be noise.
+    hasShare: keys.some((k) => USAGE_SHARES[k]),
+    // And whether the scoring-editor caveat is: xFP is the ffopportunity
+    // model's own scoring, the one pair of figures on the sheet the editor
+    // cannot rescore, and that must be said where the number is.
+    hasModel: keys.some((k) => USAGE_MODEL[k])
+  };
+}
+
 function openSheet(player) {
   sheetPlayer = player;
   const s = statOf(player);
@@ -6063,12 +7033,50 @@ function settingsFingerprint(cfg) {
 }
 
 // Turned back into something a human can read, for the refusal message.
+/* One sentence describing a league's shape, for a shut settings box, a
+   header, a Locker row and a room's own summary.
+
+   Both functions below print the same four core facts and then whatever
+   is NOT the default, and only that. A summary that lists every setting is
+   a settings screen with worse formatting; a summary that lists none of the
+   unusual ones lets somebody sit in a linear rookies-only draft with the
+   header cheerfully reading "10 teams · 14 rounds · Half PPR" — which is
+   the "right value, wrong column" failure with a whole missing column. So
+   snake and an all-players pool say nothing, because they are what a reader
+   already assumes, and anything else says itself. */
+function shapeExtras(cfg) {
+  const bits = [];
+  if (cfg.draftType === "linear") bits.push("Linear");
+  if (cfg.thirdRoundReversal) bits.push("3RR");
+  if (cfg.playerPool === "rookies") bits.push("Rookies only");
+  if (cfg.playerPool === "vets") bits.push("Vets only");
+  return bits;
+}
+
 function settingsText(cfg) {
-  return `${cfg.teams} teams · ${cfg.rounds} rounds · ${scoringLabel(cfg.scoring)}`;
+  return [
+    `${cfg.teams} teams`, `${cfg.rounds} rounds`, scoringLabel(cfg.scoring)
+  ].concat(shapeExtras(cfg)).join(" · ");
 }
 
 function saveDraft() {
-  if (!state.started) return;
+  // hasRoom(), not inRoom() — see the distinction CLAUDE.md draws between
+  // them: inRoom() is Live.active(), which blips false during an ordinary
+  // reconnect, and a save written during that blip would still be a room
+  // draft's picks sitting under the exact same key a solo draft resumes
+  // from. A room member's real way back in is the invite link/room code,
+  // which already reconnects correctly (see live.js's own reconnect-on-
+  // visibilitychange/pageshow logic) — this key was never a working
+  // second path for that, only an accidental one. Confirmed reachable:
+  // close the tab on a room draft without using "Leave the room" (an
+  // ordinary way to lose a tab, not a deliberate departure), come back
+  // with no ?room= code, and the Locker showed an "in progress" band
+  // indistinguishable from a solo draft. "Resume draft" rebuilt state
+  // purely from the saved name list — it never touched Live or the
+  // socket — so it silently forked the draft into an offline solo
+  // continuation against CPUs while the real room carried on without
+  // this seat, with nothing on screen saying that had happened.
+  if (!state.started || hasRoom()) return;
   try {
     localStorage.setItem(SAVE_KEY, JSON.stringify({
       v: 2,
@@ -6413,6 +7421,99 @@ function projectedWinPctForRoom(all, cv) {
   });
 }
 
+/* The Draft Insights report, frozen whole at the moment a draft completes —
+   see DraftInsightsDashboard.jsx's own file comment for the bug this fixes.
+   openHistoryDraft() rebuilds the whole board from *today's* live
+   projections and ADP before replaying a saved draft's picks onto it, so
+   every grade, VORP figure and callout on a reopened report used to be
+   recomputed against data that had moved since the draft actually
+   happened — a D+ in the Locker table (itself already frozen, see
+   recordHistory() below) reading back as an A- in the report built from
+   the same picks. And freezing only the raw inputs and re-running today's
+   *formula* would not have fixed it either: WEIGHTS, MIN_SPAN and
+   GRADE_SCALE have each been retuned more than once in this file's own
+   history (see CLAUDE.md's grade section), so only the fully computed
+   output — post-scaling, post-weights, post-grade-lookup — is immune to
+   the grade's own shape changing out from under an old report.
+
+   Full per-team detail (the VORP matrix, the value timeline, the one that
+   got away) is frozen only for the drafter's own team — a roster-sized
+   chunk of data per team, and nobody has asked to inspect a CPU seat's
+   report after the fact. Every other team gets the lightweight row the
+   standings and the share card's room comparison actually need: rank,
+   grade, total and the four scaled components. Team names are resolved to
+   strings here rather than left as slot numbers, because teamLabel()
+   depends on state.mySlot, which will not be this draft's mySlot once a
+   different draft is later in progress. */
+function freezeReport(all, slot) {
+  const mine = all[slot];
+  if (!mine) return null;
+
+  const winPcts = projectedWinPctForRoom(all);
+
+  const standings = all.map(function (t) {
+    return {
+      slot: t.slot,
+      teamName: teamLabel(t.slot),
+      rank: t.rank,
+      grade: t.grade,
+      total: t.total,
+      startersScaled: t.startersScaled,
+      valueScaled: t.valueScaled,
+      buildScaled: t.buildScaled,
+      byePenaltyScaled: t.byePenaltyScaled,
+      winPct: winPcts ? winPcts[t.slot] : null
+    };
+  });
+
+  const lineup = (mine.lineup || []).map(function (seat) {
+    return {
+      slotLabel: seat.slot,
+      name: seat.player ? seat.player.name : null,
+      pos: seat.player ? seat.player.pos : null,
+      vorpGap: seat.player ? replacementGap(seat.player) : null
+    };
+  });
+
+  const teamPicks = state.picks.filter((p) => p.slot === slot)
+    .slice().sort((a, b) => a.overall - b.overall);
+  const timeline = teamPicks
+    .filter((p) => !FORCED_LATE[p.player.pos])
+    .map(function (p) {
+      return { round: p.round, overall: p.overall, pos: p.player.pos,
+               name: shortName(p.player), gap: p.overall - p.player.overall };
+    });
+
+  const away = oneThatGotAway(slot);
+  const missed = away ? {
+    theirsName: away.theirs.player.name,
+    theirsTeamName: teamLabel(away.theirs.slot),
+    theirsOverall: away.theirs.overall,
+    mineName: away.mine.player.name,
+    mineRound: away.mine.round,
+    mineOverall: away.mine.overall,
+    delta: away.delta
+  } : null;
+
+  return {
+    mySlot: slot,
+    weights: { starters: WEIGHTS.starters, value: WEIGHTS.value, build: WEIGHTS.build, byes: WEIGHTS.byes },
+    standings: standings,
+    mine: {
+      value: mine.value,
+      bargain: mine.bargain ? {
+        name: mine.bargain.pick.player.name, pos: mine.bargain.pick.player.pos, gap: mine.bargain.gap
+      } : null,
+      reach: mine.reach ? {
+        name: mine.reach.pick.player.name, pos: mine.reach.pick.player.pos, gap: mine.reach.gap
+      } : null,
+      lineup: lineup,
+      timeline: timeline,
+      oneThatGotAway: missed
+    }
+  };
+}
+
 function recordHistory() {
   // The whole room, not just mine — the tendencies strip's "room average"
   // roster-VORP baseline needs every team's number, and this is the one
@@ -6458,7 +7559,15 @@ function recordHistory() {
     // strength) rather than sit beside it disagreeing.
     rosterVorp: mine ? rosterVorpOf(mine) : null,
     roomAvgRosterVorp: roomAvgRosterVorp,
-    weakestSpot: mine ? weakestStartingSpot(mine.lineup) : null
+    weakestSpot: mine ? weakestStartingSpot(mine.lineup) : null,
+    // The whole Draft Insights report, frozen right here — see
+    // freezeReport()'s own comment for why a reopened report used to
+    // disagree with this very entry's own `grade` a few lines up. Absent
+    // (undefined, same convention as every other field below) on any
+    // entry recorded before this existed; DraftLocker.jsx falls back to
+    // the old live-recompute path for those, exactly as every entry used
+    // to work.
+    report: freezeReport(all, state.mySlot)
     // Net ADP value, positional strength and projected win % all used to
     // be frozen here too, reasoning that this was the one moment the board
     // matched the draft that was actually played. That reasoning was
@@ -6829,7 +7938,52 @@ function historyStats() {
         }
       }
 
-      if (netAdpAny) netAdpEntries.push({ id: entry.id, value: netAdpSum, completedAt: entry.completedAt });
+      /* Against par for that seat, not raw.
+
+         Raw net ADP value cannot come out positive for most people, and the
+         card was reporting that as a record: "you beat ADP in 0 of 10 mocks".
+         Three things stack up, all measured. Your first pick is capped at zero,
+         because the gap is pick number minus board rank and nothing ranks below
+         1. Need-based drafting reaches by construction — needFromCount()
+         returns 0.80 for a position still filling a starting slot, so the app
+         itself schedules the reaches it then marks you down for; on a real
+         seat-1 mock the quarterback and the last two starting slots were −14,
+         −26 and −28 against positives that never exceeded +5. And the room does
+         not sum to zero: measured across ten rooms it came out −41 to −44 every
+         time, so the average team loses at this too.
+
+         Seat is most of the rest. Mean raw value by chair over ten mocks ran
+         −28, −19, −14, −3, +15, +6, −3, −11, +13, +2 — a 43-point spread on
+         where you sat. Against par it is +2, +3, −1, −3, −3, +5, +3, −3, −1,
+         −2, which is noise, and that is the same correction the grade's own
+         value component already applies.
+
+         Par is asked for with `entry.league` rather than the live one: a
+         12-team mock read while you sit in a 10-team league needs par for the
+         shape it was played at. If par is unavailable — no engine yet, or an
+         entry too old to carry its league — the raw figure is kept rather than
+         a silently unadjusted zero-subtraction, and `vsPar` says which it is so
+         the card can label itself honestly. */
+      if (netAdpAny) {
+        const shape = entry.league && entry.league.starters ? entry.league : null;
+        /* Indexed by picks *made*, not picks judged. parRun() pushes a value
+           row on every pick and only adds to the running total on the ones
+           freelyChosen()/reachableRank() let through, so the row index is the
+           seat's pick count — and using the judged count here would read par
+           two or three picks early, which is exactly where the late reaches
+           this metric is dominated by actually land. Resolved picks, because a
+           name no longer on today's board is skipped above and contributes to
+           neither side. */
+        const par = shape
+          ? seatPar(entry.mySlot, rosters[entry.mySlot].length, "value", shape)
+          : null;
+        netAdpEntries.push({
+          id: entry.id,
+          value: typeof par === "number" ? netAdpSum - par : netAdpSum,
+          vsPar: typeof par === "number",
+          completedAt: entry.completedAt
+        });
+      }
 
       const myRoster = rosters[entry.mySlot];
       if (myRoster.length) {
@@ -7052,7 +8206,7 @@ function inProgressSummary() {
   // resumeDraft() already takes when a whole save fails to resolve.
   const myPicks = [];
   data.picks.forEach(function (name, i) {
-    if (DraftEngine.pickInfo(i + 1, data.league.teams).slot !== data.mySlot) return;
+    if (DraftEngine.pickInfo(i + 1, data.league).slot !== data.mySlot) return;
     const player = board.find((p) => p.name === name);
     if (player) myPicks.push({ name: player.name, pos: player.pos });
   });
@@ -7297,6 +8451,13 @@ const RULE_GROUPS = [
   ["Turnovers and returns", ["fum_lost", "kr_td", "pr_td"]],
   ["Kicking",  ["xpm", "xpmiss", "fgmiss", "fgm_0_19", "fgm_20_29",
                 "fgm_30_39", "fgm_40_49", "fgm_50_59", "fgm_60p"]],
+  // Its own group, and the group title is what says these are additional.
+  // Sitting under "Kicking" beside "Field goal missed" they would read as a
+  // replacement for it, and a manager typing -1 into one would be charging
+  // -2 a miss — which would look harsh rather than wrong.
+  ["Extra for a missed field goal, by distance",
+               ["fgmiss_20_29", "fgmiss_30_39", "fgmiss_40_49",
+                "fgmiss_50_59", "fgmiss_60p"]],
   ["Defense and special teams",
                ["sack", "int", "fum_rec", "safe", "def_td", "def_st_td",
                 "blk_kick", "def_2pt"]],
@@ -7318,6 +8479,9 @@ const RULE_LABELS = {
   rec_fd: "Receiving first down", rec_40p: "Catch of 40+ yards",
   fum_lost: "Fumble lost", kr_td: "Kick return TD", pr_td: "Punt return TD",
   xpm: "Extra point", xpmiss: "Extra point missed", fgmiss: "Field goal missed",
+  fgmiss_20_29: "Missed 20–29", fgmiss_30_39: "Missed 30–39",
+  fgmiss_40_49: "Missed 40–49", fgmiss_50_59: "Missed 50–59",
+  fgmiss_60p: "Missed 60+",
   fgm_0_19: "FG 0–19", fgm_20_29: "FG 20–29", fgm_30_39: "FG 30–39",
   fgm_40_49: "FG 40–49", fgm_50_59: "FG 50–59", fgm_60p: "FG 60+",
   sack: "Sack", int: "Interception", fum_rec: "Fumble recovered",
@@ -7430,10 +8594,12 @@ function scoringSummary() {
    everything else, so it cannot describe a different league from the one the
    controls inside it hold — the same reason scoringSummary() exists. */
 function leagueSummary() {
-  // scoringLabel(), not SCORING_NAMES directly — the same lookup with the
-  // same fallback already exists and drifting from it is how the dropdown
-  // and the scoring summary once disagreed about the same league.
-  return `${league.teams} teams · ${league.rounds} rounds · ${scoringLabel()}`;
+  // settingsText(league), not a second copy of the same join — that
+  // function is already the one place a league's shape becomes a sentence,
+  // and this used to be a near-identical template literal beside it. The
+  // moment settingsText() learned about draft type and player pool, this
+  // one would have gone on describing a league that no longer existed.
+  return settingsText(league);
 }
 
 function fillSetupControls() {
@@ -7491,8 +8657,20 @@ function setupProblem() {
            `= ${filled} roster spots, but the draft runs ${league.rounds} rounds.`;
   }
   if (totalPicks() > poolSize()) {
+    /* The pool is what adpSet() actually returns, which since the
+       available-players filter arrived is not always the whole ADP set —
+       so a rookies-only draft is refused here the same way an over-long one
+       always was, with the reason naming the filter rather than the format.
+       Getting this from poolSize() rather than from a second count is what
+       makes the two agree by construction: the board this validates is
+       literally the array buildBoard() will map over. */
+    if (league.playerPool && league.playerPool !== "all") {
+      return `${league.teams} teams over ${league.rounds} rounds is ${totalPicks()} picks, ` +
+             `and there are only ${poolSize()} ${league.playerPool === "rookies" ? "rookies" : "veterans"} ` +
+             `on the board. Widen the player pool, or run fewer teams or rounds.`;
+    }
     return `${league.teams} teams over ${league.rounds} rounds is ${totalPicks()} picks, ` +
-           `and the ${league.scoring === "half" ? "half PPR" : league.scoring} board only ` +
+           `and the ${scoringLabel(league.scoring)} board only ` +
            `carries ${poolSize()} players.`;
   }
   return "";
@@ -8313,21 +9491,53 @@ window.addEventListener("hashchange", function () {
   const now = typeof Live === "undefined" ? null : Live.state().code;
   if (code && code !== now) joinRoom(code, false);
 
-  /* Not called at all for a bare in-page anchor (#rooms, #proof, #scores —
-     anything not starting with "#/"; an empty hash still runs it). Every
-     real route in this app is "#/something"; applyRoute() ends in an
-     unconditional window.scrollTo(0, 0), which is correct for a real route
-     change (leaving the Draft Room, arriving at "#/") and wrong for
-     everything else — it fights the browser's own native scroll-to-anchor,
-     so the hash updates and the page snaps straight back to the top
+  /* applyRoute() itself is not called for a bare in-page anchor (#rooms,
+     #proof, #scores — anything not starting with "#/"; an empty hash still
+     runs it). Every real route in this app is "#/something"; applyRoute()
+     ends in an unconditional window.scrollTo(0, 0), which is correct for a
+     real route change (leaving the Draft Room, arriving at "#/") and wrong
+     for everything else — it fights the browser's own native scroll-to-
+     anchor, so the hash updates and the page snaps straight back to the top
      instead of landing on the section a click just asked for. This was
      already true of Hero.jsx's "Explore The Rooms" link before the
      homepage redesign added a full anchor nav that depends on it working —
      same bug, just newly load-bearing. The one caller that must still see
      a bare fragment (a fresh page load landing directly on #rooms from a
      bookmark or shared link) is the boot-time applyRoute() call below,
-     which isn't behind this hashchange guard at all. */
-  if (location.hash && location.hash.charAt(1) !== "/") return;
+     which isn't behind this hashchange guard at all.
+
+     syncHomeVisibility() still has to run, though. SiteNav.jsx's own
+     comment claims these same-page anchors "still work when clicked from
+     the Locker... following one of these un-mounts the fixed Locker
+     overlay and lets the browser's native anchor scroll land on the
+     homepage section underneath" — true of the React side (useHashActive
+     only matches "#/drafts", so the Locker overlay does unmount), false of
+     this file's own side: #/drafts leaves view-home/shellbar hidden
+     (applyRoute()'s hideHome, above), and skipping applyRoute() entirely
+     for the #proof hashchange that follows means nothing ever sets that
+     back. The Locker overlay unmounts on cue and reveals a #root that is
+     still sitting inside a hidden ancestor — the homepage renders
+     correctly and nobody can see any of it. Confirmed live: following "How
+     It Works" from the Lobby left document.body.innerText at four
+     characters ("JUKE") with #root's full markup intact underneath.
+
+     Un-hiding still isn't enough on its own to land on the named section,
+     only to stop the page being blank: the browser's own native
+     scroll-to-fragment runs as part of updating location.hash, which is
+     earlier than this listener — so on the very hashchange that reveals
+     #proof, the browser already tried and gave up scrolling to an element
+     that was still display:none at that instant, and it does not retry
+     once the element becomes visible a moment later. scrollIntoView() here
+     redoes that native attempt by hand, now that the target can actually
+     be scrolled to; scroll-behavior/scroll-padding-top (index.css) apply
+     to it exactly as they do to the native version, so it still eases in
+     under the fixed header rather than jumping straight to its top edge. */
+  if (location.hash && location.hash.charAt(1) !== "/") {
+    syncHomeVisibility();
+    const target = document.getElementById(location.hash.slice(1));
+    if (target) target.scrollIntoView();
+    return;
+  }
   applyRoute();
 });
 
@@ -8525,8 +9735,7 @@ $("playerFilter").addEventListener("click", function (e) {
    this reason), and app.js's whole dependency on them being plain
    shared-scope globals would break under import()'s module namespace. */
 function loadDeferredData() {
-  if (typeof DraftEngine !== "undefined" && typeof PLAYERS !== "undefined" &&
-      typeof STAT_KEYS !== "undefined") return;
+  if (dataReady()) return;
   let remaining = 3;
   const done = function () {
     remaining--;
@@ -8562,6 +9771,20 @@ window.addEventListener("juke:data-loaded", function onDeferredData() {
   // moment the deferred data lands. refreshSetup() rebuilds the board and
   // re-renders without touching scroll position.
   refreshSetup();
+
+  /* refreshSetup() bails outright once state.started is true (its own
+     first line), which a room's own broadcast can set before this event
+     ever fires — so on a cold load of an already-started room, the branch
+     above is a no-op and the board this file just spent a whole boot
+     sequence keeping empty-but-honest stays empty. onRoomChange() is the
+     one function that both rebuilds it correctly (adoptRoom()'s league
+     compare/rebuild) and re-applies the room's own picks on top of it, and
+     live.js kept the room's last broadcast in live.room this whole time —
+     onRoomChange() re-reads it itself rather than this listener trying to
+     hand it back in. Guarded on Live existing at all: this listener fires
+     on every page load, not only the ones that also loaded live.js, and a
+     solo boot has no room to re-sync. */
+  if (typeof Live !== "undefined" && Live.room()) onRoomChange();
 });
 
 // Everything above this line is a definition. This reads the setup screen,
@@ -8586,9 +9809,7 @@ window.JukeEngine = {
   // DraftEngine/PLAYERS/STAT_KEYS directly, the same way it reads board()
   // and league() instead of the bare module-scope bindings: one bridge,
   // not a second copy of what "ready" means creeping into web/src.
-  dataReady:    () => typeof DraftEngine !== "undefined" &&
-                       typeof PLAYERS !== "undefined" &&
-                       typeof STAT_KEYS !== "undefined",
+  dataReady,
   board:        () => board,
   league:       () => league,
   rooms:        () => ROOMS,
@@ -8612,9 +9833,26 @@ window.JukeEngine = {
   scoringNames: () => SCORING_NAMES,
   setLeague: function (patch) {
     Object.assign(league, patch);
-    // The format preset owns exactly one rule, at the moment it is chosen —
-    // same side effect readSetup() has always applied, kept in one place.
-    if (patch.scoring) league.rules.rec = REC_BY_FORMAT[patch.scoring];
+    /* A scoring preset owns exactly one rule and, since superflex joined the
+       list, one roster slot — applied at the moment it is chosen, which is
+       the same side effect readSetup() has always had for `rec`, kept in one
+       place.
+
+       The lineup patch has to move `rounds` with it, for the reason
+       DraftSettingsModal's own setLineup() already documents: setupProblem()
+       refuses a draft whose roster size and round count disagree, so a
+       preset that adds a starting slot without adding a round would leave
+       the Start button refusing and nothing on screen saying which control
+       caused it. Derived here rather than left to the caller, because the
+       caller is a settings screen that did not choose to change the roster. */
+    if (patch.scoring) {
+      league.rules.rec = REC_BY_FORMAT[patch.scoring] === undefined ? 0.5 : REC_BY_FORMAT[patch.scoring];
+      const preset = SCORING_PRESET[patch.scoring];
+      if (preset && preset.lineup) {
+        Object.assign(league, preset.lineup);
+        league.rounds = rosterSize();
+      }
+    }
     // readSetup() re-reads teams/scoring off these same two legacy <select>
     // elements every time refreshSetup() runs — goHome() among other places
     // — and until this line it always won: the legacy controls are hidden
@@ -8636,6 +9874,63 @@ window.JukeEngine = {
     render();
   },
   setupProblem: setupProblem,
+  /* ---- Everything the Draft Settings screen needs that was not on the
+     bridge yet. Every one is a read of, or a write to, the one real
+     `league`/`state` — never a second idea of what a league is, which is
+     the failure "nothing about the league shape may be written down twice"
+     exists to prevent and which the superflex grading bug is what looks
+     like when it happens. ---- */
+
+  // The three draft-order formats and the two that are real. `available`
+  // is what the settings screen disables on, so the screen never has to
+  // carry its own opinion about which of these the engine can actually
+  // run — see DRAFT_TYPES for why auction is listed rather than hidden.
+  draftTypes: () => DRAFT_TYPES,
+  playerPools: () => PLAYER_POOLS,
+  // What a preset does beyond its rec value, plus the caveat it carries.
+  scoringPreset: (key) => SCORING_PRESET[key] || null,
+  // How many players the current league/pool combination actually has to
+  // draft from — the same number setupProblem() validates against, so a
+  // screen can show the constraint rather than only the refusal.
+  poolSize: poolSize,
+  // Draft order, as the settings screen's own list: seat, who sits there,
+  // and which overall pick they hold first. cpuName() rather than
+  // teamLabel() for the reason the bridge already records beside it —
+  // teamLabel() answers "Your Team" against the *committed* state.mySlot,
+  // which is the wrong source while somebody is still choosing a seat.
+  draftOrder: function () {
+    const out = [];
+    for (let s = 0; s < league.teams; s++) {
+      out.push({
+        slot: s,
+        name: s === state.mySlot ? (teamLabel(s) || cpuName(s)) : cpuName(s),
+        you: s === state.mySlot,
+        firstPick: typeof DraftEngine === "undefined" ? null : DraftEngine.overallOf(1, s, league)
+      });
+    }
+    return out;
+  },
+  /* Randomising the order means moving ONE seat — mine — because every
+     other chair is a CPU with no identity to preserve. A shuffle of the
+     whole array would be a lie dressed as a feature: the nine other seats
+     are interchangeable by construction, so permuting them changes
+     nothing anybody can observe.
+
+     In a room it is a real reorder and belongs to the host, which is why
+     this refuses there and the Seats tab (swapSeats) is the way instead. */
+  randomizeOrder: function () {
+    if (hasRoom()) return false;
+    state.mySlot = Math.floor(Math.random() * league.teams);
+    render();
+    return true;
+  },
+  setMySlot: function (slot) {
+    const n = Number(slot);
+    if (!isFinite(n) || n < 0 || n >= league.teams) return false;
+    state.mySlot = n;
+    render();
+    return true;
+  },
   resumeDraft:  resumeDraft,
   clearSave:    clearSave,
   // Added for the Draft Locker (web/src/components/DraftLocker.jsx). Summary
@@ -8652,6 +9947,19 @@ window.JukeEngine = {
   // remove one — this is the plain filter-and-rewrite clearSave() already
   // does for the single in-progress save, extended to one entry among many.
   deleteHistoryDraft: (id) => writeHistory(readHistory().filter((e) => e.id !== id)),
+  // The frozen report recordHistory() saved when this draft finished, or
+  // null for an entry recorded before freezeReport() existed and for an id
+  // that no longer exists — either way, a plain localStorage read with no
+  // side effect on the live board, league or state.picks, unlike
+  // openHistoryDraft() below. DraftLocker.jsx tries this first and only
+  // falls back to openHistoryDraft()'s live recompute when it comes back
+  // null. Also hands back completedAt, so a reopened report's share card
+  // can date itself the day the draft actually finished rather than today.
+  historyReport: (id) => {
+    const entry = readHistory().find((h) => h.id === id);
+    if (!entry || !entry.report) return null;
+    return { report: entry.report, completedAt: entry.completedAt };
+  },
   openHistoryDraft: openHistoryDraft,
   // The counterpart — see closeHistoryDraft()'s own comment for why this is
   // not just goHome() again.
@@ -8680,6 +9988,36 @@ window.JukeEngine = {
       return false;
     }
     if (setupProblem()) return false;
+    /* Clear the last draft before building the next one. buildBoard() looks
+       like it already does this — it maps a fresh copy of every player with
+       `drafted = false` — but the board is not where a draft is recorded.
+       state.picks is, and nothing had ever emptied it: this function sets a
+       seat, a clock and a seed and starts drafting on top of whatever was
+       already there.
+
+       Reported as "Start mock draft takes me into an old insights report".
+       Finish a draft, press "Back to the locker" (a plain <a href="#/drafts">
+       — it changes the route and touches no state), change a setting, press
+       Start: state.picks still holds the finished draft's 140 entries, so
+       draftOver() is true on the first render and DraftRoom.jsx's insights
+       effect fires on the edge exactly as designed. Nothing looked broken
+       anywhere in between, because nothing was — the new draft was over
+       before it was drawn.
+
+       "Run another mock" on that same report has always worked, which is what
+       made it look intermittent: that one goes through restart() -> goHome(),
+       which clears all of this. The clear belongs here rather than on the way
+       out, because there is one way in and several ways out — the same reason
+       the retired-#/draft redirect lives at the router and not at its callers.
+
+       CLAUDE.md has recorded the missing reset since the seat-par work ("a
+       loop over seeds is a lie"), where it was diagnosed as a console-harness
+       hazard. It was the same defect reaching a user by a different route. */
+    state.picks    = [];
+    state.lastPick = null;
+    // Not inherited either: a draft abandoned while paused would otherwise
+    // start its replacement paused, with a clock that never counts.
+    state.paused   = false;
     state.mySlot      = opts.mySlot;
     state.clockLength = opts.clockLength;
     state.started     = true;
@@ -8747,6 +10085,21 @@ window.JukeEngine = {
   projectionSummary: projectionSummary,
   gameLogFor:        gameLogFor,
   depthChartFor:     depthChartFor,
+  // TEAM_RANKS/TEAM_RANKS_META are stats.js top-level consts, same cross-
+  // script-tag visibility PLAYER_STATS already relies on (see statOf()) —
+  // guarded the same way, since a page that hasn't finished loading the
+  // deferred data has neither yet. Real per-team offensive ranks (build_
+  // players.py, from nflverse's stats_team file), never a second lookup.
+  teamRanksFor: function (team) {
+    return typeof TEAM_RANKS !== "undefined" && team ? (TEAM_RANKS[team] || null) : null;
+  },
+  teamRanksMeta: function () {
+    return typeof TEAM_RANKS_META !== "undefined" ? TEAM_RANKS_META : null;
+  },
+  // Returns null when nflverse never wrote a `u` block — a defence, an
+  // unjoined player, or a run where nflverse was down. The tab is hidden on
+  // null rather than drawn empty, the same way the news tab is.
+  usageFor:          usageFor,
   sourceId:          sourceId,
   newsItemView:      newsItemView,
   /* Added for the player card's "Our Read" tab — the model explaining
@@ -8803,6 +10156,15 @@ window.JukeEngine = {
           (player.pos === 'DST' ? 'defenses' : 'kickers') +
           ' no better than chance — one of those seasons came out backwards. The number is ' +
           'withheld rather than guessed at; the projected points are still real.'
+        : null,
+      // Below real ADP -- see extend_deep_bench() in scripts/build_players.py.
+      // Unlike unranked, this doesn't withhold the score: there's no
+      // three-season finding that the ranking is wrong, only the fact that
+      // no real draft has ever priced this player. A note, not a dash.
+      deep: !!player.deep,
+      deepNote: player.deep
+        ? 'No real draft has ever taken this player — ranked by Sleeper\'s own depth order ' +
+          'instead of a live market, and the projection above may be thin or missing entirely.'
         : null,
       upside: sig ? Math.round(sig.upside) : null,
       upsideLabel: sig ? label(sig.upside) : null,
@@ -9007,7 +10369,7 @@ window.JukeEngine = {
   // resumable per-turn toggle, so it is not what a persistent "Autopick:
   // ON" switch should mean. The page drives its own turn-by-turn loop for
   // that case instead, off autoPickForMe() — bridged here as a pure read,
-  // the exact function (queueTop() -> suggestions()[0] -> bestLeft()) that
+  // the exact function (queueTop() -> cpuChoice() -> bestLeft()) that
   // autoDraftRest()'s own solo loop already uses for my seat, so a second
   // "what would I draft" rule never gets invented in React.
   inRoom: inRoom,
@@ -9059,6 +10421,14 @@ window.JukeEngine = {
   // one thing that wasn't on the bridge yet because nothing needed the
   // unformatted number before there was a bar to fill.
   timeLeft: () => state.timeLeft,
+  // The year buildPriorSeason() actually found (latestStatSeason()), for the
+  // Players tab's season toggle — p.priorPts/p.priorGames are already real
+  // fields on every board player (set inside buildPriorSeason(), scored
+  // under the current rules exactly like the projection), so the only thing
+  // missing a bridge was the label itself. Null if the stats feed had
+  // nothing to find a prior season in, which the tab reads as "hide the
+  // selector" rather than showing it against empty columns.
+  priorSeason: () => PRIOR_SEASON,
   /* The pick clock is state, not league - it is per-drafter rather than part
      of the board's shape, which is why a room broadcasts it separately. The
      settings modal wrote league.clock for two commits and read it back as
@@ -9149,14 +10519,26 @@ window.JukeEngine = {
     renderInvite();
     renderChat();
   },
-  sendChat: (text, gif) => Live.chat(text, gif || null),
+  // replyTo is the third, optional argument all the way down — Live.chat()
+  // already defaults it to null for a caller that only ever passed two.
+  sendChat: (text, gif, replyTo) => Live.chat(text, gif || null, replyTo || null),
   sendReaction: (id, emoji) => Live.react(id, emoji),
   onTyping: (fn) => Live.onTyping(fn),
   sendTyping: (on) => Live.typing(!!on),
+  // The mobile redesign's chat types — thin bridges over the identical
+  // Live.* functions sendChat/sendReaction already wrap, not reimplemented.
+  // uploadMedia resolves to a URL (or null on any failure) and is a
+  // separate step from posting, same as GIPHY search vs. sending a gif.
+  sendPoll: (question, choices, opts) => Live.pollCreate(question, choices, opts),
+  votePoll: (id, choice) => Live.pollVote(id, choice),
+  sendVoice: (url, seconds, replyTo) => Live.voice(url, seconds, replyTo || null),
+  sendPhoto: (url, w, h, replyTo) => Live.photo(url, w, h, replyTo || null),
+  uploadMedia: (kind, blob) => Live.uploadMedia(kind, blob),
   claimSeat: (seat) => Live.claimSeat(seat),
   swapSeats: (a, b) => Live.swapSeats(a, b),
   gifSearch: (q) => Live.gifSearch(q),
   safeGif: safeGif,
+  safeMediaUrl: safeMediaUrl,
   // chatStream() is the real merge of room.chat and room.picks into one
   // timeline by `at` — picks are not chat messages, and this is the same
   // function that keeps the legacy dock from storing them twice (see
@@ -9167,7 +10549,7 @@ window.JukeEngine = {
   // already call (queueToggle()/queueMove() themselves don't render;
   // the caller does, same as the legacy delegated click handler does
   // here). queueTop() is what autoPickForMe() and the clock-expiry pick
-  // already prefer over the model's own opinion — starring a player here
+  // already prefer over cpuChoice()'s own choice — starring a player here
   // is the same real plan, not a second, cosmetic-only "favorites" list.
   queue: () => state.queue,
   queued: queued,
@@ -9198,11 +10580,26 @@ window.JukeEngine = {
   // renderGrades()'s bye label and method note already use verbatim —
   // bridged so that prose is never re-derived in React.
   analyseDraft: analyseDraft,
+  // The starter-strength caption. Bridged rather than reimplemented in
+  // AnalysisTab.jsx for the reason parText() itself gives: two captions for
+  // one bar drift, and the bar is scored against par while the raw sum is
+  // what the VORP matrix prints.
+  parText: parText,
+  parValueText: parValueText,
+  buildText: buildText,
   // Added for the Analysis tab's "Fix this first" card — see bestUpgrade()'s
   // own comment for why only starters/build are simulated and why "before"
   // isn't part of what this returns (the caller already has it, off the
   // same analyseDraft() call the four bars already read).
   bestUpgrade: bestUpgrade,
+  // The Insights dashboard's "One that got away" panel. It used to do this
+  // scan itself off two bare replacementGap() readings, which is a comparison
+  // between two players with no reference to the roster being advised — see
+  // oneThatGotAway()'s own comment for the two-tight-ends case that exposed
+  // it. The verdict is computed here, beside bestLineup(), for the same
+  // reason usageFor() and projectionSummary() are: a component renders what
+  // the engine decided, and never decides it a second way.
+  oneThatGotAway: oneThatGotAway,
   byeSummary: byeSummary,
   replacementText: replacementText,
   lineupText: lineupText,

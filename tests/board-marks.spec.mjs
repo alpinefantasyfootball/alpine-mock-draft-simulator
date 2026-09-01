@@ -1,46 +1,40 @@
 /* What the draft board says beyond the picks themselves: whose column it is,
-   where the draft is, what every team holds, and how far away a pick is.
+   where the draft is, and how far away a pick is.
 
-   Gold is identity, and it is the third meaning after teal and blue. Both
-   marks were blue before — the same blue as the focus ring, the selected tab,
-   --link, .draft-btn and the header when the clock is yours. A colour doing
-   five jobs is not a signal, which is the design half.
+   The seat mark is a pair of cyan rails down the user's column now — the
+   palette handoff's "seat bracket" — where it was a gold wash plus a gold
+   border pair before it. That is a deliberate, scoped departure from
+   CLAUDE.md's "Gold is identity" rule and the reason is the ground: the
+   cells are matte pastel chalk since the same handoff, and #FFD166 at 7%
+   over #FBD5A8 is not a wash anybody can see. Gold still means "yours"
+   everywhere else in the room, and tailwind.config.js's shadow-seat and
+   .seat-wash tokens still hold it.
 
-   The bug half is smaller and worse. `mine` only ever went on a *filled*
-   cell, so the board marked where you had been and never where you were
-   going — and where you are going next is the one question a snake board
-   exists to answer. Nothing failed, nothing logged, and every check this
-   project runs passed: the cells that were marked were marked correctly.
+   The bug half of this file's original subject is unchanged and is still
+   the whole feature: `mine` only ever went on a *filled* cell, so the board
+   marked where you had been and never where you were going — and where you
+   are going next is the one question a snake board exists to answer.
+   Nothing failed, nothing logged, and every check this project runs passed:
+   the cells that were marked were marked correctly.
 
-   The contrast test is the one that changed most in the move off the legacy
-   board, and the change is worth stating rather than glossing.
+   The contrast test changed shape with the colour, and the change is worth
+   stating rather than glossing.
 
-   On that board a ring is a *pair* — 2px of gold with 1px of keyline inside
-   it — because no single colour survives what it lands on there: six position
-   solids that are fixed across themes, and an empty cell that is near-black
-   in dark and near-white in light, where gold falls to 1.26. This board has
-   no light theme, and its position cells are translucent over its own ground,
-   so every surface is dark and one colour is enough — the keyline ran 1.01 to
-   1.12 there and was doing nothing.
+   On the legacy board a ring is a *pair* — 2px of gold with 1px of keyline
+   inside it — because no single colour survives what it lands on there: six
+   position solids fixed across themes, and an empty cell that is near-black
+   in dark and near-white in light. On the React board one colour was already
+   enough because every surface was dark. It is now enough for a stronger
+   reason: the bracket never lands on a *cell surface* at all. It is an inset
+   shadow on the grid-cell wrapper, inside the 3px margin the card sits in, so
+   what is under it is always the board's own ground — whatever colour the
+   card two pixels to its right happens to be. The test below asserts that
+   geometrically rather than taking it on trust, because it is the entire
+   reason a light-chalk board can carry a single-value seat mark.
 
-   That ground is slate #1E2733 now rather than the #0B0E14 this comment used
-   to name, and the conclusion survived the move rather than being assumed to.
-   Re-measured: the ground's luminance goes 0.0044 to 0.0197, still an order
-   of magnitude inside the < 0.05 the precondition below asks for, and gold's
-   worst case across the surfaces it lands on goes 9.66:1 to 9.19:1 against a
-   3:1 bar. Both moved and neither mattered, which is the only reason one
-   colour is still enough.
-
-   Note the test does not hardcode either number — it reads the computed
-   ground and composites what is actually over it. That is why the ground
-   change surfaced here as six selector failures and not as a wrong answer:
-   what broke was `border-slate-800/70`, the class these tests use to find a
-   real board cell, which is now `border-slate-rule/70`.
-
-   So the assertion here is stronger than the legacy one — every surface, not
-   one half of a pair — and it is guarded by the precondition that makes it
-   legal. If this board ever gains a light theme the pair has to come back,
-   and the second half of that test is what will say so.
+   Which also means the precondition is doing real work now: if the board's
+   ground ever stops being dark, this mark needs re-deriving, and the last
+   assertion is the line that will say so.
 */
 
 import { test, expect } from "@playwright/test";
@@ -138,7 +132,7 @@ test.describe("what the board marks", () => {
     const r = await page.evaluate((c) => {
       eval(c);
       const all = cells();
-      const ringed = all.filter((e) => /255, 209, 102/.test(getComputedStyle(e).boxShadow));
+      const ringed = all.filter((e) => /0, 229, 255/.test(getComputedStyle(e).boxShadow));
       const filled = ringed.filter((e) => e.querySelector("p.truncate")).length;
       return { ringed: ringed.length, filled, empty: ringed.length - filled,
                rounds: league.rounds, mySlot: JukeEngine.mySlot(),
@@ -179,7 +173,7 @@ test.describe("what the board marks", () => {
       expect(after.index, "and it moved").not.toBe(before.index);
     });
 
-  test("the gold ring clears its bar on every surface, and the board stays dark",
+  test("the seat bracket is drawn on the board's own ground, and clears its bar there",
     async ({ browser }) => {
       const context = await browser.newContext();
       const page = await openApp(context, "#/draft-room");
@@ -195,36 +189,66 @@ test.describe("what the board marks", () => {
         document.head.appendChild(kill);
 
         const boardBg = parse(getComputedStyle(grid().parentElement).backgroundColor).slice(0, 3);
-        const all = cells();
-        const ringed = all.filter((e) => /255, 209, 102/.test(getComputedStyle(e).boxShadow));
+        const bracketed = cells().filter((e) => /0, 229, 255/.test(getComputedStyle(e).boxShadow));
 
-        const gold = [255, 209, 102];
-        const worst = { ratio: 99, on: null };
-        const surfaces = new Set();
-        ringed.forEach((cell) => {
-          // What the ring is actually drawn against: the card inside the
-          // cell if there is one, otherwise the board itself.
-          const card = cell.querySelector('[class*="rounded-md"]');
-          const raw = card ? getComputedStyle(card).backgroundColor : "rgba(0,0,0,0)";
-          const under = over(parse(raw), boardBg);
-          surfaces.add(raw);
-          const cr = ratio(gold, under);
-          if (cr < worst.ratio) { worst.ratio = cr; worst.on = raw; }
+        /* The load-bearing geometry. The shadow is 1px at lg+ and 2px below
+           it, inset from the wrapper's own edges, and the card lives inside
+           a 3px padding — so the rail and the card must not share a single
+           pixel of x. Measured rather than assumed, because this is the
+           whole reason one cyan value is enough on a board whose cells are
+           now light: the moment the bracket moves onto a chalk fill it is
+           #00E5FF on a pastel and the mark is gone.
+
+           Reported as an overlap count, not a boolean, so a failure says how
+           many cells were wrong rather than only that one was. */
+        let overlaps = 0, gap = 99, measured = 0;
+        bracketed.forEach((cell) => {
+          const card = cell.querySelector('[class*="rounded-"]');
+          if (!card) return;                       // an empty round, nothing to clear
+          const cw = parseFloat(getComputedStyle(cell).boxShadow.match(/(-?[\d.]+)px 0px 0px 0px inset/)[1]);
+          const railRight = cell.getBoundingClientRect().left + Math.abs(cw);
+          const cardLeft = card.getBoundingClientRect().left;
+          measured++;
+          if (cardLeft < railRight) overlaps++;
+          gap = Math.min(gap, cardLeft - railRight);
         });
-        return { checked: ringed.length, surfaces: surfaces.size,
-                 worst: Math.round(worst.ratio * 100) / 100, on: worst.on };
+
+        // And what it is actually drawn against, on both grounds it touches:
+        // the board itself, and the sticky column header at the top of the
+        // same column.
+        const head = [...grid().querySelectorAll('[class*="sticky top-0"]')]
+          .find((e) => /0, 229, 255/.test(getComputedStyle(e).boxShadow));
+        const cyan = [0, 229, 255];
+        const onBoard = ratio(cyan, boardBg);
+        const onHead = head ? ratio(cyan, over(parse(getComputedStyle(head).backgroundColor), boardBg)) : null;
+
+        return {
+          bracketed: bracketed.length, measured, overlaps,
+          gap: Math.round(gap * 100) / 100,
+          headBracketed: !!head,
+          onBoard: Math.round(onBoard * 100) / 100,
+          onHead: onHead == null ? null : Math.round(onHead * 100) / 100,
+        };
       }, CONTRAST);
 
-      expect(r.checked, "there were rings to measure").toBeGreaterThan(5);
-      expect(r.surfaces, "and more than one kind of surface under them").toBeGreaterThan(1);
+      expect(r.measured, "there were filled cells in the column to measure").toBeGreaterThan(5);
+      expect(r.overlaps, "the bracket never touches a card").toBe(0);
+      expect(r.gap, "and it clears it by the card's own margin").toBeGreaterThan(0);
+
+      /* The bracket starts at the header, not under it. A rail beginning at
+         round 1 reads as a marked block of picks; one that includes the
+         header reads as a marked column, which is the thing being marked. */
+      expect(r.headBracketed, "the column header is bracketed too").toBe(true);
+
       // Marks, not type: 1.4.11's 3:1 is the right bar here, and the only
       // place in this project where the lower one applies.
-      expect(r.worst, `gold on ${r.on}`).toBeGreaterThanOrEqual(3);
+      expect(r.onBoard, "cyan on the board's ground").toBeGreaterThanOrEqual(3);
+      expect(r.onHead, "cyan on the column header").toBeGreaterThanOrEqual(3);
 
-      /* The precondition the single ring rests on. A light theme would put a
-         near-white empty cell under it, where gold measures 1.26 and the
-         legacy board's keyline earns its place — so if this ever stops being
-         true, the pair has to come back and this is the line that says so. */
+      /* The precondition the single value rests on. A light ground under the
+         bracket would put cyan somewhere near the chalk fills it is supposed
+         to be distinguishable from — so if this ever stops being true, the
+         mark has to be re-derived and this is the line that says so. */
       const dark = await page.evaluate((c) => {
         eval(c);
         document.documentElement.setAttribute("data-theme", "light");

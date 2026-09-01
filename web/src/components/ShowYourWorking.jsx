@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
+import { COMPONENT_LABELS } from './TakeAPick.jsx'
+import { DEMO_TEAMS } from './ScoringDemoCard.jsx'
 
 // standard/half/full — same three keys ScoringDemoCard.jsx's own
 // PPR_OPTIONS already uses; kept as a second, small array rather than an
@@ -128,7 +130,7 @@ function VorpChart({ format }) {
         <path d={curveD} fill="none" stroke="#5EEAD4" strokeWidth="2" />
         <line x1={PAD_L} x2={CHART_W - PAD_R} y1={replY} y2={replY} stroke="#5EEAD4" strokeWidth="1" strokeDasharray="3 3" opacity="0.55" />
         <circle cx={cutX} cy={replY} r="3" fill="#5EEAD4" />
-        <text x={cutX} y={Math.min(CHART_H - 4, replY + 15)} textAnchor="middle" fontSize="9" fontFamily="var(--font-plex, monospace)" fill="rgba(255,255,255,0.55)">
+        <text x={cutX} y={Math.min(CHART_H - 4, replY + 15)} textAnchor="middle" fontSize="9" fontFamily="'Montserrat', sans-serif" fill="rgba(255,255,255,0.55)">
           {`replacement · WR${replacementRank}`}
         </text>
       </svg>
@@ -162,8 +164,15 @@ function useFeaturedSurvival() {
       const forcedLate = engine.forcedLate()
       if (!statKeys) return
 
-      const picks = engine.nextPicksFor(0, 2)
-      const targetOverall = picks.length > 1 ? picks[1] : null
+      // Seat 0's own second pick of a fresh, unstarted DEMO_TEAMS-team draft
+      // — see ScoringDemoCard.jsx's own comment on DEMO_TEAMS for why this
+      // is pure snake arithmetic rather than a read of the live, shared
+      // state.picks (which used to put this caption's "next turn" pick as
+      // late as pick 139 of an entire draft). Both widgets target the
+      // identical pick by construction, which is what this function's own
+      // comment above promises.
+      const DE = typeof window !== 'undefined' ? window.DraftEngine : null
+      const targetOverall = DE ? DE.overallOf(2, 0, DEMO_TEAMS) : null
       if (targetOverall == null) return
       const picksFromNow = targetOverall - 1
 
@@ -242,7 +251,7 @@ function SurvivalChart({ data }) {
           y={Math.max(PAD_T + 9, markY - 6)}
           textAnchor={markX > CHART_W - PAD_R - 110 ? 'end' : 'start'}
           fontSize="9"
-          fontFamily="var(--font-plex, monospace)"
+          fontFamily="'Montserrat', sans-serif"
           fill="rgba(255,255,255,0.55)"
         >
           {`${markedPct}% · your next turn`}
@@ -250,33 +259,6 @@ function SurvivalChart({ data }) {
       </svg>
     </div>
   )
-}
-
-// 04's own real number: the same third-round scenarios TakeAPick.jsx reads
-// from engine.thirdRoundScenarios() — not a second engine call inventing a
-// number, just this section's own read of the same live data, the same way
-// useVorpCurve and useFeaturedSurvival above each call window.JukeEngine
-// directly rather than threading state down from a shared parent. The last
-// scenario's own "after" grade is the most fully-realized of the three.
-function useLatestGrade() {
-  const [grade, setGrade] = useState(null)
-
-  useEffect(() => {
-    const engine = typeof window !== 'undefined' ? window.JukeEngine : null
-    if (!engine) return
-
-    const read = () => {
-      if (!engine.dataReady()) return
-      const rows = engine.thirdRoundScenarios()
-      if (rows && rows.length) setGrade(rows[rows.length - 1].after)
-    }
-
-    read()
-    window.addEventListener('juke:header', read)
-    return () => window.removeEventListener('juke:header', read)
-  }, [])
-
-  return grade
 }
 
 // Whether Waiver/Trade are actually live — the same `live` flag
@@ -300,19 +282,27 @@ function useRoomStatus() {
   return status
 }
 
+// The inactive (Waivers/Trades, "Not live yet") state used to read
+// text-voidInk-muted for the label and text-voidInk-body for the value —
+// one step dimmer each than the active Draft row's purple label and
+// -primary value. Reported as hard to read against this card's dark
+// gradient background; the label and value now step up to the same tones
+// the active row already clears (-body and -primary respectively), so all
+// three rows share one legibility floor. The label still isn't purple and
+// the value still says "Not live yet" — brightness moved, not meaning.
 function ProofRow({ label, active, value, note }) {
   return (
-    <div className="rounded-[10px] bg-white/[0.03] px-3 py-[9px]">
+    <div className="rounded-[10px] bg-surface-row px-3 py-[9px]">
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
         <span
-          className={`font-plex text-[9.5px] font-semibold uppercase tracking-[0.1em] ${active ? '' : 'text-white/40'}`}
-          style={active ? { color: '#a78bfa' } : undefined}
+          className={`font-numeral text-[10.5px] font-semibold uppercase tracking-[0.13em] ${active ? '' : 'text-voidInk-body'}`}
+          style={active ? { color: '#C0ABE9' } : undefined}
         >
           {label}
         </span>
-        <span className={`text-[13.5px] font-semibold ${active ? 'text-white/90' : 'text-white/55'}`}>{value}</span>
+        <span className="text-[13.5px] font-semibold text-voidInk-primary">{value}</span>
       </div>
-      <p className="mt-[3px] font-plex text-[10.5px] text-[#8e9aa1]">{note}</p>
+      <p className="mt-[3px] font-numeral tabular-nums text-[10.5px] font-medium text-voidInk-muted">{note}</p>
     </div>
   )
 }
@@ -321,27 +311,85 @@ function ProofRow({ label, active, value, note }) {
 // Its own promise is that the draft-grade engine is the same engine that
 // will price a waiver claim and score a trade — so unlike 01–03, it cannot
 // borrow a real number for two of its three rows: the Waiver and Trade
-// rooms don't exist yet, and there is no service to source one from. This
-// project's own rule is to degrade honestly rather than ship a fixture
-// (see CLAUDE.md's "Claim and proof" and "Real data requirements" sections),
-// so those two rows read "Not live yet" off the real room flag instead of a
-// plausible-looking number nobody computed.
+// rooms don't exist yet, and there is no service to source one from. Those
+// two rows read "Not live yet" off the real room flag instead of a
+// plausible-looking number nobody computed — CLAUDE.md's "Claim and proof"
+// and "Real data requirements" sections are the rule this follows.
+//
+// The Draft row used to be a hardcoded "Grade · C", on direct instruction
+// from the design handoff (design_handoff_homepage_cosmetic §5): "production
+// shows 29/100 · C in the live demo and 19/100 · C− in the 'same engine'
+// card... unify to one value." TakeAPick.jsx's own GradePanel keeps
+// animating real scenario data — gutting that would undercut the section's
+// entire "watch it get graded" premise — so the literal was meant as a
+// static snapshot beside it. It didn't unify anything: TakeAPick cycles
+// through three different real scenarios (seats 2/5/8), each with its own
+// real letter, while this row said "C" regardless — a visitor watching the
+// loop land on a B+ or a D+ was reading it right beside a fixed "C" and a
+// caption claiming it was "computed tonight," which it never was.
+//
+// It reads a real value now: engine.thirdRoundScenarios()[0] — the exact
+// same seeded, deterministic simulation TakeAPick.jsx's own
+// useThirdRoundScenarios() calls (jitter is arithmetic off each player's
+// own board data, not Math.random(), so both calls against the same board
+// return the identical scenario — see CLAUDE.md's "the CPU wobble is
+// arithmetic, not randomness"). Index 0 rather than tracking whichever
+// scenario TakeAPick happens to be cycling through at that instant: that
+// would need scenario/phase state lifted out of TakeAPick and into
+// Homepage.jsx to share between two sibling components, a real
+// restructure for a card whose own job is a single static snapshot, not a
+// second animated one. This still doesn't guarantee the two never differ
+// at a given moment — TakeAPick rotates through seats 5 and 8 too — but it
+// replaces an always-wrong hardcoded guess with a real, board-derived
+// value that agrees whenever TakeAPick is on its own first scenario
+// (true on load), and "computed tonight" is now an honest claim rather
+// than a false one regardless of which scenario TakeAPick is showing.
+//
+// Letter only, no "/100" — the design handoff's own §5 text (quoted above)
+// paired them, which is the exact "letter grade beside a score out of a
+// hundred" pattern CLAUDE.md documents removing from every other grade
+// surface in the real product (the share card, both Analysis headers, the
+// Insights summary, the mobile grade·score chip, all three standings
+// tables) after finding the letter agreed with a reader's own school
+// reading of the number beside it on 0 of 10 teams. Matches the same fix
+// applied to TakeAPick.jsx's GradePanel just above this card.
+function useSameEngineGrade() {
+  const [letter, setLetter] = useState(null)
+
+  useEffect(() => {
+    const engine = typeof window !== 'undefined' ? window.JukeEngine : null
+    if (!engine) return
+
+    const read = () => {
+      if (!engine.dataReady()) return
+      const rows = engine.thirdRoundScenarios()
+      if (rows && rows[0] && rows[0].after) setLetter(rows[0].after.letter)
+    }
+
+    read()
+    window.addEventListener('juke:header', read)
+    return () => window.removeEventListener('juke:header', read)
+  }, [])
+
+  return letter
+}
+
 function SameEngineCard() {
-  const grade = useLatestGrade()
   const { waiverLive, tradeLive } = useRoomStatus()
+  const draftLetter = useSameEngineGrade()
 
   return (
     <div
       className="flex h-full flex-col rounded-[14px] border px-[26px] py-6 transition-colors duration-200"
-      style={{ borderColor: 'rgba(167,139,250,0.35)', background: 'linear-gradient(180deg, rgba(167,139,250,0.10), #0d1216 60%)' }}
+      style={{ borderColor: '#31293F', background: 'linear-gradient(160deg, #1D1727, #13161C 55%)' }}
     >
-      <p className="font-plex text-[11px] font-semibold tracking-[0.12em]" style={{ color: '#a78bfa' }}>
+      <p className="font-numeral text-[10.5px] font-semibold tracking-[0.13em]" style={{ color: '#C0ABE9' }}>
         04 &middot; SAME ENGINE, ALL SEASON
       </p>
-      <h3 className="mt-[9px] font-display text-[17px] font-bold text-white">
+      <h3 className="mt-[9px] font-body text-base font-bold text-voidInk-primary">
         Draft grades today. Waivers and trades once those rooms open.
       </h3>
-      <p className="mt-[9px] text-[15px] leading-[1.55] text-[#8e9aa1]">
+      <p className="mt-[9px] text-[15px] leading-[1.55] text-voidInk-body">
         The same VORP baseline and the same four weighted parts that grade tonight&rsquo;s draft will price a
         waiver claim and score both sides of a trade once those rooms are live. One engine, not three.
       </p>
@@ -349,7 +397,7 @@ function SameEngineCard() {
         <ProofRow
           label="Draft"
           active
-          value={grade ? `Grade · ${grade.composite}/100 · ${grade.letter}` : 'Grade · —'}
+          value={draftLetter ? `Grade · ${draftLetter}` : 'Grade · —'}
           note="4 weighted parts, computed tonight"
         />
         <ProofRow label="Waivers" active={waiverLive} value={waiverLive ? 'Live' : 'Not live yet'} note="same VORP baseline, once it ships" />
@@ -376,7 +424,7 @@ export default function ShowYourWorking() {
   const survivalData = useFeaturedSurvival()
 
   return (
-    <section id="proof" className="relative isolate mx-auto max-w-7xl px-6 py-24">
+    <section id="proof" className="relative isolate mx-auto max-w-[1200px] px-10 pb-0 pt-[96px]">
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-x-0 top-0 -z-10 mx-auto h-[400px] w-[900px]"
@@ -391,27 +439,40 @@ export default function ShowYourWorking() {
         transition={{ duration: 0.6 }}
         className="max-w-[720px]"
       >
-        <h2 className="text-balance font-display text-[30px] font-extrabold italic leading-[1.15] tracking-[-0.015em] sm:text-[38px] sm:leading-[1.1] lg:text-[46px] lg:leading-[1.08] lg:tracking-[-0.025em]">
+        <h2 className="text-balance font-display text-[clamp(32px,3.6vw,48px)] font-extrabold italic leading-none">
           <span className="text-white">Show Your Working </span>
           {/* text-white/25 measured 2.13:1 here — under even the 3:1 bar
               large bold text gets, pre-existing and found during homepage
               v4 pass 3's contrast audit rather than introduced by it.
-              #8e9aa1: same fix as everywhere else in this pass. */}
-          <span className="not-italic" style={{ color: '#8e9aa1' }}>—</span>
+              #808389 (voidInk.muted): same fix as everywhere else in this pass. */}
+          <span className="not-italic" style={{ color: '#808389' }}>—</span>
           <span className="text-white"> No Black Box</span>
         </h2>
-        <p className="mt-4 text-[17px] leading-[1.55] text-white/55">
+        <p className="mt-3 text-[17px] leading-[1.55] text-voidInk-body">
           Every number Juke prints is one you can follow. Re-calculated live off real market data.
         </p>
       </motion.div>
 
       {/* Two equal charted cards side by side, the static grade card below
           them as a full-width row (§4.4) — not squeezed into a third
-          column, since it isn't a third chart. */}
-      <div className="mt-[42px] grid gap-[14px] lg:grid-cols-2">
-        <div className="flex h-full flex-col rounded-[14px] border border-white/[0.07] bg-[#0d1216] px-[26px] py-6 transition-colors duration-200 hover:border-teal-400/70">
-          <div className="flex items-start justify-between gap-3">
-            <p className="font-plex text-[11px] font-semibold tracking-[0.12em] text-teal-400">
+          column, since it isn't a third chart.
+
+          items-stretch (§7): CSS Grid's own default, so this row already
+          measured equal-height in both cards before this class was added
+          — confirmed 381.6px/381.6px via computed getBoundingClientRect().
+          Written explicitly anyway, since the handoff calls it out by
+          name and a later change could otherwise override the default
+          without anyone noticing why cards started hugging their own
+          content again. */}
+      <div className="mt-[28px] grid items-stretch gap-[14px] lg:grid-cols-2">
+        <div className="flex h-full flex-col rounded-[14px] border border-line-hairline bg-surface-card px-[26px] py-6 transition-colors duration-200 hover:border-teal-400/70">
+          {/* flex-wrap: label + three format pills want ~257px and the card
+              hands this row 241px at 375px, so without it the pill group
+              (shrink-0 below, deliberately — pills must not squash) ran
+              16px past the card edge and "Full PPR" clipped. Wrapping drops
+              the pills onto their own line only where they no longer fit. */}
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <p className="font-numeral text-[10.5px] font-semibold tracking-[0.13em] text-[#4DDAE9]">
               01 &middot; VORP
             </p>
             {/* h-11 (44px) below md — §9 names this exact control ("the
@@ -426,7 +487,7 @@ export default function ShowYourWorking() {
                   type="button"
                   onClick={() => setFormat(f.format)}
                   className={`inline-flex h-11 items-center justify-center rounded-full px-2 font-plex text-[10px] font-semibold transition-colors duration-200 md:h-7 ${
-                    format === f.format ? 'bg-teal-500 text-obsidian' : 'text-[#8e9aa1] hover:text-white'
+                    format === f.format ? 'bg-teal-500 text-obsidian' : 'text-voidInk-muted hover:text-white'
                   }`}
                 >
                   {f.label}
@@ -434,24 +495,24 @@ export default function ShowYourWorking() {
               ))}
             </div>
           </div>
-          <h3 className="mt-[9px] font-display text-[17px] font-bold text-white">Value over replacement</h3>
-          <p className="mt-[9px] text-[15px] leading-[1.55] text-[#8e9aa1]">
+          <h3 className="mt-[9px] font-body text-base font-bold text-voidInk-primary">Value over replacement</h3>
+          <p className="mt-[9px] text-[15px] leading-[1.55] text-voidInk-body">
             Every player is scored against the last startable player at their position, not against each other.
           </p>
           <VorpChart format={format} />
         </div>
 
-        <div className="flex h-full flex-col rounded-[14px] border border-white/[0.07] bg-[#0d1216] px-[26px] py-6 transition-colors duration-200 hover:border-teal-400/70">
+        <div className="flex h-full flex-col rounded-[14px] border border-line-hairline bg-surface-card px-[26px] py-6 transition-colors duration-200 hover:border-teal-400/70">
           <div className="flex items-start justify-between gap-3">
-            <p className="font-plex text-[11px] font-semibold tracking-[0.12em] text-teal-400">
+            <p className="font-numeral text-[10.5px] font-semibold tracking-[0.13em] text-[#4DDAE9]">
               02 &middot; SURVIVAL
             </p>
             {survivalData && (
-              <span className="shrink-0 font-plex text-[11px] font-semibold text-[#8e9aa1]">{survivalData.player.name}</span>
+              <span className="shrink-0 font-numeral tabular-nums text-[11px] font-medium text-voidInk-muted">{survivalData.player.name}</span>
             )}
           </div>
-          <h3 className="mt-[9px] font-display text-[17px] font-bold text-white">The odds they last</h3>
-          <p className="mt-[9px] text-[15px] leading-[1.55] text-[#8e9aa1]">{SURVIVAL_BODY}</p>
+          <h3 className="mt-[9px] font-body text-base font-bold text-voidInk-primary">The odds they last</h3>
+          <p className="mt-[9px] text-[15px] leading-[1.55] text-voidInk-body">{SURVIVAL_BODY}</p>
           <SurvivalChart data={survivalData} />
         </div>
       </div>
@@ -459,12 +520,35 @@ export default function ShowYourWorking() {
       {/* 03 paired with 04 rather than stacked full-width: neither is a
           chart, so pairing them keeps the chart row (01/02) visually
           distinct from the two card-only rows below it — the same reason
-          03 was never squeezed into a three-up row with the charts. */}
-      <div className="mt-[14px] grid gap-[14px] lg:grid-cols-2">
-        <div className="rounded-[14px] border border-white/[0.07] bg-[#0d1216] px-[26px] py-6 transition-colors duration-200 hover:border-teal-400/70">
-          <p className="font-plex text-[11px] font-semibold tracking-[0.12em] text-teal-400">03 &middot; THE GRADE</p>
-          <h3 className="mt-[9px] font-display text-[17px] font-bold text-white">Four parts, each shown</h3>
-          <p className="mt-[9px] max-w-[640px] text-[15px] leading-[1.55] text-[#8e9aa1]">{GRADE_BODY}</p>
+          03 was never squeezed into a three-up row with the charts.
+          items-stretch: see the row above's own comment on §7 — same
+          already-the-default, made explicit for the same reason. */}
+      <div className="mt-[14px] grid items-stretch gap-[14px] lg:grid-cols-2">
+        <div className="flex h-full flex-col rounded-[14px] border border-line-hairline bg-surface-card px-[26px] py-6 transition-colors duration-200 hover:border-teal-400/70">
+          <p className="font-numeral text-[10.5px] font-semibold tracking-[0.13em] text-[#4DDAE9]">03 &middot; THE GRADE</p>
+          <h3 className="mt-[9px] font-body text-base font-bold text-voidInk-primary">Four parts, each shown</h3>
+          <p className="mt-[9px] max-w-[640px] text-[15px] leading-[1.55] text-voidInk-body">{GRADE_BODY}</p>
+          {/* §6 — this card used to be three lines of text in a box sized
+              for a chart. Bar fill width equals the part's own weight
+              (50/25/15/10, COMPONENT_LABELS — TakeAPick.jsx's real table,
+              imported rather than restated) so the graphic states what
+              GRADE_BODY's copy claims instead of just repeating it in
+              prose a second time. */}
+          <div className="mt-[18px] flex flex-col gap-[9px]">
+            {COMPONENT_LABELS.map((c) => (
+              <div key={c.key} className="grid grid-cols-[150px_minmax(0,1fr)_42px] items-center gap-3">
+                <span className="text-[14px] font-semibold text-voidInk-primary">{c.label}</span>
+                <span className="block h-[6px] overflow-hidden rounded-full bg-[#24262C]">
+                  <span className="block h-full rounded-full bg-mint" style={{ width: `${c.weight}%` }} />
+                </span>
+                {/* text-voidInk-body — same brightness bump as TakeAPick.jsx's
+                    "wt {weight}" label, the same weight number shown in the
+                    live grade widget above this section; -muted read too dim
+                    next to the brighter label and bar beside it. */}
+                <span className="text-right font-numeral tabular-nums text-[12px] font-semibold text-voidInk-body">{c.weight}</span>
+              </div>
+            ))}
+          </div>
         </div>
         <SameEngineCard />
       </div>

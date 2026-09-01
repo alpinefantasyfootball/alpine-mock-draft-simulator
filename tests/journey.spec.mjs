@@ -30,20 +30,61 @@ test("homepage to a finished draft, pressing only what a person can press",
     await page.goto(SITE, { waitUntil: "domcontentloaded" });
     await page.waitForFunction(() => !!window.JukeEngine, null, { timeout: 30000 });
 
-    // The homepage is real content, not a splash: the ticker and the hero
-    // both read off the live board rather than sample data.
-    const boardSize = await page.evaluate(() => JukeEngine.board().length);
-    expect(boardSize, "the board is loaded before anything is clicked").toBeGreaterThan(150);
+    /* The homepage is real content, not a splash: the ticker and the hero
+       both read off the live board rather than sample data.
+
+       Polled, not read once. window.JukeEngine exists as soon as app.js has
+       run, and app.js is a blocking classic script — but the board arrives
+       with the deferred boot (draft-engine.js/players.js/stats.js, loaded on
+       requestIdleCallback), so the bridge is there a good while before the
+       data behind it is. Reading straight after the waitForFunction above
+       caught that gap and reported 0 on a page that fills in correctly a
+       moment later.
+
+       That gap is the same one CLAUDE.md records under "a window.JukeEngine
+       entry is only as safe as its own guard": the bridge existing never
+       implied the deferred files had landed, and DraftLocker.jsx learned it
+       the same way. Still before anything is clicked, which is the claim. */
+    await expect
+      .poll(() => page.evaluate(() => JukeEngine.board().length), { timeout: 30000 })
+      .toBeGreaterThan(150);
 
     /* ---- 2. find the Draft Room --------------------------------------- */
     /* Through a link on the page, not by setting location.hash. ROOMS is
        written down once and rendered into both the header panel and the
        homepage's doors, and the one string in it is what sends every "start
        a draft" entry point somewhere — it pointed at the retired route for a
-       while, and nothing in the suite would have noticed. */
-    const doors = page.locator('a[href="#/draft-room"]');
+       while, and nothing in the suite would have noticed.
+
+       That string is "#/drafts" now, not "#/draft-room", and the move was
+       deliberate: ROOMS and Hero.jsx both carry the reasoning — the Lobby is
+       the product's real front door, and a homepage link straight into the
+       live Cockpit was the most direct way a manager landed back on a stale
+       finished draft instead of a fresh choice. So this follows the Lobby,
+       which is also what the rest of this test already walks through. */
+    /* `a[href="#/drafts"]` alone matches several links at once — Hero.jsx's
+       two CTA variants (one `lg:hidden`, one `hidden lg:flex`, exactly one
+       ever visible) and Header.jsx's own sticky mobile bottom bar, which
+       carries the same href but no `data-hero-cta` marker and sits earlier
+       in the DOM than either Hero variant. At this test's default desktop
+       viewport that bar is `lg:hidden` — permanently hidden, not merely slow
+       to render — so `.first()` on the bare selector resolves to it and a
+       click retries against an element that will never become visible,
+       timing out. `data-hero-cta` exists for precisely this — Hero.jsx's own
+       comment: "only one is ever rendered" of the two marked variants, so
+       filtering to the marked ones and taking whichever is on screen is the
+       one real door regardless of viewport, without needing to know which
+       breakpoint is active.
+
+       And the mobile pass added a fourth: there are two whole HOMEPAGES in
+       this document now, not just two renderings of one control, and both
+       mount — the phone one is `sm:hidden` at this width and first in
+       document order. It carries the marker too (HomePhone.jsx's Mock Draft
+       row), which is why the count below is the only thing the bare marker
+       answers and the click on line 91 still asks for `:visible`. */
+    const doors = page.locator('[data-hero-cta]');
     expect(await doors.count(), "the homepage offers a way in").toBeGreaterThan(0);
-    await doors.first().click();
+    await page.locator('[data-hero-cta]:visible').first().click();
 
     // The door lands on the Locker first, not the seat-picker directly —
     // seat-picking moved to its own screen one step further in. "Start
@@ -56,44 +97,39 @@ test("homepage to a finished draft, pressing only what a person can press",
     // click here rather than delegating to that helper.
     const enter = page.locator("#draftroom-root button").filter({ hasText: /^Start mock draft$/ });
     await expect(enter, "the Locker asks for one thing").toBeVisible({ timeout: 30000 });
-    await enter.click();
+    /* ---- 3. sit down, and change something, so the draft is actually mine
 
-    await page.waitForFunction(() => {
-      const root = document.getElementById("draftroom-root");
-      return root && /YOUR ROSTER, EMPTY/i.test(root.innerText || "");
-    }, null, { timeout: 30000 });
+       Both on the Lobby, before starting, because that is where they live
+       now. This used to be three screens: click through to a seat-picker
+       ("YOUR ROSTER, EMPTY", DraftEntryScreen.jsx), claim the seventh chair
+       by clicking its chip on the board, then open the Draft settings modal
+       to set the scoring, then press a second "Start draft".
 
-    /* ---- 3. sit down --------------------------------------------------- */
-    const chips = page.locator("#draftroom-root button").filter({ hasText: /^(Claim|You|Taken)$/ });
-    const seats = await chips.count();
-    expect(seats, "a chair per team").toBe(await page.evaluate(() => JukeEngine.league().teams));
+       "Start mock draft" starts the draft outright today, so none of those
+       screens sit between here and the board — the seat and the scoring are
+       two selects on the panel the button belongs to, and they have to be
+       set before it is pressed rather than after. Same collapse the seat
+       chips in solo.spec.mjs ran into.
 
-    // The seventh chair, claimed by clicking it on the board.
-    await chips.nth(6).click();
-    await expect.poll(() => page.evaluate(() => {
-      const root = document.getElementById("draftroom-root");
-      return [...root.querySelectorAll("button")]
-        .map((b) => b.textContent.trim())
-        .filter((t) => /^(Claim|You|Taken)$/.test(t))
-        .indexOf("You");
-    })).toBe(6);
+       Still pressing only what a person can press, which is this file's own
+       rule: these are the real <select>s, driven by their labels rather than
+       by index, because NewMockPanel renders a second lg:hidden ChipSelect
+       bound to each of the same values. */
+    const lobbyRow = (label) =>
+      page.locator(`#draftroom-root div:has(> span:text-is("${label}")) > select`);
 
-    /* ---- 4. change something, so the draft is actually mine ------------ */
-    await page.click('#draftroom-root button[aria-label="Draft settings"]');
-    await page.waitForFunction(() => [...document.querySelectorAll("div")]
-      .some((d) => (d.className || "").toString().includes("z-[70]")), null, { timeout: 10000 });
-
-    // Full PPR, through the real select.
-    await page.selectOption('div[class*="z-[70]"] select >> nth=1', "ppr");
+    // The seventh chair. The select is 1-based and mySlot is 0-based.
+    await lobbyRow("Your seat").selectOption("7");
+    await lobbyRow("Scoring").selectOption("ppr");
+    // setScoring writes straight through to engine.setLeague (NewMockPanel),
+    // so this is the same fact the assertion after the start re-checks —
+    // asserted here too, so a select that silently stopped being wired up
+    // fails on the control rather than on the draft that follows it.
     await expect.poll(() => page.evaluate(() => JukeEngine.league().scoring)).toBe("ppr");
 
-    await page.click('div[class*="z-[70]"] button[aria-label="Close draft settings"]');
-
-    /* ---- 5. start ------------------------------------------------------ */
-    const start = page.locator("#draftroom-root button").filter({ hasText: /^Start draft$/ });
-    await expect(start, "the lobby asks for one thing").toBeVisible();
-    await start.click();
-    await page.waitForFunction(() => state.started, null, { timeout: 20000 });
+    /* ---- 4. start ------------------------------------------------------ */
+    await enter.click();
+    await page.waitForFunction(() => state.started, null, { timeout: 30000 });
 
     // The seat survived the start, and the scoring did too.
     expect(await page.evaluate(() => JukeEngine.mySlot()), "seated where I sat").toBe(6);
@@ -116,12 +152,31 @@ test("homepage to a finished draft, pressing only what a person can press",
     expect(await page.evaluate((i) => state.picks[i].slot, before),
       "and it was my own chair").toBe(6);
 
-    // Then the rest, through the control that exists for it - behind the
-    // kebab now (DraftMenuOverlay.jsx), not a direct header button, and its
-    // own visible text rather than an aria-label nothing sets any more.
-    await page.click('#draftroom-root button[aria-label="Draft options"]');
-    await page.locator('#draftroom-root button').filter({ hasText: /^Auto-draft the rest/ }).click();
-    await expect.poll(() => page.evaluate(() => draftOver()), { timeout: 60000 }).toBe(true);
+    /* Then the rest, through the control that exists for it — the Autopick
+       toggle on the header.
+
+       This used to open the kebab and press "Auto-draft the rest". That item
+       is gone: a product review cut Pause, Undo and it together, and
+       DraftMenuOverlay.jsx's own comment says what replaced it — "the single
+       'Autopick' toggle every competitor mock drafter actually ships". The
+       click hung against a menu that no longer offers it until the six-minute
+       test timeout killed the run.
+
+       Autopick rather than a call into engine.autoDraftRest(), which is what
+       solo.spec.mjs does: this file's rule is that it presses only what a
+       person can press, and this is what a person presses. It drives my seat
+       while the CPUs keep taking theirs, so the board fills the same way —
+       measured at 47s for a full 140-pick board, hence the headroom below.
+
+       aria-pressed is the toggle's own state, so it doubles as the assertion
+       that the press registered rather than landing on a dead control. */
+    const autopick = page
+      .locator('#draftroom-root button[aria-pressed]:visible')
+      .filter({ hasText: /^Autopick$/ })
+      .first();
+    await autopick.click();
+    await expect(autopick, "the toggle went on").toHaveAttribute("aria-pressed", "true");
+    await expect.poll(() => page.evaluate(() => draftOver()), { timeout: 180000 }).toBe(true);
 
     /* ---- 7. read the result -------------------------------------------- */
     const out = await page.evaluate(() => {

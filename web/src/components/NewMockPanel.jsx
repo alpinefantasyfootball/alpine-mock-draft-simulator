@@ -64,7 +64,7 @@ function ChipSelect({ value, onChange, disabled, options }) {
          "Seat 1", "60s clock". shrink-0 alone (the first fix tried) wasn't
          enough: it silenced the shrink half of the leak but left
          flex-grow/flex-basis still pulling from the tag rule. */
-      className="w-auto flex-none rounded-lg border border-white/10 bg-white/[0.03] px-3 py-[7px] font-plex text-base text-white/80 outline-none transition-colors focus:border-teal-400/50 disabled:cursor-not-allowed disabled:text-white/30"
+      className="w-auto flex-none rounded-lg border border-white/10 bg-white/[0.03] px-3 py-[7px] font-numeral tabular-nums text-base text-white/80 outline-none transition-colors focus:border-teal-400/50 disabled:cursor-not-allowed disabled:text-white/30"
     >
       {/* bg-slate-panel — see RowSelect's own comment. The open popup is
          native chrome this select's own background never reaches. */}
@@ -184,7 +184,7 @@ export default function NewMockPanel({
       <div className="flex flex-wrap gap-2 lg:hidden">
         <ChipSelect value={league.teams} onChange={setTeams} disabled={locked} options={chipTeamOptions} />
         <ChipSelect value={league.scoring} onChange={setScoring} disabled={locked} options={chipScoringOptions} />
-        <span className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-[7px] font-plex text-[12.5px] text-white/80">
+        <span className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-[7px] font-numeral tabular-nums text-[12.5px] text-white/80">
           {league.rounds} rounds
         </span>
         <ChipSelect value={lobbySlot + 1} onChange={setSeat} disabled={locked} options={chipSeatOptions} />
@@ -209,19 +209,43 @@ export default function NewMockPanel({
             ? 'cursor-not-allowed bg-white/5 text-white/25'
             : 'bg-gradient-to-r from-[#00E5FF] to-[#7B1FA2] text-white shadow-glass hover:scale-[1.02] hover:shadow-[0_0_15px_rgba(0,229,255,0.4)]')
         }
+        /* data-start-draft is a hook for the phone suite. This label has
+           moved three times — "Enter Draft Room", then "Start draft", then
+           "Start mock draft" — and each move failed a test about something
+           else; phone.spec.mjs still carries a regex of every name it has
+           ever had. An attribute says what the button IS. */
+        data-start-draft
       >
-        Start mock draft
+        {/* roomActive: this button doesn't start anything in a room — it
+            calls enterDraftRoom() (DraftRoom.jsx's handleStartNew) and
+            just navigates to the seat picker. RoomPanel.jsx already uses
+            the honest label, "Enter draft room", for the identical action;
+            this was the one place still calling it "Start mock draft"
+            after a host closed the "Draft with friends" modal without
+            using that panel's own button. */}
+        {roomActive ? 'Enter draft room' : 'Start mock draft'}
       </button>
       {problem && <p className="mt-2 text-[11px] leading-relaxed text-rose-300/90">{problem}</p>}
 
+      {/* px-3 py-2.5, not a bare text link — the old version had no
+          padding of its own at all, so its clickable area was exactly the
+          text's own glyph box and its only hover feedback was a small
+          color shift. rounded-lg + hover:bg gives it the same "clearly a
+          control" affordance the Copy/Sit here/Leave buttons elsewhere on
+          this screen already have, at a visibly lighter weight than the
+          gradient CTA above it — the point isn't to compete with that
+          button, just to stop being invisible until the exact moment a
+          cursor already knows to click it. */}
       <button
         type="button"
         onClick={onDraftWithFriends}
         disabled={!!problem}
         title={problem || undefined}
         className={
-          'mt-3 text-sm font-semibold transition-colors ' +
-          (problem ? 'cursor-not-allowed text-white/20' : 'text-teal-300 hover:text-teal-200')
+          'mt-3 rounded-lg px-3 py-2.5 text-center text-sm font-semibold transition-colors duration-200 ' +
+          (problem
+            ? 'cursor-not-allowed text-white/20'
+            : 'text-teal-300 hover:bg-teal-400/10 hover:text-teal-200')
         }
       >
         Draft with friends instead →

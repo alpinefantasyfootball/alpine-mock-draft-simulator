@@ -53,7 +53,7 @@ function PicksList({ items, engine, DE, league, mySlot }) {
         }
       >
         <span className="text-ink-muted">
-          {DE ? DE.pickCode(item.pick.overall, league.teams) : item.pick.overall}
+          {DE ? DE.pickCode(item.pick.overall, league) : item.pick.overall}
         </span>{' '}
         <span className="font-medium text-white/80">{engine.teamLabel(item.pick.slot)}</span> took{' '}
         <span className="text-white/90">{item.pick.player.name}</span>{' '}

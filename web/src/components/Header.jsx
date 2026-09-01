@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { Menu } from 'lucide-react'
 import JukeLogo from './juke-logo/JukeLogo.jsx'
-import ComingSoonModal from './ComingSoonModal.jsx'
+import EarlyAccessModal from './EarlyAccessModal.jsx'
 import MobileNavSheet from './MobileNavSheet.jsx'
-import { NAV_LINKS, AccountButtons } from './SiteNav.jsx'
+import { NavLinks, AccountButtons } from './SiteNav.jsx'
 
-// NAV_LINKS/AccountButtons come from SiteNav.jsx now rather than a second
+// NavLinks/AccountButtons come from SiteNav.jsx now rather than a second
 // literal copy — this file's own comment used to say the homepage was "out
 // of scope for the pass that added [SiteNav.jsx], so nothing there was
 // touched," which is exactly the drift SiteNav.jsx exists to prevent once
@@ -13,7 +13,13 @@ import { NAV_LINKS, AccountButtons } from './SiteNav.jsx'
 // mobile hamburger sheet needs the same list LobbyBar.jsx already reads from
 // there, and a second copy behind it would be the identical two-headers bug
 // SiteNav.jsx was written to fix, just moved one level down into "which
-// list does the mobile sheet see."
+// list does the mobile sheet see." NavLinks (rather than mapping NAV_LINKS
+// directly, the way this file used to) is the same fix applied a second
+// time, for "The Rooms" dropdown and the currentRoom indicator — see
+// SiteNav.jsx's own comment on NavLinks. This file never passes
+// currentRoom: the homepage isn't "inside" any room, which is also why
+// NAV_LINKS no longer carries a permanent "Draft Room" entry at all — see
+// that array's own comment.
 /* The sticky bottom CTA hides while ANY primary "Enter the Draft Room" CTA
    is on screen — Hero's own pair, RoomsGrid's live-room card, and
    ClosingCta's closing band all carry the same data-hero-cta marker now.
@@ -133,9 +139,23 @@ export default function Header() {
         shrinking desktop to match a spec that never asked for it, the row
         takes two heights the same way LobbyBar.jsx's 56px already does at
         every width, just gated here since Header.jsx's desktop height predates
-        this pass. */}
-    <header className="fixed inset-x-0 top-0 z-50 border-b border-white/5 bg-void/90 backdrop-blur-md">
-      <div className="mx-auto flex h-14 max-w-7xl items-center gap-10 px-4 md:h-16 md:px-6">
+        this pass.
+
+        Homepage cosmetic revision §13 gives this bar its own exact surface
+        (page-bg at 88% alpha, a hairline border) and a padding value —
+        applied here as px-10 (horizontal only; matches every other
+        section's own 40px content-container padding from §2, so the nav's
+        content now lines up edge-to-edge with the rest of the page).
+        Deliberately NOT switched to vertical padding-driven sizing: h-14/
+        h-16 is read in two other places (Homepage.jsx's <main> padding,
+        index.css's scroll-padding-top) and style.css's own .to-top button
+        positioning depends on it too — CLAUDE.md documents this as a
+        three-way tracked value on purpose. Swapping the sizing mechanism
+        would be a real layout change chasing a cosmetic one, for a
+        difference (56/64px fixed vs. ~58/~66px padding-driven) too small
+        to be worth that risk. */}
+    <header className="fixed inset-x-0 top-0 z-50 border-b border-[#20242B] bg-[#0D0F15]/[0.88] backdrop-blur-md">
+      <div className="mx-auto flex h-14 max-w-7xl items-center gap-10 px-10 md:h-16">
         {/* Two instances behind a wrapper's hidden/block, not a className
             passed straight to JukeLogo: the component's own root <span>
             hardcodes display:inline-flex as an inline style so its mark and
@@ -157,37 +177,40 @@ export default function Header() {
         </a>
 
         <nav className="hidden shrink-0 items-center gap-7 md:flex">
-          {NAV_LINKS.map((link) => (
-            <a
-              key={link.label}
-              href={link.href}
-              className="text-sm font-medium text-white/60 transition-colors hover:text-white"
-            >
-              {link.label}
-            </a>
-          ))}
+          <NavLinks
+            linkClassName="text-[15px] font-medium text-[#B5B7BD] transition-colors hover:text-white"
+            modalRef={modalRef}
+          />
         </nav>
 
-        {/* Log in stays a text link at every width — the mockup keeps it
-            beside the hamburger rather than folding it into the sheet, so
-            it's one tap rather than two for the one account action a visitor
-            is likeliest to already have a reason to press. Sign Up moves
-            into the sheet: two CTAs competing for a 375px-wide row is the
-            same crowding problem the bottom action bar exists to solve for
-            the page's real primary action. */}
+        {/* "Get early access" stays a text link at every width — the same
+            one-tap-not-two reasoning this used to carry for "Log in" alone,
+            now that there's only the one account control to show. The
+            hamburger sheet's own copy of AccountButtons (MobileNavSheet.jsx)
+            opens the identical modal, so a visitor who opens the sheet
+            instead sees the same offer rather than a different one.
+
+            whitespace-nowrap: this label is more than twice as long as "Log
+            in" was, sharing this row with the hamburger at 390px — measured
+            comfortable at that width, but a button's default white-space
+            lets it wrap onto a second line rather than overflow, and a
+            wrapped label here would sit at a different height from the
+            44px hamburger beside it. Nothing this codebase's own truncation
+            rule prefers over the alternative: this text is never cut off,
+            it just refuses to stack. */}
         <div className="ml-auto flex shrink-0 items-center gap-1 md:hidden">
           <button
             type="button"
             onClick={() =>
               modalRef.current?.open(
-                'Accounts are not live yet',
-                'There is nothing to log into so far. Your drafts save to this device, ' +
-                  'so you can close the tab and pick up where you left off.'
+                "Accounts aren't live yet. Leave an email and we'll tell you the day your " +
+                  'locker follows you between devices.',
+                'header'
               )
             }
-            className="inline-flex h-11 items-center justify-center rounded-full px-3 text-sm text-white/60 transition-colors hover:text-white"
+            className="inline-flex h-11 items-center justify-center whitespace-nowrap rounded-full px-3 text-sm text-white/60 transition-colors hover:text-white"
           >
-            Log in
+            Get early access
           </button>
           <button
             type="button"
@@ -200,7 +223,7 @@ export default function Header() {
         </div>
 
         <div className="ml-auto hidden shrink-0 items-center gap-2 md:flex">
-          <AccountButtons modalRef={modalRef} />
+          <AccountButtons modalRef={modalRef} variant="ghost" />
         </div>
       </div>
 
@@ -213,9 +236,24 @@ export default function Header() {
           scroll-padding-top both had to shrink with it — see the comments
           on both. */}
 
-      <MobileNavSheet open={navOpen} onClose={() => setNavOpen(false)} modalRef={modalRef} />
-      <ComingSoonModal ref={modalRef} />
+      <EarlyAccessModal ref={modalRef} />
     </header>
+
+    {/* A true sibling of <header>, not a descendant, for the identical
+        reason the bottom action bar below is one: MobileNavSheet's own
+        panel is `fixed inset-0`, and backdrop-blur-md on <header> is a CSS
+        filter — any filter/backdrop-filter on an ancestor becomes the
+        containing block for a position:fixed descendant, the same rule
+        transform follows. Nested inside <header> this resolved the sheet's
+        `inset-0` against the *header's own* short box (h-14/h-16) instead
+        of the viewport: measured live, the panel's rendered height was
+        exactly 56px, with its nav links and account buttons overflowing
+        that box uncontained and reading as pasted over the hero underneath
+        rather than a slide-in drawer. EarlyAccessModal stays inside
+        <header> — a native <dialog> promotes to the browser's own top
+        layer on showModal(), which sits above this containing-block
+        question entirely, so it was never the same bug. */}
+    <MobileNavSheet open={navOpen} onClose={() => setNavOpen(false)} modalRef={modalRef} variant="ghost" />
 
     {/* Sticky bottom action bar — the marketing shell's other half, and a
         true sibling of <header> above rather than a descendant of it.
@@ -244,7 +282,11 @@ export default function Header() {
     >
       <a
         href="#/drafts"
-        className="flex h-[50px] w-full items-center justify-center rounded-full bg-gradient-to-r from-[#22d3ee] to-[#a78bfa] text-[15px] font-bold text-white shadow-glass transition-transform active:scale-[0.98]"
+        className="flex h-[50px] w-full items-center justify-center rounded-full text-[15px] font-bold text-[#0B0D12] transition-transform active:scale-[0.98]"
+        style={{
+          background: 'linear-gradient(100deg, #44D4E2, #82A1F6)',
+          boxShadow: '0 10px 34px -14px rgba(63,177,234,0.7)',
+        }}
       >
         Enter the Draft Room
       </a>

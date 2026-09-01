@@ -38,8 +38,51 @@ export default {
         // would be exactly the "a position reads a different colour
         // depending which page you're looking at" bug that file was
         // rewritten once already to end.
-        mint: '#5eead4',
+        // #74E5CE as of the homepage cosmetic revision (design_handoff_
+        // homepage_cosmetic) — was #5eead4. Converted from the handoff's
+        // own oklch(0.85 0.11 178) rather than eyeballed; only three files
+        // read this token (Hero.jsx, PhaseRail.jsx, RoomsGrid.jsx), all
+        // homepage-only, so redefining in place is safe.
+        mint: '#74E5CE',
         skyblue: '#38bdf8',
+        // ---- Homepage cosmetic revision (design_handoff_homepage_cosmetic) ----
+        // §1's four surface steps, converted from oklch(L 0.012 265) via the
+        // real OKLab matrices, not approximated against an existing token —
+        // the handoff is explicit that several of these changes exist
+        // specifically to widen tonal separation between surfaces, so a
+        // "close enough" substitution would defeat the point. Nested rather
+        // than four more flat tokens: `surface.page/nav/card/row` reads as
+        // one related step-scale, the same shape `slate.*` already uses for
+        // the Draft Room's own ground/panel/sunk/rule steps — and it keeps
+        // the marketing-only surface system visually distinct in this file
+        // from the Draft Room's, which is the whole reason two separate
+        // ground systems (`void` vs `slate`) exist here in the first place.
+        surface: {
+          page: '#0D0F15', // oklch(0.17 0.012 265)
+          nav: '#111419', // oklch(0.19 0.012 265)
+          card: '#13161C', // oklch(0.20 0.012 265)
+          row: '#1A1C22', // oklch(0.225-0.23 0.012 265), midpoint 0.2275
+        },
+        // Hairline border and subtle divider — kept apart from `surface`
+        // above (a border is not a fill) but named to sit next to it.
+        line: {
+          hairline: '#252930', // oklch(0.28 0.015 265)
+          divider: '#1E2229', // oklch(0.24-0.26 0.015 265), midpoint 0.25
+        },
+        // Body text on the `surface.*`/void ground, raised from the old
+        // `text-white/NN` opacity system (§9's own contrast audit already
+        // found /25 through /45 failing 4.5:1 against these near-black
+        // cards — see TakeAPick.jsx's MUTED comment). Named `voidInk`
+        // rather than reusing `ink.*` above: that group is documented as
+        // text on the Draft Room's `slate` ground specifically ("A value
+        // tuned against #070A0D does not hold at #1E2733") — a second,
+        // unrelated set of tokens under the same name would read as one
+        // scale when it is measured against a completely different ground.
+        voidInk: {
+          primary: '#EDEEF2', // oklch(0.95 0.005 265)
+          body: '#B9BCC1', // oklch(0.78-0.81 0.008 265), midpoint 0.795
+          muted: '#808389', // oklch(0.60-0.62 0.01 265), midpoint 0.61
+        },
         // ---- The two-surface split (Claude Design, "Slate & Mint") ----
         //
         // Marketing surfaces stay on `void`. App surfaces — lobby, draft
@@ -137,7 +180,33 @@ export default {
         // entire time. Barlow Condensed is already loaded; this costs no
         // extra network request, it just points at the font that's there.
         display: ['"Barlow Condensed"', '"Arial Narrow"', 'system-ui', 'sans-serif'],
-        body: ['"Inter"', 'system-ui', 'sans-serif'],
+        // Hanken Grotesk as of the sitewide font-consistency pass that
+        // followed the homepage cosmetic revision — was Inter, and Inter
+        // was barely load-bearing when it was: the homepage never applied
+        // `font-body` anywhere (rendering in the bare browser/OS sans stack
+        // instead), and only three Draft Room Cockpit components
+        // (DraftEntryScreen.jsx, DraftCockpitHeader.jsx, NewMockPanel.jsx)
+        // used it for real. The homepage pass itself scoped its own face to
+        // `voidBody` rather than touch this token, specifically because
+        // redefining `body` in place would have silently reskinned those
+        // three Cockpit components while doing nothing for the homepage —
+        // a homepage-only handoff had no business changing shared,
+        // app-wide type. That constraint is gone now that the owner wants
+        // one consistent face across both the homepage and the Cockpit, so
+        // `voidBody` and `body` collapsed into this single token — every
+        // call site that said `font-voidBody` now says `font-body`.
+        body: ['"Hanken Grotesk"', 'system-ui', 'sans-serif'],
+        // Montserrat — was `voidNumeral`, homepage-only, for the same
+        // reason `body` above was scoped away from Inter: this token is now
+        // used by both the homepage and the Draft Room Cockpit's own
+        // prose/single-value numerals (report-card scores, stat-card
+        // figures, percentages in a sentence), so the homepage-specific
+        // name no longer fit. `plex` (IBM Plex Mono) is deliberately
+        // untouched and still the right choice wherever a numeral's own
+        // monospace WIDTH is load-bearing rather than just its face — pick
+        // codes, team/position abbreviations, and any board or stat-table
+        // grid whose columns depend on every cell measuring the same.
+        numeral: ['"Montserrat"', 'system-ui', 'sans-serif'],
         // A new, separate token — not `mono` itself, so a page still using
         // bare `font-mono` (Tailwind's own system-mono fallback) never gets
         // silently reskinned just because this file changed. That was the

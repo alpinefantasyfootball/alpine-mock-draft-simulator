@@ -101,7 +101,14 @@ async function readAnalysisScreen(page) {
      harmless today, load-bearing the moment one exists. */
   const alreadyOpen = await page.locator('#draftroom-root [class*="z-[70]"]').count();
   if (!alreadyOpen) {
-    const analysisTab = page.locator('#draftroom-root button:text-is("Analysis")');
+    /* :visible, because there are two of these now and both are mounted.
+       MobileDraftTabBar.jsx carries its own Analysis button and is
+       lg:hidden - which is CSS-hidden, not absent, exactly the thing
+       CLAUDE.md's note on useMinWidth is about - so a bare text match
+       resolves to two elements and Playwright refuses it under strict
+       mode. At this viewport the bottom bar is the hidden one, so this
+       picks the header tab a person at a desk would actually press. */
+    const analysisTab = page.locator('#draftroom-root button:text-is("Analysis"):visible');
     await analysisTab.click();
   }
   const text = await page.locator("#draftroom-root").innerText();
@@ -140,6 +147,135 @@ test("a fully CPU-driven draft grades every team consistently, at two league siz
   }
 });
 
+/* Phase 0: the Analysis tab must never assert a room comparison it cannot
+   make yet.
+
+   Exactly one pick per team in — round 1 just finished, round 2 is on the
+   clock — `build` and `byePenalty` are mathematically tied across every
+   team: nobody has a bye-week collision with only one starter drafted, and
+   every team is missing the identical number of starting slots (see
+   AnalysisTab.jsx's own isMeasurable() comment for the full arithmetic).
+   scaleAcross() maps that tie to a flat 50 for everyone, which used to
+   print "+0 vs room median" on both of those bars — right beside a real,
+   non-tied "Nth of 10" rank computed from full-precision totals. Two true
+   facts, shown so they read as a contradiction.
+
+   The premise (both spreads genuinely ~0) is asserted before the screen is
+   trusted, the same discipline every other test in this file follows —
+   confirmed a mathematical certainty for the default league at exactly
+   `teams` picks: one player each, always a starter rather than bench, so
+   both cover checks and the hole count land on the same number for every
+   seat regardless of who they happen to have taken. */
+test("the Analysis tab does not assert a room comparison before the room has one", async ({ browser }) => {
+  const context = await browser.newContext();
+  const page = await openApp(context, "#/draft-room");
+  await startSoloDraft(page);
+
+  const teams = await page.evaluate(() => league.teams);
+
+  // Round 1 only, every seat included (mySlot too) — the same
+  // fully-CPU-driven shape as the test above, stopped one round early.
+  await page.evaluate((n) => {
+    let guard = 0;
+    while (state.picks.length < n && guard++ < 500) {
+      const c = onTheClock();
+      if (!c) break;
+      const choice = cpuChoice(c.slot, c.round);
+      if (!choice) break;
+      makePick(choice);
+    }
+    render();
+  }, teams);
+
+  const early = await page.evaluate(() => {
+    const all = analyseDraft();
+    const spread = (key) => Math.max(...all.map((t) => t[key])) - Math.min(...all.map((t) => t[key]));
+    return {
+      picks: state.picks.length,
+      buildSpread: spread("build"),
+      byeSpread: spread("byePenalty"),
+      mine: all.find((t) => t.slot === state.mySlot),
+    };
+  });
+
+  expect(early.picks, "exactly one pick per team, round 1 done").toBe(teams);
+  expect(early.buildSpread, "roster construction genuinely tied across the room at this point").toBeLessThan(0.5);
+  expect(early.byeSpread, "and so is bye week safety").toBeLessThan(0.5);
+
+  const screen = (await readAnalysisScreen(page)).replace(/\s+/g, " ");
+
+  // The rank is real and printed, off the same full-precision totals the
+  // two tied components above cannot see.
+  const rankWord = early.mine.rank === 1 ? "st" : early.mine.rank === 2 ? "nd" : early.mine.rank === 3 ? "rd" : "th";
+  expect(screen, "a real, non-blank rank").toContain(`${early.mine.rank}${rankWord} of ${teams}`);
+
+  // The two components confirmed tied above must not claim a room
+  // comparison — anchored on the label so this can't accidentally match
+  // the unrelated "How the grade is built" row for the same component,
+  // which never says "vs room median" at all.
+  expect(screen, "roster construction prints no room-comparison delta")
+    .not.toMatch(/Roster construction[\s\S]{0,40}[-+]?\d+ vs room median/);
+  expect(screen, "bye week safety prints no room-comparison delta")
+    .not.toMatch(/Bye week safety[\s\S]{0,40}[-+]?\d+ vs room median/);
+
+  // And the dash placeholder is what actually renders in their place — not
+  // just "the misleading number is gone", but "the honest one is there".
+  expect(screen, "roster construction shows the not-yet-measurable dash")
+    .toMatch(/Roster construction[\s\S]{0,40}— vs room median/);
+  expect(screen, "bye week safety shows the not-yet-measurable dash")
+    .toMatch(/Bye week safety[\s\S]{0,40}— vs room median/);
+
+  await context.close();
+});
+
+/* The other half of the same fix: the dash is not a one-way door. Once the
+   room has genuinely differed on a component, real numbers have to come
+   back on their own — nothing in AnalysisTab.jsx may count picks or rounds
+   to decide this, only the room's own current spread. Driven to a finished
+   draft rather than a fixed round count, so the premise below is measured
+   rather than assumed: by the end of a real draft, fourteen rounds of
+   different positions, different roster shapes and different bye weeks
+   have had every chance to separate the room on both components the first
+   test above found tied. */
+test("a component that was tied starts showing real numbers again once the room differs", async ({ browser }) => {
+  const context = await browser.newContext();
+  const page = await openApp(context, "#/draft-room");
+  await startSoloDraft(page);
+
+  await page.evaluate(() => {
+    let guard = 0;
+    while (!draftOver() && guard++ < 500) {
+      const c = onTheClock();
+      if (!c) break;
+      const choice = cpuChoice(c.slot, c.round);
+      if (!choice) break;
+      makePick(choice);
+    }
+    render();
+  });
+
+  const later = await page.evaluate(() => {
+    const all = analyseDraft();
+    const spread = (key) => Math.max(...all.map((t) => t[key])) - Math.min(...all.map((t) => t[key]));
+    return { buildSpread: spread("build"), byeSpread: spread("byePenalty") };
+  });
+
+  // The premise: a finished draft has to have actually differentiated
+  // roster construction across the room, the same fact the "fully
+  // CPU-driven draft" test above already relies on ("build is not a
+  // constant across the room").
+  expect(later.buildSpread, "roster construction has genuinely differentiated by the end of the draft").toBeGreaterThan(1);
+
+  const screen = (await readAnalysisScreen(page)).replace(/\s+/g, " ");
+
+  expect(screen, "roster construction shows a real delta now, not the tied placeholder")
+    .toMatch(/Roster construction[\s\S]{0,40}[-+]?\d+ vs room median/);
+  expect(screen, "and the dash is gone for that component")
+    .not.toMatch(/Roster construction[\s\S]{0,40}— vs room median/);
+
+  await context.close();
+});
+
 test("the Analysis screen's own numbers match what analyseDraft() computed for that seat", async ({ browser }) => {
   const context = await browser.newContext();
   const page = await openApp(context, "#/draft-room");
@@ -149,9 +285,43 @@ test("the Analysis screen's own numbers match what analyseDraft() computed for t
   const { mine } = await readGrade(page);
   const screen = await readAnalysisScreen(page);
 
+  /* Whitespace-collapsed before matching, because the rank is split across
+     two elements - AnalysisTab.jsx renders it as
+     `{ordinal(rank)} <span>of {teams}</span>` - so innerText puts a newline
+     inside the phrase. Matching the joined phrase is the point: "2nd" and
+     "of 10" each appear elsewhere on this screen, and asserting them
+     separately would pass on a screen that never put them together. */
+  const flat = screen.replace(/\s+/g, " ");
+
   expect(screen, "the printed grade letter").toContain(mine.grade);
-  expect(screen, "the printed rank").toContain(`${mine.rank}${mine.rank === 1 ? "st" : mine.rank === 2 ? "nd" : mine.rank === 3 ? "rd" : "th"} of`);
-  expect(screen, "the printed weighted score").toContain(`${Math.round(mine.total)} / 100`);
+  expect(flat, "the printed rank").toContain(`${mine.rank}${mine.rank === 1 ? "st" : mine.rank === 2 ? "nd" : mine.rank === 3 ? "rd" : "th"} of`);
+
+  /* And the composite is NOT printed as a score out of a hundred.
+
+     This assertion used to be its opposite - it required "60.3 / 100" on the
+     screen - and it was guarding a real bug: the standings column once showed
+     starter strength under a header reading the weighted total. That guard is
+     kept by the two lines above, which still read what the screen prints and
+     compare it to what analyseDraft() computed.
+
+     What replaces it is the defect that removal fixed. The letter is finishing
+     position and the composite is a room-relative min-max score, so an "A" one
+     line above a "69 / 100" contradicts twelve years of schooling every time -
+     measured across a room, the letter agreed with the school reading of the
+     number beside it on 0 of 10 teams. Curving the letter off an absolute
+     quantity was measured and rejected (a normal room came out 37 of 40 A+),
+     so the number went.
+
+     Scoped to the pairing rather than to the number. The total is still on
+     this screen, in the component bars' own "Weighted sum = 55.9" line, where
+     four bars visibly add up to it and nothing calls it a percentage - and
+     "Roster construction 90 / 100" is a genuine component out of a hundred
+     with no letter beside it. Asserting the total were absent would fail on
+     the first and asserting "/ 100" were absent would fail on the second. */
+  expect(flat, "the composite is not dressed as a percentage")
+    .not.toContain(`${mine.total.toFixed(1)} / 100`);
+  expect(flat, "nor as a rounded one")
+    .not.toContain(`${Math.round(mine.total)} / 100 weighted`);
 
   await context.close();
 });
@@ -292,15 +462,120 @@ test("a room of identical drafters does not produce a full-scale grade spread", 
   });
   await context.close();
 
-  // The premise: these rosters really are near-identical, so the grade has
-  // nothing real to spread. If this ever stops being true the assertion below
-  // is measuring something else and should be re-derived.
-  expect(room.rawStarterSpread, "identical drafters produce near-identical starter strength").toBeLessThan(25);
+  /* The premise, re-derived when aboveReplacement() stopped counting ADP rank
+     places and started counting projected points.
 
-  expect(room.spread, `composite spread across a room of identical drafters (was 100 unfloored)`).toBeLessThan(60);
+     This line used to read `toBeLessThan(25)` and the comment beside it said
+     identical drafters produce near-identical starter strength. That was true
+     of the old unit and false about the rosters: rank places are capped by how
+     deep a position is drafted, so the metric compressed every room into a
+     10-to-12 point band whatever the seats actually held. In points the same
+     identically-drafted room spans ~190 — seat 1 fields 362 and seat 5 fields
+     171 — because snake position really is worth that much, and the old number
+     was hiding it rather than measuring it absent.
+
+     So the premise is no longer "nothing to spread". It is "the spread that
+     exists is seat, not drafting", and the assertion below is what matters:
+     the composite must stay well short of full scale even when one component
+     underneath it is spread wide. Bounded generously — this is a guard against
+     the metric blowing up, not a pin on today's board. */
+  expect(room.rawStarterSpread, "a seat-driven starter spread, in points").toBeGreaterThan(25);
+  expect(room.rawStarterSpread, "but not an unbounded one").toBeLessThan(320);
+
+  /* Re-derived a second time, when par stopped applying the model multiplier.
+
+     This read `toBeLessThan(60)` and the pinned seed now produces 67.6, so it
+     had to move — but the number is measured, not nudged to fit. Across eight
+     seeds a room of identical drafters spans **48 to 80** of the 100 available,
+     against the 100 this same comment records for the unfloored original. 90
+     leaves headroom over the worst observed room and still fails outright if
+     the floors are ever removed.
+
+     Read what this actually guards before tightening it. The metric saturates:
+     measured over the same seeds, a room of identical drafters spreads a mean
+     of **60**, and a room containing a deliberately unbuilt roster spreads
+     **48** — *less*, because min-max scaling is capped either way and one bad
+     team only moves the floor of the range. So composite spread cannot tell a
+     room of equals from a room with a terrible drafter in it, and it is a
+     backstop against full-scale confidence rather than a measure of anything.
+
+     The assertions that carry real weight are elsewhere: the chair test below,
+     and "the app's own advice beats a deliberately unbuilt roster" above. The
+     bad drafter finishes last in 6 of 6 seeded rooms at every floor tried. */
+  expect(room.spread, `composite spread across a room of identical drafters (was 100 unfloored)`).toBeLessThan(90);
 
   // The ordering survives — somebody still finishes first. Flooring the span
   // compresses the scores, it does not flatten the standings.
   expect(room.ranks[0], "somebody is still ranked first").toBe(1);
   expect(new Set(room.ranks).size, "and the room is still ranked, not tied flat").toBeGreaterThan(3);
+});
+
+/* Where a manager sits must not decide their grade.
+
+   Starter strength counting projected points rather than ADP rank places made
+   this measurable for the first time: in a room where every seat runs the
+   identical CPU rule, so no seat out-drafts any other, raw starter strength
+   spans ~190 points and correlates with the chair at about r -0.6. That is a
+   true fact about snake position and an indefensible input to a grade meant to
+   judge drafting.
+
+   analyseDraft() scores `startersVsPar` — the seat's own par, simulated by
+   seatParTable() — so the correlation between chair and finishing rank goes to
+   roughly zero while the raw figure stays exactly as seat-dependent as it
+   really is. Both are asserted, because only checking the composite would pass
+   just as happily if par had quietly flattened the underlying number instead
+   of re-centring it.
+
+   Confirmed against the bug: scaling `starters` instead of `startersVsPar` in
+   analyseDraft() puts seat-vs-rank at +0.50 and fails the first assertion. */
+test("the chair a manager drafts from does not decide their grade", async ({ browser }) => {
+  const context = await browser.newContext();
+  const page = await openApp(context, "#/draft-room");
+  await startSoloDraft(page);
+
+  const out = await page.evaluate(() => {
+    state.seed = 24757;
+    applyJitter();
+    let guard = 0;
+    while (!draftOver() && guard++ < 900) {
+      const c = onTheClock();
+      if (!c) break;
+      // Every seat on the identical rule, so any seat-shaped signal left in
+      // the result is the metric rather than the drafting.
+      const choice = cpuChoice(c.slot, c.round);
+      if (!choice) break;
+      makePick(choice);
+    }
+    const all = analyseDraft().slice().sort((a, b) => a.slot - b.slot);
+    const corr = (a, b) => {
+      const mean = (x) => x.reduce((p, q) => p + q, 0) / x.length;
+      const ma = mean(a), mb = mean(b);
+      let n = 0, da = 0, db = 0;
+      for (let i = 0; i < a.length; i++) {
+        n += (a[i] - ma) * (b[i] - mb);
+        da += (a[i] - ma) ** 2;
+        db += (b[i] - mb) ** 2;
+      }
+      return n / Math.sqrt(da * db);
+    };
+    const seats = all.map((t) => t.slot + 1);
+    return {
+      seatVsRank: corr(seats, all.map((t) => t.rank)),
+      seatVsRawStarters: corr(seats, all.map((t) => t.starters)),
+      parIsReal: all.every((t) => t.par > 0),
+      // par has to re-centre the number, not flatten it
+      vsParSpread: Math.max(...all.map((t) => t.startersVsPar))
+                 - Math.min(...all.map((t) => t.startersVsPar)),
+    };
+  });
+  await context.close();
+
+  expect(Math.abs(out.seatVsRank), "the chair does not predict finishing rank").toBeLessThan(0.35);
+
+  /* The premise. If identically-drafted seats ever stop differing this much in
+     raw terms there is no seat bias left to correct and the assertion above is
+     measuring nothing. */
+  expect(Math.abs(out.seatVsRawStarters), "while the raw figure is still seat-driven").toBeGreaterThan(0.4);
+  expect(out.parIsReal, "every seat got a par, so none was silently ungraded").toBe(true);
+  expect(out.vsParSpread, "par re-centres the component rather than flattening it").toBeGreaterThan(20);
 });

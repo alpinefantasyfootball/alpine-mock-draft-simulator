@@ -1,17 +1,7 @@
+import { useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
-import { ChevronRight } from 'lucide-react'
-import { POS_BADGE, POS_SOLID, INJURY_META } from './draftRoomPositions.js'
-
-// A team has no photo, so its header avatar is initials in a solid
-// circle — the same idea chat's seatInitials()/avatar circle already
-// uses for a manager with no photo, applied to a team name instead of a
-// person's. Two words give two letters, one gives one — "Bijan Mustard"
-// reads "BM", a bare "CPU 4" reads "C".
-function initialsOf(name) {
-  if (!name) return '?'
-  const parts = String(name).trim().split(/\s+/).slice(0, 2)
-  return parts.map((w) => w[0].toUpperCase()).join('')
-}
+import { ChevronDown, ChevronUp } from 'lucide-react'
+import { POS_CHALK, POS_RAIL, CELL_INK, CELL_SUB, INJURY_META } from './draftRoomPositions.js'
 
 // Real data only: `picks` is window.JukeEngine.picks() (state.picks itself,
 // {overall, round, slot, player}), the same array the legacy board reads
@@ -25,71 +15,45 @@ function initialsOf(name) {
 // Rebuilding on every render is the same "render() redraws everything, no
 // partial updates" trade this codebase already makes deliberately (see
 // CLAUDE.md's Conventions section), and it costs nothing at ~280 entries.
-// Positive = fell past ADP = a bargain (green); negative = taken early =
-// a reach (red). Same "pick number minus rank" convention the real grade
-// calculation uses for its own draft-value component (see CLAUDE.md's
-// "The draft value gap is pick number minus board rank, in that order" —
-// getting this backwards was a real, shipped bug there), just measured
-// against the player's raw adp instead of the board's integer rank, which
-// is what gives this its one decimal place rather than a whole number.
-function adpGap(pick) {
-  const adp = pick.player.adp
-  if (typeof adp !== 'number' || !Number.isFinite(adp)) return null
-  return pick.overall - adp
-}
 
-// The cell's own reading of the same gap adpGap() already returned — one
-// call per pick, reused for the delta text beside the name, never
-// recomputed. Beat-or-tied (gap >= 0, a bargain) reads brand teal; reached
-// (gap < 0) reads the app's one red. No-data (gap == null — this player
-// carries no adp at all) prints nothing.
-//
-// This used to also return a full-cell background wash in the same two
-// hues, which was the board's *only* colour signal beyond a 3px rail —
-// reported back as "why are we using red/green" and "we need this colour
-// coded by position, like every serious fantasy site." Position is the
-// cell's background now (posWash() below); this keeps just the number's
-// own colour, which was never the problem — a reader glancing at a column
-// for a position run needs the fill, not a two-tone value judgement
-// competing with it for the same pixels.
-function adpText(gap) {
-  if (gap == null) return ''
-  return gap >= 0 ? 'text-teal-500' : 'text-red-400'
-}
+/* adpGap()/adpText() used to live here, and the delta they drew is gone
+   from the cell by name: the palette handoff removes it and puts the
+   round's snake arrow in the slot it held. Worth recording why, because
+   the number itself was correct and this is the second signal this cell
+   has shed.
 
-// A light wash in the player's own position hue — POS_SOLID, the identical
-// six colours the rail and the legend already use, just at low alpha
-// instead of full strength. Full-strength position fills were tried twice
-// before this file existed in its current form and lost to "a saturated
-// quilt fighting the ADP-delta tint" (draftRoomPositions.js's own POS_
-// CELL_BLOCK history) — but that verdict was reached *while* a competing
-// full-strength value tint was still painted on top of it. With the value
-// signal reduced to a small coloured number instead of a second wash,
-// position can carry the cell without refighting that exact collision.
-// rgba over a Tailwind arbitrary-value class for the same reason the border
-// rail below is inline style: POS_SOLID is a hex map, not a set of
-// Tailwind classes, and interpolating a hex into a class string is the
-// literal trap this file's own header comment already warns about — the
-// JIT scanner greps source for a complete class token, never sees one built
-// at runtime, and silently compiles to nothing.
-function hexToRgba(hex, alpha) {
-  const n = parseInt(hex.slice(1), 16)
-  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`
-}
+   A board cell is read at a glance, in a column, for one question — what
+   went where. The delta answered a different one (was that pick good
+   value), in a hue pair the board also spends on nothing else, on all 140
+   cells at once. It was the last survivor of a version of this cell that
+   carried a full-cell red/green value wash as well, and the argument that
+   demoted the wash to a number applies again one step further down. Where
+   value-versus-ADP still belongs is the player profile and the pool row,
+   which both draw it, and neither is glanced at in a grid.
 
-// The legend's position row and the cell's own rail/wash read the same six
-// hues off the same map — Object.keys() rather than a second, hand-typed
-// QB/RB/WR/TE/K/DST list that could drift from this one.
-const LEGEND_POSITIONS = Object.keys(POS_SOLID)
+   Nothing else imported either function — checked before deleting rather
+   than after — so this is a removal, not a hidden move. DraftRoom.jsx's
+   own gap arithmetic near line 964 is its own copy for the ticker and is
+   untouched. */
 
-// Snake direction, per cell — every cell carries it, not just drafted
+// Pick-order direction, per cell — every cell carries it, not just drafted
 // ones (CLAUDE.md: "it was on drafted ones only" was itself a shipped
 // bug — the turn matters most *before* a pick lands). Built only from
-// DraftEngine.pickInRound(), the one place the snake mirror is allowed
-// to live, never re-derived here.
-function boardArrow(DE, round, slot, teams) {
+// DraftEngine, the one place the mirror is allowed to live, never
+// re-derived here.
+//
+// Takes the whole `league`, not a team count. `round % 2 === 0` was the
+// direction test and it is only right for a plain snake: a linear draft
+// runs forward in every round and third-round reversal inverts the parity
+// from round three on, so a board asked for a team count alone would draw
+// confident arrows pointing the wrong way, on cells whose pick numbers
+// were simultaneously correct. That is the seat-versus-pick-number bug
+// exactly — two right numbers side by side disagreeing — so the answer
+// comes from DraftEngine.reversedRound().
+function boardArrow(DE, round, slot, league) {
   if (!DE) return null
-  return DE.pickInRound(round, slot, teams) === teams ? 'down' : (round % 2 === 0 ? 'left' : 'right')
+  if (DE.pickInRound(round, slot, league) === league.teams) return 'down'
+  return DE.reversedRound(round, league) ? 'left' : 'right'
 }
 
 /* One glyph, rotated - never three different characters. The down arrow is a
@@ -113,7 +77,37 @@ const ARROW_SPIN = { right: 'rotate(0deg)', down: 'rotate(90deg)', left: 'rotate
    anybody works out it is an alignment problem rather than a weight one.
 
    A square box with leading-none and the glyph centred inside it rotates
-   symmetrically, so all three directions occupy the identical rectangle. */
+   symmetrically - but only once the box actually contains the glyph, and
+   `line-height` is not what makes it. Measured on the phone board, 31 August
+   2026: at `text-[14px]` the box is 14 x 14 and the glyph's own box is
+   12.09 x 19, because the layout overflow of inline text is the face's
+   ascent+descent (1.357em in Hanken Grotesk) rather than its line-height. So
+   2.5px of it hangs out above and below every arrow - invisible while it is
+   vertical, since the cell clips it - and rotating 90 degrees turns that into
+   19px of width inside a 14px box. The down arrow therefore reached 3px past
+   the right edge of the flex row it sits at the end of, which is one cell per
+   round: the end-of-round pick is the only one whose arrow points down.
+
+   That is what phone.spec.mjs's overflow sweep reads as a row that can
+   neither scroll nor ellipsise, and it is right to. The tell that it is a
+   real overflow rather than the subpixel rounding that sweep's own `slack`
+   exists to forgive: the numbers do not move with the device pixel ratio at
+   all - clientWidth 82 against scrollWidth 85 at dpr 1 and at dpr 3 alike.
+
+   `overflow: hidden` is what makes the promise above true, and it costs
+   nothing on screen. Clipping happens in the element's own coordinates before
+   the transform, so the parent sees a 14 x 14 box whichever way the glyph is
+   turned, and what gets clipped is ascent/descent whitespace rather than ink.
+   Measured as a whole-viewport pixel diff with and without it: 0 differing
+   pixels of 1170 x 1992 on the phone, and 0 of 2880 x 1800 on the desktop
+   board at `lg:text-[16px]`, where all 140 arrows are on screen at once. The
+   desktop run took a control pair first - two shots with nothing changed
+   between them - because framer-motion drives the live cell's opacity pulse
+   from JavaScript and it survives `animation: none`, so an uncontrolled diff
+   reports 25,000 pixels of pulse and calls it a change.
+
+   Widening the sweep's tolerance instead would have hidden a genuinely
+   clipped short label somewhere else and fixed nothing here. */
 function Arrow({ dir, className }) {
   if (!dir) return null
   return (
@@ -127,6 +121,10 @@ function Arrow({ dir, className }) {
         width: '1em',
         height: '1em',
         lineHeight: 1,
+        // Not decoration on the rule above - it is what enforces it. See the
+        // note: without it the glyph's font box is taller than this box and
+        // rotation turns that into width.
+        overflow: 'hidden',
         transform: ARROW_SPIN[dir],
       }}
     >
@@ -135,60 +133,141 @@ function Arrow({ dir, className }) {
   )
 }
 
-// Gold is identity — CLAUDE.md's "Whose it is, and where the draft is": it
-// marks the *whole* column, filled and empty alike, because "when do I pick
-// again" is the question an empty cell has to answer too.
-//
-// A per-cell ring was tried first and a design review caught exactly the
-// failure CLAUDE.md's own board-card section predicts for a ring built the
-// wrong way: fourteen cells each drawing their own complete rectangle reads
-// as a dashed stack of separate boxes, not one column, and the header above
-// it was cyan for the same idea gold owns everywhere else on the board. The
-// fix isn't a bigger ring, it's fewer edges: every cell in the column gets
-// the same wash and the same gold left/right border — which is invisible as
-// a *seam* between adjacent cells that already touch with no gap between
-// them, and reads as one continuous outline — and only the very first and
-// very last cell in the column close it off with a top or bottom edge.
-// mineEdge() below returns exactly those four pieces per cell rather than a
-// single ring class, and the header's own "YOU" label matches in gold too.
+/* "Which one am I", answered structurally rather than by tinting. Two cyan
+   rails run the full height of your column — through the header, through
+   every drafted cell and, crucially, through every empty future one — and
+   the column keeps exactly the same value as the rest of the board. The
+   palette handoff's own name for the option is "seat bracket", and the
+   bracket is the whole of it: no wash, no per-cell ring, no second colour
+   inside the cells.
 
-// Four complete literal strings, not one built from concatenated
-// fragments — draftRoomPositions.js's own comment already names this
-// exact trap ("Tailwind's JIT scanner finds classes by grepping source
-// files for the literal string... it would compile to nothing, silently")
-// and this function fell into it anyway on its first pass: the shadow
-// value was assembled from `'shadow-[...' + (cond ? ',...' : '') + '...]'`
-// pieces, so the complete bracket content this class needs never once
-// appeared as a whole token anywhere in the source Tailwind scans. Every
-// cell still rendered the class name — React doesn't care that it means
-// nothing — so nothing looked wrong until a test actually read
-// getComputedStyle(cell).boxShadow and got back "none".
-const MINE_WASH = 'bg-[rgba(255,209,102,0.07)]'
-const MINE_EDGE = {
-  mid: MINE_WASH + ' shadow-[inset_2px_0_0_rgba(255,209,102,0.45),inset_-2px_0_0_rgba(255,209,102,0.45)]',
-  first: MINE_WASH + ' shadow-[inset_2px_0_0_rgba(255,209,102,0.45),inset_-2px_0_0_rgba(255,209,102,0.45),inset_0_2px_0_rgba(255,209,102,0.45)]',
-  last: MINE_WASH + ' shadow-[inset_2px_0_0_rgba(255,209,102,0.45),inset_-2px_0_0_rgba(255,209,102,0.45),inset_0_-2px_0_rgba(255,209,102,0.45)]',
-  // Both edges at once only happens in a one-round league — an edge case,
-  // but a real one (this app supports 1-round drafts), so it gets its own
-  // real literal rather than falling through to "mid" and drawing a
-  // column with no top or bottom.
-  both: MINE_WASH + ' shadow-[inset_2px_0_0_rgba(255,209,102,0.45),inset_-2px_0_0_rgba(255,209,102,0.45),inset_0_2px_0_rgba(255,209,102,0.45),inset_0_-2px_0_rgba(255,209,102,0.45)]',
-}
+   This replaces a gold wash plus a gold border pair, and the swap is the
+   one deliberate departure from CLAUDE.md's "Gold is identity" rule —
+   scoped, on purpose, to this grid. Gold still means "yours" in PicksRail,
+   PickTicker, ChatPanel, the Decide screen, the queue and the Entry seat
+   board, and tailwind.config.js's `shadow-seat`/`.seat-wash` tokens are
+   untouched. What changed is that the board's cells are chalk now: gold at
+   7% alpha over a light pastel is not a tint anybody can see, and a #FFD166
+   rule against #FBD5A8 (TE's fill) measures 1.15:1 — the mark would have
+   survived as a name and died as a signal. Cyan is the one hue on this
+   board that no chalk fill goes near.
 
-function mineEdge(isMine, isFirstRound, isLastRound) {
-  if (!isMine) return ''
-  if (isFirstRound && isLastRound) return MINE_EDGE.both
-  if (isFirstRound) return MINE_EDGE.first
-  if (isLastRound) return MINE_EDGE.last
-  return MINE_EDGE.mid
-}
+   The cost is real and is not hidden: cyan already carries "on the clock"
+   on this same grid, which is the exact "one colour, several jobs" failure
+   gold was introduced to end. What keeps them apart here is that they are
+   different shapes rather than different colours — the live pick is a
+   filled, pulsing, 2px-bordered box occupying one cell, and the seat is a
+   pair of hairlines fourteen rows tall that never fills anything. Inside
+   your own column on your own turn both are drawn, nested, which is the
+   same "two facts coincide, let both draw" call the legacy board already
+   makes.
+
+   An inset box-shadow, never a border: a border is inside the box under
+   box-sizing: border-box, so it would eat 1-2px out of the card's own
+   padding on the two columns nobody wants shifted, and every cell in the
+   board would have to gain the same width to stay aligned. The shadow sits
+   on the grid-cell wrapper rather than the pick card, which is what makes
+   the rails continuous — they cross the 3px gutter between cards instead
+   of stopping at each one, so fourteen cells read as one column.
+
+   Two complete literal strings, one per width, never one assembled from
+   fragments. draftRoomPositions.js's header names this exact trap and this
+   function fell into it once already: Tailwind's JIT greps source for a
+   whole class token, so a bracket value built by concatenation compiles to
+   nothing at all — and React still renders the class name, so the only
+   thing that ever noticed was a test reading getComputedStyle().boxShadow
+   and getting back "none". 2px below lg because 1px reads as an artefact
+   at phone density (the handoff says so, and it is right); 1px at lg+
+   because at desktop density 2px reads as a border somebody drew. */
+const SEAT_BRACKET =
+  'shadow-[inset_2px_0_0_#00E5FF,inset_-2px_0_0_#00E5FF] ' +
+  'lg:shadow-[inset_1px_0_0_#00E5FF,inset_-1px_0_0_#00E5FF]'
 
 // The current pick keeps its own distinct box (the teal pulsing one below,
-// with its own inline glow) rather than composing into mineEdge() above —
+// with its own inline glow) rather than composing into SEAT_BRACKET above —
 // "your column" and "the live pick" stay two readable facts instead of one
-// cell trying to carry both.
+// cell trying to carry both. They share a hue now and deliberately not a
+// shape; see the note on SEAT_BRACKET for why that is the thing keeping
+// them apart.
 
-export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLabelOf, onTeamClick, shortNameOf, onClaimSeat, seats, onOpenLog, onSelectPlayer }) {
+// The dock-raise/lower chevron pair, on the board's own bottom-right corner
+// rather than in DraftRoom.jsx as a sibling overlay — the board is the
+// thing whose corner this sits on, and DraftLobby.jsx mounts this same
+// component with no dock beneath it at all (trayPos/onTrayUp/onTrayDown all
+// undefined there), so the pair only renders when a real dock is passed in.
+function RaiseLowerButton({ onClick, disabled, title, children }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      aria-label={title}
+      className={
+        'flex h-6 w-6 items-center justify-center rounded-full border transition-colors duration-150 ' +
+        (disabled
+          ? 'cursor-not-allowed border-slate-rule bg-slate-sunk/70 text-white/15'
+          : 'border-slate-rule bg-slate-sunk/80 text-white/60 hover:border-teal-400/50 hover:text-teal-300')
+      }
+    >
+      {children}
+    </button>
+  )
+}
+
+/* Put the live pick in the middle of the board's own scroller.
+
+   Two things here are the hard-won rules this codebase already paid for
+   once, on the legacy board, and they are just as true of this one.
+
+   `offsetTop` is NOT a distance to the scroller. It is the distance to the
+   nearest *positioned* ancestor, and nothing between a board cell and this
+   scroll container is positioned — the legacy board read it anyway and sat
+   about four rounds past the live pick, twitching every time anything above
+   the board changed height. Two getBoundingClientRect() calls, differenced,
+   are a real distance between two real boxes whatever is positioned in
+   between. Do not "fix" a future version of this by adding `position:
+   relative` to the scroller: that makes offsetTop correct today and
+   silently wrong again the next time somebody changes positioning.
+
+   And do not re-ask for a scroll you are already at. `behavior: smooth`
+   starts an animation whether or not the target moved, so a caller that
+   fires this on every render would restart one every few hundred
+   milliseconds. 4px of slop is what turns "moves constantly" into "moves
+   once, when asked." */
+function centreOnLive(scroller, cell) {
+  if (!scroller || !cell) return
+  const box = scroller.getBoundingClientRect()
+  const target = cell.getBoundingClientRect()
+  const left = scroller.scrollLeft + (target.left - box.left) - (box.width - target.width) / 2
+  const top = scroller.scrollTop + (target.top - box.top) - (box.height - target.height) / 2
+  const x = Math.max(0, Math.min(left, scroller.scrollWidth - scroller.clientWidth))
+  const y = Math.max(0, Math.min(top, scroller.scrollHeight - scroller.clientHeight))
+  if (Math.abs(x - scroller.scrollLeft) < 4 && Math.abs(y - scroller.scrollTop) < 4) return
+  scroller.scrollTo({ left: x, top: y, behavior: 'smooth' })
+}
+
+export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLabelOf, onTeamClick, shortNameOf, onClaimSeat, seats, onSelectPlayer, trayPos, onTrayUp, onTrayDown, scrollToLiveSignal }) {
+  const scrollerRef = useRef(null)
+  const liveCellRef = useRef(null)
+
+  /* Driven by a counter the caller increments, not by a ref handed up or a
+     window event. A counter is the smallest thing that can express "the
+     crosshair was pressed again" — pressing it twice in a row has to scroll
+     twice, and a boolean cannot say that. It also keeps this a plain prop:
+     a window event would scroll every board that happened to be mounted,
+     and a forwarded imperative handle would have to be threaded through
+     DraftBoardPeekPhone and DraftRoomPhone to reach the header.
+
+     Deliberately skipped on the first render (signal 0 / undefined): a
+     caller that has never pressed it must not have the board jump on
+     mount, which is a different feature (auto-follow) with its own
+     "the board yanks while I'm reading round one" failure mode. */
+  useEffect(() => {
+    if (!scrollToLiveSignal) return
+    centreOnLive(scrollerRef.current, liveCellRef.current)
+  }, [scrollToLiveSignal])
+
   const byCell = new Map()
   picks.forEach((p) => byCell.set(p.round + '-' + p.slot, p))
 
@@ -207,35 +286,37 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
      benchmarked against — scrolls rather than compresses. 120px is under
      what a long name wants at the widest league sizes, which is exactly
      why the horizontal scroll stays: this is a floor, not a fit. */
-  /* 30px gutter below lg, not 64. A round number is one or two digits and
-     the rail is sticky, so it is permanently on screen — 64px of a 390px
-     phone is 16% of the width spent on "12", and the 34px it gives back is
-     most of a column's worth of name. The floor rises to 120 with it, which
-     is the width the handoff measured a hyphenated name against
-     ("J. Smith-Njigba" wants 81px once the pick code's own reserve is out of
-     the way); the grid scrolls either way, so a wider column costs nothing
-     but scroll distance. Desktop keeps its own pair below.
+  /* 36px gutter below lg, not 64 and not the 30px this used to be either.
+     A round number is one or two digits and the rail is sticky, so it is
+     permanently on screen. 36+108 is the mobile board pass's own pair
+     (see the seat column note below) — both moved together so a ten-team
+     board lands on exactly 1116px, the acceptance check's own number,
+     rather than the two floors being tuned independently and drifting
+     apart. Desktop keeps its own pair below, untouched.
 
-     Fixed 120px below lg, not minmax(120px, 1fr). The floor is the right
-     shape for desktop — see the note above — but combined with this grid's
-     own min-w-max it resolves to max-content, and a board of real player
-     names came out at 179px a column: 1819px of scroll on a 390px phone,
-     4.7 screens wide, against the 1230px (30 + 10 x 120) a fixed track
-     gives. On a width where you can see three columns at once, how far the
-     board runs is the cost that matters, and 120px is already measured
-     against the longest name it has to hold. */
-  const cols = `30px repeat(${teams}, 120px)`
+     Fixed 108px below lg, not minmax(108px, 1fr). The floor is the right
+     shape for desktop — see the note on colsWide below — but combined
+     with this grid's own min-w-max it resolves to max-content, and a
+     board of real player names came out well past what a fixed track
+     gives. On a width where you can see three columns at once, how far
+     the board runs is the cost that matters, and 108px is the mobile
+     board pass's own measured floor for the longest name it has to hold
+     at this row height. */
+  const cols = `36px repeat(${teams}, 108px)`
   const colsWide = `56px repeat(${teams}, minmax(120px, 1fr))`
   /* Explicit rows, not another auto-rows floor: the header keeps its own
      natural (avatar + name) height, and every round after it is exactly
-     50px — a fixed size, never a minimum. The old
+     46px below lg, 50px at lg+ — a fixed size, never a minimum. The old
      auto-rows-[minmax(34px,auto)] let a round's height come from its
      tallest cell's own content, which is exactly the thing a fixed-height
      design needs to stop being possible; naming every track here removes
-     the question rather than narrowing it. */
-  const rowsTemplate = `auto repeat(${rounds}, 56px)`
+     the question rather than narrowing it. 46, not the 56 this used to
+     be: the mobile board pass's own row height, paired with the smaller
+     108px column and 24px seat avatar below so the whole header/row
+     stack shrinks together rather than the columns narrowing under rows
+     still sized for the wider ones. */
+  const rowsTemplate = `auto repeat(${rounds}, 46px)`
   const rowsWide = `auto repeat(${rounds}, 50px)`
-  const totalPicks = teams * rounds
 
   return (
     // w-full h-full, not a flex-basis of its own: DraftRoom.jsx now wraps
@@ -247,83 +328,44 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
     // column at its real width, never squashed), so on a phone it's always
     // wider than the viewport — this box is what scrolls, both directions,
     // with touch.
-    <div className="flex h-full min-h-[240px] w-full flex-1 flex-col overflow-hidden border-b border-slate-rule bg-slate lg:border-b-0 lg:border-r">
-      {/* Title, the real picks-made count, and the Log link — mobile only.
-          Desktop draws none of this row: it already has DraftLogDock as a
-          permanent side panel, and that panel's own "Log" tab content
-          inside PlayerHub is itself lg:hidden — wiring this same button in
-          at lg+ would open a sheet with nothing visible inside it, the
-          dead-control failure CLAUDE.md names outright. The count is real,
-          not a placeholder: picks.length and totalPicks are the same
-          numbers the rest of the room already reads off picks/league. */}
-      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-rule px-3 py-2 lg:hidden">
-        <h2 className="text-lg font-bold text-white">The board</h2>
-        <div className="flex items-center gap-3">
-          <span className="font-plex text-xs text-white/60">
-            {picks.length} of {totalPicks}
-          </span>
-          {onOpenLog && (
-            <button
-              type="button"
-              onClick={onOpenLog}
-              className="flex items-center gap-0.5 text-xs font-semibold text-teal-300 transition-colors duration-150 hover:text-teal-200"
-            >
-              Log
-              <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
-            </button>
-          )}
-        </div>
-      </div>
+    <div className="relative flex h-full min-h-[240px] w-full flex-1 flex-col overflow-hidden border-b border-slate-rule bg-slate lg:border-b-0 lg:border-r">
+      {/* The legend is gone, and so is the row it sat in. It read
+         "FILL = POSITION" beside six chalk pills, and it was answering a
+         question the board had already stopped asking: the cell says
+         "RB · DET" in its own second line, the pool below it carries a
+         position chip on every row, and the filter chips above that are
+         the same six letters again. Nothing on this screen was relying on
+         the ribbon to decode a colour — a reader who cannot tell the
+         pink cells from the green ones can read the two letters inside
+         them, which is exactly why the letters stayed when the position
+         badge chip came out.
 
-      {/* The legend, above the grid rather than below it — a reader meets
-          it before the first cell, not after scrolling past however many
-          rounds are already on the board. Position leads now: it's the
-          cell's own background (posWash() above), so it's the fact a
-          reader meets first when they meet the board, and the six hues
-          read off LEGEND_POSITIONS/POS_SOLID directly — the same map the
-          cell wash and rail both use, so this can never list a colour the
-          board doesn't actually draw. The ADP delta comes second, as the
-          coloured *number* it actually is now rather than a second wash —
-          this used to be a background tint too, reported back as "why are
-          we using red/green," which was really two colour signals
-          fighting on the same cell. "you" stays gold, deliberately not
-          teal: the ring really is gold (CLAUDE.md: "Gold is identity... a
-          colour doing five jobs is not a signal"), and teal now belongs to
-          "beat ADP" two swatches to its right on this exact row.
+         What it cost was real estate at the top of the board, permanently,
+         on the one panel whose whole value is how many rounds it can show
+         at once. It was 33px — most of a round.
 
-          Not lg:hidden any more. This was mobile-only while desktop had
-          nothing in its place — every filled cell on the lg+ board carries
-          the identical wash and the identical ADP-gap number this legend
-          decodes, with zero explanation beside them. */}
-      <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-slate-rule px-3 py-2">
-        <span className="font-plex text-[10px] uppercase tracking-wide text-white/60">
-          Fill = position
-        </span>
-        <span className="flex flex-wrap items-center gap-2">
-          {LEGEND_POSITIONS.map((pos) => (
-            <span key={pos} className="flex items-center gap-1 text-[10px] text-white/60">
-              <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ backgroundColor: POS_SOLID[pos] }} aria-hidden="true" />
-              {pos}
-            </span>
-          ))}
-        </span>
-        <span className="flex items-center gap-2 border-l border-slate-rule pl-3">
-          <span className="font-plex text-[10px] uppercase tracking-wide text-white/60">Number = value vs ADP</span>
-          <span className="text-[10px] font-semibold text-teal-500">+0.4 beat it</span>
-          <span className="text-[10px] font-semibold text-red-400">−0.7 reached</span>
-        </span>
-        <span className="flex items-center gap-1 text-[10px] text-white/60">
-          <span className="h-2.5 w-2.5 shrink-0 rounded-sm border-2 border-[#FFD166]" aria-hidden="true" />
-          you
-        </span>
-      </div>
+         Historically it carried three keys (the six hues, a red/green
+         "value vs ADP" scale, and a gold "you" swatch) and shed them one
+         at a time as the things they decoded left the cell or became
+         self-evident. This is the last of the three, removed for the same
+         reason as the second: a marker that explains itself needs no
+         caption, and a caption that outlives its subject is furniture.
+
+         LEGEND_POSITIONS is gone with it — nothing else read it, and an
+         unused export of the position order is exactly the sort of thing
+         a later pass wires back in without the reasoning that took it
+         out. POS_CHALK/POS_RAIL keep the order they always had.
+
+         The mobile redesign's own `hideLegend` prop went with it too —
+         there is nothing left for it to hide, on any caller, including
+         the phone board-peek that used to pass it. */}
 
       {/* The one scroll container, both axes — everything above this point
           is shrink-0 chrome that never scrolls with it, so there is exactly
           one scrollbar on this screen rather than a nested one fighting an
           outer page scroll. flex-1 min-h-0 is what makes it claim exactly
           the remaining height rather than growing to its content. */}
-      <div className="min-h-0 w-full flex-1 overflow-x-auto overflow-y-auto">
+      <div ref={scrollerRef} className="no-scrollbar-below-lg min-h-0 w-full flex-1 overflow-x-auto overflow-y-auto">
       {/* pb-[7rem+tab bar] below lg: PlayerHub's sheet is fixed over the
           bottom edge there and would otherwise cover the last couple of
           rounds when scrolled all the way down. The 7rem (112px, pb-28's own
@@ -417,25 +459,40 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
             </div>
           )
         }) : Array.from({ length: teams }, (_, s) => {
-          // A 30px avatar (initials, no photo — a team has none) plus a
-          // centred name, replacing the roster-count strip: a design
-          // review read that strip as an unlabelled row of coloured
-          // digits, and the handoff this room was built from says the
-          // header should carry a name, "not a name crushed over four
-          // count chips" in the first place — so the fix is to not print
-          // the chips here at all, not to caption them.
-          const label = s === mySlot ? 'YOU' : teamLabelOf(s)
+          /* The Juke mark, not the team's initials, and the palette
+             handoff is explicit about it: same slot, same centring, a
+             15px-tall gradient mark at lg+ and 13px below it.
+
+             It is worth being honest that this trades information away.
+             A "BM" chip said something about *this* column that the mark
+             cannot — the mark is identical in all ten. What it buys is
+             that the header stops being a row of coloured monograms
+             competing with the six-hue quilt directly under it, and the
+             team name (which was always the fact the chip was standing in
+             for) becomes the only thing in the header saying who this is.
+             A name truncated at two lines still says more than two
+             letters ever did.
+
+             A plain <img>, not JukeLogo.jsx: the handoff asks for the
+             gradient body with no colour overrides, which is precisely
+             what that component's `mono`/silhouette machinery exists to
+             take away, and it swaps itself to a silhouette below 28px —
+             a width every one of these lands under. Sourced from
+             /juke-mark-void.svg in web/public, which is byte-identical to
+             the asset shipped with the handoff (checked, not assumed).
+             aria-hidden because the name beside it already identifies the
+             column; the mark here is a badge, not a label. */
+          const isMine = s === mySlot
+          const onClockHere = !!onClock && onClock.slot === s
+          const label = isMine ? 'YOU' : teamLabelOf(s)
           const content = (
             <>
-              <span
-                className={
-                  'flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full text-[11px] font-bold ' +
-                  (s === mySlot ? 'bg-[#FFD166] text-obsidian' : 'bg-white/10 text-white/60')
-                }
+              <img
+                src="/juke-mark-void.svg"
+                alt=""
                 aria-hidden="true"
-              >
-                {initialsOf(teamLabelOf(s))}
-              </span>
+                className="h-[13px] w-auto shrink-0 lg:h-[15px]"
+              />
               {/* Two lines below lg, one with an ellipsis above it. A
                   120px column cannot hold "Bone-Thugs-N-Montgomery" on one
                   line at any size worth reading, and the room's team names
@@ -444,24 +501,73 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
                   overflow-wrap:anywhere is what lets a long unbroken run
                   like that one split at all; line-clamp caps it at two and
                   ellipsises the rest. Desktop keeps the single truncated
-                  line its wider columns can afford. */}
+                  line its wider columns can afford.
+
+                  #66F0FF (teal-300) for your own seat, where this used to
+                  be gold — the second half of the seat bracket, and the
+                  half that survives a column being scrolled past its own
+                  rails. Measured 11.81:1 on the header's own bar ground. */}
               <span
                 className={
                   'w-full text-center text-[9.5px] font-semibold leading-[1.15] [overflow-wrap:anywhere] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] [display:-webkit-box] overflow-hidden ' +
-                  'lg:block lg:truncate lg:text-xs lg:leading-normal ' +
-                  (s === mySlot ? 'text-[#FFD166]' : 'text-white/60')
+                  'lg:block lg:truncate lg:text-[11px] lg:leading-normal ' +
+                  (isMine ? 'text-teal-300' : 'text-white/60')
                 }
               >
                 {label}
               </span>
+              {/* Live state, and only live state: the pill says you are on
+                  the clock *now*, so it comes and goes while the brackets
+                  and the cyan name stay put. Two different questions —
+                  "which column is mine" is permanent, "is it my turn" is
+                  not — and giving the permanent one a badge that blinks
+                  is how a reader stops trusting either.
+
+                  lg+ only. It does not fit a 108px phone column, and it
+                  does not need to: DraftCockpitHeader already carries the
+                  full on-the-clock state beside the countdown, which is
+                  where a phone reader is looking anyway. Below lg the
+                  column gets a 6px cyan dot instead — present/absent is
+                  the whole of what the pill communicates at that size, and
+                  a dot can say it in the space there is. #06222A on the
+                  pill measures 10.75:1. */}
+              {onClockHere && isMine && (
+                <>
+                  <span
+                    className="font-plex hidden shrink-0 rounded-full px-[7px] py-[2px] text-[8px] font-bold uppercase tracking-[0.1em] leading-[1.4] lg:inline-block"
+                    style={{ backgroundColor: '#00E5FF', color: '#06222A' }}
+                  >
+                    On the clock
+                  </span>
+                  {/* The dot carries the label rather than an sr-only
+                      sibling: whichever of the two is hidden is
+                      display:none, and a display:none element is not
+                      announced — so exactly one of them speaks at any
+                      width, and a third always-present copy would make the
+                      desktop header say it twice. */}
+                  <span
+                    className="h-1.5 w-1.5 shrink-0 rounded-full bg-teal-500 lg:hidden"
+                    role="img"
+                    aria-label="On the clock"
+                  />
+                </>
+              )}
             </>
           )
+          /* The bracket starts here, not at round 1. A rail that begins
+             under the header reads as a marked *block of picks*; one that
+             starts at the header reads as a marked *column*, which is the
+             thing being marked. The handoff says "header row included" for
+             the same reason. */
+          const headCls =
+            'sticky top-0 z-10 flex flex-col items-center justify-center gap-1 border-b border-r border-slate-rule bg-slate-panel/95 px-1.5 py-1.5 ' +
+            (isMine ? SEAT_BRACKET : '')
           return onTeamClick ? (
             <button
               key={'hd-' + s}
               type="button"
               onClick={() => onTeamClick(s)}
-              className="sticky top-0 z-10 flex flex-col items-center justify-center gap-1 truncate border-b border-r border-slate-rule bg-slate-panel/95 px-1.5 py-1.5 transition-colors duration-150 hover:bg-teal-500/10"
+              className={headCls + ' transition-colors duration-150 hover:bg-teal-500/10'}
               title={'View ' + teamLabelOf(s) + "'s draft insights"}
             >
               {content}
@@ -469,7 +575,7 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
           ) : (
             <div
               key={'hd-' + s}
-              className="sticky top-0 z-10 flex flex-col items-center justify-center gap-1 border-b border-r border-slate-rule bg-slate-panel/95 px-1.5 py-1.5"
+              className={headCls}
               title={teamLabelOf(s)}
             >
               {content}
@@ -488,19 +594,41 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
                 const pick = byCell.get(round + '-' + s)
                 const isCurrent = !!onClock && onClock.round === round && onClock.slot === s
                 const isMine = s === mySlot
-                const gap = pick ? adpGap(pick) : null
-                const gapText = adpText(gap)
-                const overall = DE ? DE.overallOf(round, s, teams) : null
+                const overall = DE ? DE.overallOf(round, s, league) : null
                 // The label for a pick that has landed. Always via
                 // DraftEngine.pickCode() — the snake mirror lives there and
                 // nowhere else (CLAUDE.md: a pick number is not a seat
                 // number, and half the board agrees with the wrong answer).
-                const code = pick && DE ? DE.pickCode(pick.overall, teams) : null
-                const arrow = boardArrow(DE, round, s, teams)
+                const code = pick && DE ? DE.pickCode(pick.overall, league) : null
+                const arrow = boardArrow(DE, round, s, league)
                 return (
                   <div
                     key={round + '-' + s}
-                    className={'h-[56px] lg:h-[50px] box-border border-b border-r border-slate-rule/70 p-0.5 ' + mineEdge(isMine, round === 1, round === rounds)}
+                    /* p-[3px], not p-0.5: the handoff's own 3px card
+                       margin, and it is what the seat bracket needs to
+                       read as a rail beside the card rather than a border
+                       on it. border-slate-rule/70 stays in the class list
+                       whatever else this cell carries — it is how both
+                       board specs find a real cell. */
+                    /* The crosshair centres on this element, so the ref
+                       goes on the grid cell rather than on the card inside
+                       it — centreOnLive() differences two rects and the
+                       cell is the box the board's own geometry is built
+                       from. */
+                    ref={isCurrent ? liveCellRef : undefined}
+                    className={'h-[46px] lg:h-[50px] box-border border-b border-r border-slate-rule/70 p-[3px] ' + (isMine ? SEAT_BRACKET : '')}
+                    /* The hit area is the whole grid cell, not the card
+                       inside it. The 3px margin that makes the seat
+                       bracket read as a rail also takes the card to 39px
+                       tall on a phone, which is under the 44px a thumb
+                       wants — and the gutter it opens up is dead space
+                       sitting directly between two tappable things. On
+                       the wrapper the target is the full 46px and the
+                       gutters belong to whichever cell they sit inside.
+                       Only when there is a pick to open: an empty cell
+                       stays inert rather than becoming a control that
+                       looks identical and does nothing. */
+                    onClick={pick && onSelectPlayer ? () => onSelectPlayer(pick.player) : undefined}
                   >
                     {pick ? (
                       // layoutId matches the same player's row in
@@ -511,25 +639,51 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
                       // on its own, so the card visibly moves from the
                       // queue into its cell rather than just popping in.
                       //
-                      // A neutral ground plus a 3px POS_SOLID left rule,
-                      // not the old saturated full-cell fill — a design
-                      // review, and a look at the actual handoff spec
-                      // rather than this file's own two-year-old paraphrase
-                      // of it, both landed on the same place: painting six
-                      // hues across 140 full cells means nothing is
-                      // emphasised because everything already is. The rule
-                      // is a plain style prop (POS_SOLID is a hex map, not
-                      // Tailwind classes) since a computed colour can't be
-                      // a static utility class.
+                      /* A matte pastel chalk card with dark ink on it, and
+                         a 5px saturated rail down its left edge. This is
+                         the fourth answer this cell has had and the first
+                         that inverts it — the three before were all dark
+                         surfaces arguing about how much hue to let through
+                         (a full-saturation block, a bare 3px rail on
+                         charcoal, then that rail over a 14% wash of its own
+                         colour). draftRoomPositions.js carries the full
+                         record beside POS_CHALK.
+
+                         What changes with the inversion is that the rail
+                         finally works. Two earlier looks called a rail
+                         "nearly invisible at working zoom" and both were
+                         right about the ground they measured it on: a
+                         saturated rule against near-black is a rule against
+                         near-black. The same rule against a pastel of its
+                         own hue is a real edge — and it now has a second
+                         job, telling two chalk fills apart at a glance when
+                         the fills themselves are deliberately close in
+                         value.
+
+                         Inline style rather than utility classes for the
+                         usual reason: POS_CHALK/POS_RAIL are hex maps, and a
+                         class built by interpolating a hex never appears as
+                         a whole token for Tailwind's JIT to find, so it
+                         compiles to nothing, silently. The 1px
+                         rgba(0,0,0,0.05) border is the handoff's own — not
+                         a visible edge, but what stops a light card on a
+                         dark ground from looking like it is glowing at its
+                         corners.
+
+                         An unknown position falls back to a neutral light
+                         card rather than to no card at all: the map is
+                         complete for every position the board can draft, but
+                         a cell rendering as bare dark ground would read as
+                         an empty pick, which is a lie. */
                       <motion.div
                         layoutId={'player-' + (pick.player.id || pick.player.name)}
                         initial={{ opacity: 0, scale: 0.85 }}
                         animate={{ opacity: 1, scale: 1 }}
                         transition={{ type: 'spring', stiffness: 400, damping: 32 }}
-                        onClick={() => onSelectPlayer && onSelectPlayer(pick.player)}
                         style={{
-                          borderLeft: '3px solid ' + (POS_SOLID[pick.player.pos] || 'rgba(255,255,255,0.25)'),
-                          backgroundColor: POS_SOLID[pick.player.pos] ? hexToRgba(POS_SOLID[pick.player.pos], 0.14) : undefined,
+                          backgroundColor: POS_CHALK[pick.player.pos] || '#C2CCD7',
+                          border: '1px solid rgba(0,0,0,0.05)',
+                          color: CELL_INK,
                         }}
                         // h-full alone is enough now: the row itself is a
                         // fixed 50px (rowsTemplate above) rather than a
@@ -537,21 +691,31 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
                         // track regardless of its own content — there is no
                         // longer a shorter round for the grid to shrink
                         // toward (the legacy board's "two row heights" bug).
-                        // The position wash replaces the flat charcoal fill —
-                        // see posWash()/hexToRgba() above for why this is the
-                        // cell's primary colour now rather than the ADP gap.
                         // box-border restates border-box explicitly (Tailwind
                         // Preflight already sets it globally) because an
                         // explicit height and this card's own padding are
                         // exactly where content-box and border-box disagree.
-                        className="relative flex h-full box-border cursor-pointer flex-col justify-center gap-0.5 rounded-md px-1.5 py-1 text-white/90"
+                        // overflow-hidden is what keeps the rail inside the
+                        // rounded corner rather than squaring it off.
+                        className="relative flex h-full box-border cursor-pointer flex-col justify-center gap-[3px] overflow-hidden rounded-lg py-[6px] pl-[10px] pr-[7px] lg:rounded-[7px] lg:py-[7px] lg:pl-[12px] lg:pr-[9px]"
                       >
-                        {/* Line 1 — name, then the pick code. The code used
-                            to share line 1 with the position letters; the
-                            position moved to line 2 as its own small badge
-                            once the cell stopped being a full colour block
-                            and needed another way to say WR vs RB besides
-                            the (now much subtler) rail. */}
+                        {/* The rail. Absolutely positioned and full height
+                            rather than a border-left, because a border is
+                            inside the box and would eat its width out of the
+                            padding the text is measured against — and
+                            because the left padding above (12px desktop,
+                            10px mobile) is deliberately wider than the rail,
+                            so the name clears it rather than sitting on it.
+                            4px below lg, 5px at lg+: the handoff's own pair,
+                            and the same reasoning as the seat bracket's 2/1
+                            — a phone needs more physical width to read the
+                            same mark. */}
+                        <span
+                          aria-hidden="true"
+                          className="absolute bottom-0 left-0 top-0 w-[4px] lg:w-[5px]"
+                          style={{ backgroundColor: POS_RAIL[pick.player.pos] || '#4E6377' }}
+                        />
+                        {/* Line 1 — name, then the pick code. */}
                         <div className="flex items-center justify-between gap-1 leading-none">
                           {/* "J. Gibbs", not "Jahmyr Gibbs". A full name in
                               a ~132px column truncated 133 of 140 times.
@@ -560,57 +724,95 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
                               reason: an initial plus a surname reads as a
                               person where a surname alone reads as a row in
                               a table. Never re-derived here. */}
-                          {/* 11.5px/700 below lg against desktop's 13px, and
-                              the pick code drops to 9px with it. Both are the
-                              handoff's own values, and they are what makes a
-                              120px phone column hold the names it was sized
-                              for: at 13px, five of twenty-five real cards
-                              ellipsised — "J. Smith-Njigba" among them, which
-                              is the exact name the column width was measured
-                              against. 9px is the documented floor and this is
-                              one of the five things allowed to sit on it,
-                              being uppercase mono. */}
-                          <p className="min-w-0 truncate text-[11.5px] font-bold lg:text-[13px] lg:font-semibold" title={pick.player.name}>
+                          {/* 12px/600 below lg against desktop's 13px/700 —
+                              the handoff's own pair. The mobile step down is
+                              what makes a 108px column hold the names it was
+                              sized for: at 13px, five of twenty-five real
+                              cards ellipsised, "J. Smith-Njigba" among them,
+                              which is the exact name that width was measured
+                              against. */}
+                          <p className="min-w-0 truncate text-[12px] font-semibold lg:text-[13px] lg:font-bold" title={pick.player.name}>
                             {shortNameOf ? shortNameOf(pick.player) : pick.player.name}
                           </p>
-                          {code && <span className="shrink-0 font-plex text-[9px] text-ink-soft lg:text-[10px]">{code}</span>}
-                        </div>
-                        {/* Line 2 — position badge, club, the snake arrow,
-                            then the ADP gap on its own side so it never
-                            competes with the name above it for the reader's
-                            first look. */}
-                        <div className="flex items-center justify-between gap-1 leading-none">
-                          <span className="flex min-w-0 items-center gap-1">
-                            <span className={'shrink-0 rounded px-1 py-px text-[9px] font-bold ' + (POS_BADGE[pick.player.pos] || 'bg-white/10 text-white/60')}>
-                              {pick.player.pos}
+                          {/* data-pick-code, not the font class it happens to
+                              carry. board-card.spec.mjs used to find these by
+                              `span.font-plex`, on the strength of a comment
+                              saying that class named nothing else on a card —
+                              true until the position abbreviation on the line
+                              below became mono too, which doubled the count
+                              and reported 86 codes against 43 picks. An
+                              attribute says what an element IS. */}
+                          {code && (
+                            <span data-pick-code className="shrink-0 font-plex text-[10px]" style={{ color: CELL_SUB }}>
+                              {code}
                             </span>
-                            <span className="truncate text-[10px] font-medium text-ink-soft">{pick.player.team}</span>
-                            {/* A dot, not a chip — the cell has no room for
-                                a labelled badge on top of everything else
-                                here, but "hurt" is worth a glance even at
-                                this size. Full status is one click away on
-                                the profile now. */}
+                          )}
+                        </div>
+                        {/* Line 2 — POS · TEAM, and the snake arrow on the
+                            far side. The position used to be a coloured badge
+                            chip here; it is plain mono text now because the
+                            cell itself is the position, at full card size,
+                            and a second coloured chip saying the same thing
+                            inside it is exactly the redundancy the fill was
+                            adopted to remove. What the letters still do is
+                            name the colour for anybody who cannot separate
+                            two pastels — which is why they stay rather than
+                            going the way of the badge entirely.
+
+                            The ADP delta used to sit on the right of this
+                            line. The arrow has it now. */}
+                        <div className="flex items-center justify-between gap-1 leading-none" style={{ color: CELL_SUB }}>
+                          <span className="flex min-w-0 items-center gap-1">
+                            <span className="truncate font-plex text-[10px] tracking-[0.06em]">
+                              {pick.player.pos} · {pick.player.team}
+                            </span>
+                            {/* A dot, not a chip — the cell has no room for a
+                                labelled badge on top of everything else here,
+                                but "hurt" is worth a glance even at this
+                                size. Full status is one click away on the
+                                profile.
+
+                                INJURY_META's `chalk` value, never its `dot`
+                                class: `dot` is a -400 step drawn for a dark
+                                cell and measures 1.55:1 on QB's own fill —
+                                the same hue family, which is precisely where
+                                it would vanish. */}
                             {INJURY_META[pick.player.inj] && (
                               <span
-                                className={'h-[5px] w-[5px] shrink-0 rounded-full ' + INJURY_META[pick.player.inj].dot}
+                                className="h-[5px] w-[5px] shrink-0 rounded-full"
+                                style={{ backgroundColor: INJURY_META[pick.player.inj].chalk }}
                                 title={INJURY_META[pick.player.inj].label}
                               />
                             )}
-                            <Arrow dir={arrow} className="shrink-0 text-[9px] text-ink-soft" />
                           </span>
-                          {gap != null && (
-                            <span className={'shrink-0 text-[10px] font-semibold ' + gapText}>
-                              {gap >= 0 ? '+' : ''}
-                              {gap.toFixed(1)}
-                            </span>
-                          )}
+                          {/* 16px/700 at lg+, 14px below — the handoff's own
+                              sizes, and far bigger than the 9px this used to
+                              be, because the arrow is now the whole of what
+                              the right of this line says rather than one of
+                              two things sharing it.
+
+                              Three directions, not the handoff's two. Its
+                              rule is `round % 2` — odd rounds point right,
+                              even rounds left — which is correct for every
+                              cell but one per round, and the one it misses is
+                              the turn itself. The end-of-round pick is where
+                              the order stops and comes back, it is why the
+                              ends of the room pick twice in a row, and
+                              CLAUDE.md records the down arrow as the one
+                              thing on the board the pick numbers do not say
+                              on sight. boardArrow() keeps deriving it from
+                              DraftEngine.pickInRound(), the one place the
+                              snake mirror is allowed to live; the parity the
+                              handoff asks for falls out of that for every
+                              cell it describes. */}
+                          <Arrow dir={arrow} className="shrink-0 text-[14px] font-bold lg:text-[16px]" />
                         </div>
                       </motion.div>
                     ) : isCurrent ? (
                       <motion.div
                         animate={{ opacity: [1, 0.75, 1] }}
                         transition={{ duration: 1.4, repeat: Infinity, ease: 'easeInOut' }}
-                        className="relative flex h-full box-border items-center justify-center rounded-md border-2 border-teal-400 bg-teal-500/20 text-[10px] font-bold uppercase tracking-wide text-teal-300"
+                        className="relative flex h-full box-border items-center justify-center rounded-lg border-2 border-teal-400 lg:rounded-[7px] bg-teal-500/20 text-[10px] font-bold uppercase tracking-wide text-teal-300"
                       >
                         {overall != null && (
                           <span className="absolute left-1 top-0.5 text-[10px] font-normal normal-case text-teal-300/75">{overall}</span>
@@ -619,7 +821,7 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
                         <Arrow dir={arrow} className="absolute right-1 top-0.5 text-[9px] font-normal normal-case text-teal-300/75" />
                       </motion.div>
                     ) : (
-                      <div className="relative h-full box-border rounded-md border border-dashed border-slate-rule">
+                      <div className="relative h-full box-border rounded-lg border border-dashed border-slate-rule lg:rounded-[7px]">
                         {/* One value for one element. Gold measured fine
                             here (13.4:1 on near-black; the "gold never
                             paints type" rule is about light surfaces) but it
@@ -665,6 +867,32 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
         })}
       </div>
       </div>
+
+      {/* right-[14px] bottom-[12px], matching the handoff exactly — this
+          sits over the board's own scroll container, not the dock, so it
+          stays reachable however tall the dock currently is. Each end
+          disables and dims rather than disappearing, which is what tells a
+          reader the range has an end at all (CLAUDE.md's own two-button
+          precedent for this exact control, one per direction rather than a
+          single button that wraps around). */}
+      {trayPos && (onTrayUp || onTrayDown) && (
+        <div className="absolute bottom-3 right-3.5 z-40 hidden flex-col gap-1 lg:flex">
+          <RaiseLowerButton
+            onClick={onTrayUp}
+            disabled={trayPos === 'raised'}
+            title={trayPos === 'raised' ? 'The pool is already raised' : 'Raise the pool'}
+          >
+            <ChevronUp className="h-3.5 w-3.5" />
+          </RaiseLowerButton>
+          <RaiseLowerButton
+            onClick={onTrayDown}
+            disabled={trayPos === 'hidden'}
+            title={trayPos === 'hidden' ? 'The pool is already closed' : 'Lower the pool'}
+          >
+            <ChevronDown className="h-3.5 w-3.5" />
+          </RaiseLowerButton>
+        </div>
+      )}
     </div>
   )
 }

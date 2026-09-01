@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The source-id crosswalk, tested without the network.
+"""The two crosswalks and the nflverse audit, tested without the network.
 
 Why this file exists when the rest of the pipeline is tested by running it:
 a bad join does not look like a failure. Every count still prints, both
@@ -181,6 +181,453 @@ for label, rows in [
     check(f"{label}: the headline count is what was stored", head, stored)
     check(f"{label}: the breakdown adds up to it", parts, stored)
 
+
+# ---- 11. the nflverse join -----------------------------------------------
+#
+# A different source, a different join, and the same failure mode: a wrong
+# match does not look wrong. Their file carries no Sleeper id at all, so
+# unlike Tank01 there is no shared-identifier tier to fall back from -- the
+# name match IS the join, and every case below is one it has to get right.
+#
+# Its own pool, because these cases need a two-way player and a Rams player
+# and the pool above is asserted on exactly as it stands.
+NFL_SLEEPER = {
+    "1001": {"full_name": "Puka Nacua",     "position": "WR", "team": "LAR"},
+    "1002": {"full_name": "Travis Hunter",  "position": "WR", "team": "JAX"},
+    "1003": {"full_name": "Jahmyr Gibbs",   "position": "RB", "team": "DET"},
+    "1004": {"full_name": "Ja'Marr Chase",  "position": "WR", "team": "CIN"},
+}
+NFL_STATS = {pid: {"age": 25} for pid in NFL_SLEEPER}
+NFL_INDEXES = bp.index_sleeper(NFL_SLEEPER)
+
+
+def nfl(gsis, name, pos, team, last=2025):
+    return {"gsis_id": gsis, "display_name": name, "position": pos,
+            "latest_team": team, "last_season": str(last)}
+
+
+linked, report = bp.link_nflverse(NFL_STATS, NFL_SLEEPER, NFL_INDEXES, [
+    nfl("00-01", "Jahmyr Gibbs", "RB", "DET"),
+    nfl("00-02", "Ja'Marr Chase", "WR", "CIN"),
+])
+check("nflverse joins on name, position and team",
+      linked, {"1003": "00-01", "1004": "00-02"})
+check("and reports everyone it could not reach",
+      sorted(l.split(" | ")[0] for l in report if "no nflverse id" in l),
+      ["Puka Nacua", "Travis Hunter"])
+
+
+# ---- 12. nflverse calls the Rams LA and we call them LAR ------------------
+#
+# TEAM_ALIASES already knows. The point of the test is that link_nflverse
+# actually asks it: a raw team code compared straight across drops every Ram
+# to the looser tier, and this is how a defence once reconciled to zero.
+linked, _ = bp.link_nflverse(NFL_STATS, NFL_SLEEPER, NFL_INDEXES, [
+    nfl("00-03", "Puka Nacua", "WR", "LA"),
+])
+check("an nflverse LA row joins our LAR player on the strict tier",
+      linked, {"1001": "00-03"})
+
+
+# ---- 13. a two-way player carries the wrong position ----------------------
+#
+# nflverse lists Travis Hunter as a DB because that is what he mostly is.
+# His receiving is perfectly present under his gsis_id; the position tier
+# simply cannot see him, and no amount of name matching will fix that. So
+# the join has to fail here rather than guess, and NFLVERSE_MATCHES is what
+# rescues him.
+linked, _ = bp.link_nflverse(NFL_STATS, NFL_SLEEPER, NFL_INDEXES, [
+    nfl("00-04", "Travis Hunter", "DB", "JAX"),
+])
+check("a position nobody drafts does not join by itself", linked.get("1002"), None)
+
+saved_matches = bp.NFLVERSE_MATCHES
+bp.NFLVERSE_MATCHES = {"1002": "00-04"}
+linked, report = bp.link_nflverse(NFL_STATS, NFL_SLEEPER, NFL_INDEXES, [
+    nfl("00-04", "Travis Hunter", "DB", "JAX"),
+])
+check("NFLVERSE_MATCHES is what reaches him", linked.get("1002"), "00-04")
+check("and he stops being reported as missing",
+      any("Travis Hunter" in l for l in report), False)
+bp.NFLVERSE_MATCHES = saved_matches
+
+
+# ---- 14. two of theirs claiming one of ours ------------------------------
+linked, report = bp.link_nflverse(NFL_STATS, NFL_SLEEPER, NFL_INDEXES, [
+    nfl("00-05", "Jahmyr Gibbs", "RB", "DET"),
+    nfl("00-06", "Jahmyr Gibbs", "RB", "DET"),
+])
+check("an nflverse collision stores neither id", linked.get("1003"), None)
+check("and says so loudly",
+      any(l.startswith("COLLISION") and "00-05" in l and "00-06" in l for l in report),
+      True)
+
+
+# ---- 15. the outage path -------------------------------------------------
+#
+# nflverse being down, or a season not played yet, both arrive here as no
+# rows. The board must be unaffected and the report must say so, because a
+# pipeline that needs a third party to be up in order to produce a board is
+# not a pipeline this project wants.
+linked, report = bp.link_nflverse(NFL_STATS, NFL_SLEEPER, NFL_INDEXES, [])
+check("no rows links nothing", linked, {})
+check("and reports every player we hold", len(report), len(NFL_STATS))
+
+lines, flagged = bp.audit_against_nflverse(NFL_STATS, {}, {})
+check("an audit with nothing to compare flags nothing", flagged, 0)
+check("and says why rather than printing an empty table",
+      any("nothing compared" in l for l in lines), True)
+
+
+# ---- 16. the audit applies the two known definitions ---------------------
+#
+# These are the two differences that would look like data if they were
+# reported, and like a bug if they were fixed by taking nflverse's column.
+# A touchdown is a first down to them and is not to us; a blocked kick is a
+# miss to us and is not to them.
+def audited(ours, theirs):
+    stats = {"1003": {"s": {"2025": ours}}}
+    seasons = {2025: {"00-01": dict(theirs, player_display_name="Test Player")}}
+    return bp.audit_against_nflverse(stats, {"1003": "00-01"}, seasons)[1]
+
+
+check("a first-down line that differs by exactly the touchdowns is not flagged",
+      audited({"cfd": 40, "ct": 9},
+              {"receiving_first_downs": "49", "receiving_tds": "9"}), 0)
+check("and one that differs by anything else is",
+      audited({"cfd": 40, "ct": 9},
+              {"receiving_first_downs": "52", "receiving_tds": "9"}), 1)
+check("a miss total that differs by exactly the blocked kicks is not flagged",
+      audited({"fgx": 6}, {"fg_missed": "4", "fg_blocked": "2"}), 0)
+check("and one that differs by anything else is",
+      audited({"fgx": 6}, {"fg_missed": "4", "fg_blocked": "0"}), 1)
+check("a stat both feeds agree on is not flagged",
+      audited({"cy": 1200}, {"receiving_yards": "1200"}), 0)
+
+
+# ---- 17. the audit never changes a stored number -------------------------
+#
+# The whole design. Sleeper is the feed every season block, every weekly log
+# and every archived projection was built from, so a value quietly replaced
+# from somewhere else would make `pp` a comparison between two feeds instead
+# of between a forecast and an outcome.
+import copy as _copy
+before = {"1003": {"s": {"2025": {"cy": 1200, "ct": 9, "cfd": 40}}}}
+after = _copy.deepcopy(before)
+bp.audit_against_nflverse(after, {"1003": "00-01"}, {2025: {"00-01": {
+    "receiving_yards": "999", "receiving_tds": "1", "receiving_first_downs": "2",
+    "player_display_name": "Test Player"}}})
+check("the audit leaves every stored value exactly as it found it", after, before)
+
+
+# ---- 17. app.js has the other half of every scoring rule -----------------
+#
+# The build already refuses to write when a SCOREABLE stat has no home in
+# STAT_FIELDS. This is the other direction, and it is just as silent:
+# pointsUnder() walks the rules object, so a stat with no default in app.js
+# is summed as zero and nothing says a word.
+#
+# It runs against the real app.js rather than a fixture, because a fixture
+# would prove the parser works and not that the two files agree.
+_here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_cwd = os.getcwd()
+os.chdir(_here)
+try:
+    bp.check_app_rules()
+    check("every scoreable stat has a default, a group and a label in app.js",
+          True, True)
+except SystemExit as error:
+    check("every scoreable stat has a default, a group and a label in app.js",
+          str(error), "no problems")
+finally:
+    os.chdir(_cwd)
+
+# ---- 18. the usage block ------------------------------------------------
+#
+# The one thing nflverse writes into a record. Everything else it does is a
+# report, so this is the only place a third party can put a number into
+# stats.js at all -- which is why the outage case below matters as much as
+# the happy one.
+def usage_row(**kw):
+    row = {"target_share": "", "air_yards_share": "", "wopr": "",
+           "receiving_epa": "", "rushing_epa": "", "passing_epa": "",
+           "passing_cpoe": "", "rushing_20": "", "gwfg_att": "", "gwfg_made": ""}
+    row.update(kw)
+    return row
+
+
+records = {"1003": {"s": {"2025": {"cy": 1200}}}}
+written = bp.build_usage(records, {"1003": "00-01"}, {2025: {"00-01": usage_row(
+    target_share="0.30412", air_yards_share="0.3341", wopr="0.6903",
+    receiving_epa="41.44", rushing_20="3")}})
+check("a usage block is written under `u`, keyed by season like `s`",
+      records["1003"].get("u"),
+      {"2025": {"ts": 0.304, "ays": 0.334, "wo": 0.69, "ep": 41.4, "r20": 3}})
+check("and it is counted", written, 1)
+check("the season block beside it is untouched",
+      records["1003"]["s"], {"2025": {"cy": 1200}})
+
+# A zero and a missing value read identically on a sheet, and this file is a
+# plain <script src> in front of every first paint. Both are dropped.
+records = {"1003": {}}
+bp.build_usage(records, {"1003": "00-01"},
+               {2025: {"00-01": usage_row(target_share="0", receiving_epa="12.5")}})
+check("a zero is dropped rather than stored",
+      records["1003"]["u"], {"2025": {"ep": 12.5}})
+
+records = {"1003": {}}
+bp.build_usage(records, {"1003": "00-01"}, {2025: {"00-01": usage_row()}})
+check("a row with nothing in it writes no `u` at all", "u" in records["1003"], False)
+
+# Air yards go negative -- a screen pass is caught behind the line -- so the
+# sign is meaningful rather than dirty, and it must survive being stored.
+records = {"1003": {}}
+bp.build_usage(records, {"1003": "00-01"},
+               {2025: {"00-01": usage_row(air_yards_share="-0.003")}})
+check("a negative air-yards share is kept, not clamped or dropped",
+      records["1003"]["u"], {"2025": {"ays": -0.003}})
+
+# The outage path. nflverse down, or a season not played yet, both arrive
+# as no rows -- and the board must be identical either way.
+records = {"1003": {"s": {"2025": {"cy": 1200}}}}
+before = _copy.deepcopy(records)
+check("no nflverse rows writes no usage", bp.build_usage(records, {}, {}), 0)
+check("and leaves every record exactly as it found it", records, before)
+
+records = {"1003": {"s": {"2025": {"cy": 1200}}}}
+bp.build_usage(records, {"1003": "00-01"}, {2025: {}})
+check("a linked player with no row that season gets no `u`",
+      "u" in records["1003"], False)
+
+# USAGE_FIELDS may not name a Sleeper key. compact() resolves STAT_FIELDS
+# source names against the raw Sleeper row, so a collision would quietly
+# store Sleeper's number under an nflverse label and stay plausible.
+check("no usage short key collides with a stored stat short key",
+      sorted(set(s for s, _, _ in bp.USAGE_FIELDS) & set(bp.STAT_FIELDS.values())),
+      [])
+check("no usage source column is a Sleeper key name",
+      sorted(set(c for _, c, _ in bp.USAGE_FIELDS) & set(bp.STAT_FIELDS)), [])
+
+# ---- 19. expected points ride the same block ----------------------------
+#
+# fetch_expected_points() output merges into the same per-season `u` block
+# under xf/xd, on the same gsis id. The seasons walked are the union of the
+# two feeds, so either one being down costs its own columns and nothing else.
+records = {"1003": {}}
+bp.build_usage(records, {"1003": "00-01"},
+               {2025: {"00-01": usage_row(receiving_epa="12.5")}},
+               {2025: {"00-01": {"xf": 180.3, "xd": -12.1}}})
+check("expected points merge into the same season block",
+      records["1003"]["u"], {"2025": {"ep": 12.5, "xf": 180.3, "xd": -12.1}})
+
+records = {"1003": {}}
+bp.build_usage(records, {"1003": "00-01"}, {},
+               {2024: {"00-01": {"xf": 95.0}}})
+check("an nflverse outage does not silently drop xFP with it",
+      records["1003"]["u"], {"2024": {"xf": 95.0}})
+
+records = {"1003": {}}
+bp.build_usage(records, {"1003": "00-01"},
+               {2025: {"00-01": usage_row(receiving_epa="12.5")}},
+               {2025: {}})
+check("no expected points leaves the block exactly as before",
+      records["1003"]["u"], {"2025": {"ep": 12.5}})
+
+check("xf/xd do not collide with a stored stat short key",
+      sorted({"xf", "xd"} & set(bp.STAT_FIELDS.values())), [])
+check("xf/xd do not collide with another usage short key",
+      sorted({"xf", "xd"} & set(s for s, _, _ in bp.USAGE_FIELDS)), [])
+
+
+# ---- 20. team ranks -------------------------------------------------------
+#
+# A different kind of block from everything above: no player, no crosswalk,
+# just clean_team() and nflverse's own stats_team release. The pool is the
+# real 32 team codes (TEAM_CITIES's keys, the same universe join_rows() uses
+# for a defense's own city name) so the permutation check below means what it
+# says rather than passing on a fixture too small to reveal a gap.
+TEAMS_32 = sorted(bp.TEAM_CITIES.keys())
+check("the real team pool is 32 teams", len(TEAMS_32), 32)
+
+
+def team_row(i, code):
+    # Deliberately decorrelated across categories -- passing yards rises
+    # with i, attempts and rushing yards fall with it -- so "most passing
+    # yards" and "most attempts" land on different teams rather than the
+    # same one coincidentally leading everywhere. passing_tds and
+    # rushing_tds both cycle, which manufactures real ties on purpose: the
+    # tie-break is only proven by a fixture that actually has one.
+    return {
+        "season": "2025", "team": code, "season_type": "REG", "games": "17",
+        "completions": str(300 + i),
+        "attempts": str(400 + (31 - i)),
+        "passing_yards": str(3000 + i * 13),
+        "passing_tds": str(15 + (i % 7)),
+        "passing_interceptions": "10",
+        "rushing_yards": str(2500 - i * 9),
+        "rushing_tds": str(8 + ((31 - i) % 5)),
+        "receiving_yards": str(3000 + i * 13),
+        "receiving_tds": str(15 + (i % 7)),
+        "def_sacks": "40", "def_interceptions": "12",
+    }
+
+
+rows = [team_row(i, code) for i, code in enumerate(TEAMS_32)]
+
+# nflverse calls the Rams "LA", not "LAR" -- swap this one row's own code so
+# build_team_ranks() has to run it through clean_team() same as every other
+# nflverse join in this file, rather than passing by coincidence because the
+# fixture happened to already spell it our way. Reuses TEAM_ALIASES, the
+# same table the player-level nflverse join is tested against above -- not a
+# second alias table for the same fact.
+lar_index = TEAMS_32.index("LAR")
+rows[lar_index] = dict(rows[lar_index], team="LA")
+
+ranks = bp.build_team_ranks(rows)
+
+check("every one of the 32 teams is ranked", len(ranks), 32)
+check("an nflverse LA row joins our LAR team code", "LAR" in ranks, True)
+check("and does not also leave a phantom LA entry behind", "LA" in ranks, False)
+
+# (a) a complete 1-32 permutation, no duplicate and no gap, on every
+# category -- including the two with real ties in this fixture.
+for category in ("off", "passYd", "passAtt", "passTd", "td"):
+    check(f"{category} ranks are a complete 1-32 permutation with no ties left over",
+          sorted(r[category]["rank"] for r in ranks.values()), list(range(1, 33)))
+
+# (b) the team with the most passing yards is ranked 1st in PASS YD, with
+# the raw value alongside it -- not just "some team is rank 1", the actual
+# leader.
+leader = max(TEAMS_32, key=lambda t: 3000 + TEAMS_32.index(t) * 13)
+check("the team with the most passing yards is PASS YD rank 1",
+      ranks[leader]["passYd"], {"rank": 1, "val": 3000 + TEAMS_32.index(leader) * 13})
+
+# (c) PASS ATT is ranked the same descending way as the rest (most = 1st),
+# not inverted as though fewer attempts were better.
+att_leader = max(TEAMS_32, key=lambda t: 400 + (31 - TEAMS_32.index(t)))
+check("the team with the most attempts is PASS ATT rank 1",
+      ranks[att_leader]["passAtt"]["rank"], 1)
+
+# The 404/outage path: nflverse not having published the file yet arrives
+# here as no rows, same as everywhere else in this pipeline, and must not
+# raise or invent a partial ranking.
+check("no rows ranks no teams and does not raise", bp.build_team_ranks([]), {})
+
+# A row with no team code at all -- clean_team()'s own "FA" fallback -- is
+# dropped rather than stored as a 33rd, fictitious "team".
+check("a blank team code (clean_team()'s FA fallback) is dropped, not stored",
+      bp.build_team_ranks([dict(team_row(0, "ARI"), team="")]), {})
+
+# ---- 21. extending past real ADP with Sleeper's own deeper pool ---------
+#
+# Real ADP for this format is one player; the pool behind it deliberately
+# includes everything that should be excluded -- an id already on the real
+# list, a player with no team (retired or a free agent), a position that
+# isn't fantasy-relevant (a long snapper), and a team defense keyed by team
+# code the way Sleeper's own master actually stores one -- so a wrong
+# exclusion or a wrong inclusion shows up as a wrong id in the result
+# rather than merely a wrong count.
+DEEP_SLEEPER = {
+    "1001": {"full_name": "Real Starter", "position": "QB", "team": "BUF", "search_rank": 5},
+    "2001": {"full_name": "Bench Guy One", "position": "RB", "team": "DET", "search_rank": 300},
+    "2002": {"full_name": "Bench Guy Two", "position": "WR", "team": "MIA", "search_rank": 100},
+    "2003": {"full_name": "No Team Guy",   "position": "WR", "team": None,  "search_rank": 1},
+    "2004": {"full_name": "Ray Guy",       "position": "LS", "team": "DAL", "search_rank": 1},
+    "2005": {"full_name": "No Rank Guy",   "position": "TE", "team": "NYJ"},
+    "MIA":  {"position": "DEF", "team": "MIA"},
+}
+DEEP_PLAYERS = [
+    {"id": "1001", "name": "Real Starter", "pos": "QB", "team": "BUF", "bye": 7,
+     "adp": 1.0, "sd": 1.1, "td": 40, "inj": "", "_entry": DEEP_SLEEPER["1001"]},
+]
+DEEP_BYES = {"BUF": 7, "DET": 8, "MIA": 11, "NYJ": 9}
+
+no_op = bp.extend_deep_bench(list(DEEP_PLAYERS), DEEP_SLEEPER, DEEP_BYES, target=1)
+check("nothing to add once the target is already met", no_op, DEEP_PLAYERS)
+
+extended = bp.extend_deep_bench(list(DEEP_PLAYERS), DEEP_SLEEPER, DEEP_BYES, target=5)
+check("real ADP is left in place, first", extended[0]["id"], "1001")
+# The Miami defense leads the tail rather than trailing it, and that is the
+# scarce-position rule rather than a search_rank surprise: every roster needs
+# one defense and one kicker, and search_rank puts both far below any
+# receiver. Everyone after them is still in search_rank order -- 2002 at 100,
+# 2001 at 300, then 2005 with none at all.
+check("scarce positions lead, then search_rank -- best-known first",
+      [p["id"] for p in extended[1:]], ["MIA", "2002", "2001", "2005"])
+check("an id already on the real list is never duplicated",
+      "1001" in [p["id"] for p in extended[1:]], False)
+check("no team means no candidacy", "2003" in [p["id"] for p in extended], False)
+check("a position outside FANTASY_POSITIONS is never added",
+      "2004" in [p["id"] for p in extended], False)
+
+added = extended[1:]
+check("every extension carries deep: true", all(p.get("deep") is True for p in added), True)
+check("no real ADP sample behind these, so sd/td are both zero",
+      [(p["sd"], p["td"]) for p in added], [(0.0, 0)] * 4)
+check("adp continues past the real sequence rather than restarting it",
+      [p["adp"] for p in added], [2.0, 3.0, 4.0, 5.0])
+check("bye comes from the team lookup built off real ADP rows, not a fetch of its own",
+      [p["bye"] for p in added], [11, 11, 8, 9])
+# Found by id rather than by position in the list. It was extended[4], which
+# was true until the scarce-position rule moved defenses to the front -- an
+# index is a claim about ordering smuggled into a test about naming.
+check("a team defense gets the same city name join_rows() gives one",
+      next(p["name"] for p in extended if p["id"] == "MIA"), "Miami Defense")
+
+exhausted = bp.extend_deep_bench(list(DEEP_PLAYERS), DEEP_SLEEPER, DEEP_BYES, target=50)
+check("stops once the real pool runs out, rather than inventing players to hit target",
+      len(exhausted), 1 + 4)
+
+# A player Sleeper only carries as first_name/last_name (no full_name) still
+# gets a real name -- join_rows()'s own ADP rows never hit this path (FFC
+# always sends a name), but Sleeper's master sometimes has no full_name for
+# a player nobody has looked up yet.
+NO_FULL_NAME = {
+    "1001": DEEP_SLEEPER["1001"],
+    "4001": {"first_name": "Fallback", "last_name": "Name", "position": "RB",
+              "team": "CHI", "search_rank": 1},
+}
+fallback = bp.extend_deep_bench(list(DEEP_PLAYERS), NO_FULL_NAME, DEEP_BYES, target=2)
+check("first_name + last_name stands in for a missing full_name",
+      fallback[1]["name"], "Fallback Name")
+
+# A free agent is not "no team". Sleeper stamps an unsigned player "FA",
+# which is truthy, so `entry.get("team")` let them through while correctly
+# excluding the None case above -- the two look like the same test and are
+# not. Measured on the real feed before this was fixed: fourteen of them on
+# the half-PPR board, a retired Derek Carr and four unsigned kickers among
+# them, each arriving as a 33rd "club" with a bye of 0. A 0 bye reads as
+# *never on bye*, which is a quietly better roster in a grade that spends
+# 10% of itself on bye-week safety.
+FA_SLEEPER = {
+    "1001": DEEP_SLEEPER["1001"],
+    "3001": {"full_name": "Released Guy", "position": "WR", "team": "FA", "search_rank": 1},
+    "3002": {"full_name": "Signed Guy",   "position": "WR", "team": "DET", "search_rank": 900},
+}
+fa = bp.extend_deep_bench(list(DEEP_PLAYERS), FA_SLEEPER, DEEP_BYES, target=3)
+check("a free agent is dropped even though \"FA\" is a truthy team",
+      [p["id"] for p in fa], ["1001", "3002"])
+check("and no club called FA reaches the board",
+      sorted({p["team"] for p in fa}), ["BUF", "DET"])
+
+# Every roster needs one kicker and one defense, and search_rank ranks both
+# far below any receiver -- so depth alone does not guarantee the two slots a
+# league cannot start without. FULL_POSITION_COVER pulls them forward until
+# every club has one. Here the receiver is the best-known player in the pool
+# and still goes last.
+COVER_SLEEPER = {
+    "1001": DEEP_SLEEPER["1001"],
+    "4101": {"full_name": "Famous Receiver", "position": "WR", "team": "DET", "search_rank": 2},
+    "4102": {"full_name": "Some Kicker",     "position": "K",  "team": "MIA", "search_rank": 5000},
+    "MIA":  {"position": "DEF", "team": "MIA"},
+}
+cover = bp.extend_deep_bench(list(DEEP_PLAYERS), COVER_SLEEPER, DEEP_BYES, target=3)
+check("a kicker and a defense are taken before a better-known receiver",
+      sorted(p["pos"] for p in cover[1:]), ["DST", "K"])
+
+deep_all = bp.extend_deep_bench(list(DEEP_PLAYERS), COVER_SLEEPER, DEEP_BYES, target=4)
+check("and the receiver still arrives once both slots are covered",
+      [p["pos"] for p in deep_all[1:]].count("WR"), 1)
 
 print()
 if FAILURES:

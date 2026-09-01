@@ -336,6 +336,14 @@
     onChat: function (fn) { live.onchat = fn; },
     onTyping: function (fn) { live.ontyping = fn; },
 
+    /* The worker's own HTTP origin — what uploadMedia() above already
+       builds by hand for its fetch() call, exposed so app.js's
+       safeMediaUrl() can check a voice/photo URL is actually on it before
+       ever handing one to an <audio>/<img src>. The same "check twice"
+       shape safeGif()/cleanGif() already have: the room refuses a foreign
+       URL server-side, and this is the second check, not a substitute. */
+    workerHttpOrigin: function () { return WORKER.replace(/^ws/, "http"); },
+
     name: myName,
     setName: setMyName,
     NAME_MAX: NAME_MAX,
@@ -353,8 +361,69 @@
        on counting and handed the seat to the CPU while the header said
        "Paused". The room refuses it from anyone but the host. */
     pause:    function (on)  { return send({ type: "pause", on: !!on }); },
-    chat: function (text, gif) { return send({ type: "chat", text: text, gif: gif || null }); },
+    /* replyTo is optional and additive: an existing caller passing just
+       (text, gif) still works exactly as before, and the room stores
+       `replyTo: null` for it, the same as it always implicitly has. */
+    chat: function (text, gif, replyTo) {
+      return send({ type: "chat", text: text, gif: gif || null, replyTo: replyTo || null });
+    },
     react: function (id, emoji) { return send({ type: "react", id: id, emoji: emoji }); },
+
+    /* A voice note or a photo, already uploaded through uploadMedia() below
+       — this only ever sends the URL that upload returned, never the bytes.
+       The room checks that URL against its own worker before storing it,
+       so a bogus one is refused the same way a non-GIPHY gif is. */
+    voice: function (url, seconds, replyTo) {
+      return send({ type: "voice", url: url, seconds: seconds, replyTo: replyTo || null });
+    },
+    photo: function (url, w, h, replyTo) {
+      return send({ type: "photo", url: url, w: w || null, h: h || null, replyTo: replyTo || null });
+    },
+
+    /* Any member may open one, the same as sending a chat message — nothing
+       about a poll makes it a host-only action. durationMs is "how long
+       from now", not an absolute end time: the room is handed `now` by its
+       own caller and never reads a clock, so an absolute time supplied by a
+       client's own clock is exactly the kind of thing this project never
+       trusts. Pass 0 (or omit) for a poll that never closes. */
+    pollCreate: function (question, choices, opts) {
+      opts = opts || {};
+      return send({
+        type: "poll-create", question: question, choices: choices,
+        multi: !!opts.multi, anon: !!opts.anon,
+        durationMs: opts.durationMs || 0, replyTo: opts.replyTo || null
+      });
+    },
+    /* A single index for a single-choice poll, or an array of indices for a
+       multi-choice one — see Room.votePoll()'s own comment for exactly what
+       each shape does. */
+    pollVote: function (id, choice) {
+      return send({ type: "poll-vote", id: id, choice: choice });
+    },
+
+    /* The upload half of a voice note or a photo, through the worker's own
+       /media route — same reasoning as gifSearch()/news() below: the R2
+       binding lives server-side, and this is the file that already knows
+       where the worker is. Resolves to the URL the route handed back, or
+       null on any failure (not configured, refused, too large, offline) —
+       never a message of its own, because deciding what to do about a
+       failed upload is the caller's job, not this file's. Uploading and
+       posting are two separate steps on purpose, the same way searching
+       GIPHY and sending a gif are: call this first, then voice()/photo()
+       with the URL it returns. */
+    uploadMedia: function (kind, blob) {
+      if (!live.code) return Promise.resolve(null);
+      const http = WORKER.replace(/^ws/, "http");
+      return fetch(http + "/media?kind=" + encodeURIComponent(kind) +
+                   "&room=" + encodeURIComponent(live.code), {
+        method: "POST",
+        headers: { "content-type": (blob && blob.type) || "application/octet-stream" },
+        body: blob
+      })
+        .then((r) => r.json())
+        .then((body) => (body && body.url) ? body.url : null)
+        .catch(() => null);
+    },
 
     /* Sent on a leading edge and then not again until it lapses — see
        app.js. A message per keystroke would be a message per keystroke for
@@ -387,6 +456,28 @@
       return fetch(http + "/news?player=" + encodeURIComponent(playerId || ""))
         .then((r) => r.json())
         .catch(() => ({ configured: false, items: [] }));
+    },
+
+    /* Email capture, through the worker. Same shape as gifSearch()/news()
+       above and for the same reason: this is the file that knows where the
+       worker is, so a "get early access" form posts here rather than
+       working out a base URL of its own — a second copy of WORKER.replace()
+       is exactly the kind of thing that drifts the day the host changes.
+
+       There is no account behind this and nothing here requires one; it is
+       a mailing list of one field, tagged with which dead end asked for it.
+       Never rejects: a signup form failing silently into "that didn't send"
+       is the whole of the contract, so the catch is load-bearing rather
+       than politeness. */
+    signup: function (email, source) {
+      const http = WORKER.replace(/^ws/, "http");
+      return fetch(http + "/signup", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: email, source: source })
+      })
+        .then((r) => r.json())
+        .catch(() => ({ ok: false }));
     }
   };
 })(window);

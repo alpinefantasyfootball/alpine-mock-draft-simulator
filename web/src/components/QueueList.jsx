@@ -37,7 +37,7 @@ export default function QueueList({ players, myTurn, engine, survivalOf }) {
       </span>
       <span className="min-w-0 flex-1 truncate text-xs font-medium text-white/90">{p.name}</span>
       {survivalOf && (
-        <span className="shrink-0 font-plex text-[10px] tabular-nums text-white/50">
+        <span className="shrink-0 font-numeral text-[10px] tabular-nums text-white/50">
           {(() => {
             const s = survivalOf(p)
             return s == null ? '—' : Math.round(s * 100) + '%'

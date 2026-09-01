@@ -149,18 +149,33 @@ test.describe("latest news", () => {
       await openSheet(page, "Gibbs");
       await openNewsTab(page);
 
-      const r = await page.evaluate((src) => {
-        const panel = eval(src);
+      /* Read off the sheet itself rather than through PANEL, which is the one
+         thing in this file that was actually broken.
+
+         PANEL takes the first .overflow-y-auto holding a link, and since the
+         drawer became a full-screen player sheet that *is* the sheet — the
+         same drift CLAUDE.md already records for the hostile-payload test
+         below, which was fixed by scoping its counts to the headline cards.
+         Here it was the `.slice(0, 60)` that finished the job: sixty
+         characters of the sheet is its header and tab strip, so this asserted
+         against "jg · jahmyr gibbs · rb · det · our read · draft fit …" and
+         reported a missing message that LatestNewsTab.jsx was rendering
+         perfectly well a little further down.
+
+         The scope is unchanged — PANEL resolved to this element anyway — so
+         the link count means exactly what it did. What changes is that the
+         message is looked for where the component puts it. */
+      const r = await page.evaluate(() => {
         const root = document.getElementById("draftroom-root");
         return {
-          links: panel ? panel.querySelectorAll("a[target=_blank]").length : 0,
-          says: panel ? panel.innerText.trim().slice(0, 60) : "",
+          links: root.querySelectorAll("a[target=_blank]").length,
+          says: root.innerText,
           // The rest of the sheet is untouched: this is a section that fails
           // by having nothing to say, not by taking the page with it.
           ourReadStillThere: [...root.querySelectorAll("button")]
             .some((b) => b.textContent.trim() === "Our Read"),
         };
-      }, PANEL);
+      });
 
       expect(r.links, "no headlines without a key").toBe(0);
       expect(r.says.toLowerCase(), "and it says so rather than showing an empty frame")
@@ -212,9 +227,27 @@ test.describe("latest news", () => {
         // check for "Wire Service" fails against a perfectly correct
         // "WIRE SERVICE". Same trap as reading a colour off a transition.
         text: items.map((a) => a.textContent),
-        injected: { img: panel.querySelectorAll("img").length,
+        /* Counted inside the headline cards, not across the whole panel.
+
+           Every hostile field - the title, the summary, the source - renders
+           inside its own item, so the items are where an element built from
+           the payload would appear, and scoping there is what makes a count
+           of 0 mean "nothing was constructed" rather than "nothing is on
+           screen at all".
+
+           Panel-wide was right when the panel was the news list. It is the
+           full-screen player sheet now ("fixed inset-0 z-[70] overflow-y-auto",
+           matched by PANEL's .overflow-y-auto), so it also contains the
+           player's own headshot - two layers of one <img> off sleepercdn -
+           and the check failed reporting img: 2 on a page where nothing had
+           been injected at all. A security test that cries wolf is worse
+           than most, because the next red is the one nobody reads.
+
+           script stays panel-wide deliberately: a <script> anywhere in this
+           sheet is worth failing on whoever built it. */
+        injected: { img: items.reduce((n, a) => n + a.querySelectorAll("img").length, 0),
                     script: panel.querySelectorAll("script").length,
-                    b: panel.querySelectorAll("b").length },
+                    b: items.reduce((n, a) => n + a.querySelectorAll("b").length, 0) },
         pwned: [window.__pwned, window.__pwned2, window.__pwned3, window.__pwned4]
       };
     }, PANEL);

@@ -116,6 +116,8 @@ the Stack section above, not a one-time migration hiccup.
 | `worker/store.js` | The D1 cache: Sleeper's pool and Tank01 headlines. A cache and never a source of truth, and a missing binding is a normal condition rather than a fault. |
 | `worker/migrations/` | D1 schema, applied with `wrangler d1 migrations apply`. The database is not to be shaped by hand — see the note on three variants of one schema. |
 | `web/index.html` | The real homepage entry Vite builds from. Loads the legacy files above as root-relative classic scripts, alongside Vite's own hashed module bundle for React. The Draft Room markup lives here too, hidden — see the Stack section. |
+| `web/src/components/phone/` | The phone-only screens, mounted below `sm` (`usePhoneWidth()`): the draft room, the homepage, the Mock Drafts Lobby, the floating nav pill. Each is a different screen from its desktop counterpart rather than a narrower one — see "The mobile pass" below for why that is a product decision and what it costs. |
+| `web/src/components/settings/` | The Draft Settings screen's own controls, the scoring-rule editor and the draft-order list. Split out of `DraftSettingsModal.jsx` when that file became the whole settings screen rather than a three-tab modal. |
 | `web/src/` | The React homepage: `Homepage.jsx` composes `Header`, `Hero`, `ScoresStrip`, `ShowYourWorking`, `RoomsGrid`, `ClosingCta`. Every one of them reads real data through `window.JukeEngine` (or `window.DraftEngine` directly, for `pickCode()`) rather than inventing sample content — the header ticker used to be six fabricated stats and is now five real ones read off the live board. |
 | `web/vite.config.js` | The Vite build config, plus a dev-server middleware that serves the same `LEGACY_FILES`/`LEGACY_DIRS` list `copy-legacy-assets.mjs` uses, from the true repo root, so `window.JukeEngine` carries real data under `vite dev` too — not just after a full build. |
 | `web/scripts/copy-legacy-assets.mjs` | Copies the legacy files into `web/dist/` after `vite build`, chained as this package's `build` script. Fails loudly (`process.exit(1)`) and lists exactly what's missing rather than shipping a partial site quietly. |
@@ -131,16 +133,65 @@ the Stack section above, not a one-time migration hiccup.
 | `og-image.png` | 1200x630 link-preview card. **A designed asset now, not a generated one** — it arrived with the shark handoff. `scripts/build_og.html` still draws a plainer fallback from the same mark; running it replaces the designed card with a generated one. The copy that is actually served is `web/public/og-image.png`; see the note on the repo root below. |
 | `favicon.ico`, `favicon-16.png`, `favicon-32.png` | The root favicons, named by `404.html` and all three `docs/` pages. The PNGs are rendered exports; the `.ico` is assembled from them by `scripts/build_favicon_ico.py`. Duplicated into `web/public/`, which is the copy a browser reaches. |
 | `scripts/build_favicon_ico.py` | Wraps `favicon-{16,32,48}.png` in an `.ico` container, payloads unmodified. Stdlib only, no encoder, and it re-traces nothing — if the mark changes, re-render the PNGs and run it again. |
-| `unmatched.txt` | **GENERATED.** Feed rows that failed to join, plus unscored stat keys. |
+| `unmatched.txt` | **GENERATED.** Five sections: FFC rows that failed to join, players with no id at another source, **Sleeper stats we are not storing** (read this before adding a feed), Sleeper against nflverse, and the missed-field-goal reconciliation. |
+| `data/baselines/2026/preseason/` | **FROZEN, not generated.** The one-shot 2026 preseason projections/VORP/tiers/ADP snapshot, hashed in `manifest.json`. Never regenerated, never hand-edited — see the Data section below and the directory's own README.md. |
+| `scripts/freeze_baseline.mjs` | Wrote the frozen baseline above, once. Drives the real app in a headless browser rather than reimplementing scoring/VORP/tiers in Python — see its own header comment. Refuses to run again if a baseline already exists. |
+| `data/season/<year>/week-<NN>/` | **APPEND-ONLY.** One week's real actuals, written once by `scripts/archive_week.mjs` and never touched again. See the Data section below and `data/season/README.md`. |
+| `scripts/archive_week.mjs` | Writes the weekly actuals archive above. Drives the real app in a headless browser for `pointsUnder()`/`rulesForFormat()` rather than reimplementing scoring — see its own header comment. Refuses to overwrite an already-archived week without `--force`. |
+| `scripts/test_archive_week.mjs` | Offline check for `archive_week.mjs`'s raw-stat mapping and the points it produces, against a synthetic, hand-computable stat line — the one part of that script this project can test without live Sleeper access. |
+| `.github/workflows/archive-weekly-actuals.yml` | Runs `archive_week.mjs` weekly (Tuesdays, 14:00 UTC), after Monday Night Football and Sleeper's own box-score finalization. |
 
 ## Data
 
-Two free feeds, no keys: **Sleeper** (players, injuries, stats back to 2018,
-weekly logs, projections, depth charts) and **Fantasy Football Calculator**
-(ADP, one set per scoring format, written to `players.js` as `ADP_SETS`).
+Three free feeds, no keys: **Sleeper** (players, injuries, stats back to 2018,
+weekly logs, projections, depth charts), **Fantasy Football Calculator**
+(ADP, one set per scoring format, written to `players.js` as `ADP_SETS`), and
+**nflverse** (nflfastR's play-by-play derivatives, used to check Sleeper and
+never to replace it — see "The second feed" below).
+
+### `data/baselines/2026/preseason/` is frozen, not generated
+
+Every other generated file in this project — `players.js`, `stats.js`,
+`unmatched.txt` — is meant to be rebuilt from scratch every night, and
+CLAUDE.md says so throughout. This one directory is the opposite on purpose:
+`scripts/freeze_baseline.mjs` ran exactly once, before Week 1 of the 2026
+season, and captured every player's raw projection, their points under all
+three scoring presets, VORP and replacement level per position, the ADP
+snapshot, and tier assignments — the last moment any of that could be
+captured honestly, before a single game told the projection whether it was
+right. `manifest.json` carries a SHA-256 of the frozen payload for exactly
+that reason: to prove, later, that nothing in it was touched after the fact.
+
+**Do not run `scripts/freeze_baseline.mjs` again, and do not hand-edit
+`baseline.json` or `manifest.json`.** The script itself refuses to overwrite
+an existing baseline, but that only helps if nobody deletes the files first
+to "fix" one. A wrong number discovered later is a data point about the
+projection, not a bug in this directory — see its own README.md for the
+full argument. This is the one place in the pipeline where regenerating the
+data is the mistake, not the fix.
+
+### `data/season/<year>/week-<NN>/` is the season's actual record
+
+`players.js`/`stats.js` are rebuilt from scratch every night, which is
+exactly right for a live draft board and exactly wrong for keeping a record
+of what happened in a given week — the next night's rebuild simply
+overwrites it. `scripts/archive_week.mjs` runs weekly (Tuesdays, after
+Monday Night Football and Sleeper's own box-score finalization) and writes
+what actually happened that week — raw stats, snap/target usage where
+Sleeper sends it, injury/depth-chart status at capture time, and points
+under all three scoring presets — to its own directory, once. See
+`data/season/README.md` for the shape and `scripts/archive_week.mjs`'s own
+header comment for why it drives the real app in a headless browser rather
+than reimplementing `pointsUnder()`.
+
+**Archives are append-only.** The script refuses to overwrite an
+already-archived week unless run with `--force`. This is the substrate a
+projections backtest (graded against `data/baselines/2026/preseason/`) and
+the future Waiver Room both need, and neither is buildable retroactively —
+there is no asking Sleeper what it said about a week that has since passed.
 
 **The pipeline stores raw components and no points total at all.** Scoring
-lives in `app.js` (`DEFAULT_RULES` and `fantasyPoints()`), so all 38 rules are
+lives in `app.js` (`DEFAULT_RULES` and `fantasyPoints()`), so all 49 rules are
 editable on the setup screen and everything rescores with no rebuild.
 Sleeper's own `pts_half_ppr` is discarded, as it always was, because it bakes
 in assumptions we do not share.
@@ -154,6 +205,371 @@ drift. Anything scoreable must be in `STAT_FIELDS` — a stat that was never
 stored can never be rescored, and `build_players.py` fails loudly if a
 `SCOREABLE` entry has nowhere to live.
 
+**And it fails the other way too now, which it did not for a long time.**
+`pointsUnder()` walks the rules object rather than the stat list, so a stat in
+`SCOREABLE` with no entry in `DEFAULT_RULES` is never summed, and one missing
+from `RULE_GROUPS` or `RULE_LABELS` never appears in the editor. Neither shows
+up as an error — the total is simply lower than it should be.
+`check_app_rules()` reads the three tables out of `app.js` and refuses to run
+without all three, before any network. `unmatched.txt` has said "and give it a
+default in app.js" at the head of its unstored-keys list all along; nothing
+enforced it.
+
+## The list nobody was reading
+
+**`unmatched.txt`'s third section is the pipeline's own answer to "what is
+missing", and it went unread for the entire life of the project.** It lists
+every key Sleeper sends that `STAT_FIELDS` has no home for — **155 of them,
+143 once the twelve `adp_*` entries are set aside** — under a heading that says
+exactly what it means: anything here is a scoring rule the app could never
+support.
+
+It was found while scoping the nflverse integration below, by an audit of the
+spec rather than by the spec itself. Most of what nflverse was wanted for was
+already arriving from Sleeper and being thrown away: **missed field goals by distance, blocked kicks, longest kick, attempts,
+red-zone targets and carries, air yards, yards after catch, drops, broken
+tackles and snap counts.** All of it free — no join, no second source of truth,
+no third party that can be down.
+
+**So read that section before adding a feed.** A new source is only justified
+for what is *not* on it.
+
+**Free of a join is not free of a cost, and the second half of that sentence
+had to be measured too.** All fourteen role, red-zone and snap keys were added,
+the pipeline was run, and `stats.js` went from 101 KB gzipped to 183 — an 80%
+increase on a plain classic `<script src>` that blocks the first paint. Broken
+down by key: those fourteen are **70 KB of it**, `off_snp` and `tm_off_snp`
+alone are 20.5, and **nothing in the app renders any of them.** The five
+`fgmiss_*` bands that are the actual new scoring capability cost **0.7 KB**, and
+the whole kicking line 3.2.
+
+So the kicking keys ship and the fourteen do not, yet. They come back in the
+change that draws them, next to the nflverse share and EPA figures they are
+meant to sit beside — which is where the spec's own build order already put
+them. **A stat costs a phone bytes on every load whether or not a pixel ever
+shows it**, which is the same argument `WEEKLY_SEASONS` settles for weekly logs
+and it lands the same way. Being already in the building is an argument about
+the join, not about the payload.
+
+### The second feed, and the three things it does add
+
+**nflverse adds what Sleeper cannot, and it is a short list.** A statistic that
+needs a denominator or a model bigger than one player's box score (share of a
+team's targets or air yards, EPA, completion percentage over expected); an
+independent second opinion on the numbers Sleeper already sends; and a handful
+of plain box-score facts Sleeper has no key for — rushes of 20+ yards,
+game-winning field goal attempts, misses from inside twenty. Only the second of
+those is built today.
+
+**The join is a name join, and that is not a compromise.** nflverse's
+`players.csv` carries no Sleeper id at all, so there is no shared-identifier
+tier to prefer. Measured 27 August 2026 against the 26 August board: **240 of
+241 skill players match on normalised name, position and team alone**, every
+one of them carrying a `gsis_id`. `link_nflverse()` reuses `index_sleeper()`
+and `normalise()` for the same reason `link_source_ids()` does.
+
+**A two-way player carries one position and it is not the fantasy one.** Travis
+Hunter is `DB`/`CB` to nflverse and `WR` to us. His receiving is perfectly
+present under his `gsis_id`; the position tier simply cannot see him. So the
+nflverse master is filtered by *recency* and never by position, and he is the
+one entry in `NFLVERSE_MATCHES`. **That table is not `MANUAL_MATCHES`** — that
+one maps an FFC name to a Sleeper id and is read by `join_rows()`. Two
+different joins between two different pairs of sources, and an entry in the
+wrong one is a silent no-op.
+
+**nflverse calls the Rams `LA`.** `TEAM_ALIASES` already knows, and
+`clean_team()` is how you ask it. Found by a defence reconciling to zero.
+
+### The audit never changes a stored number
+
+Sleeper stays authoritative for everything in `STAT_FIELDS`. `pp` — the archive
+of what we forecast for seasons already played — was built against it, so a
+value quietly replaced from somewhere else would turn `projectionRecord()` into
+a comparison between two feeds rather than between a forecast and an outcome.
+The audit reports, into `unmatched.txt`, and that is all it does.
+
+**Two definitional differences are applied rather than reported, and neither
+may be "fixed" by taking nflverse's column.**
+
+- **nflverse counts a touchdown as a first down; Sleeper does not.** Over 2025
+  this explained 311 of 313 disagreements exactly — 32 of 32 passers, 161 of
+  161 receivers, 118 of 120 rushers. Dropping their column into `cfd`, `rfd` or
+  `pfd` would pay every league that scores first downs for every touchdown
+  twice, and a receiver's total would rise by single digits and stay entirely
+  plausible.
+- **Sleeper counts a blocked kick as a miss; nflverse does not.** Eleven of the
+  twenty board kickers agreed outright in 2025 (they had none) and the other
+  nine matched exactly once `fg_blocked` was added back. Swapping their column
+  in would silently forgive every block — and it would make kickers look
+  *better*, which is the direction nobody checks.
+
+**The rest agrees, and that is what makes the check worth running.** Measured
+over 2025: 100% exact on passing yards, touchdowns, interceptions, attempts and
+completions; carries and rushing touchdowns; receptions, receiving yards and
+receiving touchdowns; every field goal made in all six distance bands; and
+extra points made.
+
+**Two feeds agreeing today is the baseline; the audit exists for the day they
+stop.** It found two disagreements on its very first run, both of them Sleeper
+changing its own mind years ago:
+
+- **Sleeper's first-down definition changed between 2018 and 2020.** In 2018,
+  42 of 55 first-down lines match nflverse *raw* — touchdown counted — and from
+  2020 on, 91–99% match nflverse *minus* touchdowns. 2019 is the changeover and
+  matches neither cleanly. So `pfd`, `rfd` or `cfd` disagreeing on an old season
+  is expected; on 2024 or 2025 it is not.
+- **A 60-yard field goal sat in Sleeper's 50–59 band before 2024** and in
+  nflverse's 60+ band. Six kicker seasons across 2021–2023, every one a single
+  kick, and the made-total always agrees.
+
+**The disagreement rate falls steeply with recency** — 16.2% of comparisons in
+2018, 4.1% in 2022, **0.3% in 2025**. Neither of the two above is fixable from
+here: the history is what it is. What matters is that both are written down, so
+the next thing that moves is visibly new. `AUDIT_NOTES` carries them, dated,
+into the report itself.
+
+### A season that has not started is a 404, not a fault
+
+Every in-season nflverse file for a season not yet played returns 404 —
+`stats_player`, `stats_team`, `snap_counts`, `injuries`, `pfr_advstats` and
+`ftn_charting` all did for 2026 as of 27 August. Every fetch is optional and
+prints its count, exactly as `PROJECTION_HISTORY` already does, so the pipeline
+picks a new season up on its own the first morning after week one and nobody
+edits a list. **A total nflverse outage now produces a `stats.js` identical
+but for the absence of `u`** — every board number, every grade and every
+projection is untouched, and the usage panel is simply not drawn. One loud
+line in the log says so. Same rule the module docstring already states about
+Tank01.
+
+### The `u` block: the only thing nflverse writes
+
+Everything else nflverse does here is a report. `build_usage()` writes exactly
+one key, `u`, keyed by season the same way `s` is, and **nothing scores it** —
+it is not in `STAT_FIELDS`, not in `SCOREABLE`, and `pointsUnder()` never sees
+it. Ten fields: `ts`/`ays`/`wo` for target share, air-yards share and WOPR;
+`ep`/`rep`/`pep` for receiving, rushing and passing EPA; `cpo` for CPOE; `r20`
+for 20-yard rushes; `gwa`/`gwm` for game-winning field goals.
+
+**It runs after the records are built and it has to.** `compact()` returns a
+fresh dict assembled only from `STAT_FIELDS`, so anything merged into a record
+before it runs is discarded without a word.
+
+**All eight seasons cost 14 KB gzipped**, measured, which is why there is no
+`USAGE_SEASONS` cut the way `WEEKLY_SEASONS` cuts weekly logs. Rounding on the
+way in and dropping zeros is what does it — the raw values carry fifteen
+decimals, and written naively the same block is over 30 KB. The marginal
+season is about 1.5 KB, so trimming to three years would save four and cost
+the sheet five seasons of history. `NFL_SEASONS` is `STAT_SEASONS` for the
+usual reason: a `u` year with no `s` year beside it is a row the sheet cannot
+place.
+
+**Five things are deliberately not in it**, and four of them are the same
+mistake in different clothes. `racr` and `pacr` are unstable and correlate
+*negatively* with next season's points. `receiving_air_yards`,
+`receiving_yards_after_catch` and `receiving_20` are all sent by Sleeper
+already — storing nflverse's copy under an nflverse name is the trap the "do
+not give an nflverse field a Sleeper key name" rule exists for, reached from
+the other direction. `*_first_downs` is a different definition; see
+`AUDIT_FIRST_DOWNS`. And **`games` is left out because `gp` is already in
+every season block** — nflverse counts games in which the player recorded a
+stat and Sleeper counts games played, so they differ on **12.9%** of seasons
+(Keenan Allen 2018 is 16 against 15). Two plausible numbers for one fact, and
+the sheet wants Sleeper's: *how much of the season was he here for*.
+
+**A share is over the team's whole season, not over his own games**, verified
+against nflverse's own aggregation. So a player who missed six games shows a
+depressed share that is arithmetically correct and answers a different
+question from the one the reader is asking — 68 stored player-seasons have
+nine games or fewer and a share. It is never drawn without `gp` beside it, the
+same rule `projectionRecord()` already follows and for the same reason.
+
+**Air-yards share goes negative and that is real.** A screen pass is caught
+behind the line, so the season total is signed: 126 stored values are below
+zero. Anything drawing a proportion bar has to survive it, and a test pins it,
+because clamping it to zero is the obvious and wrong repair.
+
+### The Usage tab
+
+`usageFor()` in `app.js` and `web/src/components/UsageTab.jsx`, sitting after
+Projections in `PlayerProfileModal.jsx` — **Projections says how much he is
+worth, Usage says why he scored what he scored**, which is the question the
+sheet is actually opened for and the one the app could not answer at all.
+
+**Which columns are meaningful is a football question and is answered in
+`app.js`**, beside `logColumns()`, not in the component: a quarterback has no
+target share, a kicker has nothing but his game-winners. `USAGE_COLUMNS` is
+per position, and `usageFor()` formats every cell before React sees it — the
+same contract `projectionSummary()` already has with `ProjectionsTab`.
+
+**The tab is absent, not empty, when there is nothing to show.** `usageFor()`
+returns null for a defence, an unjoined player, or a run where nflverse was
+unreachable, and the tab is filtered out of the strip entirely. Same rule the
+news tab already follows: a section nobody asked to wait for is worse as a
+permanently empty panel than as no panel.
+
+**The tab list is a filtered literal now, not an index splice.** It was
+`fit ? [BASE_TABS[0], 'Draft Fit', ...BASE_TABS.slice(1)] : BASE_TABS`, which
+means something different the moment a second optional tab joins the first —
+and Usage is that second one. It is one ordered array with `fit && …` and
+`usage && …` in place and a `.filter(Boolean)`, so the reading order is the
+source order and adding a third optional tab is one line.
+
+**Bowers is the case that justifies the GP column.** He reads 17.4% target
+share in 2025 and 25.8% in 2024, which looks like a role collapsing — until
+the 12 beside it says he missed five games and the share is over his team's
+whole season either way. Without that column the table states a fact and
+invites the wrong conclusion, which is the same failure as a kicker being
+named the biggest reach.
+
+**And the panel says out loud that it does not rank anybody.** Usage was very
+nearly not built at all: measured against next season's points, no usage
+metric beat points per game, and the best any of them managed *on top of*
+points per game was +0.008 r. So it is on the sheet and nowhere near
+`overallScore()`, `suggestions()` or `cpuChoice()`, and the tab's own footer
+says so — because the next person to find these numbers will want to rank with
+them.
+
+**On a phone every research tab lives below the two actions**, strip included.
+The sheet's contract is *"the numbers a pick turns on and the two actions that
+follow from them, in one glance with nothing to tap through first"*, and what
+that forbids is a strip placed *above* the content — which is what the desktop
+card does, correctly, because a desk-side reader is not mid-pick. Below the
+buttons the glance is untouched and the tabs are depth for whoever scrolls.
+Measured on a 375×667 phone: the sheet caps at 85vh, Draft lands at **465px**,
+and the strip is under it. Before this the phone could not reach Our Read,
+Projections, Game Logs, News or the depth chart at all.
+
+**One tab at a time rather than six panels inlined.** Inlining would put a
+week-by-week log and a news request under every open, and Latest News spends
+against a thousand-call monthly allowance. Our Read is selected by default:
+the shortest, and the only one that is a verdict rather than a table.
+
+**It is one strip and one set of bodies, rendered in whichever half is
+alive.** A second phone-shaped copy of the same tables is the "written down
+twice" rule in markup, and it drifts the first time a column changes.
+
+**And that is what `useMinWidth` is for here.** `lg:hidden` and its opposite
+are CSS, and **CSS-hidden is still mounted** — the exact thing that hook was
+written for. Rendered in both halves, `LatestNewsTab` would mount twice for a
+single open and ask the worker for the same player's headlines twice. Checked
+by counting `<table>` elements inside `#draftroom-root`: exactly one.
+
+**The resize path across 1024px cannot be tested in the embedded browser and
+was not.** Changing the emulated viewport there fires **neither** `resize` nor
+`matchMedia` `change` — verified by arming both listeners and watching the log
+stay empty while the width went 375 → 1200 — so React keeps the width it
+mounted with and one half renders blank. That is the harness, not the app:
+both events are ordinary browser behaviour and the hook already relies on them
+elsewhere. **Do not "fix" the hook against this symptom** — it is the same
+shape as the wrangler crash-loop and the "network connection lost" flood, a
+diagnosis about the tooling wearing a bug's clothes. Verify each width by
+mounting fresh at it, which is what was done.
+
+**Six columns fit 341px, and the scroller is there for when they do not.**
+Measured at 375px for the widest set a position can produce — a quarterback's
+`PASS EPA / CPOE / RUSH EPA / 20+ RUN` — the table comes out exactly 341
+against a 341 scroller, with `overflow-x: auto` behind it and no sideways page
+scroll. That is the rule this file already states about truncation: an element
+wider than its box is only a bug when it can neither scroll nor ellipsise.
+
+### Missed field goals are charged once, and the bands are an extra
+
+`fgmiss` is the rule that charges a miss, it defaults to −1, and **it counts a
+blocked kick** — checked against nflverse, whose `fg_missed` excludes blocks
+and reconciles with ours for every kicker season once `fg_blocked` is added
+back. The five `fgmiss_*` bands are an *extra* on top of it, default zero: a
+missed 45-yarder increments `fgmiss` and `fgmiss_40_49` both, so a league
+scaling a miss by distance sets the base on one and the increment on the
+other. There is no `fgmiss_0_19` because Sleeper sends none — nobody missed
+from inside twenty all last season.
+
+**The bands count blocks too, and the first version of this section said they
+did not.** That claim came from the nflverse comparison and was true of
+*nflverse's* `fg_missed`, not of Sleeper's bands — a fact about one feed
+written down about the other. It is checkable and was checked: `fga == fgm +
+fgmiss` reconciles for all 310 kicker seasons without exception, so a block is
+structurally inside `fgmiss`, and in the seasons where the bands are complete
+they equal `fgmiss` exactly, so a block is inside a band as well. Adding
+`fg_blkd` back on top of the bands overshoots, and the check that did it
+reported 145 healthy seasons as broken on its first run.
+
+**The symmetry with `fgm` is false and following it would break three things
+silently.** Makes are stored as `fgm` and deliberately *not* scoreable, so a
+made kick can only ever be charged through its band. Demoting `fgmiss` the same
+way looks right and is not:
+
+- it defaults to −1, so the change rescores **every** league rather than the few
+  that opted in — `fgm` was never a rule at all, which is what makes the
+  symmetry false;
+- Sleeper forecasts misses only as `fgmiss_50p`, so no band would ever reach
+  `PROJECTED_KEYS` and `fgmiss` would leave it — the 2026 board would charge
+  nothing at all for a missed kick, which is the `fgm_50p` bug at the other end
+  of the same stat;
+- **the bands do not cover the history and `fgmiss` does.** They account for
+  every miss from 2024 on and for 52–63% of them before that. A total that is
+  whole in every season cannot be replaced by a decomposition that is whole in
+  two of eight.
+
+Every one of those is silent: `pointsUnder()` falls through to zero.
+
+### The miss bands are lossy before 2024, and the sharp edge is the date
+
+Measured 27 August 2026, over the kicker seasons Juke actually stores. The five
+`fgmiss_*` bands account for **100.0%** of `fgmiss` in 2024 and 2025 and for
+**48–70%** before — 2023 is the worst, with 28 of 54 misses in no band at all.
+The boundary is sharp: no season is partly one and partly the other, so it is
+Sleeper having filled in its own history rather than a definition anybody
+disagrees about.
+
+**Which is precisely why the bands are an extra on `fgmiss` and not a
+replacement for it.** A league that scales a miss by distance gets a penalty
+that fires on about half the misses of a pre-2024 season while `fgmiss` itself
+stays whole — so the base charge is right on every season and only the
+increment is short. Demote `fgmiss` and there is no whole number left anywhere.
+The argument above was made before this was measured and the measurement is
+what confirms it; it would have been the deciding reason on its own.
+
+**Measure this on the pool you score, not on the league.** Across *every*
+kicker Sleeper has, the six `fgm_*` bands are 9–17% short before 2024 — Daniel
+Carlson's 2022 is 34 made and 23 banded. Across the pool Juke stores they are
+short by **one kick, in three seasons, ever**, and in the other direction: the
+bands *exceed* `fgm` by one for Jason Myers 2019, Ka'imi Fairbairn 2018 and Wil
+Lutz 2018. Two honest measurements, an order of magnitude apart, because the
+board carries the kickers whose history Sleeper kept best. The board-pool figure
+is the one that describes what gets scored today; the league-wide one is the
+warning about a kicker who joins the board tomorrow and brings a lossier history
+with him.
+
+**It hid because the totals are perfect.** `fga == fgm + fgmiss` reconciles for
+all 310 kicker seasons without exception, so every number the pipeline could
+reconcile *did* reconcile, and nothing had ever compared a band to the total it
+decomposes. The same shape as roster construction sitting at 100 for all ten
+teams: right arithmetic on a question nobody was asking. Adding the miss bands
+is what made anybody aim a check at it.
+
+**A part exceeding its whole is counted on its own, because it nets.** Three
+seasons over by one against a season total that is otherwise short reads as a
+−1.1% shortfall and looks like more sparse history. It is not the same fault and
+cannot be repaired the same way, so `check_miss_bands()` lists it separately.
+
+Nothing is repaired, because there is nothing here to repair it from: the kicks
+Sleeper did not band are not recoverable from Sleeper, and nflverse's own bands
+carry the `f60` boundary problem the audit notes already record. It is written
+down, dated, and printed every run instead.
+
+**The bands sit in their own group, and the group title is what says they are
+additional.** Under "Kicking" beside "Field goal missed" they read as a
+replacement for it, and a manager typing −1 into one would be charging −2 a
+miss — which looks harsh rather than wrong.
+
+**`check_miss_bands()` prints the split every run, in both directions**, and
+counts a failure **only** for a season at or after `BAND_COMPLETE_FROM`. The
+first version counted every lossy old season and reported 145 failures on a
+pipeline that was working — which is the permanent-known-failure trap the
+testing section already records: a check carrying a standing red stops being
+read by the end of the week. What is expected is reported as a rate; what is
+new is reported as a failure.
+
 ## The draft grade
 
 Four components, weighted 50/25/15/10: starter strength, draft value, roster
@@ -161,17 +577,32 @@ construction, bye week safety. Each is computed for every team, scaled 0–100
 against the rest of the room by `scaleAcross()`, then weighted. The grade is
 a ranking inside the room, which is why somebody always gets an A+.
 
+**Starter strength is projected points over replacement, scored against par for
+the seat** — not ADP rank places, and not the raw total. Both of those were
+wrong and both are written up below ("Starter strength was counting the wrong
+thing", "Starter strength is scored against par for the chair"). The bars on
+screen are positions within *one* room, not scores: comparing a component
+across two drafts compares two different populations and means nothing.
+
 Three of the four were wrong at once, found in one sitting in August 2026,
 and they were wrong in the same direction: they all flattered picks nobody
-chose to make. Starter strength was correct throughout. What follows is why
-each was wrong, because none of them announced themselves.
+chose to make. What follows is why each was wrong, because none of them
+announced themselves.
+
+**This section used to say "starter strength was correct throughout", and it
+was the one that was wrong for longest.** See "Starter strength was counting
+the wrong thing" below — it is corrected in place rather than left standing,
+the same rule the rebrand section follows about orange.
 
 **`bestLineup()` sorts by `aboveReplacement`, never by `posRank`.** A rank
 inside a position cannot choose between positions, and the FLEX is a slot that
 has to. Sorting by `posRank` filled it from TE19, RB25 and WR28 by taking the
 tight end — 19 is a smaller number than 25 — when TE replacement is 14, so
 that tight end was *below* startable and worth 0, while the running back was
-five places above his own replacement and sat on the bench.
+five places above his own replacement and sat on the bench. (The raw figures
+in this paragraph are in the rank-places unit `aboveReplacement()` used at the
+time; it returns projected points now, and the ordering argument is unchanged
+and stronger for it.)
 
 Half the grade is starter strength, and it was being read off a lineup nobody
 would ever field. Measured on one real roster it cost five raw points against
@@ -183,6 +614,399 @@ This is the suggestions bug in a different function, and the lesson is the same
 one: **a within-position measure cannot answer a between-position question.**
 Inside a single-position slot the two orderings are identical, which is exactly
 why it hid — every slot but the FLEX looked right.
+
+### Starter strength was counting the wrong thing, in the wrong unit
+
+Reported by the owner, 27 August 2026, as a D+ on the highest-VORP roster of
+four mocks. Nothing in the grade was arithmetically wrong and every check in
+this section passed. `aboveReplacement()` was:
+
+```js
+Math.max(0, replacementRank(player.pos) - player.posRank)
+```
+
+**`posRank` is ADP rank.** `buildBoard()` sorts the board by `adp` and numbers
+each position off that order, so half the grade was asking "how early does the
+market take him within his position", never "how good is he". The projection's
+own within-position rank has been on every player all along as `projPosRank`,
+and the grade never read it. Measured on the 26 August board: **Sam LaPorta is
+TE12 by ADP and TE5 by projection**, so he scored 0 for a player the app
+privately rates seven places inside the starting cut.
+
+**And places are not points.** Replacement rank is `teams × slots + 1`, so the
+*ceiling* is set by how deep a position is drafted rather than by what a player
+is worth — measured, QB tops out at **10** places and TE at **11**, against
+**24** for RB and **26** for WR. So Josh Allen at **+60.2** projected points
+over replacement scored 10, and Drake London at **+18.0** scored 22: half the
+grade rating London at better than twice Allen on a board that privately rates
+Allen at over three times London.
+
+**The user-visible consequence is that the app graded in one currency and
+reported in another.** `replacementGap()` — points — is what the player sheet,
+the Juke score and the Insights VORP matrix all show. A roster can hold the
+room's best projected starters and read as the room's worst draft, and no
+reader can get from one to the other. That is the same class as the standings
+printing starter strength under a column of totals: a right number in the
+wrong place.
+
+It is points now, floored at 0, computed as `projPts - REPLACEMENT_PTS[pos]`.
+**Deliberately not `replacementGap()` itself**, which refuses K and DST — that
+refusal is about *ranking* them and the note under `UNRANKED_POSITIONS`
+already says the grade is untouched by it on purpose, because a kicker really
+did score those points.
+
+**Which creates one thing to watch, and it is newly reachable rather than
+new.** The VORP matrix dashes K and DST while starter strength counts them —
+5 to 29 points a team, measured across a room. That contradiction existed
+before and nobody could catch it, because the two were in different units and
+nothing invited adding them up. Now they are the same unit, so a reader *can*
+add the panel up, and the footnote has to say so. **Unifying two units makes
+every previously-invisible disagreement between them checkable at once** —
+budget for that, rather than being surprised by it.
+
+**The cover term in `build` had the same defect** and moved with it: it ranked
+bench receivers and backs by `posRank` too, so the cover a manager actually
+wants — the player the room drafts late and the projection likes — was
+invisible to it. Fixing one and not the other leaves the grade half-converted.
+
+**Do not re-derive the old expression from the fact that replacement level is
+a rank.** `replacementRank()` is still a rank and still the right way to find
+*which* player sets the baseline; what may not happen again is measuring a
+player's worth in distance from it.
+
+### The printed weights were not the weights that ran
+
+Found in the same sitting, by measuring rather than reading. `MIN_SPAN` floored
+`starters` and `build` and left `value` and `byes` unfloored — so the two
+components with the widest natural spread stretched across the full 0-100 on
+every draft while starter strength was compressed into whatever a floored
+denominator allowed. Measured as each component's share of the variance in
+finishing order, across two rooms:
+
+```
+             stated   actually explained
+starters      50%           ~35%
+value         25%           ~36%
+build         15%           ~13%
+byes          10%           ~15%
+```
+
+**Draft value decided the grade more than starter strength did**, in a grade
+that says on its own face that starters are worth double. A floor on one
+component is never a local adjustment: scaling is what turns a raw spread into
+the 0-100 the weights are applied to, so flooring one silently reweights all
+four.
+
+Every component has a floor now, in its own units and derived from its own
+resolution — `{ starters: 20, value: 35, build: 20, byePenalty: 20 }`. After
+the change, on the same board: **starters 55.7%, value 27.4%, build 6.5%,
+byes 10.4%.** Build now under-influences, and that is the floor working rather
+than failing — its raw span across a CPU-drafted room is 7, well inside its own
+error, and a component that is not discriminating should not be handed 15% of
+the answer.
+
+**`MIN_SPAN.starters = 20` did not change value and its justification did.**
+The old comment derived it as MAE 6.8 a player × √9 ≈ 20 *points* — correct
+arithmetic, attached to a quantity that was counted in ADP rank places. The
+number was right for a unit the code was not using. **A justification can be
+sound and still be about something else; check the unit before trusting the
+derivation.**
+
+### Starter strength is scored against par for the chair
+
+The points unit exposed this; it did not create it. In a room where every seat
+runs the identical CPU rule — so no seat out-drafts any other — raw starter
+strength spans **191 points** (seat 1 fields 362, seat 5 fields 171) and
+correlates with the chair at **r −0.6**. Seat predicted finishing rank at
+**+0.50**. In rank places the same room spanned 10 to 12, which read as
+"identical drafters produce identical rosters" and was really "this metric
+cannot see a 190-point difference".
+
+Both facts are true at once, which is why the answer is not to shrink the
+number: an early seat's lineup genuinely is worth that much more, and a grade
+meant to judge *drafting* must not hand out most of a letter for where somebody
+sat. So the component is **`startersVsPar`** — the seat's raw strength minus
+what a straight consensus drafter would have got from that same chair. Golf's
+par, or WAR's replacement, applied to a draft slot. Measured after: seat versus
+finishing rank **−0.06**, and the printed weights land almost exactly
+(**50.3 / 27.7 / 11.2 / 10.8** against 50/25/15/10).
+
+**`seatParTable()` simulates par the way `shotPicks()` and
+`generateThirdRoundScenario()` already simulate a room** — a local
+`taken`/`have` pair, never `board[].drafted` or `state.picks` — so it runs
+during a live draft without touching it, and asks `bestAvailable()` rather
+than carrying a second opinion of what a seat would take. Three things about it
+that are load-bearing:
+
+- **No jitter.** `bestAvailable()` grew a `wobble` parameter for this one
+  caller. Par has to be a property of the board, not of a draft: with the
+  wobble in, the same roster scores differently because a reference draft it
+  was never part of happened to wobble differently. Everyone else keeps it.
+- **It is a table, not a number.** Par after three picks is not par after
+  fourteen, and comparing a partial roster against a finished par is the
+  "a component written for a finished roster behaves least like itself
+  mid-draft" trap this file already records.
+- **It is cached on the board, and it must be.** `bestUpgrade()` calls
+  `analyseTeam()` once per available player, so an uncached simulation would
+  run a full draft a hundred times to draw one panel. The key carries
+  `BEST_VOR`, which is the tell for a rescoring — editing the scoring table
+  rewrites every `projPts` and therefore every par.
+
+**`starters` stays on the object as the raw sum** because that is what the
+Insights VORP matrix prints per player and a reader has to be able to add that
+panel up. `startersScaled` is *aliased* to `startersVsParScaled` rather than
+computed separately, so no consumer sees two scaled starter figures and picks
+the wrong one. The caption under the bar comes from `parText()` through the
+bridge — a bar whose caption describes a different quantity from the bar is
+this file's own "right value, wrong column" bug, and there were two call sites
+ready to drift.
+
+**Par may not apply the model multiplier, and the first version did.**
+`bestAvailable()` applies `modelMultipliers()` unconditionally and
+`cpuChoice()` never has, so par was benchmarking every seat against a
+*Juke-advised* draft rather than a consensus one — a better drafter than
+anybody in the room actually is. That is not a rounding error and it is not
+evenly distributed: measured over ten seeds, mean `startersVsPar` ran **+80 at
+seat 1 and −83 at seat 5**, a 163-point systematic residue in the one component
+whose entire job is removing seat bias. `seatParTable()` passes
+`{ wobble: false, model: false }` now, which makes par exactly `cpuChoice()`
+unwobbled. After: the correlation between chair and mean `startersVsPar` is
+**+0.05** and the residue is 79.
+
+**The model stays on for every other caller**, `shotPicks()` especially — see
+the note on why the hero shot is not an ADP slice. Par is the one place that
+wants the market's opinion rather than ours.
+
+**Par is an average over twelve wobbles, and the first version was one draft.**
+A single realization is not an expectation — it is one sample with its own luck
+in it. Measured: run par under twelve wobbles and a chair's own par moves with
+a standard deviation of **18.9 points**, the same magnitude as the noise the
+grade is trying to see through. Freezing one sample bakes that chair's luck in
+permanently, as a fixed per-chair bias in every draft graded against it.
+
+**It was visible for a while and was misread as a fact about the chairs.** The
+single unwobbled par sat −4, −37, +30, +19, +23, −28, −12, +24, −18, −5 from
+the twelve-wobble mean, and the residual `startersVsPar` by chair came out +4,
++40, −39, −9, −23, +32, +7, −31, +26, +7 — **the same numbers with the sign
+flipped, chair for chair.** It was never chair-specific board interaction. It
+was the error in par, and the tell was there to be read: a residue that is the
+negative of your own baseline's error is your baseline, not your subject.
+Residual spread went **79 → 20** on averaging, which is inside the standard
+error twelve samples buy.
+
+`PAR_SEEDS` is hard-coded and never `state.seed`, for the reason par exists at
+all: it has to be a property of the board, the same for every client in a room
+and the same tomorrow. Twelve puts the standard error of a chair's par at
+18.9/√12 = 5.5, well inside `MIN_SPAN.startersVsPar`; twenty-four would buy 3.9
+for twice the work. **The whole thing costs 30ms cold and 0ms warm**, measured,
+so the cache carries it comfortably.
+
+`bestAvailable()` grew `jitterOf` for this rather than the par run writing to
+`board[].jitter` and restoring it. That save-and-restore is exactly the shape
+`gradeAndRosterAt()` already documents as dangerous — one shared flag, several
+callers, a restore that is only right if nothing else touched it meanwhile —
+and a live draft is reading that field while this runs.
+
+**What par does not remove is wobble, and that was measured rather than
+assumed.** Across ten seeds, a seat's `startersVsPar` moves with a standard
+deviation of **18.3 points**; drafting well rather than badly from the same
+chair is worth **196**. So the luck is real and it is about a tenth of the
+signal — which is why `MIN_SPAN.startersVsPar` stays at 20 rather than being
+raised to cover it.
+
+### Draft value is scored against par too, and it was the last of the seat bias
+
+With starter strength neutralised, the chair still correlated **0.69** with raw
+draft value while sitting at 0.04 against everything else — so value was the
+whole of what remained. Mean value by chair ran −23, −16, −16, −10, +14, +4,
+−1, −7, +12, 0: early seats reading as reaching, late seats as finding
+bargains.
+
+**It is structural, not behavioural, and that is what makes par the right
+answer rather than a fudge.** Value is pick number minus board rank, and the
+first pick of a draft can only ever score zero or worse because no player has a
+board rank below 1. Nobody drafting from seat 1 can avoid that; a par drafter
+in seat 1 cannot either, so subtracting it removes exactly the part nobody
+controls and keeps the part they do.
+
+`parRun()` accumulates value alongside lineup strength, and **it applies
+`freelyChosen()` and `reachableRank()` by calling them**, on a pick-shaped
+object, rather than restating what they test. analyseTeam() filters the real
+picks through those same two before summing, and a par counting a different set
+of picks would not be comparable to it — the sort of mismatch that reads as a
+working grade for months.
+
+Measured over ten seeds, chair against mean `valueVsPar` by chair: +2, +3, −1,
+−3, −3, +5, +3, −3, −1, −2, a spread of 8 against a `MIN_SPAN` of 35, so it
+contributes nothing to the scaling. And the composite finally follows:
+
+```
+chair vs mean finishing rank    −0.51  ->  −0.11
+worst per-room chair vs rank     0.30  ->   0.17
+influence (S/V/B/Y)      54/25/9/11, against a stated 50/25/15/10
+```
+
+**`extra` advances par for starters and deliberately not for value.** A
+hypothetical additional player is counted by `bestLineup()` and so by starter
+strength, but `judged` is built from `state.picks` and never sees him — so
+advancing value's par by a pick he did not contribute to would charge a
+simulated bargain against a roster that never took one. Nothing reads
+`valueVsPar` for a hypothetical today, since `bestUpgrade()` only simulates
+starters and build, which is precisely why it would have gone unnoticed.
+
+**Raising that floor was tried against the measurement and is wrong.** It looks
+like the obvious way to suppress wobble luck, and it makes every number that
+matters worse: at floors of 20 / 100 / 130 / 200 the worst per-room chair
+correlation goes **0.37 → 0.38 → 0.41 → 0.50** and starter strength's share of
+the grade falls **0.544 → 0.524 → 0.479 → 0.376**, away from the 50% it is
+supposed to carry. The deliberately unbuilt roster finishes last in 6 of 6
+seeded rooms at *every* floor, so nothing is bought for it either.
+
+### `startDraft()` did not clear `state.picks`, and a loop over seeds is a lie
+
+The single most expensive thing in this whole pass, and it produced two
+confident, precise, wrong answers before anything caught it. **It is fixed as
+of 30 August 2026 — see the end of this section — and everything below
+describes the code before that.** The heading is past tense for that reason;
+the failure is kept because the way it hides has not changed.
+
+`JukeEngine.startDraft()` called `buildBoard()`, set the seed and applied the
+jitter — and never touched `state.picks`. So the *second* iteration of any
+"run a draft per seed" loop finds 140 picks already sitting there,
+`draftOver()` is true immediately, the while loop never executes, and the
+"new" draft is byte-identical to the old one because **it is the old one**.
+
+What that produced, both stated as measured facts:
+
+- "changing the seed changes nothing about the draft" — six seeds, six
+  identical drafts
+- "jitter is inert: 0 of 140 picks differ with it zeroed"
+
+Both false. With `state.picks.length = 0` and `board.forEach(p => p.drafted =
+false)` before each run, six seeds give **six distinct drafts differing in 60
+to 73 of 140 picks**, and zeroing the jitter changes **90 of 140**. The wobble
+works exactly as designed.
+
+**The tell was available and went unread for three measurements.** A no-op run
+returns a draft of the right length with plausible numbers — there is nothing
+malformed to notice. What gives it away is a *zero* standard deviation:
+per-seat `startersVsPar` came back identical to the point across ten seeds,
+which is not what any real stochastic process does. **A variance of exactly
+zero across samples means the samples are the same sample**, and that is worth
+checking before it means anything about the thing being measured.
+
+It also very nearly justified deleting a working feature. The conclusion on the
+table was "`DraftEngine.jitter()` is inert, the CPU wobble does not wobble" —
+an interesting, plausible, well-evidenced claim about `jitter()`'s sawtooth
+arithmetic, and entirely an artifact of the harness. Same shape as the wrangler
+crash-loop and the "network connection lost" flood: **a diagnosis about the
+tooling wearing a bug's clothes.**
+
+Anything driving repeated drafts from the console resets both, or measures
+nothing.
+
+**It clears them itself now, and the reason that matters is that this was
+never only a harness problem.** Reported from the desktop app on 30 August
+2026: finish a mock, press "Back to the locker", change the league, press
+"Start mock draft" — and land on the *previous* draft's insights report. Same
+missing reset, reached by a person instead of a console loop. This section
+had it written down as a hazard for anyone measuring, which is how it stayed
+open: the diagnosis named the harness, so the fix went into the harness, and
+the defect was in `startDraft()` the whole time.
+
+**A bug found through the tooling is still a bug in the product until you
+check.** The two are hard to tell apart from inside the measurement — the
+wrangler crash-loop and the stale Tailwind config really were the tooling —
+and the tell here was that this one had a plain user-facing sentence
+available: *what happens if somebody just presses Start twice?* Nobody asked
+it for three weeks.
+
+`startDraft()` now empties `state.picks`, clears `state.lastPick` and drops
+`state.paused` before `buildBoard()`. The clear belongs on the way *in*
+because there is one door in and several ways out — "Run another mock" goes
+through `restart()` → `goHome()` and always worked, which is exactly what
+made the bug look intermittent, while "Back to the locker" is a plain
+`<a href="#/drafts">` that changes the route and touches no state. Same
+reasoning as the retired `#/draft` redirect living at the router rather than
+at its callers.
+
+**Two more leaks sat on that same path, and neither is in the engine.**
+`DraftRoom.jsx` does not unmount between drafts — the Lobby is one of its own
+branches — so anything it holds in React state survives a "new" draft:
+
+- **`view` stayed on `'insights'`.** The insights effect only ever watched the
+  rising edge of `draftIsOver`. With the engine fixed, a genuinely fresh draft
+  still rendered a report — grade A+, every lineup slot "Empty", and the
+  header beside it correctly reading ROUND 1 · PICK 1. A right value in the
+  wrong view, which is this file's own standings-column bug in React. It
+  watches the falling edge too now, through a ref rather than an `else`: that
+  effect also depends on `mySlot`, and an `else` would fire on any `mySlot`
+  change mid-draft and yank a reader off whatever tab they were on.
+- **Autopick stayed armed.** `soloAutopick` is React state, so a manager who
+  turned it on to step away from one draft had it still on for the next, which
+  then drafted their team without being asked. `state.autoMe` is already
+  deliberately never saved for exactly this reason ("coming back to a draft
+  still on autopilot is a nasty surprise"); the solo flag simply had no
+  equivalent rule. `armFreshDraft()` is the one place both start paths clear
+  it.
+
+**An edge on `started` or `draftIsOver` cannot fix either of these, and that
+was tried first.** "Back to the locker" leaves `state.started` true, so
+neither flag moves between finishing one draft and starting the next and no
+edge-triggered effect re-fires. Pressing Start is the only event that means
+"new draft" — which is the same lesson as the clear itself, one layer up.
+
+`tests/restart.spec.mjs` covers all three, each confirmed red against its own
+bug with the other two fixed. Its second test — "finishing a draft still opens
+its report" — is not redundant: a falling-edge reset is one `else` away from
+also suppressing the report entirely, and that would pass every assertion in
+the first test.
+
+**And the first version of that spec passed against the bug.** Pressing Start
+raises DraftRoom's `starting` loader for SonarLoader's full 2100ms ring, so an
+assertion made straight after the click finds no report because nothing at all
+is rendered yet. `phone.spec.mjs` already waits this out by waiting for the
+room's own nav to exist rather than for a duration; do that, or the check is
+green and empty.
+
+`tests/grade.spec.mjs` gained "the chair a manager drafts from does not decide
+their grade", which asserts both halves — chair-versus-rank near zero *and* the
+raw figure still seat-driven, since a par that flattened the component instead
+of re-centring it would pass a one-sided check. **Confirmed against the bug**:
+scaling `starters` again puts chair-versus-rank at **+0.47** and fails it.
+
+Its older premise line asserted `rawStarterSpread < 25` and now asserts a
+bounded seat-driven spread instead. **That failure was a stale threshold in a
+retired unit, not a regression** — the assertion the test exists for passed
+throughout, which is exactly the tell the testing section describes.
+
+### The one that got away had no roster in it
+
+`DraftInsightsDashboard.jsx` scanned each gap between a team's picks and named
+the biggest `replacementGap()` upgrade somebody else took — a comparison
+between two players with no reference to the roster being advised. Reported
+from a real draft: a team holding **two elite tight ends was told it had missed
+Sam LaPorta.** The subtraction was right and the advice was unusable, because a
+third tight end cannot start, so those points were never available to that
+roster at any price. Same failure as naming a kicker the biggest reach.
+
+`oneThatGotAway()` lives in `app.js` now, beside the grade, and the delta is a
+**substitution run through `bestLineup()`**: the roster as drafted against the
+roster with that pick swapped for theirs. Swap, not add — a roster carrying
+both is a team that never existed, and adding is what lets a spare tight end
+look like a gain by occupying a bench spot nobody was choosing between.
+
+Verified both directions on one board: a team holding Bowers (TE1) and McBride
+(TE2) scores **+0.0** for LaPorta and **+0.0** for the next-best tight end, so
+neither can be named; a team holding Loveland (TE3) and Kincaid (**TE12, worth
+0**) scores **+27.9** for LaPorta, who really does displace Kincaid into the
+lineup. A better tight end who beats a starter still counts, and should — the
+rule is about the lineup, not about the position.
+
+**A component may not decide this for itself.** It rendered a verdict it also
+computed, which is the "written down twice" rule in React; the engine decides
+and the component draws, the same contract `usageFor()` and
+`projectionSummary()` already have.
 
 **A component that is the same for every team is not in the grade.** This is
 the check to run first on anything in here. `scaleAcross()` hands every team
@@ -240,11 +1064,16 @@ indexing that array by finishing position needs the same clamp. Stretching
 the scale to fit the room was the alternative and was rejected: it would
 quietly regrade every ten-team draft, which is a bigger change than the bug.
 
-**The number in the room standings is the weighted total, and it has to be.**
-The table is ordered by that total and the letter is handed out for finishing
-position, so a column sitting between the two that shows anything else makes
-the table look broken. It used to print starter strength — one component of
-four — which produced this:
+**The room standings have no score column at all now, and the rule that used
+to govern it is why.** Whatever sat between the rank and the letter had to be
+the weighted total, because the table is ordered by that total and a column
+showing anything else makes a strictly ranked table look broken. The reason it
+is gone is the section below on the letter and the hundred — the same
+requirement, followed one step further. What follows is the bug that
+established the rule, and it is still the reason nothing else may go there.
+
+It used to print starter strength — one component of four — which produced
+this:
 
 ```
 1  The Gibbs Ultimatum   90  A+
@@ -266,6 +1095,176 @@ wrong column — and it only surfaced by reading what the analysis *renders*
 and comparing it to what the analysis *computes*. Do both. A grade can be
 correct and still be unbelievable, and an unbelievable grade is a broken
 feature: this is the same failure as a kicker being named the biggest reach.
+
+### A letter grade may not stand next to a score out of a hundred
+
+Reported by the owner: *why does an "A" sit above "69 / 100"?* Because the
+letter is finishing position and the number was a room-relative min-max
+composite — two different scales, printed an inch apart, and every reader
+arrives already fluent in a third one where A means 90 and F means below 60.
+
+**Measured on a real ten-team room: the letter agreed with the school reading
+of the number beside it on 0 of 10 teams.** The A+ scored 76, the A scored 69,
+and seven of the ten would have been an F by the scale the reader is actually
+using. Two further consequences of indexing a fourteen-step scale by rank:
+**nobody can score an F in a ten-team league** — the worst available letter is
+D+ — and **somebody always gets an A+**, including in a room where every seat
+drafted identically.
+
+**Curving the letter off something absolute was measured and rejected.** With
+par in place there is finally an absolute quantity to curve — `startersVsPar`
+is real projected points against what a consensus drafter would have got from
+that chair — so it was tried properly, against a ladder of drafters making
+deliberate mistakes on a known fraction of their picks:
+
+```
+mistakes    0%     10%    20%    30%    50%    70%   100%
+vsPar        0     -17    -29    -43    -65   -122   -193
+SD         7.8    23.4   28.7   27.9   41.1   47.7   46.5
+```
+
+It fails for two reasons that are worth keeping. **Par is a ceiling, not a
+midpoint** — `autoPickForMe()` and `cpuChoice()` return identical picks on a
+stock table, so the app's own advice *is* par and nothing systematically beats
+it; the best anything managed was +30, and that was wobble luck. And **the
+noise swamps the signal where users live**: at a 10% mistake rate the effect is
+−17 against an SD of 23. Built at 25-point bands, a normal room came out **A+
+×37, A ×3 of 40**, a drafter erring on half their picks still read A+ or A−
+about half the time, and one guessing on every pick never reached F. Less
+informative than the ranking it would have replaced.
+
+**Making both numbers rank-derived fails too, and the reason is structural.**
+Stretch the fourteen letters across the room and print a percentile instead:
+3 of 10 agree. School bands are wildly non-linear — A is the top ten points, F
+is the bottom sixty — and a percentile is linear in rank. No mapping of ten
+ranks onto letters satisfies both.
+
+So the number goes and the letter stays. `A · 2nd of 10` is internally
+consistent and needs no explaining, because the rank says exactly what the
+letter means. Removed from the share card, both Analysis headers, the Insights
+summary, the mobile `grade · score` chip, and all three standings tables.
+
+**What deliberately stays.** The component bars' own `Weighted sum = 55.9`
+line, where four bars visibly add up to it and nothing calls it a percentage —
+that is the reconciliation the grade section already requires. And
+`Roster construction 90 / 100`, which is a genuine component out of a hundred
+with no letter beside it. The rule is about the *pairing*, not about the
+number: a test asserting the total were absent would fail on the first, and one
+asserting `/ 100` were absent would fail on the second.
+
+**`shareData` no longer carries `total`.** A field left on the object that
+nothing draws is an invitation to put the line back without the reasoning that
+took it out.
+
+**And `RANK_COL_W` had to be re-derived, not just left.** The share card sizes
+the grade glyph to whatever the rank column leaves it, and that constant was
+307 because the widest line *was* `100 / 100 weighted score`. With that line
+gone the widest is `24th of 24` — measured at 206px with Archivo actually
+loaded. The constant is 230 rather than 206 because **it is the clearance**:
+the gap between the longest rank line and the panel is `RANK_COL_W` minus the
+rank width and nothing else, so 210 produced a 6px near-miss on a 24-team card.
+230 leaves 24px, the gutter the panel already keeps, and the grade still grows
+from 208px to 262. **A constant derived from a string is wrong the moment that
+string changes** — and it fails as a collision, not as an error.
+
+### A weight is not a share of the outcome, and build is where they part
+
+Asked, reasonably, to "fix build's weight" once its share of the finishing
+order came out **5.1% against a printed 15%**. The measurement says the
+expectation is wrong rather than the number, and the weights were deliberately
+left alone.
+
+**Influence is weight times spread, and only three of the four components have
+a spread that is fixed by construction.** Measured over twelve rooms with a
+human in each:
+
+```
+startersScaled  29.9      valueScaled    28.8
+byePenaltyScaled 33.1     buildScaled     9.0
+```
+
+The first three go through `scaleAcross()`, which is min-max — it *stretches*
+them to fill 0-100 whatever the room actually did, so their spread lands near
+30 every time. `build` is its own raw score now (see the section below), so it
+spreads as much as rosters genuinely differ, which is not much: most teams are
+built alike.
+
+**So equal weights cannot buy equal influence once one component stops being
+stretched.** That is not a defect that appeared; it is a property that was
+hidden while build was scaled like the rest. The printed-weights rule this file
+already records — that 50/25/15/10 has to be what runs — was true of four
+components normalised the same way, and stopped being achievable the moment one
+of them was deliberately not.
+
+**Every alternative is worse, and they were costed rather than dismissed:**
+
+- **Raise build to 0.37**, which is what delivers 15% of the outcome. It makes
+  roster construction the joint-largest weight in a grade whose entire premise
+  is that starters are worth double, and it manufactures separation the data
+  does not contain — the thing `MIN_SPAN` exists to prevent, reached from the
+  other side.
+- **Lower build to 0.05** to match the influence. It does not even do that:
+  weight and influence move together, so 0.05 yields about **1.7%**, and
+  chasing it converges toward zero.
+- **Scale it again.** That is the 0 the owner reported, restored.
+
+**Build's small spread is information.** A component that rarely separates
+people should rarely separate people. What was actually wrong is the label: a
+bar reading `wt 15%` invites being read as "15% of your grade", and for this
+one it is not. The panel says so in a line under the weighted sum now, which is
+the cheapest honest fix and changes no grade.
+
+### Roster construction is the one component that is not scaled
+
+Reported by the owner: *why is roster construction 0 on a mock I got a B and
+finished 5th of 10 in?* Because `build` was going through `scaleAcross()`, and
+it is the one component that should never have.
+
+The other three are in their own units — points over par, picks over par,
+squared starters off in a week — so they have to be projected onto the 0-100
+the weights are applied to. **`build` is already that**: it starts at 100 and
+subtracts named penalties, so it is an absolute score, comparable across rooms,
+before scaling ever sees it. Putting it through a second transform is what
+produced the number.
+
+**And the second transform destroyed the information.** `scaleAcross()` is
+min-max, the nine CPU seats build to one rule and cluster at the top, so a
+human is the room's minimum almost every time — and the minimum is 0 by
+construction. Measured over ten rooms with one realistically imperfect human in
+each: **the human read 0 on eight of ten**, with raw builds of 44, 47, 54, 60,
+67, 73, 76 and 79. A roster worth 79 and one worth 44 printed the same 0. It
+was not a harsh number, it was an empty one. The owner's case reproduces
+exactly: raw 79, scaled 0, grade B, 5th of 10.
+
+The cliff was sharp and close to ordinary. In a typical room the raw values sit
+83–98, span 15, which is under the old `MIN_SPAN.build` of 20 — so the
+denominator was the floor, the midpoint sat at 90.5, and **anything at or below
+81 clamped to 0**: no RB cover read 38, no RB *or* WR cover read 0.
+
+**`buildScaled` is aliased to `build` now**, rather than the key being dropped,
+because every consumer reads that name — both dashboards' bars, the
+weighted-sum line that has to reconcile against them, the share card, the
+specs. One name, one number, and the panel still adds up.
+
+**The cost is real and is not hidden.** Build's share of the finishing order
+falls from **13.8% to 5.1%** against a stated 15%, measured on rooms with a
+human in them. That is the honest consequence of a component that varies less
+than the scaling made it appear to, and it is the trade this file's own rule
+asks for: a number nobody can act on is worth less than a number that moves the
+grade. **Whether 15% is still the right weight is a separate question and has
+not been answered.**
+
+`MIN_SPAN` has no `build` key any more — a floor for something nothing scales
+is a number nothing reads.
+
+**The caption had to change with it.** It was `me.build + " / 100"`, which
+under a raw headline is the same number twice. `buildText()` names what cost
+the points instead — "no RB cover", "2 spare QB", "1 empty starting slot" — and
+it lives in the engine beside the arithmetic that assigns them, the same
+contract `parText()` and `usageFor()` already have. **It has to name partial
+charges too**: cover is graded rather than a cliff, so naming only total
+absence printed "nothing missing" on a roster scoring 86 — a caption
+disagreeing with its own headline by fourteen points.
 
 **`build` is floored at zero, because it is printed as "x / 100".** Three
 rounds in, with six starting slots still empty, the bar read
@@ -501,6 +1500,15 @@ the number it replaced.
 kicker really did score those points. How a finished roster performed and how
 well a forecast ranks are different questions, and only the second one failed.
 
+**This survived `aboveReplacement()` becoming points, and it had to be kept
+deliberately.** The obvious move once both are measured in points is to call
+`replacementGap()` from the grade and delete the duplicated arithmetic — and
+that would silently drop K and DST out of starter strength, because
+`replacementGap()` honours `UNRANKED_POSITIONS` and this must not. The grade
+computes `projPts - REPLACEMENT_PTS[pos]` itself for exactly that reason. Two
+functions doing the same arithmetic on purpose, with the refusal in one of
+them, is the point rather than an oversight.
+
 ## Team colour
 
 One mark per club, in `TEAM_ACCENT`, used in exactly two places on the player
@@ -642,6 +1650,14 @@ perfectly good pick.
 The same number being right in the grade and wrong here is not a
 contradiction. The grade is scoring who *starts*. This is choosing who to
 *hold*. **Do not reach for `aboveReplacement` again without re-reading this.**
+
+**The unit changed underneath this and the conclusion did not.** It returned
+ADP rank places when the experiment above was run and returns projected points
+now (see "Starter strength was counting the wrong thing"), so the `> 0` test in
+that snippet still means the same thing — startable today or not — and every
+reason it failed is about *what question is being asked of a bench pick*, not
+about how the answer is scaled. The measurement was not re-run and does not
+need to be. If anyone does re-run it, the eleven pinned seeds are the bar.
 
 **Whether it helps is a measurable question, so measure it.** Same seed, same
 computer teams, your seat drafting each way, across pinned seeds. A suggestion
@@ -1267,11 +2283,43 @@ way, not reasoned about.
   comments and in this file — real prose about the project rather than copy
   anybody reads on the page. So a sentence that needs the common noun still
   gets a small r; there simply is not one on screen today.
+- **A position is one hue at several steps, and which step you want is
+  settled by one question: does type sit on the colour?** `POS_CHALK` is the
+  pastel fill and takes `CELL_INK` only — and it is also what a bar, a dot
+  or a tier square wants, because their labels sit outside them. `POS_SOLID`
+  is the -700 step, for a filled block with white text across it and nothing
+  else. `POS_BADGE` is the translucent chip. Reaching for the wrong one does
+  not throw — it draws a mark nobody can see, which is how five of six
+  analytics bars sat between 1.46 and 2.93 against their own track and how
+  gold ended up at 1.06 on a light cell. See "The chalk position palette".
 - **Check a new class name against the existing sheet before using it.**
   The landing section was first called `.home`, which is already the header's
   home button; it inherited `display:flex` and collapsed to zero width. The
   chat avatar was first called `.avatar`, which is the player photo and is
   hidden outright inside the rail.
+
+- **And a bare element selector in `style.css` reaches into React, where no
+  class name collides at all.** `style.css:1323` is
+  `table { background: var(--card) }`, and that sheet is a plain `<link>` on
+  the same document `#draftroom-root` mounts into — so every `<table>` in
+  `web/src` inherited it, and `--card` is white under
+  `:root[data-theme="light"]` while the cells stayed `text-white/70`.
+  **Measured at 1.0:1, white on white, on four tabs** — Analysis, Game Logs,
+  Projections and Usage — reachable through the app's own theme control.
+
+  Tailwind's classes are fixed hex and the legacy tokens are theme-swapped
+  variables, so the two systems disagree only in the theme nobody building the
+  React room is looking at. The `thead` survived because it carries its own
+  `bg-slate-sunk/60`, which is what made it read as a table with its data
+  missing rather than as an obviously broken panel.
+
+  Fixed by giving each table an explicit `bg-slate-panel`, **not** by scoping
+  the legacy rule: `404.html` and the three `docs/` pages are styled by that
+  same sheet, so narrowing the selector to fix React risks the pages nobody
+  visits on purpose. An explicit surface is also what stops the next bare
+  element selector reaching in. **A React component is not isolated from
+  `style.css` — grep it for the tag before trusting a Tailwind background**,
+  and check the theme you are not developing in.
 
 - **The same goes for function names, and it fails more quietly.** `app.js`
   is one scope, so a second `function initials()` does not shadow the first —
@@ -1693,6 +2741,59 @@ way, the whole app comes back clean at 375px and the board's three inner
 scrollers — the tab strip, the action bar and the grid — show up as the
 scrollers they are.
 
+**And a rotated glyph overflows sideways by however tall its font box is.**
+The board card's `Arrow` is a `1em` square with the glyph centred in it, and
+the square was doing only half the job: at `text-[14px]` the box is 14 x 14
+while the glyph's own layout box is **12.09 x 19**, because the layout
+overflow of inline text is the face's ascent+descent (1.357em in Hanken
+Grotesk) and `line-height: 1` does not shrink it. So 2.5px hangs above and
+below *every* arrow, harmlessly, for as long as it is vertical — and
+`rotate(90deg)` turns that 19px of height into 19px of **width** inside a
+14px box. `justify-between` parks the arrow flush against the row's right
+content edge, so 3px landed past it.
+
+**Which is one cell per round and no others**, the end-of-round pick being
+the only one whose arrow points down. On the sweep's own fixture — thirty
+picks into a ten-team draft — that is **3 rows against 18 pointing right
+and 9 pointing left**, every one of those at `over=0`. The ratio is the
+durable part rather than the counts, which move with whatever the fixture
+drives: a defect firing on a tenth of what a sweep looks at reads as noise
+in it, and that is exactly what this was mistaken for.
+
+**The tell that it was real and not the sweep's own rounding is that it did
+not move with the device pixel ratio.** `sweepOverflow()` allows `slack = 2`
+at dpr > 1 for a measured reason of its own — see the note beside it — so
+the first question about any `over=3` is whether it is that. Measured in the
+same harness with only `deviceScaleFactor` varied: **clientWidth 82 against
+scrollWidth 85 at dpr 1 and at dpr 3 alike.** Subpixel rounding changes with
+the subpixel grid. This did not, so it was not.
+
+**Nothing was clipped on screen, and that is not a defence.** The cell's own
+`overflow-hidden` edge is 7px further right, so a reader lost no ink. The
+row still overflowed and could neither scroll nor ellipsise, which is the
+condition above, stated without reference to whether the bleed happens to
+land somewhere harmless today.
+
+`overflow: hidden` on the square box is the repair, and it is what makes the
+component's own comment true — that comment claimed all three directions
+"occupy the identical rectangle" and they did not: right and left painted
+12.09 x 19 and down painted 19 x 12.09. Clipping happens in the element's
+own coordinates *before* the transform, so the parent sees 14 x 14 whichever
+way the glyph is turned. Measured to cost nothing: **0 differing pixels of
+1170 x 1992** on the phone and **0 of 2880 x 1800** on the desktop board at
+`lg:text-[16px]`, where all 140 arrows are on screen at once. Not
+`overflow: clip`, which is Safari 16+ — on iOS 15 the declaration is
+dropped and the bug comes back silently, on the devices this test exists
+for.
+
+**Take the control shot.** The desktop diff first reported ~25,000 changed
+pixels and none of them were the change: framer-motion drives the live
+cell's opacity pulse from JavaScript, so it survives
+`* { animation: none }`, and a stylesheet `!important` is what pins it. Two
+shots with nothing changed between them is what says whether the noise floor
+is zero — the same lesson as killing transitions before measuring a colour,
+one layer along.
+
 **A monospace box stops being code the moment its lines become sentences.**
 The formulas on the how-it-works page are prose now, which made them long
 enough to wrap on a phone, and a wrapped line starting hard against the left
@@ -1751,10 +2852,211 @@ team defense has no height, weight, age or college — it is eleven people —
 so `bioLine()` gives it its own line rather than a strip of dashes, and
 `ourRead()` calls it "this defense" rather than "him".
 
+## The board depth
+
+`setupProblem()` offers 4 to 24 teams and 8 to 20 rounds on the setup screen
+and then refused most of the deep end of that range outright: 24 teams over
+14 rounds is 336 picks, and the half-PPR board carried 228 to 232. A
+standard 12-team, 20-round league — 240 picks — could not run at all. Deep,
+superflex and dynasty drafters bounced before they saw anything.
+
+**The limit was never the pipeline's own `KEEP` cap.** `KEEP = 320` has been
+generous headroom since it was written; FFC's real ADP sample is the
+binding constraint, at 223 to 271 rows depending on format (measured against
+the 29 August 2026 `players.js`). Raising `KEEP` would have changed nothing
+— FFC genuinely does not return more rows than that, because it is sourced
+from real recorded drafts and nobody drafts a fifth-string long snapper in a
+twelve-team mock. So the real question was never "how many rows do we ask
+for," it was "what happens below the depth real drafters ever reach."
+
+**`extend_deep_bench()` (`scripts/build_players.py`) answers it with
+Sleeper's own player master**, which — unlike FFC's ADP — runs to every
+player still on an NFL roster. Below real ADP there is no more market
+signal to rank by, so the extension orders candidates by `search_rank`,
+Sleeper's own general "how known is this player" figure. That is
+deliberately not the same move as reading `pts_ppr` or `rank_ppr` off
+Sleeper's stats feed — both of those are opinions about fantasy value and
+sit in `IGNORED_KEYS` for exactly that reason (`Sleeper's own pts_half_ppr
+is discarded... because it bakes in assumptions we do not share`).
+`search_rank` never claims to be a fantasy score, so ordering the players
+nobody has scored an opinion on by it isn't the same mistake. Each format's
+list tops up toward `DEEP_TARGET = 480` — 24 teams × 20 rounds, the deepest
+picture the setup screen can ask for — until real candidates run out.
+
+**Bye weeks for the extension come from the same run's own ADP rows, not a
+second fetch.** Every real ADP row already carries its player's team's bye,
+so a `team -> bye` map built once from all three formats' rows covers all
+32 teams for free, before a single extended entry needs one.
+
+**Every extended player carries `deep: true`, and it means something
+narrower than K/DST's `UNRANKED_POSITIONS`.** A kicker or a defense is
+withheld — `overallScore()` returns `null` — because three seasons of
+backtesting found the ranking no better than chance. There is no equivalent
+finding here, only the fact that no real draft has ever priced this player.
+So being deep is never **on its own** a reason to withhold the Juke score;
+`jukeReadout()` adds `deep`/`deepNote` alongside the existing
+`unranked`/`unrankedNote` pair, and the UI adds a note rather than swapping
+the number for a dash — the same "replaced, not fed a null" rule, applied
+one notch more gently because the underlying claim is weaker, not absent.
+`survivalProbability()` needs no equivalent change: a synthetic row's
+`sd`/`td` are both `0`, which the function already treats as "no real
+sample," the same as a thin one.
+
+**"On its own" is load-bearing, and this paragraph used to say "the Juke
+score is never withheld for a deep player" instead.** That is true of
+deepness and false of players, because a player can be both — and not
+rarely. `FULL_POSITION_COVER` pulls K and DST to the *front* of the
+extension queue on purpose, so the **first** deep player on a real board is
+one of them: 25 of the 249 deep players on the 31 August 2026 board, with
+the other 224 scored normally. The two refusals are independent, both fire,
+and the stricter one wins the number — which is what "alongside the
+existing pair" already says, one clause later.
+
+**It cost a standing red that read as a product bug.**
+`deep-board.spec.mjs` picked its sample with
+`board.find(p => p.deep && p.projPts !== null)`, was handed Chris Boswell,
+and then asserted the deep rule against a player the K/DST rule owns. The
+test was right that the score was `null` and wrong about whose rule had
+made it so, and nothing in the failure said which. The selector asks
+`UNRANKED_POSITIONS` now rather than writing `"K"`/`"DST"` down a second
+time, and a sibling test pins the precedence rather than dodging it —
+because withholding has to be complete, and a sheet printing "no real draft
+has ever taken this player" beside a Juke score has told the reader to
+distrust a number and then handed them one. **A sentence naming one rule as
+the exception to another is a claim that the two cannot both apply.** Check
+that before writing it: here they can, and the board puts the overlap
+first.
+
+**Replacement level did not need to change to handle a deeper board, and
+that is a property worth stating rather than assuming.** `replacementRank()`
+is pure arithmetic over `league` (`teams * starters + flex share`), with no
+reference to board length; `REPLACEMENT_PTS` clamps to the shallowest
+available rank when a league asks for one deeper than the board (`cut =
+min(rank, ranked.length) - 1`), which is exactly the fallback a very deep
+league used to hit constantly and now hits rarely. A deeper board makes
+that clamp fire less often — the replacement player for a 24-team league is
+now an actual ranked player near the real cutoff instead of whoever was
+left at the old board's edge — which is what "moves correctly" means here:
+not a new formula, an existing one finally being fed enough players to
+answer honestly.
+
+**The Players table's tier-divider machinery grew a sibling, not a second
+system.** `PlayerQueueSidebar.jsx` already interleaves `{type: 'divider'}`
+rows into the row list for a tier cliff; a `{type: 'divider', kind: 'deep'}`
+row does the same for "real ADP ends here," gated on board order for the
+identical reason tier dividers are — outside ADP order a deep player can
+sort anywhere among real ones, and a single boundary line would claim a
+cliff that isn't there. Unlike a tier cliff it needs no `posFilter` narrowed
+to one position: "no real draft has taken these" is a fact about the whole
+board. A per-row `DEEP` badge carries the same information for every other
+sort order, where the divider can't — once the list isn't in board order,
+deep and real players interleave and there is no single line to draw.
+
+**Confirmed against the live feeds on 30 August 2026, which the session that
+built this could not do.** Sleeper and FFC were both reachable, and all three
+sets came out at the target with the two holes below closed:
+
+```
+standard  total 480 | ranked 219 | teams 32 | FA: no | no-bye 0 | K 32  DST 32
+half      total 480 | ranked 230 | teams 32 | FA: no | no-bye 0 | K 32  DST 32
+ppr       total 480 | ranked 266 | teams 32 | FA: no | no-bye 0 | K 32  DST 32
+```
+
+**A free agent is not "no team", and the two look like one test.** The filter
+was `entry.get("team")`, which correctly excluded a `None` team and let every
+unsigned player straight through — Sleeper stamps them `"FA"`, which is
+truthy. Measured on the real feed: **fourteen of them on the half-PPR board**,
+a retired Derek Carr and four unsigned kickers among them. Each arrived as a
+33rd "club" with no accent colour and a bye of **0**, and a 0 bye reads as
+*never on bye* — a quietly better roster in a grade that spends 10% of itself
+on bye-week safety. The test is `clean_team(...) in NFL_TEAMS` now, in both
+`extend_deep_bench()` and `join_rows()`, from one constant.
+
+**`join_rows()` had the same hole and it predates the deep bench.** FFC ranks a
+few unsigned players too, because its sample was taken before they were
+released. The 30 August build carried Bub Means in the standard and PPR sets
+and missed the half set only by luck, which is why `team-accent.spec.mjs`'s
+"all 32 clubs resolve to a colour" had never gone red. It goes red the moment
+the data shifts one player, which is what found it.
+
+**Every roster needs a kicker and a defense, and `search_rank` ranks both far
+below any receiver.** The half-PPR set carried **19 kickers and 21 defenses**
+against one starting slot each per team, so an 18- or 24-team league could not
+fill them *even with picks to spare*. `poolSize()` cannot see it, because it
+counts players and not positions — it surfaces as a draft that completes and
+leaves lineups unfillable rather than as a setup screen that refuses.
+
+Filling to `DEEP_TARGET` by `search_rank` alone happens to cover it at 480,
+which is exactly the kind of accident that stops being true when the target
+moves. `FULL_POSITION_COVER` states it as a rule instead: K and DST are pulled
+to the front of the queue until all 32 clubs have one. **A total that fits is
+not the same as a roster that fills**, and any future check on pool depth wants
+to ask both.
+
+**Confirming any of this against a live, ~460-player board could not be
+done against real network data — Sleeper and FFC are both unreachable from
+this environment (org egress policy) — so verification split into two
+halves.** `extend_deep_bench()` itself is unit-tested directly, against
+synthetic Sleeper-shaped fixtures, in `scripts/test_crosswalk.py`: exclusion
+by id, no-team candidates, non-fantasy positions, `search_rank` ordering
+with ties broken by candidate order, the `adp`/`sd`/`td`/`bye` shape of an
+extended row, and the `first_name`+`last_name` fallback for a player
+Sleeper has no `full_name` for. None of it needs a network. Everything
+downstream of the pipeline — the guard, the Players table, `jukeReadout()`,
+a full room-shaped draft — was verified against a locally-built ~460-player
+fixture: the real committed `players.js`/`stats.js`, cloned past real ADP
+using the *real* app's own stat shapes rather than invented data, swapped
+in for a build, driven through a real browser, and reverted before
+anything was committed. **Never committed as generated output** — the
+`Never hand-edit players.js or stats.js` rule is about exactly this kind of
+temptation, and the distinction that keeps it from applying here is that
+this was a local, disposable test fixture, built and torn down inside one
+verification pass, not a replacement for the pipeline's own output.
+
+**The fixture's first cut nearly manufactured a false regression.** Cloning
+extension candidates from the *best* real players first, tapering their
+production only gradually, put a near-duplicate of the #1 overall player at
+a fake ADP in the low 200s — production real deep-bench players never have.
+`tests/solo.spec.mjs`'s existing grade-variance test ("every lineup fields
+the best eligible player") failed against it: inserting a stealth near-elite
+producer into a position's points-sorted list shifts which real player sits
+at the replacement cutoff, moving `REPLACEMENT_PTS` for shallow leagues that
+should never have been touched by anything past real ADP at all. Cloning
+from the *worst* real players instead, capped well below replacement from
+the start, made the failure disappear — which is the tell that it was a
+property of the fixture, not of `extend_deep_bench()` (which draws from
+Sleeper's own master, ordered by `search_rank`, and never manufactures a
+duplicate of an already-real-ADP player in the first place) or of anything
+downstream of it. Two lessons worth keeping past this one verification
+pass: a synthetic fixture standing in for a missing feed has to model the
+*shape* of what's missing, not just its schema — and a component that only
+just started reading the tail of a much bigger array is exactly the moment
+to re-run whatever already checks that component's variance.
+
+**And the other thing that broke was the tooling, not the app — a fourth
+instance of a pattern this file already names.** A batch Playwright run
+produced a stuck test and a `12x15` draft that stopped 12 picks short. Both
+traced to an orphaned `wrangler dev`/`workerd` process, left running from an
+earlier, interrupted batch, quietly eating 30% of a CPU the whole time.
+Killing it and rerunning the identical suite passed all 19 tests clean. The
+same class of false lead `CLAUDE.md`'s Testing section already documents
+for the wrangler crash-loop, `startDraft()` not clearing `state.picks`, and
+a stale `vite dev` serving an old Tailwind config: a real, reproducible
+symptom whose cause was the harness, not the change under test. Check what
+process holds a CPU or a port before trusting a flaky rerun to mean
+anything about the code.
+
 ## The board card
 
 Five things per cell: who, what and where, which way the pick order is
 travelling, which pick it was, and a face. It was a surname and a position.
+
+**This section describes the LEGACY board.** The React board's cell is a
+`POS_CHALK` fill with `CELL_INK` on it and a `POS_RAIL` rule down its left
+edge now — see "The chalk position palette" above for what moved and why
+every mark on the cell had to invert with it.
+The rules below about the arrow, the row owning the height, headshots costing
+nothing per render and empty cells being centred are all still true of both.
 
 **The arrow is there for the turn, which is the one thing the numbers do not
 tell you on sight.** Down on the last pick of a round, along the way its round
@@ -2479,6 +3781,476 @@ picks land, which is when somebody is working out whether their wait is one
 pick or nineteen. It yields to the clock and only to the clock; two facts in a
 74px box is one too many and the countdown is the one being watched.
 
+## The mobile pass: one product on a phone, another on a desk
+
+The owner's instruction was "all of these changes will be for MOBILE ONLY.
+Our website should have a different offering altogether." That is a product
+decision rather than a responsive-layout one, and it is now true of three
+screens: the homepage, the Lobby and the draft menu each render something
+genuinely different below `sm` (640px, `usePhoneWidth()`) rather than the
+same markup at a narrower width.
+
+**Nothing is deleted to make room for it.** The desktop marketing homepage,
+the analytics Lobby and the anchored kebab dropdown are all untouched above
+`sm`, and every one of them is still reachable from the phone: the Lobby's
+dashboard is a button press away from the phone's Mock Drafts screen, and it
+is the *same component*, not a cut-down copy.
+
+### The homepage is chosen by CSS, and that is a hydration decision
+
+`scripts/prerender.mjs` writes real server-rendered markup into `#root` and
+`main.jsx` hydrates onto it. A width-dependent **branch** cannot survive
+that: the server has no `window`, so it renders the desktop tree, and a
+phone's first client render disagrees. React patches a mismatch by
+re-rendering the subtree — which on a phone is one visible frame of desktop
+layout before the phone one replaces it, which is exactly what the prerender
+exists to prevent.
+
+So both trees are prerendered and `sm:hidden` / `hidden sm:block` picks
+between them. **The cost is real and is named in the file**: the desktop tree
+still MOUNTS on a phone, because CSS-hidden is still mounted — the rule
+`useMinWidth` exists for, arriving from a new direction. That is the same
+work today's homepage already did on a phone, so nothing got slower; it
+simply did not get faster. If it ever needs to, the fix is to prerender two
+documents, not to move this back to a hook.
+
+**The Draft Room does not have this problem and uses a hook.** `DraftRoom` is
+its own React root, mounted into `#draftroom-root`, which the prerender never
+touches — so `usePhoneWidth()` is free there and always was.
+
+### The floating nav pill, and the clearance that came with it
+
+`MobileAppTabBar`'s flush, edge-to-edge bar became
+`phone/FloatingNavPill.jsx`: detached, blurred, floating above the safe area.
+A bar welded to the bottom edge sits in the same visual layer as the
+browser's own toolbar and reads as furniture; a floating one reads as the
+app. The old file is a **re-export**, so there is still exactly one nav to
+change when a tab is added.
+
+**A `fixed` pill costs the page no layout height, so nothing under it gets
+clearance for free the way a flush bar's own height gave it.**
+`NAV_PILL_CLEARANCE` is exported for that reason and every screen that
+scrolls under the pill reserves it. Reserving it in the Lobby's scroll
+container *as well* would double it on the phone screen and leave the desktop
+dashboard padded for a bar that is `sm:hidden` — so the clearance moved onto
+the screens themselves.
+
+### Behavioural hooks, because labels keep moving
+
+Four `data-*` attributes were added purely so tests stop breaking on copy:
+`data-start-draft`, `data-hero-eyebrow`, `data-pick-code` and
+`data-hero-cta`. Each one exists because a rename — or, for the last, a
+second page — failed a test about something else.
+
+- The start button has been called "Enter Draft Room", "Start draft", "Start
+  mock draft" and now "Start a mock draft". `phone.spec.mjs` carried a regex
+  of every previous name and missed the fourth by one word.
+- The hero eyebrow was found by matching the slogan's own words. That broke
+  once on case (the text is uppercased in CSS and title case in the source)
+  and again when the phone homepage drew it as a `<p>` with an icon rather
+  than a bare `<span>`.
+- **`data-hero-cta` is the one that is not about a rename.** It already
+  existed on the marketing page, and `sonar.spec.mjs` uses it to hit-test
+  the page's primary call to action — the only check that can tell an
+  overlay that has really gone from one that is merely transparent. It is
+  scoped to a visible instance, which was enough while one homepage
+  rendered at every width. With two mounted and CSS picking between them,
+  the desktop tree is `hidden sm:block` and reports a zero box on a phone,
+  and the launcher carried no marker at all — so the check reported "the
+  hero CTA rendered: false" against a page that was fine. The Mock Draft
+  row carries it now. **Splitting a page by breakpoint orphans every
+  attribute only one half of it carries**, and the failure reads as a
+  missing element rather than as a missing marker.
+- The pick code was found by `span.font-plex`, on the strength of a comment
+  saying that class "names nothing else on a card" — true until the cell
+  redesign made the position line mono too, which doubled the count and
+  reported 86 codes against 43 picks.
+
+**None of those three tests was about the thing that broke it.** An attribute
+says what an element IS; a class or a label says what it currently looks like
+or reads. Anchor on the first.
+
+## The chalk position palette, and the matte one it replaced
+
+**Two palettes were built for this board in the same fortnight, from two
+different directions, and only one of them shipped.** The board palette
+handoff on `main` — chalk cells, a saturated left rail, a cyan seat bracket,
+the legend removed — is the one that survives, and the mobile pass's matte
+palette was merged onto it. This section records both, because the reasons
+the losing one was built are still true and would otherwise be rediscovered.
+
+The six hues MOVED, which is the part to read first if you remember the old
+set: **QB rose, RB emerald, WR blue, TE orange, K violet, DST slate**, where
+they were orange/emerald/blue/fuchsia/gold/indigo. Only RB and WR are where
+they were. The old set's own comment argued at length that rose and violet
+were unavailable — rose being the danger colour, violet the injury chip — and
+the handoff overrules it on the ground that a hue is only spoken for when a
+reader could confuse the two meanings *in the same glance*, which a pink cell
+reading QB and a red countdown digit in the header are not. Teal is still
+out, permanently: it is the CTA, the focus ring, the live pick and now the
+seat bracket.
+
+`draftRoomPositions.js` is the one hue reference, and it carries five maps.
+Which one a call site wants is decided by one question, and it is not which
+screen it is on: **does type sit on the colour?**
+
+- **`POS_CHALK`** — the matte pastel a board cell is painted with, and the
+  default for anything whose labels sit *outside* it: a bar, a dot, a tier
+  square, a run strip.
+- **`POS_RAIL`** — the saturated 5px rule down a chalk cell's left edge.
+- **`CELL_INK` / `CELL_SUB`** — the only two inks a chalk fill may carry.
+- **`POS_SOLID`** — the -700 step, for a filled block with white text
+  written across it, and nothing else.
+- **`POS_BADGE`** — the translucent chip, as literal Tailwind class strings.
+
+**Five of the six analytics bars were reading `POS_SOLID` and measured 1.46
+to 2.93 against their own track** — every one under the 3:1 a non-text mark
+answers to, with a DST bar that was effectively not drawn. Five of them
+failed under the *previous* palette too, so that is a long-standing miss the
+handoff surfaced rather than caused. It only became findable once the board
+started drawing the same six positions in a way that visibly worked.
+
+### What the matte pass was for, and what of it survived
+
+It was a different answer to the same complaint — six hues reading as six
+tints of one charcoal, because the cell was `POS_SOLID` at 14% alpha and a
+colour dark enough for white text is far too heavy to paint 140 cells with.
+Matte reached the same place chalk did: a light cell with dark ink. Chalk
+went further by pairing it with a saturated rail, which is what finally made
+the rail legible after two earlier looks had called it invisible.
+
+Three findings from that pass outlived the hexes and are the reason this
+section is not simply deleted:
+
+**Solve against every fill, not an average, and not to the bar itself.** A
+colour drawn on a per-player background has to clear all six — the "every
+stop in a gradient must clear white on its own" rule in a new shape. A pair
+of value colours solved to exactly 4.5 modelled at 4.53 worst case and
+**measured 4.37 on the real rendered board**, with transitions killed and
+ancestor `opacity` composited. The browser is the authority. Do not spend the
+model's entire margin: solve past the bar so a small disagreement cannot
+cross it.
+
+**Every mark on a cell has to invert with the cell.** A light-on-dark mark
+left behind on a light fill does not throw — it just becomes unreadable. The
+handoff hit the identical problem from its own direction and solved it the
+same way: `INJURY_META` grew a `chalk` value beside its `dot` because `dot`
+is a -400 step drawn for a dark cell and measures **1.55:1** on QB's own
+fill, which is the same hue family — precisely where it is least visible.
+
+**`shareCard.js`'s hand-copied hex table is a real hazard and it is still
+there.** The matte pass deleted it, on the correct observation that the file
+is a module in the same bundle and can import the map — what it cannot read
+is the *Tailwind theme*, which is a different thing. That import does not
+survive the merge, because `POS_BADGE`'s tints are Tailwind family steps and
+are not exported as hex by anything. So the copy stays, and it has already
+gone stale once: the handoff took QB rose and TE orange while every hex in
+that file still said orange and fuchsia, so a share card drew a fuchsia TE
+chip beside a board that had stopped drawing one — **in an image that leaves
+the app and cannot be corrected after the fact.** If `POS_BADGE` moves again,
+grep `shareCard.js` for `rgba(` before believing the change is done.
+
+### Gold is gone, and the ring that replaced it is one colour again
+
+The seat marker was gold, `--mine`, and this file argued for it at length:
+teal acts, blue states, gold is *whose*. On a dark board that worked. On a
+board of chalk cells gold measured **1.06** on a real card, and the mobile
+pass's answer was to restore the legacy board's gold-then-keyline pair — two
+exact complements, so one half always has the surface under it.
+
+The handoff's answer is better and it is what shipped: **cyan hairlines, and
+the separation from the live pick is SHAPE rather than hue.** The seat is a
+pair of 1-2px rules fourteen rows tall that never fills anything; the live
+pick is a filled, pulsing, bordered box occupying one cell. Cyan is the one
+hue on this board no chalk fill goes near, which is what lets a single value
+work where a single gold could not. Inside your own column on your own turn
+both are drawn, nested — the same "two facts coincide, let both draw" call
+the legacy board already makes.
+
+**This is the one place the mobile pass's work was thrown away rather than
+merged**, and the note that predicted the whole thing still deserves its
+place:
+
+`board-marks.spec.mjs` carried a comment against the assertion that the
+board's ground is dark in both themes — *"if this ever stops being true, the
+pair has to come back and this is the line that says so."* It was written
+about a hypothetical light theme. What falsified it was making the **cells**
+light while the ground stayed dark, a direction that assertion could not see,
+so it would have gone on passing while gold measured 1.06 on a real card.
+**A precondition written down is worth its line even when the thing that
+breaks it arrives from somewhere the author could not have looked.**
+
+That spec measures the bracket's geometry now rather than gold's contrast:
+the rail and the card must not share a pixel of x, reported as an overlap
+count rather than a boolean, because the moment the bracket moves onto a
+chalk fill it is `#00E5FF` on a pastel and the mark is gone.
+
+## Draft types are real, and the engine takes a config
+
+`draft-engine.js` accepts a **config object anywhere it took a bare `teams`
+number**, and one function decides whether a round runs backwards:
+
+- **linear** — never. Every round runs seat 1 to seat N.
+- **snake** — even rounds.
+- **snake + third-round reversal** — rounds one and two are an ordinary
+  snake, round three repeats round two's direction instead of flipping back,
+  and it snakes normally from there. So from round three on the parity is
+  inverted: `round >= 3 ? round % 2 === 1 : round % 2 === 0`.
+
+**A bare number still means a plain snake**, which is not backwards
+compatibility for its own sake — it is what lets a caller holding only a team
+count ask for a pick code, and what keeps every existing call site in
+`app.js`, `room.js` and the worker correct rather than quietly drawing round
+three the old way. **Pass the league object wherever the ORDER matters.**
+
+**A room ran a plain snake and nothing else for a while, and that was a
+deploy skew wearing a feature's clothes.** `draft-engine.js` is the one file
+the browser and the server both run, so the two have to agree about what is
+legal or two managers take the same player milliseconds apart and the room
+forks. The site deploys itself from git and **the worker does not** — it ships
+only when somebody runs `wrangler deploy -c worker/wrangler.toml` — so in the
+window between the draft types merging and that command being run, the server
+was still snaking while a client drew linear. That failure is not a broken
+page: it is picks quietly rejected from round two on, which reads as the room
+freezing.
+
+So `roomShapeProblem()` refused the two orders it could not yet guarantee and
+said so on screen, and it was deleted the moment the worker carrying the new
+engine was live. It is written down because the *shape* recurs: any change to
+`draft-engine.js` or `room.js` has this window in it, the window is invisible
+(CLAUDE.md's own "ask the database, not the response"), and a guard that
+refuses loudly is the cheap way through it. **A control that cannot act must
+not merely fail; it must not be offered** — `createRoom()` returning null with
+nothing on screen is the dead-control failure this project has shipped once
+already, which is why the refusal had a sentence beside it rather than only a
+disabled button.
+
+**`round % 2 === 0` is no longer a legal direction test anywhere.** It was
+inlined in `boardArrow()` on both boards, and it is right for a plain snake
+and wrong for the other two — a board asked for a team count alone draws
+confident arrows pointing the wrong way on cells whose pick numbers are
+simultaneously correct. That is the seat-versus-pick-number bug exactly: two
+right numbers side by side disagreeing. `DraftEngine.reversedRound()` is
+exported so nothing has to re-derive it.
+
+**Auction is listed in `DRAFT_TYPES` and marked unavailable, deliberately.**
+It is not a setting — it is a second draft mode end to end (a budget per
+team, a nomination order, live bidding, a bid clock, and a CPU that values a
+player in dollars rather than in board position). A control that silently ran
+a snake draft under an "Auction" label would be a whole wrong product behind
+a right label. It is listed rather than hidden because a settings screen
+showing two options where the category has three tells a visitor the product
+does not know about the third.
+
+### Three more things the league now carries
+
+**`playerPool`** — all / rookies / vets, read off Sleeper's own `years_exp`,
+which is already `exp` in `stats.js` on every matched player. No pipeline
+change and no second source. **A player with no `exp` is kept in BOTH
+filtered pools**: 27 board rows have no stats record, team defenses have no
+years of experience, and a defense is neither a rookie nor a veteran in any
+sense a drafter means. Dropping them would leave a league that starts a D/ST
+with no legal pick for the slot. `undefined` is missing, and missing is not
+evidence of anything — the other half of "treat `0` from an API as missing".
+
+The filter lives inside `adpSet()`, so `poolSize()` and therefore
+`setupProblem()` validate against the array `buildBoard()` will actually map
+over. There are 38 rookies on a 232-player board, so rookies-only is a
+three-round draft; the settings screen prints the count beside the control
+rather than letting the Start button refuse with the reason nowhere near the
+cause.
+
+**`superflex`** is a scoring preset that is not a scoring format. It draws
+full PPR's ADP set — FFC publishes three sets and none of them is superflex —
+and what it actually changes is `league.superflex`, plus the round that has
+to come with it. `SCORING_PRESET` carries a `note` saying so on screen,
+because a superflex board genuinely underrates quarterbacks and a drafter is
+better off being told than finding out in round three. `ADP_FORMAT` maps a
+preset to a set through a named function rather than indexing `ADP_SETS`
+directly, so a new preset with no entry is a preset nobody decided the board
+for, rather than one silently falling through to the default.
+
+**`cpuAutopick`** — whether a human seat whose clock runs out gets drafted
+for. This has always happened and was never a setting. Off, the clock reaches
+0:00 and the seat stays yours. **CPU seats are untouched in both states**:
+they are not users running out of time, and a room that stops moving because
+a setting about humans was switched off is a deadlock.
+
+## The Draft Settings screen
+
+The three-tab modal (Roster / Scoring / Seats) is the whole settings screen
+now — draft name, draft type, third round reversal, scoring, teams, available
+players, time per pick, CPU autopick, roster construction, draft order, and
+the scoring-rule editor folded away at the bottom.
+
+**One component at every width**: a full-screen sheet below `sm`, a centred
+modal above it. A second copy of ten sections is the "written down twice"
+rule in markup and it drifts the first time one of them changes.
+
+**Save is a dismiss, not a commit.** Every control writes through to the one
+real `league` the moment it is pressed, because that is what keeps the board,
+the summary line and `setupProblem()` agreeing with the screen while somebody
+is still reading it. What Save genuinely guards is that refusal, which it
+reports in place instead of closing onto a Start button that will not press.
+
+**Draft order stopped being a dead control.** Its solo branch was a read-only
+list with a paragraph explaining there was nothing to do. It takes a seat and
+randomizes now, through `setMySlot()`/`randomizeOrder()`, which refuse in a
+room — where the same section is the host's real seat-swap and goes through
+`swapSeats()` because the room is the thing that decides. **Randomising solo
+moves one seat, not the whole array**: the other chairs are CPUs drafting to
+one rule, so permuting them changes nothing anybody can observe, and a
+shuffle of the whole list would be a lie dressed as a feature.
+
+**`shapeExtras()` prints only what is not the default.** A summary listing
+every setting is a settings screen with worse formatting; a summary listing
+none of the unusual ones lets somebody sit in a linear rookies-only draft
+under a header reading "10 teams · 14 rounds · Half PPR".
+
+## The phone draft room's own controls
+
+**A crosshair, not an auto-follow.** The board is a real scroller in both axes
+and nothing ever pulled it back to the live pick. It centres the current cell
+in the board's own scroller — `getBoundingClientRect()` differenced against
+the scroller's, never `offsetTop`, and it returns early when already within
+4px, both of which are hard-won rules this file already records for the
+legacy board. It is a **counter** prop rather than a boolean, because
+pressing it twice in a row has to scroll twice.
+
+Deliberately not an automatic follow: that is a bug this project has already
+shipped and removed once, where a reader was pulled back to the live pick two
+or three times a second for as long as they kept trying to look elsewhere.
+
+**The auto-pick ribbon lives inside the header**, drawn only when auto-pick is
+on. Everything on that screen is `fixed` and stacked by hand — the board is
+pinned to the header's height and the sheet's ceiling is measured from it —
+so a ribbon as a separate fixed element would need both of those to know
+about it independently.
+
+**And the header measures and reports its own height.** It was a hardcoded
+106, which is only right on a device with a notch:
+`pt-[env(safe-area-inset-top)]` is 0 everywhere else, so the real header is
+about 65 and **the board started 41px below where the header ended**. Found by
+looking at a screenshot, not by anything failing. A `ResizeObserver` rather
+than a read at mount, because the height genuinely changes while the screen
+is up — the ribbon appears and disappears with auto-pick.
+
+### The bottom sheet: nearest-snap was the wrong question
+
+The collapsed snap was 188px, which is a shorter sheet still covering the
+last four rounds of a fourteen-round board — and those are the rounds
+somebody swiping the sheet down is trying to see. It is **58px** now: the drag
+handle and the tab row and nothing else. The safe-area inset is padding
+*inside* the sheet rather than folded into that number, or it double-counts
+on the devices that have one.
+
+**Release asks three questions in order, and each exists for a gesture the
+next one gets wrong.** The snaps are 412px apart, so nearest-snap-by-distance
+meant a decisive 84px swipe down released 328px from collapsed and went back
+where it came from — measured, doing exactly the gesture the reference app
+collapses on. The sheet was not ignoring small movements, it was ignoring
+most real ones.
+
+1. **Flicked** (above 550 px/s): direction is the whole message, distance is
+   irrelevant. One snap that way.
+2. **Travelled** past 56px in one direction: land on the nearest snap, but
+   never back on the one it started from.
+3. **Otherwise** nearest, which for a small movement is where it started — so
+   an accidental nudge springs back.
+
+Together those produce all three behaviours without special-casing any of
+them, and the release velocity is carried into the settle spring rather than
+starting a fresh one from zero.
+
+**A stale closure was a real hazard here.** "One snap from where this gesture
+started" cannot read `snapIndex` off the prop the handler closed over; it is
+a ref, for the same reason the settings modal's seat swap already uses one.
+
+## The gear menu, and notifications that do something
+
+The kebab dropdown is a bottom **action sheet** below `sm` and the anchored
+dropdown above it, from one array of items — a phone-specific copy of the
+list is the thing that ends up missing an item after the next change.
+
+**Pause is back, which reverses a decision recorded here.** It was cut with
+Undo and "Auto-draft the rest" by a product review that found all three
+buried in a kebab menu and reasoned a mock draft does not need them. The
+argument was about the menu rather than about the control: a list you reach
+by pressing a gear, that reads like a list of things you can do to this
+draft, is exactly where somebody looks for Pause. Undo and auto-draft-the-rest
+stay gone, still for their own reasons.
+
+**"End draft" is not the header's X.** The X steps away and keeps the draft
+resumable; End draft finishes it — the remaining picks are drafted, it is
+recorded and graded like any completed draft, and you land on the report with
+it in the locker. Two controls meaning "back to the Lobby" in different words
+is the duplicate-affordance problem. The confirm says the pick count out
+loud, because "End draft" does not on its own tell anybody that 137 picks are
+about to happen. **Never offered in a room**: "the rest" there is other
+people's teams.
+
+### Notifications are the Notification API, not a stored preference
+
+The obvious cheap version is two switches over `localStorage` that do
+nothing, and that is the dead-control failure this project has shipped once
+already — worse here, because somebody turns a notification toggle on and
+then trusts it.
+
+The point is one moment: your pick arrives while the tab is not the one you
+are looking at, which is precisely when the sound cue and the header turning
+teal reach nobody. There is no push service and none is needed — the page is
+open, it is just not in front.
+
+Three things it will not do, each the difference between a useful
+notification and one that gets the permission revoked. **It never fires while
+the tab is visible.** **It fires on the CHANGE, not the state** — `myTurn` is
+true for hundreds of renders per turn, the same shape `soundCue()`'s own
+comment already records. **It replaces rather than stacks**, one `tag` per
+kind.
+
+**Draft mentions watches the room's own `chatStream()` and needs a priming
+pass.** Joining a room hands you the whole existing chat log at once, so
+without one, every mention from before you arrived fires on connect. It
+tracks the newest message **by id, not by count**: the chat log is bounded in
+lines and bytes and drops old messages off the front, so a length comparison
+would go quiet the moment the log started rolling — silently, and only in the
+long drafts where somebody has most likely stopped watching the tab.
+
+**Three states the screen reports rather than assumes**: no API at all
+(iOS only has it for an installed site, and the note says so), permission
+denied (which Juke cannot undo from here, so it says that instead of offering
+a switch that points at itself), and granted.
+
+## The phone Lobby is a launcher, and the dashboard is a press away
+
+The desktop Lobby is a real analytics dashboard — three KPI tiles, a
+twelve-cell tendencies grid, a recommendation engine, a heatmap and a history
+table. On a 390px phone all twelve cells stack into one column and the button
+the screen exists to offer ends up past the fourth chart.
+
+`MockDraftsPhone.jsx` is what `#/drafts` is below `sm`: start, resume, and
+what you have already run. **Nothing is lost.** "Your insights" mounts the
+identical `DraftLocker`, and a history row opens that component's own report
+path through a new `initialAnalyzeId` prop rather than a second entry point —
+the frozen-report-first path is the whole reason a reopened draft and the
+grade it was recorded with cannot disagree, and skipping it would silently
+reintroduce exactly that.
+
+**`historySummary()` resolves a stored name against the LIVE board**, which is
+how a name becomes a position and a headshot — and the board is empty until
+`players.js` lands, which is deferred rather than blocking. Read once on
+mount, every row came back with a null position and drew a grey dash where
+its colour belongs: the names were right, because those are stored, and only
+the resolved fields were missing. It reads the engine tick. **Anything that
+resolves against `board` needs the same treatment.**
+
+**An early return is a wall no hook may sit behind.** `DraftLocker`'s new
+effect was placed after its own `if (!engine) return null`, so the hook count
+changed between renders and React threw on the first press of the button that
+mounts it. It is keyed on `engine` rather than `[]` for a second reason:
+`analyze` is a const further down the same function, in its temporal dead
+zone on exactly the render that early return takes.
+
 ## Security
 
 The zone is set beyond Cloudflare's defaults, and the defaults were not
@@ -2708,6 +4480,20 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   Verified in both directions, which is the only way a check like this means
   anything.
 
+- **The site's entry reuses by port too, and its command is the build.**
+  `reuseExistingServer` adopting a static server somebody started by hand is
+  fine as far as identity goes — it is serving `web/dist` either way — but
+  the `webServer` command is `npm --prefix web run build && … http.server`,
+  so **adopting a running server skips the build**. Edit a component, run the
+  suite, and it tests the previous bundle: the `Arrow` overflow fix — see
+  "a rotated glyph overflows sideways" in the truncation rules — came back
+  5/5 red on a run where it was already correct in the source, which reads as
+  "the fix does not work" rather than "nothing rebuilt it". Same family as
+  the `vite dev` serving a deleted Tailwind config, and the same repair —
+  rebuild, or stop the server and let the suite start its own. `curl` the
+  bundle for the change before believing a red run: the built JS names what
+  it contains, exactly as the deployed stylesheet does.
+
 - Room over sockets: `cd worker && wrangler dev --port 8787 --local`, then
   `node worker/test-sockets.mjs` in another terminal. Seventy-six assertions
   against the real Durable Object runtime, no Cloudflare account needed.
@@ -2741,7 +4527,14 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   passed a broken file twice.
 - Crosswalk: `python scripts/test_crosswalk.py` — the source-id join against a
   handful of players, including two Josh Allens, a collision and a player
-  neither side shares. Needs nothing but the standard library.
+  neither side shares; the nflverse join with its two-way player and its
+  `LA`/`LAR` case; the audit applying both known definitions and mutating
+  nothing; and `check_app_rules()` against the real `app.js`.
+  Needs nothing but the standard library. **It cannot reach `app.js`'s rule
+  tables except through `check_app_rules()`** — `test_engine.py` is the only
+  suite with a JavaScript host and it loads `draft-engine.js` and `room.js`,
+  never `app.js` — which is why that guard lives in the build rather than
+  here.
 - Pipeline: `python scripts/build_players.py` — prints counts and writes the
   generated files. Check `unmatched.txt` afterwards. **`TANK01_KEY` in the
   environment is optional**: without it the crosswalk is skipped, the build is
@@ -2753,6 +4546,105 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   static server. Opening a file directly no longer works — see the Stack
   section on why `file://` broke once the legacy scripts became
   root-relative.
+- **This checkout is regularly open in more than one Claude session at once,
+  and every whole-tree git command is a hazard because of it.**
+
+  Four incidents in one night, none of which reached production and all of
+  which cost time:
+
+  - `git add -A` swept **41,379 lines** of another session's untracked
+    `src/data/ep_weekly_*.csv` into an unrelated commit. Caught on the stat
+    line before pushing.
+  - `git stash push -- web/src` took another session's in-flight edits with
+    it. The pop restored them, but that was luck: the same trick lost this
+    session's own `DraftInsightsDashboard.jsx` edits an hour later.
+  - Another session's `b057176` "Sitewide font consistency" **committed and
+    pushed this session's uncommitted React work**, because it staged the
+    whole tree too. The grade-visual change is now recorded under a commit
+    titled about fonts.
+  - A `vite dev` started before another session edited `tailwind.config.js`
+    served CSS generated from a config that no longer existed — see the
+    Tailwind note below.
+
+  **`.claude/hooks/block-whole-tree-git.py` now refuses `git add -A`,
+  `git add --all`, `git add .` and the writing forms of `git stash`**, wired
+  as a `PreToolUse` hook in `.claude/settings.json`. `git stash list` and
+  `git stash show` still work, because reading is how you find out what a
+  previous session left behind. Nothing else is blocked.
+
+  Two things about it worth knowing before changing it. **It is Python, not
+  the usual `jq` one-liner, because `jq` is not installed on this machine** —
+  a hook written against a missing binary does not fail loudly, it simply
+  never fires, which is the worst possible outcome for a guardrail. And it
+  **fails open**: unparseable input exits 0 with no output, because a guard
+  that blocks work when it cannot read its own input is worse than the hazard
+  it guards against.
+
+  **The hook is a backstop, not the fix.** The fix is that a second session
+  should work in a worktree — `.claude/worktrees/` already holds four, so the
+  machinery exists and simply was not used. Stage explicit paths, never the
+  tree, and restart any dev server after another session touches config.
+
+- **A long-lived `vite dev` does not reload `tailwind.config.js`, and the way
+  it fails looks like a design regression rather than a stale server.**
+
+  Reported as sharp white borders around a dozen homepage elements, and it
+  was neither white nor a border anybody had written. `border-line-hairline`
+  resolves through `colors.line.hairline`, and when that token is missing from
+  the config the *generator has already run*, so the utility contributes no
+  colour rule at all — only the `border` width — and the colour falls through
+  to Tailwind's own preflight default, `#e5e7eb`. Measured: **31 elements
+  computing `rgb(229, 231, 235)` where the token says `rgb(37, 41, 48)`.**
+
+  Nothing was wrong with the page. The server had been up since before another
+  session added those tokens, so it was serving CSS generated from a config
+  that no longer existed on disk. Stopping and restarting it took the count
+  from 31 to 0.
+
+  **Ask the deployed stylesheet before hunting through commits.** The built CSS
+  names every utility it generated, so one request settles whether the token is
+  real:
+
+  ```bash
+  curl -s https://jukeff.com/assets/index-<hash>.css | grep -o "border-line-hairline{[^}]*}"
+  ```
+
+  It came back correct on the first try, which turned what looked like a
+  thirteen-commit bisect into a two-minute answer.
+
+  **This is the fourth time in this file that the tooling has worn a bug's
+  clothes**, after the wrangler crash-loop, `startDraft()` not clearing
+  `state.picks`, and a `git stash` in a shared checkout. The tell is the same
+  every time: the symptom is real, reproducible, and describes a fault in
+  something nobody changed. It is most likely here whenever two sessions share
+  the repository, because design tokens are exactly what the *other* session
+  edits while yours has a server up — so restart the preview after any change
+  to `tailwind.config.js`, whoever made it.
+- **A proxied sandbox makes a render-blocking `<link>` look like a broken
+  loader.** `sonar.spec.mjs` holds `#boot-sonar` to leaving between 4800ms and
+  5800ms of navigation start, and it came back `removedAt: null` — the overlay
+  still on screen nine seconds in, on a build whose teardown had not been
+  touched. Nothing was wrong with it. `web/index.html` links Barlow Condensed
+  from `fonts.googleapis.com`, that link is render-blocking, and in a container
+  where outbound HTTPS goes through an agent proxy whose CA the browser does
+  not trust, the TLS handshake hangs and resets — twice, six seconds each. So
+  `domContentLoadedEventEnd` was **12,512ms**, the teardown's two nested rAFs
+  fired after it, and every bound in the file was missed by seven seconds.
+
+  **Chromium reads `HTTPS_PROXY` from the environment by itself**, which is
+  what makes this hard to see and what makes two obvious repairs do nothing:
+  `--host-resolver-rules` and an `/etc/hosts` entry are both resolution-side,
+  and with a proxy in play the hostname is resolved at the proxy, not here.
+  Measured: DCL stayed at 12.4s under both. Running the suite with the proxy
+  variables unset takes it to **120ms** and the file to 4 passed. Never
+  `--ignore-certificate-errors` for this — the fault is reachability, and
+  turning off verification is a different and much larger change.
+
+  The tell is that the failing number is a *duration* and the thing it
+  measures is downstream of page load. Check `performance.getEntriesByType(
+  "resource")` for an entry whose `responseEnd` is in the seconds before
+  reading anything into the app's own timing. This is the fifth time in this
+  file that the tooling has worn a bug's clothes.
 - **In a headless or hidden browser, disable transitions before you measure
   a colour.** A pane that is not compositing produces no frames, so a CSS
   transition never advances — it sits frozen at its starting value, and
@@ -2861,10 +4753,13 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   committed blob was correct throughout and so was the deployed card;
   `git checkout --` on the path was the whole repair.
 
-- **CI is `tests.yml` and it is a floor, not a gate — and it does not cover
-  itself.** It runs the two Python suites on `pull_request` and on `push` to
-  main; the browser suite is deliberately not in it. Three things follow that
-  have each cost something:
+- **CI is two workflows, and neither is a gate.** `tests.yml` runs the two
+  Python suites on `pull_request` and on `push` to main — a floor, and it does
+  not cover itself. `browser-tests.yml` runs the Playwright suite daily at
+  12:30 UTC against the deployed site, which is a smoke alarm rather than a
+  gate: it tells you the morning after something rots, and blocks nothing. The
+  browser suite is still deliberately out of `tests.yml`. Three things follow
+  that have each cost something:
 
   - **A pull request opened after its last push has no checks at all.** The
     workflow fires on the `pull_request` event, so a branch pushed first and
@@ -2874,6 +4769,49 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   - **`update-players.yml` is unproven by any pull request.** It runs on
     `schedule` and `workflow_dispatch` only, so a change to it is not
     exercised until 11:00 UTC or until somebody presses the button.
+  - **The browser suite used to rot, because nothing ran it on a schedule.**
+    `browser-tests.yml` does now — 12:30 UTC daily, against `jukeff.com`,
+    ninety minutes after the nightly commits new data and triggers its Pages
+    build, so it tests the day's deployed site rather than racing the deploy
+    that produces it. It is not a gate and is not in `tests.yml`: seventeen
+    minutes is too heavy for every push, and the thing that was missing was
+    never a gate but a *notification* — a scheduled failure emails the owner,
+    which is what "red for days and nobody was told" needed.
+
+    **It runs against the deployed site, not a local build**, which is what
+    keeps the job to node and a browser: `playwright.config.mjs` skips its
+    whole `webServer` block when the site is not local, so there is no web/
+    build, no python static server and no wrangler beside it to break. It also
+    covers the deploy — a promoted build that 404s its own content-hashed
+    bundle is exactly this file's inverse caching trap, and no local run can
+    see it. The cost is the one keyless news test, which skips itself against a
+    keyed worker: **expect "1 skipped" every run and investigate its absence,
+    not its presence.**
+
+    The rot it exists to catch: `phone.spec.mjs` was found four-red on 27
+    August, and every one of the four was a spec describing a screen the
+    product had since changed —
+    "Start mock draft" no longer stopping at a second "Start draft"
+    (deliberately: the confirm step was removed), the entry screen becoming
+    room-only, `Roster` leaving the tab bar for a pane inside Players, the
+    still-to-fill block moving to Decide's own Team pane, and a `<span>`
+    becoming a `<div>`. **Not one of them was an app bug.** They had been red
+    for days and nobody was told, which is the failure — a suite that is only
+    run by hand is a suite that reports last week's product.
+
+    **The tell is the shape of the failure.** A stale spec fails by not
+    finding something ("no button reading Start draft", "Cannot read
+    properties of undefined") or by asserting an arrangement that has been
+    deliberately improved. A real regression fails on a number that moved
+    while the thing it measures still exists. Check which before changing
+    anything, and check the app in a browser rather than reading the diff:
+    three of these four looked like layout regressions in the output.
+
+    **Anchor on behaviour, not on class strings.** The rewrites match the
+    scroller by its computed `overflow-y`, the selected tab by either teal
+    marker the two navs use, and a row by a name off the live board — every
+    one of the four broke on a selector that described markup rather than
+    the property under test.
   - **Pressing that button is not free.** The job rebuilds `players.js` and
     `stats.js`, commits if the feeds moved, rewrites every `?v=` and triggers
     a Pages deploy. It is a real data commit, so run it to answer a question
@@ -2888,10 +4826,40 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   bump, v6 moved the credentials, v7 blocked fork checkouts for
   `pull_request_target` and `workflow_run`, which this repository does not use.
 
-- **End to end: `npm install` once, then `npx playwright test`.** Ninety
-  tests across fifteen spec files, measured at about five minutes against
-  production, and it starts the static server and `wrangler dev` itself when
-  it is pointed at localhost.
+- **End to end: `npm install` once, then `npx playwright test`.** 105 tests
+  across twenty-two spec files, and it starts the static server and
+  `wrangler dev` itself when it is pointed at localhost.
+
+  Measured 27 August 2026 against production: **89 passed, 1 skipped, 0
+  failed, in 16.4 minutes** on one worker. The skip is the news test that
+  asserts an absence and correctly stands down against a keyed worker. This
+  used to say "about five minutes", which was true of a smaller suite and is
+  the kind of figure that drifts silently — hence the date, the same rule the
+  Juke score section states about any number written down here.
+
+  **Measured again 30 August 2026, locally, at 22.1 minutes** — and the run
+  is only readable if you know which failures are the environment. Eight of
+  the thirteen were `ECONNREFUSED 127.0.0.1:8787`: `wrangler dev` never came
+  up inside its 120s `webServer` timeout, which takes all five `room` specs,
+  `lobby`'s host check and both worker-side `news` tests with it, plus
+  `phone`'s entry-screen test, which needs a real room to reach the screen it
+  measures. Every one of those nine passed on a re-run with the worker
+  started by hand. **A failing spec that calls `createRoom()` is a question
+  about port 8787 before it is a question about the app** — `curl -s -o
+  /dev/null -w "%{http_code}" "http://127.0.0.1:8787/news?id=1"` should say
+  403, which is `originAllowed()` refusing before it reads a key, and is the
+  same probe the `webServer` entry uses as its readiness check.
+
+  The other four were stale in the way this section already describes, and
+  were confirmed stale by re-running them against unmodified `app.js` and
+  `DraftRoom.jsx` and watching them fail identically: `parity` wants "Master
+  the draft." where the page says "Master the Draft."; `journey` clicks an
+  `a[href="#/drafts"]` that is no longer the visible one; and
+  `autopick-adp`'s and `grade`'s statistical thresholds have drifted with the
+  nightly board — chair-versus-rank measured **0.382** against a bar of 0.35.
+  **Baseline before attributing.** Reverting the two changed files, rebuilding
+  and re-running the same specs is about six minutes and is the difference
+  between "my change broke four tests" and "four tests were already red".
 
   It drives the real pages in a real browser — a solo draft at both shapes, a
   full two-manager room draft to completion, a dropped socket reconnecting,
@@ -3077,6 +5045,264 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   Any league setting that changes what a roster is allowed to hold deserves
   the same treatment. A grade that rewards a worse roster is worse than no
   grade, and it will not show up in a spread or a reconciliation.
+
+### The suite goes stale, and it fails exactly like a broken app
+
+Measured 27 August 2026: **nine tests across seven spec files failing against
+production, and not one had a bug behind it.** Every single failure was a UI
+change nobody had updated the tests for. The app was fine throughout.
+
+That is the thing worth keeping, because it is the opposite of what a red
+suite is supposed to mean. This project's whole testing argument is that a
+failing test is evidence about the product — and for one afternoon it was
+evidence about its own age instead. A suite in that state is worse than no
+suite, for the reason the permanent-known-failure note above already gives:
+what nobody believes, nobody reads.
+
+**Most of it traced to one collapse.** The two-step "entry screen, then claim
+a chair on the seat board" is gone — the Lobby's "Start mock draft" starts the
+draft outright, and the seat and scoring are selects on that same panel. Four
+separate things in the suite were still walking the old path: a second "Start
+draft" button, a claim-chip seat board, a `"Order"` tab that is `"Seats"` now,
+and an "Auto-draft the rest" menu item that a product review cut along with
+Pause and Undo. None of those announced themselves as removals; they
+announced themselves as tests that hung or read `undefined`.
+
+**A test can measure the wrong thing rather than the wrong value, and that
+looks far more alarming.** Two of the nine looked like real defects and were
+not:
+
+- `news.spec.mjs` counts elements built from a deliberately hostile payload
+  and reported **two `<img>`**. They were the player's own headshot: `PANEL`
+  finds the first `.overflow-y-auto` holding a link, which is the full-screen
+  player sheet now rather than the news list. Zero images inside the news
+  items, and the hostile markup arrived as text and stayed text. The check is
+  scoped to the headline cards now — where an element built from the payload
+  would actually land — and `<script>` stays panel-wide on purpose.
+- `share-card.spec.mjs` said Archivo was drawn but never requested. Archivo
+  moved to self-hosting (`/fonts/archivo-variable-latin.woff2`, preloaded,
+  `@font-face` in `index.css`); the test only ever parsed `index.html`'s
+  Google Fonts `family=` query. It reads both sources now.
+
+**And `PANEL` claimed a third one, months later, in the same file.** The
+keyless test asserted the panel says "no recent headlines" and reported the
+message missing. `LatestNewsTab.jsx` was rendering it the whole time: `PANEL`
+resolves to the full-screen sheet, as above, and the assertion read
+`.slice(0, 60)` of it — sixty characters of that sheet is
+**"JUKE · PLAYERS · BOARD · DECIDE · ANALYSIS · Autopick · RND 1 OF 14"**,
+chrome rather than content. It now reads the message off the sheet where the
+component puts it. The scope did not change, because `PANEL` was resolving to
+that element anyway; only the truncation went.
+
+**Two lessons, and the second is the one that keeps costing.** A shared helper
+that silently widened its scope broke three assertions across two sittings, so
+when a selector in this file surprises you, check what it *resolves to* before
+believing what it *reports* — one `console.log` of `panel.innerText` would have
+ended each of the three in a minute. And **a `.slice()` inside an assertion is
+a filter nobody reads as one**: it turned a correct check into one that could
+only ever see the header. Assert on the whole string and let `toContain` do the
+narrowing.
+
+**Both were settled by asking the live page, not by reasoning.** Dumping the
+two images showed `sleepercdn.../9221.jpg` twice; running `shareCard.js`'s own
+`usable()` probe in a real browser returned true for Archivo. Neither needed
+a code change. **A test asserting an absence has to be re-checked against the
+running app before it is believed**, which is the same instruction the
+`?cb=` note gives about deployment and the `LOCAL_WORKER` skip gives about
+news.
+
+### A standing red that was not the pass that found it
+
+`autopick-adp.spec.mjs`'s "the autopicked seat's draft value is not a
+systematic bottom-of-room outlier" failed 5 of 5 pinned seeds, and it was
+failing before the mobile pass touched anything. **Measured rather than
+assumed**: the same five seeds run against the build at `356243f` and
+against the mobile-pass build returned byte-identical numbers — rank 10 of
+10, raw value −57, in all five — so the failure was attributable to neither,
+and the pass left it alone and wrote it down here instead of quietly
+rewriting a grade test to go green.
+
+**It is fixed on `main`, in `9d11465`, and the diagnosis converged from two
+directions at once.** The test reads `t.value`, the RAW draft-value
+component, and `startSoloDraft()` leaves the default seat of 0 — which is a
+snake draft's round-anchor chair, always the first pick of an odd round and
+the last of an even one. This file's own section on par already says what
+that costs: value is pick number minus board rank, "the first pick of a
+draft can only ever score zero or worse because no player has a board rank
+below 1", and mean raw value by chair runs −23 at seat 1 against +14 at seat
+5. `valueVsPar` is what the grade actually weighs and what removes it; the
+test never read it.
+
+`9d11465` adds the half that settles it: an **all-CPU room, with no autopick
+anywhere including seat 0**, produces the identical outlier on the identical
+seeds — and seat 0's whole fourteen-pick roster comes back byte-identical
+across all five seeds while 13 of the other 126 picks in the room differ.
+Neither fact involves `autoPickForMe()` at all. The test moved to seat 5,
+checked against the same five seeds first: real per-seed variation and never
+last.
+
+**The lesson is about which seat a claim is measured from.** The assertion is
+about whether the metric singles a seat out unfairly, and it was being asked
+from the one chair the metric is structurally unfair to. Nothing was wrong
+with the code under test, and nothing was wrong with the metric either — it
+was the wrong question asked from the wrong chair, which is a shape this file
+records elsewhere as a right value in the wrong column.
+
+### Six stale specs, one predicted failure, and the fix that outlives both
+
+The mobile pass turned six specs red. Five were stale in the ordinary way —
+a label moved, a tab became a section, an element changed from a `<span>` to
+a `<p>`. **The tell is the one this file already records**: they failed by
+not finding something, on properties that had nothing to do with what broke
+them. A test about whether the Start button is coverable failed on the
+button's name; a test about the gap under the fixed header failed on which
+element the eyebrow is; a test about pick codes failed because the position
+abbreviation became mono.
+
+**A seventh failure was mine, and it is the case trap again.** Replacing
+`/Randomize order/` with `/Randomize/` looked like the whole fix; the button
+is title case in the source and uppercased in CSS, so `innerText` hands back
+`RANDOMIZE` and the case-sensitive match found nothing. The *negative*
+assertion ("a guest is not offered the shuffle") passed either way, which is
+what hid it — a negative that matches nothing passes for the wrong reason,
+and it had been doing so since the label lost its second word. What caught it
+was adding the positive: **assert that the thing you are checking the absence
+of is present for somebody**, or the absence means nothing. That is the third
+appearance of this trap in this file, after `/nan/i` catching Monangai and the
+hero eyebrow's own uppercase slogan.
+
+**The repair was not to update the selectors.** Each of those three now
+matches a `data-*` attribute the app carries deliberately —
+`data-start-draft`, `data-hero-eyebrow`, `data-pick-code` — because updating
+a label match only buys until the next rename, and the start button alone has
+had four names. An attribute says what an element IS. That is this file's own
+"anchor on behaviour, not on class strings" rule, applied to the identity of
+the element rather than to how it is found.
+
+**The sixth was a real prediction coming true**, and it is the best argument
+in this file for writing down what an assertion rests on.
+`board-marks.spec.mjs` asserted that the board's ground is dark in both
+themes, with a comment saying that is the precondition a single gold ring
+rests on and "if this ever stops being true, the pair has to come back and
+this is the line that says so". It stopped being true from a direction the
+comment did not anticipate — the cells went light while the ground stayed
+dark — so **that assertion would have gone on passing** while gold measured
+1.06 on a real card. What actually caught it was the contrast assertion
+beside it. The precondition is no longer load-bearing and is no longer the
+guard; the pair is measured directly instead.
+
+**And one failed for being right.** The sheet's tallest snap was pinned to
+558 — a 664px viewport minus a header hardcoded at 106px. The header measures
+itself now, so the honest cap is 588, and that assertion would have gone red
+for the fix exactly as loudly as for a regression. It derives the cap from
+the header's real height now. **Assert the relationship, never an absolute
+offset** — the same rule this file already states about the padding that
+stands in for a fixed header's height, learned again on the number underneath
+it.
+
+### `actionTimeout` was unset, and that is why a stale locator cost six minutes
+
+`playwright.config.mjs` set none, so the default was **no ceiling at all**. A
+locator action against an element that never appears waits for ever, and the
+*test* timeout is what eventually fires — six minutes later, blaming the whole
+test rather than the line, with nothing in the output naming what was waited
+for. `isEnabled()` is the sharpest form: the question has an answer, `false`,
+and the default behaviour is to wait for a different one instead. One removed
+button took down `grade`, `journey` and `solo` that way and read as three
+broken tests.
+
+**It is `30 * 1000`, and the number is not free choice.** The option is not
+scoped to actions the way its name suggests: Playwright applies it through
+`setDefaultTimeout()`, the default for *every* method taking a timeout,
+`page.waitForFunction()` included. It was set to 15s first, which did not
+merely bound what was unbounded — it quietly halved every wait in the suite
+that never asked for one, and `room.spec.mjs` went red within one run. 30s is
+Playwright's own default, so nothing that already worked is shortened while
+the unbounded case still collapses to thirty seconds and names the action.
+
+**Guard an optional control with `count()`, never with `isEnabled()`.** The
+first is a fact about this screen; the second is a question that hangs.
+
+### Two waits that had been passing on luck
+
+Tightening the default exposed both. Neither was caused by it — both were
+waits that never said what they were waiting for and inherited whatever the
+global happened to be.
+
+**A wait has to be sized for the thing it waits on.** `"leaving the draft
+leaves the room"` waits for the opening pick of a real two-manager draft, and
+nobody picks first there: the guest is playing as a human, the host's autopick
+is never turned on, so the first pick only lands when a 60s `clockLength` runs
+out and the room takes the seat. No default could reach that. It carries 90s
+explicitly now — **not** "fixed" by giving the host autopick, which would make
+it fast by quietly changing the scenario under test.
+
+**`createRoom()` returned a code, and the callers all wanted a seat.**
+`codeInUrl()` goes true the instant the worker answers, because `createRoom()`
+writes the hash itself then. The host's own seat arrives later, on the
+broadcast after their join — so there is a window where the room is real,
+reachable by its link, and **seat 0 is still empty**, and `join()` hands a new
+member the first free chair (`freeSeat()`, `room.js`). A guest arriving inside
+it took the host's seat and `"the guest is seat 1"` failed with `0`,
+intermittently, reading as a flake in the room rather than as a fixture
+handing out the code before it was safe to use.
+
+**That window is unreachable in life**, which is why it had never been seen: a
+person copies the link and sends it, which is seconds, and the host is seated
+long before anyone clicks. A test hands the code straight to a second browser,
+so it hits the one race a human cannot. The helper waits for a seat now. When
+a room test flakes, suspect the fixture's definition of "ready" before
+suspecting the room.
+
+### Desktop and mobile both mount, so a label matches twice
+
+**And there are two whole HOMEPAGES in the document now, not just two
+renderings of one control.** `journey.spec.mjs` clicked
+`a[href="#/drafts"]` and took `.first()`, which after the mobile pass is a
+link inside the phone homepage — `sm:hidden` at desktop width, first in
+document order, a zero box. It clicked nothing for a minute and timed out
+at the action. `:visible` is the same fix as everywhere else in this
+section; what is new is that the duplicate can be a page rather than a
+button, so a selector that names a destination rather than a control is
+just as exposed.
+
+`Analysis`, `Draft options` and the lobby gear each render in a desktop bar
+and again in a `lg:hidden` mobile one. Both are in the DOM — **CSS-hidden is
+still mounted**, the rule `useMinWidth` already exists for — so matching on
+the label alone is a Playwright strict-mode violation rather than a missing
+control. `:visible` is the fix, and it says what the test means: the one a
+person can see at this width.
+
+**And `page.evaluate(...).find(...).click()` is the wrong shape for anything
+that renders on a socket.** It runs once, so an element a beat away is
+`undefined` and the failure reads `Cannot read properties of undefined
+(reading 'click')` — a control that does not exist, rather than one that is
+not there *yet*. A locator auto-waits. The guest reaches the lobby bar as soon
+as `Live.room()` reports a seat, which is the socket answering and not the bar
+having rendered.
+
+### An AI test agent matches text case-insensitively unless told not to
+
+Worth writing down beside the `Monangai` note above, because a second tool
+found the same trap from a new direction. A TestSprite assertion reading "no
+`NaN` is visible" failed on a perfectly healthy player sheet: **six matches,
+every one of them a surname** — Kyle Mo**nan**gai and Kee**nan** Allen. A real
+browser found **zero** case-sensitive `NaN` on the same page.
+
+So an assertion handed to a language model has to say *case-sensitive* and
+name the expected near-misses, or it reports the sport's own spelling as a
+bug. The same instruction that keeps `/nan/i` out of a console sweep applies
+to prose.
+
+### Finding out whether a commit is really gone
+
+`git branch --contains` answers "which refs hold this SHA", which is not the
+question when a branch has been rebased on its way to the remote. A commit
+here looked unique and unpushed by that test, and the identical change was
+already on `origin` under a different SHA and already merged into `main`.
+**`git patch-id --stable` compares content, and `git cherry main <branch>`
+marks with `-` anything already upstream by content.** Ask those before
+calling work at risk — and before force-pushing anything on top of it.
 
 ## Don't
 

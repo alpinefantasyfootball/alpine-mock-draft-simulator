@@ -21,9 +21,21 @@
    the colour and not the element's opacity. That is a third way to lie about
    contrast, after alpha and gradients, and it is the one this file watches.
 
-   The React cells are translucent rather than solid, which the check has to
-   handle too: a cell's own background is composited over the board's ground
-   before anything is measured, or the numbers are fiction.
+   The cells are opaque chalk fills with dark ink on them since the palette
+   handoff (option 2h), where they were translucent washes over a dark ground
+   before it. The compositing step below survives that on purpose rather than
+   being simplified away: over() is a no-op at alpha 1, and this cell has now
+   been redrawn four times in two directions. A check that only works on the
+   current fill is a check that has to be rewritten every time somebody
+   changes it.
+
+   What did change is the direction of the contrast. Every line on a card is
+   dark type on a light ground now (#16202E and #2B3540 on six pastels), and
+   the worst case measured across a real 60-pick board is 7.38:1 against the
+   4.5 asserted — comfortably better than the translucent cells it replaced,
+   which is worth knowing before anybody "improves" the sub colour. It was
+   raised twice in design review and the handoff says explicitly not to
+   lighten it.
 */
 
 import { test, expect } from "@playwright/test";
@@ -37,6 +49,18 @@ async function draftInto(page, picks, teams = 10) {
   await page.evaluate(({ n, t }) => {
     if (t !== 10) window.JukeEngine.setLeague({ teams: t });
     window.JukeEngine.startDraft({ mySlot: 3, clockLength: 90 });
+    // startDraft() ends in runCPUs(), which arms a cpuStep() timer to play
+    // whoever it left on the clock. The loop below drives every pick itself
+    // and never touches that timer, so left alone it fires 350ms later and
+    // keeps rescheduling itself until it reaches my seat: mySlot 3 four
+    // picks into an even round is three extra, untracked picks landing
+    // while the assertions below are reading the board. Seen once as
+    // "Expected 43, Received 42" on a test that asked for 40 — the engine
+    // three picks ahead of what was asked for, and the grid one behind the
+    // engine. The number of picks on the board has to be the number this
+    // fixture asked for, or every count in this file is a race.
+    // board-marks.spec.mjs's own draftInto() carries the same call.
+    stopSim();
     for (let i = 0; i < n; i++) { const c = onTheClock(); if (c) makePick(cpuChoice(c.slot, c.round)); }
     render();
     location.hash = "#/draft-room";
@@ -75,7 +99,7 @@ const FILLED = `(() => {
   const grid = [...root.querySelectorAll("div")].find(
     (d) => getComputedStyle(d).display === "grid" && d.style.getPropertyValue("--cols"));
   return [...grid.querySelectorAll("p.truncate")]
-    .map((n) => n.closest('[class*="rounded-md"]'))
+    .map((n) => n.closest('[class*="rounded-lg"]'))
     .filter(Boolean);
 })()`;
 
@@ -107,10 +131,17 @@ test.describe("the draft board card", () => {
           return [0, 1, 2].map((i) => c[i] * a + under[i] * (1 - a));
         };
 
-        // The board's own ground, which every translucent cell sits on.
-        const board = parse(getComputedStyle(
-          document.querySelector('#draftroom-root [class*="bg-\\\\[\\\\#0B0E14\\\\]"]') || document.body
-        ).backgroundColor).slice(0, 3);
+        /* The board's own ground. The cards are opaque chalk fills now, so
+           over() folds this away for every one of them — it is kept
+           because a card that ever goes translucent again has to be
+           composited against something real rather than against white,
+           and because the empty-cell measurements below share it. Read off
+           the grid's own scroll parent rather than matched by a hex class:
+           that selector named #0B0E14 and the app moved to slate long ago,
+           so it had been silently falling through to document.body. */
+        const grid = [...document.getElementById("draftroom-root").querySelectorAll("div")].find(
+          (d) => getComputedStyle(d).display === "grid" && d.style.getPropertyValue("--cols"));
+        const board = parse(getComputedStyle(grid.parentElement).backgroundColor).slice(0, 3);
 
         const fails = [];
         let checked = 0, worst = 99;
@@ -237,10 +268,25 @@ test.describe("the draft board card", () => {
       const root = document.getElementById("draftroom-root");
       const grid = [...root.querySelectorAll("div")].find(
         (d) => getComputedStyle(d).display === "grid" && d.style.getPropertyValue("--cols"));
-      // font-plex is the pick code's own class, not a styling accident: the
-      // Cockpit board is the one place this codebase sets IBM Plex Mono for
-      // tabular figures, and it names nothing else on a card.
-      const drawn = [...grid.querySelectorAll("span.font-plex")]
+      /* data-pick-code, not `span.font-plex`.
+
+         The old selector rested on font-plex "naming nothing else on a
+         card", which was true and then quietly stopped being true: the
+         chalk-cell redesign made the position line mono as well, so this
+         found two spans per card and reported double the expected count.
+         Nothing about pick codes was wrong; the test was describing markup
+         rather than the property under test, which is the exact failure
+         this suite's own stale-spec note warns about.
+
+         Filtering `span.font-plex` by the shape of a pick code
+         (round-dot-two-digits) fixes the same count and was the other
+         repair on the table. The attribute is preferred for the reason
+         CLAUDE.md states: an attribute says what an element IS, and a
+         value filter would also quietly drop a code that came out
+         MALFORMED — which is one of the things this test exists to catch,
+         since the assertion below is that every drawn code matches
+         DraftEngine.pickCode() exactly. */
+      const drawn = [...grid.querySelectorAll("[data-pick-code]")]
         .map((s) => s.textContent.trim());
       const expected = JukeEngine.picks().map(
         (p) => DraftEngine.pickCode(p.overall, league.teams));

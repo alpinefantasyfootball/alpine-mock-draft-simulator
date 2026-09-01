@@ -1,14 +1,42 @@
-/* The homepage says the same things at 390px as it does at 1440px.
+/* The homepage does not CONTRADICT itself between a phone and a desktop.
 
-   Written after the live site was reported as showing "a completely different
-   message on the desktop homepage vs. mobile homepage", which it was: the hero
-   paragraph was two entirely different sentences, and desktop's led with the
-   price the rest of the page had just stopped leading with.
+   ---- What this file used to assert, and why that rule is gone ----
 
-   The check is deliberately a *content* diff and not a screenshot. Two
-   breakpoints are supposed to look different — that is what a breakpoint is —
-   and a pixel comparison would fail on every intentional layout change while
-   staying silent on the thing that actually went wrong, which is the words. */
+   It was "the homepage says the same things at 390px as it does at 1440px",
+   written after the live site was reported as showing "a completely
+   different message on the desktop homepage vs. mobile homepage" — which it
+   was: the hero paragraph was two entirely different sentences, and
+   desktop's led with a price the rest of the page had just stopped leading
+   with. The check was a content diff of every visible string at both
+   widths, against a curated allowlist of sanctioned differences.
+
+   That was the right test for one responsive page. There are two pages now.
+   The owner's instruction was explicit — the phone changes are "for MOBILE
+   ONLY" and "our website should have a different offering altogether" — so
+   below `sm` the homepage is `HomePhone.jsx`, a launcher, and above it the
+   marketing page is untouched. They share a brand and almost no copy. An
+   allowlist of the sanctioned differences between them would be a list of
+   nearly every string on both, which is not a test.
+
+   ---- What survives, because the original complaint still applies ----
+
+   "A different message" was never really about different strings. It was
+   about the two pages disagreeing: one selling on price while the other had
+   stopped, one framing the product one way and one another. Two pages built
+   for different jobs are allowed to say different things and are still not
+   allowed to disagree — so this file asserts the CLAIMS rather than the
+   copy:
+
+   - both carry the brand slogan,
+   - both offer a way into the Draft Room,
+   - both name the same six rooms and mark the same ones live,
+   - both make the same free/no-account promise,
+   - neither sells on price, and neither claims a room is live that ROOMS
+     itself does not.
+
+   Every one of those is a fact the two pages could drift on, and every one
+   of them would be the reported bug if they did. None of them is a string
+   either page is obliged to phrase the same way. */
 
 import { test, expect, devices } from "@playwright/test";
 import { openApp } from "./helpers.mjs";
@@ -18,11 +46,12 @@ const DESKTOP = { viewport: { width: 1440, height: 900 } };
 
 /* Every visible text node under #view-home, in document order.
 
-   Scoped to that id on purpose: the legacy markup is still in the document at
-   display:none (CLAUDE.md — unreachable, not deleted), and a hidden element
-   still has text. The walker skips display:none and visibility:hidden as it
-   descends, so a subtree hidden by a breakpoint never contributes — which is
-   the whole mechanism being tested. */
+   Scoped to that id on purpose: the legacy markup is still in the document
+   at display:none (CLAUDE.md — unreachable, not deleted), and a hidden
+   element still has text. The walker skips display:none and
+   visibility:hidden as it descends, so a subtree hidden by a breakpoint
+   never contributes — which is what makes this see one homepage at a time
+   now that both are mounted and CSS picks between them. */
 const COLLECT = `window.__collectHomeText = function () {
   var root = document.getElementById("view-home");
   var out = [];
@@ -51,167 +80,140 @@ const COLLECT = `window.__collectHomeText = function () {
   return out;
 }`;
 
-async function homeTextAt(browser, contextOpts) {
+async function homeAt(browser, contextOpts) {
   const context = await browser.newContext(contextOpts);
   const page = await openApp(context, "#/");
   await page.evaluate(COLLECT);
-  // The freshness line and the ticker both wait on window.JukeEngine.
+  // The freshness line and the room list both wait on window.JukeEngine.
   await page.waitForTimeout(900);
   const text = await page.evaluate(() => __collectHomeText());
-  // Player names are data, not copy — they come off the nightly board, and the
-  // scoring demo shows six rows on desktop against five on the phone, so the
-  // sixth name is a real difference that means nothing. Read from the bridge
-  // rather than pattern-matched, because "Jonathan Taylor" and "Draft Room"
-  // are the same shape to a regex.
-  const names = await page.evaluate(() =>
-    (window.JukeEngine && window.JukeEngine.board() ? window.JukeEngine.board() : []).map((p) => p.name),
-  );
+  /* The rooms as the engine states them, not as either page words them —
+     this is the source both pages are supposed to be rendering, so a claim
+     that disagrees with it is an overclaim rather than a difference. */
+  const rooms = await page.evaluate(() =>
+    (window.JukeEngine && window.JukeEngine.rooms ? window.JukeEngine.rooms() : [])
+      .map((r) => ({ name: r.name, live: !!r.live })));
+  // A way in, by destination rather than by label. #/drafts is the Lobby,
+  // which is where every "enter the Draft Room" control on this page points
+  // — see ROOMS in app.js for why it is not #/draft-room.
+  const waysIn = await page.evaluate(() =>
+    [...document.querySelectorAll('#view-home a[href="#/drafts"]')]
+      .filter((a) => a.getBoundingClientRect().height > 0).length);
   await context.close();
-  return { text, names };
+  return { text, rooms, waysIn, joined: text.join(" · ") };
 }
 
-/* Strings each breakpoint is allowed to carry alone, with the reason.
+test("neither homepage contradicts the other about what Juke is", async ({ browser }) => {
+  const phone = await homeAt(browser, PHONE);
+  const desktop = await homeAt(browser, DESKTOP);
 
-   Every entry here is a decision recorded in design_handoff_mobile, not a
-   convenience. Anything that turns up outside this list is the bug. */
-const PHONE_ONLY = [
-  // PROMPT 1 — the marketing shell's persistent bottom CTA. Its string is the
-  // same "Enter the Draft Room" every other CTA uses; it is the *element* that
-  // is phone-only, and it shows up as a duplicate rather than a new string.
+  expect(phone.text.length, "the phone rendered something").toBeGreaterThan(10);
+  expect(desktop.text.length, "the desktop rendered something").toBeGreaterThan(20);
 
-  // PROMPT 2 item 2 — ScoringDemoCard's mobile branch is documented as
-  // deliberately different from desktop's: its own eyebrow, the reversed
-  // format order, five rows sliced off six, no points column, and a generated
-  // closing line. "Each of those differs from desktop on purpose."
-  "CHANGE THE RULES, WATCH IT RERUN",
-  "Every ranking on Juke moves with your rules.",
-  // Its format pills are short here and spelled out on desktop — "Half"
-  // against "Half PPR" — because three of them have to fit 358px.
-  "Half",
-  // And its closing sentence is generated from PPR_EXPLAIN[format], so it
-  // changes with the toggle. Matched by shape rather than by value.
-  /^Receptions are worth /,
+  /* The two pages are genuinely different, and this asserts it rather than
+     leaving it implied. Without this line every check below would still
+     pass if the split silently stopped working and both widths rendered the
+     desktop page — which is the exact regression the hydration note in
+     Homepage.jsx is about, and it would look like a passing suite. */
+  expect(phone.text.length,
+    "the phone gets the launcher, not the marketing page").toBeLessThan(desktop.text.length);
 
-  // PROMPT 2 item 4 — "Do not render five separate Coming Soon cards on a
-  // phone." The five rooms collapse to one row naming them.
-  "Five more rooms in build",
-  "Prospect, Waiver, Trade, Strategy, League",
-];
+  for (const [name, page] of [["phone", phone], ["desktop", desktop]]) {
+    /* The slogan. Title case in the DOM and uppercased in CSS at both
+       widths — asserting the rendered casing is what left this test red for
+       a day with no bug behind it, and it is the same trap the hero
+       eyebrow and the lobby's Randomize button have both hit since. */
+    expect(page.joined.toLowerCase(),
+      `${name} carries the slogan`).toContain("agility through analytics");
 
-const DESKTOP_ONLY = [
-  // PROMPT 1 — the nav collapses into the hamburger sheet below lg.
-  "How It Works",
-  "The Rooms",
-  "Draft Room",
-  "Sign Up",
+    // A way into the product, on the page whose job is to get you there.
+    expect(page.waysIn, `${name} offers a way into the Draft Room`).toBeGreaterThan(0);
 
-  // PROMPT 2 "Cut from mobile" — the insights ticker, and review item 36's
-  // scores strip. Every ticker line is generated from the live board, so they
-  // are matched by prefix below rather than listed.
+    // The free/no-account promise, in whatever words each page uses for it.
+    expect(page.joined.toLowerCase(), `${name} says the Draft Room is free`)
+      .toMatch(/free/);
+    expect(page.joined.toLowerCase(), `${name} says no account is needed`)
+      .toMatch(/no account|browser/);
 
-  // PROMPT 2 item 2 again, from the other side: desktop's own scoring card
-  // labels, its sixth row, and its format-dependent footer.
-  "Points per reception",
-  "Standard",
-  "Half PPR",
-  "Full PPR",
-  /^Projected season points · /,
+    /* Nothing sells on price. Three CTAs once disagreed — "Start a mock
+       draft", "Start a mock draft — free", "Start a Free Mock Draft" — and
+       the price moved to a caption. A button that starts selling again is
+       the regression, at either width. */
+    const pricedCta = page.text.filter(
+      (t) => /^(start|enter|play)\b/i.test(t) && /free|\$|price/i.test(t));
+    expect(pricedCta, `${name} has no CTA selling on price`).toEqual([]);
+  }
 
-  // PROMPT 2 item 4 — the five coming-soon cards and their lead lines, plus
-  // RoomCard's own "Mock smarter." lead, which the phone card omits by name.
-  "Mock smarter.",
-  "The Prospect Room",
-  "Scout the future.",
-  "The Waiver Room",
-  "Win the wire.",
-  "The Trade Room",
-  "Deal with confidence.",
-  "The Strategy Room",
-  "Optimize every week.",
-  "The League Room",
-  "See the big picture.",
-  "Coming soon",
-  // …and each card's blurb, which only the desktop grid renders. The phone's
-  // one live card keeps its own blurb, so these five are the coming-soon ones.
-  /^Analyze the college production/,
-  /^Connect your live league/,
-  /^Model complex trade proposals/,
-  /^Set your lineup using predictive/,
-  /^Track season-long trends/,
-];
+  /* Both pages read the same room list, so both have to name the same rooms
+     and agree about which one is open. This is the claim most likely to
+     drift between two separately-authored pages and the one a visitor would
+     actually be misled by. */
+  expect(phone.rooms, "both pages read the same ROOMS").toEqual(desktop.rooms);
+  const live = phone.rooms.filter((r) => r.live).map((r) => r.name);
+  expect(live.length, "exactly one room is live today").toBe(1);
 
-/* Live data, not copy. These are real numbers off the board and they change
-   nightly; both breakpoints read the same bridge, so a difference here is a
-   data-timing artefact of two page loads, not a content divergence. */
-const DATA_SHAPED = [
-  /^\d+(\.\d+)?$/,                       // rank cells, projected points
-  /^(QB|RB|WR|TE|K|DST)$/,               // position badges
-  /^—$/,                                 // the demo's empty delta cell
-  /is the (top overall pick|first)/,     // ticker facts
-  /^(Kickers|Defenses) stay undrafted/,  // ticker facts
-  /^\d+ players · refreshed/,            // the shared freshness line
-  /^players · refreshed$/,               // the ticker's split version of it
-  /^\d+ (hrs?|mins?|days?) ago$/,
-];
-
-// Allowlists hold strings and regexes side by side — two of the sanctioned
-// differences are generated copy that changes with a toggle.
-function permitted(t, allowed) {
-  return allowed.some((a) => (a instanceof RegExp ? a.test(t) : a === t));
-}
-
-
-test("the homepage says the same things on a phone as on a desktop", async ({ browser }) => {
-  const { text: phone, names } = await homeTextAt(browser, PHONE);
-  const { text: desktop } = await homeTextAt(browser, DESKTOP);
-  const isData = (t) => permitted(t, DATA_SHAPED) || names.includes(t);
-
-  expect(phone.length, "the phone rendered something").toBeGreaterThan(20);
-  expect(desktop.length, "the desktop rendered something").toBeGreaterThan(20);
-  expect(names.length, "the board answered, so names are really being excluded").toBeGreaterThan(50);
-
-  // Sets, not sequences. Order genuinely differs — the phone promotes the
-  // scoring demo into the top third (review item 35) — and that is a layout
-  // decision, not a content one.
-  const onPhone = new Set(phone);
-  const onDesktop = new Set(desktop);
-
-  const phoneOnly = [...onPhone]
-    .filter((t) => !onDesktop.has(t) && !permitted(t, PHONE_ONLY) && !isData(t));
-  const desktopOnly = [...onDesktop]
-    .filter((t) => !onPhone.has(t) && !permitted(t, DESKTOP_ONLY) && !isData(t));
-
-  expect(phoneOnly, "strings the phone shows and the desktop does not").toEqual([]);
-  expect(desktopOnly, "strings the desktop shows and the phone does not").toEqual([]);
+  for (const [name, page] of [["phone", phone], ["desktop", desktop]]) {
+    for (const room of phone.rooms) {
+      /* The phone shortens "The Waiver Room" to "Waiver Room" on its locked
+         cards, so the article is optional — what may not happen is a room
+         missing from one page entirely. */
+      const short = room.name.replace(/^The\s+/, "");
+      expect(page.joined, `${name} names ${room.name}`).toContain(short);
+    }
+    // And the one live room is the one the engine says is live, at both
+    // widths — a page marking a second one live would be an overclaim
+    // rather than a wording difference.
+    expect(page.joined.toLowerCase().split(live[0].replace(/^The\s+/, "").toLowerCase()).length - 1,
+      `${name} names the live room`).toBeGreaterThan(0);
+  }
 });
 
-/* The five sentences the whole page is built on, asserted by value rather than
-   by comparison — so a change that removes one from *both* breakpoints still
-   fails here instead of passing the diff above by symmetry. */
-test("the hero and the closing band carry the agreed copy at both widths", async ({ browser }) => {
-  const REQUIRED = [
-    "AGILITY THROUGH ANALYTICS",
-    "Master the draft.",
-    "Dominate the season.",
-    "Draft against a room of CPU opponents that react to your picks, then get a graded report that shows its working. Change your scoring rules and every number reruns.",
-    "FREE · UNLIMITED · NO ACCOUNT",
-    "Open the Draft Room.",
-    "No setup, no league import. Pick your scoring and start.",
-  ];
+/* The sentences each page is built on, asserted by value rather than by
+   comparison — so a change that quietly removes one still fails here
+   instead of passing a diff by symmetry.
 
-  for (const [name, opts] of [["phone", PHONE], ["desktop", DESKTOP]]) {
-    const { text } = await homeTextAt(browser, opts);
-    for (const line of REQUIRED) {
-      expect(text, `${name} carries: ${line.slice(0, 40)}`).toContain(line);
-    }
+   Two lists now, not one. The old single list was every sentence the
+   responsive page carried at both widths; the phone page is a launcher and
+   deliberately carries none of the marketing prose. What both lists have in
+   common is that each is the copy its own page cannot lose without becoming
+   a different page. */
+/* The last five lines here came from `main`'s own version of this file,
+   which was still the string-diff test when the mobile pass split the
+   homepage in two. That diff and its allowlists are gone for the reason
+   the header gives, but the copy it had been corrected against is not
+   guesswork — c7f1c1b tracked down two of these against the live page
+   after the daily scheduled run went red, and 20852fd's casing changes
+   before it. Folding them in keeps that verification rather than
+   discarding it with the mechanism it happened to live in. */
+const DESKTOP_REQUIRED = [
+  "Agility Through Analytics",
+  "Master the Draft.",
+  "Dominate the Season.",
+  "Enter the Draft Room",
+  "Explore The Rooms",
+  "Test your strategy in the Draft Room completely free. Waivers, trades and week-to-week tools are in build.",
+  "Free Draft Room • No Account Needed",
+  "Open the Draft Room.",
+  "No setup, no league import. Pick your scoring and start.",
+];
 
-    /* One CTA string on the page. There were three that disagreed — "Start a
-       mock draft", "Start a mock draft — free", "Start a Free Mock Draft" —
-       and the price moved to the mono line above. Any button still selling on
-       price is the regression. */
-    const ctas = text.filter((t) => /^(Start|Enter)\b/.test(t) && /draft|room/i.test(t));
-    expect([...new Set(ctas)], `${name} has exactly one CTA string`).toEqual([
-      "Enter the Draft Room",
-    ]);
+const PHONE_REQUIRED = [
+  "Agility through analytics",
+  "Mock Draft",
+  "The Rooms",
+  "Draft games",
+];
+
+test("each homepage carries its own agreed copy", async ({ browser }) => {
+  const phone = await homeAt(browser, PHONE);
+  const desktop = await homeAt(browser, DESKTOP);
+
+  for (const line of DESKTOP_REQUIRED) {
+    expect(desktop.joined.toLowerCase(), `desktop carries: ${line}`)
+      .toContain(line.toLowerCase());
+  }
+  for (const line of PHONE_REQUIRED) {
+    expect(phone.joined.toLowerCase(), `the phone carries: ${line}`)
+      .toContain(line.toLowerCase());
   }
 });

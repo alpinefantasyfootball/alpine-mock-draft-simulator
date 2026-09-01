@@ -1,5 +1,6 @@
-import { ChevronRight, Sparkles } from 'lucide-react'
-import { POS_BADGE, POS_SOLID, INJURY_META } from './draftRoomPositions.js'
+import { useEffect, useRef, useState } from 'react'
+import { ChevronLeft, ChevronRight, Sparkles } from 'lucide-react'
+import { POS_BADGE, POS_CHALK, INJURY_META } from './draftRoomPositions.js'
 import QueueList from './QueueList.jsx'
 
 function round1(v) {
@@ -17,10 +18,27 @@ function ordinal(n) {
 // you a rose Draft-now button underneath it. Thresholds are round numbers
 // chosen for legibility, not fit to anything; survivalProbability() is
 // the real measurement, this only buckets it into three sentences.
-function verdictFor(survival) {
+//
+// `actionable` is whether Draft is really available right now. SurvivorCard
+// is the "who's still here at my next turn" screen, rendered exactly when
+// it is NOT your turn (Card covers the myTurn case and never calls this),
+// so its Draft button is correctly disabled the whole time it's on screen.
+// "Take him now" above a button that cannot be pressed is the same failure
+// as naming a kicker the biggest reach: a correct number nobody can act on.
+// The bucket, the colour and the button's own action never change — only
+// the word painted above a button that was never clickable.
+function verdictFor(survival, actionable = true) {
   if (survival == null) return { label: 'Unranked market', color: 'text-white/50', action: 'Draft' }
-  if (survival < 0.2) return { label: 'Take him now', color: 'text-rose-300', action: 'Draft' }
-  if (survival < 0.65) return { label: 'Coin flip', color: 'text-amber-300', action: 'Queue him' }
+  if (survival < 0.2) {
+    return actionable
+      ? { label: 'Take him now', color: 'text-rose-300', action: 'Draft' }
+      : { label: 'Likely gone', color: 'text-rose-300', action: 'Draft' }
+  }
+  if (survival < 0.65) {
+    return actionable
+      ? { label: 'Coin flip', color: 'text-amber-300', action: 'Queue him' }
+      : { label: 'Coin flip on lasting', color: 'text-amber-300', action: 'Queue him' }
+  }
   return { label: 'Safe to wait', color: 'text-emerald-300', action: 'Leave him' }
 }
 
@@ -49,8 +67,15 @@ function reasonFor(rankLabel, candidate, engine) {
   }
   if (rankLabel === 'Safest wait') return 'Deepest tier of the three — the least urgent pick here.'
   // 'Also available' — a candidate too far below replacement for
-  // "scarce"/"safe" to mean anything (see BAD_VORP below).
-  if (rankLabel === 'Also available') return "Nobody's rushing for him — pure bench depth at this point."
+  // "scarce"/"safe" to mean anything (see BAD_VORP below). Was "Nobody's
+  // rushing for him — pure bench depth at this point," which read as a
+  // verdict on the player rather than a fact about the market — "pure"
+  // and "nobody's rushing" both frame him as barely worth having, when
+  // the actual reason he's in this slot is timing, not quality: nothing
+  // else here scored him low, the market just isn't pricing urgency into
+  // him. Same "no rush" fact Safest wait states, in the same neutral
+  // register.
+  if (rankLabel === 'Also available') return 'No urgency behind him — steady bench value whenever you need it.'
   const fit = engine.draftFit(candidate.player)
   return fit && fit.startsNow ? 'Best value for a slot you still need to fill.' : 'Best value still on the board.'
 }
@@ -84,6 +109,15 @@ function whatItCosts(engine, board, player, counts, nextOverall) {
   return survival < 0.4
     ? `The board's best ${need}, ${bestAtNeed.p.name} (${vorpText}), is unlikely to last — ${pct}% chance he's still there at your next pick.`
     : `The board's best ${need}, ${bestAtNeed.p.name} (${vorpText}), should still be around — ${pct}% chance he lasts to your next pick.`
+}
+
+// Shared by the desktop tier ladder and the mobile tier strip below, so
+// the two can never describe the identical row differently.
+function tierCaption(row) {
+  if (row.tier1.length === 0) return 'none this deep'
+  if (row.remaining === 0) return 'tier gone'
+  if (row.remaining <= 4) return `cliff after ${row.remaining} more`
+  return 'no rush'
 }
 
 /* When two of the three cards land on the identical rounded Juke score, a
@@ -153,17 +187,17 @@ function Card({ candidate, rankLabel, primary, onDraft, myTurn, engine, board, c
       <div className="mb-4 grid grid-cols-3 gap-2 rounded-lg bg-white/[0.03] px-3 py-2.5">
         <div>
           <div className="text-[9px] font-semibold uppercase tracking-[0.08em] text-ink-muted">VORP</div>
-          <div className="font-plex text-lg font-bold tabular-nums text-emerald-300">
+          <div className="font-numeral text-lg font-bold tabular-nums text-emerald-300">
             {vorp != null ? `${vorp >= 0 ? '+' : ''}${Math.round(vorp)}` : '—'}
           </div>
         </div>
         <div>
           <div className="text-[9px] font-semibold uppercase tracking-[0.08em] text-ink-muted">Juke score</div>
-          <div className="font-plex text-lg font-bold tabular-nums text-teal-300">{juke ?? '—'}</div>
+          <div className="font-numeral text-lg font-bold tabular-nums text-teal-300">{juke ?? '—'}</div>
         </div>
         <div>
           <div className="text-[9px] font-semibold uppercase tracking-[0.08em] text-ink-muted">Proj</div>
-          <div className="font-plex text-lg font-bold tabular-nums text-white">{proj ?? '—'}</div>
+          <div className="font-numeral text-lg font-bold tabular-nums text-white">{proj ?? '—'}</div>
         </div>
       </div>
 
@@ -219,7 +253,7 @@ function Card({ candidate, rankLabel, primary, onDraft, myTurn, engine, board, c
 
 function SurvivorCard({ candidate, engine, onQueueToggle, onDraft, myTurn, queued, onOpenProfile }) {
   const { player, survival } = candidate
-  const verdict = verdictFor(survival)
+  const verdict = verdictFor(survival, myTurn)
   const pct = survival != null ? Math.round(survival * 100) : null
   const barColor = survival == null ? 'bg-white/20' : survival < 0.2 ? 'bg-rose-400' : survival < 0.65 ? 'bg-amber-300' : 'bg-emerald-400'
 
@@ -262,7 +296,117 @@ function SurvivorCard({ candidate, engine, onQueueToggle, onDraft, myTurn, queue
   )
 }
 
-export default function DraftDecideScreen({ engine, league, mySlot, myTurn, picks, onDraft, onQueueToggle, onOpenProfile, queuedNames, nextOverall, nextPicks, onOpenHub }) {
+// Mobile only — the desktop tier ladder (above) is a grid of cards with
+// room to spell "TIER 1" and a caption out in full; this is the same six
+// fields (tierCaption() included, never a second wording of the same row)
+// in a phone-width cell, one swipe-scrollable row instead of a grid.
+function TierStripMobile({ tierLadder }) {
+  return (
+    <div className="no-scrollbar -mx-4 mb-4 flex gap-2 overflow-x-auto px-4">
+      {tierLadder.map((row) => (
+        <div key={row.pos} className="w-[108px] shrink-0 rounded-lg bg-white/[0.03] p-2.5">
+          <div className="flex items-center gap-1">
+            <span className={'rounded px-1.5 py-0.5 text-[9px] font-bold ' + (POS_BADGE[row.pos] || 'bg-white/10 text-white/60')}>
+              {row.pos}
+            </span>
+            <span className="text-[9px] font-bold uppercase tracking-[0.06em] text-white/50">Tier 1</span>
+          </div>
+          <div className="mt-1.5 font-numeral tabular-nums text-[10.5px] text-white/50">{row.remaining} left</div>
+          <div className="mt-1 truncate font-numeral text-[9.5px] text-white/50">{tierCaption(row)}</div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// Mobile only — one Card/SurvivorCard at a time (desktop shows all three
+// side by side; a phone has room for one) with a 48x44 previous/next pair
+// and a dot per candidate, the active one teal-400. Neither leaf component
+// is touched: this only changes how many of them are on screen and how you
+// move between them, never what a card itself says or how it decides
+// anything, which is exactly what CLAUDE.md's own "do not touch
+// DraftDecideScreen.jsx's grading, sentence generation or rank-label logic"
+// rule is protecting.
+//
+// Swiping the card left/right pages it too, via the same drag-a-fixed-
+// element-then-measure-the-release-point shape PlayerHub's own sheet and
+// PickClockBand's own grab handle already use elsewhere in this redesign —
+// pointer and touch both, a real distance threshold rather than any move
+// at all counting as a page.
+function CardPager({ count, index, onIndex, children }) {
+  const dragX = useRef(null)
+  const onDragStart = (e) => { dragX.current = e.touches ? e.touches[0].clientX : e.clientX }
+  const onDragEnd = (e) => {
+    const x = e.changedTouches ? e.changedTouches[0].clientX : e.clientX
+    const dx = dragX.current == null ? 0 : x - dragX.current
+    dragX.current = null
+    if (dx < -32) onIndex(Math.min(count - 1, index + 1))
+    else if (dx > 32) onIndex(Math.max(0, index - 1))
+  }
+  return (
+    <div>
+      <div
+        onTouchStart={onDragStart}
+        onTouchEnd={onDragEnd}
+        onPointerDown={onDragStart}
+        onPointerUp={onDragEnd}
+        style={{ touchAction: 'pan-y' }}
+      >
+        {children}
+      </div>
+      <div className="mt-3.5 flex items-center justify-center gap-4">
+        <button
+          type="button"
+          onClick={() => onIndex(Math.max(0, index - 1))}
+          disabled={index === 0}
+          aria-label="Previous option"
+          className="flex h-11 w-12 items-center justify-center rounded-lg border border-white/[0.12] text-white/70 disabled:cursor-not-allowed disabled:opacity-30"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+        <div className="flex items-center gap-2">
+          {Array.from({ length: count }, (_, i) => (
+            <span key={i} className={'h-[7px] w-[7px] rounded-full ' + (i === index ? 'bg-teal-400' : 'bg-white/[0.18]')} />
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={() => onIndex(Math.min(count - 1, index + 1))}
+          disabled={index === count - 1}
+          aria-label="Next option"
+          className="flex h-11 w-12 items-center justify-center rounded-lg border border-white/[0.12] text-white/70 disabled:cursor-not-allowed disabled:opacity-30"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
+  )
+}
+
+export default function DraftDecideScreen({ engine, league, mySlot, myTurn, autopick, picks, onDraft, onQueueToggle, onOpenProfile, queuedNames, nextOverall, nextPicks, onOpenHub }) {
+  // Folded once, here, rather than at every Draft affordance below —
+  // PlayersTab.jsx's own two PlayerQueueSidebar calls already do this same
+  // fold ("a human clicking Draft while [autopick's] on is a race that
+  // shouldn't read as available"); this screen never received an autopick
+  // prop at all, so every Draft button here — the two ranked cards, the
+  // queue list, and the "Everyone else" rows, on both mobile and desktop —
+  // stayed clickable through a whole autopick turn. engine.draftPlayer()
+  // only checks whose turn it is, never this local toggle, so a tap here
+  // during autopick was a genuine race for who actually drafts, not a
+  // harmless no-op.
+  const canDraftNow = myTurn && !autopick
+  // Mobile's own segmented control (Juke/Everyone/Team) and the pager's
+  // current card, declared above the draftOver() early return below so
+  // every hook still runs on every render regardless of which branch this
+  // component takes — the same rule AnalysisTab.jsx's own mobile state
+  // already follows, for the same reason.
+  const [mobilePane, setMobilePane] = useState('juke')
+  const [cardIndex, setCardIndex] = useState(0)
+  // A new pick landing means new candidates — the reader's own place in
+  // the old set means nothing against the new one, so this resets to the
+  // first card rather than silently showing "card 2 of 3" of a set nobody
+  // chose to look at yet.
+  useEffect(() => { setCardIndex(0) }, [picks.length])
   // A finished draft has no decision left to make — suggestions('ALL')
   // returns nothing, survivalProbability() has no next pick to check
   // against, and the not-your-turn cards would otherwise show three
@@ -439,11 +583,20 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, pick
      app.js already stamped every player), not a new scarcity metric. One
      row per skill position: how many of tier 1 are left, and how big the
      drop to tier 2 actually is once it runs out, so "cliff" means a real
-     points gap rather than a feeling. */
+     points gap rather than a feeling.
+
+     "How many remain" goes through engine.tierRemaining() rather than a
+     second `!p.drafted` filter here — it's the exact function app.js's own
+     board chip prints ("2 left in tier 1") and the candidate cards above
+     already call it per-player (see `tierLeft` a few lines up). tier1[0]
+     stands in for "a tier-1 player at this position" because every element
+     of tier1 shares the same pos/tier by construction, which is all
+     tierRemaining() reads — it re-counts off the real board itself, so it
+     can't drift from this array's own contents. */
   const tierLadder = ['QB', 'RB', 'WR', 'TE'].map((pos) => {
     const posBoard = board.filter((p) => p.pos === pos)
     const tier1 = posBoard.filter((p) => p.tier === 1)
-    const remaining = tier1.filter((p) => !p.drafted).length
+    const remaining = tier1.length ? engine.tierRemaining(tier1[0]) : 0
     const tier2 = posBoard.filter((p) => p.tier === 2)
     let drop = null
     if (tier1.length && tier2.length) {
@@ -490,68 +643,250 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, pick
        naturally-sized flex child needs no scroll container of its own; the
        one on this wrapper is what scrolls the whole stack on a phone. */
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-[calc(58px+env(safe-area-inset-bottom))] lg:grid lg:grid-cols-[300px_minmax(0,1fr)_330px] lg:overflow-hidden lg:pb-0">
-      {/* ---------- STILL TO FILL, mobile (handoff PROMPT 4) ----------
-          The desktop rail below is 644px tall on a 390px phone — nine lineup
-          rows, four need bars and the next-picks chip set — and it used to sit
-          above the recommendation cards, so the one thing this screen exists
-          for started a screen and a half below the fold on a 60-second clock.
-          This is what replaces it: what is still owed, and a tap through to the
-          Roster tab for everything else. That tab is not a second surface —
-          onOpenHub('team') opens the same PlayerHub sheet MobileDraftTabBar's
-          own Roster button does.
+      {/* Mobile: Juke/Everyone/Team behind a segmented control, replacing
+          both the old "Still to fill" strip this comment used to describe
+          and the always-visible stacked layout the Centre column showed
+          below lg before this pass — that column is desktop-only now (see
+          its own comment). Same computed data throughout (candidates,
+          others, tierLadder, needRows, lineup, projectedSurvivors — every
+          one already built above, once, for the desktop layout); this is a
+          second reading of it, never a second calculation. */}
+      <div className="flex shrink-0 gap-1.5 border-b border-white/[0.06] bg-slate-panel/40 px-2.5 py-2 lg:hidden">
+        {[
+          { key: 'juke', label: 'Juke' },
+          { key: 'everyone', label: 'Everyone' },
+          { key: 'team', label: 'Team' },
+        ].map((p) => (
+          <button
+            key={p.key}
+            type="button"
+            onClick={() => setMobilePane(p.key)}
+            aria-pressed={mobilePane === p.key}
+            className={
+              'h-11 flex-1 rounded-full px-2 text-center text-xs font-semibold transition-colors duration-150 ' +
+              (mobilePane === p.key ? 'bg-teal-400/[0.14] text-teal-300' : 'text-ink-muted hover:text-white/60')
+            }
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
 
-          Two lines, not one. The label and the "Roster ›" link share the first;
-          the chips get the second to themselves. A single row does fit — I
-          measured the one-line version at 390px with these exact labels and it
-          came back at zero overflow, so the handoff's stated reason (an 8px
-          overrun) does not reproduce here. It is still the better shape: the
-          chips are a readout and the link is the only tappable thing in the
-          block, and a row that mixes the two invites a tap on a chip. Splitting
-          them also leaves room for a fifth chip if the lineup ever grows one,
-          which is the case the handoff says breaks a single row outright.
-
-          The denominator only prints while it is still owed. CLAUDE.md's rule
-          is that a fraction is a promise about its denominator, and "1/1" in a
-          success colour reads as a cap when a second tight end is an ordinary
-          pick — so a met requirement drops to the bare count and goes solid,
-          and the dashed border carries "still owed" the rest of the time. */}
-      {onOpenHub && (
-        <div className="shrink-0 border-b border-white/[0.06] px-4 py-2.5 lg:hidden">
-          <div className="flex items-center justify-between gap-3">
-            <span className="font-plex text-[10.5px] font-bold uppercase tracking-[0.12em] text-ink-muted">
-              Still to fill
-            </span>
-            <button
-              type="button"
-              onClick={() => onOpenHub('team')}
-              className="-my-2 flex h-11 items-center gap-0.5 text-[13px] font-semibold text-teal-300"
-            >
-              Roster
-              <ChevronRight className="h-4 w-4" aria-hidden="true" />
-            </button>
-          </div>
-          <div className="mt-1 flex flex-wrap items-center gap-1.5">
-            {needRows.map((r) => {
-              const met = r.need > 0 && r.have >= r.need
-              return (
-                <span
-                  key={r.pos}
-                  className={
-                    'rounded-[5px] border px-2 py-1 font-plex text-[11px] font-semibold ' +
-                    (met
-                      ? 'border-white/10 bg-white/[0.07] text-white/70'
-                      : 'border-dashed border-white/[0.14] bg-white/[0.045] text-ink-muted')
-                  }
-                >
-                  {r.pos} {met ? r.have : `${r.have}/${r.need}`}
-                </span>
-              )
-            })}
-          </div>
+      {mobilePane === 'juke' && (
+        <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-4 lg:hidden">
+          <h2 className="text-[19px] font-extrabold tracking-[-0.02em] text-white">What Juke would do</h2>
+          <p className="mb-4 mt-1 text-[13.5px] text-white/60">
+            {myTurn ? 'Three options, ranked.' : `Who's still here at ${nextOverall ?? '—'}.`}
+            {candidates.length > 0 && ` Card ${Math.min(cardIndex, candidates.length - 1) + 1} of ${candidates.length}.`}
+          </p>
+          <TierStripMobile tierLadder={tierLadder} />
+          {candidates.length > 0 && (() => {
+            const i = Math.min(cardIndex, candidates.length - 1)
+            const c = candidates[i]
+            return (
+              <CardPager count={candidates.length} index={i} onIndex={setCardIndex}>
+                {myTurn ? (
+                  <Card
+                    candidate={c}
+                    rankLabel={rankLabels[i]}
+                    primary={i === 0}
+                    onDraft={onDraft}
+                    myTurn={canDraftNow}
+                    engine={engine}
+                    board={board}
+                    counts={counts}
+                    siblings={candidates}
+                    onOpenProfile={onOpenProfile}
+                  />
+                ) : (
+                  <SurvivorCard
+                    candidate={c}
+                    engine={engine}
+                    onQueueToggle={onQueueToggle}
+                    onDraft={onDraft}
+                    myTurn={canDraftNow}
+                    queued={queuedNames.has(c.player.name)}
+                    onOpenProfile={onOpenProfile}
+                  />
+                )}
+              </CardPager>
+            )
+          })()}
+          {!myTurn && (
+            <div className="mt-4 rounded-lg bg-white/[0.035] p-3.5">
+              <div className="mb-2.5 flex items-center gap-2.5">
+                <span className="text-[10px] font-bold uppercase tracking-[0.11em] text-white/55">Your queue · while you wait</span>
+              </div>
+              <p className="mb-2.5 text-xs text-white/55">Autopick will take #1 if you're away</p>
+              <QueueList players={queue} myTurn={canDraftNow} engine={engine} survivalOf={survivalOfName} />
+            </div>
+          )}
         </div>
       )}
 
-      {/* Roster rail — desktop only, see the strip above. */}
+      {mobilePane === 'everyone' && (
+        <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-4 lg:hidden">
+          <div className="mb-2.5 flex items-baseline justify-between gap-3">
+            <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-white/50">Everyone else</span>
+            <span className="font-numeral text-[10px] text-ink-muted">VORP &middot; JUKE</span>
+          </div>
+          {others.length === 0 ? (
+            <p className="py-6 text-center text-[13px] text-ink-muted">Nobody left off the top three right now.</p>
+          ) : (
+            <div className="flex flex-col gap-1">
+              {others.map((o) => (
+                <div
+                  key={o.player.name}
+                  onClick={() => onOpenProfile(o.player)}
+                  className="grid min-h-[44px] cursor-pointer grid-cols-[26px_minmax(0,1fr)_44px_38px_56px] items-center gap-2 rounded-md px-1.5 py-1.5 transition-colors hover:bg-white/[0.05]"
+                >
+                  <span className="text-[10px] font-bold text-white/55">{o.player.pos}</span>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-white">{o.player.name}</p>
+                    {o.whyNot && <p className="truncate text-[10px] leading-tight text-ink-muted">{o.whyNot}</p>}
+                  </div>
+                  <span className="text-right text-xs tabular-nums text-white/85">
+                    {o.vorp != null ? `${o.vorp >= 0 ? '+' : ''}${Math.round(o.vorp)}` : '—'}
+                  </span>
+                  <span className="text-right text-xs font-semibold tabular-nums text-teal-300">{o.juke ?? '—'}</span>
+                  {/* This row had no disabled state at all — reachable
+                      whenever the "Everyone" pane is open, independent of
+                      whose turn it is (a completely ordinary thing to check
+                      while waiting), unlike every other Draft control in
+                      the app. */}
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); if (canDraftNow) onDraft(o.player) }}
+                    disabled={!canDraftNow}
+                    title={canDraftNow ? 'Draft' : 'Not your turn'}
+                    className={
+                      'h-11 rounded-full border text-[11px] font-bold ' +
+                      (canDraftNow
+                        ? 'border-teal-400/40 text-teal-300'
+                        : 'cursor-not-allowed border-white/10 text-white/25')
+                    }
+                  >
+                    Draft
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          {/* The other half of dropping a longer everyone-else list: three
+              recommendations plus a door to all N, rather than an arbitrary
+              few more names. Same button this pane inherited from the old
+              always-visible mobile layout — see Centre's own comment on why
+              it moved here rather than staying put. */}
+          {onOpenHub && (
+            <button
+              type="button"
+              onClick={() => onOpenHub()}
+              className="mt-4 flex h-[46px] w-full items-center justify-center gap-1.5 rounded-[10px] border border-white/[0.12] text-[14.5px] font-semibold text-white/65"
+            >
+              Browse all {availableCount} players
+              <ChevronRight className="h-4 w-4" aria-hidden="true" />
+            </button>
+          )}
+        </div>
+      )}
+
+      {mobilePane === 'team' && (
+        <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-4 lg:hidden">
+          <div className="mb-3.5 text-[10px] font-bold uppercase tracking-[0.12em] text-white/50">Your team</div>
+          <div className="mb-5 flex flex-col gap-1">
+            {lineup.seats.map((s, i) => (
+              <div key={i} className="grid h-9 grid-cols-[38px_minmax(0,1fr)_auto] items-center gap-2.5 rounded-md px-2.5">
+                <span className={'rounded py-0.5 text-center text-[10px] font-bold ' + (s.player ? POS_BADGE[s.player.pos] || 'bg-white/10 text-white/60' : 'bg-white/5 text-ink-muted')}>
+                  {s.slot}
+                </span>
+                <span className={'truncate text-xs font-medium ' + (s.player ? 'text-white' : 'text-ink-muted')}>
+                  {s.player ? s.player.name : '—'}
+                </span>
+                {s.player && (
+                  <span className="text-[10px] tabular-nums text-emerald-300">
+                    {(() => { const g = engine.replacementGap(s.player); return g != null ? `${g >= 0 ? '+' : ''}${Math.round(g)}` : '' })()}
+                  </span>
+                )}
+              </div>
+            ))}
+            {Array.from({ length: league.bench }, (_, i) => {
+              const p = lineup.bench[i] || null
+              return (
+                <div key={'bn-' + i} className="grid h-9 grid-cols-[38px_minmax(0,1fr)_auto] items-center gap-2.5 rounded-md px-2.5">
+                  <span className={'rounded py-0.5 text-center text-[10px] font-bold ' + (p ? POS_BADGE[p.pos] || 'bg-white/10 text-white/60' : 'bg-white/5 text-ink-muted')}>
+                    BN
+                  </span>
+                  <span className={'truncate text-xs font-medium ' + (p ? 'text-white' : 'text-ink-muted')}>
+                    {p ? p.name : '—'}
+                  </span>
+                  {p && (
+                    <span className="text-[10px] tabular-nums text-emerald-300">
+                      {(() => { const g = engine.replacementGap(p); return g != null ? `${g >= 0 ? '+' : ''}${Math.round(g)}` : '' })()}
+                    </span>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+
+          <div className="mb-5 border-t border-white/[0.07] pt-[18px]">
+            <div className="mb-3 text-[10px] font-bold uppercase tracking-[0.12em] text-white/50">Still to fill</div>
+            <div className="flex flex-col gap-2.5">
+              {needRows.map((r) => (
+                <div key={r.pos} className="grid grid-cols-[34px_minmax(0,1fr)_34px] items-center gap-2.5">
+                  <span className="text-xs font-bold text-white/70">{r.pos}</span>
+                  <div className="h-1 overflow-hidden rounded-full bg-white/[0.08]">
+                    <div
+                      className="h-full rounded-full bg-teal-400"
+                      style={{ width: `${r.need ? Math.min(100, (r.have / r.need) * 100) : 0}%` }}
+                    />
+                  </div>
+                  <span className="text-right text-[10px] tabular-nums text-white/60">{r.text}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {nextPicks.length > 0 && (
+            <div className="seat-wash mb-3 rounded-lg p-3.5">
+              <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.12em] text-[#FFD166]">Your next picks</div>
+              <div className="flex flex-wrap gap-[7px]">
+                {nextPicks.map((overall) => {
+                  const code = window.DraftEngine ? window.DraftEngine.pickCode(overall, league) : overall
+                  return (
+                    <span key={overall} className="rounded bg-white/10 px-2.5 py-1 font-plex text-xs font-semibold text-[#FFD166]">
+                      {code}
+                    </span>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {projectedSurvivors.length > 0 && (
+            <div className="rounded-lg border border-teal-400/20 bg-teal-400/[0.03] p-3.5">
+              <div className="mb-2.5 text-[10px] font-bold uppercase tracking-[0.12em] text-teal-300">
+                Likely there at {window.DraftEngine ? window.DraftEngine.pickCode(nextOverall, league) : nextOverall}
+              </div>
+              <div className="flex flex-col gap-2">
+                {projectedSurvivors.map(({ player, survival }) => (
+                  <div key={player.name} className="flex items-center gap-2">
+                    <span className="min-w-0 flex-1 truncate text-xs text-white/80">{player.name}</span>
+                    <span className={'font-numeral tabular-nums text-[11px] font-semibold ' + survivalTextColor(survival)}>
+                      {survival != null ? `${Math.round(survival * 100)}%` : '—'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-2.5 font-numeral text-[9px] leading-relaxed text-white/40">
+                The same survival model the cards use, run forward to your next pick.
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Roster rail — desktop only, see Centre's own comment above. */}
       <div className="hidden border-white/[0.06] px-[18px] py-5 lg:block lg:overflow-y-auto lg:border-r">
         <div className="mb-3.5 text-[10px] font-bold uppercase tracking-[0.12em] text-white/50">Your team</div>
         <div className="mb-5 flex flex-col gap-1">
@@ -619,7 +954,7 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, pick
             <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.12em] text-[#FFD166]">Your next picks</div>
             <div className="flex flex-wrap gap-[7px]">
               {nextPicks.map((overall) => {
-                const code = window.DraftEngine ? window.DraftEngine.pickCode(overall, league.teams) : overall
+                const code = window.DraftEngine ? window.DraftEngine.pickCode(overall, league) : overall
                 return (
                   <span key={overall} className="rounded bg-white/10 px-2.5 py-1 font-plex text-xs font-semibold text-[#FFD166]">
                     {code}
@@ -636,27 +971,35 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, pick
         {projectedSurvivors.length > 0 && (
           <div className="mt-3 rounded-lg border border-teal-400/20 bg-teal-400/[0.03] p-3.5">
             <div className="mb-2.5 text-[10px] font-bold uppercase tracking-[0.12em] text-teal-300">
-              Likely there at {window.DraftEngine ? window.DraftEngine.pickCode(nextOverall, league.teams) : nextOverall}
+              Likely there at {window.DraftEngine ? window.DraftEngine.pickCode(nextOverall, league) : nextOverall}
             </div>
             <div className="flex flex-col gap-2">
               {projectedSurvivors.map(({ player, survival }) => (
                 <div key={player.name} className="flex items-center gap-2">
                   <span className="min-w-0 flex-1 truncate text-xs text-white/80">{player.name}</span>
-                  <span className={'font-plex text-[11px] font-semibold ' + survivalTextColor(survival)}>
+                  <span className={'font-numeral tabular-nums text-[11px] font-semibold ' + survivalTextColor(survival)}>
                     {survival != null ? `${Math.round(survival * 100)}%` : '—'}
                   </span>
                 </div>
               ))}
             </div>
-            <div className="mt-2.5 font-plex text-[9px] leading-relaxed text-white/40">
+            <div className="mt-2.5 font-numeral text-[9px] leading-relaxed text-white/40">
               The same survival model the cards use, run forward to your next pick.
             </div>
           </div>
         )}
       </div>
 
-      {/* Centre */}
-      <div className="min-w-0 px-[22px] py-5 lg:overflow-y-auto">
+      {/* Centre — desktop only from here down. Mobile's own version of
+          everything inside it (the tier ladder, the three cards, Everyone
+          else) is the segmented Juke/Everyone/Team control above, built
+          fresh around the same Card/SurvivorCard leaves and the same
+          computed data rather than squeezing this column's own layout —
+          three cards side by side and a table with five grid columns have
+          no honest single-column reading, which is the whole reason this
+          prompt exists. None of the JSX below changed to make room for
+          that; it just stopped being reachable below lg. */}
+      <div className="hidden px-[22px] py-5 lg:block lg:min-w-0 lg:overflow-y-auto">
         {myTurn ? (
           <>
             {/* One heading again, and it is the live one. An earlier pass
@@ -685,13 +1028,7 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, pick
               </div>
               <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
                 {tierLadder.map((row) => {
-                  const caption = row.tier1.length === 0
-                    ? 'none this deep'
-                    : row.remaining === 0
-                      ? 'tier gone'
-                      : row.remaining <= 4
-                        ? `cliff after ${row.remaining} more`
-                        : 'no rush'
+                  const caption = tierCaption(row)
                   return (
                     <div key={row.pos} className="rounded-lg bg-white/[0.03] p-3">
                       <div className="flex items-center justify-between gap-2">
@@ -701,19 +1038,29 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, pick
                           </span>
                           <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-white/50">tier 1</span>
                         </span>
-                        <span className="font-plex text-[10.5px] text-white/50">{row.remaining} left</span>
+                        <span className="font-numeral tabular-nums text-[10.5px] text-white/50">{row.remaining} left</span>
                       </div>
                       <div className="mt-2 flex flex-wrap gap-[3px]">
+                        {/* POS_CHALK, not POS_SOLID. These nine-pixel
+                            squares carry no text, and the whole row is a
+                            count of how many of a tier are left — which
+                            only works if a taken square and a live one are
+                            told apart at a glance. At -700 against this
+                            panel the live squares measured 1.46-2.93:1
+                            and the drafted grey sat *brighter* than some
+                            of them, so the two states could invert. The
+                            chalk fills clear 8.74 at worst and are the
+                            same six the board draws. */}
                         {row.tier1.map((p) => (
                           <span
                             key={p.name}
                             className="h-[9px] w-[9px] rounded-sm"
-                            style={{ background: p.drafted ? 'rgba(255,255,255,0.13)' : POS_SOLID[row.pos] || 'rgba(255,255,255,0.4)' }}
+                            style={{ background: p.drafted ? 'rgba(255,255,255,0.13)' : POS_CHALK[row.pos] || 'rgba(255,255,255,0.55)' }}
                           />
                         ))}
                       </div>
                       <div
-                        className="mt-2 font-plex text-[10px] text-white/50"
+                        className="mt-2 font-numeral text-[10px] text-white/50"
                         title={row.drop != null ? `Next tier projects about ${row.drop} fewer points` : undefined}
                       >
                         {caption}
@@ -724,7 +1071,17 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, pick
               </div>
             </div>
 
-            <div className="mb-[18px] grid grid-cols-1 gap-3.5 md:grid-cols-3">
+            {/* repeat(auto-fit, minmax(300px, 1fr)), not md:grid-cols-3 — three
+                equal columns resolved to about 105px per card at 1100px (a
+                perfectly ordinary laptop width) and clipped every headline
+                mid-word. auto-fit asks the real question instead: how many
+                300px-plus cards actually fit, so this shows 1 at 1100px minus
+                the two rails, 2 once there's room, 3 only once there's really
+                room for three — never a forced count narrower than its own
+                floor. grid-cols-1 stays as the true mobile default below md;
+                nothing about this screen's phone layout is this prompt's job
+                (prompt 06 replaces it with a pager, not a grid). */}
+            <div className="mb-[18px] grid grid-cols-1 gap-3.5 md:grid-cols-[repeat(auto-fit,minmax(300px,1fr))]">
               {candidates.map((c, i) => (
                 <Card
                   key={c.player.name}
@@ -732,7 +1089,7 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, pick
                   rankLabel={rankLabels[i]}
                   primary={i === 0}
                   onDraft={onDraft}
-                  myTurn={myTurn}
+                  myTurn={canDraftNow}
                   engine={engine}
                   board={board}
                   counts={counts}
@@ -758,7 +1115,7 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, pick
               <div>
                 <div className="mb-2.5 flex items-baseline justify-between gap-3">
                   <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-white/50">Everyone else</span>
-                  <span className="font-plex text-[10px] text-ink-muted lg:hidden">VORP &middot; JUKE</span>
+                  <span className="font-numeral text-[10px] text-ink-muted lg:hidden">VORP &middot; JUKE</span>
                 </div>
                 {/* Column heads — a design review caught "+64 · 38 · Draft"
                     with nothing saying which number was which. */}
@@ -796,10 +1153,19 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, pick
                         {o.vorp != null ? `${o.vorp >= 0 ? '+' : ''}${Math.round(o.vorp)}` : '—'}
                       </span>
                       <span className="text-right text-xs font-semibold tabular-nums text-teal-300">{o.juke ?? '—'}</span>
+                      {/* Same missing disabled state as the mobile "Everyone
+                          else" row — see its own comment. */}
                       <button
                         type="button"
-                        onClick={(e) => { e.stopPropagation(); onDraft(o.player) }}
-                        className="h-11 rounded-full border border-teal-400/40 text-xs font-bold text-teal-300 lg:h-auto lg:border-0 lg:bg-teal-400/[0.14] lg:py-1.5"
+                        onClick={(e) => { e.stopPropagation(); if (canDraftNow) onDraft(o.player) }}
+                        disabled={!canDraftNow}
+                        title={canDraftNow ? 'Draft' : 'Not your turn'}
+                        className={
+                          'h-11 rounded-full border text-xs font-bold lg:h-auto lg:border-0 lg:py-1.5 ' +
+                          (canDraftNow
+                            ? 'border-teal-400/40 text-teal-300 lg:bg-teal-400/[0.14]'
+                            : 'cursor-not-allowed border-white/10 text-white/25 lg:bg-white/[0.04]')
+                        }
                       >
                         Draft
                       </button>
@@ -824,7 +1190,7 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, pick
                   engine={engine}
                   onQueueToggle={onQueueToggle}
                   onDraft={onDraft}
-                  myTurn={myTurn}
+                  myTurn={canDraftNow}
                   queued={queuedNames.has(c.player.name)}
                   onOpenProfile={onOpenProfile}
                 />
@@ -837,24 +1203,9 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, pick
                 <div className="flex-1" />
                 <span className="text-xs text-white/55">Autopick will take #1 if you're away</span>
               </div>
-              <QueueList players={queue} myTurn={myTurn} engine={engine} survivalOf={survivalOfName} />
+              <QueueList players={queue} myTurn={canDraftNow} engine={engine} survivalOf={survivalOfName} />
             </div>
           </>
-        )}
-        {/* The mobile exit to the full board, on both turn states — the
-            handoff draws it under the three cards on 1c, and it is the
-            other half of dropping "Everyone else" above: three
-            recommendations plus one door to all 217, rather than three
-            recommendations and an arbitrary four more. */}
-        {onOpenHub && (
-          <button
-            type="button"
-            onClick={() => onOpenHub('players')}
-            className="mt-4 flex h-[46px] w-full items-center justify-center gap-1.5 rounded-[10px] border border-white/[0.12] text-[14.5px] font-semibold text-white/65 lg:hidden"
-          >
-            Browse all {availableCount} players
-            <ChevronRight className="h-4 w-4" aria-hidden="true" />
-          </button>
         )}
       </div>
 
@@ -871,8 +1222,13 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, pick
           <div className="mb-4 rounded-lg bg-white/[0.04] p-3.5">
             <div className="mb-2.5 text-sm font-semibold text-white">{runPos} run</div>
             <div className="mb-2.5 flex gap-1">
+              {/* POS_CHALK, same reason as the tier squares above: a
+                  bare colour block with the sentence underneath doing all
+                  the naming. This strip exists to make a position *run*
+                  visible as a block of one colour, which is the reading
+                  the darkest steps cost most. */}
               {last10.map((p, i) => (
-                <span key={i} className="h-5 flex-1 rounded-sm" style={{ background: POS_SOLID[p.player.pos] || 'rgba(255,255,255,0.15)' }} />
+                <span key={i} className="h-5 flex-1 rounded-sm" style={{ background: POS_CHALK[p.player.pos] || 'rgba(255,255,255,0.25)' }} />
               ))}
             </div>
             <div className="text-xs leading-[1.5] text-white/60">
@@ -885,7 +1241,7 @@ export default function DraftDecideScreen({ engine, league, mySlot, myTurn, pick
         <div className="mb-2.5 text-[10px] font-bold uppercase tracking-[0.12em] text-white/50">Last picks</div>
         <div className="flex flex-col gap-[3px]">
           {picks.slice(-9).reverse().map((p) => {
-            const code = window.DraftEngine ? window.DraftEngine.pickCode(p.overall, league.teams) : p.overall
+            const code = window.DraftEngine ? window.DraftEngine.pickCode(p.overall, league) : p.overall
             const mine = p.slot === mySlot
             return (
               <div

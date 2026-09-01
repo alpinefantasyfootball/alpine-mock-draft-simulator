@@ -28,7 +28,7 @@ import Room from "../room.js";
 /* The D1 cache. Every function in there answers "no" to a missing binding
    rather than throwing, so this file works unchanged with no database — which
    is what keeps `wrangler dev --local` and the keyless news test running. */
-import { syncPlayerPool, cachedNews, storeNews, usableNews } from "./store.js";
+import { syncPlayerPool, cachedNews, storeNews, usableNews, storeSignup } from "./store.js";
 
 /* How long after the last socket closes before the room is forgotten. Long
    enough that a phone locking, a tunnel, or closing a laptop for lunch does
@@ -258,13 +258,47 @@ export class DraftRoom {
         result = Room.pause(this.room, { member }, !!msg.on);
         break;
       case "chat":
-        result = Room.say(this.room, { member, text: msg.text, gif: msg.gif, now });
+        result = Room.say(this.room, {
+          member, text: msg.text, gif: msg.gif, replyTo: msg.replyTo, now
+        });
         break;
       case "rename":
         result = Room.rename(this.room, { member, name: msg.name });
         break;
       case "react":
         result = Room.react(this.room, { member, id: Number(msg.id), emoji: msg.emoji });
+        break;
+      // A voice clip or a photo, already uploaded through POST /media (see
+      // below) — this message only ever carries the URL that came back from
+      // that upload, never the bytes themselves. Room.js still checks the
+      // URL against MEDIA_HOSTS before storing it, the same way cleanGif()
+      // checks a GIF against giphy.com: nothing stops a crafted message
+      // naming a URL that never went through the upload route at all.
+      case "voice":
+        result = Room.sayVoice(this.room, {
+          member, url: msg.url, seconds: msg.seconds, replyTo: msg.replyTo,
+          mediaHosts: MEDIA_HOSTS, now
+        });
+        break;
+      case "photo":
+        result = Room.sayPhoto(this.room, {
+          member, url: msg.url, w: msg.w, h: msg.h, replyTo: msg.replyTo,
+          mediaHosts: MEDIA_HOSTS, now
+        });
+        break;
+      // Any member, the same as chat — nothing in this file restricts
+      // posting a message to the host, and a poll is a message.
+      case "poll-create":
+        result = Room.createPoll(this.room, {
+          member, question: msg.question, choices: msg.choices,
+          multi: !!msg.multi, anon: !!msg.anon, durationMs: msg.durationMs,
+          replyTo: msg.replyTo, now
+        });
+        break;
+      case "poll-vote":
+        result = Room.votePoll(this.room, {
+          member, id: Number(msg.id), choice: msg.choice, now
+        });
         break;
       default:
         return;
@@ -394,6 +428,18 @@ function originAllowed(request) {
   return ALLOWED.indexOf(origin) >= 0 ||
          /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin);
 }
+
+/* Where a voice or photo message's URL is allowed to point.
+
+   Not the site's own origin (ALLOWED, above) — a media URL is served by
+   *this* worker, at whatever host reached it, so a voice clip uploaded
+   against `wrangler dev --local` has to validate against 127.0.0.1/localhost
+   and one uploaded against the deployed worker has to validate against its
+   real host. cleanMediaUrl() in room.js takes this list as a parameter for
+   exactly that reason — it cannot hardcode a host the way cleanGif()
+   hardcodes giphy.com, because ours varies by deployment and theirs does
+   not. */
+const MEDIA_HOSTS = ["juke-draft-room.jukeff.workers.dev", "127.0.0.1", "localhost"];
 
 function corsFor(request) {
   const origin = request.headers.get("Origin") || "";
@@ -681,6 +727,216 @@ function newsCacheKey(playerId) {
                      encodeURIComponent(playerId || "none"));
 }
 
+/* Voice clips and photo attachments, in R2 rather than anywhere else in
+   this worker.
+
+   They do not belong in the room. A Durable Object value has a hard
+   ceiling and the whole room — league, picks, chat — is written to it on
+   every action; a recording is real binary payload, not the couple of
+   hundred lines of text trimChat() bounds the log to. They do not belong in
+   D1 either: that database is a cache of somebody else's data (the player
+   pool, Tank01 headlines) and never a source of truth of our own, and an
+   uploaded photo is the opposite of that — it exists nowhere but here.
+
+   Served back out from `/media/<key>` on this same worker, rather than
+   through R2's own public-bucket URL. That is a deliberate choice over the
+   more obvious one: a public R2 bucket needs its own manual "make this
+   public" step (a dashboard toggle or a connected custom domain) with its
+   own security surface, on top of `wrangler r2 bucket create`. Serving it
+   ourselves needs nothing extra — the binding is already private by
+   default — and keeps every media URL on a host `MEDIA_HOSTS` and
+   `cleanMediaUrl()` already know about, the same way a GIF has to be
+   giphy.com's own domain and nothing that merely contains the string. The
+   object key is 16 random bytes, which is what actually stands in for
+   access control here: nobody can list a bucket over this route, and
+   nobody can guess a key, so an unlisted URL is exactly as private as an
+   unlisted one on any other chat host. */
+const MEDIA_KINDS = {
+  voice: {
+    types: {
+      "audio/webm": "webm", "audio/ogg": "ogg", "audio/mp4": "m4a",
+      "audio/mpeg": "mp3", "audio/wav": "wav"
+    },
+    /* Two minutes is a reasonable ceiling on a chat voice note — long
+       enough to actually say something about a pick, short enough that
+       nobody is recording a podcast into the draft room. Sized in bytes
+       from that: Chrome's MediaRecorder defaults `audio/webm;codecs=opus`
+       to about 128kbps, so two minutes comes to roughly
+       128kbps / 8 * 120s = 1.92MB. 2MB comfortably covers a full-length
+       clip at that default and rejects one recorded much longer or at a
+       much higher bitrate — VOICE_SECONDS_MAX in room.js is the same two
+       minutes, as a label rather than an enforcement, because a client can
+       lie about `seconds` but it cannot lie the file past this cap. */
+    maxBytes: 2 * 1024 * 1024
+  },
+  photo: {
+    types: {
+      "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp",
+      "image/heic": "heic", "image/heif": "heif"
+    },
+    /* A 12-megapixel phone camera photo is typically 3-6MB straight off the
+       sensor as an unmodified JPEG, and this feature has no resize step of
+       its own yet — the file that reaches here is whatever the phone
+       produced. 8MB covers that with room, without inviting a full-
+       resolution RAW-adjacent file or a screen recording mislabelled as a
+       photo. */
+    maxBytes: 8 * 1024 * 1024
+  }
+};
+
+function randomMediaId() {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/* POST /media?kind=voice|photo&room=<code>, body is the raw file.
+
+   Rate limiting is deliberately not added here, for the same reason room
+   creation is not rate-limited: that belongs on the edge, not in a worker
+   route, and a Cloudflare rate limiting rule can see traffic patterns this
+   single request cannot. What this route does own is the origin check —
+   before the bucket binding is even looked at, the same order every other
+   key- or quota-spending route in this file already follows — and the size
+   cap, which is the one thing standing between an open upload endpoint and
+   an unbounded R2 bill. */
+async function uploadMedia(request, env) {
+  const cors = corsFor(request);
+  const headers = Object.assign({ "content-type": "application/json" }, cors);
+
+  if (!originAllowed(request)) {
+    return new Response(JSON.stringify({ error: "forbidden" }),
+                        { status: 403, headers: { "content-type": "application/json" } });
+  }
+
+  if (!env.MEDIA) {
+    // Not provisioned yet — see worker/README.md. Answered the same shape
+    // as a missing GIPHY/Tank01 key: false rather than a thrown error, so a
+    // client can say "attachments are not set up" instead of guessing.
+    return new Response(JSON.stringify({ configured: false }), { headers });
+  }
+
+  const url = new URL(request.url);
+  const kind = MEDIA_KINDS[url.searchParams.get("kind")];
+  const room = (url.searchParams.get("room") || "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 40);
+  if (!kind || !room) {
+    return new Response(JSON.stringify({ error: "bad-request" }), { status: 400, headers });
+  }
+
+  const contentType = (request.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
+  const ext = kind.types[contentType];
+  if (!ext) {
+    return new Response(JSON.stringify({ error: "bad-content-type" }), { status: 415, headers });
+  }
+
+  /* Buffered rather than streamed to R2 directly. Both caps top out at a
+     few megabytes, comfortably inside a Worker's memory, and buffering is
+     what lets the size be checked *before* anything is written — streaming
+     the put and aborting partway through would still leave a truncated
+     object in the bucket for a client that lied about its length. */
+  const body = await request.arrayBuffer();
+  if (!body.byteLength || body.byteLength > kind.maxBytes) {
+    return new Response(JSON.stringify({ error: "too-large", maxBytes: kind.maxBytes }),
+                        { status: 413, headers });
+  }
+
+  const kindName = url.searchParams.get("kind");
+  const key = "room/" + room + "/" + kindName + "/" + randomMediaId() + "." + ext;
+  await env.MEDIA.put(key, body, { httpMetadata: { contentType: contentType } });
+
+  // Built off this request's own origin rather than a hardcoded production
+  // host, so the same code returns a working address under `wrangler dev`
+  // and under the real deploy without being told which it is running as —
+  // the same trick live.js's own WORKER constant relies on from the other
+  // side.
+  return new Response(JSON.stringify({ url: new URL(request.url).origin + "/media/" + key }),
+                      { headers });
+}
+
+/* GET /media/<key>, streamed straight from the binding.
+
+   Deliberately not origin-checked. Reading via <img src> or <audio src> is
+   never a CORS-governed request in the first place — CORS decides whether a
+   page's *script* may read a response, not whether the browser may paint or
+   play it — so refusing an unrecognised Origin here would not stop a page
+   embedding one of these anyway, and some browsers omit Origin on a plain
+   media fetch regardless, which would 403 a legitimate load. The random key
+   is what stands in for access control, the same way the room's own invite
+   code does, at a length nobody is going to guess. */
+async function serveMedia(env, key) {
+  if (!env.MEDIA) return new Response("Not found", { status: 404 });
+
+  const object = await env.MEDIA.get(key);
+  if (!object) return new Response("Not found", { status: 404 });
+
+  const headers = new Headers();
+  object.writeHttpMetadata(headers);
+  headers.set("etag", object.httpEtag);
+  // The key is 16 random bytes; the same address never names different
+  // content, so it can be cached for as long as a browser likes — the same
+  // argument CLAUDE.md makes for `immutable` on a `?v=`-stamped asset, true
+  // here without that stamp's own trap, because nothing ever overwrites a
+  // key once it is written.
+  headers.set("cache-control", "public, max-age=31536000, immutable");
+  return new Response(object.body, { headers });
+}
+
+/* Email capture, proxied to D1.
+
+   Phase 0 of accounts: there is still no login anywhere in Juke and this
+   route does not add one. It is a mailing list of one column, so the whole
+   job is: refuse an origin we do not serve, refuse an address that is not
+   one, and hand the write to storeSignup() — same shape as the two routes
+   above, and for the same reason: the origin check happens *before* any
+   work, not after.
+
+   Unlike /news and /giphy there is no key to protect here, but a public
+   form is a wider target than an invite-only room's proxy routes — anyone
+   can POST to it, not just someone already holding a room link. The origin
+   check is the only defence today; a rate limit would be the next thing to
+   add if this is ever abused (see the note in CLAUDE.md's Security section
+   on why the room's own limiter lives on the socket and not here — this
+   route has no socket to hang one off yet). */
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+async function captureSignup(request, env) {
+  const cors = corsFor(request);
+  const headers = Object.assign({ "content-type": "application/json" }, cors);
+
+  if (!originAllowed(request)) {
+    return new Response(JSON.stringify({ error: "forbidden" }),
+                        { status: 403, headers: { "content-type": "application/json" } });
+  }
+
+  // Malformed JSON is a 400, not a throw — the same defensive parse
+  // safeJson() gives a socket message, just returned rather than dropped,
+  // because there is a caller here actually waiting on an answer.
+  let body;
+  try {
+    body = await request.json();
+  } catch (err) {
+    return new Response(JSON.stringify({ ok: false, error: "bad-json" }),
+                        { status: 400, headers });
+  }
+
+  const email = String((body && body.email) || "").trim().slice(0, 254);
+  const source = String((body && body.source) || "").trim().slice(0, 64);
+
+  if (!EMAIL_RE.test(email)) {
+    return new Response(JSON.stringify({ ok: false, error: "bad-email" }),
+                        { status: 400, headers });
+  }
+
+  // storeSignup() never throws — a missing or broken DB binding answers
+  // false, same as every other function in store.js — so this is a plain
+  // read of what happened rather than a try/catch of its own. A failed
+  // write is still a 200: the client asked a real question and deserves a
+  // real, honest answer rather than an HTTP error code standing in for one.
+  const kept = await storeSignup(env, email, source);
+  return new Response(JSON.stringify(kept ? { ok: true } : { ok: false, error: "store-failed" }),
+                      { headers });
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -703,6 +959,36 @@ export default {
         }, corsFor(request)) });
       }
       return giphySearch(request, env);
+    }
+
+    if (url.pathname === "/media") {
+      if (request.method === "OPTIONS") {
+        return new Response(null, { headers: Object.assign({
+          "access-control-allow-methods": "POST",
+          "access-control-allow-headers": "content-type",
+          "access-control-max-age": "86400"
+        }, corsFor(request)) });
+      }
+      if (request.method !== "POST") return new Response("Not found", { status: 404 });
+      return uploadMedia(request, env);
+    }
+
+    if (url.pathname.startsWith("/media/")) {
+      // No OPTIONS handling here on purpose — see serveMedia()'s own note on
+      // why this route carries no origin check at all.
+      return serveMedia(env, url.pathname.slice("/media/".length));
+    }
+
+    if (url.pathname === "/signup") {
+      if (request.method === "OPTIONS") {
+        return new Response(null, { headers: Object.assign({
+          "access-control-allow-methods": "POST, OPTIONS",
+          "access-control-allow-headers": "content-type",
+          "access-control-max-age": "86400"
+        }, corsFor(request)) });
+      }
+      if (request.method !== "POST") return new Response("Method not allowed", { status: 405 });
+      return captureSignup(request, env);
     }
 
     const match = url.pathname.match(/^\/room\/([A-Za-z0-9_-]{4,40})/);

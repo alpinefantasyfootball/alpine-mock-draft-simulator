@@ -96,8 +96,11 @@ body {
 }
 
 /* Tailwind 3 has no backdrop: variant, so ::backdrop is styled directly.
-   ComingSoonModal.jsx is the only <dialog> in web/src today. */
-.coming-soon-dialog::backdrop {
+   ComingSoonModal.jsx and EarlyAccessModal.jsx are the two <dialog>s in
+   web/src, and both want the identical treatment — one rule for both rather
+   than two copies of the same three lines. */
+.coming-soon-dialog::backdrop,
+.early-access-dialog::backdrop {
   background: rgba(11, 14, 20, 0.7);
   backdrop-filter: blur(4px);
 }
@@ -110,4 +113,55 @@ body {
    root - and the rings are its descendants. */
 [data-sonar][data-sonar-paused] [data-sonar-ring] {
   animation-play-state: paused;
+}
+
+/* PickTicker.jsx's ribbon: it advances on its own as picks land (an inner
+   strip translated by the width of whatever it has consumed), and stays a
+   real overflow-x-auto container underneath that so trackpad/wheel scroll
+   still reaches rounds the auto-advance hasn't gotten to. A visible
+   scrollbar on a strip that also animates its own position reads as
+   broken — two different things moving the same element — so it's hidden
+   here, scoped to the one attribute this element carries rather than a
+   global rule that would hide it everywhere a page scrolls. */
+[data-ticker] {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+[data-ticker]::-webkit-scrollbar {
+  display: none;
+}
+
+/* PlayersTab.jsx's phone/app screen: no phone draws an OS scrollbar inside
+   its own app frame, and this screen has four independently-scrolling
+   panes (the pool, the queue, the roster, the picks feed) plus a
+   horizontal filter-selects row, all in normal in-flow layout rather than
+   the ribbon's one special case above — a reusable class rather than a
+   fifth `[data-x]` attribute selector for the same rule. */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* DraftBoardGrid.jsx's own scroll container, unlike every other one this
+   file hides a scrollbar on, is the SAME element at every breakpoint —
+   desktop's mouse-driven board is meant to show its own scrollbar (every
+   other panel on that layout does), only the phone/app frame is not
+   supposed to draw one. `.no-scrollbar` is unconditional, so this is a
+   second class rather than a prop threading a mobile flag through a
+   component that has never needed one before. 1023.98px matches
+   Tailwind's own `max-lg:` breakpoint exactly (lg is the default 1024px,
+   untouched in tailwind.config.js), so this stops applying at the same
+   width the grid's own column/row templates already switch to their
+   desktop values. */
+@media (max-width: 1023.98px) {
+  .no-scrollbar-below-lg {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .no-scrollbar-below-lg::-webkit-scrollbar {
+    display: none;
+  }
 }

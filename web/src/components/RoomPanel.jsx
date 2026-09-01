@@ -15,7 +15,18 @@ const STATUS_TEXT = {
 // from hasRoom()/the hash afterwards). A guest typing in a code is a
 // different action with no such case to protect — that path is left alone,
 // and still auto-enters exactly as it always has.
-export default function RoomPanel({ onCreated }) {
+//
+// onEnter: the seat-picker/live board is one call away (DraftRoom.jsx's own
+// enterDraftRoom), not required. Its only caller today is
+// DraftWithFriendsModal.jsx, where a host who just created a room otherwise
+// had no way forward from this exact screen except closing the modal by
+// hand and re-finding "Start mock draft" on the Lobby card underneath —
+// two clicks to do one thing, and the second one wasn't even visible from
+// here. suppressAutoEnterRef (DraftRoom.jsx) is what keeps this room from
+// entering itself the instant it exists; this button is the deliberate,
+// explicit version of the same action, for once the host has actually
+// copied the link below.
+export default function RoomPanel({ onCreated, onEnter }) {
   const engine = useEngine()
   useJukeTick(engine)
   const [joinCode, setJoinCode] = useState('')
@@ -38,8 +49,19 @@ export default function RoomPanel({ onCreated }) {
        is a shape decided before a draft starts, not something an existing
        one can be converted into. Gating here is the only fix that doesn't
        need a confirmation dialog defending against a scenario nothing else
-       in the room model supports. */
-    const started = !!engine.headerInfo().started
+       in the room model supports.
+
+       started alone used to gate this, and state.started never goes back
+       to false on its own once a draft finishes — so a completed draft
+       stayed just as blocked as one mid-round, and the copy below promising
+       "finish... this draft first" was never actually true: finishing did
+       nothing to this flag, only discarding did. headerInfo().over is the
+       same "is there still a live pick to protect" fact DraftCockpitHeader
+       already reads to retire its own pick pill once a draft ends; folding
+       it in here is what makes "finish" a real way out rather than a
+       promise the gate couldn't keep. */
+    const info = engine.headerInfo()
+    const started = !!info.started && !info.over
     const handleJoin = () => {
       if (started) return
       const code = joinCode.trim().toUpperCase()
@@ -120,7 +142,7 @@ export default function RoomPanel({ onCreated }) {
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(link).then(() => {
         setCopied(true)
-        setTimeout(() => setCopied(false), 1500)
+        setTimeout(() => setCopied(false), 2000)
       })
     }
   }
@@ -164,9 +186,26 @@ export default function RoomPanel({ onCreated }) {
                      transition-colors duration-200 hover:border-teal-400/60 hover:text-teal-300"
         >
           {copied ? <Check className="h-3.5 w-3.5 text-teal-400" /> : <Copy className="h-3.5 w-3.5" />}
-          {copied ? 'Copied' : 'Copy'}
+          {copied ? 'Copied!' : 'Copy'}
         </button>
       </div>
+
+      {/* The one gradient CTA on this screen, same rule NewMockPanel.jsx's
+          own comment already states about its "Start mock draft"/"Draft
+          with friends" pair: exactly one thing shouting for attention.
+          Copy above stays an outline button rather than competing with
+          this — send the link first, enter whenever you're ready, in
+          either order. py-3 text-sm matches "Create a room" above,
+          measured at 44px (12+12 padding, 20px line-height), the primary-
+          CTA floor. */}
+      <button
+        type="button"
+        onClick={onEnter}
+        className="mt-4 w-full rounded-full bg-gradient-to-r from-[#00E5FF] to-[#7B1FA2] py-3 text-sm font-semibold text-white
+                   shadow-glass transition-all duration-200 hover:scale-[1.02] hover:animate-pulse-glow"
+      >
+        Enter draft room
+      </button>
 
       <div className="mt-6 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wide text-white/30">
         <Users className="h-3.5 w-3.5" />
@@ -184,7 +223,19 @@ export default function RoomPanel({ onCreated }) {
               }
             >
               <span className="flex min-w-0 items-center gap-1.5 truncate">
-                {isHostSeat && <Crown className="h-3.5 w-3.5 shrink-0 text-amber-300" />}
+                {/* A pill, not a bare Crown icon — the icon alone read as
+                    decoration to anyone who didn't already know what it
+                    meant. isHostSeat matches on room.hostName, not on seat
+                    index, so this stays correct even in the (currently
+                    theoretical) case a host isn't sitting in seat 1 — the
+                    same "derive it, don't assume it" reasoning DraftEngine's
+                    own pick-code math is documented on elsewhere. */}
+                {isHostSeat && (
+                  <span className="flex shrink-0 items-center gap-1 rounded-full border border-amber-400/30 bg-amber-400/10 px-1.5 py-[1px] text-[9px] font-semibold uppercase tracking-wide text-amber-300">
+                    <Crown className="h-2.5 w-2.5" />
+                    Host
+                  </span>
+                )}
                 <span className={seat.taken ? 'truncate text-white/90' : 'text-white/30'}>
                   {seat.taken ? seat.name || `Seat ${seat.index + 1}` : 'Open seat'}
                 </span>

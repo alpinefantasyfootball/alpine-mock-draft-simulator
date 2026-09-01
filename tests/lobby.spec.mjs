@@ -40,15 +40,19 @@ test("two managers, one board: a claimed chair shows as taken to everybody",
     const hostCtx = await browser.newContext();
     const host = await openApp(hostCtx, "#/draft-room");
 
-    // A fresh visit lands on Settings & Locker first now — seat-picking is
-    // its own screen one step further in. "Start mock draft" (NewMockPanel.jsx)
-    // is the one thing that screen asks for now — it replaced the older
-    // "Enter Draft Room" button as part of a fix for a two-primaries bug.
-    await host.locator("#draftroom-root button").filter({ hasText: /^Start mock draft$/ }).click();
+    /* Straight to createRoom(), with no "Start mock draft" in front of it.
 
-    // The lobby is the pre-draft screen, so no draft is started anywhere here.
-    await expect.poll(() => claimChips(host).then((c) => c.length)).toBeGreaterThan(0);
+       This used to click that button first and then wait for the chairs,
+       back when it opened a seat-picker. It starts the draft outright now,
+       so the click was doing two wrong things at once: putting a live solo
+       draft where a lobby was expected — hence no chips, ever — and creating
+       one for createRoom() to wipe a line later (RoomPanel.jsx: adoptRoom()
+       "wipes state.picks and un-drafts the whole board").
 
+       The seat board is a room screen, which is what this file is about: the
+       chairs appear on the room's own lobby, and the room is what makes them
+       claimable in the first place. So the room comes first and the chairs
+       are waited for after it — the same order a person invites somebody in. */
     const code = await host.evaluate(async () => {
       window.JukeEngine.createRoom();
       for (let i = 0; i < 80 && !window.JukeEngine.codeInUrl(); i++) {
@@ -57,6 +61,10 @@ test("two managers, one board: a claimed chair shows as taken to everybody",
       return window.JukeEngine.codeInUrl();
     });
     expect(code, "the host's room has an invite code").toBeTruthy();
+
+    // The lobby is the pre-draft screen, so no draft is started anywhere here.
+    await expect.poll(() => claimChips(host).then((c) => c.length)).toBeGreaterThan(0);
+    expect(await host.evaluate(() => state.started), "still pre-draft").toBe(false);
 
     const guestCtx = await browser.newContext();
     const guest = await openApp(guestCtx, `#/draft-room?room=${code}`);
@@ -138,22 +146,42 @@ test("two managers, one board: a claimed chair shows as taken to everybody",
    (test_engine.py proves Room.swapSeats does), but a refusal the UI never
    mentions is a control that looks live and does nothing. */
 async function openOrderTab(page) {
-  await page.evaluate(() => {
-    const root = document.getElementById("draftroom-root");
-    // The lobby bar's gear. The "Roster & scoring settings" button lived in
-    // the Configure column, which the full-bleed lobby removed.
-    [...root.querySelectorAll("button")]
-      .find((b) => /draft settings/i.test(b.getAttribute("aria-label") || ""))
-      .click();
-  });
+  /* The lobby bar's gear. The "Roster & scoring settings" button lived in
+     the Configure column, which the full-bleed lobby removed.
+
+     An auto-waiting locator, not a one-shot page.evaluate. The guest gets
+     here the moment Live.room() reports a seat — which is the socket
+     answering, not the lobby bar having rendered — so a synchronous
+     querySelectorAll found nothing and called .click() on undefined. The
+     error read "Cannot read properties of undefined (reading 'click')",
+     which looks like a control that does not exist rather than one that is
+     not there *yet*; the gear is present on this screen, a beat later.
+
+     :visible for the reason the other headers need it — this bar has a
+     compact and a roomy build and mounts both. */
+  await page
+    .locator('#draftroom-root button[aria-label="Draft settings"]:visible')
+    .first()
+    .click({ timeout: 30000 });
   await page.waitForFunction(() =>
     [...document.querySelectorAll("div")].some((d) =>
       (d.className || "").toString().includes("z-[70]")), null, { timeout: 15000 });
-  await page.evaluate(() => {
-    const m = [...document.querySelectorAll("div")]
-      .find((d) => (d.className || "").toString().includes("z-[70]"));
-    [...m.querySelectorAll("button")].find((b) => b.textContent.trim() === "Order").click();
-  });
+  /* There is no tab to press any more. The settings modal became the whole
+     Draft Settings screen — draft name, type, third-round reversal,
+     scoring, teams, player pool, clock, CPU autopick, roster, draft order,
+     scoring rules — one scrolling column rather than three tabs, so "Seats"
+     (itself a rename of "Order") is a section heading now and not a
+     control.
+
+     What this function has to guarantee is unchanged: that the draft-order
+     list is genuinely mounted before anything below reads or clicks it.
+     Waiting for the section's own <ol> is a stronger version of what
+     clicking a tab used to buy — the tab click could succeed against an
+     empty panel, this cannot. */
+  await page
+    .locator('div[class*="z-[70]"] ol li button')
+    .first()
+    .waitFor({ timeout: 30000 });
 }
 
 function orderPanelText(page) {
@@ -191,12 +219,30 @@ test("the host sets the draft order and a guest cannot", async ({ browser }) => 
     .poll(() => orderPanelText(guest), { timeout: 15000 })
     .toMatch(/Only the host can set the draft order/);
   const guestSeesRandomize = await orderPanelText(guest);
-  expect(guestSeesRandomize, "and is not offered the shuffle").not.toMatch(/Randomize order/);
+  /* "Randomize", not "Randomize order" — the label lost its second word
+     when draft order became a section with its own heading above it. Worth
+     noticing rather than just updating: the old string matched NOTHING on
+     the new screen, so this negative assertion would have gone on passing
+     for a guest who was being offered the shuffle. A negative assertion is
+     only worth its line if the positive one is also checked, which is what
+     the host's own case below now does.
+
+     And case-INSENSITIVE, which is the second half of the same lesson. The
+     button is title case in the source and uppercased in CSS, so innerText
+     hands back "RANDOMIZE" — the identical trap this file's own homepage
+     eyebrow already hit, and the identical shape as CLAUDE.md's note about
+     an assertion handed to a language model. Written case-sensitively, this
+     negative would ALSO have passed vacuously, and the host's positive
+     below is what caught it. */
+  expect(guestSeesRandomize, "and is not offered the shuffle").not.toMatch(/randomize/i);
 
   // The host swaps the two occupied chairs, through the real list.
   await openOrderTab(host);
   await expect.poll(() => orderPanelText(host), { timeout: 15000 })
     .toMatch(/Tap a seat to pick it up/);
+  // The other half of the guest's negative above: the shuffle really is on
+  // this screen for somebody, so its absence for the guest means something.
+  expect(await orderPanelText(host), "the host IS offered the shuffle").toMatch(/randomize/i);
 
   await host.evaluate(([a, b]) => {
     const m = [...document.querySelectorAll("div")]

@@ -1,7 +1,6 @@
 import { motion } from 'framer-motion'
 import { ChevronRight } from 'lucide-react'
 import ScoringDemoCard from './ScoringDemoCard.jsx'
-import PhaseRail from './PhaseRail.jsx'
 
 export default function Hero() {
   return (
@@ -18,40 +17,48 @@ export default function Hero() {
         }}
       />
 
-      <div className="relative mx-auto grid max-w-7xl gap-[72px] px-6 pb-[76px] pt-9 lg:grid-cols-[1.05fr_1fr] lg:items-center lg:pt-[92px]">
+      {/* pt is responsive, and it has to be. 72px is the desktop rhythm and it
+          was unconditional, so a 375px phone inherited a padding scaled for a
+          1200px column: measured, that put the eyebrow 71px under a 57px
+          header where artboard 1a puts it at 36. Not the 149px the phone spec
+          was originally written against, but past what it allows, and past it
+          for the same reason — a vertical measurement that stands in for
+          desktop proportion has to be as responsive as the proportion is.
+          36px on a phone, the artboard's own figure; 72 from lg up, unchanged. */}
+      <div className="relative mx-auto grid max-w-[1200px] gap-[72px] px-10 pb-0 pt-9 lg:pt-[72px] lg:grid-cols-[1.05fr_1fr] lg:items-center">
         {/* min-w-0: a CSS grid item's default min-width is auto, not 0, so
-            without this a wide-enough descendant (PhaseRail's mobile chip
-            row, at its natural 440px) visually spills past this column's
-            actual ~375px track instead of being constrained to it — the
-            grid track itself still reports the right width, only this
-            item's rendered content ignores it. Caught only because
-            PhaseRail's own overflow-x-auto had nothing bounded to scroll
-            within; the fix belongs here; on the grid item, not on the row. */}
+            without this a wide-enough descendant visually spills past this
+            column's actual track instead of being constrained to it — the
+            grid track itself still reports the right width, only an
+            unbounded child's rendered content ignores it. Originally caught
+            via PhaseRail's own mobile scroll row (its overflow-x-auto had
+            nothing bounded to scroll within); that component moved to
+            RoomsGrid.jsx in the homepage cosmetic revision (§8), but the fix
+            belongs on the grid item regardless of what's inside it, so it
+            stays as a standing guard against the same failure recurring. */}
         <motion.div
           className="min-w-0"
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
         >
-          {/* One eyebrow at every width now, and it is desktop's mint pill.
-              The phone used to get its own teal mono line reading
-              "FREE · UNLIMITED MOCKS" — the revised mobile handoff retires
-              it on brand-architecture grounds rather than typographic ones:
-              price was the first thing a visitor read, and naming the
-              category pinned the brand to one room while the Rooms section
-              four rows below says five more are coming. "Free" is still
-              said, in its own mono line under the CTA pair.
-
-              The paragraph and CTAs below stay split by breakpoint — those
-              really are phone-specific — so this is one element leaving that
-              arrangement, not the arrangement being abandoned. */}
-          <span className="inline-flex items-center gap-[9px] rounded-full border border-mint/30 bg-mint/[0.06] px-[15px] py-[7px] text-[11.5px] font-bold tracking-[0.13em] text-mint">
-            <span className="relative flex h-1.5 w-1.5">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-mint opacity-75" />
-              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-mint" />
+          {/* Homepage cosmetic revision §11 — was a mint pill with a
+              pulsing dot, the same visual language as the "Live" status
+              badge elsewhere on the page, so it read as a status
+              indicator ("this is live/on") rather than a tagline. Now a
+              typographic slogan: a short rule, then the words in
+              Barlow Condensed (the handoff's own allowance — "if
+              production already ships a condensed italic display face,
+              keep it") rather than a pill. No pill, no dot, and margin-
+              bottom on this element (not margin-top on the h1 below it)
+              is what now owns the gap between the two. */}
+          <div className="flex items-center gap-[14px] mb-[22px]">
+            <span className="h-px w-8 shrink-0" style={{ background: '#3E9886' }} />
+            {/* data-hero-eyebrow — see HomePhone.jsx's copy of this note. */}
+            <span data-hero-eyebrow className="font-display text-[19px] font-extrabold italic uppercase tracking-[0.03em] text-mint">
+              Agility Through Analytics
             </span>
-            AGILITY THROUGH ANALYTICS
-          </span>
+          </div>
 
           {/* One headline at every width, in font-display (Barlow Condensed).
               The phone used to get its own 39px Archivo 900 sentence; the
@@ -70,39 +77,32 @@ export default function Hero() {
               A condensed face is what makes 46px fit 390px at all: "Master
               the draft." at 39px Archivo was already close to the padding,
               and this is seven points larger. */}
-          <h1 className="mt-5 text-balance font-display text-[46px] font-extrabold italic leading-[1.04] tracking-[-0.02em] sm:mt-7 sm:text-[52px] sm:leading-[1.04] lg:text-[64px] lg:leading-[1.03] lg:tracking-[-0.032em]">
-            <span className="text-white">Master the draft.</span>
+          <h1 className="text-balance font-display text-[clamp(42px,5.4vw,76px)] font-extrabold italic leading-[0.94] tracking-[-0.005em]">
+            <span className="text-white">Master the Draft.</span>
             <br />
-            <span className="text-mint">Dominate the season.</span>
+            <span className="text-mint">Dominate the Season.</span>
           </h1>
 
-          {/* One paragraph at both widths, and it is the phone's.
+          {/* One paragraph at both widths.
 
-              These were two entirely different sentences — the phone said
-              "Draft against a room of CPU opponents…", desktop said "Free,
-              unlimited mock drafts against a board that reruns live…" — which
-              is a different message about the product depending on the width
-              of the window it is read in. Reported from the live site as
-              exactly that.
+              These were two entirely different sentences at one point —
+              phone and desktop each had their own — which is a different
+              message about the product depending on the width of the window
+              it is read in. Reported from the live site as exactly that, and
+              unified to one sentence, read at every width, for that reason.
 
-              Desktop's is the one that goes, for the same reason the eyebrow
-              and the CTAs already changed: it opens on the price. After that
-              pass, desktop's own hero was arguing with itself — a brand
-              eyebrow and headline, "Enter the Draft Room" underneath, and a
-              paragraph between them leading with "Free, unlimited mock
-              drafts". The revised handoff says to keep this sentence verbatim
-              on the phone and explicitly not to promote desktop's; making it
-              the only one is the same instruction with the divergence removed.
-
-              It is also the better sentence on its own terms, which is worth
-              recording so nobody swaps it back. It names no seat count — the
-              app's default is 10 and the room is configurable 4-24 wide, so
-              any number here is wrong for most rooms drafted — and it says
-              what the product does rather than what it costs. Price now lives
-              in the mono line under the CTA pair, once, on both widths. */}
-          <p className="mt-4 max-w-[480px] text-pretty text-base leading-[1.55] text-white/55 lg:mt-6 lg:max-w-[530px] lg:text-[17.5px] lg:leading-[1.6]">
-            Draft against a room of CPU opponents that react to your picks, then get a graded
-            report that shows its working. Change your scoring rules and every number reruns.
+              The second sentence used to name Juke Pro and Juke All-Access
+              as unlockable tiers directly. Phase 0 has no purchase behind
+              either name — the rooms are in build, not for sale — so
+              stating them as something a visitor could "unlock" today would
+              be a claim the product can't back. The badges themselves stay
+              exactly where they are on the Rooms cards below: those read as
+              roadmap labels rather than an offer, which is the distinction
+              this sentence couldn't make. Price still lives only in the
+              mono line under the CTA pair. */}
+          <p className="mt-4 max-w-[520px] text-pretty text-[19px] leading-[1.5] text-voidInk-body lg:mt-6">
+            Test your strategy in the Draft Room completely free. Waivers, trades and week-to-week tools are in
+            build.
           </p>
 
           {/* Two stacked 54px CTAs, mobile only. The secondary is "Explore
@@ -129,8 +129,12 @@ export default function Hero() {
             <a
               href="#/drafts"
               data-hero-cta=""
-              className="flex h-[54px] w-full items-center justify-center rounded-full bg-gradient-to-r from-[#22d3ee] to-[#a78bfa] text-base font-bold text-white
-                         shadow-glass transition-all duration-200 active:scale-[0.98]"
+              className="flex h-[54px] w-full items-center justify-center rounded-full text-[17px] font-bold text-[#0B0D12]
+                         transition-all duration-200 active:scale-[0.98]"
+              style={{
+                background: 'linear-gradient(100deg, #44D4E2, #82A1F6)',
+                boxShadow: '0 10px 34px -14px rgba(63,177,234,0.7)',
+              }}
             >
               Enter the Draft Room
             </a>
@@ -158,14 +162,18 @@ export default function Hero() {
             <a
               href="#/drafts"
               data-hero-cta=""
-              className="rounded-full bg-gradient-to-r from-[#22d3ee] to-[#a78bfa] px-8 py-4 text-base font-bold text-white
-                         shadow-glass transition-all duration-200 hover:scale-105 hover:shadow-[0_0_15px_rgba(34,211,238,0.4)]"
+              className="rounded-full px-[34px] py-[17px] text-[17px] font-bold text-[#0B0D12]
+                         transition-all duration-200 hover:scale-105"
+              style={{
+                background: 'linear-gradient(100deg, #44D4E2, #82A1F6)',
+                boxShadow: '0 10px 34px -14px rgba(63,177,234,0.7)',
+              }}
             >
               Enter the Draft Room
             </a>
             <a
               href="#rooms"
-              className="group inline-flex items-center gap-2 text-base font-semibold text-white/90 transition-colors hover:text-mint"
+              className="group inline-flex items-center gap-2 text-base font-semibold text-[#E6E8EB] transition-colors hover:text-mint"
             >
               Explore The Rooms
               <ChevronRight className="h-4 w-4 text-teal-400 transition-transform group-hover:translate-x-0.5" />
@@ -186,11 +194,9 @@ export default function Hero() {
 
               Not a tap target, so exempt from the 44px floor; 11.5px is the
               handoff's own value and sits on the type floor for mono. */}
-          <p className="mt-3 text-center font-plex text-[11.5px] tracking-[0.1em] text-[#7C8A99] lg:mt-5 lg:text-left">
-            FREE &middot; UNLIMITED &middot; NO ACCOUNT
+          <p className="mt-3 text-center font-plex text-[11.5px] tracking-[0.1em] text-voidInk-muted lg:mt-5 lg:text-left">
+            Free Draft Room &bull; No Account Needed
           </p>
-
-          <PhaseRail />
         </motion.div>
 
         {/* Not rotated, not floating — squared and aligned as a real second

@@ -87,27 +87,27 @@ function usePlayerPool() {
 // a fixed VORP that only Proj reran under would be exactly the "half the
 // grade was reading a lie" class of bug that file is written to prevent.
 //
-// Survival is asked once per pool refresh, not per format: "still on the
-// board at your next turn" describes when a real draft would take him,
-// which a scoring toggle does not change.
-function useRankedRows(pool, ready, format, count) {
-  const [secondPick, setSecondPick] = useState(null)
-  // Declared before the effect below, not after — a dependency array is
-  // evaluated at the point useEffect() is called, so referencing a const
-  // declared later in the same function body throws "Cannot access
-  // before initialization" rather than reading it as a later reassignment
-  // the way a var would.
-  const engine = typeof window !== 'undefined' ? window.JukeEngine : null
+// Seat 0's own second pick (round 2) of a fresh, unstarted DEMO_TEAMS-team
+// draft — not "my next turn" in whatever draft the browser's shared engine
+// singleton happens to be holding. engine.nextPicksFor() used to answer
+// this by walking the real, global state.picks, which on the marketing
+// homepage is whatever a previous visit (or this tab's own solo draft)
+// left behind — often near-finished or already discarded — so the target
+// pick it returned could land near the very last pick of an entire draft.
+// This card's rows are the top seven by VORP, the earliest-ADP players on
+// the board by construction, so survival against a pick that late rounded
+// to 0% for every single one of them. DraftEngine.overallOf() is pure
+// snake arithmetic with no such state to drift off of — the same function
+// DraftBoardGrid.jsx already calls for a corner pick number on an empty
+// board cell (CLAUDE.md's "the seat-versus-pick-number bug"). Exported so
+// ShowYourWorking.jsx's own "next turn" demo targets the identical pick
+// rather than a second, independently-chosen team count.
+export const DEMO_TEAMS = 10
 
-  useEffect(() => {
-    if (!engine || !ready) return
-    // Seat 0's own second pick in the default league — there is no real
-    // draft in progress on the marketing homepage to ask "my next turn"
-    // of, so this is the one league config every control on the setup
-    // screen still defaults to (CLAUDE.md), read live rather than assumed.
-    const picks = engine.nextPicksFor(0, 2)
-    setSecondPick(picks.length > 1 ? picks[1] : null)
-  }, [engine, ready])
+function useRankedRows(pool, ready, format, count) {
+  const engine = typeof window !== 'undefined' ? window.JukeEngine : null
+  const DE = typeof window !== 'undefined' ? window.DraftEngine : null
+  const secondPick = DE ? DE.overallOf(2, 0, DEMO_TEAMS) : null
 
   if (!engine || !ready || !pool.length) return []
 
@@ -130,11 +130,21 @@ function useRankedRows(pool, ready, format, count) {
     })
 }
 
-// 34px | minmax(0,1fr) | 66px | 68px | 56px — §4.2's own grid, Pos/Player/
-// Proj/VORP/Surv. Shared by the header row and every data row so the two
-// can never drift out of alignment with each other.
-const ROW_GRID = 'grid-cols-[34px_minmax(0,1fr)_66px_68px_56px]'
-const MOBILE_ROW_GRID = 'grid-cols-[28px_minmax(0,1fr)_46px_46px_40px]'
+// 34px | minmax(0,1fr) | 56px | 62px | 52px, 10px column gap only — the
+// design handoff's own board grid (§4), narrower on the three numeric
+// columns and with no row-gap eating into the shared column gutter than
+// the figure this replaced, which is what let "Christian McCaffrey"
+// truncate in the player column at this card's width. Shared by the
+// header row and every data row so the two can never drift out of
+// alignment with each other.
+const ROW_GRID = 'grid-cols-[34px_minmax(0,1fr)_56px_62px_52px]'
+// Four columns, not five: the documented fallback below ("drop Proj, keep
+// Surv") is now the shipped state. Five was "measured at 375px and it fits",
+// but that measurement predated the hero grid's 40px side padding — inside
+// today's hero the card is 295px, which left the 1fr player column 31px and
+// every name truncated to two letters. Dropping Proj hands its 46px + gap to
+// the name, which is the widest thing the row actually carries.
+const MOBILE_ROW_GRID = 'grid-cols-[28px_minmax(0,1fr)_46px_40px]'
 
 function RowCells({ row, grid, dense }) {
   const { player, projPts, vorp, surv, rank } = row
@@ -145,27 +155,28 @@ function RowCells({ row, grid, dense }) {
   // are relative to each other.
   const emphasized = rank <= 3
   return (
-    <div className={`grid ${grid} items-center gap-2 rounded-[11px] border border-white/[0.06] bg-[#0c1114] px-[14px] py-[12px]`}>
+    <div className={`grid ${grid} items-center ${dense ? 'gap-2 px-[14px]' : 'gap-x-[10px] gap-y-0 px-3'} rounded-[11px] border border-line-hairline bg-surface-row py-[12px]`}>
       <span className={`shrink-0 rounded-md px-1.5 py-0.5 text-center text-[10px] font-bold ${POS_BADGE[player.pos] || 'bg-white/10 text-white/50'}`}>
         {player.pos}
       </span>
-      <span className={`min-w-0 truncate font-semibold text-white/90 ${dense ? 'text-[13px]' : 'text-[14.5px]'}`}>
+      <span className={`min-w-0 truncate font-semibold text-voidInk-primary ${dense ? 'text-[13px]' : 'text-[14.5px]'}`}>
         {player.name}
       </span>
-      <span className={`text-right font-plex tabular-nums text-white/60 ${dense ? 'text-[11px]' : 'text-[13px]'}`}>
-        {projPts != null ? Math.round(projPts) : '—'}
-      </span>
-      {/* text-white/45 measured 4.42:1 here (§9's bar is 4.5) — #8e9aa1 is
-          the same solid-colour fix applied throughout TakeAPick.jsx; see
-          that file's own comment on why opacity failed in the first place. */}
+      {/* Proj is desktop-only — the mobile grid dropped its column (see
+          MOBILE_ROW_GRID above), and a fifth cell in a four-column grid
+          would wrap onto a phantom second row rather than error. */}
+      {!dense && (
+        <span className="text-right font-numeral tabular-nums font-semibold text-voidInk-body text-[13px]">
+          {projPts != null ? Math.round(projPts) : '—'}
+        </span>
+      )}
       <span
-        className={`text-right font-plex tabular-nums font-semibold ${dense ? 'text-[11px]' : 'text-[13px]'} ${emphasized ? 'text-teal-300' : ''}`}
-        style={emphasized ? undefined : { color: '#8e9aa1' }}
+        className={`text-right font-numeral tabular-nums font-semibold ${dense ? 'text-[11px]' : 'text-[13px]'} ${emphasized ? 'text-teal-300' : 'text-voidInk-muted'}`}
       >
         {vorp >= 0 ? '+' : ''}
         {Math.round(vorp)}
       </span>
-      <span className={`text-right font-plex tabular-nums ${dense ? 'text-[11px]' : 'text-[13px]'}`} style={{ color: '#8e9aa1' }}>
+      <span className={`text-right font-numeral tabular-nums font-semibold text-voidInk-muted ${dense ? 'text-[11px]' : 'text-[13px]'}`}>
         {surv != null ? `${surv}%` : '—'}
       </span>
     </div>
@@ -194,18 +205,16 @@ export default function ScoringDemoCard() {
   return (
     <>
       {/* ---------- Mobile ----------
-          Five columns per §3.9's own "ship five if it fits" instruction —
-          measured at 375px with the dense sizing below and it does; the
-          documented fallback (drop Proj, keep Surv — "survival is the
-          differentiator, projection is the commodity") is a one-line
-          change to MOBILE_ROW_GRID and RowCells' dense branch if a
-          narrower target ever needs it. */}
-      <div
-        className="rounded-2xl border border-white/[0.09] p-5 lg:hidden"
-        style={{ background: 'linear-gradient(170deg, #111a1f, #0b1013)' }}
-      >
+          Four columns — §3.9's documented fallback (drop Proj, keep Surv:
+          "survival is the differentiator, projection is the commodity"),
+          shipped rather than held in reserve. "Ship five if it fits" was
+          measured against a 375px viewport, not against the 295px this
+          card actually gets inside the hero grid's 40px side padding, and
+          at 295 the five-column player cell was 31px wide — every name
+          two letters and an ellipsis. See MOBILE_ROW_GRID. */}
+      <div className="rounded-[14px] border border-line-hairline bg-surface-card p-5 lg:hidden">
         <div className="flex items-center justify-between gap-3">
-          <p className="font-plex text-[11px] font-semibold tracking-[0.12em] text-[#7C8A99]">
+          <p className="font-numeral text-[10.5px] font-semibold tracking-[0.13em] text-voidInk-muted">
             BOARD · SORTED BY VORP
           </p>
         </div>
@@ -230,10 +239,9 @@ export default function ScoringDemoCard() {
           ))}
         </div>
 
-        <div className={`mt-4 grid ${MOBILE_ROW_GRID} gap-2 px-[14px] font-plex text-[9px] uppercase tracking-wide text-[#8e9aa1]`}>
+        <div className={`mt-4 grid ${MOBILE_ROW_GRID} gap-2 px-[14px] font-numeral text-[10.5px] font-semibold uppercase tracking-[0.13em] text-voidInk-muted`}>
           <span>Pos</span>
           <span>Player</span>
-          <span className="text-right">Proj</span>
           <span className="text-right">VORP</span>
           <span className="text-right">Surv</span>
         </div>
@@ -246,18 +254,15 @@ export default function ScoringDemoCard() {
           ))}
         </div>
 
-        <p className="mt-4 text-[13.5px] leading-[1.5] text-white/50">
+        <p className="mt-4 text-[13.5px] leading-[1.5] text-voidInk-body">
           {PPR_EXPLAIN[format]} Every ranking on Juke moves with your rules.
         </p>
       </div>
 
       {/* ---------- Desktop ---------- */}
-      <div
-        className="hidden rounded-2xl border border-white/[0.09] px-[22px] pb-[22px] pt-6 lg:block"
-        style={{ background: 'linear-gradient(170deg, #111a1f, #0b1013)' }}
-      >
+      <div className="hidden rounded-[14px] border border-line-hairline bg-surface-card px-[22px] pb-[22px] pt-6 lg:block">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <span className="text-base font-bold text-white">Board · sorted by value over replacement</span>
+          <span className="text-base font-bold text-voidInk-primary">Board · sorted by value over replacement</span>
           <div className="inline-flex gap-1 rounded-full bg-white/5 p-1">
             {PPR_OPTIONS.map((opt) => (
               <button
@@ -274,7 +279,7 @@ export default function ScoringDemoCard() {
           </div>
         </div>
 
-        <div className={`mt-4 grid ${ROW_GRID} gap-3 px-[14px] font-plex text-[10px] uppercase tracking-wide text-[#8e9aa1]`}>
+        <div className={`mt-4 grid ${ROW_GRID} gap-x-[10px] gap-y-0 px-3 font-numeral text-[10.5px] font-semibold uppercase tracking-[0.13em] text-voidInk-muted`}>
           <span>Pos</span>
           <span>Player</span>
           <span className="text-right">Proj</span>
@@ -290,7 +295,7 @@ export default function ScoringDemoCard() {
           ))}
         </div>
 
-        <div className="mt-4 flex items-center gap-[7px] font-plex text-[11px] text-[#8e9aa1]">
+        <div className="mt-4 flex items-center gap-[7px] font-numeral tabular-nums text-[11px] font-medium text-voidInk-muted">
           <RotateCw className="h-3 w-3 shrink-0" aria-hidden="true" />
           <span>
             Projected season points · {ppr === 1 ? '1.0' : ppr === 0.5 ? '0.5' : 'no reception bonus'}

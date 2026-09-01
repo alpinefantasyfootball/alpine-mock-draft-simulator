@@ -55,7 +55,7 @@ export default function ProjectionsTab({ summary, record }) {
             Our record on him
           </p>
           <div className="overflow-hidden rounded-lg border border-slate-rule">
-            <table className="w-full text-xs">
+            <table className="w-full bg-slate-panel text-xs">
               <thead>
                 <tr className="border-b border-slate-rule bg-slate-sunk/60 text-[10px] uppercase tracking-wide text-ink-muted">
                   <th className="px-2 py-1.5 text-left font-medium">Year</th>

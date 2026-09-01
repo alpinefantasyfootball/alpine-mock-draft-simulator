@@ -5,15 +5,45 @@ import { POS_BADGE } from './draftRoomPositions.js'
 /* One row of the "against the room" panel — where "you" sits on a 0-100
    track against this component's room median and best. All three come off
    the same analyseDraft() call the four bars already read; nothing here is
-   a second measurement. */
+   a second measurement.
+
+   `item.measurable` is false when this component's raw, pre-scaling figure
+   is still tied (or as good as tied) across the whole room — see
+   `isMeasurable()` below for why that happens early in a draft and why it
+   is checked on the raw value rather than the scaled one. A tied room maps
+   every team to the same scaled 50, so the marker, the median tick and the
+   delta text below would all sit on top of each other and print "+0 vs
+   room median" — a real number, honestly rounded, that still reads as "you
+   are exactly average" when the truer statement is "nobody can be compared
+   on this yet." Drawing a marker or a delta here would assert a comparison
+   that does not exist, so this renders a plain dash instead — no bar, no
+   "you" square, no median tick — until the room actually differs. */
 function ComponentBand({ item }) {
   const clamp = (v) => Math.max(0, Math.min(100, v))
+  if (!item.measurable) {
+    return (
+      <div className="mb-3.5 last:mb-0">
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="text-[12.5px] font-medium text-white/80">{item.label}</span>
+          <span
+            className="font-numeral text-[11px] font-semibold text-ink-muted"
+            title="Not enough of the room has drafted yet to compare this."
+          >
+            &mdash; vs room median
+          </span>
+        </div>
+        <div className="relative mt-2 h-4">
+          <div className="absolute inset-x-0 top-[7px] h-1 rounded-full bg-white/[0.07]" />
+        </div>
+      </div>
+    )
+  }
   const below = item.pct < item.median
   return (
     <div className="mb-3.5 last:mb-0">
       <div className="flex items-baseline justify-between gap-2">
         <span className="text-[12.5px] font-medium text-white/80">{item.label}</span>
-        <span className={'font-plex text-[11px] font-semibold ' + (below ? 'text-rose-400' : 'text-teal-300')}>
+        <span className={'font-numeral text-[11px] font-semibold ' + (below ? 'text-rose-400' : 'text-teal-300')}>
           {item.pct >= item.median ? '+' : ''}
           {Math.round(item.pct - item.median)} vs room median
         </span>
@@ -42,7 +72,7 @@ function FixThisFirst({ item, upgrade, before, dense }) {
         'rounded-xl border border-teal-400/30 bg-teal-400/[0.05] ' + (dense ? 'p-4' : 'p-4 sm:p-5')
       }
     >
-      <p className="font-plex text-[10px] font-semibold uppercase tracking-wide text-teal-300">Fix this first</p>
+      <p className="font-numeral text-[10px] font-semibold uppercase tracking-wide text-teal-300">Fix this first</p>
       <p className={'mt-2 font-bold text-white ' + (dense ? 'text-[15px] leading-snug' : 'font-display text-lg')}>
         {item.label} — your weakest number, carrying the most weight
       </p>
@@ -59,7 +89,7 @@ function FixThisFirst({ item, upgrade, before, dense }) {
           {upgrade.player.team}
           {upgrade.player.bye ? ` · bye ${upgrade.player.bye}` : ''}
         </span>
-        <span className="ml-auto font-plex text-[13px] font-bold text-teal-300">
+        <span className="ml-auto font-numeral text-[13px] font-bold text-teal-300">
           {before} → {upgrade.after}
         </span>
       </div>
@@ -130,12 +160,76 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
   // only if an older bundle without the bridge entry is somehow live.
   const weights = engine.weights ? engine.weights() : { starters: 0.5, value: 0.25, build: 0.15, byes: 0.1 }
 
+  /* scaled: true for the three components analyseDraft() actually runs
+     through scaleAcross() (see app.js) — their 0-100 number is this room's
+     floor and ceiling, min-max stretched across whoever is in it, and means
+     nothing outside that room. Roster construction never goes through that
+     transform (see CLAUDE.md's "Roster construction is the one component
+     that is not scaled" section); its 0-100 is an absolute score, computed
+     the same way in every room. Reported directly: a 0 on a scaled
+     component read as "this draft had zero value," when it only ever means
+     "the worst of these N teams." Drives the "vs. room" / "own scale" tag
+     on each bar row below, and the summary sentence a few lines down that
+     used to claim all four worked the same way — they don't. */
+  /* Whether a component's raw, pre-scaling figure has actually started to
+     differ across the room — independent of what scaleAcross() does with it
+     afterwards. Early in a draft `build` and `byePenalty` are mathematically
+     forced to an identical raw value for every team: nobody has a bye-week
+     collision yet, and nobody has picked up an unfilled-slot or roster-cap
+     penalty nobody else also has. scaleAcross() then maps that tied raw
+     value to a flat 50 for every team (a raw spread of exactly 0 puts every
+     team at the room midpoint — see scaleAcross() in app.js), so a real,
+     non-tied "4th of 10" rank can sit over four component bars that all
+     round to "+0 vs room median." Both facts are true; only one of them is
+     informative, and nothing on screen said which.
+
+     Checked against the RAW figure rather than the *scaled* one, and rather
+     than MIN_SPAN: MIN_SPAN says how much of a real spread to trust once
+     scaleAcross() is stretching it across 0-100, which is a different
+     question from whether a spread exists at all. A component can be
+     genuinely measurable well before its spread clears that floor.
+
+     Epsilons are per component, in that component's own units, not a shared
+     percentage. `build` is Math.round()ed to a whole number and `byePenalty`
+     only ever moves in steps of 20 — one squared starter, one week, at a
+     time (see byeCost above) — so anything short of a full step apart is
+     the same tied value, not a coincidence of rounding. `startersVsPar` and
+     `valueVsPar` are continuous points and picks respectively, so a much
+     smaller gap already means two genuinely different rosters; 1 is small
+     enough to catch only the case both are actually still tied. This is a
+     live, data-driven check re-run on every render — never a fixed
+     picks-count threshold — so a component starts showing its real numbers
+     again the moment the room actually differs on it, whatever round that
+     happens to be. */
+  const RAW_KEY = { starters: 'startersVsPar', value: 'valueVsPar', build: 'build', byes: 'byePenalty' }
+  const RAW_EPSILON = { starters: 1, value: 1, build: 0.5, byes: 0.5 }
+  const isMeasurable = (key) => {
+    const values = all.map((t) => t[RAW_KEY[key]])
+    return Math.max(...values) - Math.min(...values) > RAW_EPSILON[key]
+  }
+
   const bars = [
-    { key: 'starters', label: 'Starter strength', detail: Math.round(me.starters) + ' pts above replacement', pct: me.startersScaled, weight: weights.starters },
-    { key: 'value', label: 'Draft value', detail: (me.value >= 0 ? '+' : '') + me.value + ' picks, K and D/ST aside', pct: me.valueScaled, weight: weights.value },
-    { key: 'build', label: 'Roster construction', detail: me.build + ' / 100', pct: me.buildScaled, weight: weights.build },
-    { key: 'byes', label: 'Bye week safety', detail: engine.byeSummary(me.badWeeks), pct: me.byePenaltyScaled, weight: weights.byes },
+    // Caption from the engine, not rebuilt here: the bar is scored against par
+    // for this seat and the raw sum is what the VORP matrix adds up to, so a
+    // locally-composed detail line would describe a different number from the
+    // bar it sits under. See parText() in app.js.
+    { key: 'starters', label: 'Starter strength', detail: engine.parText ? engine.parText(me) : Math.round(me.starters) + ' pts above replacement', pct: me.startersScaled, weight: weights.starters, scaled: true, measurable: isMeasurable('starters') },
+    // Caption from the engine, same contract as starter strength above: the
+    // bar is scored against par for this seat and the raw figure is what the
+    // value timeline's own bars sum to, so composing it here would describe a
+    // different number from the bar it labels. See parValueText() in app.js.
+    { key: 'value', label: 'Draft value', detail: engine.parValueText ? engine.parValueText(me) : (me.value >= 0 ? '+' : '') + me.value + ' picks, K and D/ST aside', pct: me.valueScaled, weight: weights.value, scaled: true, measurable: isMeasurable('value') },
+    /* The headline is the raw score now — buildScaled is aliased to it, so the
+       bar, its number and the weighted-sum line all read the same thing. The
+       caption used to be `me.build + ' / 100'`, which was that same number a
+       second time; engine.buildText() names what actually cost the points. */
+    { key: 'build', label: 'Roster construction', detail: engine.buildText ? engine.buildText(me) : me.build + ' / 100', pct: me.buildScaled, weight: weights.build, scaled: false, measurable: isMeasurable('build') },
+    { key: 'byes', label: 'Bye week safety', detail: engine.byeSummary(me.badWeeks), pct: me.byePenaltyScaled, weight: weights.byes, scaled: true, measurable: isMeasurable('byes') },
   ]
+  // How many of the four are currently tied across the room — drives the
+  // optional caveat near the rank below. Not used to gate anything else:
+  // each bar/band still decides its own measurability independently.
+  const unmeasurableCount = bars.filter((b) => !b.measurable).length
 
   const standings = all.slice().sort((a, b) => a.rank - b.rank)
 
@@ -158,8 +252,18 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
     'Roster construction': ['a deep bench', 'a thin bench'],
     'Bye week safety': ['bye-safe starters', 'bye-week exposure'],
   }
-  const strongest = bars.reduce((a, b) => (b.pct > a.pct ? b : a))
-  const weakest = bars.reduce((a, b) => (b.pct < a.pct ? b : a))
+  /* Picked from the measurable bars only, when there are any. A component
+     tied across the whole room (see isMeasurable() above) still carries a
+     real `pct` — often the lowest or highest of the four purely because
+     roster construction starts everyone near 100 and empty slots subtract
+     from it fastest — and naming it "weak" or "strong" in the sentence
+     below would be the same false claim ComponentBand refuses to draw,
+     just said in prose instead of a marker. Falls back to every bar only
+     in the (rare, very-early) case none of the four have differentiated
+     yet, so the sentence never throws on an empty array. */
+  const measurableBars = bars.filter((b) => b.measurable)
+  const strongest = (measurableBars.length ? measurableBars : bars).reduce((a, b) => (b.pct > a.pct ? b : a))
+  const weakest = (measurableBars.length ? measurableBars : bars).reduce((a, b) => (b.pct < a.pct ? b : a))
   const roomAverage = Math.round(all.reduce((s, t) => s + t.total, 0) / all.length)
   const goodPhrase = PHRASE[strongest.label][0]
   const summarySentence =
@@ -187,7 +291,16 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
     const values = all.map((t) => t[scaledKeyOf[b.key]])
     const roomMedian = median(values)
     const best = Math.max(...values)
-    return { ...b, median: roomMedian, best, cost: b.weight * Math.max(0, roomMedian - b.pct) }
+    /* cost is 0 for a component that isn't measurable yet, same as it
+       already is at or above the room median — there is no real gap to
+       close, only the display noise ComponentBand and the bars above are
+       both refusing to draw. Without this, "Fix this first" could name a
+       roster-construction hole every team shares in round 2 as the seat's
+       single most expensive problem, alongside a real player upgrade for
+       it, which is the same false-signal-as-advice failure this whole pass
+       exists to remove. */
+    const cost = b.measurable ? b.weight * Math.max(0, roomMedian - b.pct) : 0
+    return { ...b, median: roomMedian, best, cost }
   })
   // "Fix this first" targets whichever component costs the most, in
   // weighted points, against the room's middle team — not just the lowest
@@ -274,8 +387,10 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
       on a quarterback, kicker or defense you can never start, and how far from startable your best benched
       running back and receiver are — nothing if either could start today. Bye week safety is the last 10%,
       charging every week that leaves more than two starters out — by the square of how many are missing
-      beyond the second, so one week with four off costs more than two weeks with three. Each component is
-      scaled against the other {teams - 1} teams before weighting.
+      beyond the second, so one week with four off costs more than two weeks with three. Starter strength,
+      draft value and bye safety are each scaled against the other {teams - 1} teams before weighting, so
+      0 and 100 on those three mean this room's worst and best, not an absolute verdict. Roster construction
+      is not scaled against anyone — it's an absolute 0-100 score, the same in every room.
     </>
   )
 
@@ -302,7 +417,7 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
         >
           <ChevronLeft className="h-5 w-5" />
         </button>
-        <span className="font-plex text-[11px] font-bold uppercase tracking-[0.14em] text-ink-muted">
+        <span className="font-numeral text-[11px] font-bold uppercase tracking-[0.14em] text-ink-muted">
           {done ? 'Draft complete' : 'Grade so far'}
         </span>
         <button
@@ -320,27 +435,67 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
         <div className="mx-auto max-w-xl p-4 pt-5 sm:p-6 lg:hidden">
           <div className="flex items-start gap-3.5">
             <div className="min-w-0 flex-1">
-              <p className="font-plex text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Where you stand</p>
+              <p className="font-numeral text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Where you stand</p>
               <h2 className="mt-1 font-display text-[38px] font-black leading-none text-white">
                 {ordinal(me.rank)} <span className="text-[16px] font-semibold text-white/50">of {teams}</span>
               </h2>
-              <p className="mt-2 flex items-baseline gap-1.5">
-                <span className="font-plex text-[20px] font-bold text-teal-300">{me.total.toFixed(1)}</span>
-                <span className="font-plex text-[11px] text-ink-muted">/ 100 weighted score</span>
-              </p>
               <p className="mt-2 text-[14px] leading-snug text-white/55">{summarySentence}</p>
+              {/* Optional, low-key — only shows once more than one of the
+                  four bars is currently a dash (see isMeasurable() above),
+                  so a rank this real doesn't sit over several ties with
+                  nothing on screen explaining why. */}
+              {unmeasurableCount >= 2 && (
+                <p className="mt-1 text-[12px] leading-snug text-ink-muted">
+                  A few components below are still settling in as more of the room drafts.
+                </p>
+              )}
             </div>
-            {/* The letter, demoted — a 68 is a B mid-draft and an A+ at the
-                end, because the letter is finishing position and the score
-                above it is a weighted composite (both room-relative, but
-                on different scales), so the two must never carry equal
-                visual weight. */}
+            {/* The letter, demoted, and no longer standing next to a score out
+                of a hundred.
+
+                It used to read "69.8 / 100" here with an "A" beside it, and
+                that is unreadable in the way only a familiar scale can be: the
+                letter is finishing position and the number was a room-relative
+                composite, so a reader applying the meaning they were taught in
+                school got a contradiction every single time — measured, the
+                letter agreed with the school reading of the number it sat
+                beside on 0 of 10 teams.
+
+                Curving the letter off something absolute was measured and
+                rejected (a normal room came out 37 of 40 A+), so the number
+                goes rather than the letter. It survives in the component bars
+                below, where the four parts visibly add up to it and nothing
+                claims it is a percentage. */}
             <div className="w-[74px] shrink-0 pt-1 text-right">
-              <p className="font-plex text-[9px] font-semibold uppercase leading-tight tracking-wide text-ink-muted">
+              <p className="font-numeral text-[9px] font-semibold uppercase leading-tight tracking-wide text-ink-muted">
                 Letter, for the share card
               </p>
               <p className="mt-1.5 font-display text-2xl font-bold text-white/50">{me.grade}</p>
             </div>
+          </div>
+
+          {/* Promoted up from the bottom of the screen, where "run another
+              mock or go back to the lobby" — the two things a manager who
+              just finished a draft is likeliest to want — sat below the
+              full breakdown, the standings and the methodology disclosure,
+              reachable only after scrolling past all of it. These are the
+              same two handlers the row at the foot of this screen already
+              used; only the position moved; Close/Discard stay down there
+              as the lower-frequency pair. */}
+          <div className="mt-5 space-y-2.5">
+            <button
+              type="button"
+              onClick={handleRunAnother}
+              className="flex h-[52px] w-full items-center justify-center rounded-full bg-gradient-to-r from-[#00E5FF] to-[#7B1FA2] text-[15px] font-bold text-white shadow-glass transition-transform duration-150 active:scale-[0.98]"
+            >
+              Run another mock
+            </button>
+            <a
+              href="#/drafts"
+              className="flex h-[50px] w-full items-center justify-center rounded-full border border-white/15 text-[14px] font-semibold text-white/75 transition-colors duration-150 active:bg-white/[0.06]"
+            >
+              Back to the locker
+            </a>
           </div>
 
           <h3 className="mt-8 font-display text-lg font-extrabold text-white">How the grade is built</h3>
@@ -353,15 +508,15 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
                 <div key={b.key}>
                   <div className="flex items-baseline justify-between gap-3">
                     <span className="text-[15px] font-bold text-white">{b.label}</span>
-                    <span className={'shrink-0 font-plex text-[15px] font-bold ' + (t === 'bad' ? 'text-rose-400' : 'text-teal-300')}>
+                    <span className={'shrink-0 font-numeral text-[15px] font-bold ' + (t === 'bad' ? 'text-rose-400' : 'text-teal-300')}>
                       {Math.round(b.pct)}
                     </span>
                   </div>
                   <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-white/[0.08]">
                     <div className={'h-1.5 rounded-full transition-all duration-300 ' + barFill[t]} style={{ width: width + '%' }} />
                   </div>
-                  <div className="mt-1.5 flex items-center justify-between font-plex text-[11px] text-ink-muted">
-                    <span>{Math.round(b.weight * 100)}% weight</span>
+                  <div className="mt-1.5 flex items-center justify-between font-numeral text-[11px] text-ink-muted">
+                    <span>{Math.round(b.weight * 100)}% weight · {b.scaled ? 'vs. room' : 'own scale'}</span>
                     <span>contributes {contributes.toFixed(1)}</span>
                   </div>
                 </div>
@@ -371,12 +526,21 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
 
           <div className="mt-6 flex items-center justify-between border-t border-white/10 pt-5">
             <span className="text-[15px] font-bold text-white">Composite</span>
-            <span className="font-plex text-[17px] font-bold text-teal-300">
+            <span className="font-numeral text-[17px] font-bold text-teal-300">
               {me.total.toFixed(1)} <span className="text-ink-muted">&rarr;</span> {me.grade}
             </span>
           </div>
+          {/* Used to claim all four bars work the same way ("every score is
+              ranked against the room, 50 is the average") — false for
+              roster construction, which is never scaled against the room
+              at all (see CLAUDE.md and the bars array's own comment above).
+              Fixed in place rather than left standing: it was the same
+              "0 reads as a verdict" confusion the vs.-room tag on each bar
+              now heads off closer to the number itself, just stated wrong. */}
           <p className="mt-3 text-[13.5px] leading-relaxed text-ink-muted">
-            Every score is your value ranked against the other {teams - 1} teams, so 50 is the room average.
+            Starter strength, draft value and bye safety are ranked against the other {teams - 1} teams — 50 is
+            the room average on those three, and 0 means "worst in this room," never "no value." Roster
+            construction is scored on its own scale instead: an absolute 0-100, not ranked against anyone.
             Bars run one direction: right is better.
           </p>
 
@@ -409,7 +573,7 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
               only, per the handoff's own instruction not to invent new
               behavior here. */}
           <details className="group mt-5 rounded-xl border border-slate-rule bg-slate-panel/40 p-4">
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
+            <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3">
               <span>
                 <span className="block text-[14px] font-bold text-white">How this grade is calculated</span>
                 <span className="mt-0.5 block text-[13.5px] text-ink-muted">The full method, in plain English</span>
@@ -421,7 +585,7 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
 
           <div className="mt-7 flex items-center justify-between">
             <h3 className="font-display text-lg font-extrabold text-white">The room</h3>
-            <span className="font-plex text-[11px] text-ink-muted">{teams} teams</span>
+            <span className="font-numeral text-[11px] text-ink-muted">{teams} teams</span>
           </div>
           <div className="mt-3 space-y-2">
             {mobileStandings.map((t) => {
@@ -434,12 +598,17 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
                     (mine ? 'border-teal-400/40 bg-teal-400/[0.08]' : 'border-white/[0.06] bg-white/[0.02]')
                   }
                 >
-                  <span className="w-4 shrink-0 font-plex text-[12px] text-ink-muted">{t.rank}</span>
+                  <span className="w-4 shrink-0 font-numeral text-[12px] text-ink-muted">{t.rank}</span>
                   <span className={'min-w-0 flex-1 truncate text-[14px] font-bold ' + (mine ? 'text-teal-300' : 'text-white/85')}>
                     {mine ? 'You · seat ' + (t.slot + 1) : engine.teamLabel(t.slot)}
                   </span>
-                  <span className={'shrink-0 font-plex text-[13.5px] font-semibold ' + (mine ? 'text-teal-300' : 'text-white/70')}>
-                    {t.grade} &middot; {Math.round(t.total)}
+                  {/* The letter alone. This read "B− · 56", which is the
+                      grade-beside-a-score pairing in its most compressed form
+                      — and the rank is already the first thing in the row, so
+                      the number was restating the ordering in a scale that
+                      argues with the letter. */}
+                  <span className={'shrink-0 font-numeral text-[13.5px] font-semibold ' + (mine ? 'text-teal-300' : 'text-white/70')}>
+                    {t.grade}
                   </span>
                 </div>
               )
@@ -449,32 +618,21 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
             <button
               type="button"
               onClick={() => setShowAllTeams((v) => !v)}
-              className="mt-2.5 inline-block py-1.5 text-[13.5px] font-semibold text-ink-muted transition-colors duration-150 hover:text-teal-300"
+              className="mt-1 flex h-11 items-center text-[13.5px] font-semibold text-ink-muted transition-colors duration-150 hover:text-teal-300"
             >
               {showAllTeams ? 'Show fewer ‹' : 'Show all ' + teams + ' ›'}
             </button>
           ) : null}
 
-          {/* Four exits — Prompt 6's own review note: these were missing
-              entirely before this pass. Only Discard confirms (the state and
-              handler above, shared with the desktop buttons below), because
-              nothing else here can lose a finished draft — it is already in
-              history the moment the draft ended (see the comment above
+          {/* Two exits now, not four — Run another mock/Back to the locker
+              moved up to sit right under the grade itself (see that
+              comment); Close and Discard are the lower-frequency pair and
+              stay put. Only Discard confirms (the state and handler above,
+              shared with the desktop buttons below), because nothing else
+              here can lose a finished draft — it is already in history the
+              moment the draft ended (see the comment above
               handleRunAnother). */}
-          <div className="mt-8 space-y-2.5 border-t border-white/10 pt-6">
-            <button
-              type="button"
-              onClick={handleRunAnother}
-              className="flex h-[52px] w-full items-center justify-center rounded-full bg-gradient-to-r from-[#00E5FF] to-[#7B1FA2] text-[15px] font-bold text-white shadow-glass transition-transform duration-150 active:scale-[0.98]"
-            >
-              Run another mock
-            </button>
-            <a
-              href="#/drafts"
-              className="flex h-[50px] w-full items-center justify-center rounded-full border border-white/15 text-[14px] font-semibold text-white/75 transition-colors duration-150 active:bg-white/[0.06]"
-            >
-              Back to the locker
-            </a>
+          <div className="mt-8 border-t border-white/10 pt-6">
             <div className="flex gap-2.5">
               <button
                 type="button"
@@ -510,33 +668,54 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
         <div className="mx-auto hidden max-w-6xl p-6 lg:block">
           <div className="flex flex-wrap items-center gap-5 rounded-xl border border-slate-rule bg-slate-panel/60 p-4 sm:gap-6 sm:p-5">
             <div>
-              <p className="font-plex text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Where you stand</p>
+              <p className="font-numeral text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Where you stand</p>
               <p className="mt-1 flex items-baseline gap-2">
                 <span className="font-display text-4xl font-black text-white">{ordinal(me.rank)}</span>
                 <span className="text-sm text-white/50">of {teams}</span>
               </p>
             </div>
             <div className="hidden h-10 w-px bg-slate-rule sm:block" />
-            <div>
-              <p className="font-plex text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Weighted score</p>
-              <p className="mt-1 font-plex text-2xl font-bold text-teal-300">
-                {me.total.toFixed(1)} <span className="text-sm font-normal text-ink-muted">/ 100</span>
-              </p>
-            </div>
-            <div className="hidden h-10 w-px bg-slate-rule sm:block" />
             <p className="max-w-sm text-xs leading-relaxed text-white/50">
               {done ? 'Draft complete.' : 'Updates after every pick.'} Graded against the {teams - 1} teams in
               this room, not against the league at large.
+              {/* Same optional caveat as the mobile header, same threshold —
+                  see unmeasurableCount and isMeasurable() above. */}
+              {unmeasurableCount >= 2 && (
+                <span className="text-ink-muted"> A few components below are still settling in as more of the room drafts.</span>
+              )}
             </p>
-            {/* The letter, demoted — see the mobile header's own comment on
-                why finishing position and the weighted composite can't
-                share top billing. */}
+            {/* The letter, demoted, and the "Weighted score / x / 100" block
+                that used to sit here is gone — see the mobile header's own
+                comment for why a letter cannot stand beside a score out of a
+                hundred. Its divider went with it, or the header would carry a
+                rule with nothing on either side of it. */}
             <div className="ml-auto shrink-0 text-right">
-              <p className="font-plex text-[9px] font-semibold uppercase tracking-wide text-ink-muted">
+              <p className="font-numeral text-[9px] font-semibold uppercase tracking-wide text-ink-muted">
                 Letter, for the share card
               </p>
               <p className="mt-1 font-display text-lg font-bold text-white/50">{me.grade}</p>
             </div>
+          </div>
+
+          {/* Promoted up from the exit row at the foot of the screen — see
+              the mobile header's identical addition for why. Solid gradient
+              for Run another mock rather than the outline pill the bottom
+              row still uses for it: this is the one suggested action, not
+              one of four equally-weighted exits. */}
+          <div className="mt-4 flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={handleRunAnother}
+              className="rounded-full bg-gradient-to-r from-[#00E5FF] to-[#7B1FA2] px-4 py-2 text-xs font-bold text-white shadow-glass transition-transform duration-150 hover:scale-[1.02]"
+            >
+              Run another mock
+            </button>
+            <a
+              href="#/drafts"
+              className="rounded-full border border-white/15 px-4 py-2 text-xs font-semibold text-white/60 transition-colors duration-150 hover:border-teal-400/60 hover:text-teal-300"
+            >
+              Back to the locker
+            </a>
           </div>
 
           <div className="mt-4 space-y-2.5">
@@ -546,11 +725,13 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
               return (
                 <div key={b.key} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                   <b className="w-32 shrink-0 font-semibold text-white/80 sm:w-40">{b.label}</b>
-                  <span className="w-14 shrink-0 font-plex text-[10px] text-ink-muted">wt {Math.round(b.weight * 100)}%</span>
+                  <span className="w-24 shrink-0 font-numeral text-[10px] text-ink-muted">
+                    wt {Math.round(b.weight * 100)}% · {b.scaled ? 'room' : 'own'}
+                  </span>
                   <div className="h-1.5 min-w-[100px] max-w-[420px] flex-1 rounded-full bg-slate-rule">
                     <div className={'h-1.5 rounded-full transition-all duration-300 ' + barFill[t]} style={{ width: width + '%' }} />
                   </div>
-                  <span className={'w-7 shrink-0 text-right font-plex text-sm font-bold ' + (t === 'bad' ? 'text-rose-400' : 'text-teal-300')}>
+                  <span className={'w-7 shrink-0 text-right font-numeral text-sm font-bold ' + (t === 'bad' ? 'text-rose-400' : 'text-teal-300')}>
                     {Math.round(b.pct)}
                   </span>
                   <span className="w-full shrink-0 text-ink-muted sm:w-auto sm:flex-1">{b.detail}</span>
@@ -561,8 +742,8 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
                 not just agree with it in principle. */}
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-slate-rule/70 pt-2.5 text-xs">
               <span className="w-32 shrink-0 font-semibold uppercase tracking-wide text-teal-300 sm:w-40">Weighted sum</span>
-              <span className="flex-1 font-plex text-ink-muted">{bars.map((b) => (b.pct * b.weight).toFixed(1)).join(' + ')}</span>
-              <span className="font-plex text-sm font-bold text-teal-300">= {me.total.toFixed(1)}</span>
+              <span className="flex-1 font-numeral text-ink-muted">{bars.map((b) => (b.pct * b.weight).toFixed(1)).join(' + ')}</span>
+              <span className="font-numeral text-sm font-bold text-teal-300">= {me.total.toFixed(1)}</span>
             </div>
           </div>
 
@@ -601,7 +782,7 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
                   <div className="text-[10px] font-semibold uppercase tracking-wide text-emerald-400">Best value</div>
                   <div className="mt-0.5 truncate text-sm font-medium text-white">{me.bargain.pick.player.name}</div>
                   <div className="mt-0.5 text-[11px] leading-relaxed text-white/50">
-                    Taken at {DE ? DE.pickCode(me.bargain.pick.overall, teams) : me.bargain.pick.overall}, board had
+                    Taken at {DE ? DE.pickCode(me.bargain.pick.overall, league) : me.bargain.pick.overall}, board had
                     him {me.bargain.pick.player.overall}
                     {me.bargain.gap > 0 ? ` — ${me.bargain.gap} picks late` : ''}
                   </div>
@@ -619,7 +800,7 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
                   </div>
                   <div className="mt-0.5 truncate text-sm font-medium text-white">{me.reach.pick.player.name}</div>
                   <div className="mt-0.5 text-[11px] leading-relaxed text-white/50">
-                    Taken at {DE ? DE.pickCode(me.reach.pick.overall, teams) : me.reach.pick.overall}, board had him{' '}
+                    Taken at {DE ? DE.pickCode(me.reach.pick.overall, league) : me.reach.pick.overall}, board had him{' '}
                     {me.reach.pick.player.overall} — {Math.abs(me.reach.gap)} picks early
                   </div>
                 </div>
@@ -648,14 +829,18 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
           </div>
 
           <p className="mt-5 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">Room standings</p>
-          <table className="mt-1.5 w-full text-xs">
+          <table className="mt-1.5 w-full bg-slate-panel text-xs">
             <tbody>
               {standings.map((t) => (
                 <tr key={t.slot} className={t.slot === mySlot ? 'bg-[#FFD166]/10' : ''}>
-                  <td className="py-1 pr-2 text-ink-muted">{t.rank}</td>
+                  {/* Rank, team, letter — no score column between the last
+                      two. See the legacy standings note in app.js: whatever
+                      sits there has to be the weighted total, and a weighted
+                      total next to a letter grade is the pairing that reads
+                      against everything a person was taught about letters. */}
+                  <td className="py-1 pr-2 font-numeral tabular-nums text-ink-muted">{t.rank}</td>
                   <td className="py-1 pr-2 font-medium text-white/80">{engine.teamLabel(t.slot)}</td>
-                  <td className="py-1 pr-2 text-right font-semibold text-white/90">{Math.round(t.total)}</td>
-                  <td className="py-1 text-right text-white/60">{t.grade}</td>
+                  <td className="py-1 text-right font-numeral text-white/60">{t.grade}</td>
                 </tr>
               ))}
             </tbody>
@@ -668,20 +853,10 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
             <p className="mt-2 max-w-[70ch] text-[11px] leading-relaxed text-ink-muted">{methodologyText}</p>
           </details>
 
+          {/* Run another mock/Back to the locker moved up to sit under the
+              summary bar (see that comment) — Close and Discard are the
+              lower-frequency pair and stay here. */}
           <div className="mt-6 flex flex-wrap items-center justify-center gap-2.5 border-t border-slate-rule/80 pt-5">
-            <a
-              href="#/drafts"
-              className="rounded-full border border-white/15 px-4 py-2 text-xs font-semibold text-white/60 transition-colors duration-150 hover:border-teal-400/60 hover:text-teal-300"
-            >
-              Back to the locker
-            </a>
-            <button
-              type="button"
-              onClick={handleRunAnother}
-              className="rounded-full border border-teal-400/40 px-4 py-2 text-xs font-semibold text-teal-300 transition-colors duration-150 hover:border-teal-400 hover:bg-teal-400/10"
-            >
-              Run another mock
-            </button>
             <button
               type="button"
               onClick={onClose}

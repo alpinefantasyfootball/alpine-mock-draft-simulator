@@ -41,7 +41,7 @@ export default function GameLogsTab({ engine, player }) {
       </p>
 
       <div className="overflow-x-auto rounded-lg border border-slate-rule">
-        <table className="w-full min-w-max text-xs">
+        <table className="w-full min-w-max bg-slate-panel text-xs">
           <thead>
             <tr className="border-b border-slate-rule bg-slate-sunk/60">
               {log.head.map((h) => (

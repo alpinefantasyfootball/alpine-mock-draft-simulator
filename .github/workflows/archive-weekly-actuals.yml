@@ -1,0 +1,89 @@
+name: Archive weekly actuals
+
+# The nightly pipeline (update-players.yml) overwrites players.js/stats.js
+# every run -- exactly right for a live draft board, and it means the 2026
+# season would otherwise run past the app without ever being recorded. This
+# is the substrate a projections backtest and the future Waiver Room both
+# need, and neither can be built retroactively once a week's games are gone.
+# See scripts/archive_week.mjs's own header comment and CLAUDE.md.
+#
+# Tuesday, 14:00 UTC: comfortably after Monday Night Football (which can run
+# past 04:00 UTC for a late window game) and after Sleeper typically
+# finalizes the box scores from it.
+on:
+  schedule:
+    - cron: "0 14 * * 2"
+  workflow_dispatch:
+    inputs:
+      season:
+        description: "NFL season"
+        required: false
+        default: "2026"
+      week:
+        description: "Week (1-18). Leave blank to auto-detect the most recently completed week from Sleeper's own state/nfl endpoint."
+        required: false
+        default: ""
+      force:
+        description: "Overwrite an already-archived week"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          # Two separate npm projects (root, web/) -- both lockfiles, or the
+          # cache key only ever reflects one of them.
+          cache-dependency-path: |
+            package-lock.json
+            web/package-lock.json
+
+      # Root package.json (Playwright) and web/'s own dependencies (Vite) --
+      # this job actually runs `vite dev` locally to read pointsUnder()/
+      # rulesForFormat() straight out of the real app, the same reason
+      # scripts/freeze_baseline.mjs needs both. See that script's header
+      # comment for why this is JS rather than a second copy of the scoring
+      # arithmetic in Python.
+      - run: npm ci
+      - run: npm ci
+        working-directory: web
+
+      - run: npx playwright install --with-deps chromium
+
+      - name: Archive the week
+        run: |
+          ARGS="--season ${{ inputs.season || '2026' }}"
+          if [ -n "${{ inputs.week }}" ]; then ARGS="$ARGS --week ${{ inputs.week }}"; fi
+          if [ "${{ inputs.force }}" = "true" ]; then ARGS="$ARGS --force"; fi
+          node scripts/archive_week.mjs $ARGS
+
+      - name: Commit if a week was archived
+        run: |
+          git config user.name  "alpine-draft-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/season
+
+          # --quiet exits non-zero when there ARE changes -- the early exit on
+          # a run that found nothing to archive yet (before kickoff, a run
+          # that fires before Sleeper has finalized the week, or a week
+          # that's already archived and wasn't --force'd).
+          if git diff --staged --quiet; then
+            echo "Nothing new to archive this run."
+            exit 0
+          fi
+
+          WEEK=$(git diff --staged --name-only | grep -oE 'week-[0-9]+' | head -1)
+          git commit -m "Archive ${{ inputs.season || '2026' }} $WEEK actuals"
+          git push

@@ -1,5 +1,5 @@
-import { useReducer, useState } from 'react'
-import { Calendar, TrendingUp, Shield } from 'lucide-react'
+import { useEffect, useReducer, useRef, useState } from 'react'
+import { Calendar, ChevronLeft, TrendingUp, Shield } from 'lucide-react'
 import { useEngine, useJukeTick } from '../hooks/useJukeEngine.js'
 import NewMockPanel from './NewMockPanel.jsx'
 import InProgressBand from './InProgressBand.jsx'
@@ -67,7 +67,7 @@ const MIN_MOCKS_FOR_ANALYTICS = 5
 // and the heatmap's 3-column span (13 cell-units of content into 12 cells)
 // and had to invent a fourth row to make the arithmetic work. It didn't
 // need to: the spec was describing a visual proportion, not a grid mechanic.
-function AnalyticsGrid({ engine, league, stats, problem, lobbySlot, roomActive, onSetLobbySlot, onStartNew, onOpenSettings, onDraftWithFriends }) {
+function AnalyticsGrid({ engine, league, stats, problem, lobbySlot, roomActive, onSetLobbySlot, onStartNew, onRunAtSeat, onOpenSettings, onDraftWithFriends }) {
   const totalMocks = stats.total || 0
   const thin = totalMocks < MIN_MOCKS_FOR_ANALYTICS
 
@@ -93,14 +93,35 @@ function AnalyticsGrid({ engine, league, stats, problem, lobbySlot, roomActive, 
             Run {MIN_MOCKS_FOR_ANALYTICS - totalMocks} more mock{MIN_MOCKS_FOR_ANALYTICS - totalMocks === 1 ? '' : 's'} and
             Juke will start showing your tendencies, your projected win rate, and where each draft left value on the board.
           </p>
-          <p className="mt-3 text-xs tabular-nums text-ink-muted">
+          {/* Five dots, one per mock still needed — the same fact the
+              caption below states in words, made visible at a glance before
+              anyone reads the number. totalMocks is always <
+              MIN_MOCKS_FOR_ANALYTICS in this branch (that's the gate this
+              branch renders under), so no clamping needed on the fill
+              count. */}
+          <div
+            className="mt-4 flex items-center gap-2"
+            role="img"
+            aria-label={`${totalMocks} of ${MIN_MOCKS_FOR_ANALYTICS} mocks logged`}
+          >
+            {Array.from({ length: MIN_MOCKS_FOR_ANALYTICS }, (_, i) => (
+              <span
+                key={i}
+                className={
+                  'h-2 w-2 rounded-full transition-colors duration-300 ' +
+                  (i < totalMocks ? 'bg-teal-400 shadow-[0_0_6px_rgba(0,229,255,0.6)]' : 'border border-white/15')
+                }
+              />
+            ))}
+          </div>
+          <p className="mt-2 text-xs tabular-nums text-ink-muted">
             {totalMocks} of {MIN_MOCKS_FOR_ANALYTICS} logged so far
           </p>
         </div>
       ) : (
         <>
           <div className="sm:col-span-2 lg:col-start-2 lg:col-span-2 lg:row-start-1">
-            <RecommendationEngine engine={engine} league={league} stats={stats} onSetLobbySlot={onSetLobbySlot} onStartNew={onStartNew} />
+            <RecommendationEngine engine={engine} league={league} stats={stats} roomActive={roomActive} onRunAtSeat={onRunAtSeat} />
           </div>
           <div className="lg:col-start-4 lg:row-start-1">
             <MostDraftedCard stats={stats} />
@@ -138,7 +159,7 @@ function AnalyticsGrid({ engine, league, stats, problem, lobbySlot, roomActive, 
 // child here is presentational — this component owns the one thing that
 // has to live above all of them, which is knowing whether an in-progress
 // draft or history entry changed and needs a re-render.
-export default function DraftLocker({ onStartNew, problem, lobbySlot, roomActive, onSetLobbySlot, onOpenSettings, onDraftWithFriends }) {
+export default function DraftLocker({ onStartNew, onRunAtSeat, problem, lobbySlot, roomActive, onSetLobbySlot, onOpenSettings, onDraftWithFriends, initialAnalyzeId, onBackToList }) {
   const engine = useEngine()
   useJukeTick(engine)
   // clearSave()/deleteHistoryDraft() are plain localStorage writes with no
@@ -157,8 +178,50 @@ export default function DraftLocker({ onStartNew, problem, lobbySlot, roomActive
   const [analyzingId, setAnalyzingId] = useState(null)
   // Which team's report the dashboard shows — yours on open, or another
   // seat's if a future caller wants that; kept separate from mySlot the
-  // same way DraftRoom.jsx's own insightsSlot is.
+  // same way DraftRoom.jsx's own insightsSlot is. Only meaningful for the
+  // live-recompute fallback path below; a frozen report only ever has full
+  // detail for the drafter's own seat, so it ignores this entirely.
   const [insightsSlot, setInsightsSlot] = useState(0)
+  // The frozen report for analyzingId, or null when analyzing a pre-freeze
+  // entry that has to fall back to the live recompute — see analyze() and
+  // DraftInsightsDashboard.jsx's own file comment on why the two disagree
+  // and why that gap matters.
+  const [historyReport, setHistoryReport] = useState(null)
+  /* Open one report straight away, when a caller already knows which.
+
+     MockDraftsPhone.jsx is that caller: on a phone the history list lives
+     on its own screen, so tapping a row has to land on the report rather
+     than on the dashboard the row is not part of. It goes through the
+     identical analyze() below rather than reaching for openHistoryDraft()
+     itself — the frozen-report-first path is the whole reason a reopened
+     draft and the report it was graded with cannot disagree, and a second
+     entry point that skipped it would silently reintroduce exactly that.
+
+     ---- Two things about where this sits ----
+
+     ABOVE `if (!engine) return null`, and that is not style. Placed below
+     it, the hook ran on the renders where the engine had resolved and not
+     on the ones before, so the hook COUNT changed between renders —
+     React's "rendered more hooks than during the previous render", thrown
+     on the first press of the button that mounts this component. Every
+     hook in a component runs on every render or none of them do; an early
+     return is a wall no hook may sit behind.
+
+     And it fires once, tracked by a ref rather than by an empty dep array.
+     `analyze` is a const assigned further down this function, so on the
+     render where the engine is still null it is never assigned at all —
+     an empty-dep effect would run exactly then, reach a binding in its
+     temporal dead zone, and throw. Keyed on `engine` it runs again once
+     there is one, and the ref is what stops it re-opening a report the
+     reader has since closed. */
+  const openedInitial = useRef(false)
+  useEffect(() => {
+    if (!engine || !initialAnalyzeId || openedInitial.current) return
+    openedInitial.current = true
+    analyze(initialAnalyzeId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [engine, initialAnalyzeId])
+
 
   if (!engine) return null
 
@@ -175,13 +238,81 @@ export default function DraftLocker({ onStartNew, problem, lobbySlot, roomActive
   const hasWinTrend = stats.winPctHistory && stats.winPctHistory.length >= 2
 
   const resume = () => { engine.resumeSavedDraft(); location.hash = '#/draft-room' }
-  const discard = () => { engine.clearSave(); forceLocal() }
+  // engine.restart() — clearSave() plus goHome() — not clearSave() alone.
+  // Reported directly: discard here, then start a new mock, and the new
+  // board opened already holding the old draft's picks. clearSave() only
+  // drops the localStorage save; it never touches the live state.picks or
+  // board[i].drafted that a draft actually left behind on the page (the
+  // chevron back to this screen doesn't clear them either — leaving a
+  // draft mid-round is meant to be resumable, so nothing here resets that
+  // state on its own). startDraft() -> buildBoard() does rebuild `board`
+  // from scratch on the next mock, but it has never cleared state.picks
+  // itself — it relies on whatever ended the previous draft having already
+  // done that, which goHome() does and clearSave() alone does not. This is
+  // the exact same "Discard draft" action the in-draft kebab menu already
+  // gets right (DraftRoom.jsx's handleDiscard); this screen just hadn't
+  // been calling it.
+  const discard = () => { engine.restart(); forceLocal() }
+  // Frozen report first — a plain localStorage read, no board rebuild, no
+  // drift. Only an entry recorded before freezeReport() existed comes back
+  // null, and only then does this fall back to the old path: rebuild
+  // today's board and replay the picks onto it, live. See
+  // DraftInsightsDashboard.jsx's own file comment for why the two can
+  // disagree on the very same picks and why that gap was a real bug.
   const analyze = (id) => {
+    const frozen = engine.historyReport(id)
+    if (frozen) {
+      setHistoryReport(frozen)
+      setAnalyzingId(id)
+      return
+    }
     if (!engine.openHistoryDraft(id)) return
     setInsightsSlot(engine.mySlot())
+    setHistoryReport(null)
     setAnalyzingId(id)
   }
   const deleteEntry = (id) => { engine.deleteHistoryDraft(id); forceLocal() }
+
+  // A report replaces the Lobby screen while it's open, the same way
+  // DraftRoom.jsx's own `view === 'insights'` replaces the board tab
+  // instead of appending below it — this used to render *after* the KPI
+  // row, "Your Tendencies," and the full history table inside the same
+  // flex-1 scroll region, so opening a report from any row of a long
+  // table left it sitting below all of that, off the bottom of the
+  // screen. Reported directly: users had to scroll to find it.
+  //
+  // onRunAnother does the extra local reset DraftRoom.jsx's own default
+  // (bare engine.restart()) doesn't need: DraftRoom listens for the
+  // juke:home event restart() fires and swaps its own view state, but
+  // this screen has no equivalent listener, so without clearing
+  // analyzingId here the dashboard kept trying to render a report
+  // against the just-cleared board and silently returned null — see
+  // DraftInsightsDashboard.jsx's own comment on this prop.
+  if (analyzingId) {
+    // historyReport set: nothing live was touched to get here (analyze()
+    // took the frozen-report path), so closing just drops local state —
+    // engine.closeHistoryDraft() only undoes what openHistoryDraft() did,
+    // and that was never called this time.
+    const closeAnalysis = () => {
+      if (!historyReport) engine.closeHistoryDraft()
+      setAnalyzingId(null)
+      setHistoryReport(null)
+    }
+    return (
+      <DraftInsightsDashboard
+        engine={engine}
+        league={league}
+        mySlot={engine.mySlot()}
+        viewSlot={insightsSlot}
+        onViewSlot={setInsightsSlot}
+        historyReport={historyReport ? historyReport.report : null}
+        historyCompletedAt={historyReport ? historyReport.completedAt : null}
+        onClose={closeAnalysis}
+        onRunAnother={() => { closeAnalysis(); engine.restart() }}
+        cameFromLocker
+      />
+    )
+  }
 
   return (
     // min-h-full + flex-col, with the Locker table wrapper below taking
@@ -193,6 +324,20 @@ export default function DraftLocker({ onStartNew, problem, lobbySlot, roomActive
     // the real ancestor scroller (DraftRoom.jsx's own overflow-y-auto) take
     // over, rather than being capped at 100% and clipping.
     <div className="mx-auto flex min-h-full max-w-[1600px] flex-col px-4 py-5 lg:px-8 lg:py-7">
+      {/* Only when somebody arrived here from a screen that is still
+          behind this one — the phone's Mock Drafts list. At every other
+          width and entry point this IS the screen, and a back control on
+          the thing you cannot go back from is the dead-control problem. */}
+      {onBackToList && (
+        <button
+          type="button"
+          onClick={onBackToList}
+          className="-ml-2 mb-2 flex items-center gap-1 self-start rounded-[10px] py-2 pl-2 pr-3 text-[14px] font-semibold text-white/70 active:bg-white/[0.05] lg:hidden"
+        >
+          <ChevronLeft className="h-5 w-5" />
+          Mock drafts
+        </button>
+      )}
       <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="font-display text-[32px] font-bold text-white">Draft Lobby</h1>
@@ -270,8 +415,8 @@ export default function DraftLocker({ onStartNew, problem, lobbySlot, roomActive
           engine={engine}
           league={league}
           stats={stats}
-          onSetLobbySlot={onSetLobbySlot}
-          onStartNew={onStartNew}
+          roomActive={roomActive}
+          onRunAtSeat={onRunAtSeat}
         />
       )}
 
@@ -295,6 +440,7 @@ export default function DraftLocker({ onStartNew, problem, lobbySlot, roomActive
           roomActive={roomActive}
           onSetLobbySlot={onSetLobbySlot}
           onStartNew={onStartNew}
+          onRunAtSeat={onRunAtSeat}
           onOpenSettings={onOpenSettings}
           onDraftWithFriends={onDraftWithFriends}
         />
@@ -303,17 +449,6 @@ export default function DraftLocker({ onStartNew, problem, lobbySlot, roomActive
       <div className="min-h-0 flex-1">
         <LockerTable entries={completed} onAnalyze={analyze} onDeleteConfirmed={deleteEntry} />
       </div>
-
-      {analyzingId && (
-        <DraftInsightsDashboard
-          engine={engine}
-          league={league}
-          mySlot={engine.mySlot()}
-          viewSlot={insightsSlot}
-          onViewSlot={setInsightsSlot}
-          onClose={() => { engine.closeHistoryDraft(); setAnalyzingId(null) }}
-        />
-      )}
     </div>
   )
 }

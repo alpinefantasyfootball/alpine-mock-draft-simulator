@@ -7,7 +7,9 @@ import { describeRecommendation, runRecommendation } from './recommendation.js'
 // close to the brand's existing teal/purple hue family (cyan and magenta
 // sit either side of it on the wheel) rather than an arbitrary rainbow, so
 // this still reads as the same app. Never reused for anything that names a
-// POSITION — POS_SOLID owns that vocabulary everywhere else and this file
+// POSITION — draftRoomPositions.js owns that vocabulary everywhere else
+// (POS_CHALK for a mark, POS_BADGE for a chip, POS_SOLID under white
+// text) and this file
 // must not compete with it (see draftRoomPositions.js's own file comment on
 // exactly that failure mode).
 const FORMAT_COLORS = ['#22D3EE', '#E879F9', '#FBBF24']
@@ -108,7 +110,7 @@ function FormatChart({ format, color, recommendation }) {
 // describeRecommendation()/runRecommendation() helpers, so the highlighted
 // bar here and the sentence in the strip can never name a different
 // (format, seat) pair.
-export default function RecommendationEngine({ engine, league, stats, onSetLobbySlot, onStartNew }) {
+export default function RecommendationEngine({ engine, league, stats, roomActive, onRunAtSeat }) {
   const formats = stats.recEngineFormats
   if (!formats || !formats.length) {
     return (
@@ -135,10 +137,19 @@ export default function RecommendationEngine({ engine, league, stats, onSetLobby
         {info && (
           <div className="mt-3 flex items-center gap-3 rounded-lg border border-white/[0.07] bg-white/[0.02] px-3 py-2.5">
             <p className="min-w-0 flex-1 text-[11.5px] leading-snug text-white/70">{info.text}</p>
+            {/* Same room-lock fix as WhatToRunNext.jsx's identical banner —
+                see its own comment. */}
             <button
               type="button"
-              onClick={() => runRecommendation(engine, league, info.rec, onSetLobbySlot, onStartNew)}
-              className="shrink-0 whitespace-nowrap rounded-md bg-teal-400 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wide text-obsidian transition-colors hover:bg-teal-300"
+              onClick={() => runRecommendation(engine, league, info.rec, onRunAtSeat)}
+              disabled={roomActive}
+              title={roomActive ? "Not available in a room" : undefined}
+              className={
+                'shrink-0 whitespace-nowrap rounded-md px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wide transition-colors ' +
+                (roomActive
+                  ? 'cursor-not-allowed bg-white/10 text-white/30'
+                  : 'bg-teal-400 text-obsidian hover:bg-teal-300')
+              }
             >
               {info.ctaLabel}
             </button>

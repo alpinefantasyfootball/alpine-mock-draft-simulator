@@ -1,6 +1,7 @@
 import { useEffect, useReducer, useRef, useState } from 'react'
 import { Image as ImageIcon, Send, X } from 'lucide-react'
 import { SonarPulse } from './SonarLoader.jsx'
+import { CHAT_MAX, buildDisplay, chatTime, seatInitials, seatLabel, seatName } from './chatHelpers.js'
 
 // Replaces ChatPlaceholder.jsx at both its mount points (DraftLogDock's
 // desktop column, PlayerHub's mobile Chat tab). Reads and writes the real
@@ -21,57 +22,9 @@ import { SonarPulse } from './SonarLoader.jsx'
 // the only consumer of it in React, and it hands the slot back to a no-op
 // on unmount so a closed chat panel cannot go on calling setState on itself.
 
-const GROUP_MS = 2 * 60 * 1000 // CLAUDE.md: two minutes of silence, or a change of speaker, starts a new block
 const TYPING_MS = 4000 // how long a typing:true is believed before it lapses on its own
 const TYPING_RESEND_MS = 2000 // how often typing:true is re-sent while still typing
-const CHAT_MAX = 500 // room.js's own CHAT_MAX — the server truth; this is just the composer matching it
 const GIF_DEBOUNCE_MS = 350
-
-function chatTime(at) {
-  if (!at) return ''
-  const d = new Date(at)
-  let h = d.getHours()
-  const suffix = h < 12 ? 'am' : 'pm'
-  h = h % 12 || 12
-  return h + ':' + String(d.getMinutes()).padStart(2, '0') + suffix
-}
-
-function seatName(room, seat, fallback) {
-  if (seat < 0) return fallback || null
-  const chair = room.seats && room.seats[seat]
-  return (chair && chair.name) || fallback || null
-}
-
-function seatLabel(room, seat, fallback) {
-  return seatName(room, seat, fallback) || (seat >= 0 ? 'Seat ' + (seat + 1) : 'Someone')
-}
-
-function seatInitials(name, seat) {
-  if (!name) return String(seat + 1)
-  const parts = String(name).trim().split(/\s+/).slice(0, 2)
-  return parts.map((w) => w[0].toUpperCase()).join('')
-}
-
-// The exact grouping pass renderChat() runs over chatStream()'s output:
-// system and pick entries always break a run, and "said" only groups with
-// the immediately preceding "said" from the same seat inside GROUP_MS.
-function buildDisplay(entries) {
-  let lastSeat = null
-  let lastAt = 0
-  let lastKind = null
-  return entries.map((entry) => {
-    if (entry.kind === 'system' || entry.kind === 'pick') {
-      lastSeat = null
-      lastKind = entry.kind
-      return { entry, grouped: false }
-    }
-    const grouped = lastKind === 'said' && entry.seat === lastSeat && entry.at - lastAt < GROUP_MS
-    lastSeat = entry.seat
-    lastAt = entry.at
-    lastKind = 'said'
-    return { entry, grouped }
-  })
-}
 
 function EmptyNoRoom() {
   return (
@@ -89,7 +42,7 @@ function SystemLine({ text }) {
 }
 
 function PickLine({ entry, room, DE, mine }) {
-  const teams = (room.league && room.league.teams) || 0
+  const teams = room.league || null
   const code = DE && teams ? DE.pickCode(entry.overall, teams) : entry.overall
   return (
     <div

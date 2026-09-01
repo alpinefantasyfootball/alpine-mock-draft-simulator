@@ -16,13 +16,22 @@ export function describeRecommendation(stats, league, scoringNames) {
 }
 
 // Real setup, not a hint: setLeague() patches the one real league object,
-// onSetLobbySlot writes the same lobbySlot state New Mock's own "Your seat"
-// row shows, and onStartNew is the identical launch the primary Start
-// button uses — this is that button, pre-aimed at the exact seat and
-// format actually worth practising. rec.seat is 1-based (it's what's
-// printed on screen); lobbySlot is 0-based (it's a seat index).
-export function runRecommendation(engine, league, rec, onSetLobbySlot, onStartNew) {
+// and onRunAtSeat both writes the seat New Mock's own "Your seat" row
+// shows AND launches the draft with that exact seat, in one call — this
+// is that button, pre-aimed at the exact seat and format actually worth
+// practising. rec.seat is 1-based (it's what's printed on screen);
+// onRunAtSeat wants a 0-based seat index, same as lobbySlot.
+//
+// This used to call two separate callbacks — onSetLobbySlot(seat) then
+// onStartNew() — and it was a real, confirmed bug: onSetLobbySlot is a
+// React state setter, so its update was still pending when onStartNew()
+// ran the very next line, and onStartNew's own launch read the *previous*
+// render's lobbySlot, not the one just set. The CTA read "Run Standard,
+// seat 5" and started the draft from whatever seat the Lobby happened to
+// already be on. onRunAtSeat takes the seat directly and starts the draft
+// with it in the same call, rather than relying on a state update landing
+// before the code right after it runs.
+export function runRecommendation(engine, league, rec, onRunAtSeat) {
   if (rec.scoring) engine.setLeague({ scoring: rec.scoring })
-  onSetLobbySlot(rec.seat - 1)
-  onStartNew()
+  onRunAtSeat(rec.seat - 1)
 }

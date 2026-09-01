@@ -9,6 +9,13 @@ Sources (all free, no key, no account -- except the last, which is optional)
   https://api.sleeper.app/v1/projections/nfl/regular/{yr}   projections
   https://fantasyfootballcalculator.com/api/v1/adp/{format} ADP, one set per scoring format
   .../getNFLPlayerList (Tank01, via RapidAPI)               source-id crosswalk, needs TANK01_KEY
+  github.com/nflverse/nflverse-data/releases/download/...   a second, independent record of
+                                                            the same football, used to CHECK
+                                                            Sleeper and never to replace it
+  github.com/ffverse/ffopportunity/releases/download/...    precomputed expected fantasy
+                                                            points (xFP), display-only in
+                                                            the usage panel like the rest
+                                                            of the `u` block
 
 TANK01_KEY is read from the environment and is optional. Without it the
 crosswalk step is skipped, the build is otherwise identical, and player news
@@ -26,6 +33,9 @@ reason it always was: it bakes in assumptions we do not share.
 Run by hand:  python scripts/build_players.py
 """
 
+import csv
+import gzip
+import io
 import json
 import os
 import re
@@ -58,8 +68,37 @@ FFC_TEAMS = 10                   # sent for correctness; see the note above
 PLAYERS_FILE = "players.js"
 STATS_FILE = "stats.js"
 UNMATCHED_FILE = "unmatched.txt"
+# Read, never written. check_app_rules() looks in here for the other half of
+# a scoring rule -- see the note on that function.
+APP_FILE = "app.js"
 
-KEEP = 320             # players written per ADP set (FFC currently returns 205-258)
+KEEP = 320             # players written per ADP set (FFC currently returns 205-271)
+
+# FFC's real ADP sample stops where real drafters stop -- 223 to 271 rows
+# depending on format, per the 29 August 2026 players.js. A league running
+# 24 teams over 20 rounds needs 480 picks, more than any format's real
+# sample carries on its own, and until this existed the setup screen simply
+# refused the combination (setupProblem() in app.js) rather than ever
+# drawing a board that deep. DEEP_TARGET is what extend_deep_bench() tops
+# each format's list up to, using Sleeper's own player master once real ADP
+# runs out -- see that function's own comment for why search_rank, not an
+# invented number, is the ordering it uses below real ADP. 480 is the
+# deepest pick count any offered league can ask for (TEAM_COUNTS tops out
+# at 24, and the setup screen's own round range tops out at 20); it is a
+# ceiling extend_deep_bench() fills toward, not a floor it pads to
+# artificially if Sleeper's own pool runs out first.
+DEEP_TARGET = 480
+# One starting kicker and one starting defense per club, at the largest league
+# the setup screen offers. There are only 32 of each in the league, so this is
+# "all of them" rather than a number chosen to fit.
+FULL_POSITION_COVER = 32
+
+# Every fantasy-relevant Sleeper position, in one place. index_sleeper() and
+# extend_deep_bench() both need exactly this list, and writing it out twice
+# is the same "league shape written down twice" trap this project's own
+# rule elsewhere already names.
+FANTASY_POSITIONS = ("QB", "RB", "WR", "TE", "K", "DEF")
+
 WEEKLY_KEEP = 180      # players who also get week-by-week game logs
 # Every season back to 2018 covers the full career of essentially any player
 # with 2026 draft relevance. Seasons that return nothing are skipped, so this
@@ -119,6 +158,11 @@ TEAM_CITIES = {
     "WAS": "Washington",
 }
 
+# The 32 clubs, and the one test for "is this a real team". TEAM_CITIES is
+# already exactly them and is needed for a defense's own city name anyway, so
+# this is a view of it rather than a second list that could drift.
+NFL_TEAMS = frozenset(TEAM_CITIES)
+
 INJURY_CODES = {
     "questionable": "Q", "doubtful": "D", "out": "O",
     "ir": "IR", "injured reserve": "IR",
@@ -157,6 +201,12 @@ SCOREABLE = [
     "rec", "rec_yd", "rec_td", "rec_2pt", "rec_fd", "rec_40p",
     "fum_lost", "kr_td", "pr_td",
     "xpm", "xpmiss", "fgmiss",
+    # An EXTRA on top of fgmiss, not a replacement for it: a 45-yard miss
+    # increments fgmiss and fgmiss_40_49 both, so these default to zero in
+    # app.js and a league scaling a miss by distance sets the base on fgmiss
+    # and the increment here. Sleeper sends no fgmiss_0_19 -- there were no
+    # misses inside twenty yards all last season.
+    "fgmiss_20_29", "fgmiss_30_39", "fgmiss_40_49", "fgmiss_50_59", "fgmiss_60p",
     "fgm_0_19", "fgm_20_29", "fgm_30_39", "fgm_40_49", "fgm_50_59", "fgm_60p",
     "sack", "int", "fum_rec", "safe",
     "def_td", "def_st_td", "blk_kick", "def_2pt",
@@ -194,6 +244,41 @@ STAT_FIELDS = {
     "fgm": "fg", "xpm": "xp", "xpmiss": "xpx", "fgmiss": "fgx",
     "fgm_0_19": "f19", "fgm_20_29": "f29", "fgm_30_39": "f39",
     "fgm_40_49": "f49", "fgm_50_59": "f59", "fgm_60p": "f60",
+    # Misses by distance, and the rest of the kicking line Sleeper has been
+    # sending all along. unmatched.txt has listed every one of these under
+    # "Sleeper stats we are not storing" since the file existed.
+    #
+    # fgx is the total and it INCLUDES a blocked kick, so fbk is stored and
+    # is deliberately not scoreable: a rule on it would charge a block twice.
+    "fgmiss_20_29": "x29", "fgmiss_30_39": "x39", "fgmiss_40_49": "x49",
+    "fgmiss_50_59": "x59", "fgmiss_60p": "x60",
+    "fg_blkd": "fbk", "xp_blkd": "xbk", "fgm_lng": "flg",
+    "fga": "fga", "xpa": "xpa",
+    # --- role, red zone and snaps: NOT stored, and the reason is the size ---
+    #
+    # rec_rz_tgt, rush_rz_att, pass_rz_att, rec_air_yd, rec_yar, pass_air_yd,
+    # rush_yac, off_snp, tm_off_snp, rush_40p, rec_drop, rush_btkl, rec_lng
+    # and rush_lng all belong here eventually. They were added, measured and
+    # taken out again, because the measurement was decisive: they cost
+    # 70 KB gzipped in stats.js -- which is a plain classic <script src> in
+    # front of every first paint -- and nothing renders one of them.
+    #
+    # For scale, the five fgmiss_* bands above are the actual new scoring
+    # capability in this change and they cost 0.7 KB gzipped. The whole
+    # kicking line is 3.2. These fourteen are 98% of the weight of storing
+    # anything at all, for a sheet panel that does not exist. Two of them --
+    # off_snp and tm_off_snp -- are 20.5 KB between them on their own.
+    #
+    # This is the same argument WEEKLY_SEASONS already settles for weekly
+    # logs, and it lands the same way: a stat costs a phone bytes on every
+    # load whether or not a pixel ever shows it. They come back in the same
+    # change that draws them, beside the nflverse share and EPA figures they
+    # are meant to sit next to.
+    #
+    # They are deliberately NOT in IGNORED_KEYS, so unmatched.txt goes on
+    # listing them. That list is the thing this whole piece of work exists
+    # because nobody was reading; hiding them again to keep it tidy would be
+    # re-creating the blindness on purpose.
     # --- defense and special teams ---
     "sack": "sk", "int": "in", "fum_rec": "fr", "safe": "sf",
     "def_td": "dtd", "def_st_td": "sttd", "blk_kick": "bk", "def_2pt": "d2",
@@ -208,8 +293,13 @@ STAT_FIELDS = {
 }
 
 # Keys we knowingly ignore, so the diagnostic below stays useful.
+# off_snp and tm_off_snp used to be here and are deliberately not any more.
+# They are not stored either -- see the note in STAT_FIELDS -- so they now
+# appear in unmatched.txt's unstored list, which is exactly where a key we
+# intend to store later belongs. "Knowingly ignored" is a claim about a key
+# nobody wants; these are wanted and are waiting on something to draw them.
 IGNORED_KEYS = {
-    "gp", "gs", "gms_active", "team", "off_snp", "tm_off_snp", "tm_def_snp",
+    "gp", "gs", "gms_active", "team", "tm_def_snp",
     "tm_st_snp", "def_snp", "st_snp", "pts_std", "pts_ppr", "pts_half_ppr",
     "rank_std", "rank_ppr", "rank_half_ppr", "pos_rank_std", "pos_rank_ppr",
     "pos_rank_half_ppr", "anytime_tds", "tm_st_snp_pct",
@@ -269,6 +359,75 @@ def injury_code(entry):
         if value in INJURY_CODES:
             return INJURY_CODES[value]
     return ""
+
+
+def check_app_rules():
+    """Fail the run when a scoreable stat has no rule waiting for it in app.js.
+
+    This file already refuses to write when a SCOREABLE stat has no home in
+    STAT_FIELDS, because the browser can only score what the pipeline
+    records. The other direction had no guard and is just as silent:
+    pointsUnder() walks the rules object rather than the stat list, so a stat
+    added here with no entry in DEFAULT_RULES is never summed, and one
+    missing from RULE_GROUPS or RULE_LABELS never appears in the editor.
+    Neither shows up as an error. The total is simply lower than it should
+    be, which is the shape of bug this project keeps finding the hard way.
+
+    unmatched.txt has said "and give it a default in app.js" at the head of
+    its unstored-keys list all along. Nothing enforced it.
+
+    app.js is read as text rather than parsed. Only the key names are needed,
+    and the three tables are all one identifier per entry -- but if their
+    shape ever changes this raises rather than passing quietly, which is the
+    whole point of a guard.
+
+    Run before any network, so a mistake in a rule table costs nothing.
+    """
+    try:
+        with open(APP_FILE, encoding="utf-8") as handle:
+            source = handle.read()
+    except OSError as error:
+        raise SystemExit(f"Cannot read {APP_FILE} to check the scoring rules: {error}")
+
+    def table(name, close):
+        match = re.search(r"const " + name + r"\s*=\s*[\[{](.*?)\n" + re.escape(close),
+                          source, re.S)
+        if not match:
+            raise SystemExit(
+                f"{APP_FILE}: could not find {name}. The scoring-rule check reads "
+                "these three tables by name, so a rename has to be made here too.")
+        return match.group(1)
+
+    def keys_of(text):
+        # Comments out, then strings out. Both can hold a word followed by a
+        # colon -- these tables are heavily commented on purpose -- and
+        # either would otherwise read as a rule that does not exist. Found
+        # by this check firing on its own explanatory comment.
+        text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
+        text = re.sub(r"//[^\n]*", "", text)
+        return set(re.findall(r"([a-z][a-z0-9_]*)\s*:", re.sub(r'"[^"]*"', '""', text)))
+
+    defaults = keys_of(table("DEFAULT_RULES", "};"))
+    labels = keys_of(table("RULE_LABELS", "};"))
+    # Group titles are quoted prose and start with a capital, so an
+    # identifier-shaped string is a rule and nothing else is.
+    grouped = set(re.findall(r'"([a-z][a-z0-9_]*)"', table("RULE_GROUPS", "];")))
+
+    problems = []
+    for stat in SCOREABLE:
+        missing = [where for where, known in (
+            ("a default in DEFAULT_RULES", defaults),
+            ("a group in RULE_GROUPS", grouped),
+            ("a label in RULE_LABELS", labels)) if stat not in known]
+        if missing:
+            problems.append(f"{stat}: needs " + ", ".join(missing))
+    for rule in sorted(defaults - set(SCOREABLE)):
+        problems.append(f"{rule}: has a default in {APP_FILE} but is not SCOREABLE, "
+                        "so STAT_KEYS will not carry it and pointsUnder() scores it zero")
+    if problems:
+        raise SystemExit(f"{APP_FILE} and SCOREABLE disagree:\n  " + "\n  ".join(problems))
+
+    print(f"  a default, a group and a label for all {len(SCOREABLE)} scoreable stats")
 
 
 SEEN_KEYS = set()
@@ -449,7 +608,7 @@ def index_sleeper(sleeper):
     by_name_pos_team, by_name_pos, by_name = {}, {}, {}
 
     for player_id, entry in sleeper.items():
-        if entry.get("position") not in ("QB", "RB", "WR", "TE", "K", "DEF"):
+        if entry.get("position") not in FANTASY_POSITIONS:
             continue
         key = normalise(entry.get("full_name") or entry.get("last_name") or "")
         if not key:
@@ -479,6 +638,16 @@ def join_rows(adp_rows, sleeper, indexes):
             continue
 
         team = clean_team(row.get("team"))
+        # Same rule as extend_deep_bench()'s, from the same constant, because
+        # FFC ranks a few unsigned players too -- its sample was taken before
+        # they were released, so their ADP is a fact about a roster that no
+        # longer exists. Left in they arrive as a 33rd "club" called FA with no
+        # bye. Pre-existing rather than new: the 30 August build carried Bub
+        # Means in the standard and PPR sets and missed the half set only by
+        # luck, which is why "all 32 clubs resolve to a colour" had never gone
+        # red.
+        if team not in NFL_TEAMS:
+            continue
         name = (row.get("name") or "").strip()
         key = normalise(name)
         sleeper_position = "DEF" if position == "DST" else position
@@ -528,19 +697,859 @@ def join_rows(adp_rows, sleeper, indexes):
     return players[:KEEP], unmatched
 
 
+def extend_deep_bench(players, sleeper, team_byes, target):
+    """Top up one format's real-ADP list with Sleeper's own deeper pool.
+
+    Below real ADP there is no more market signal to rank by -- nobody in
+    FFC's sample drafted these players, and that absence is itself the
+    fact, not a gap to paper over. What's left is Sleeper's own player
+    master, which runs to every player still on an NFL roster, ordered by
+    `search_rank` -- Sleeper's general "how known is this player" figure,
+    used for its own search/autocomplete and computed across virtually the
+    whole league. It is not a fantasy opinion the way `pts_ppr` or
+    `rank_ppr` are (both sit in IGNORED_KEYS for exactly that reason): it
+    never claims to be a scored value, so using it here to order players
+    nobody has scored an opinion on isn't the same mistake as scoring off
+    Sleeper's own points.
+
+    Every player this adds carries `deep: True`. The app owes the reader
+    the same honesty it already gives a kicker or a defense (UNRANKED_
+    POSITIONS in app.js): a rank with no market behind it is not the same
+    claim as one FFC's real drafts priced, and the UI has to say so rather
+    than let a deep-bench player sit in the same tier as somebody real
+    drafters actually took.
+
+    `players` is one format's real-ADP list (already `join_rows()`'s
+    output, so every entry already carries a real Sleeper id or an empty
+    one for an unmatched ADP row). Candidates are excluded by id, so a
+    player already on the list -- real or, in principle, previously
+    extended -- is never duplicated.
+    """
+    covered = {p["id"] for p in players if p["id"]}
+    candidates = [
+        (player_id, entry) for player_id, entry in sleeper.items()
+        if player_id not in covered
+        and entry.get("position") in FANTASY_POSITIONS
+        # `entry.get("team")` was the test here and it is truthy for a free
+        # agent: Sleeper stamps an unsigned player "FA", so retired and
+        # released players came through as a 33rd "club" with no accent colour
+        # and, worse, no bye. team_byes.get(team, 0) then gives them 0, and a
+        # 0 bye reads as *never on bye* -- a quietly better roster in a grade
+        # that spends 10% of itself on bye-week safety. Measured on the real
+        # feed: fourteen of them on the half-PPR board, a retired Derek Carr
+        # and four unsigned kickers among them.
+        and clean_team(entry.get("team")) in NFL_TEAMS
+    ]
+    candidates.sort(key=lambda pair: pair[1].get("search_rank") or 9_999_999)
+
+    room = target - len(players)
+    if room <= 0 or not candidates:
+        return players
+
+    # Continues the real sequence rather than restarting it, so the whole
+    # list stays sorted by "adp" with the deep tail strictly after every
+    # real pick -- the one thing that lets a single divider, rather than a
+    # per-position one, mark where real ADP ends (see PlayerQueueSidebar.jsx).
+    next_adp = int(max((p["adp"] for p in players), default=0)) + 1
+
+    # Kickers and defenses are pulled to the front of the queue until every
+    # club has one, before depth is spent on anyone else.
+    #
+    # search_rank is a "how known is this player" figure, so it orders the
+    # league's kickers and defenses far below its receivers -- and every roster
+    # needs exactly one of each. Measured on the 30 August board: the half-PPR
+    # set carried 19 kickers and 21 defenses, so an 18- or 24-team league could
+    # not have filled those two starting slots even with picks to spare. That
+    # is a ceiling poolSize() cannot see, because it counts players and not
+    # positions, and it surfaces as a draft that completes and leaves lineups
+    # unfillable rather than as a setup screen that refuses.
+    #
+    # Filling to DEEP_TARGET by search_rank alone happens to cover it today at
+    # 480, which is exactly the kind of accident that stops being true when the
+    # target moves. Stated as a rule instead: a total that fits is not the same
+    # as a roster that fills.
+    have = {}
+    for player in players:
+        have[player["pos"]] = have.get(player["pos"], 0) + 1
+    scarce, rest = [], []
+    for player_id, entry in candidates:
+        position = POSITION_MAP.get(entry.get("position"))
+        if position in ("K", "DST") and have.get(position, 0) < FULL_POSITION_COVER:
+            have[position] = have.get(position, 0) + 1
+            scarce.append((player_id, entry))
+        else:
+            rest.append((player_id, entry))
+    ordered = scarce + rest
+
+    extra = []
+    for player_id, entry in ordered[:room]:
+        position = POSITION_MAP.get(entry.get("position"))
+        team = clean_team(entry.get("team"))
+        if position == "DST":
+            name = f"{TEAM_CITIES.get(team, team)} Defense"
+        else:
+            name = entry.get("full_name") or \
+                f"{entry.get('first_name', '')} {entry.get('last_name', '')}".strip()
+        extra.append({
+            "id": player_id, "name": name, "pos": position, "team": team,
+            "bye": team_byes.get(team, 0),
+            # sd/td are 0 rather than omitted, matching what a real row gets
+            # when FFC sends no stdev/sample -- survivalProbability() in
+            # app.js already withholds a probability rather than divide by
+            # a zero sd, so a deep-bench player correctly shows no "still
+            # on the board" odds instead of a fabricated one.
+            "adp": float(next_adp), "sd": 0.0, "td": 0,
+            "inj": injury_code(entry), "_entry": entry, "deep": True,
+        })
+        next_adp += 1
+
+    return players + extra
+
+
+# Sleeper's distance bands are complete from this season on, and lossy
+# before it. Measured 27 August 2026 over every kicker season we store:
+# the six fgm_* bands account for 100.0% of fgm in 2024 and 2025 and for
+# 83-91% before, and the five fgmiss_* bands account for 100.0% of fgmiss
+# in 2024 and 2025 and for 52-63% before. The boundary is sharp -- there is
+# no season that is partly one and partly the other -- so it is a change
+# Sleeper made to its own history rather than a definition either side
+# disagrees about.
+BAND_COMPLETE_FROM = 2024
+
+FG_MADE_BANDS = ("f19", "f29", "f39", "f49", "f59", "f60")
+FG_MISS_BANDS = ("x29", "x39", "x49", "x59", "x60")
+
+
+def check_miss_bands(stats):
+    """Do Sleeper's distance bands account for every kick its own totals count?
+
+    Both directions, because both are scored. The six fgm_* bands have been
+    SCOREABLE since kickers existed here; the five fgmiss_* bands are new.
+    Either one silently under-charging is invisible on screen: the totals
+    reconcile perfectly against attempts, so nothing else in the pipeline
+    ever compares a band to the total it is supposed to decompose.
+
+    The blocked-kick correction that belongs in the nflverse audit does NOT
+    belong here. `fga == fgm + fgmiss` reconciles for every kicker season
+    without exception, so a block is structurally inside fgmiss -- and in
+    the complete era the bands equal fgmiss exactly, so a block is inside a
+    band too. Adding fbk back would overshoot. That correction is about
+    nflverse's fg_missed, which is the narrower number; see AUDIT_BLOCKED.
+
+    A season before BAND_COMPLETE_FROM falling short is expected and is
+    reported as a rate. A season at or after it falling short is the thing
+    that means something, and it is the only thing counted as a failure --
+    a check that reports 145 known-lossy seasons every morning is a check
+    nobody reads by the end of the week.
+    """
+    made, miss, over = {}, {}, []
+    for our_id, record in sorted(stats.items()):
+        for season, block in (record.get("s") or {}).items():
+            got = made.setdefault(season, [0, 0])
+            got[0] += block.get("fg") or 0
+            got[1] += sum(block.get(k) or 0 for k in FG_MADE_BANDS)
+            lost = miss.setdefault(season, [0, 0])
+            lost[0] += block.get("fgx") or 0
+            lost[1] += sum(block.get(k) or 0 for k in FG_MISS_BANDS)
+            # A part cannot exceed the whole it decomposes, so this is never
+            # the sparse-history story below -- it is a miscount at source,
+            # and it nets invisibly against a shortfall in a season total.
+            for label, total_key, band_keys in (
+                    ("fgm", "fg", FG_MADE_BANDS), ("fgmiss", "fgx", FG_MISS_BANDS)):
+                whole = block.get(total_key) or 0
+                parts = sum(block.get(k) or 0 for k in band_keys)
+                if parts - whole > 0.01:
+                    over.append(f"  {season} | {our_id} | {label} {whole:g} | "
+                                f"bands {parts:g} | +{parts - whole:g}")
+
+    lines, off = [], 0
+    lines.append("Sleeper's own totals against Sleeper's own distance bands. The")
+    lines.append("totals are trustworthy either way -- fga == fgm + fgmiss for every")
+    lines.append("kicker season -- so a shortfall here is a band that was never")
+    lines.append("populated, not a kick that did not happen.")
+    lines.append("")
+    lines.append("season    fgm  in bands   short      fgmiss  in bands   short")
+    for season in sorted(set(made) | set(miss)):
+        m_total, m_band = made.get(season, [0, 0])
+        x_total, x_band = miss.get(season, [0, 0])
+        if not m_total and not x_total:
+            continue
+        m_pct = 100.0 * (m_total - m_band) / m_total if m_total else 0.0
+        x_pct = 100.0 * (x_total - x_band) / x_total if x_total else 0.0
+        lines.append(f"{season:<8}{m_total:>5.0f}{m_band:>10.0f}{m_pct:>7.1f}%"
+                     f"{x_total:>12.0f}{x_band:>10.0f}{x_pct:>7.1f}%")
+        if int(season) >= BAND_COMPLETE_FROM and (
+                abs(m_total - m_band) > 0.01 or abs(x_total - x_band) > 0.01):
+            off += 1
+
+    lines.append("")
+    lines.append(f"Bands are complete from {BAND_COMPLETE_FROM} on and lossy before it,")
+    lines.append("and the two halves are lossy to very different degrees in this pool.")
+    lines.append("The made bands very nearly reconcile throughout; the miss bands do not,")
+    lines.append("leaving a third to a half of every pre-2024 miss in no band at all. So a")
+    lines.append("league that scales a miss by distance gets a penalty that fires on about")
+    lines.append("half the misses on an old season, while fgmiss itself stays whole. That")
+    lines.append("is the reason the bands are an extra on fgmiss rather than a")
+    lines.append("replacement for it, and it is visible on the Seasons tab.")
+    lines.append("")
+    if over:
+        lines.append(f"{len(over)} seasons where the bands EXCEED the total they")
+        lines.append("decompose. A part cannot be larger than its whole, so this is a")
+        lines.append("miscount at source rather than the sparse history above -- and it")
+        lines.append("nets against a shortfall in a season total, which is why it is")
+        lines.append("counted on its own:")
+        lines.extend(over[:20])
+        if len(over) > 20:
+            lines.append(f"  ... and {len(over) - 20} more, not listed")
+        lines.append("")
+    if off:
+        lines.append(f"{off} seasons at or after {BAND_COMPLETE_FROM} DO NOT reconcile. "
+                     "That is new.")
+        lines.append("Either Sleeper changed something or a band key was renamed. The")
+        lines.append("bands are an extra on top of fgmiss in app.js and that arrangement")
+        lines.append("assumes they decompose it exactly.")
+    else:
+        lines.append(f"Every season from {BAND_COMPLETE_FROM} on reconciles exactly, "
+                     "both directions.")
+    return lines, off
+
+
+# ---------------------------------------------------------------- nflverse
+#
+# A second, independent record of the same football. nflverse publishes
+# nflfastR's play-by-play derivatives as plain files on a GitHub release --
+# no key, no account -- and the .csv.gz variants are five to six times
+# smaller than the .csv and open with the standard library alone.
+#
+# It is here to CHECK Sleeper, never to replace it. Sleeper stays
+# authoritative for everything in STAT_FIELDS, because `pp` -- the archive of
+# what we forecast for seasons already played -- was built against it, and a
+# history that quietly re-based itself would turn projectionRecord() into a
+# comparison between two feeds rather than between a forecast and an outcome.
+#
+# Nothing in this section writes a stored value. It reports.
+NFLVERSE = "https://github.com/nflverse/nflverse-data/releases/download"
+
+# Tied to STAT_SEASONS rather than copied from it. A season audited with no
+# `s` block beside it is a comparison against nothing, and an `s` block with
+# no audit is a season nobody is checking. nflverse covers 2018-2025, which
+# is exactly what STAT_SEASONS asks for today.
+NFL_SEASONS = STAT_SEASONS
+
+# Sleeper id -> nflverse gsis_id, for a player the name join cannot reach.
+#
+# Not MANUAL_MATCHES: that one maps an FFC ADP name to a Sleeper id and is
+# read by join_rows(). This is a different join between two different
+# sources, and putting an entry in the wrong table is a silent no-op.
+#
+# Travis Hunter plays both ways, so nflverse lists him as a DB while we list
+# him as a WR. His receiving is perfectly present under this gsis_id -- it is
+# the position tier of the join that cannot see him. Measured 27 August 2026:
+# he is the only one of 241 skill players on the board who needs a line here.
+NFLVERSE_MATCHES = {
+    "12530": "00-0040718",          # Travis Hunter, WR to us and DB to them
+}
+
+# What we stored, against what they derived. Short key on the left because
+# that is what a finished record holds; nflverse column on the right.
+#
+# Measured 27 August 2026 over 2025: every pair below agreed exactly for
+# every board player, bar one rushing line by five yards and two target
+# lines by one. That is what makes the check worth running -- when these
+# diverge next season, it means something.
+AUDIT_PAIRS = [
+    ("py", "passing_yards"), ("pt", "passing_tds"),
+    ("pi", "passing_interceptions"), ("pa", "attempts"), ("pc", "completions"),
+    ("ry", "rushing_yards"), ("rt", "rushing_tds"), ("ra", "carries"),
+    ("cy", "receiving_yards"), ("ct", "receiving_tds"), ("rc", "receptions"),
+    ("tg", "targets"),
+    ("fg", "fg_made"), ("xp", "pat_made"),
+    ("f19", "fg_made_0_19"), ("f29", "fg_made_20_29"), ("f39", "fg_made_30_39"),
+    ("f49", "fg_made_40_49"), ("f59", "fg_made_50_59"), ("f60", "fg_made_60_"),
+]
+
+# The first of the two known definitional differences, and the reason no
+# nflverse first down may ever be written into cfd, rfd or pfd.
+#
+# nflverse counts a touchdown as a first down; Sleeper, following the fantasy
+# convention, does not. Measured over 2025 this explained 311 of 313
+# disagreements exactly -- 32 of 32 passers, 161 of 161 receivers, 118 of 120
+# rushers. Dropping their column straight in would pay every league that
+# scores first downs for every touchdown twice, and a receiver's total would
+# rise by single digits and stay entirely plausible.
+AUDIT_FIRST_DOWNS = [
+    ("pfd", "passing_first_downs", "passing_tds"),
+    ("rfd", "rushing_first_downs", "rushing_tds"),
+    ("cfd", "receiving_first_downs", "receiving_tds"),
+]
+
+# The second: Sleeper's miss total counts a blocked kick and nflverse's does
+# not. Eleven kickers agreed outright in 2025 (they had none) and the other
+# nine matched exactly once fg_blocked was added back. Swapping their column
+# in would silently forgive every block -- and it would make kickers look
+# better, which is the direction nobody checks.
+AUDIT_BLOCKED = [
+    ("fgx", "fg_missed", "fg_blocked"),
+    ("xpx", "pat_missed", "pat_blocked"),
+]
+
+# A tenth of a point is the precision the raw data arrives in, and compact()
+# rounds to it. Half a unit is comfortably outside that and comfortably
+# inside a disagreement worth reading.
+AUDIT_TOLERANCE = 0.5
+
+# What the first run of this audit found, with the date, because a number
+# without a date is the bug and a drifted number is not.
+#
+# Measured 27 August 2026 over 2018-2025. The disagreement rate falls
+# steeply with recency -- 16.2% of comparisons in 2018, 4.1% in 2022, 0.3%
+# in 2025 -- and two named causes account for most of the old end. Both are
+# Sleeper changing its own mind years ago, and neither is fixable from here:
+# the history is what it is.
+AUDIT_NOTES = [
+    "Sleeper's first-down definition changed between 2018 and 2020. In 2018,",
+    "42 of 55 first-down lines match nflverse RAW (touchdown counted); from",
+    "2020 on, 91-99% match nflverse MINUS touchdowns, which is what this",
+    "audit applies. 2019 is the changeover and matches neither cleanly. So",
+    "pfd, rfd or cfd disagreeing on an old season is expected; on 2024 or",
+    "2025 it is not. (Measured 27 August 2026.)",
+    "",
+    "A 60-yard field goal sat in Sleeper's 50-59 band before 2024 and in",
+    "nflverse's 60+ band. Six kicker seasons across 2021-2023, every one a",
+    "single kick, and the made-total always agrees. A league paying extra",
+    "for 60+ is slightly under-paying on those seasons. (Same date.)",
+]
+
+
+def fetch_csv_gz(url, optional=False):
+    """A gzipped CSV as a list of dicts. Standard library only.
+
+    Returns [] rather than raising when optional, which is the normal state
+    of every in-season file before a season starts: nflverse publishes
+    stats_player_reg_2026 the first time 2026 games are played, and asking
+    for it before then is a 404 rather than a fault. So the pipeline picks a
+    new season up on its own, and if it never appears the run is identical
+    to today's.
+    """
+    request = urllib.request.Request(
+        url, headers={"User-Agent": "alpine-draft-room/1.0"})
+    try:
+        with urllib.request.urlopen(request, timeout=120) as response:
+            text = gzip.decompress(response.read()).decode("utf-8")
+    except (urllib.error.URLError, urllib.error.HTTPError,
+            OSError, UnicodeDecodeError) as error:
+        if optional:
+            print(f"  ! skipped {url} ({error})")
+            return []
+        raise
+    return list(csv.DictReader(io.StringIO(text)))
+
+
+def fetch_nflverse_players():
+    """The crosswalk master, or nothing at all. Never fatal.
+
+    Filtered by recency and never by position. A two-way player carries one
+    position and it is not the fantasy one, so a position filter drops him
+    while his statistics sit there under his gsis_id -- which is exactly how
+    Travis Hunter came to need a line in NFLVERSE_MATCHES.
+    """
+    print("Fetching nflverse player master...")
+    rows = fetch_csv_gz(f"{NFLVERSE}/players/players.csv.gz", optional=True)
+    first = min(NFL_SEASONS)
+    recent = []
+    for row in rows:
+        try:
+            last = int(row.get("last_season") or 0)
+        except ValueError:
+            last = 0
+        if last >= first:
+            recent.append(row)
+    print(f"  {len(recent)} of {len(rows)} played in {first} or later")
+    return recent
+
+
+def fetch_nflverse_season(season):
+    """One season of totals, or nothing. A season not yet played is a 404."""
+    rows = fetch_csv_gz(
+        f"{NFLVERSE}/stats_player/stats_player_reg_{season}.csv.gz", optional=True)
+    print(f"  {season}: {len(rows)} lines")
+    return rows
+
+
+# Expected fantasy points, from ffverse/ffopportunity's precomputed model --
+# the "what should his role have scored" number no box score can produce.
+# Keyed by the same gsis_id link_nflverse() already resolves, so it rides the
+# existing join and needs no crosswalk of its own.
+FFOPP = ("https://github.com/ffverse/ffopportunity/releases/download/"
+         "latest-data/ep_weekly_{season}.csv")
+
+# scripts/fetch_ffopportunity.py writes here, and the Tuesday workflow keeps
+# the newest season current. A season on disk is read from disk; one that is
+# not is fetched off the release -- history never changes, so only the
+# current season ever actually moves between runs.
+EP_DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                           "..", "src", "data")
+
+
+def fetch_expected_points():
+    """{season: {gsis_id: {"xf": .., "xd": ..}}}, season totals from weekly rows.
+
+    xf is the model's expected fantasy points, xd is actual minus expected --
+    stored as sent rather than recomputed, because expectation lives in
+    ffopportunity's own play-by-play model and its own scoring assumptions.
+    That makes these the one pair of usage figures the scoring editor cannot
+    move, which the panel says out loud rather than hiding.
+
+    Optional at every step, like the rest of the nflverse section: a missing
+    season, a dead release or a malformed file is a smaller usage table, and
+    every board number is untouched.
+    """
+    print("Fetching ffopportunity expected points...")
+    out = {}
+    for season in NFL_SEASONS:
+        local = os.path.join(EP_DATA_DIR, f"ep_weekly_{season}.csv")
+        if os.path.exists(local):
+            with open(local, encoding="utf-8-sig") as handle:
+                rows = list(csv.DictReader(handle))
+            source = "local"
+        else:
+            request = urllib.request.Request(
+                FFOPP.format(season=season),
+                headers={"User-Agent": "alpine-draft-room/1.0"})
+            try:
+                with urllib.request.urlopen(request, timeout=120) as response:
+                    text = response.read().decode("utf-8-sig")
+            except (urllib.error.URLError, urllib.error.HTTPError,
+                    OSError, UnicodeDecodeError):
+                print(f"  {season}: unavailable, no xFP for this season")
+                continue
+            rows = list(csv.DictReader(io.StringIO(text)))
+            source = "release"
+
+        agg = {}
+        for row in rows:
+            gsis = (row.get("player_id") or "").strip()
+            if not gsis:
+                continue
+            totals = agg.setdefault(gsis, [0.0, 0.0])
+            for i, column in enumerate(("total_fantasy_points_exp",
+                                        "total_fantasy_points_diff")):
+                try:
+                    totals[i] += float(row.get(column) or 0)
+                except ValueError:
+                    pass
+        # Rounded to one decimal and zeros dropped, the same convention the
+        # rest of the `u` block and compact() already follow: this file is a
+        # plain <script src> in front of every first paint.
+        season_map = {}
+        for gsis, (xf, xd) in agg.items():
+            one = {}
+            if round(xf, 1):
+                one["xf"] = round(xf, 1)
+            if round(xd, 1):
+                one["xd"] = round(xd, 1)
+            if one:
+                season_map[gsis] = one
+        if season_map:
+            out[season] = season_map
+        print(f"  {season}: {len(rows)} weekly lines, "
+              f"{len(season_map)} players ({source})")
+    return out
+
+
+def link_nflverse(stats, sleeper, indexes, nfl_rows):
+    """Attach an nflverse gsis_id to our records, and report anything that did not.
+
+    The same shape and the same discipline as link_source_ids(): two tiers,
+    strictest first, a collision refuses both rather than picking one, and
+    everything that failed comes back in the report. It reuses the indexes
+    index_sleeper() already built rather than making a second set, so there
+    is one normalise() in this file and it cannot drift from itself.
+
+    Their file carries no Sleeper id at all, so unlike the Tank01 crosswalk
+    there is no shared-identifier tier to try first. The name join is not the
+    fallback here, it is the join -- measured at 240 of 241 on the strict
+    tier alone, every one of them carrying a gsis_id.
+
+    Team codes go through clean_team() because nflverse calls the Rams `LA`
+    and we call them `LAR`. TEAM_ALIASES already knows; raw nflverse rows do
+    not, and a defence reconciling to zero is how that was found.
+    """
+    by_name_pos_team, by_name_pos, _by_name = indexes
+    linked, report = {}, []
+    claimed, method = {}, {}
+
+    for row in nfl_rows:
+        their_id = (row.get("gsis_id") or "").strip()
+        position = POSITION_MAP.get((row.get("position") or "").upper())
+        key = normalise(row.get("display_name") or "")
+        if not their_id or not position or not key:
+            continue
+
+        team = clean_team(row.get("latest_team"))
+        strict = by_name_pos_team.get((key, position, team))
+        match = strict or by_name_pos.get((key, position))
+        if not match or match[0] not in stats:
+            continue
+        our_id = match[0]
+
+        # Two of theirs pointing at one of ours means the join is wrong, not
+        # that the player has two ids. Keep neither.
+        if our_id in claimed and claimed[our_id] != their_id:
+            report.append(
+                f"COLLISION | {row.get('display_name')} | {position} | {team} | "
+                f"{claimed[our_id]} and {their_id} both map to {our_id}")
+            linked.pop(our_id, None)
+            method.pop(our_id, None)
+            continue
+
+        claimed[our_id] = their_id
+        linked[our_id] = their_id
+        method[our_id] = "name+pos+team" if strict else "name+pos"
+
+    # By hand, last, so an override wins over a wrong automatic match and
+    # survives a collision that discarded one.
+    for our_id, their_id in NFLVERSE_MATCHES.items():
+        if our_id in stats:
+            linked[our_id] = their_id
+            method[our_id] = "manual"
+
+    for our_id in stats:
+        if our_id in linked:
+            continue
+        entry = sleeper.get(our_id) or {}
+        name = entry.get("full_name") or entry.get("last_name") or our_id
+        report.append(f"{name} | {entry.get('position') or '?'} | "
+                      f"{clean_team(entry.get('team'))} | no nflverse id")
+
+    # Counted from what survived, not from what was attempted -- the same
+    # lesson link_source_ids() records: a number that disagrees with the
+    # thing it describes is how you stop trusting the numbers.
+    strict_n = sum(1 for k in linked if method.get(k) == "name+pos+team")
+    loose_n = sum(1 for k in linked if method.get(k) == "name+pos")
+    manual_n = sum(1 for k in linked if method.get(k) == "manual")
+    print(f"  linked {len(linked)} of {len(stats)} ({strict_n} on name+pos+team, "
+          f"{loose_n} on name+pos, {manual_n} by hand)")
+    return linked, report
+
+
+def audit_against_nflverse(stats, linked, nfl_seasons):
+    """Compare what we stored against what nflverse derived, and report.
+
+    Reports only. Nothing here changes a stored number, and that is the whole
+    design: Sleeper is the feed every season block, every weekly log and
+    every archived projection was built from, so a value quietly replaced
+    from somewhere else would make `pp` a comparison between two feeds
+    instead of between a forecast and an outcome.
+
+    Two known definitional differences are applied rather than reported --
+    see AUDIT_FIRST_DOWNS and AUDIT_BLOCKED. Anything left over is either
+    real drift in one of the feeds or a definition that has moved, and both
+    are worth a line in the file.
+    """
+    lines, agree, checked, flagged = [], {}, {}, []
+    season_seen, season_off = {}, {}
+
+    def number(value):
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return 0.0
+
+    for our_id, record in sorted(stats.items()):
+        their_id = linked.get(our_id)
+        if not their_id:
+            continue
+        for season, rows in sorted(nfl_seasons.items()):
+            theirs = rows.get(their_id)
+            ours = (record.get("s") or {}).get(str(season))
+            if not theirs or not ours:
+                continue
+
+            comparisons = [(short, number(ours.get(short)), number(theirs.get(column)))
+                           for short, column in AUDIT_PAIRS]
+            # A touchdown is a first down to them and is not to us.
+            comparisons += [
+                (short, number(ours.get(short)),
+                 number(theirs.get(column)) - number(theirs.get(td_column)))
+                for short, column, td_column in AUDIT_FIRST_DOWNS]
+            # A blocked kick is a miss to us and is not to them.
+            comparisons += [
+                (short, number(ours.get(short)),
+                 number(theirs.get(column)) + number(theirs.get(blocked)))
+                for short, column, blocked in AUDIT_BLOCKED]
+
+            for short, mine, theirs_value in comparisons:
+                if not mine and not theirs_value:
+                    continue
+                checked[short] = checked.get(short, 0) + 1
+                season_seen[season] = season_seen.get(season, 0) + 1
+                if abs(mine - theirs_value) <= AUDIT_TOLERANCE:
+                    agree[short] = agree.get(short, 0) + 1
+                else:
+                    season_off[season] = season_off.get(season, 0) + 1
+                    flagged.append((abs(mine - theirs_value), short, season,
+                                    theirs.get("player_display_name") or their_id,
+                                    mine, theirs_value))
+
+    lines.append("Two differences are known, applied rather than reported, and")
+    lines.append("must not be `fixed' by taking their column:")
+    lines.append("  * nflverse counts a touchdown as a first down; Sleeper does not.")
+    lines.append("  * Sleeper counts a blocked kick as a miss; nflverse does not.")
+    lines.append("")
+    lines.extend(AUDIT_NOTES)
+    lines.append("")
+
+    if not checked:
+        lines.append("(nothing compared -- no nflverse rows this run)")
+        return lines, 0
+
+    lines.append("season    compared  disagree    rate")
+    for season in sorted(season_seen):
+        seen, off = season_seen[season], season_off.get(season, 0)
+        lines.append(f"{season:<8}{seen:>10}{off:>10}{100.0 * off / seen:>7.1f}%")
+    lines.append("")
+
+    width = max(len(k) for k in checked)
+    lines.append(f"{'stat'.ljust(width)}  compared   agree   agree%")
+    for short in sorted(checked):
+        got, total = agree.get(short, 0), checked[short]
+        lines.append(f"{short.ljust(width)}  {total:>8}  {got:>6}  "
+                     f"{100.0 * got / total:>6.1f}%")
+
+    lines.append("")
+    if flagged:
+        lines.append(f"{len(flagged)} disagreements beyond {AUDIT_TOLERANCE}, "
+                     "largest first:")
+        for _, short, season, name, mine, theirs_value in sorted(flagged, reverse=True)[:60]:
+            lines.append(f"  {season} | {short:<4} | {name} | "
+                         f"ours {mine:g} | theirs {theirs_value:g}")
+        if len(flagged) > 60:
+            lines.append(f"  ... and {len(flagged) - 60} more, not listed")
+    else:
+        lines.append("No disagreements. Both feeds tell the same story.")
+
+    return lines, len(flagged)
+
+
+# ---------------------------------------------------------------- team ranks
+#
+# A team's own offense, ranked against the other 31 -- not a player number at
+# all, but the shape of the games a fantasy player is playing in, for the
+# player profile's Team tab. nflverse publishes this pre-aggregated, one row
+# per team per season, under a different release tag from the player-level
+# file fetched above (stats_team rather than stats_player), so there is no
+# per-game rollup to do and no player crosswalk to build: clean_team() is the
+# only join this needs, for the same reason it is needed everywhere else
+# nflverse's own team codes show up -- it calls the Rams "LA" and we call
+# them "LAR".
+#
+# Five categories, all real columns on this file and none invented: OFFENSE
+# (passing + rushing yards), PASS YD, PASS ATT, PASS TD, and TD (passing +
+# rushing touchdowns -- deliberately not defensive or special-teams scores,
+# because this describes the offense a fantasy player plays IN, not the team
+# as a whole). There is no red-zone column on stats_team, so there is no
+# red-zone category here; inventing one is exactly what this project's whole
+# pipeline exists to refuse to do.
+TEAM_RANK_FIELDS = [
+    ("off",     lambda r: team_stat(r, "passing_yards") + team_stat(r, "rushing_yards")),
+    ("passYd",  lambda r: team_stat(r, "passing_yards")),
+    # Pass attempts is volume, not a skill measure the way the other four
+    # are -- more is not really "better" -- but it is ranked the same
+    # descending way as the rest for consistency, most attempts first,
+    # rather than singled out with its own inverted rule.
+    ("passAtt", lambda r: team_stat(r, "attempts")),
+    ("passTd",  lambda r: team_stat(r, "passing_tds")),
+    ("td",      lambda r: team_stat(r, "passing_tds") + team_stat(r, "rushing_tds")),
+]
+
+
+def team_stat(row, column):
+    try:
+        return float(row.get(column) or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def fetch_team_stats(season):
+    """One season of team-level offensive totals, or nothing at all.
+
+    Same optional shape as fetch_nflverse_season() -- a season not yet played
+    is a 404, not a fault, so the pipeline picks a new one up on its own the
+    first morning nflverse publishes it and is otherwise unaffected. This is
+    a different release tag though (stats_team, not stats_player): nflverse
+    already aggregates it to one row per team, so there is no per-game work
+    to do on this side at all.
+    """
+    rows = fetch_csv_gz(
+        f"{NFLVERSE}/stats_team/stats_team_reg_{season}.csv.gz", optional=True)
+    print(f"  {season}: {len(rows)} team lines")
+    return rows
+
+
+def build_team_ranks(rows):
+    """Rank all 32 teams, 1st (best) to 32nd (worst), on five offensive counts.
+
+    Descending value order on every category, PASS ATT included -- see the
+    note above TEAM_RANK_FIELDS on why volume is ranked the same way as the
+    rest rather than singled out.
+
+    Ties are broken by team code, so every category comes out a complete
+    1-32 permutation with no shared rank and no gap. Real season totals
+    rarely tie exactly, but a rank column that COULD ever come out with a
+    hole in it is a worse bug than a coin-flipped tie, so the tie-break is
+    unconditional rather than a fallback for an edge case.
+
+    Returns {team: {category: {"rank": int, "val": int}}}. The raw value
+    travels with the rank so the UI can print "3947 pass yds", not just
+    "3rd" -- a number with nothing under it is exactly the kind of unchecked
+    claim this project's data pipeline exists to avoid.
+    """
+    by_team = {}
+    for row in rows:
+        team = clean_team(row.get("team"))
+        if not team or team == "FA":
+            continue
+        # First row per team wins. stats_team_reg_<season> is documented as
+        # one row per team per season already; a duplicate is a data problem
+        # worth seeing, not a total worth silently summing twice.
+        by_team.setdefault(team, row)
+
+    if by_team and len(by_team) != 32:
+        print(f"  ! stats_team returned {len(by_team)} teams, not 32 -- ranking anyway")
+
+    values = {team: {key: fn(row) for key, fn in TEAM_RANK_FIELDS}
+              for team, row in by_team.items()}
+
+    ranks = {team: {} for team in by_team}
+    for key, _ in TEAM_RANK_FIELDS:
+        ordered = sorted(by_team, key=lambda t: (-values[t][key], t))
+        for i, team in enumerate(ordered):
+            ranks[team][key] = {"rank": i + 1, "val": int(round(values[team][key]))}
+    return ranks
+
+
+# The usage block: what nflverse adds that no box score can produce.
+#
+# Every one of these needs either the rest of the offence (a share needs the
+# team's whole season in the denominator) or a play-by-play model (EPA, CPOE).
+# That is the entire justification for a second feed -- everything else on the
+# original wish list turned out to be arriving from Sleeper already, which is
+# what the note above STAT_FIELDS is about.
+#
+# Rounded on the way in, because the raw values carry fifteen decimals and
+# this file is a plain <script src> in front of every first paint. Rounding
+# and dropping zeros is what takes all eight seasons to 12 KB gzipped rather
+# than the 30 a naive write costs.
+#
+# Deliberately NOT here:
+#   racr, pacr -- unstable, and negatively correlated with next season's
+#     points. Measured, in the spec this came from, at r -0.113 for WR/TE.
+#   receiving_air_yards, receiving_yards_after_catch, receiving_20 -- Sleeper
+#     sends all three. A second copy under an nflverse name is the trap the
+#     "do not give an nflverse field a Sleeper key name" rule exists for.
+#   *_first_downs -- a different definition; see AUDIT_FIRST_DOWNS.
+#   games -- `gp` is already in every season block. nflverse's own `games`
+#     counts games in which the player recorded a stat and Sleeper's counts
+#     games played, so they differ on 12.9% of seasons (Keenan Allen 2018:
+#     16 against 15). Storing both would be one fact written down twice and
+#     the wrong one would get read; the sheet wants "how much of the season
+#     was he here for", which is Sleeper's.
+USAGE_FIELDS = [
+    ("ts",  "target_share",    3),
+    ("ays", "air_yards_share", 3),
+    ("wo",  "wopr",            3),
+    ("ep",  "receiving_epa",   1),
+    ("rep", "rushing_epa",     1),
+    ("pep", "passing_epa",     1),
+    ("cpo", "passing_cpoe",    1),
+    ("r20", "rushing_20",      0),
+    ("gwa", "gwfg_att",        0),
+    ("gwm", "gwfg_made",       0),
+]
+
+
+def build_usage(stats, linked, nfl_seasons, ep_seasons=None):
+    """Write record["u"], the one thing here that is not a check on Sleeper.
+
+    Runs AFTER the records are built, and it has to: compact() returns a fresh
+    dict assembled only from STAT_FIELDS, so anything merged into a record
+    before it runs is discarded without a word.
+
+    Keyed by season exactly as `s` is, and tied to the same NFL_SEASONS, so a
+    usage row always has a season block beside it to be read against. A `u`
+    year with no `s` year is a row the sheet cannot place.
+
+    ep_seasons is fetch_expected_points()'s output, merged into the same
+    per-season block under `xf`/`xd`. The seasons walked are the union of the
+    two feeds, so an nflverse outage costs the shares and EPA without also
+    silently dropping xFP -- and the other way round. Both ride the same
+    gsis_id, so an unjoined player is absent from both halves at once.
+
+    Returns a count rather than a report: an unjoined player is already named
+    in link_nflverse()'s report, and saying it twice in one file is how a
+    reader learns to skim both.
+    """
+    ep_seasons = ep_seasons or {}
+    written = 0
+    for our_id, record in stats.items():
+        their_id = linked.get(our_id)
+        if not their_id:
+            continue
+        block = {}
+        for season in set(nfl_seasons) | set(ep_seasons):
+            row = nfl_seasons.get(season, {}).get(their_id)
+            one = {}
+            for short, column, places in USAGE_FIELDS if row else []:
+                raw = (row.get(column) or "").strip()
+                if not raw:
+                    continue
+                try:
+                    value = round(float(raw), places)
+                except ValueError:
+                    continue
+                # compact() drops zeros from a season block for the same
+                # reason: a zero and a missing value read identically here,
+                # and the file is served to a phone.
+                if value == 0:
+                    continue
+                one[short] = int(value) if places == 0 else value
+            # Already rounded and zero-dropped by fetch_expected_points().
+            one.update(ep_seasons.get(season, {}).get(their_id, {}))
+            if one:
+                block[str(season)] = one
+        if block:
+            record["u"] = block
+            written += 1
+    return written
+
+
 def player_line(player):
-    """One line of the PLAYERS array, as it appears in players.js."""
+    """One line of the PLAYERS array, as it appears in players.js.
+
+    `deep` is only ever written as `true` -- appended, never a `false` on
+    every other row, the same convention `inj: ""` breaks and this one
+    doesn't: app.js reads `player.deep` and an absent key is already a
+    falsy read, so a real ADP row costs nothing extra for the field it
+    doesn't have.
+    """
+    extra = ", deep: true" if player.get("deep") else ""
     return ('  {{ id: "{id}", name: "{name}", pos: "{pos}", team: "{team}", '
-            'bye: {bye}, adp: {adp}, sd: {sd}, td: {td}, inj: "{inj}" }}'.format(
+            'bye: {bye}, adp: {adp}, sd: {sd}, td: {td}, inj: "{inj}"{extra} }}'.format(
                 id=player["id"], name=player["name"].replace('"', "'"),
                 pos=player["pos"], team=player["team"], bye=player["bye"],
                 adp=player["adp"], sd=player["sd"], td=player["td"],
-                inj=player["inj"]))
+                inj=player["inj"], extra=extra))
 
 
 # ---------------------------------------------------------------- main
 
 def main():
+    # Before any network: a scoreable stat with no rule waiting for it in
+    # app.js is scored as zero by a browser and says nothing about it.
+    print("Checking app.js has a rule for every scoreable stat...")
+    check_app_rules()
+
     print("Fetching Sleeper player master...")
     sleeper = fetch_json(f"{SLEEPER}/players/nfl")
     print(f"  {len(sleeper)} players")
@@ -553,6 +1562,18 @@ def main():
         if rows:
             adp_raw[key] = rows
         print(f"  {key:<9} {len(rows)} rows")
+
+    # Real 2026 bye weeks, for free: every ADP row already carries its
+    # player's team's bye, so the union across every format and every row
+    # gives every team's real bye without a fetch of its own -- exactly
+    # what extend_deep_bench() needs for a player FFC never sampled.
+    team_byes = {}
+    for rows in adp_raw.values():
+        for row in rows:
+            team = clean_team(row.get("team"))
+            bye = int(row.get("bye") or 0)
+            if bye and team not in team_byes:
+                team_byes[team] = bye
 
     season_stats = {}
     for season in STAT_SEASONS:
@@ -599,6 +1620,30 @@ def main():
             weekly[season] = got
         print(f"  {len(got)} weeks")
 
+    # ---- team ranks: the offense a fantasy player is playing in ----
+    #
+    # Derived from season_stats rather than hardcoded, the same reason
+    # PRIOR_SEASON in app.js is derived rather than written down: a literal
+    # year here would go stale every February, and app.js's own
+    # latestStatSeason() already treats "the max season key actually
+    # returned" as the definition of "the last completed season" -- this is
+    # that same rule, asked of the same data, once.
+    team_ranks, team_ranks_season = {}, None
+    if season_stats:
+        team_ranks_season = max(season_stats)
+        print(f"Fetching {team_ranks_season} team stats (nflverse stats_team)...")
+        team_rows = fetch_team_stats(team_ranks_season)
+        if team_rows:
+            team_ranks = build_team_ranks(team_rows)
+            print(f"  team ranks: {len(team_ranks)} of 32 teams ranked "
+                  f"for {team_ranks_season}")
+        else:
+            print(f"  ! nflverse stats_team not published for {team_ranks_season} "
+                  "yet -- skipping Team Rank this run")
+    else:
+        print("  ! no season stats fetched at all, so there is no 'last completed "
+              "season' to rank teams for -- skipping Team Rank this run")
+
     # ---- join every ADP set to Sleeper records ----
     indexes = index_sleeper(sleeper)
 
@@ -608,7 +1653,11 @@ def main():
             print(f"  ! no {key} ADP, that set will be missing from players.js")
             continue
         joined, missed = join_rows(adp_raw[key], sleeper, indexes)
+        real_count = len(joined)
+        joined = extend_deep_bench(joined, sleeper, team_byes, DEEP_TARGET)
         sets[key] = joined
+        print(f"  {key:<9} {real_count} real ADP + {len(joined) - real_count} deep bench "
+              f"= {len(joined)}")
         # The same player fails to join in every set, so report each name once.
         for line in missed:
             if line not in unmatched:
@@ -740,6 +1789,38 @@ def main():
     for our_id, their_id in source_ids.items():
         stats[our_id]["x"] = {"tank": their_id}
 
+    # ---- nflverse: a second opinion on the same football ----
+    #
+    # After the records exist, for the same reason the source-id crosswalk
+    # is: the join is against the pool we actually carry rather than against
+    # everybody either source has heard of.
+    #
+    # The audit writes no stored value. build_usage() writes exactly one key,
+    # `u`, and nothing else in the file reads it -- so if nflverse is down,
+    # every board number is identical and the usage panel is absent rather
+    # than wrong. A pipeline that needs a third party to be up in order to
+    # produce a board is not a pipeline this project wants.
+    nfl_players = fetch_nflverse_players()
+    nfl_linked, nfl_report, nfl_seasons = {}, [], {}
+    if nfl_players:
+        nfl_linked, nfl_report = link_nflverse(stats, sleeper, indexes, nfl_players)
+        print("Fetching nflverse season totals...")
+        for season in NFL_SEASONS:
+            rows = fetch_nflverse_season(season)
+            if rows:
+                nfl_seasons[season] = {row["player_id"]: row for row in rows}
+    else:
+        print("  nflverse returned nothing, so there is no audit this run")
+
+    # After the records are built, because compact() rebuilds each one from
+    # STAT_FIELDS alone and would discard this without a word. Expected points
+    # are only worth fetching when the gsis join exists to attach them to.
+    ep_seasons = fetch_expected_points() if nfl_linked else {}
+    usage_written = build_usage(stats, nfl_linked, nfl_seasons, ep_seasons)
+
+    audit_lines, audit_flagged = audit_against_nflverse(stats, nfl_linked, nfl_seasons)
+    band_lines, band_off = check_miss_bands(stats)
+
     # ---- which scoreable stats the forecast actually carries ----
     #
     # Sleeper's projections are far coarser than its actuals: it forecasts
@@ -775,6 +1856,7 @@ def main():
     key_map = {k: STAT_FIELDS[k] for k in SCOREABLE}
     matched = sum(1 for p in players if p["id"])
     flagged = sum(1 for p in players if p["inj"])
+    deep = sum(1 for p in players if p.get("deep"))
     projected = sum(1 for v in stats.values() if "p" in v)
     archived = sum(1 for v in stats.values() if "pp" in v)
     crosswalked = sum(1 for v in stats.values() if "x" in v)
@@ -797,15 +1879,20 @@ def main():
             f"-{max(season_stats) if season_stats else '-'}\n"
             f"   Matched   : {matched} of the {DEFAULT_FORMAT} set carry a Sleeper id\n"
             f"   Flagged   : {flagged} carry an injury designation\n"
+            f"   Deep      : {deep} of the {DEFAULT_FORMAT} set carry no real ADP -- ranked\n"
+            "               by Sleeper's own depth order rather than a live draft\n"
+            "               sample, and marked `deep: true` for the UI to say so\n"
             f"   Projected : {projected} have {PROJECTION_SEASON} projections\n\n"
             "   ADP: Fantasy Football Calculator, one set per scoring format.\n"
             "   Team count is not an axis: FFC returns the same sample for\n"
             "   8, 10, 12 and 14 teams. See the note in build_players.py.\n"
+            "   Below real ADP, Sleeper's own player master extends each set\n"
+            "   toward DEEP_TARGET players -- see extend_deep_bench().\n"
             "   Player, injury and stat data: Sleeper.\n"
             "   ========================================================== */\n\n"
             f'const PLAYERS_META = {{ generated: "{stamp}", count: {len(players)}, '
-            f"matched: {matched}, flagged: {flagged}, projected: {projected}, "
-            f"unmatched: {len(unmatched)} }};\n\n"
+            f"matched: {matched}, flagged: {flagged}, deep: {deep}, "
+            f"projected: {projected}, unmatched: {len(unmatched)} }};\n\n"
             "/* One ordered list per scoring format. app.js picks the set that\n"
             "   matches league.scoring when a draft starts, and works out every\n"
             "   rank and tier from that set rather than from a fixed board. */\n"
@@ -827,7 +1914,14 @@ def main():
             "                  keyed by year to line up with s\n"
             "     x            this player's id at other sources, so nothing\n"
             "                  has to match on a name at request time\n"
-            "     w            week by week logs, keyed by season\n\n"
+            "     w            week by week logs, keyed by season\n"
+            "     u            usage from nflverse, keyed by season like s:\n"
+            "                  ts/ays/wo share and WOPR, ep/rep/pep EPA,\n"
+            "                  cpo CPOE, r20 20-yard rushes, gwa/gwm\n"
+            "                  game-winning field goals. Never scored, and\n"
+            "                  absent entirely if nflverse was unreachable.\n"
+            "                  A share is over the team's whole season, so\n"
+            "                  read it beside s[year].gp and not alone.\n\n"
             "   Raw components only. There is no points total in here: app.js\n"
             "   applies the scoring rules, so a league can change them without\n"
             "   this file being rebuilt.\n\n"
@@ -837,6 +1931,14 @@ def main():
             "   over anything outside it scores history correctly and adds\n"
             "   nothing to the 2026 projection, which is what the draft board\n"
             "   is ranked on. The scoring editor says so on each rule.\n\n"
+            "   TEAM_RANKS is a separate, player-less block: each of the 32 NFL\n"
+            "   teams (by code, aliased through the same TEAM_ALIASES a player\n"
+            "   record's own team uses) ranked 1st (best) to 32nd (worst) on\n"
+            "   five offensive counts from nflverse's stats_team release --\n"
+            "   off (pass+rush yards), passYd, passAtt, passTd, td (pass+rush\n"
+            "   TDs). Every entry is {rank, val}, so the UI can print the raw\n"
+            "   number beside the rank. For the Team tab, not a player's own\n"
+            "   sheet. TEAM_RANKS_META names the season it was built from.\n\n"
             f"   Source ids : {crosswalked} of {len(stats)} players carry a Tank01 id\n"
             f"   Archived   : {archived} players carry past projections"
             f"{' for ' + ', '.join(archive_years) if archive_years else ' (none returned)'}\n"
@@ -844,7 +1946,11 @@ def main():
             "   ========================================================== */\n\n"
             "const STAT_KEYS = " + json.dumps(key_map, separators=(",", ":")) + ";\n\n"
             "const PROJECTED_KEYS = " + json.dumps(projected_keys, separators=(",", ":")) + ";\n\n"
-            "const PLAYER_STATS = " + json.dumps(stats, separators=(",", ":")) + ";\n")
+            "const PLAYER_STATS = " + json.dumps(stats, separators=(",", ":")) + ";\n\n"
+            "const TEAM_RANKS_META = " + json.dumps(
+                {"season": team_ranks_season, "teams": len(team_ranks)},
+                separators=(",", ":")) + ";\n\n"
+            "const TEAM_RANKS = " + json.dumps(team_ranks, separators=(",", ":")) + ";\n")
 
     with open(UNMATCHED_FILE, "w", encoding="utf-8") as handle:
         handle.write(f"FFC rows that did not join to a Sleeper player\nGenerated {stamp}\n"
@@ -874,8 +1980,40 @@ def main():
         handle.write("The browser can only score what this pipeline records, so anything\n"
                      "here is a scoring rule the app could never support. If a league\n"
                      "counts it, add it to STAT_FIELDS and SCOREABLE in build_players.py\n"
-                     "and give it a default in app.js.\n\n")
+                     "and give it a default in app.js.\n\n"
+                     "Read this section before adding a feed. It is the pipeline's own\n"
+                     "answer to what is missing, and everything in it is already arriving.\n\n")
         handle.write("\n".join(unscored) if unscored else "(none)\n")
+
+        # A fourth section rather than a fourth file: this one is already
+        # committed by the workflow, already regenerated every run, and
+        # already the first place anyone looks. A new file would need adding
+        # to the workflow's git add, and on a day when only the audit moved
+        # the early exit would say "No change in the feeds today" and commit
+        # nothing at all.
+        handle.write("\n\n\nSleeper against nflverse\n")
+        handle.write("Two feeds built from different sources, compared stat by stat over\n"
+                     "every season we store. Sleeper stays authoritative: this changes no\n"
+                     "stored number and never should. It is here so that when the two\n"
+                     "start disagreeing, somebody finds out from this file.\n\n")
+        if not nfl_players:
+            handle.write("(nflverse was unavailable this run, so nothing was compared)\n")
+        else:
+            handle.write(f"{len(nfl_linked)} of {len(stats)} players joined to an "
+                         f"nflverse record.\n")
+            unlinked = [line for line in nfl_report if " | no nflverse id" in line]
+            collisions = [line for line in nfl_report if line.startswith("COLLISION")]
+            if collisions:
+                handle.write("\n" + "\n".join(collisions) + "\n")
+            handle.write("\nNo nflverse record for:\n")
+            handle.write(("\n".join(unlinked) if unlinked else "(none)") + "\n")
+            handle.write("\n" + "\n".join(audit_lines) + "\n")
+
+        handle.write("\n\n\nSleeper against itself: field goals by distance\n")
+        handle.write("Every made and missed kick should sit in exactly one distance band,\n"
+                     "because app.js scores the made bands and now offers the missed ones.\n"
+                     "This is where that is checked, in both directions.\n\n")
+        handle.write("\n".join(band_lines) + "\n")
 
     print(f"\n{PLAYERS_FILE}: {counts}, {matched} matched, "
           f"{flagged} flagged, {len(unmatched)} unmatched")
@@ -894,6 +2032,31 @@ def main():
               f"on {archived} players")
     else:
         print("  no past projections returned; nothing archived this run")
+
+    # Said out loud either way, and in one line, because a number that only
+    # appears when something is wrong is a number nobody learns to read.
+    if not nfl_players:
+        print("  nflverse unavailable: no audit, and stats.js is unaffected")
+    else:
+        print(f"  nflverse: {len(nfl_linked)} of {len(stats)} joined, "
+              f"{audit_flagged} stat lines disagree beyond the two known definitions")
+        print(f"  usage: a `u` block on {usage_written} players "
+              f"({len(NFL_SEASONS)} seasons of share, EPA and CPOE; "
+              f"xFP on {len(ep_seasons)} seasons)")
+    print(f"  field goal bands: "
+          + (f"every season from {BAND_COMPLETE_FROM} decomposes exactly "
+             f"(earlier ones are lossy at source -- see {UNMATCHED_FILE})"
+             if not band_off
+             else f"{band_off} seasons at or after {BAND_COMPLETE_FROM} DO NOT "
+                  f"reconcile, which is new -- see {UNMATCHED_FILE}"))
+    # Said out loud either way, same convention as every other optional feed
+    # above: a number that only appears on success is a number nobody learns
+    # to trust the absence of.
+    if team_ranks:
+        print(f"  team ranks: {len(team_ranks)} teams ranked for "
+              f"{team_ranks_season} (OFFENSE / PASS YD / PASS ATT / PASS TD / TD)")
+    else:
+        print("  team ranks: none this run (see log above)")
 
     # The smallest set is the ceiling on teams x rounds, so print it: it is the
     # number the setup screen validates against.

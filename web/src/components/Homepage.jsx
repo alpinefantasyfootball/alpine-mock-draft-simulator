@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react'
-import { Apple, PlaySquare } from 'lucide-react'
 import Header from './Header.jsx'
 import Hero from './Hero.jsx'
 import TakeAPick from './TakeAPick.jsx'
@@ -8,7 +7,10 @@ import RoomsGrid from './RoomsGrid.jsx'
 import ClosingCta from './ClosingCta.jsx'
 import JukeLogo from './juke-logo/JukeLogo.jsx'
 import ComingSoonModal from './ComingSoonModal.jsx'
+import EarlyAccessModal from './EarlyAccessModal.jsx'
+import { ROOM_SIGNUP_SOURCE, roomSignupCopy } from './icons.jsx'
 import { freshnessLine } from './dataFreshness.js'
+import HomePhone from './phone/HomePhone.jsx'
 
 // METHOD is Juke's own real content — three sections of one doc plus the
 // doc's own top, the same four destinations the footer has carried since
@@ -20,38 +22,29 @@ const METHOD_LINKS = [
   { label: 'Data sources', href: '/docs/draft-room-how-it-works.html#s02' },
 ]
 
-// COMPANY and SUPPORT_LINKS are the sections a reference footer (Sleeper's)
-// carries that Juke doesn't have real pages behind yet — About Us, Careers,
-// Contact; Support alongside the two real legal pages. None of them are
-// left out the way "no real page yet" would normally mean here, because
-// the ask this time is explicitly to shape the footer for where the
-// company is headed, not just where it is today. Each opens the same
-// ComingSoonModal every other not-live control on this page already uses
-// rather than a dead href="#" — honest about "not yet" without pointing
-// at nothing.
-const COMPANY_LINKS = ['About Us', 'Careers', 'Contact']
+// Phase 0 of accounts turned Contact and Support into a real destination —
+// an email address — so both left this file's "not live yet" family
+// entirely. About Us and Careers had no such destination to turn into and
+// are gone outright rather than left pointing at a ComingSoonModal that
+// exists for lack of anything better to say.
+const CONTACT_EMAIL = 'hello@jukeff.com'
 
 const LEGAL_LINKS = [
   { label: 'Privacy Policy', href: '/docs/privacy.html' },
   { label: 'Terms of Service', href: '/docs/terms.html' },
 ]
-const SUPPORT_LINK = 'Support'
 
 // Real marks now, not mono-label placeholders — path data pulled straight
 // from Simple Icons (simpleicons.org), whose SVG recreations are
 // dedicated to the public domain (CC0 1.0; checked the project's own
-// LICENSE.md), so redrawing them here isn't a copyright question the way
-// the App Store/Google Play badges below still are.
+// LICENSE.md), so redrawing them here isn't a copyright question.
 //
 // The trademarks the marks depict still belong to Meta/X Corp/Reddit, same
 // as any logo — but using a platform's own mark to point at your own real
 // profile on it ("follow us on X") is ordinary, widely-practiced nominative
-// use, not the tightly-licensed, agreement-bound territory Apple/Google's
-// *store badges* live in (those are tied to an actual listing Juke doesn't
-// have, under marketing guidelines that gate the artwork itself). Different
-// question, different answer — accurate icons are fine here; there's just
-// no Juke account behind any of them yet, which is a "not live" problem,
-// not a "not allowed" one, so they still open the same ComingSoonModal.
+// use. There's just no Juke account behind any of them yet, which is a
+// "not live" problem, not a "not allowed" one, so they still open the same
+// ComingSoonModal.
 //
 // LinkedIn and YouTube dropped per instruction, matching the reference
 // footer's own four (Reddit, X, Facebook, Instagram) rather than the five
@@ -82,16 +75,6 @@ function SocialIcon({ path }) {
     </svg>
   )
 }
-
-// Juke isn't listed in either store — it installs as a PWA (manifest.json),
-// which is a real, working feature this pair of badges doesn't hook up to
-// yet. Apple/PlaySquare are lucide's generic, brand-neutral icons, not a
-// hand-traced reproduction of Apple's or Google's actual trademarked badge
-// artwork, which this project has no license to redraw.
-const APP_BADGES = [
-  { store: 'App Store', article: 'the App Store', kicker: 'Download on the', Icon: Apple },
-  { store: 'Google Play', article: 'Google Play', kicker: 'Get it on', Icon: PlaySquare },
-]
 
 function useRooms() {
   const [rooms, setRooms] = useState([])
@@ -124,13 +107,13 @@ function useDataFreshness() {
   return freshness
 }
 
-// One row per room: a real link for the one that's live, a ComingSoonModal
-// button for the other five — the same choice RoomCard.jsx already makes
-// for exactly these five room cards elsewhere on this page, just reused
-// here rather than re-decided. Listing all six (not just the live one) is
-// the point of this pass: a reference footer whose own product-list column
-// names everything the company offers, not just what's shipped.
-function FooterRoomLink({ room, onComingSoon, className }) {
+// One row per room: a real link for the one that's live, an EarlyAccessModal
+// button for the other five — the same choice RoomsGrid.jsx's own roadmap
+// rows make for exactly these five rooms elsewhere on this page, just
+// reused here rather than re-decided. Listing all six (not just the live
+// one) is the point of this pass: a reference footer whose own product-list
+// column names everything the company offers, not just what's shipped.
+function FooterRoomLink({ room, onSignup, className }) {
   if (room.live && room.href) {
     return (
       <a href={room.href} className={className}>
@@ -139,7 +122,7 @@ function FooterRoomLink({ room, onComingSoon, className }) {
     )
   }
   return (
-    <button type="button" onClick={() => onComingSoon(room)} className={`${className} text-left`}>
+    <button type="button" onClick={() => onSignup(room)} className={`${className} text-left`}>
       {room.name}
     </button>
   )
@@ -148,19 +131,29 @@ function FooterRoomLink({ room, onComingSoon, className }) {
 function FooterColumn({ title, children }) {
   return (
     <div className="flex flex-col gap-[11px]">
-      <span className="font-plex text-[11px] font-semibold tracking-[0.11em] text-white/80">{title}</span>
+      <span className="font-numeral text-[10.5px] font-semibold tracking-[0.13em] text-voidInk-body">{title}</span>
       {children}
     </div>
   )
 }
 
-// The brand stack — logo, then socials, then app badges, in that order —
-// is identical on both breakpoints, so it gets its own component rather
-// than being written out twice.
-function FooterBrandStack({ onSocialClick, onAppClick }) {
+// The brand stack — logo, then socials, in that order — is identical on
+// both breakpoints, so it gets its own component rather than being written
+// out twice.
+function FooterBrandStack({ onSocialClick }) {
   return (
     <div className="flex flex-col items-start gap-5">
-      <JukeLogo size={18} />
+      {/* §11's footer repeat of the slogan — wrapped with the logo in its
+          own div rather than joining the outer gap-5 flex column directly,
+          since the spec's own 8px gap is specific to logo-to-slogan and
+          would otherwise apply uniformly to every child in this stack
+          (i.e. also pushing the socials row away from it). */}
+      <div>
+        <JukeLogo size={18} />
+        <div className="mt-2 font-display text-[14px] font-extrabold italic uppercase tracking-[0.05em] text-[#7A808D]">
+          Agility Through Analytics
+        </div>
+      </div>
 
       <div className="flex gap-2">
         {SOCIAL_LINKS.map((social) => (
@@ -169,26 +162,9 @@ function FooterBrandStack({ onSocialClick, onAppClick }) {
             type="button"
             onClick={() => onSocialClick(social.label)}
             aria-label={social.label}
-            className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/[0.08] text-white/50 transition-colors hover:border-teal-400/40 hover:text-white"
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-line-hairline text-voidInk-muted transition-colors hover:border-teal-400/40 hover:text-white"
           >
             <SocialIcon path={social.path} />
-          </button>
-        ))}
-      </div>
-
-      <div className="flex flex-wrap gap-2">
-        {APP_BADGES.map(({ store, article, kicker, Icon }) => (
-          <button
-            key={store}
-            type="button"
-            onClick={() => onAppClick(store, article)}
-            className="flex items-center gap-2 rounded-lg border border-white/[0.08] px-3 py-[7px] transition-colors hover:border-teal-400/40"
-          >
-            <Icon className="h-5 w-5 text-white/70" />
-            <span className="flex flex-col items-start leading-tight">
-              <span className="text-[8.5px] uppercase tracking-[0.06em] text-white/45">{kicker}</span>
-              <span className="text-[12.5px] font-semibold text-white/85">{store}</span>
-            </span>
           </button>
         ))}
       </div>
@@ -200,18 +176,46 @@ export default function Homepage() {
   const rooms = useRooms()
   const freshness = useDataFreshness()
   const modalRef = useRef(null)
+  const earlyAccessRef = useRef(null)
 
   const openComingSoon = (label, body) => modalRef.current?.open(`${label} is coming soon`, body)
   const openSocial = (label) => openComingSoon(label, `Juke isn't on ${label} yet — check back once it is.`)
-  const openApp = (store, article) => openComingSoon(store, `Juke isn't listed on ${article} yet — it installs as a browser app for now.`)
-  const openCompanyLink = (label) => openComingSoon(label, `There's no ${label} page yet — check back as Juke grows.`)
-  const openRoom = (room) => openComingSoon(room.name, `${room.blurb} There's nothing to sign up for yet — check back once it's live.`)
-  const openSupport = () => openComingSoon(SUPPORT_LINK, "There's no support channel yet — check back as Juke grows.")
+  // ROOM_SIGNUP_SOURCE/roomSignupCopy (icons.jsx) are the same lookup
+  // RoomsGrid.jsx's roadmap list and RoomsNavMenu.jsx's dropdown rows use,
+  // so these footer links, that grid and that dropdown all tag the
+  // identical five rooms with the identical source string.
+  const openRoom = (room) => earlyAccessRef.current?.open(roomSignupCopy(room), ROOM_SIGNUP_SOURCE[room.name])
 
-  const roomLinkClass = 'flex min-h-[44px] items-center text-sm text-white/60 transition-colors hover:text-white lg:min-h-0 lg:text-[13px]'
+  const roomLinkClass = 'flex min-h-[44px] items-center text-sm text-voidInk-body transition-colors hover:text-white lg:min-h-0 lg:text-[13px]'
 
   return (
-    <div className="min-h-screen overflow-x-hidden bg-void text-white">
+    <>
+      {/* ---- Two homepages, chosen by CSS rather than by a media-query
+          hook, and the reason is hydration ----
+
+          scripts/prerender.mjs writes real server-rendered markup into
+          #root and main.jsx hydrates onto it. A width-dependent BRANCH
+          cannot survive that: the server has no window, so it renders the
+          desktop tree, and a phone's first client render would disagree —
+          React patches the mismatch by re-rendering the subtree, which on
+          a phone means one visible frame of desktop layout before the
+          phone one replaces it. That flash is exactly what the prerender
+          exists to prevent.
+
+          So both trees are prerendered and `sm:hidden` / `hidden sm:block`
+          picks. The cost is real and is worth naming: the desktop tree
+          MOUNTS on a phone (CSS-hidden is still mounted — the rule
+          useMinWidth's own comment exists for), so its effects run and its
+          engine reads happen on the device least able to afford them. That
+          is the same work today's homepage already does on a phone, so
+          nothing gets slower; it simply does not get faster. If it ever
+          needs to, the fix is to prerender two documents, not to move this
+          back to a hook. */}
+      <div className="sm:hidden">
+        <HomePhone />
+      </div>
+
+      <div className="hidden min-h-screen overflow-x-hidden bg-surface-page font-body text-voidInk-primary sm:block">
       <Header />
 
       {/* The fixed header is just its nav row now — the status strip that
@@ -230,26 +234,28 @@ export default function Homepage() {
       </main>
 
       {/* ---------- Footer, restructured after a real competitor's (Sleeper's)
-          own footer ---------- Logo, then socials, then app badges, stacked
-          top-left; everything else in equal-width columns to the right —
+          own footer ---------- Logo, then socials, stacked top-left;
+          everything else in equal-width columns to the right —
           Rooms/Method/Company/Legal here, standing in for Sleeper's own
           Available-on/Company/Resources/Play columns. Rooms and Method are
-          Juke's real content; Company and Legal's three new entries
-          (About Us, Careers, Contact, Support) are the "shape it for where
-          the company is headed" half of this pass — see the ComingSoonModal
-          note on COMPANY_LINKS above for why they're buttons, not dead
-          links. gap-x-10/gap-y-12 on both breakpoints is the one spacing
-          scale for the whole footer, rather than a different hand-picked
-          value per section, which is what "evenly spaced" actually means
-          here: every gap between every pair of sections is the same
-          number, not just visually close. */}
-      <footer className="border-t border-white/[0.07] bg-[#060909]">
-        <div className="mx-auto flex max-w-7xl flex-col gap-12 px-6 py-14 lg:grid lg:grid-cols-5 lg:gap-x-10 lg:gap-y-12">
-          <FooterBrandStack onSocialClick={openSocial} onAppClick={openApp} />
+          Juke's real content; Company now holds one real destination
+          (Contact, a mailto:) rather than the reference footer's four —
+          About Us and Careers never had anywhere to point and are gone
+          rather than left opening a "nothing here yet" dialog. Support in
+          Legal is a mailto: too, the same address as Contact — one real way
+          to reach a person beats two ways to open the same dead end.
+          gap-x-10/gap-y-12 on both breakpoints is the one spacing scale for
+          the whole footer, rather than a different hand-picked value per
+          section, which is what "evenly spaced" actually means here: every
+          gap between every pair of sections is the same number, not just
+          visually close. */}
+      <footer className="mt-[72px] border-t border-line-hairline bg-surface-nav">
+        <div className="mx-auto flex max-w-[1200px] flex-col gap-12 px-10 py-14 lg:grid lg:grid-cols-5 lg:gap-x-10 lg:gap-y-12">
+          <FooterBrandStack onSocialClick={openSocial} />
 
           <FooterColumn title="The Rooms">
             {rooms.map((room) => (
-              <FooterRoomLink key={room.name} room={room} onComingSoon={openRoom} className={roomLinkClass} />
+              <FooterRoomLink key={room.name} room={room} onSignup={openRoom} className={roomLinkClass} />
             ))}
           </FooterColumn>
 
@@ -262,11 +268,9 @@ export default function Homepage() {
           </FooterColumn>
 
           <FooterColumn title="Company">
-            {COMPANY_LINKS.map((label) => (
-              <button key={label} type="button" onClick={() => openCompanyLink(label)} className={`${roomLinkClass} text-left`}>
-                {label}
-              </button>
-            ))}
+            <a href={`mailto:${CONTACT_EMAIL}`} className={roomLinkClass}>
+              Contact
+            </a>
           </FooterColumn>
 
           <FooterColumn title="Legal">
@@ -275,13 +279,14 @@ export default function Homepage() {
                 {link.label}
               </a>
             ))}
-            <button type="button" onClick={openSupport} className={`${roomLinkClass} text-left`}>
-              {SUPPORT_LINK}
-            </button>
+            <a href={`mailto:${CONTACT_EMAIL}`} className={roomLinkClass}>
+              Support
+            </a>
           </FooterColumn>
         </div>
 
         <ComingSoonModal ref={modalRef} />
+        <EarlyAccessModal ref={earlyAccessRef} />
 
         {/* The legal/copyright row — a single centred line, matching the
             reference footer's own bottom bar, plus the one Juke-specific
@@ -289,12 +294,12 @@ export default function Homepage() {
             that has no equivalent in a reference built for a different
             product, kept because it's true and worth keeping rather than
             cut to match a shape that has no room for it. */}
-        <div className="mx-auto flex max-w-7xl flex-col items-center gap-3 border-t border-white/5 px-6 py-6 text-center">
-          <p className="max-w-[560px] text-[13px] text-[#8e9aa1]">
+        <div className="mx-auto flex max-w-[1200px] flex-col items-center gap-3 border-t border-line-divider px-10 py-6 text-center">
+          <p className="max-w-[560px] text-[13px] text-voidInk-muted">
             A solo mock draft runs entirely in your browser — nothing you draft is sent anywhere.
             Drafting with your league uses a server, just for that room.
           </p>
-          <span className="font-plex text-xs text-[#8e9aa1]">&copy; 2026 Juke. All rights reserved.</span>
+          <span className="font-numeral tabular-nums text-xs font-medium text-voidInk-muted">&copy; 2026 Juke. All rights reserved.</span>
         </div>
 
         {/* The footer's one static closing line — see useDataFreshness()
@@ -303,11 +308,12 @@ export default function Homepage() {
             fails-by-disappearing contract as the score strip), rather than
             a placeholder that would flash a wrong count for one frame. */}
         {freshness && (
-          <div className="mx-auto max-w-7xl px-6 pb-6 text-center">
-            <p className="font-plex text-xs text-[#8e9aa1]">{freshness}</p>
+          <div className="mx-auto max-w-[1200px] px-10 pb-6 text-center">
+            <p className="font-numeral tabular-nums text-xs font-medium text-voidInk-muted">{freshness}</p>
           </div>
         )}
       </footer>
-    </div>
+      </div>
+    </>
   )
 }

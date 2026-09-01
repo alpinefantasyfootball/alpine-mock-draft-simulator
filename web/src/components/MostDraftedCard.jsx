@@ -1,5 +1,5 @@
 import AnalyticsCard from './AnalyticsCard.jsx'
-import { POS_BADGE, POS_SOLID } from './draftRoomPositions.js'
+import { POS_BADGE, POS_CHALK } from './draftRoomPositions.js'
 
 // Row 1, col 4 of the analytics grid — the top five names by how often they
 // land on your own roster, tallied across only your own picks
@@ -28,8 +28,16 @@ export default function MostDraftedCard({ stats }) {
                 {row.pos}
               </span>
               <span className="min-w-0 flex-1 truncate text-xs font-medium text-white/85">{row.name}</span>
+              {/* POS_CHALK, not POS_SOLID — see AvgRoundByPositionCard
+                  for the measurement. Nothing is drawn on this bar, so the
+                  step that exists to carry white text is the wrong one, and
+                  on this card's ground it measured 1.46-2.93:1.
+
+                  The unknown-position fallback stays teal rather than
+                  becoming a seventh pastel: it means "no position colour
+                  for this", and a light grey would read as DST. */}
               <div className="h-1.5 w-14 shrink-0 overflow-hidden rounded-full bg-white/[0.08]">
-                <div className="h-full rounded-full" style={{ width: `${pct}%`, background: POS_SOLID[row.pos] || '#00E5FF' }} />
+                <div className="h-full rounded-full" style={{ width: `${pct}%`, background: POS_CHALK[row.pos] || '#00E5FF' }} />
               </div>
               <span className="w-14 shrink-0 text-right text-[10.5px] tabular-nums text-white/55">
                 {row.count} of {row.total}
