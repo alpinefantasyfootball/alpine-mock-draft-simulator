@@ -5184,8 +5184,26 @@ can run: it says "could not reach your account" on exactly this.
 
 **`PREVIEW_ORIGIN_RE`** allows any `https://<hash>.juke-1mw.pages.dev` through
 `originAllowed()`, because every branch push gets its own preview address and
-that is where this is tested before a merge. Without it every authenticated
-route 403s on a preview with nothing on screen to say why.
+that is where this is meant to be tested before a merge. Without it every
+authenticated route 403s on a preview with nothing on screen to say why.
+
+**The worker's half of that is done and the page's half is not, so a preview
+has no accounts on it at all.** Measured 2 September 2026 against the preview
+for PR #126: `window.Clerk` is undefined, `window.JukeAuth` is never written,
+and the built bundle contains no `pk_` key — while production's own bundle
+carries `pk_live_…` a few bytes from the same place.
+`VITE_CLERK_PUBLISHABLE_KEY` is set for the **Production** environment in the
+Pages project and not for **Preview**, and Vite bakes it in at build time, so
+a preview build genuinely has none.
+
+Everything degrades exactly as designed — `useAccountUiReady()` answers false,
+`AccountButtons` renders its inert triggers, the Locker's strip falls back to
+the early-access form — which is why nobody noticed: **the preview looks fine,
+it simply is not the product.** What it costs is the one thing the note above
+claims: the signed-in path cannot be exercised on a preview, so the gap the
+`verifyToken` bug lived in is still open and the only real check remains a
+merge to production. Setting the same variable for Preview is a dashboard
+change nobody has made, not a code change.
 
 ## Security
 
