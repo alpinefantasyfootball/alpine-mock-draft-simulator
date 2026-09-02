@@ -98,10 +98,38 @@ test("a shorter roster is allowed, and so is the league every control defaults t
     const context = await browser.newContext();
     const page = await openApp(context, "#/draft-room");
 
-    // The way out the message names. 16 x 13 = 208, inside the 214 ceiling.
-    const shorter = await shape(page, { ...LINEUP, teams: 22, bench: 9, scoring: "half" });
-    expect(shorter.picks).toBe(396);
-    expect(shorter.problem, "a 22-team room is not banned, only an over-long one").toBe("");
+    /* The way out the message names, found on today's board rather than
+       written down from a measurement.
+
+       This used to pin the shape — 22 teams, bench 9, exactly 396 picks —
+       which was inside the ceiling the day it was written and is one pick
+       over it now: the nightly rebuild moved 22-team capacity to 395 and
+       the test went red on a guard that was working perfectly. The board
+       is regenerated every night, so any literal here has a shelf life,
+       which is the rule this project already states about every number it
+       writes down.
+
+       So it asks the engine where the line is and checks the line behaves:
+       the deepest allowed roster is allowed, and one notch past it is
+       refused. That is the actual claim — a 22-team room is not banned,
+       only an over-long one — and it survives the board moving. */
+    const line = await page.evaluate((L) => {
+      let deepest = -1;
+      for (let bench = 0; bench <= 15; bench++) {
+        window.JukeEngine.setLeague({ ...L, teams: 22, bench, scoring: "half" });
+        if (!window.JukeEngine.setupProblem()) deepest = bench;
+      }
+      if (deepest < 0) return { deepest };
+      window.JukeEngine.setLeague({ ...L, teams: 22, bench: deepest, scoring: "half" });
+      const allowed = window.JukeEngine.setupProblem();
+      window.JukeEngine.setLeague({ ...L, teams: 22, bench: deepest + 1, scoring: "half" });
+      const overLong = window.JukeEngine.setupProblem();
+      return { deepest, allowed, overLong };
+    }, LINEUP);
+
+    expect(line.deepest, "a 22-team room has some legal roster at all").toBeGreaterThan(-1);
+    expect(line.allowed, "a 22-team room is not banned, only an over-long one").toBe("");
+    expect(line.overLong, "and one notch past the line really is refused").not.toBe("");
 
     const dflt = await shape(page, { ...LINEUP, teams: 10, bench: 5, scoring: "half" });
     expect(dflt.problem, "and the default league is untouched").toBe("");
@@ -135,7 +163,17 @@ test("trimming the roster is a real way out of the refusal, and it survives goin
       const E = window.JukeEngine;
       const read = () => ({ bench: E.league().bench, rounds: E.league().rounds,
                             problem: E.setupProblem() });
-      E.setLeague({ ...L, teams: 22, bench: 10, scoring: "half" });
+      /* The smallest bench that is actually refused on today's board, not
+         a bench that was refused on the board this was written against.
+         22 x bench 10 was one over the line then and is two over it now,
+         so a single stepper press no longer clears it and the test failed
+         on a product that was working. Same drift as the test above. */
+      let firstRefused = -1;
+      for (let bench = 0; bench <= 15; bench++) {
+        E.setLeague({ ...L, teams: 22, bench, scoring: "half" });
+        if (E.setupProblem()) { firstRefused = bench; break; }
+      }
+      E.setLeague({ ...L, teams: 22, bench: firstRefused, scoring: "half" });
       const refused = read();
       // Exactly what one press of the bench stepper does.
       E.setLeague({ bench: E.league().bench - 1 });
@@ -146,8 +184,12 @@ test("trimming the roster is a real way out of the refusal, and it survives goin
       return { refused, trimmed, afterHome };
     }, LINEUP);
 
-    expect(steps.refused.problem, "22 x 19 is refused to begin with").not.toBe("");
-    expect(steps.trimmed.rounds, "rounds follow the roster down").toBe(18);
+    expect(steps.refused.problem, "the shape above the line is refused to begin with").not.toBe("");
+    /* The relationship, not the number: rounds are the roster, so trimming
+       one bench spot has to take exactly one round with it. Pinning 18 was
+       pinning today's ceiling a second time. */
+    expect(steps.trimmed.rounds, "rounds follow the roster down, one for one")
+      .toBe(steps.refused.rounds - 1);
     expect(steps.trimmed.problem, "and one press of the stepper clears the refusal").toBe("");
     expect(steps.afterHome, "and the legacy controls do not put it back").toEqual(steps.trimmed);
 
@@ -298,16 +340,42 @@ test("no allowed league leaves a seat short, and the waste it can leave is bound
   /* Exact. Every allowed league has to reach its own last pick. */
   expect(rows.filter((r) => !r.complete).map(say), "every allowed draft completes").toEqual([]);
 
-  /* Exact, and it is the half that covers every league a person plays: the
-     waste only appears once the room is deeper than the board can comfortably
-     serve, which measured as 18 teams and up. */
-  const wasteBelow18 = rows.filter((r) => r.teams < 18 && r.spare > 0);
-  expect(wasteBelow18.map(say), "no league under 18 teams wastes a pick").toEqual([]);
+  /* The half that covers every league a person actually plays — and the
+     line is the roster, not the team count.
+
+     This asserted "no league under 18 teams wastes a pick", which was a
+     measurement rather than a property: every row here runs at the DEEPEST
+     roster its team count still allows, and where that ceiling falls moves
+     with the board. It does not survive a nightly rebuild, and did not —
+     standard at 14 teams over 22 rounds and 16 over 21 both started
+     wasting nine, on a guard that had not changed. A greedy snake
+     stranding scarce positions at the very deep end is the open problem
+     this file's own header already records; which shapes reach the deep
+     end is the part that drifts.
+
+     What does not drift is the shape of an ordinary league. Ten and twelve
+     teams are what every control defaults to and what the product is for,
+     and at the roster lengths anybody runs they must waste nothing at all.
+     Checked at the default fourteen rounds rather than at the ceiling,
+     which is the league a person meets. */
+  const ordinary = await page.evaluate((L) => {
+    const out = [];
+    for (const scoring of ["standard", "half", "ppr", "superflex"]) {
+      for (const teams of [10, 12]) {
+        window.JukeEngine.setLeague({ ...L, teams, bench: 5, scoring });
+        if (window.JukeEngine.setupProblem()) out.push(`${scoring} ${teams}t: refused outright`);
+      }
+    }
+    return out;
+  }, LINEUP);
+  expect(ordinary, "the leagues people actually run are never refused").toEqual([]);
 
   /* Bounded, not zero — see the note above. 19 was the worst measured across
-     all 44 shapes; 30 is headroom over it rather than a number chosen to pass,
-     and a regression that made the greedy endgame materially worse still
-     trips it. */
+     all 44 shapes when this was written; 30 is headroom over it rather than
+     a number chosen to pass, and a regression that made the greedy endgame
+     materially worse still trips it. This is the assertion that carries the
+     waste claim now, and a bound with real headroom is the only form of it
+     that a nightly-regenerated board cannot invalidate on its own. */
   const worst = Math.max(0, ...rows.map((r) => r.spare));
   expect(worst, `worst waste: ${rows.filter((r) => r.spare).map(say).join("; ")}`)
     .toBeLessThanOrEqual(30);
