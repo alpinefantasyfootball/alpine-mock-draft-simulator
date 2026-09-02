@@ -426,10 +426,26 @@ check("and answers a repeat", newsAgain.status, 200);
 
 /* Only meaningful with a key configured: without one the route returns before
    it ever reaches the cache, which is correct and is why this is conditional
-   rather than an unconditional assertion that would fail on a fresh checkout. */
+   rather than an unconditional assertion that would fail on a fresh checkout.
+
+   "not miss", not "hit", and the difference is the whole point of the test.
+   There are two caches in front of the provider — the edge cache
+   (x-juke-cache: hit) and D1 (db) — and only "miss" means the provider was
+   actually called. What this exists to prove is that a player opened
+   repeatedly costs one upstream call rather than fifty, and "db" proves
+   that exactly as well as "hit" does.
+
+   Asserting "hit" held locally and failed against the deployed worker,
+   measured: miss -> db -> hit, three asks to reach the edge cache rather
+   than two, because the edge write does not land in time for the request
+   immediately behind it. That is a property of a real edge and not a
+   fault, and it matters now in a way it did not before — the deploy
+   workflow runs this suite against production after every deploy, so an
+   assertion that only holds against miniflare would have made every
+   automated deploy report red. */
 if (firstBody.configured) {
-  check("a repeated ask is served from cache",
-        newsAgain.headers.get("x-juke-cache"), "hit");
+  check("a repeated ask does not reach the provider again",
+        newsAgain.headers.get("x-juke-cache") !== "miss", true);
 }
 
 const newsOther = await fetch(`${HTTP}/news?player=CACHETEST1`,
