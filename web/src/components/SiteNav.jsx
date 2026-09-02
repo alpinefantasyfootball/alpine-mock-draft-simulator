@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
 import { SignedIn, SignedOut, SignInButton, SignUpButton, UserButton } from '@clerk/clerk-react'
 import RoomsNavMenu from './RoomsNavMenu.jsx'
-import { CLERK_PUBLISHABLE_KEY, CLERK_APPEARANCE } from '../clerkConfig.js'
+import { CLERK_APPEARANCE } from '../clerkConfig.js'
+import { useAccountUiReady } from '../hooks/useAccountUiReady.js'
 
 // The one canonical top-nav link list and account-controls pair. Before
 // this file existed, LobbyBar.jsx (the Draft Room / Locker screen) had
@@ -131,17 +131,16 @@ export function NavLinks({ linkClassName, currentRoomClassName, currentRoom, mod
 // built yet, LockerTable's locker-specific pitch), just not for the one
 // thing that's no longer waitlist-only.
 //
-// mounted exists for one reason: entry-server.jsx's Node prerender pass has
-// no window, which Clerk's frontend JS reaches for throughout, so it never
-// gets wrapped in a <ClerkProvider> at all (main.jsx's own comment). If this
-// rendered <SignedIn>/<SignedOut> on the very first client pass, that pass
-// is the one hydrateRoot() uses to reconcile against the server's markup —
-// and the server rendered neither, because it can't. Waiting for an effect
-// (which never runs during SSR, and never runs before that first client
-// pass either) keeps the first client render byte-for-byte the same
-// fallback the server sent, then swaps in the real thing a tick later —
-// the same shape main.jsx's own hydrateRoot/createRoot branch exists for,
-// one component down.
+// useAccountUiReady() is the SSR/no-key guard that used to be a `mounted`
+// state and a CLERK_PUBLISHABLE_KEY check inlined right here — see that
+// hook's own comment for why both halves exist and how each one fails
+// silently. It moved out when HomePhone.jsx's account card needed the
+// identical question answered: the phone tree is deliberately a different
+// screen rather than a narrower one (CLAUDE.md's mobile-pass rule), so the
+// two share the wiring and decide their own look, rather than sharing a
+// component neither quite fits. What differs is only what `false` means —
+// here the inert triggers still render, because a nav row with a hole in
+// it reads as broken.
 //
 // variant="ghost" (design_handoff_homepage_cosmetic §10's "Nav 'Sign Up'"
 // row) is opt-in and homepage-only — Header.jsx passes it explicitly, both
@@ -173,8 +172,7 @@ export function AccountButtons({ variant = 'filled' }) {
   const loginButtonClass =
     'inline-flex h-11 items-center justify-center rounded-full px-3 text-[15px] font-semibold text-[#B7BEC9] transition-colors duration-150 hover:text-white md:h-9 md:text-sm'
 
-  const [mounted, setMounted] = useState(false)
-  useEffect(() => setMounted(true), [])
+  const accountUiReady = useAccountUiReady()
 
   const loginTrigger = (
     <button type="button" className={loginButtonClass}>
@@ -187,7 +185,7 @@ export function AccountButtons({ variant = 'filled' }) {
     </button>
   )
 
-  if (!mounted || !CLERK_PUBLISHABLE_KEY) {
+  if (!accountUiReady) {
     // No Clerk (SSR, or a checkout with no key configured at all) — both
     // triggers still render, they just don't open anything yet, matching
     // every other "answer no to a missing binding" fallback in this app
