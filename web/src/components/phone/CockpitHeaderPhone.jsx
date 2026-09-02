@@ -103,16 +103,23 @@ export default function CockpitHeaderPhone({
 
         {/* Jump to the live pick. The board is a real scroller in both axes
             — a 14-round, 10-team board is several screens tall and wider
-            than a phone — and nothing has ever pulled it back to the
-            current pick, so scrolling up to check round one was a one-way
-            trip you undid by hand.
+            than a phone — so scrolling up to check round one used to be a
+            one-way trip you undid by hand.
 
-            Deliberately a button and NOT an automatic follow. Auto-scroll
-            on every render is a bug this project has already shipped and
-            removed once on the legacy board: it pulled a reader back to the
-            live pick two or three times a second for as long as they kept
-            trying to look somewhere else. An explicit control cannot do
-            that, and it is what the reference app offers too. */}
+            This comment used to say the button was deliberately NOT an
+            automatic follow, on the grounds that auto-scroll on every
+            render is a bug this project shipped and removed once on the
+            legacy board. Half of that is still true and it is the wrong
+            half: what the legacy board removed was *unconditional*
+            following, and what it replaced it with was `boardFollow` —
+            follow until a person scrolls, then stop. A board that never
+            follows at all was reported straight back, from a real phone
+            draft with auto-pick on, as a draft happening off-screen.
+
+            So the board follows (DraftBoardGrid's `followLive`) and this
+            button is what re-arms it after a person has scrolled away. It
+            is still the only control here, and it still cannot yank
+            anybody anywhere: it only ever fires on a press. */}
         <button
           type="button"
           onClick={onFindLive}
