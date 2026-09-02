@@ -608,8 +608,10 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
              what that component's `mono`/silhouette machinery exists to
              take away, and it swaps itself to a silhouette below 28px —
              a width every one of these lands under. Sourced from
-             /juke-mark-void.svg in web/public, which is byte-identical to
-             the asset shipped with the handoff (checked, not assumed).
+             /juke-shark-mark.svg, which is design package 02's own mark and
+             is ground-independent — the -void variant this used to name was
+             a cut-out baked for #070A0D, and there is no longer a per-ground
+             file to pick between (see JukeLogo.jsx).
              aria-hidden because the name beside it already identifies the
              column; the mark here is a badge, not a label. */
           const isMine = s === mySlot
@@ -618,7 +620,7 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
           const content = (
             <>
               <img
-                src="/juke-mark-void.svg"
+                src="/juke-shark-mark.svg"
                 alt=""
                 aria-hidden="true"
                 className="h-[13px] w-auto shrink-0 lg:h-[15px]"

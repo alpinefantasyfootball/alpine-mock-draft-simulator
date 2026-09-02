@@ -689,10 +689,12 @@ test("every player on the Players tab is reachable on a phone", async ({ browser
      true sentence about a button nobody wants back.
 
      And the wait is on the transition rather than on the clock. Pressing
-     Start raises DraftRoom's `starting` loader, whose floor went from 400ms
-     to 2100 (SonarLoader's own RING_MS) so the sweep can complete — a fixed
-     500ms wait was racing it and would have gone red again the next time
-     that number moved. Waiting for the nav to exist cannot. */
+     Start raises DraftRoom's `starting` loader, whose floor has now been
+     400ms, then 2100 (SonarLoader's RING_MS, so its sweep could complete),
+     and now 500 (DraftRoomLoader has no sweep to complete — see its own
+     comment). A fixed wait raced it every time and would have gone red on
+     each of those moves. Waiting for the nav to exist cannot, which is the
+     whole point and is now demonstrated three times over. */
   await clickStart();
   await page.waitForFunction(() => {
     const root = document.getElementById("draftroom-root");

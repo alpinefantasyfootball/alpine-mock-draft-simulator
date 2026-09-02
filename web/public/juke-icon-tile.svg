@@ -3,6 +3,7 @@
 <linearGradient id="jukeGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#85B1F9"/><stop offset="100%" stop-color="#CC9BFA"/></linearGradient>
 <filter id="eyeBloom" x="-300%" y="-300%" width="700%" height="700%"><feGaussianBlur stdDeviation="5"/></filter>
 </defs>
+<rect x="450" y="182" width="380" height="380" rx="84" fill="#141C27"/>
 <g transform="matrix(1.9211538461538462 0 0 1.9211538461538462 640 389.8518668198408)">
 <g opacity="0.42" filter="url(#eyeBloom)"><g class="eyeCopy" transform="matrix(0.930716823464046 0 0 -0.9307168234640459 -23.673899264996237 15.637531781113495)">
 <path style="stroke: none; stroke-width: 1; stroke-dasharray: none; stroke-linecap: butt; stroke-dashoffset: 0; stroke-linejoin: miter; stroke-miterlimit: 4; fill: #00E5FF; fill-rule: nonzero; opacity: 1;" paint-order="stroke" transform=" translate(-6.125500000000001, 0.7269999999999994)" d="M 0 0 C 0 -3.822 3.1 -6.922 6.923 -6.922 C 9.08 -6.922 10.982 -5.917 12.251000000000001 -4.3709999999999996 L 2.72 5.468 C 1.077 4.201 0 2.236 0 0" stroke-linecap="round"></path>

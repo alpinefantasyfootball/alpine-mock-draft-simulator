@@ -18,7 +18,7 @@ import PlayerProfileModal from './PlayerProfileModal.jsx'
 import DraftSettingsModal from './DraftSettingsModal.jsx'
 import DraftEntryScreen from './DraftEntryScreen.jsx'
 import DraftLobby from './DraftLobby.jsx'
-import SonarLoader from './SonarLoader.jsx'
+import DraftRoomLoader from './DraftRoomLoader.jsx'
 import LobbyBar from './LobbyBar.jsx'
 import MobileAppTabBar from './MobileAppTabBar.jsx'
 import MobileDraftTabBar from './MobileDraftTabBar.jsx'
@@ -233,18 +233,41 @@ export default function DraftRoom() {
   // its job, not a real wait, but the brief's requirement is unconditional
   // ("every surface, always"), not "only when slow".
   //
-  // The floor used to be 400ms, which is the same mistake #boot-sonar's own
-  // MIN_VISIBLE_MS made once already (there: 900ms, "chosen off the mark
-  // alone") — short enough that dataReady() being already true (the common
-  // case) meant this screen was never actually seen, just flashed. Reported
-  // directly: the Sonar ring never got the chance to complete a sweep, let
-  // alone loop, before the board appeared underneath it. 2100 is
-  // SonarLoader's own RING_MS — one full ring cycle — the same number and
-  // the same reasoning #boot-sonar's floor already uses, because this is
-  // the same component doing the same job in a second place.
+  // The floor is 500ms, from design package 03, and it is a REDUCTION from
+  // 2100 that does not reopen the bug 2100 was fixing.
+  //
+  // The history matters, because 500 is closer to the 400 that failed than to
+  // the 2100 that worked. 400 was too short because SonarLoader's ring is a
+  // sweep with a beginning: dataReady() is usually already true here, so the
+  // screen was gone before one cycle completed and it read as a flash.
+  // Reported directly. 2100 was RING_MS — exactly one full sweep — chosen so
+  // the thing always finished what it started.
+  //
+  // DraftRoomLoader has no sweep to complete. Its teeth run on negative delays
+  // stepped 55ms apart, so it is already mid-loop on its first painted frame
+  // and there is no cycle boundary to land on: it looks the same held for
+  // 500ms as for 5000. The cost 2100 was buying is a cost this loader does not
+  // incur, so paying it would be 1.6 seconds of nothing on the common path
+  // where the draft is genuinely ready.
+  //
+  // What 500 still buys is the other half of the original complaint, which
+  // does survive: a loader that flashes for 80ms reads as a glitch whatever is
+  // drawn in it. Below ~400ms a person perceives a flicker rather than a
+  // transition, which is why the package puts the floor just above it.
   const [starting, setStarting] = useState(false)
   const startingSinceRef = useRef(0)
-  const START_TRANSITION_MIN_MS = 2100
+  const START_TRANSITION_MIN_MS = 500
+  // The layer stays mounted through its own 220ms fade-out, so the board is
+  // not revealed by a hard cut. `leaving` is what separates "the draft is
+  // ready" from "the loader has finished getting out of the way" — without it
+  // the element unmounts on the first of those and the fade never plays.
+  const [leaving, setLeaving] = useState(false)
+  // 15s, from the package: past this the wait has stopped being a wait. The
+  // poll below has no other exit — it is an rAF loop on a condition that a
+  // wedged engine never satisfies — so without this the screen is a permanent
+  // full-viewport layer at z-index 60 with no way out but a reload.
+  const START_TRANSITION_MAX_MS = 15000
+  const [startTimedOut, setStartTimedOut] = useState(false)
   // The one thing that can refuse the Start button, said beside it rather
   // than folded away — the rule the legacy setup screen already followed.
   const problem = engine ? engine.setupProblem() : ''
@@ -407,14 +430,29 @@ export default function DraftRoom() {
   useEffect(() => {
     if (!starting || !engine) return
     let raf
+    let fade
     const check = () => {
       const ready = !!engine.headerInfo().started && engine.dataReady()
       const elapsed = performance.now() - startingSinceRef.current
-      if (ready && elapsed >= START_TRANSITION_MIN_MS) { setStarting(false); return }
+      if (ready && elapsed >= START_TRANSITION_MIN_MS) {
+        // Fade the layer out over 220ms and only then unmount it. Setting
+        // `starting` false here directly is what produced the hard cut this
+        // replaces; the flag that actually ends the transition is the timer.
+        setLeaving(true)
+        fade = setTimeout(() => { setStarting(false); setLeaving(false) }, 220)
+        return
+      }
+      if (elapsed >= START_TRANSITION_MAX_MS) { setStartTimedOut(true); return }
       raf = requestAnimationFrame(check)
     }
     raf = requestAnimationFrame(check)
-    return () => { if (raf) cancelAnimationFrame(raf) }
+    return () => {
+      if (raf) cancelAnimationFrame(raf)
+      // The fade timer has to be cleared too. This effect re-runs on `engine`,
+      // which moves on every juke:header tick, so a surviving timer from a
+      // previous run would drop `starting` mid-transition on a later one.
+      if (fade) clearTimeout(fade)
+    }
   }, [starting, engine])
   // A real invite link (#/draft-room?room=CODE) joins the room over the
   // socket the moment app.js boots — see joinRoom() in app.js — entirely
@@ -593,10 +631,26 @@ export default function DraftRoom() {
   // against that exact hex (#1E2733, tailwind.config.js's slate.DEFAULT),
   // not "obsidian", which is the boot overlay's own void-page ground.
   if (starting) {
+    /* Design package 03. The layer draws its own ground (#151D2B) and its own
+       centring, so there is no wrapper here any more — the <div> this replaced
+       existed to supply bg-slate and a flex column, and a second box around it
+       would only be somewhere for a future className to go wrong.
+
+       The fade is on this element rather than inside the component so that the
+       component stays usable inline, where a caller wants it to appear with
+       whatever it is sitting in rather than to animate itself in. 160ms in and
+       220ms out, both from the package; `leaving` is set 220ms before the
+       unmount so the transition has time to run. */
     return (
-      <div className="fixed inset-0 z-[60] flex flex-col bg-slate text-white">
-        <SonarLoader tier="screen" surface="app" srLabel="Setting up your draft" style={{ height: '100%' }} />
-      </div>
+      <DraftRoomLoader
+        label={startTimedOut ? 'This is taking longer than it should' : 'Entering draft room'}
+        sub={startTimedOut || !league ? '' : `Seating ${league.teams} teams`}
+        error={startTimedOut ? 'This is taking longer than it should' : ''}
+        className={
+          'transition-opacity motion-reduce:transition-none ' +
+          (leaving ? 'opacity-0 duration-[220ms] ease-out' : 'animate-[sonar-fade_160ms_ease-out_both]')
+        }
+      />
     )
   }
 
@@ -639,6 +693,15 @@ export default function DraftRoom() {
   const armFreshDraft = () => {
     setSoloAutopick(false)
     startingSinceRef.current = performance.now()
+    // Both transition flags are per-attempt and both have to be cleared on the
+    // way IN, for exactly the reason this function exists: DraftRoom does not
+    // unmount between drafts, so anything left set survives into the next one.
+    // A stuck `startTimedOut` would open the following draft on the timeout
+    // message, and a stuck `leaving` would start it already faded out — the
+    // same shape as the `view`/`soloAutopick` leaks this function was written
+    // for, one state pair along.
+    setStartTimedOut(false)
+    setLeaving(false)
     setStarting(true)
   }
 

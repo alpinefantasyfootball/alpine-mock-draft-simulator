@@ -30,7 +30,7 @@
      that, went on drawing a navy #152A49 shield for two brand generations
      after the app stopped using one. Nothing pointed at it, nothing ran it,
      and nobody would have found out until the next time somebody pressed the
-     button. It reads ../web/public/juke-mark.svg now, so there is one mark
+     button. It reads ../web/public/juke-shark-mark.svg now, so there is one mark
      rather than a private copy that cannot drift back.
 
      The cost of that is a server: fetch() cannot read a file:// URL at all, so
@@ -68,8 +68,8 @@ const status = (msg) => { document.getElementById('status').textContent = msg; }
   try {
     /* Fetched rather than pointed at with an <img src>, so a miss is an error
        here instead of a card silently drawn with a hole where the mark goes. */
-    const res = await fetch('../web/public/juke-mark.svg');
-    if (!res.ok) throw new Error('../web/public/juke-mark.svg returned ' + res.status);
+    const res = await fetch('../web/public/juke-shark-mark.svg');
+    if (!res.ok) throw new Error('../web/public/juke-shark-mark.svg returned ' + res.status);
     const svg = await res.text();
     img = await new Promise((resolve, reject) => {
       const i = new Image();

@@ -184,16 +184,31 @@ export async function openApp(context, path = "#/draft-room", opts = {}) {
      "nothing is sitting on top of the Start button" reporting the overlay's
      own artwork as the thing covering the button, and the bottom sheet
      refusing to grow on a tap — and both were the page being handed over too
-     early. Measured on the real build: the button hit-tests as covered at
-     600ms through 5000ms and is clickable from 6000ms, which is the same
-     4800-5800ms window sonar.spec.mjs asserts the overlay's removal in.
+     early. Measured on the Breach build: the button hit-tested as covered at
+     600ms through 5000ms and was clickable from 6000ms.
 
-     The ceiling is 8000ms, real headroom over that documented window rather
+     Deepwater moved that window forward by more than half. The overlay now
+     holds 2500ms and is gone by ~2780 (2500 + a 260ms fade + the 280ms
+     removal beat), which is the 2400-3400ms window sonar.spec.mjs asserts.
+     That is worth roughly three seconds on each of the ninety-six openApp()
+     calls in this suite — several minutes of wall clock, and the largest
+     single saving in it. Nothing about this wait had to change to collect it,
+     which is the argument for having written it as a wait on the overlay's
+     actual absence rather than on a duration.
+
+     The ceiling is 5000ms, real headroom over that documented window rather
      than a hopeful number. If the overlay outstays it the element is removed
      rather than the wait failing: an overlay that never leaves is one bug and
      it is sonar.spec.mjs's to report, and a hard wait here would turn it into
      ninety-six timeouts in every other file instead — the same tolerance the
      predicate this replaces was written with.
+
+     Tolerant of the overlay not existing at all, and that is now the common
+     case rather than an edge one: splash-boot.js gates the splash to one play
+     per session, so the second and later navigations inside a single browser
+     context find no overlay and this resolves on the first tick. A spec that
+     needs to watch it play needs a fresh context, which is what
+     loadWithProbe() in sonar.spec.mjs does.
 
      `keepBootOverlay` is for sonar.spec.mjs alone, which measures the
      overlay's whole life from an init script and needs it left exactly as the
@@ -201,7 +216,7 @@ export async function openApp(context, path = "#/draft-room", opts = {}) {
      and the docs pages have no loader. */
   if (!opts.keepBootOverlay) {
     await page
-      .waitForFunction(() => !document.getElementById("boot-sonar"), null, { timeout: 8000 })
+      .waitForFunction(() => !document.getElementById("boot-sonar"), null, { timeout: 5000 })
       .catch(() => page.evaluate(() => {
         const el = document.getElementById("boot-sonar");
         if (el) el.remove();

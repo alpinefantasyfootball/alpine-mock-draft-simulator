@@ -76,7 +76,7 @@ const PROBE = () => {
     } else if (window.__sonar.existed && window.__sonar.removedAt == null) {
       window.__sonar.removedAt = Date.now() - t0;
     }
-    if (Date.now() - t0 < 6000) setTimeout(tick, 16);
+    if (Date.now() - t0 < 4000) setTimeout(tick, 16);
   };
   tick();
 };
@@ -95,7 +95,7 @@ async function loadWithProbe(browser, opts, path = "#/") {
 for (const [label, opts] of [["a phone", PHONE], ["a desktop", DESKTOP]]) {
   test(`the cold-load overlay comes down on ${label}, and leaves nothing over the page`, async ({ browser }) => {
     const { context, page } = await loadWithProbe(browser, opts);
-    await page.waitForTimeout(5800);
+    await page.waitForTimeout(3600);
 
     const sonar = await page.evaluate(() => window.__sonar);
     expect(sonar.existed, "the overlay is in the served markup").toBe(true);
@@ -159,7 +159,7 @@ for (const [label, opts] of [["a phone", PHONE], ["a desktop", DESKTOP]]) {
    thing to catch is that price quietly growing. */
 test("the loader is shown on every load, and does not outstay its welcome", async ({ browser }) => {
   const { context, page } = await loadWithProbe(browser, DESKTOP);
-  await page.waitForTimeout(6000);
+  await page.waitForTimeout(3600);
   const sonar = await page.evaluate(() => window.__sonar);
 
   expect(sonar.existed, "the overlay is in the served markup").toBe(true);
@@ -169,19 +169,32 @@ test("the loader is shown on every load, and does not outstay its welcome", asyn
   ).toBeGreaterThan(0.9);
 
   /* The floor is the overlay's own choreography rather than a chosen number.
-     Sonar's ring loop shipped this same shape of bound; Breach II's own last
-     arrival is the closing ripple, which is visually settled at opacity 0 by
-     about 4680ms — a .55 * 4000ms delay (see index.html's --ripple) plus the
-     62% point of its own --total-length run, where breachRipple's keyframe
-     already holds opacity at 0 — see main.jsx's own comment for the rest of
-     the arrival table. An earlier version of this held 900ms and asserted
-     800, back when the mark alone decided it — which passed while the
-     wordmark was still animating and the third ring had never appeared at
-     all. The floor sits past every element's arrival now, Breach's included,
-     so a regression that cuts the composition short fails here rather than
-     shipping a loader nobody sees complete. */
-  expect(sonar.removedAt, "it stays until the whole composition has arrived").toBeGreaterThan(4800);
-  expect(sonar.removedAt, "and it is gone inside a reasonable window").toBeLessThan(5800);
+     Sonar's ring loop shipped this same shape of bound, and Breach II's after
+     it; Deepwater's own last arrival is the eye flicker, which finishes at
+     2500ms exactly — see main.jsx's comment for the full arrival table.
+
+     What is different about this version, and worth knowing before moving
+     either number: the deciding element is inside <juke-mark>'s shadow root.
+     juke-mark.js ships unedited from the design package, so 2500 is a
+     published figure this repository matches rather than one it can measure
+     and re-derive. If it ever looks wrong, the thing to check is the design
+     package, not this bound.
+
+     An earlier version of this held 900ms and asserted 800, back when the
+     mark alone decided it — which passed while the wordmark was still
+     animating and the third ring had never appeared at all. The floor still
+     sits past every element's arrival, so a regression that cuts the
+     composition short fails here rather than shipping a reveal nobody sees
+     complete.
+
+     2400 rather than 2500 for the floor: removedAt is sampled on a 16ms tick
+     against a Date.now() taken in an init script, so it carries a frame or
+     two of slack in both directions and a bound sitting exactly on the
+     figure would flake. The ceiling is the real assertion — 2500 hold plus a
+     260ms fade plus the 280ms removal beat is ~2780, and 3400 leaves room
+     for a slow CI frame without admitting the 4900ms hold this replaced. */
+  expect(sonar.removedAt, "it stays until the whole composition has arrived").toBeGreaterThan(2400);
+  expect(sonar.removedAt, "and it is gone inside a reasonable window").toBeLessThan(3400);
 
   await context.close();
 });

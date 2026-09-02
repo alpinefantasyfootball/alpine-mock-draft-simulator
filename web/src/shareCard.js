@@ -35,15 +35,22 @@ const BG = '#0B0E14'
 const PANEL = '#131A24'
 
 /* The one real logo on the card, not just the eyebrow's spelled-out
-   "J U K E". juke-mark.svg specifically, not one of its ground-specific
-   siblings — JukeLogo.jsx's own SURFACE map names it as the variant baked
-   for a #0B0E14 background ("obsidian"), and BG above is that exact hex.
-   Drawing juke-mark-void.svg or -appbar.svg here would carry the wrong
-   negative-space colour baked into the file and read as a mismatched logo
-   the moment it landed on this card's ground — see CLAUDE.md's "The
-   shark" and "A variant per ground, not one file you recolour" for why
-   there is no single mark file that works on every surface. */
-const MARK_SRC = '/juke-mark.svg'
+   "J U K E".
+
+   This used to be juke-mark.svg specifically, chosen because that file's
+   negatives were baked at #0B0E14 and BG above is that exact hex — the
+   paragraph here warned at length against drawing -void or -appbar
+   instead, on the grounds that no single mark file worked on every
+   surface. Design package 02's mark is the file that does: its body is
+   #1A222D, a real slate rather than any page ground, so there is nothing
+   left to match BG against. The ground-matching rule is gone with the
+   cut-outs it was written for; see JukeLogo.jsx for the measurement.
+
+   That makes this card the easiest of the lot to get wrong later, because
+   it is drawn to a canvas and exported as an image: a mismatch here leaves
+   the app and cannot be corrected after the fact. One file removes the
+   choice. */
+const MARK_SRC = '/juke-shark-mark.svg'
 const MARK_ASPECT = 564 / 352 // do not stretch — same ratio JukeLogo.jsx and build_og.html use
 
 // The four grade components, same order and names as the dashboard's radar.

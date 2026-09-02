@@ -137,8 +137,13 @@ the Stack section above, not a one-time migration hiccup.
 | `scripts/build_players.py` | The pipeline that writes the two generated files. |
 | `.github/workflows/update-players.yml` | Runs the pipeline daily at 11:00 UTC, and bumps `?v=` in `web/index.html` (not the root `index.html`) alongside `404.html` and the how-it-works doc. |
 | `og-image.png` | 1200x630 link-preview card. **A designed asset now, not a generated one** — it arrived with the shark handoff. `scripts/build_og.html` still draws a plainer fallback from the same mark; running it replaces the designed card with a generated one. The copy that is actually served is `web/public/og-image.png`; see the note on the repo root below. |
-| `favicon.ico`, `favicon-16.png`, `favicon-32.png` | The root favicons, named by `404.html` and all three `docs/` pages. The PNGs are rendered exports; the `.ico` is assembled from them by `scripts/build_favicon_ico.py`. Duplicated into `web/public/`, which is the copy a browser reaches. |
-| `scripts/build_favicon_ico.py` | Wraps `favicon-{16,32,48}.png` in an `.ico` container, payloads unmodified. Stdlib only, no encoder, and it re-traces nothing — if the mark changes, re-render the PNGs and run it again. |
+| `favicon.ico`, `juke-icon-tile-{16,32}.png` | The root favicons, named by `404.html` and all three `docs/` pages. **GENERATED** — the PNGs by `scripts/build_icons.mjs`, the `.ico` assembled from them by `scripts/build_favicon_ico.py`. Duplicated into `web/public/`, which is the copy a browser reaches. The old `favicon-{16,32,48}.png` are gone: the icon is the head crop now, not the full mark. |
+| `scripts/build_favicon_ico.py` | Wraps `juke-icon-tile-{16,32,48}.png` in an `.ico` container, payloads unmodified. Stdlib only, no encoder, and it re-traces nothing — if the mark changes, run `build_icons.mjs` and then this. |
+| `web/public/juke-mark.js` | **VENDOR — ship as-is, do not edit.** Design package 01/03's `<juke-mark>` custom element: the shark and every animation, in a shadow root, no dependencies. Twelve variants; the app uses `form` (cold launch), `loader` (in-app waits) and `static` (reduced motion). It is also the ONE copy of the mark's geometry — `build_icons.mjs` derives every SVG and PNG from its `ART`. |
+| `web/public/splash-boot.js` | The two decisions the cold-load splash makes before its first frame: whether it plays at all this session, and whether it plays animated. Parser-blocking, immediately after `#boot-sonar` — in `<head>` the element it asks about does not exist yet. |
+| `web/public/juke-shark-mark.svg`, `juke-icon-tile.svg`, `juke-favicon.svg` | **GENERATED** by `scripts/build_icons.mjs` from `juke-mark.js`. The full mark (564x352) is the logo; the tile is a 380x380 head crop on navy for the browser icon; the favicon variant is the same crop with no tile. Never hand-edit — see "One mark, two crops" below. |
+| `scripts/build_icons.mjs` | Writes the three SVGs above from `juke-mark.js`, then every PNG from them, verifying each by re-reading its signature and IHDR. The one generator; do not add a second. |
+| `web/src/components/DraftRoomLoader.jsx` | Design package 03's in-app wait: the mark holds still, teeth sweep, eyes flicker, 1.6s loop. Full-screen for the Lobby → Draft Room transition, and inline at 40–56px for any other wait past ~400ms. Not the splash — see the note on why. |
 | `unmatched.txt` | **GENERATED.** Five sections: FFC rows that failed to join, players with no id at another source, **Sleeper stats we are not storing** (read this before adding a feed), Sleeper against nflverse, and the missed-field-goal reconciliation. |
 | `data/baselines/2026/preseason/` | **FROZEN, not generated.** The one-shot 2026 preseason projections/VORP/tiers/ADP snapshot, hashed in `manifest.json`. Never regenerated, never hand-edited — see the Data section below and the directory's own README.md. |
 | `scripts/freeze_baseline.mjs` | Wrote the frozen baseline above, once. Drives the real app in a headless browser rather than reimplementing scoring/VORP/tiers in Python — see its own header comment. Refuses to run again if a baseline already exists. |
@@ -979,7 +984,8 @@ also suppressing the report entirely, and that would pass every assertion in
 the first test.
 
 **And the first version of that spec passed against the bug.** Pressing Start
-raises DraftRoom's `starting` loader for SonarLoader's full 2100ms ring, so an
+raises DraftRoom's `starting` loader — SonarLoader's full 2100ms ring at the
+time, `DraftRoomLoader`'s 500ms floor plus a 220ms fade now — so an
 assertion made straight after the click finds no report because nothing at all
 is rendered yet. `phone.spec.mjs` already waits this out by waiting for the
 room's own nav to exist rather than for a duration; do that, or the check is
@@ -3687,15 +3693,19 @@ applies to whichever hue is holding the job this month.
 two places before this change touched the legacy stylesheet at all: it is
 the lightest stop of the draft room header's own my-turn gradient
 (`web/src/components/AppHeader.jsx`, from the header redesign) and it is
-the accent in the newer J-monogram app icons (`web/public/juke-favicon.svg`,
-`juke-app-icon-*.png`, `juke-app-icon-gradient.svg` — paired there with a
-purple `#7B1FA2` this rule does not otherwise use). Retargeting `--orange`
+the accent in the J-monogram app icons that shipped at the time
+(`web/public/juke-favicon.svg`, `juke-app-icon-*.png`,
+`juke-app-icon-gradient.svg` — paired there with a purple `#7B1FA2` this rule
+does not otherwise use; every one of those files is deleted now, replaced by
+design package 02's icon tile, and the observation about where teal was already
+load-bearing is what survives them). Retargeting `--orange`
 to that same value connects a colour three parts of the app already agreed
 on, rather than choosing a fourth nobody had measured.
 
 **One thing this pass could not reach, and it stayed unreached for two more
-brand generations.** `favicon.ico`, `favicon-16.png` and `favicon-32.png` at
-the repo root are rendered PNG/ICO, not CSS-driven elements, so they went on
+brand generations.** The root favicons — `favicon.ico` and, at the time,
+`favicon-16.png` and `favicon-32.png` — are rendered PNG/ICO, not CSS-driven
+elements, so they went on
 showing the shield's swoosh in the original orange while the app showed first
 a goalpost and then a shark. `404.html` and all three `docs/` pages link them
 directly. That is the general lesson rather than a footnote about orange: **a
@@ -3705,6 +3715,13 @@ and looks. The shark swap is what finally replaced them, and the sentence
 "no tool here rasterises an icon" was true and beside the point — the `.ico`
 never needed rasterising, only a container, which `scripts/build_favicon_ico.py`
 now writes in forty lines of stdlib around the PNGs' own bytes.
+
+**And it is finally closed, three generations after it opened.** Design package
+02 made the SVGs themselves a build product of `juke-mark.js` — see "One mark,
+two crops" — so `scripts/build_icons.mjs` now regenerates every raster in the
+set from the one copy of the geometry, and the two PNGs named above are deleted
+rather than stale. A raster export is still invisible to every pass this project
+runs; the repair was to stop having any raster that is not generated.
 
 **The first attempt at `--teal-cta` repeated the exact mistake this section
 just finished describing, aimed at a new colour.** It measured `--teal`
@@ -3792,15 +3809,37 @@ two-value mark. It is 28 now, which is the smallest width that keeps the face.
 A handoff saying "no call site needs editing" is a claim about the *signature*,
 not about the values already being passed through it.
 
-**A variant per ground, not one file you recolour.** In the supplied artwork
-the eyes, teeth and jaw were filled with the canvas colour, so the mark only
-worked on one background. Every file declares its negative value explicitly,
-which is why `juke-mark-light.svg` and `juke-mark-fg.svg` exist as files rather
-than as a `fill` override. **That is what makes an `<img>` mark theme-blind**:
-the inline SVG it replaced on `404.html` took `var(--mark-ink)` and
-`var(--teal)` and reversed itself, and an `<img>` cannot. That page carries two
-of them and swaps on `:root[data-theme="light"]`; the `docs/` headers carry one,
-because `.appbar` is navy under both themes.
+**A variant per ground, not one file you recolour — and design package 02
+retired the rule by removing the thing it was written about.** This section is
+corrected in place rather than left standing, the same way the rebrand's orange
+paragraphs were.
+
+The rule was right. In the artwork it was written about, the eyes, teeth and jaw
+were filled with the CANVAS colour, so the mark was a cut-out and only worked on
+the one background it was cut for. Every file declared its negative value
+explicitly, which is why `juke-mark-light.svg`, `juke-mark-void.svg`,
+`juke-mark-appbar.svg` and `juke-mark-app.svg` existed as files rather than as a
+`fill` override.
+
+**Package 02's mark is not a cut-out, and that was measured rather than taken on
+trust.** The old `/juke-mark.svg` fills 16 paths with `#0B0E14` — obsidian, the
+page itself. The new `/juke-shark-mark.svg` fills 11 with `#1A222D`, a slate
+that is not any ground in this app. The negatives are the shark rather than a
+hole shaped like one, so one file reads on navy and on white alike and there is
+nothing left for a per-ground cut to compensate for. `JukeLogo.jsx`'s five-entry
+`SURFACE` map is one `MARK` constant now; the four extra files are deleted.
+
+**`surface` and `onLight` stay in the signature**, because every call site
+passes them and a prop that vanishes is a silent change at a dozen sites — and
+`onLight` still does one real job, suppressing the detail variant, whose shading
+is tuned for a dark ground and is genuinely wrong on white.
+
+**What did NOT change is why an `<img>` mark is theme-blind**: the inline SVG it
+replaced on `404.html` took `var(--mark-ink)` and `var(--teal)` and reversed
+itself, and an `<img>` cannot. That is still true and is still the reason a
+theme-aware mark has to be inline or masked. It simply stopped mattering for the
+grounds this app has, which is why `404.html` now carries one `<img>` where it
+used to carry two and swap them on `:root[data-theme="light"]`.
 
 **The mark may now stand alone, and that is the one rule that changed.** The
 goalpost read as a plain U without its wordmark, so mark-only was restricted to
@@ -3825,6 +3864,150 @@ markup carrying `hidden shrink-0 sm:block` a few lines below — the arithmetic
 had been wrong since that class went on. A handoff's paths are read off the
 repository at some moment and go stale like anything else; check what actually
 renders before measuring it.
+
+## One mark, two crops, and the water it arrives through
+
+Three design packages, landed together, and they share one file. `<juke-mark>`
+(`web/public/juke-mark.js`) is a dependency-free custom element carrying the
+shark and twelve animation variants in a shadow root. **It ships unedited** —
+the package says so and this file repeats it, because the consequences of
+forgetting are spread across the three sections below.
+
+Three variants are in use. `form` is the cold launch: a one-shot reveal with a
+beginning and an end. `loader` is the in-app wait: a 1.6s loop with neither.
+`static` is what reduced motion gets. **Do not use `form` for a wait** — an
+animation that finishes and then sits there reads as a hung screen rather than
+a busy one, which is the distinction the packages draw and the reason there are
+two.
+
+### The geometry is written down once, and everything else is derived
+
+`juke-mark.js`'s `ART` is the only copy of the mark's paths in this repository.
+`scripts/build_icons.mjs` reads it and writes `juke-shark-mark.svg` (the logo,
+564x352), `juke-icon-tile.svg` (the browser icon: a 380x380 head crop on a navy
+`#141C27` tile at 22% radius) and `juke-favicon.svg` (that crop with no tile),
+then renders every PNG from those.
+
+**The packages supply those SVGs as files and they are deliberately not copied
+in.** Package 02's own stated intent is that "the logo in your nav and the mark
+in the cold launch are the same object". Copied, that is a sentence somebody
+maintains across three files and it is false the first time one of them moves.
+Derived, it cannot be false. Checked before relying on it: the package's
+`juke-icon-tile.svg` is byte-identical to `ART` on every path, transform and
+fill, and differs only in viewBox, the tile rect and the bloom opacity — which
+are exactly the three parameters the generator takes.
+
+**Two crops, because one asset at two sizes does not work.** At 16px the full
+mark's fins swallow the head and it reads as a smudge. The `.ico` is assembled
+from the TILE at 16/32/48, not the mark; `build_favicon_ico.py` says so.
+
+**There is one generator.** The first version of this work added a second
+script beside `build_icons.mjs` before noticing it already existed and wrote to
+the same directory — the written-down-twice failure, in the tooling this time.
+Its `JOBS` table takes an explicit height now, because the mark is 1.60:1 and
+the old one-`px`-for-both signature would have letterboxed it silently.
+
+**The packages' SVGs carry a C2PA provenance manifest and it is not
+reproduced.** It is a signature over their bytes; re-emitting it over generated
+bytes would be a false provenance claim, and an invalid one.
+
+### Deepwater, the cold launch
+
+Four specks fall through deep water, gather at centre, merge into a droplet,
+and the droplet expands into the mark; teeth light left to right, the eyes
+flicker twice and hold. 2500ms, then the frame is dead still until the app is
+ready. It replaced Breach, a 4000ms shark leaping through a waterline.
+
+The element id is still `#boot-sonar` — `theme.js`'s comment, `main.jsx`'s
+teardown and `sonar.spec.mjs` all key off that literal string, and none of it
+had to change. Only what plays inside it did.
+
+**`--total` retimes the water and cannot retime the mark**, and that is the one
+thing here that is invisible when it breaks. The specks, droplet, caustics,
+shafts and motes are CSS in `index.html` and derive from `--total`. The rise,
+the teeth and the eye flicker are inside `<juke-mark variant="form">`, where no
+selector in this repository reaches them. They agree at 2500ms today. Moving
+one without re-cutting the other desynchronises two halves of one animation.
+The same fact makes `sonar.spec.mjs`'s 2400–3400ms bound a *published figure
+this repository matches* rather than one it can measure and re-derive.
+
+**`splash-boot.js` answers two questions before the first frame**, and is
+parser-blocking immediately after the overlay rather than in `<head>`, because
+both questions are about an element that does not exist yet up there.
+Deferring either to `DOMContentLoaded` would paint the thing it exists to
+suppress.
+
+**The same-session gate is a reversal of a decision recorded in this file, and
+the code says so at the point of reversal.** The owner has removed a skip-gate
+from this overlay twice — a 300ms delay that meant nobody on a fast connection
+ever saw it, and an installed-app-only scoping that meant almost nobody saw it
+at all. Both hid the splash from someone who had never seen it. This one hides
+it from someone who watched it a moment ago and pressed reload; the first visit
+of every session still plays in full, on every device and connection speed.
+That is the property those two reversals were protecting, and it is the test to
+apply if a third gate is ever proposed.
+
+**Reduced motion needs a script, not a media query.** `juke-mark.js` carries no
+reduced-motion handling and its animations are in a shadow root, so
+`splash-boot.js` swaps the attribute to `variant="static"` and `main.jsx`
+shortens its hold to 600ms off an attribute that script sets — rather than a
+second `matchMedia` call that could disagree with the first. The water keeps its
+opacity and loses only its motion, so the frame is still the designed picture;
+the specks and droplet are removed outright, because both animate from opacity 0
+and holding either at its first frame paints a stray dot over the mark.
+
+**`<html>` carries `#0a1119`.** The overlay's own background cannot cover a
+frame in which the overlay does not exist.
+
+**There is no wordmark, and the argument for the old one survives its
+removal.** Breach carried `<b>Juke</b>` under the shark and this file argued for
+it: a visitor arriving from a pasted link needs to know whose product this is.
+What made that true was that the goalpost monogram read as a plain U on its own.
+A shark silhouette does not. Do not add a tagline either — that has now been
+decided three times.
+
+### The draft room loader
+
+`DraftRoomLoader.jsx` replaced SonarLoader at the one call site that was a
+full-screen wait. SonarLoader is untouched and still correct everywhere else.
+
+**The floor dropped 2100ms to 500ms, which is a reduction toward a number that
+has already failed once**, so it needs its argument written down. 400ms failed
+because SonarLoader's ring is a sweep with a beginning: `dataReady()` is
+usually already true here, so the screen was gone before one cycle completed
+and it read as a flash. 2100 was `RING_MS` exactly — one full sweep — so the
+thing always finished what it started.
+
+`DraftRoomLoader` has no sweep to complete. Its teeth run on negative delays
+stepped 55ms apart, so it is mid-loop on its first painted frame and there is
+no cycle boundary to land on; it looks the same held for 500ms as for 5000. The
+cost 2100 was buying does not exist here. What 500 still buys is the other half
+of the original complaint, which does survive: below about 400ms a person
+perceives a flicker rather than a transition.
+
+**Do not remount it while the layer is up.** The loop is seamless precisely
+because it starts mid-flight; remounting resets the sweep and reads as a
+stutter.
+
+**It grew a ceiling it never had.** The readiness poll is an rAF loop on a
+condition a wedged engine never satisfies, so before this there was no exit at
+all — a permanent full-viewport layer at z-index 60 with no way out but a
+reload. 15s, and it says so on screen.
+
+**Both new flags are cleared in `armFreshDraft()`**, for that function's
+existing reason: `DraftRoom` does not unmount between drafts, so a stuck
+`startTimedOut` would open the next draft on the timeout message and a stuck
+`leaving` would start it already faded out. Same shape as the
+`view`/`soloAutopick` leaks it was written for.
+
+### What the suite got back
+
+`openApp()` waits on the overlay's absence, so halving the overlay halved the
+wait with no edit: its ceiling went 8000ms to 5000ms and roughly two seconds
+came off each of 96 calls. The session gate means most of those calls now find
+no overlay at all. A spec that needs to watch the splash play needs a fresh
+browser context — `loadWithProbe()` in `sonar.spec.mjs` already made one, which
+is why it kept working without being told the gate existed.
 
 ## The draft room header
 
@@ -5694,8 +5877,9 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   edits while yours has a server up — so restart the preview after any change
   to `tailwind.config.js`, whoever made it.
 - **A proxied sandbox makes a render-blocking `<link>` look like a broken
-  loader.** `sonar.spec.mjs` holds `#boot-sonar` to leaving between 4800ms and
-  5800ms of navigation start, and it came back `removedAt: null` — the overlay
+  loader.** `sonar.spec.mjs` held `#boot-sonar` to leaving between 4800ms and
+  5800ms of navigation start (2400–3400 since Deepwater; the diagnosis below is
+  about the proxy either way), and it came back `removedAt: null` — the overlay
   still on screen nine seconds in, on a build whose teardown had not been
   touched. Nothing was wrong with it. `web/index.html` links Barlow Condensed
   from `fonts.googleapis.com`, that link is render-blocking, and in a container
@@ -6198,7 +6382,8 @@ back. The predicate was:
 !document.documentElement.hasAttribute("data-standalone") || !document.getElementById("boot-sonar")
 ```
 
-which was exactly right when it was written. Breach was scoped to the installed
+which was exactly right when it was written. Breach — the overlay before
+Deepwater — was scoped to the installed
 app's cold launch, `index.html` hid it everywhere else with
 `html:not([data-standalone]) #boot-sonar { display: none }`, `theme.js` stamped
 that attribute only under `matchMedia('(display-mode: standalone)')`, and a
@@ -6220,9 +6405,10 @@ sitting on top of the Start button" reported the overlay's own artwork as the
 thing covering the button — true, and not the bug that test exists to find — and
 "the bottom sheet cycles through its three snap heights" failed because
 `page.mouse.down()` on the drag handle was being swallowed. Measured on the real
-build: the button hit-tests as covered from 600ms through 5000ms and is
-clickable from 6000ms, which is the same 4800–5800ms window `sonar.spec.mjs`
-asserts the removal in. The two specs had been contradicting each other, and the
+build: the button hit-tested as covered from 600ms through 5000ms and was
+clickable from 6000ms, which was the same 4800–5800ms window `sonar.spec.mjs`
+asserted the removal in at the time. Both windows moved with Deepwater — see
+below — and the lesson did not. The two specs had been contradicting each other, and the
 one asserting the overlay *stays* was the one telling the truth.
 
 **The shape to remember is that nothing broke — a condition retired.** A guard
@@ -6232,7 +6418,7 @@ here was two failures in one file that both described input going somewhere
 unexpected rather than a value being wrong, which is the sixth time in this file
 that the tooling has worn a bug's clothes.
 
-`openApp()` waits on the overlay's actual absence now, ceiling 8000ms, and
+`openApp()` waits on the overlay's actual absence now, ceiling 5000ms, and
 removes the element if it outstays that rather than failing — an overlay that
 never leaves is one bug and it is `sonar.spec.mjs`'s to report, where a hard wait
 here would turn it into ninety-six timeouts spread across every other file.
@@ -6240,10 +6426,25 @@ here would turn it into ninety-six timeouts spread across every other file.
 overlay's whole life from an init script and is the one caller that needs it
 played exactly as shipped.
 
-**It costs the suite real time and that is the honest price.** Waiting out a
-five-second overlay on 96 `openApp()` calls is minutes, not seconds. It is worth
-paying because a person waits too: the overlay is not decoration the tests may
-skip, it is the first five seconds of using the product.
+**It cost the suite real time and Deepwater gave most of it back.** Breach held
+4900ms and this wait was ceilinged at 8000; Deepwater holds 2500 and is gone by
+about 2780, so the ceiling is 5000. That is roughly two seconds off each of 96
+`openApp()` calls — minutes of wall clock, and the largest single saving in the
+suite. **Nothing about this wait had to change to collect it**, which is the
+argument for having written it against the overlay's actual absence rather than
+against a duration: the number it waits for moved by half and the code did not
+move at all.
+
+What is left of the cost is still worth paying, for the same reason as before: a
+person waits too. The overlay is not decoration the tests may skip, it is the
+first two and a half seconds of using the product.
+
+**And the common case is now no overlay at all.** `splash-boot.js` gates the
+splash to one play per session, so the second and later navigations inside a
+single browser context find nothing to wait for and this resolves on the first
+tick. A spec that needs to watch it play needs a fresh context — which is what
+`loadWithProbe()` in `sonar.spec.mjs` does, and why it kept working without
+being told about the gate.
 
 ### A standing red that was not the pass that found it
 
