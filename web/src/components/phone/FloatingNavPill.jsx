@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import { SignInButton, useClerk, useUser } from '@clerk/clerk-react'
 import { CalendarClock, Compass, Home, ListChecks, LogOut, Settings2, User } from 'lucide-react'
 import { useAccountUiReady } from '../../hooks/useAccountUiReady.js'
+import { useEngine, useJukeTick } from '../../hooks/useJukeEngine.js'
 
 /* The app-level bottom nav, as a floating pill.
 
@@ -41,10 +42,25 @@ import { useAccountUiReady } from '../../hooks/useAccountUiReady.js'
 // Anything that scrolls under this pill reserves it.
 export const NAV_PILL_CLEARANCE = 'calc(76px + env(safe-area-inset-bottom))'
 
+/* Board is conditional; the other four are always there.
+
+   It used to be a permanent tab, which made it the one entry in this pill
+   with nowhere useful to go: pressed from the homepage by somebody who has
+   never drafted, #/draft-room is the Lobby — the same place the tab beside
+   it already goes, under a different name. Reported from a cold launch,
+   where it is the first thing a new visitor sees offered.
+
+   What it is actually for is the one case where it is not a duplicate:
+   you are mid-draft, you came back to the Lobby (the header's own X, or a
+   mis-tap), and you want the board again. That is a real destination and
+   nothing else in the pill offers it. So the tab appears exactly then —
+   see `boardTab` below for what "then" means and why it is narrower than
+   "a draft exists". */
+const BOARD_TAB = { key: 'draft', label: 'Board', icon: ListChecks, href: '#/draft-room' }
+
 const TABS = [
   { key: 'home', label: 'Home', icon: Home, href: '#/' },
   { key: 'lobby', label: 'Drafts', icon: CalendarClock, href: '#/drafts' },
-  { key: 'draft', label: 'Board', icon: ListChecks, href: '#/draft-room' },
   { key: 'rooms', label: 'Rooms', icon: Compass, href: '#rooms' },
   { key: 'you', label: 'You', icon: User },
 ]
@@ -225,6 +241,8 @@ export default function FloatingNavPill() {
   const [active, setActive] = useState(null)
   const [youOpen, setYouOpen] = useState(false)
   const accountUiReady = useAccountUiReady()
+  const engine = useEngine()
+  useJukeTick(engine)
 
   useEffect(() => {
     const onHash = () => setActive(activeFromHash(location.hash))
@@ -233,6 +251,28 @@ export default function FloatingNavPill() {
     return () => window.removeEventListener('hashchange', onHash)
   }, [])
 
+  /* Board shows on the Lobby, and only while a draft is genuinely running.
+
+     Both halves are the ask, and each on its own would be wrong. Without
+     the route test it is offered on the homepage, where it duplicates
+     Drafts. Without the draft test it is offered to somebody who has never
+     drafted, where it goes to the Lobby they are already on.
+
+     "Running" is the live draft this page is holding, not a saved one:
+     headerInfo() answers for the draft actually in memory, room or solo,
+     which is the state a mis-tap back to the Lobby leaves behind and the
+     one #/draft-room really does return to. A save with no live draft
+     behind it — a reload, a new tab — is a different situation with its
+     own, better control: the Lobby's own Resume row, right there on the
+     screen this tab would be sitting under. `over` is checked because
+     state.started never goes back to false on its own once a draft
+     finishes (CLAUDE.md, "leaving the draft is not discarding it"), so
+     `started` alone would leave this tab up for the rest of the session
+     pointing at a finished board. */
+  const info = engine ? engine.headerInfo() : null
+  const draftRunning = !!(info && info.started && !info.over)
+  const tabs = active === 'lobby' && draftRunning ? [...TABS.slice(0, 2), BOARD_TAB, ...TABS.slice(2)] : TABS
+
   return (
     <>
       <nav
@@ -240,7 +280,7 @@ export default function FloatingNavPill() {
         style={{ paddingBottom: 'calc(8px + env(safe-area-inset-bottom))' }}
       >
         <div className="flex w-full max-w-[420px] items-stretch gap-0.5 rounded-full border border-white/[0.09] bg-[rgba(17,20,25,0.86)] px-1.5 shadow-[0_10px_34px_-8px_rgba(0,0,0,0.85)] backdrop-blur-xl">
-          {TABS.map((t) => {
+          {tabs.map((t) => {
             const Icon = t.icon
             const isActive = active === t.key
             const cls =
