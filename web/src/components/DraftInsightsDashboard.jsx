@@ -532,7 +532,7 @@ export default function DraftInsightsDashboard({
               <button
                 type="button"
                 onClick={() => onViewSlot(mySlot)}
-                className="rounded-full border border-teal-400/40 px-3 py-1.5 text-xs font-semibold text-teal-300 transition-colors duration-150 hover:border-teal-400 hover:bg-teal-400/10"
+                className="flex min-h-[44px] items-center rounded-full border border-teal-400/40 px-3 py-1.5 text-xs font-semibold text-teal-300 transition-colors duration-150 hover:border-teal-400 hover:bg-teal-400/10 lg:min-h-0"
               >
                 Back to your team
               </button>
@@ -554,7 +554,7 @@ export default function DraftInsightsDashboard({
               type="button"
               onClick={onClose}
               aria-label="Close report"
-              className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 text-white/50 transition-colors duration-150 hover:border-white/30 hover:text-white"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/15 text-white/50 transition-colors duration-150 hover:border-white/30 hover:text-white lg:h-8 lg:w-8"
             >
               <X className="h-4 w-4" aria-hidden="true" />
             </button>
@@ -799,7 +799,7 @@ export default function DraftInsightsDashboard({
               {standings.map((t) => {
                 const Row = onStandingsClick ? 'button' : 'div'
                 const rowClass =
-                  'flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors duration-150 ' +
+                  'flex min-h-[44px] items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-xs transition-colors duration-150 lg:min-h-0 ' +
                   (t.slot === effViewSlot
                     ? 'border border-teal-400/40 bg-teal-500/10 font-semibold text-white'
                     : 'text-white/60' + (onStandingsClick ? ' hover:bg-white/5 hover:text-white' : ''))
@@ -832,7 +832,7 @@ export default function DraftInsightsDashboard({
         <button
           type="button"
           onClick={onClose}
-          className="mx-auto rounded-full border border-white/15 px-5 py-2 text-sm font-medium text-white/60 transition-colors duration-200 hover:border-teal-400/60 hover:text-teal-300"
+          className="mx-auto flex min-h-[44px] items-center rounded-full border border-white/15 px-5 py-2 text-sm font-medium text-white/60 transition-colors duration-200 hover:border-teal-400/60 hover:text-teal-300 lg:min-h-0"
         >
           View the full board
         </button>

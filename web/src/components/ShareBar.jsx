@@ -104,8 +104,8 @@ export default function ShareBar({ shareData }) {
     typeof navigator !== 'undefined' && !!navigator.clipboard && typeof window !== 'undefined' && !!window.ClipboardItem
 
   const btn =
-    'flex items-center gap-1.5 rounded-full border border-slate-rule px-3.5 py-1.5 text-xs font-semibold ' +
-    'text-white/70 transition-colors duration-150 hover:border-teal-400/60 hover:text-teal-300'
+    'flex min-h-[44px] items-center gap-1.5 rounded-full border border-slate-rule px-3.5 py-1.5 text-xs font-semibold ' +
+    'text-white/70 transition-colors duration-150 hover:border-teal-400/60 hover:text-teal-300 lg:min-h-0'
 
   // One glyph slot, three states, in priority order: drawing, then the flash of
   // success, then the button's own icon. 14px rather than SonarPulse's own 20
