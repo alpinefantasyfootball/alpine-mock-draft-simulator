@@ -203,7 +203,26 @@ function YouSheet({ onClose }) {
 }
 
 export default function FloatingNavPill() {
-  const [active, setActive] = useState(() => (typeof window === 'undefined' ? null : activeFromHash(location.hash)))
+  /* Starts null on both sides of the hydration boundary, deliberately.
+     This used to seed itself from location.hash in the initializer, guarded
+     with `typeof window === 'undefined'` — which reads like SSR safety and
+     is the opposite: the guard is what MAKES the two sides disagree. The
+     server has no window, so it rendered no active tab; the client's first
+     pass — the one hydrateRoot() reconciles against that markup — read the
+     real hash and rendered Home lit, with a teal label, a filled lozenge
+     and an aria-current the server never wrote. React threw #418 on the
+     mismatch and #423 recovering from it, on every single load of the
+     phone homepage.
+
+     The initializer was also redundant, which is what makes the fix free:
+     the effect below already calls onHash() on mount, so `active` lands on
+     the same value one tick later either way. The only cost is one frame
+     with no tab lit — and that frame is exactly what the prerendered
+     markup already shows, which is the point.
+
+     Anything added here that reads window, location or matchMedia during
+     render puts this back. It belongs in the effect. */
+  const [active, setActive] = useState(null)
   const [youOpen, setYouOpen] = useState(false)
   const accountUiReady = useAccountUiReady()
 

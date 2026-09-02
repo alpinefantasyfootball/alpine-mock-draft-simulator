@@ -35,6 +35,56 @@ import './index.css'
 const appbarRoot = document.getElementById('appbar-root')
 const draftRoomRoot = document.getElementById('draftroom-root')
 
+/* The portals mount a tick after hydration rather than during it, and that
+   delay is the whole point.
+
+   React hydrates a portal's children against whatever is ALREADY in the
+   container createPortal() names — it does not treat a portal as a fresh
+   mount just because its container sits outside the hydrating root.
+   scripts/prerender.mjs only ever fills #root (entry-server.jsx exports
+   App and nothing else), so #appbar-root and #draftroom-root are empty in
+   the served HTML while the client tree renders AppHeader and DraftRoom
+   into them. React looked for that markup, found none, and failed:
+
+     Warning: Expected server HTML to contain a matching <div> in <div>.
+         at div
+         at AppHeader
+     Hydration failed because the initial UI does not match what was
+     rendered on the server.
+     There was an error while hydrating... the entire root will switch to
+     client rendering.
+
+   Which is worse than it sounds. A hydration failure is not scoped to the
+   subtree that caused it — React discards the server markup for the WHOLE
+   root and rebuilds all of it on the client. So the prerender, whose
+   entire job is to put hero pixels on screen before this module has
+   parsed, was being thrown away on every single load of the site. It cost
+   nothing visible, which is exactly why it survived: the page still looked
+   right, just built the slow way.
+
+   Rendering null on the first pass makes the client's hydration render
+   match the server's markup exactly — no portals on either side — and the
+   effect then mounts them normally, as a plain client render into empty
+   containers, which is what they always were. The alternative is to teach
+   the prerender to fill all three containers, which is a much larger
+   change to entry-server.jsx and buys nothing: neither of these two
+   components has anything to show before window.JukeEngine exists.
+
+   This has to stay inside the one tree rather than becoming its own
+   createRoot() call — see the ClerkProvider note above. */
+function DeferredPortals() {
+  const [mounted, setMounted] = React.useState(false)
+  React.useEffect(() => setMounted(true), [])
+  if (!mounted) return null
+
+  return (
+    <>
+      {appbarRoot && createPortal(<AppHeader />, appbarRoot)}
+      {draftRoomRoot && createPortal(<DraftRoom />, draftRoomRoot)}
+    </>
+  )
+}
+
 // Only wraps when a key exists. entry-server.jsx's Node prerender pass
 // never has one (there's no window there, which Clerk's frontend JS
 // reaches for throughout), and a real browser with no key configured is
@@ -50,14 +100,12 @@ const tree = (
       <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY} appearance={CLERK_APPEARANCE}>
         <AuthBridge />
         <App />
-        {appbarRoot && createPortal(<AppHeader />, appbarRoot)}
-        {draftRoomRoot && createPortal(<DraftRoom />, draftRoomRoot)}
+        <DeferredPortals />
       </ClerkProvider>
     ) : (
       <>
         <App />
-        {appbarRoot && createPortal(<AppHeader />, appbarRoot)}
-        {draftRoomRoot && createPortal(<DraftRoom />, draftRoomRoot)}
+        <DeferredPortals />
       </>
     )}
   </React.StrictMode>
@@ -72,9 +120,18 @@ const tree = (
 //
 // A portal contributes no DOM nodes to its own tree's root container —
 // its content appears in whatever node createPortal() names, not in
-// #root — so AppHeader/DraftRoom joining this tree changes nothing about
-// what #root's own hydration has to match: still exactly what <App/>
-// renders, the same as before this file carried any of them.
+// #root — so what #root's own markup has to match is still exactly what
+// <App/> renders, the same as before this file carried any of them.
+//
+// That sentence used to end "...so AppHeader/DraftRoom joining this tree
+// changes nothing about hydration", and that second half was wrong. It is
+// a true statement about #root's DOM and a false one about hydration:
+// React hydrates each portal against ITS OWN container too, and both of
+// those are empty in the served HTML, which failed the whole root on
+// every load. See DeferredPortals above. Whether a portal's content is
+// hydrated or freshly mounted is a separate question from which container
+// its nodes land in, and only the second one is obvious from reading
+// createPortal().
 //
 // `vite dev` never runs the prerender step (only the production build
 // script does), so #root is genuinely empty there — hydrating empty
