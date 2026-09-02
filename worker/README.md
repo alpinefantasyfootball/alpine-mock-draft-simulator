@@ -13,6 +13,63 @@ against the old one — check both sides ship together.
 with no backend at all and never opens a socket, and that is deliberate — see
 the multi-user section of `CLAUDE.md`.
 
+## The account-deletion webhook
+
+`POST /webhooks/clerk`, verified against `CLERK_WEBHOOK_SECRET`, deletes
+everything Juke holds for an account when Clerk says it is gone.
+
+Set it up once, in the Clerk dashboard under **Webhooks**:
+
+1. Endpoint `https://juke-draft-room.jukeff.workers.dev/webhooks/clerk`
+2. Subscribe to **`user.deleted`** (anything else is acknowledged and ignored)
+3. Copy the signing secret and give it to the worker:
+
+```bash
+wrangler secret put CLERK_WEBHOOK_SECRET -c worker/wrangler.toml
+```
+
+**Until that secret exists the route refuses with a 500 rather than
+answering 200.** Everywhere else here an unconfigured binding answers "no"
+quietly and the product carries on; that contract is exactly wrong for
+this one. Honouring an unverified delete would let anybody delete anybody's
+drafts, and a cheerful 200 that did nothing would tell Clerk the delivery
+succeeded, so it would never retry and the deletion would be lost in
+silence. A 500 says nothing happened, and Clerk redelivers once the secret
+is there.
+
+**The signature replaces the Origin check rather than joining it.** Clerk
+posts from its own servers with no Origin header, so `originAllowed()` —
+which every other route here applies — would reject every real delivery.
+The signature is the stronger claim anyway: an allowed Origin says the
+request came from our page, a valid signature says it came from Clerk.
+
+### Verifying it by hand
+
+`worker/test-auth.mjs` covers every way of *not* being Clerk, which is the
+half that matters most — a false accept is somebody else's drafts gone. The
+accept path needs a request signed with the worker's own secret, which
+nothing in the repository can know, so it is checked locally:
+
+```bash
+# worker/.dev.vars (gitignored)
+CLERK_WEBHOOK_SECRET=whsec_<any base64 you like>
+```
+
+Start `wrangler dev --local`, sign a `user.deleted` body with the same
+secret using `standardwebhooks`, and post it. Measured this way: unsigned,
+forged and tampered bodies all 400; a `user.created` is a 200 that ignores
+it; a valid `user.deleted` is a 200 that leaves `users`, `saved_drafts` and
+`draft_history` all at zero rows; and a repeat delivery of the same event
+is another clean 200, which is what Clerk's retries need.
+
+**One trap, and it cost twenty minutes.** `wrangler dev` reads `.dev.vars`
+at boot and hot-reloads code without re-reading it, so a dev server started
+before the file existed serves the new route with no secret and answers
+`not-configured` for ever. Two of them were listening on 8787 at once, the
+older one from hours earlier. Same lesson this repository already records
+about stale dev servers: check what is holding the port before believing
+what it tells you.
+
 ## What is where
 
 | File | Role |

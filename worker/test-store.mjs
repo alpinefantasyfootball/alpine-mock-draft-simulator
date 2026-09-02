@@ -29,7 +29,7 @@
 
    Needs Node 22 or newer. */
 
-import { putSavedDraft, putHistoryEntry } from "./store.js";
+import { putSavedDraft, putHistoryEntry, deleteUserData } from "./store.js";
 
 const fails = [];
 const note = [];
@@ -88,11 +88,40 @@ for (const [label, call] of [
         inBatch[0].bound.includes("user_1") && inBatch[1].bound.includes("user_1"));
 }
 
+/* Deleting an account: the same foreign key, from the other end.
+
+   `saved_drafts` and `draft_history` both reference `users(clerk_id)`, so
+   removing the parent first fails the constraint exactly as inserting the
+   child first did. Order is the whole assertion here — a stub cannot prove
+   D1 accepts it, but it can prove the statements go out in an order that
+   can be accepted, which is the part a future edit would get wrong. */
+{
+  const { env, batches } = stubDb();
+  const ok = await deleteUserData(env, "user_1");
+
+  check("deleting an account reports success", ok === true);
+  check("it is one batch, so a half-deleted account cannot exist", batches.length === 1);
+
+  const sql = (batches[0] || []).map((s) => s.sql);
+  check("all three tables are cleared", sql.length === 3);
+  check("children before the parent, or the foreign key refuses",
+        /draft_history/.test(sql[0] || "") &&
+        /saved_drafts/.test(sql[1] || "") &&
+        /FROM users/.test(sql[2] || ""));
+  check("every statement is scoped to the one account",
+        (batches[0] || []).every((s) => s.bound && s.bound[0] === "user_1"));
+  check("and every one of them is a DELETE",
+        sql.every((q) => /^\s*DELETE FROM/.test(q)));
+}
+
 // A missing binding is still a normal condition, not a fault — the rule
 // this file's own module docstring already states for every function here.
 {
   const ok = await putSavedDraft({}, "user_1", "{}");
   check("no D1 binding answers false rather than throwing", ok === false);
+
+  const del = await deleteUserData({}, "user_1");
+  check("and a delete against no binding answers false too", del === false);
 }
 
 note.forEach((n) => console.log(n));

@@ -115,6 +115,41 @@ for (const path of ["/me/draft", "/me/history"]) {
 // browser sends it with no Authorization header at all, so gating it
 // behind the same auth check this route uses for GET/POST/DELETE would
 // 401 every real request's own preflight.
+/* ---- The account-deletion webhook ----
+
+   Every way of NOT being Clerk. The accept path needs a request signed
+   with the worker's own CLERK_WEBHOOK_SECRET, which this cannot know — the
+   same gap the signed-in path has, and for the same reason. It is verified
+   by hand against `wrangler dev` with a secret in worker/.dev.vars; see
+   worker/README.md.
+
+   What is covered here is the half that matters most anyway: an endpoint
+   that deletes an account's data must refuse everything it cannot prove
+   came from Clerk. A false accept is somebody else's drafts gone. */
+const deleteEvent = JSON.stringify({ type: "user.deleted", data: { id: "user_probe" } });
+
+const noSig = await fetch(BASE + "/webhooks/clerk", {
+  method: "POST", headers: { "content-type": "application/json" }, body: deleteEvent
+});
+check("an unsigned delete is refused", noSig.status < 300, false);
+
+const badSig = await fetch(BASE + "/webhooks/clerk", {
+  method: "POST",
+  headers: {
+    "content-type": "application/json",
+    "svix-id": "msg_test",
+    "svix-timestamp": String(Math.floor(Date.now() / 1000)),
+    "svix-signature": "v1,ZGVmaW5pdGVseS1ub3QtYS1zaWduYXR1cmU="
+  },
+  body: deleteEvent
+});
+check("a forged signature is refused", badSig.status < 300, false);
+
+/* And it is not a route that can be poked by hand: GET is not a delivery,
+   and a webhook endpoint that answered one would be an invitation. */
+const getIt = await fetch(BASE + "/webhooks/clerk");
+check("GET is not a delivery", getIt.status < 300, false);
+
 const preflight = await fetch(BASE + "/me/draft", {
   method: "OPTIONS",
   headers: { Origin: LOCAL_ORIGIN }

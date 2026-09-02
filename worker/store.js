@@ -655,6 +655,41 @@ export async function deleteHistoryEntry(env, clerkId, id) {
   }
 }
 
+/* Everything Juke holds for one person, removed.
+
+   Clerk owns the account and deletes it on its own; this is the half Juke
+   owns, and until now there was no half. The privacy policy said so out
+   loud rather than promising otherwise — "deleting a Clerk account does
+   not currently delete the drafts Juke stored against it" — which was
+   honest and is not a resting place: somebody exercising a deletion right
+   should not have to also send an email.
+
+   Children before the parent. `saved_drafts` and `draft_history` both
+   carry `REFERENCES users(clerk_id)`, and D1 enforces it, so removing the
+   users row first fails the constraint — the mirror image of the bug that
+   made these writes fail in the first place, from the other end. One
+   batch, so a half-deleted account is not a state that can exist.
+
+   Idempotent by construction: DELETE of nothing is success, which matters
+   because a webhook retries, and Clerk retries a delivery it did not hear
+   back from. Deleting an account twice has to be as fine as deleting it
+   once. */
+export async function deleteUserData(env, clerkId) {
+  if (!env.DB) return false;
+
+  try {
+    await env.DB.batch([
+      env.DB.prepare("DELETE FROM draft_history WHERE clerk_id = ?").bind(clerkId),
+      env.DB.prepare("DELETE FROM saved_drafts WHERE clerk_id = ?").bind(clerkId),
+      env.DB.prepare("DELETE FROM users WHERE clerk_id = ?").bind(clerkId)
+    ]);
+    return true;
+  } catch (err) {
+    console.error("account delete failed:", err && err.message);
+    return false;
+  }
+}
+
 /* ----------------------------------------------------------
    Small things
    ---------------------------------------------------------- */
