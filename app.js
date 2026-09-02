@@ -8755,13 +8755,20 @@ function syncUp(promiseFn) {
   authToken()
     .then(function (token) {
       if (!token) return;
-      return Promise.resolve(promiseFn(token)).then(noteSyncResult);
+      return Promise.resolve(promiseFn(token)).then(function (res) {
+        noteSyncResult(res && res.ok, res && res.reason);
+      });
     })
     // getToken() is Clerk's, and it rejects on an expired session and on a
     // network failure reaching Clerk itself. Without this the failure is an
     // unhandled rejection in a page that is otherwise fine — the same
     // reason the news fetch carries a catch rather than politeness.
-    .catch(function () { noteSyncResult(false); });
+    //
+    // "unauthorized" rather than a reason of its own: from the reader's
+    // side, Clerk refusing to mint a token and the worker refusing to
+    // accept one are the same sentence — the session is not good — and
+    // they have the same answer, which is to sign in again.
+    .catch(function () { noteSyncResult(false, "unauthorized"); });
 }
 
 function pushSavedDraft(data) { syncUp((token) => Live.saveDraft(token, data)); }
@@ -8791,8 +8798,31 @@ function pushHistoryDeleted(id)  { syncUp((token) => Live.deleteHistoryEntry(tok
    than this browser. */
 let syncState = "off";
 
-function noteSyncResult(ok) {
-  const next = ok ? "ok" : "error";
+/* It used to be three states — "off", "ok", "error" — and "error" was the
+   one that mattered and the one that could not be acted on. Three genuinely
+   different faults reach it, with three different fixes, and the page said
+   the same thing for all of them: a worker that will not accept the session,
+   a worker that accepts it and cannot store anything, and no worker reachable
+   at all. Telling them apart took a hand-written console probe against a live
+   session, which is not a thing to ask of anybody.
+
+   So the reason comes up from live.js (see its own note on the envelope) and
+   is kept whole. `syncStatus()` answers one of:
+
+     "off"           nobody is signed in — the normal, complete product
+     "ok"            the last thing attempted reached the account
+     "unauthorized"  the session was refused. Sign in again; if it persists
+                     the worker has no CLERK_SECRET_KEY
+     "store-failed"  the account was reached and could not store it — the
+                     database end, not the sign-in end
+     "offline"       nothing reached the worker at all
+
+   Deliberately the worker's own vocabulary rather than a message: the
+   sentence a reader sees belongs to the component drawing it, and a second
+   copy of that prose here would be the "written down twice" rule with the
+   copy furthest from the reader winning. */
+function noteSyncResult(ok, reason) {
+  const next = ok ? "ok" : (reason || "offline");
   if (syncState === next) return;
   syncState = next;
   // The Locker reads this through the bridge and re-reads on juke:header,
@@ -8831,20 +8861,30 @@ function reconcileWithServer() {
   authToken().then(function (token) {
     if (!token) { reconcileInFlight = false; return; }
 
-    const draftDone = Live.loadDraft(token).then(function (remote) {
+    /* Each half returns the same {ok, reason} envelope the Live methods
+       do, so a read that failed is not mistaken for an account with
+       nothing in it. That distinction is not academic: signed in with an
+       empty locker and no draft in progress, there is nothing to write, so
+       under the old code a completely broken token reported "ok" — the one
+       state a reader would act on, arrived at by never having tried. */
+    const draftDone = Live.loadDraft(token).then(function (res) {
+      if (!res.ok) return res;
+      const remote = res.data;
       const local = readSave();
       if (remote && (!local || (remote.savedAt || 0) > (local.savedAt || 0))) {
         try { localStorage.setItem(SAVE_KEY, JSON.stringify(remote)); } catch (err) {}
         showResumeBar();
-        return true;
+        return { ok: true, reason: null };
       }
       if (local && (!remote || (local.savedAt || 0) > (remote.savedAt || 0))) {
         return Live.saveDraft(token, local);
       }
-      return true;
+      return { ok: true, reason: null };
     });
 
-    const historyDone = Live.loadHistory(token).then(function (remoteList) {
+    const historyDone = Live.loadHistory(token).then(function (res) {
+      if (!res.ok) return res;
+      const remoteList = res.entries;
       const localList = readHistory();
       const localIds = new Set(localList.map((e) => e.id));
       const remoteIds = new Set(remoteList.map((e) => e.id));
@@ -8862,7 +8902,7 @@ function reconcileWithServer() {
       localList.forEach(function (entry) {
         if (!remoteIds.has(entry.id)) pushHistoryEntry(entry);
       });
-      return true;
+      return { ok: true, reason: null };
     });
 
     /* The merge writes localStorage and nothing else, which is a complete
@@ -8887,8 +8927,14 @@ function reconcileWithServer() {
        dispatch — that one only fires when the status CHANGES, and the
        second successful sync of a session is exactly when a second
        device's draft arrives. */
+    /* The first real failure wins the reason rather than the last, so a
+       token the worker will not accept is not reported as a storage
+       problem because the history half happened to resolve second. Both
+       halves ask the same worker with the same token, so in practice they
+       agree; when they do not, the earlier one is the one to fix first. */
     return Promise.all([draftDone, historyDone]).then(function (results) {
-      noteSyncResult(results.every(Boolean));
+      const bad = results.find(function (r) { return !(r && r.ok); });
+      noteSyncResult(!bad, bad && bad.reason);
       window.dispatchEvent(new Event("juke:header"));
     });
   })
