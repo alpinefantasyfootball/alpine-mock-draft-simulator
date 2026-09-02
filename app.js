@@ -9323,10 +9323,15 @@ function setupProblem() {
      The draft it would run does finish, which is exactly what made this hard
      to see — it finishes with ten roster spots nobody chose to waste. */
   if (totalPicks() > absorbableSize()) {
+    // "1 picks" is what the shortfall reads as when a league is over by
+    // exactly one, which is the commonest way to be over at all — the
+    // stepper moves in single rounds, so the first refusal a person meets
+    // is usually the narrowest one.
+    const over = totalPicks() - absorbableSize();
     return `${league.teams} teams over ${league.rounds} rounds is ${totalPicks()} picks, ` +
            `but a ${league.teams}-team room can only hold ${absorbableSize()} of the ` +
-           `${poolSize()} players on this board — so ${totalPicks() - absorbableSize()} ` +
-           `picks would have to go on somebody nobody can start. ` +
+           `${poolSize()} players on this board — so ${over} ` +
+           `${over === 1 ? "pick" : "picks"} would have to go on somebody nobody can start. ` +
            `Run fewer teams, or a shorter roster.`;
   }
   return "";
