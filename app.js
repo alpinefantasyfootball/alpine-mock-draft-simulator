@@ -8752,7 +8752,16 @@ function authToken() {
 // already resolve rather than reject on every failure mode. This wrapper
 // exists only to keep "no token" from even attempting a call.
 function syncUp(promiseFn) {
-  authToken().then(function (token) { if (token) promiseFn(token); });
+  authToken()
+    .then(function (token) {
+      if (!token) return;
+      return Promise.resolve(promiseFn(token)).then(noteSyncResult);
+    })
+    // getToken() is Clerk's, and it rejects on an expired session and on a
+    // network failure reaching Clerk itself. Without this the failure is an
+    // unhandled rejection in a page that is otherwise fine — the same
+    // reason the news fetch carries a catch rather than politeness.
+    .catch(function () { noteSyncResult(false); });
 }
 
 function pushSavedDraft(data) { syncUp((token) => Live.saveDraft(token, data)); }
@@ -8760,11 +8769,46 @@ function pushDraftCleared()   { syncUp((token) => Live.clearDraft(token)); }
 function pushHistoryEntry(entry) { syncUp((token) => Live.saveHistoryEntry(token, entry)); }
 function pushHistoryDeleted(id)  { syncUp((token) => Live.deleteHistoryEntry(token, id)); }
 
-/* Runs once per sign-in, not once per juke:auth event — AuthBridge fires
-   that event on any change to isSignedIn/userId/getToken, and getToken is
-   a new function reference on renders that are not a real sign-in/out
-   transition, which would otherwise reconcile on every one of them. */
-let reconciledForThisSession = false;
+/* ---- Saying whether any of the above actually worked ----
+
+   Every function in this section is fire-and-forget by design, and every
+   layer below it answers a failure with a falsy value rather than an
+   error: Live's own methods resolve to false/null/[] on a missing token
+   and on a network failure alike, and store.js answers false for a
+   missing D1 binding, a missing table and a failed write. That is the
+   right contract — a draft must never be held up by a sync — but end to
+   end it produced the exact failure CLAUDE.md's own deploy rule warns
+   about, reported as "my phone's mock never reached my laptop": nothing
+   on either device could tell "synced" from "signed in and silently
+   writing to nowhere," because the two look identical from the page.
+
+   So the result is kept. One value, three states — "off" (nobody signed
+   in, which is the normal, complete product and not a fault), "ok", and
+   "error" — read by the Locker through the bridge, and updated by the
+   same juke:header event everything else in this file re-reads on. It is
+   deliberately not a message, a code, or a retry count: the only thing a
+   reader can act on is whether their drafts are actually somewhere other
+   than this browser. */
+let syncState = "off";
+
+function noteSyncResult(ok) {
+  const next = ok ? "ok" : "error";
+  if (syncState === next) return;
+  syncState = next;
+  // The Locker reads this through the bridge and re-reads on juke:header,
+  // the same signal headerInfo() already fires — no second channel.
+  window.dispatchEvent(new Event("juke:header"));
+}
+
+function syncStatus() { return syncState; }
+
+/* AuthBridge fires "juke:auth" on any change to isSignedIn/userId/
+   getToken, and getToken is a new function reference on renders that are
+   not a real sign-in/out transition — so the listener at the end of this
+   section debounces through reconcileIfStale() rather than reconciling on
+   every one of them. The old once-per-session latch is gone with it; see
+   reconcileIfStale()'s own note on why "once" was the bug rather than the
+   protection. */
 
 /* The one moment a merge decision gets made. Both halves compare what
    this browser already has against what the account already has and pick
@@ -8781,23 +8825,26 @@ let reconciledForThisSession = false;
    merging is a union by id, and whichever side is missing an entry the
    other side has gets it pushed there. */
 function reconcileWithServer() {
-  if (reconciledForThisSession) return;
-  reconciledForThisSession = true;
+  if (reconcileInFlight) return;
+  reconcileInFlight = true;
 
   authToken().then(function (token) {
-    if (!token) return;
+    if (!token) { reconcileInFlight = false; return; }
 
-    Live.loadDraft(token).then(function (remote) {
+    const draftDone = Live.loadDraft(token).then(function (remote) {
       const local = readSave();
       if (remote && (!local || (remote.savedAt || 0) > (local.savedAt || 0))) {
         try { localStorage.setItem(SAVE_KEY, JSON.stringify(remote)); } catch (err) {}
         showResumeBar();
-      } else if (local && (!remote || (local.savedAt || 0) > (remote.savedAt || 0))) {
-        Live.saveDraft(token, local);
+        return true;
       }
+      if (local && (!remote || (local.savedAt || 0) > (remote.savedAt || 0))) {
+        return Live.saveDraft(token, local);
+      }
+      return true;
     });
 
-    Live.loadHistory(token).then(function (remoteList) {
+    const historyDone = Live.loadHistory(token).then(function (remoteList) {
       const localList = readHistory();
       const localIds = new Set(localList.map((e) => e.id));
       const remoteIds = new Set(remoteList.map((e) => e.id));
@@ -8815,9 +8862,88 @@ function reconcileWithServer() {
       localList.forEach(function (entry) {
         if (!remoteIds.has(entry.id)) pushHistoryEntry(entry);
       });
+      return true;
     });
-  });
+
+    /* The merge writes localStorage and nothing else, which is a complete
+       fix for the next page load and no fix at all for the one on screen
+       — and the screen is where it was reported from. Every React surface
+       that reads the locker (DraftLocker, MockDraftsPhone through
+       DraftRoom's own tick) re-reads on "juke:header" and on nothing
+       else, so a merge that lands after mount left a phone's finished
+       draft invisible on the laptop until a manual reload.
+
+       The event, deliberately, and NOT render(). render() ends in
+       saveDraft(), which writes SAVE_KEY and pushes it up — so reconciling
+       through it would answer every pull with a write of whatever this tab
+       happens to hold, which is the one thing a merge must not do. It is
+       guarded (`!state.started` returns early) and would very likely never
+       have fired, and "very likely never" is not a property to give the
+       function whose job is deciding which device's draft survives. The
+       legacy half of the screen is already handled: showResumeBar() above
+       is the only legacy DOM a merge can change.
+
+       Unconditional, rather than leaning on noteSyncResult()'s own
+       dispatch — that one only fires when the status CHANGES, and the
+       second successful sync of a session is exactly when a second
+       device's draft arrives. */
+    return Promise.all([draftDone, historyDone]).then(function (results) {
+      noteSyncResult(results.every(Boolean));
+      window.dispatchEvent(new Event("juke:header"));
+    });
+  })
+    .catch(function () { noteSyncResult(false); })
+    .then(function () { reconcileInFlight = false; });
 }
+
+/* Sync is not a boot-time event, it is a "this tab is being looked at
+   again" event, and that distinction is the whole of cross-device.
+
+   The original ran exactly once per sign-in, which is correct for the
+   device that finished the draft and useless for the other one: a laptop
+   left open all afternoon reconciled at nine in the morning and never
+   again, so a mock finished on a phone at two could not appear on it
+   until the tab was reloaded by hand. That is precisely how it was
+   reported.
+
+   `visibilitychange` is the same signal live.js already uses to decide a
+   dropped socket is worth reopening, and for the same reason: coming back
+   to a tab is the strongest evidence there is that now is the moment.
+   RECONCILE_MIN_MS keeps a fast alt-tab from turning into a request per
+   switch, and reconcileInFlight keeps two overlapping triggers from
+   racing each other into a double merge. */
+const RECONCILE_MIN_MS = 30 * 1000;
+let reconcileInFlight = false;
+let lastReconcileAt = 0;
+
+function reconcileIfStale() {
+  if (!(window.JukeAuth && window.JukeAuth.isSignedIn)) return;
+  const now = Date.now();
+  if (now - lastReconcileAt < RECONCILE_MIN_MS) return;
+  lastReconcileAt = now;
+  reconcileWithServer();
+}
+
+document.addEventListener("visibilitychange", function () {
+  if (document.visibilityState === "visible") reconcileIfStale();
+});
+window.addEventListener("online", reconcileIfStale);
+
+/* And arriving at the locker, which is the one screen whose whole question
+   is "what have I drafted" — the moment somebody would notice an answer
+   that is missing a device. A tab that has been open and focused all
+   afternoon fires no visibilitychange at all, so without this the only
+   person the two events above cannot help is the one sitting on the very
+   screen this is for. Same debounce, so walking between routes costs
+   nothing. */
+window.addEventListener("hashchange", function () {
+  // The hash itself, not route(): that function answers "draft" or "home"
+  // for app.js's own two legacy views and has never had a name for the
+  // React locker, which owns its own hash-watching (see the note beside
+  // #draftroom-root). Matching the prefix keeps #/drafts and any future
+  // query on it, the same shape #/draft-room's own invite links take.
+  if (location.hash.replace(/^#\/?/, "").split("?")[0] === "drafts") reconcileIfStale();
+});
 
 // Never runs synchronously at boot — Clerk has not loaded by the time this
 // classic script does, so the first real answer arrives as an event,
@@ -8827,9 +8953,15 @@ function reconcileWithServer() {
 // the rest of the tab's life.
 window.addEventListener("juke:auth", function () {
   if (window.JukeAuth && window.JukeAuth.isSignedIn) {
-    reconcileWithServer();
+    reconcileIfStale();
   } else {
-    reconciledForThisSession = false;
+    // A sign-out resets both halves: the next sign-in — the same account
+    // again, or a different one — has to reconcile immediately rather
+    // than waiting out a window it did not spend, and the Locker has to
+    // stop claiming anything about an account nobody is in.
+    lastReconcileAt = 0;
+    syncState = "off";
+    window.dispatchEvent(new Event("juke:header"));
   }
 });
 
@@ -10490,6 +10622,13 @@ window.JukeEngine = {
   // each field means and why a stat that can't be computed cleanly is just
   // absent rather than zeroed.
   historyStats: historyStats,
+  /* "off" | "ok" | "error" — whether the locker above is only in this
+     browser, safely in an account, or signed in and failing to reach one.
+     See noteSyncResult()'s own comment: every layer under this answers a
+     failure with a falsy value rather than an error, which is right for a
+     draft and left the one thing a reader can act on invisible. The Locker
+     re-reads this on juke:header like everything else. */
+  syncStatus: syncStatus,
   // The launcher's presets — see startFromHistoryLeague()'s own comment.
   startFromHistoryLeague: startFromHistoryLeague,
   // The Locker's completed drafts had a way to open one and no way to

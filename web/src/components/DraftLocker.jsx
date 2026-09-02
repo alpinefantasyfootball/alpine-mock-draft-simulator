@@ -447,7 +447,18 @@ export default function DraftLocker({ onStartNew, onRunAtSeat, problem, lobbySlo
       </div>
 
       <div className="min-h-0 flex-1">
-        <LockerTable entries={completed} onAnalyze={analyze} onDeleteConfirmed={deleteEntry} />
+        {/* syncStatus, not a boolean: the table's own footer has to tell
+            "in this browser only" from "in your account" from "signed in
+            and failing to reach it," and only the engine knows the third
+            one — see app.js's noteSyncResult(). Guarded here rather than
+            in the table because syncStatus() is a newer bridge entry than
+            this component and a cached app.js will not have it. */}
+        <LockerTable
+          entries={completed}
+          onAnalyze={analyze}
+          onDeleteConfirmed={deleteEntry}
+          syncStatus={engine.syncStatus ? engine.syncStatus() : 'off'}
+        />
       </div>
     </div>
   )

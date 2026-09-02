@@ -519,27 +519,45 @@ export default function DraftCockpitHeader({
             <JukeLogo size={19} surface="appbar" />
           </a>
 
-          <button
-            type="button"
-            onClick={onToggleAutopick}
-            disabled={over}
-            aria-pressed={autopick}
-            title={over ? 'Draft complete' : undefined}
-            className={
-              'flex h-11 shrink-0 items-center gap-1.5 rounded-full bg-white/5 pl-2.5 pr-1.5 ' +
-              (over ? 'cursor-not-allowed opacity-40' : '')
-            }
-          >
-            <span className="text-[11px] font-semibold text-white/70">Auto</span>
-            <span className={'relative block h-4 w-[30px] rounded-full transition-colors duration-200 ' + (autopick && !over ? 'bg-teal-500/70' : 'bg-white/[0.16]')}>
-              <motion.span
-                layout
-                transition={{ type: 'spring', stiffness: 500, damping: 32 }}
-                className="absolute top-0.5 h-3 w-3 rounded-full bg-white"
-                style={{ left: autopick ? 16 : 2 }}
-              />
-            </span>
-          </button>
+          {/* Auto while there is anything left to auto-pick; a labelled way
+              out once there is not.
+
+              Over, this slot held a permanently disabled toggle at 40%
+              opacity — a dead control taking the widest position on a
+              46px bar, on the one screen where the reader has finished
+              and is looking for the exit. The only other way back to the
+              locker at that moment is the chevron on the far left, which
+              is an unlabelled glyph, and the "Back to the locker" link at
+              the bottom of the Insights report itself, which is the
+              screen being left. Reported as needing a route out that is
+              not the report. Same destination as the chevron, said in a
+              word rather than drawn as an arrow. */}
+          {over ? (
+            <a
+              href="#/drafts"
+              title="Back to your draft locker"
+              className="flex h-11 shrink-0 items-center rounded-full bg-white/5 px-3 text-[11px] font-semibold text-white/70"
+            >
+              Locker
+            </a>
+          ) : (
+            <button
+              type="button"
+              onClick={onToggleAutopick}
+              aria-pressed={autopick}
+              className="flex h-11 shrink-0 items-center gap-1.5 rounded-full bg-white/5 pl-2.5 pr-1.5"
+            >
+              <span className="text-[11px] font-semibold text-white/70">Auto</span>
+              <span className={'relative block h-4 w-[30px] rounded-full transition-colors duration-200 ' + (autopick ? 'bg-teal-500/70' : 'bg-white/[0.16]')}>
+                <motion.span
+                  layout
+                  transition={{ type: 'spring', stiffness: 500, damping: 32 }}
+                  className="absolute top-0.5 h-3 w-3 rounded-full bg-white"
+                  style={{ left: autopick ? 16 : 2 }}
+                />
+              </span>
+            </button>
+          )}
 
           <button
             type="button"

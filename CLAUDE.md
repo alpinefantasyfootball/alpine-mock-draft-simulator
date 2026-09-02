@@ -4183,6 +4183,27 @@ the analytics Lobby and the anchored kebab dropdown are all untouched above
 dashboard is a button press away from the phone's Mock Drafts screen, and it
 is the *same component*, not a cut-down copy.
 
+### A phone component that memoizes over `board` never updates
+
+`board` is mutated in place — a pick sets `p.drafted` on an existing object
+and nothing ever replaces the array — which this file already records as the
+reason `board` is useless as a memo key, in `DraftRoom.jsx`'s own note beside
+`useJukeTick`. `PlayersTabPhone` memoized its rows on `[board, ...filters]`
+anyway, so **the phone player pool was computed once and frozen**: a drafted
+player stayed in the list and the "N AVAILABLE" count never left its opening
+number. Reported from a real mobile draft.
+
+The desktop pool has never shown it, because `availablePlayers` has had
+`tick` first in its key all along — which is exactly what made it easy to
+write the phone one the other way and not notice. **`tick` is the only value
+in a phone component's dependency list that does any work when a pick lands**,
+and it has to be threaded down as a prop, because the phone tree is props all
+the way from `DraftRoom.jsx` and nothing below re-reads the engine.
+
+Worth checking the same way anywhere else: a list that is right on the first
+render and never wrong-looking afterwards is what this failure looks like.
+Draft a player and read the count, rather than reading the filter.
+
 ### The homepage is chosen by CSS, and that is a hydration decision
 
 `scripts/prerender.mjs` writes real server-rendered markup into `#root` and
@@ -4601,17 +4622,55 @@ let anybody take.
 
 ## The phone draft room's own controls
 
-**A crosshair, not an auto-follow.** The board is a real scroller in both axes
-and nothing ever pulled it back to the live pick. It centres the current cell
-in the board's own scroller — `getBoundingClientRect()` differenced against
-the scroller's, never `offsetTop`, and it returns early when already within
-4px, both of which are hard-won rules this file already records for the
-legacy board. It is a **counter** prop rather than a boolean, because
-pressing it twice in a row has to scroll twice.
+**The board follows the live pick, and the crosshair is how you get back.**
+It centres the current cell in the board's own scroller —
+`getBoundingClientRect()` differenced against the scroller's, never
+`offsetTop`, and it returns early when already within 4px, both of which are
+hard-won rules this file already records for the legacy board. The crosshair
+is a **counter** prop rather than a boolean, because pressing it twice in a
+row has to scroll twice.
 
-Deliberately not an automatic follow: that is a bug this project has already
+**This section used to say "a crosshair, NOT an auto-follow", and that was
+half a lesson applied as a whole one.** The reasoning was sound and it is
+still in this file elsewhere: unconditional following is a bug this project
 shipped and removed once, where a reader was pulled back to the live pick two
 or three times a second for as long as they kept trying to look elsewhere.
+What that fix actually did was not stop following — it was `boardFollow`,
+*follow until a person scrolls*. A board that never follows was reported
+straight back, from a phone draft with auto-pick on: the draft happened
+entirely off-screen and watching it meant dragging the grid down a round at a
+time. **When you inherit a rule that removed something, check whether it
+removed the thing or only the unconditional version of it.**
+
+So `followLive` follows, releases on a real gesture, and re-arms on the
+crosshair — and on the desktop board, which has no crosshair, on scrolling
+the live cell back into view. Three things about the gesture list:
+
+- **`scroll` may not be one of the events that releases it.** A smooth
+  programmatic scroll fires a stream of them, so a board that disengaged on
+  `scroll` would disengage on its own animation and follow exactly one pick.
+- **`pointerdown` may not be either**, which is where this differs from the
+  legacy board. Every cell on this grid is clickable, so a pointerdown
+  listener treats reading a player as "I want to look elsewhere".
+  `touchmove` is the touch gesture that actually means scrolling; a tap never
+  fires it.
+- **`scroll` IS what re-arms it**, and that asymmetry is the point: an event
+  that only ever turns following back on cannot feed back into the animation
+  that fired it.
+
+**And the board's own box is not the part of it you can see.** The phone
+board is `fixed ... bottom: 0` with the draft sheet drawn over its lower
+half, so centring in the scroller's height put the live pick *behind the
+sheet* — measured at 375x812 with the sheet at its default snap, the
+crosshair landed the cell at y=444 against a sheet whose top edge is y=342.
+The scroll was arithmetically perfect and the pick was invisible, which reads
+as "it did not scroll at all" and is exactly how it was reported.
+`centreOnLive()` takes a `bottomInset` and centres in the visible band;
+`DraftRoomPhone` derives it from `SHEET_SNAPS[sheetSnap]` rather than
+measuring the sheet, so the board never waits a frame for a layout read and
+never chases a drag in progress. **A correct scroll to a covered place is
+indistinguishable from no scroll at all** — check where the thing landed on
+screen, not what the scroller's numbers say.
 
 **The auto-pick ribbon lives inside the header**, drawn only when auto-pick is
 on. Everything on that screen is `fixed` and stacked by hand — the board is
@@ -4658,11 +4717,39 @@ starting a fresh one from zero.
 started" cannot read `snapIndex` off the prop the handler closed over; it is
 a ref, for the same reason the settings modal's seat swap already uses one.
 
+**"Draft with friends" has to be ON the launcher, and it was not.**
+`HomePhone`'s own "Or draft with friends — same board, real managers" row
+links to `#/drafts`, which on a phone IS `MockDraftsPhone` — so the one
+advertised route to multiplayer landed on a screen with no multiplayer on
+it. Everything behind it already worked at 375px: the same
+`DraftWithFriendsModal` and `RoomPanel` the desktop Lobby opens, which
+`DraftRoom.jsx` already renders for both Lobby branches. **It was the
+control that was missing, not the feature** — which is the harder kind to
+notice, because every check anybody runs on the thing itself passes.
+
+Its own full-width row rather than a third button beside "Draft settings"
+and "Your insights": the string does not fit a third of a 390px row (the
+same measurement `HomePhone` already records for it), and it is a different
+kind of action from those two anyway — they change what the button above
+starts, this starts something else.
+
 ## The gear menu, and notifications that do something
 
 The kebab dropdown is a bottom **action sheet** below `sm` and the anchored
 dropdown above it, from one array of items — a phone-specific copy of the
 list is the thing that ends up missing an item after the next change.
+
+**"Back to the locker" is a menu item, and it exists because two real
+routes out were both unreadable.** When a draft finishes, the labelled way
+back was the link at the bottom of the Insights report — which is the screen
+somebody is trying to leave — and the header's own route was an unlabelled
+chevron. Reported as needing a way back that is not the report. The menu is
+where somebody looks for "things I can do to this draft", the same argument
+that brought Pause back below, and the mobile header's Auto toggle — a
+permanently disabled control at 40% opacity once the draft is over, in the
+widest slot on a 46px bar — becomes a labelled Locker link instead. **A dead
+control on the screen where a reader has finished is the worst place to
+spend the space that the exit needed.**
 
 **Pause is back, which reverses a decision recorded here.** It was cut with
 Undo and "Auto-draft the rest" by a product review that found all three
@@ -4952,9 +5039,7 @@ can disagree.
 
 ### Merging is a decision, and it is made in one place
 
-`reconcileWithServer()` runs once per sign-in — not once per `juke:auth` event,
-since that fires on any change to `getToken`, which is a new reference on most
-renders. Both halves compare what the browser has against what the account
+`reconcileWithServer()` compares what the browser has against what the account
 has, rather than assuming the server should win:
 
 - **The saved draft is last-write-wins by `savedAt`**, because there is only
@@ -4967,6 +5052,64 @@ has, rather than assuming the server should win:
 Everything else is fire-and-forget: `localStorage` is already written by the
 time any of it runs, so a slow or failed request must never hold up the thing
 that actually keeps a draft from being lost.
+
+**It used to run once per sign-in, and that is the cadence of the device that
+just finished the draft rather than the one waiting for it.** A laptop left
+open reconciled at nine in the morning and never again, so a mock finished on
+a phone at two could not reach it without a manual reload — which is exactly
+how it was reported. It reconciles on `visibilitychange`, on `online`, and on
+arriving at `#/drafts`, debounced by `RECONCILE_MIN_MS` with an in-flight flag
+so two triggers cannot race into a double merge. **Coming back to a tab is the
+strongest evidence there is that now is the moment** — the same signal
+`live.js` already uses to decide a dropped socket is worth reopening — and the
+locker route is there because the one person those two events cannot help is
+somebody sitting on the very screen this feature is for, in a tab that never
+goes away.
+
+**The merge notifies rather than re-renders, and the difference is not
+stylistic.** Every React surface reading the locker re-reads on `juke:header`
+and nothing else, so a merge landing after mount was invisible until a reload.
+The obvious repair is `render()` — and `render()` ends in `saveDraft()`, which
+writes `SAVE_KEY` and pushes it up, so **a pull would answer with a write of
+whatever this tab happened to hold**, which is the one thing the function
+deciding which device's draft survives must not do. It dispatches the event
+directly, and unconditionally rather than leaning on `noteSyncResult()`'s own
+change-only dispatch: the second successful sync of a session is exactly when
+a second device's draft arrives.
+
+### Every failure in this path is falsy, which is right and was invisible
+
+`Live`'s methods resolve to `false`/`null`/`[]` on a missing token and on a
+network failure alike; `store.js` answers `false` for a missing D1 binding, a
+missing table and a failed write. Each is correct on its own — a draft must
+never be held up by a sync, and "not signed in" and "cannot reach the worker"
+have to be handled identically by a caller.
+
+End to end it meant **no surface on either device could tell "synced" from
+"signed in and silently writing to nowhere"**, which is the same shape as this
+file's own "ask the database, not the response" and is how a worker that is
+merged-but-not-deployed, or a D1 that never had `0004_drafts.sql` applied,
+looks from the page: exactly like one that is working. `syncStatus()` keeps the
+answer — "off", "ok", "error" — and the Locker's storage strip says which.
+**A page that claims a backup it does not have is worse than one that claims
+nothing.**
+
+That strip is also what was telling signed-in people to sign up: one
+unconditional sentence, written before accounts synced anything, still
+promising an account under rows that were already in one. Reported with a
+screenshot of exactly that.
+
+### "Is anybody signed in" is not `useAuth()`'s question to answer here
+
+`useAccountUiReady()` above answers *may I render Clerk's components*.
+`useSignedIn()` (`web/src/hooks/useAuthState.js`) answers *is somebody signed
+in*, and it deliberately does not reach for Clerk either — for the same reason,
+one step further on. `useAuth()` throws without a provider ancestor, `main.jsx`
+renders no provider at all in a keyless build, and a hook cannot be called
+conditionally to dodge that. So it reads `window.JukeAuth` and the `juke:auth`
+event instead: both are simply absent in a keyless build, which reads as signed
+out, which is what it is. **Two hooks, two questions, and neither one may be
+the other's shortcut.**
 
 ### The phone account card, and the tab that had gone stale
 
@@ -5028,10 +5171,39 @@ the network tab: `/me/draft` and `/me/history` returning **200** while signed
 in means the worker's verification genuinely works, where a page that merely
 *looks* signed in proves only that Clerk's client half does.
 
+**A 200 proves the token, and it does not prove the table.** `listDraftHistory()`
+catches a missing `draft_history` and answers `[]`, so a D1 that never had
+`0004_drafts.sql` applied returns a perfectly healthy `200 {"entries":[]}` to
+every read — indistinguishable from an account with nothing in it. The write is
+what separates them: finishing a mock while signed in posts to `/me/history`,
+and the body is `{"ok":true}` against a real table and `{"ok":false}` against a
+missing one, both under a 200. **Read the body, not the status** — the same
+"ask the database, not the response" rule this file already states, one level
+in. The Locker's own storage strip is now the version of that check a person
+can run: it says "could not reach your account" on exactly this.
+
 **`PREVIEW_ORIGIN_RE`** allows any `https://<hash>.juke-1mw.pages.dev` through
 `originAllowed()`, because every branch push gets its own preview address and
-that is where this is tested before a merge. Without it every authenticated
-route 403s on a preview with nothing on screen to say why.
+that is where this is meant to be tested before a merge. Without it every
+authenticated route 403s on a preview with nothing on screen to say why.
+
+**The worker's half of that is done and the page's half is not, so a preview
+has no accounts on it at all.** Measured 2 September 2026 against the preview
+for PR #126: `window.Clerk` is undefined, `window.JukeAuth` is never written,
+and the built bundle contains no `pk_` key — while production's own bundle
+carries `pk_live_…` a few bytes from the same place.
+`VITE_CLERK_PUBLISHABLE_KEY` is set for the **Production** environment in the
+Pages project and not for **Preview**, and Vite bakes it in at build time, so
+a preview build genuinely has none.
+
+Everything degrades exactly as designed — `useAccountUiReady()` answers false,
+`AccountButtons` renders its inert triggers, the Locker's strip falls back to
+the early-access form — which is why nobody noticed: **the preview looks fine,
+it simply is not the product.** What it costs is the one thing the note above
+claims: the signed-in path cannot be exercised on a preview, so the gap the
+`verifyToken` bug lived in is still open and the only real check remains a
+merge to production. Setting the same variable for Preview is a dashboard
+change nobody has made, not a code change.
 
 ## Security
 
