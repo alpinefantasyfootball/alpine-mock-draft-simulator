@@ -4195,9 +4195,70 @@ work today's homepage already did on a phone, so nothing got slower; it
 simply did not get faster. If it ever needs to, the fix is to prerender two
 documents, not to move this back to a hook.
 
-**The Draft Room does not have this problem and uses a hook.** `DraftRoom` is
-its own React root, mounted into `#draftroom-root`, which the prerender never
-touches — so `usePhoneWidth()` is free there and always was.
+**The Draft Room does not have this problem and uses a hook**, and the reason
+it does not has changed underneath that sentence. It used to be that
+`DraftRoom` was its own React root: the prerender never touched
+`#draftroom-root`, so nothing in it was ever hydrated. It is a `createPortal`
+inside the one root now — Clerk allows exactly one `<ClerkProvider>` per page,
+which forced all three mount points into a single tree (`main.jsx`) — and a
+portal *is* hydrated, which is how it caught the problem this section says it
+does not have. See below. `usePhoneWidth()` is free there either way, but now
+because `DeferredPortals` mounts it after hydration rather than because it
+lives outside the root.
+
+### A portal is hydrated too, and failing it throws away the whole prerender
+
+Found 2 September 2026 by chasing two React errors that had been on every load
+of the site for as long as accounts have existed: **#418** (hydration failed)
+and **#423** (recovering by switching the root to client rendering).
+
+**React hydrates a portal's children against whatever is already sitting in
+the container `createPortal()` names.** It does not treat a portal as a fresh
+mount just because that container is outside the hydrating root.
+`scripts/prerender.mjs` fills `#root` and only `#root` — `entry-server.jsx`
+exports `App` and nothing else — so `#appbar-root` and `#draftroom-root` are
+empty in the served HTML while the client tree renders `AppHeader` and
+`DraftRoom` into them. React looked for that markup, found none, and failed:
+
+```
+Warning: Expected server HTML to contain a matching <div> in <div>.
+    at div
+    at AppHeader
+Hydration failed because the initial UI does not match what was rendered
+on the server.
+```
+
+**A hydration failure is not scoped to the subtree that caused it.** React
+discards the server markup for the *whole root* and rebuilds all of it on the
+client. So the prerender — whose entire job is to put hero pixels on screen
+before `main.jsx` has parsed — was being thrown away on every single load, by
+two components that draw nothing until `window.JukeEngine` exists. **It cost
+nothing visible, which is exactly why it survived:** the page still rendered,
+just the slow way, and a console nobody had open said so.
+
+`DeferredPortals` renders `null` on the first pass, so the hydration render
+matches the server exactly, then mounts both portals from an effect as the
+plain client renders they always were. Teaching the prerender to fill all
+three containers is the other fix and buys nothing here.
+
+**`main.jsx` used to say portals "change nothing about hydration", and that is
+the sentence to learn from.** It is true about *which container the nodes land
+in* and false about *whether they are hydrated* — two different questions, and
+only the first is obvious from reading `createPortal()`. The comment is
+corrected in place rather than left standing.
+
+**The minified codes name no component, so do not try to reason from them.**
+`#418`/`#423` are just numbers; one temporary build with
+`define: { 'process.env.NODE_ENV': '"development"' }` and `build.minify:
+false` printed `at AppHeader` on the first run. **And baseline before
+attributing**: the first suspect here was `FloatingNavPill` seeding `active`
+from `location.hash` behind a `typeof window === 'undefined'` guard — which
+reads as SSR safety and is precisely what makes the two sides disagree. That
+was a real latent divergence and is fixed (the mount effect already called
+`onHash()`, so the initializer was redundant), and fixing it changed the error
+count by **zero**. Confident, plausible, and not the cause.
+
+Measured on a production build, 2 errors to 0, at 390px and 1280px.
 
 ### The floating nav pill, and the clearance that came with it
 
