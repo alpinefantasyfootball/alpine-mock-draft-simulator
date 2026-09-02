@@ -190,7 +190,22 @@ test("homepage to a finished draft, pressing only what a person can press",
         sizes: [...new Set(Object.values(perSeat))],
         rounds: league.rounds,
         teams: league.teams,
-        earlyKicker: state.picks.filter((p) => p.player.pos === "K" && p.round < league.rounds - 1).length,
+        /* This counted kickers taken before `rounds - 1` and asserted zero,
+           which was the round gate needFromCount() used to enforce. The gate is
+           gone, so the number is expected and non-zero, and what replaced it is
+           the promise the gate was really there for: every seat finishes with
+           exactly the kicker and defense the format starts. Counted per seat,
+           because a room-wide total of ten hides one team holding two and
+           another holding none. */
+        kdShort: (function () {
+          const per = {};
+          state.picks.forEach((p) => {
+            per[p.slot] = per[p.slot] || { K: 0, DST: 0 };
+            if (p.player.pos === "K" || p.player.pos === "DST") per[p.slot][p.player.pos]++;
+          });
+          return Object.values(per).filter((r) =>
+            r.K !== league.starters.K || r.DST !== league.starters.DST).length;
+        })(),
         // A total has to equal its own weighted parts, and a component that
         // is the same for everybody is not in the grade.
         reconciles: all.every((t) => Math.abs(
@@ -205,7 +220,7 @@ test("homepage to a finished draft, pressing only what a person can press",
     expect(out.picks, "every pick was made").toBe(out.teams * out.rounds);
     expect(out.distinct, "and no player twice").toBe(out.picks);
     expect(out.sizes, "a full roster each").toEqual([out.rounds]);
-    expect(out.earlyKicker, "the app picked the kicker's timing, not the manager").toBe(0);
+    expect(out.kdShort, "every seat finished with exactly the kicker and defense it starts").toBe(0);
     expect(out.reconciles, "each total equals its own parts").toBe(true);
     expect(Math.min(...out.spread), "no component is a constant across the room")
       .toBeGreaterThan(1);

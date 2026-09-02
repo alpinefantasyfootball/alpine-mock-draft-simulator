@@ -796,10 +796,20 @@ error twelve samples buy.
 
 `PAR_SEEDS` is hard-coded and never `state.seed`, for the reason par exists at
 all: it has to be a property of the board, the same for every client in a room
-and the same tomorrow. Twelve puts the standard error of a chair's par at
-18.9/√12 = 5.5, well inside `MIN_SPAN.startersVsPar`; twenty-four would buy 3.9
-for twice the work. **The whole thing costs 30ms cold and 0ms warm**, measured,
-so the cache carries it comfortably.
+and the same tomorrow.
+
+**Twelve was derived against a wobble that has since changed, and the
+arithmetic had to be redone even though the answer did not move.** Under the old
+flat ±3 a chair's par moved with a standard deviation of 18.9 points, so twelve
+put the standard error at 18.9/√12 = 5.5. Scaling the wobble by each player's
+real ADP standard deviation roughly doubled the average board offset: measured
+30 August 2026 the per-chair par sd is **28.4**, so the standard error at twelve
+is **8.2** — still well inside `MIN_SPAN.startersVsPar` (20), on a margin of
+2.4× where it used to be 3.4×. Twenty-four would buy 5.8 for twice the work.
+**The whole thing costs 42ms cold and 0ms warm**, measured, so the cache carries
+it comfortably. Re-measure both if the wobble is ever scaled again; this is the
+"a justification can be sound and still be about something else" rule pointed at
+its own section.
 
 `bestAvailable()` grew `jitterOf` for this rather than the par run writing to
 `board[].jitter` and restoring it. That save-and-restore is exactly the shape
@@ -1029,16 +1039,19 @@ inverted arithmetic reads as correct until somebody knows enough football to
 notice the answer is absurd.
 
 **Kickers and defenses are excluded from draft value and from both
-callouts.** `cpuScore()` refuses a kicker before the last two rounds and a
-defense before the last three, and the suggestions never offer one earlier —
-so the app picks the timing, not the manager. Their ADP comes from drafts
-that run more rounds than most leagues here, which routinely puts a kicker's
-board rank past the last pick that exists, so taking one at all reads as
-early. Measured over a ten-team, fourteen-round draft, the mean gap ran
-WR +6, RB −2, QB −9, DST −12, TE −22, **K −35**, and every one of the ten
-kickers scored as a reach with none neutral. Grading somebody for obeying a
-rule the app enforces is not a judgement about drafting. Dropping them moved
-no team more than two places, because every team drafts the same forced pair.
+callouts, and only one of the two original reasons still holds.** This used
+to lead with "the app picks the timing, not the manager" — true while
+`needFromCount()` refused a kicker before the last two rounds and a defense
+before the last three, and false since those gates came out (see "Kickers and
+defenses are priced, not scheduled"). The exclusion survives on the argument
+that was always the stronger one. Their ADP comes from drafts that run more
+rounds than most leagues here, which routinely puts a kicker's board rank past
+the last pick that exists, so taking one at all reads as early. Measured over a
+ten-team, fourteen-round draft, the mean gap ran WR +6, RB −2, QB −9, DST −12,
+TE −22, **K −35**, and every one of the ten kickers scored as a reach with none
+neutral. That measurement is about the board's depth against the league's
+length, so removing the timing rule does not touch it. Dropping them moved no
+team more than two places, because every team drafts the same forced pair.
 
 **Roster construction measures cover, and it has to be graded rather than a
 threshold.** The old test was "fewer than starters + FLEX + 1 at the
@@ -1307,6 +1320,203 @@ written down twice" exists to prevent. When something here needs to know what
 a league permits, check whether the engine or the CPU already answers it
 before writing a second answer.
 
+## The pool a league can hold is not the pool it can see
+
+Reported 30 August 2026: `cpuChoice()` drafts players its own `needFromCount()`
+has already refused. Measured in a real browser against the half-PPR board of
+that morning, at 16 teams over 14 rounds: 224 picks, 232 players, **eight left
+at the end** — and in the last ten picks the board holds nothing but
+quarterbacks, kickers and defenses, every seat already holding one of each.
+
+**That shape stopped reproducing the next day, and the bug did not go away with
+it.** The deep bench landed on `main` on 31 August, the pool went 232 to 480,
+and 16-team capacity went 214 to 334 — so the example this section was written
+around is now comfortably legal and wastes nothing. Everything below is
+re-measured against the 480-player board of 1 September; the shapes moved, the
+argument did not. **A measurement is true of the board it was taken on**, and
+this project regenerates the board nightly. `cpuChoice()` has no notion of
+illegal, only of expensive, so it takes the least-bad 999. Nine of the sixteen
+seats finished with two quarterbacks and one or two with two defenses, on every
+seed tried — roster spots the format can never start, which roster construction
+then docks nine points a head for.
+
+**The bug is not in `cpuChoice()`, and the report's own first instinct — prefer
+an unrefused player, and failing that the least-full position — was built,
+measured and thrown away.** See below. What is wrong is one line further back:
+`setupProblem()` was validating against `poolSize()`, and **a board is not
+inventory.**
+
+### `poolSize()` counts rows; `absorbableSize()` counts picks the league can use
+
+A 22-team room may hold twenty-two quarterbacks — one a team, unless the format
+opened a second seat — and the half-PPR board carries fifty-six; sixty-six tight
+ends against ninety-two; twenty-two kickers against thirty-three. Those spare
+thirty-four, twenty-six and eleven are on the board and undraftable by anybody,
+so counting them as picks the league has room for is the same class of error as
+`posRank` standing in for value: a right number answering the wrong question.
+
+Measured on the 1 September 480-player half-PPR board:
+
+```
+                 picks   poolSize()   absorbableSize()   verdict
+16 teams / 14r    224       480             334           allowed, no waste
+24 teams / 17r    408       480             411           allowed, 19 wasted
+22 teams / 19r    418       480             399           refused
+24 teams / 20r    480       480             411           refused
+```
+
+The last row is the one to remember: **the deepest league the setup screen
+offers is a dead heat on `poolSize()` — 480 picks against 480 players — and 69
+picks past what the room can actually hold.**
+
+`absorbableSize()` is `Σ min(pool at that position, holdCap(pos) × teams)`, and
+`holdCap()` is *literally* the count above which `needFromCount()` refuses — so
+this is the board filtered through the same rule the draft runs on, not a second
+opinion about what a roster may contain. The shortfall column is not an estimate:
+it is exactly the number of picks a completed draft spends on somebody nobody
+can start, confirmed pick by pick.
+
+**Three copies of one league rule became one, because the check needed it.**
+`league.starters.QB + league.superflex` — the expression whose drift caused the
+superflex grading bug — was written out by hand in `needFromCount()`,
+`analyseTeam()`'s construction charge and `buildText()`'s caption at once.
+`startableCap(pos)` is the single copy now and answers **Infinity** where the
+question does not arise, so the two grade call sites walk every position rather
+than carrying their own list of which three can overflow. `holdCap()` is
+`Math.min(maxAt, startableCap)` and is what `needFromCount()` refuses above.
+Verified byte-identical across **328,536** `(have, pos, round)` combinations
+over 324 league shapes, and the grade's charge and captions against real
+finished rosters at 10 teams, 12 teams and superflex.
+
+### Tried and rejected: tiering `cpuChoice()`'s fallback
+
+The obvious fix, and the one the report led with: prefer any player
+`needFromCount()` does not refuse; only when none exists fall through to a
+refused one, and there prefer a position the roster is not already full at — a
+spare running back is a bench body, a spare defense is a wasted spot. It was
+prototyped in the browser against the real board and run both ways from the
+same seed, which is the only thing that settles this.
+
+**It moves nothing where it was measured, and the reason is a conservation
+law.** The room must absorb `picks − absorbableSize()` players it cannot use,
+whoever takes them. Measured 30 August 2026 against the 232-player board, on
+shapes the guard now refuses outright — so these are all cases where that
+difference is positive:
+
+```
+                    spare unstartable spots   mean build
+16 teams / 14r          10  ->  10            82.5 -> 82.5
+14 teams / 16r          16  ->  16            78.8 -> 78.8
+12 teams / 19r          26  ->  26            71.1 -> 71.1
+10 teams / 14r (default) 0  ->   0            90.8 -> 90.8, trajectory identical
+```
+
+At 14/16 and 12/19 it does change *which* player is taken — a seat takes its
+first kicker four rounds early rather than a second defense — and the waste
+simply lands on whoever picks the kicker later. At the reported 16/14 it changes
+nothing at all: every remaining player is refused for every seat, so there is no
+choice left to make well.
+
+**The first half of it is unreachable too.** A refusal is a 999 multiplier
+against a legal 0.80–1.45, so a refused player can only win on
+`(adp + jitter) × 999`, which needs `adp + jitter ≤ 0` — reachable in the
+arithmetic (Jahmyr Gibbs measures −1.37 on some seeds) and not in a draft,
+because a player with ADP under 3 is gone in round one, when nothing is capped.
+It is a latent sign inversion worth knowing about and not a bug anyone can hit.
+
+And with the refusal in place it is dead code: across all 33
+(scoring × team count) combinations at their **tightest legal bench**, driven to
+completion on pinned seeds, `cpuChoice()` takes a refused player **zero** times.
+`tests/pool-capacity.spec.mjs` asserts exactly that, so if it ever stops being
+true the tiering can come back with a measurement behind it.
+
+### What the refusal costs, and the answer about 24 teams
+
+Shapes move from allowed to refused and **none moves the other way** —
+`absorbableSize() ≤ poolSize()` always, which is its own assertion in the spec,
+because a check that loosened here would be the opposite of the fix and would
+show up nowhere else.
+
+What it costs, measured 1 September against the 480-player board, as the longest
+roster each team count may still run:
+
+```
+teams      4   6   8  10  12  14  16  18  20  22  24
+was       24  24  24  24  24  24  24  24  24  21  20
+now       22  22  22  22  22  21  20  20  19  18  17
+```
+
+Two to five rounds off the very deepest rosters, and **nothing a person meets in
+an ordinary league**: the default ten- and twelve-team shapes run to 22 rounds
+before the guard has anything to say, against the 14 they actually use. A single
+seat can legally hold 22 players under the default lineup (1 QB, 8 RB, 8 WR,
+3 TE, 1 K, 1 DST), so a 23- or 24-round draft is impossible at *any* team count
+and the aggregate check catches it — `absorbableSize()` can never exceed
+`teams × 22`.
+
+**So `TEAM_COUNTS` should keep going to 24, and the round count is what has to
+give.** 24 teams is genuinely runnable at seventeen rounds. The entry is not
+dead; it is constrained, and the refusal now names the real ceiling instead of a
+pool count that overstated it — most sharply at 24 × 20, where `poolSize()` saw
+480 picks against 480 players and called it fine.
+
+### The guard is a necessary condition, not a sufficient one
+
+`absorbableSize()` is an *aggregate* ceiling: it says how many players the room
+could hold if every pick went to a seat that could still use one. A snake draft
+is greedy and does not achieve that ceiling — it strands the scarce positions
+late, and a seat whose remaining legal positions have run dry takes somebody it
+can never start.
+
+Measured across all 44 shapes the screen offers, each at the largest bench
+`setupProblem()` still allows — the tightest corner there is:
+
+```
+every draft completes                     44 of 44
+seats short a mandatory K or DST           0
+shapes wasting a pick on the unstartable  16 of 44
+worst waste in one draft                  19 picks
+any waste below 18 teams                   0
+```
+
+So the guard closes the gross case and leaves a bounded residue at the deep end.
+The split worth holding on to is between **the thing that breaks a roster and
+the thing that wastes a bench spot on it**: nobody is ever left without the
+kicker or defense their format starts, and no league anybody actually plays
+wastes a pick at all.
+
+`tests/pool-capacity.spec.mjs` asserts exactly that split — the first three
+exactly, the last as a bound with headroom — rather than asserting zero waste
+everywhere, which is a property this guard was never able to give and which
+would have stood red.
+
+**This residue is not the conservation law below, and the two must not be
+confused.** "Tried and rejected: tiering `cpuChoice()`'s fallback" settles the
+case where `picks > absorbableSize()`: there the room *must* absorb
+`picks − absorbableSize()` unusable players whoever takes them, so reordering
+the fallback moves the waste around and never removes it. Every shape in the
+table above is one the guard **allows**, which means `picks ≤ absorbableSize()`
+and the conservation law says the forced waste is zero. It is not zero, so what
+is left is a greedy snake failing to reach a feasible assignment that demonstrably
+exists — 380 picks against 387 capacity still landing 15 on the unstartable.
+
+That is a real, open problem and a different one from the rejected experiment.
+It lives in `cpuChoice()`, the one function every client and the worker must
+agree on, so it is a separate change with a worker deploy attached rather than a
+tightening of this guard — and anybody picking it up should read the section
+below first and note that its conclusion does not cover this case.
+
+**And the draft it would have run does finish**, which is exactly what made this
+hard to see. It finishes with roster spots nobody chose to waste, and a grade
+that docks them for it.
+
+**The message ends "Run fewer teams, or a shorter roster", and the second half
+of that sentence did not work.** Every stepper in the settings screen's Roster
+section refused the draft on the first press, because `setLeague()` moved
+`rounds` with the roster only for a scoring preset. That is written up under
+"The Draft Settings screen" — a refusal is only as good as the way out it
+names, so the two changes ship together and one test covers the path.
+
 ## The Juke score
 
 Projected points above a replacement starter at that position, as a share of
@@ -1559,6 +1769,140 @@ is removed. `openSheet()` removes rather than blanks.
 three pixels out of the *inside* — `clientWidth` drops to 56 and the headshot
 is inset and shrunk. A test asserting the outer rect passes either way and
 proves nothing, which is what the first version of it did.
+
+## Kickers and defenses are priced, not scheduled
+
+`needFromCount()` refused a kicker before `rounds - 1` and a defense before
+`rounds - 2`. Both are gone. The two positions are now gated player by player
+by what they cost against the rest of the board, which is how every other
+position has always been gated, plus a per-seat appetite and a closing safety
+net.
+
+**The gate's real cost was that a calendar rule has no variance in it.**
+Measured 1 September 2026 against the real 480-player board, driving the app's
+own `cpuChoice()` in a browser — 60 drafts with the gate, 120 without. Every ADP
+and `sd` quoted in this section is off that morning's board and moves every
+night; the shapes are what do not:
+
+```
+                        gate             after           reference
+first D/ST           111-112         72-89 (avg 81)   FFC DST1 ADP 81.6
+first K              121-123        103-128 (avg 114)  FFC K1 ADP 125.8
+rounds with a DST        2-3              4-7          Sleeper 2026: 2-7
+rounds with a K            2              2-4          Sleeper 2026: 2-5
+K+DST in the last round 8-10 of 20    8-10 of 20       Sleeper 2026: 7-10 of 20
+seats short a K or DST  0 of 600      0 of 1200        must stay 0
+```
+
+**A one-pick spread across sixty drafts is the indictment**, and the first row
+is the whole of it: every room the app had ever run took its first defense on
+the same pick of the same round, thirty picks after the market says it goes.
+
+**This table was first written against the 232-player board of 30 August and
+two of its rows were wrong within a day**, which is worth keeping as a warning
+rather than quietly correcting. On that board the gate produced *all ten*
+defenses in round 12, *all ten* kickers in round 13, and **nothing at all** in
+the final round. The deep-bench work landed on `main` the next day, the pool
+went 232 to 480, and with more skill players still worth taking in round 12 the
+gated draft started spilling into 13 and 14 on its own. So "not one of either in
+the final round" — a line that read as the most damning fact in the whole
+section — became false without anybody touching the gate. **A measurement is
+true of the board it was taken on, and this project regenerates the board
+nightly.** The rows that survived are the ones about variance.
+
+**The board's own data already disagreed with the CPU.** Seattle Defense carries
+an FFC ADP of 81.6 — round nine of a ten-team draft — while the CPU refused to
+look at a defense until round twelve. A rule contradicted by the data file
+sitting next to it is not a modelling choice.
+
+**`sd` was on every row of `players.js` all along and `applyJitter()` threw it
+away.** FFC publishes the real standard deviation of each player's draft
+position and the wobble was a flat ±3 for everybody. Jahmyr Gibbs' sd is 0.7 and
+Jason Myers' is 23.3 — so the top of the board is now nearly settled, as it is in
+life, and the deep bench scatters. A deep-bench row carries `sd: 0`, having no
+real ADP sample to take a deviation from, and 0 is falsy, so `p.sd || 6` catches
+it — the "treat 0 from a feed as missing" rule doing its job on 247 of 480 rows. It is most of the realism, from data already
+in the repository, for the cost of reading a field. It also made drafts *more*
+different from each other, not less: 102 to 122 of 140 picks differ between
+seeds, against the 60 to 73 CLAUDE.md records under the flat wobble.
+
+**A seat's appetite is what breaks the wall, and it has to be per seat.**
+`KD_ARCHETYPES` gives each chair one of three opinions per position — reaches,
+normal, waits it out — drawn deterministically from `DraftEngine.seatRoll(slot,
+seed, salt)`. Ten managers do not all decide they need a defense on the same
+pick, and a single shared opinion is a wall however it is priced. The salt
+separates the two questions: unsalted, every seat that reaches for a defense
+reaches for a kicker too.
+
+**`seatRoll`'s slot multiplier is doing real work.** It is odd and coprime with
+the modulus, so consecutive chairs land an irrational-looking step apart and ten
+seats come out spread across 0..1 rather than clumped. A plain random draw would
+occasionally hand a whole room the same archetype, which is the failure being
+fixed.
+
+**Last call is the one thing the gate did buy and the one thing that may not be
+given up.** When a seat's remaining picks equal what it still owes at K and DST,
+the multiplier drops to `KD_LAST_CALL` and it fills. Zero rosters short across
+2500 seats, and `tests/kd-timing.spec.mjs` asserts that one exactly while every
+other bound in it is a loose tolerance.
+
+### `spread()`'s multipliers may not agree modulo the modulus
+
+The triangular draw is two uniforms summed. The first pair tried was
+`7919`/`5081`, and it produced a textbook triangle: mean 0.000, sd 0.408, three
+quarters of the mass inside the middle half — every property the function is
+supposed to have, on the only check anybody thinks to run.
+
+It was still wrong. 919 + 81 is exactly 1000, so x and y step in opposite
+directions by the same amount and their sum only moves when one of them wraps.
+**Consecutive board positions came back correlated at 0.57**: the board shifted
+in blocks of a dozen players rather than neighbours swapping, which is the
+entire point of a wobble. Visible on the live board as the first seven players
+all wobbling −0.2 to −0.6 and the next three all +0.7 to +0.9.
+
+`3571` puts that correlation at **0.014** with the marginal shape unchanged.
+**Measure the correlation along the board, not just the distribution** —
+`scripts/test_engine.py` now asserts both, and only the second one fails.
+
+### What the gate was silently holding up
+
+Removing it invalidated the *justification* for four other things, and only one
+of them actually had to change:
+
+- **`FORCED_LATE` / `freelyChosen()` — kept, reasoning rewritten.** See the
+  draft-grade section above.
+- **`bestUpgrade()`'s pool — had to change.** It excluded K and DST outright,
+  because an empty mandatory slot costs 14 points of build and any rostered
+  kicker fills it, so the simulation would recommend one in round 2. The gate
+  was the containment and the blanket exclusion was shorthand for it. It is
+  `kdInPlay()` now — would a CPU in this chair currently be choosing between a
+  defense and the best skill player left — which is the same price test the CPU
+  itself applies and needs no new threshold.
+- **`COUNTED_POSITIONS` — DST earned a column, K did not.** See above.
+- **`bestLeft()` — kept.** Deprioritising these two in a last-resort fallback is
+  still right; it has no roster and no round to reason with.
+
+**And `draftFit().legalFromRound` with it.** It fed a banner on the player sheet
+reading "the app doesn't take a K before round 13". Left in place,
+`earliestRoundFor()` would have returned 1 for every position and the banner
+would simply never have fired — a field nothing can draw, and an invitation to
+put the sentence back without the reasoning that took it out. Both are deleted,
+along with the banner in `DraftFitTab.jsx`.
+
+**Eight assertions across three spec files described the gate rather than the
+product, and none of them could fail while it stood.** Five in `solo.spec.mjs`,
+two in `autopick-adp.spec.mjs` and one in `journey.spec.mjs` — "no kicker before
+round 13", `earlyKicker === 0`, and the rest — were restating `needFromCount()`
+back to itself, which is a tautology wearing a test's clothes. **The eighth was
+written after this change was already made**, in `main`'s deep-board test ("no
+kicker before round 19" at twenty rounds), which is the thing to expect when a
+rule is removed on a branch: the rest of the world goes on writing assertions
+about it until the branch lands. Every one is
+re-aimed at what the new rule actually promises: every seat finishes with
+exactly the kicker and defense the format starts, which is the promise the gate
+was really protecting and the only one worth asserting exactly. (An eighth,
+`grade.spec.mjs`'s seat-bias test, went red for a different reason — see "A
+one-draft correlation is not a bound".)
 
 ## The suggestions
 
@@ -2376,10 +2720,10 @@ overwrites them. Change `build_players.py` instead.
 
 **Nothing about the league shape may be written down twice.** `app.js` has
 one `league` object and everything else derives from it — replacement level,
-roster limits, the starting lineup, the round a kicker becomes legal, even
-the prose in the method notes. The old code spelled "ten teams" out in a
-dozen places and carried a hand-picked replacement level that was only
-correct for one of them.
+roster limits, the starting lineup, the last call that makes a seat fill its
+mandatory slots, even the prose in the method notes. The old code spelled
+"ten teams" out in a dozen places and carried a hand-picked replacement level
+that was only correct for one of them.
 
 **FFC's `teams=` parameter does nothing.** It is echoed back in the response
 meta, so it looks like it worked, but 8, 10, 12 and 14 all return the same
@@ -2428,6 +2772,39 @@ Any new entry added to the bridge that touches `DraftEngine`, `PLAYERS` or
 check `dataReady()` first — `ScoringDemoCard.jsx` and `TakeAPick.jsx` do
 check it, and were fine; the bug was in the two bridge functions that had no
 guard of their own to fall back on.
+
+**And a guarded wrapper is only as safe as what its caller does with the
+answer.** `headerInfo()` was the third instance of this, found 1 September 2026,
+and it is the one where every guard involved was already correct. `pickInfo()`
+returns null while the engine is missing, exactly as designed. `headerInfo()`
+dereferenced `.slot` off it.
+
+Nothing above caught it first, and that is the part worth keeping: `draftOver()`
+answers **false** without the engine and `isMyTurn()` answers **false**, so both
+of the guarded branches above politely decline and execution falls through to
+the single line that is not guarded. Three wrappers behaving exactly as
+documented, composing into a TypeError.
+
+`state.started` is true inside that window on the path this section already
+names: `adoptRoom()`, off the room's own "state" broadcast, before the idle
+callback loads the engine. And `renderHeader()` is called from `render()`, so it
+was never one wrong string in a header — it took every panel with it, which is
+the same blast radius `applyJitter()` had from the same door.
+
+The fix is one early return at the top of `headerInfo()` rather than a check
+around that one expression, so the next line added below inherits it.
+`tests/header-boot.spec.mjs` holds it open by aborting the request for
+`draft-engine.js`, which covers the worse case as well: a deferred script that
+fails on a bad connection and never arrives. **It asserts both directions** — a
+guard that returned the resting header whether or not the engine had landed
+would fix the crash and leave every real draft with a blank header, which is a
+worse bug wearing a styling problem's clothes.
+
+**So the rule is not "guard the wrapper", it is "a null-returning wrapper needs
+a caller that reads null".** Grep for a `.` immediately after one of them before
+trusting the guard at the top of this file — `pickInfo()` and `onTheClock()` are
+the two that return null, and `inProgressSummary()` is the one that already
+guards itself.
 
 **Bump `?v=` in `index.html` on every deploy that changes a file it loads.**
 Everything the page asks for is cached, so without a version in the address a
@@ -3749,11 +4126,15 @@ the defect is in what is *absent*, and absence renders, contrasts and passes.
 **Your own turn draws both rings, nested.** It is the one cell on the board
 where the two facts coincide, and letting either win throws the other away.
 
-**What each team holds is on the board, and which positions get counted is
-derived.** `FORCED_LATE` already names the two the app schedules itself, so
-`COUNTED_POSITIONS` is `POSITIONS` minus those — listing QB, RB, WR and TE
-would be the league shape written down a second time. Counting a kicker is
-eight columns of "0" until the closing rounds and eight of "1" after them.
+**What each team holds is on the board, and `COUNTED_POSITIONS` is everything
+but the kicker.** It was `POSITIONS` minus `FORCED_LATE`, on the grounds that
+counting either of those two was eight columns of "0" until the closing rounds
+and eight of "1" after them. That is now true of one of them and not the other:
+with the round gates gone, defenses land across four to seven distinct rounds
+from about round 8, and kickers across two to four, effectively all in the last
+two (measured 1 September 2026 over 120 drafts). So DST earns a column and K does not. Listing QB, RB, WR and TE would still
+be the league shape written down a second time, which is why the constant names
+the one position it excludes rather than the four it keeps.
 
 **Each count carries its own ground, and that is the whole reason it is a chip
 rather than coloured text.** White on a position solid is the contract those
@@ -4106,6 +4487,50 @@ shuffle of the whole list would be a lie dressed as a feature.
 every setting is a settings screen with worse formatting; a summary listing
 none of the unusual ones lets somebody sit in a linear rookies-only draft
 under a header reading "10 teams · 14 rounds · Half PPR".
+
+**And the Roster section was one too, found the same way `Draft order` was.**
+Every stepper in it writes `bench` / `flex` / `superflex` / `starters` through
+`setLeague()`, and `setLeague()` moved `rounds` with them **only for a scoring
+preset** — so one press of the bench stepper produced *"13 roster spots, but
+the draft runs 14 rounds"*, and there is no rounds control on that screen to
+answer it with. The only way back was to undo the press. Confirmed on the
+deployed site, not inferred: `setLeague({ bench: 4 })` there leaves
+`rounds` at 14 and `setupProblem()` refusing.
+
+**Both this file and the component's own comment credited that derivation to a
+`setLineup()` that has never existed.** Not renamed, not moved — `grep -n
+"setLineup" app.js` has always come back empty. Two comments describing a
+function nobody wrote, and the control they describe silently refusing every
+press, which is the dead-control failure this project has now shipped three
+times.
+
+It is `ROSTER_KEYS` in `setLeague()` now: any patch touching a key the roster
+is made of re-derives `league.rounds = rosterSize()`, and a scoring preset that
+moves the lineup counts as one even though nothing in the patch says so —
+`superflex` is set by the preset, not by the caller.
+
+**The second half is the mirror, and it is the same trap one level down.**
+`readSetup()` reads all nine of these off the hidden legacy `<select>`s on the
+next `refreshSetup()` — which `goHome()` calls — and `setLeague()` mirrored
+only `teams` and `scoring` back to them. So a bench trimmed in the settings
+screen was reverted by the next trip home, silently, because nothing on that
+screen reads the legacy controls. `mirrorToLegacy()` writes all nine, and it
+writes them **from `league` rather than from the patch**: a scoring preset
+moves `superflex` without `superflex` ever appearing in the patch, and `rounds`
+is derived rather than handed in, so reading the object everything already
+agrees is the source of truth removes both special cases.
+
+**A `<select>` silently refuses a value that is not one of its options.**
+`.value` stays where it was and `readSetup()` then reads the old number back —
+a mirror that fails without saying so. `#benchCount` ran 0–12 and `#roundCount`
+8–20 while the React stepper goes to 15 bench, which is a 24-round roster, so
+the ranges had to be widened to match the control that writes to them. There is
+no UI cost: the legacy screen is unreachable by mouse.
+
+This is what makes the refusal in "The pool a league can hold is not the pool
+it can see" honest. That message ends *"Run fewer teams, or a shorter roster"*,
+and until this the second half of that sentence was advice the app would not
+let anybody take.
 
 ## The phone draft room's own controls
 
@@ -4585,6 +5010,28 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   machinery exists and simply was not used. Stage explicit paths, never the
   tree, and restart any dev server after another session touches config.
 
+  **A worktree does not separate the test ports, and that is the one thing it
+  cannot fix.** `playwright.config.mjs` pins 8765 and 8787 deliberately —
+  `live.js` decides where the room is from the address bar, so the worker has to
+  be on that port — which means two sessions running the suite at once are
+  fighting over one pair of ports whatever directory they are in. Measured 30
+  August 2026: a full run went 42 tests in and then failed 25 with
+  `net::ERR_CONNECTION_REFUSED`, because a second session's servers came up on
+  8765 at 23:04 and took the port out from under it.
+
+  **The tell is a byte count, not an error.** `reuseExistingServer` is true, so
+  the surviving server is *adopted* rather than refused, and the suite goes on
+  running against whatever it serves. Here it was a different checkout: 511,837
+  bytes of `app.js` against 508,633 in this one's `web/dist`, and the feature
+  under test absent from it. Ask what is actually being served before believing
+  a red run — `curl -s "http://localhost:8765/app.js?cb=1" | grep -c <a symbol
+  your change adds>` settles it in one line, and it is the same `?cb=`
+  instruction this file already gives about deploys, pointed at localhost.
+
+  So check the ports before starting a long run, and treat a cascade of
+  connection failures partway through as the other session arriving rather than
+  as anything about the app.
+
 - **A long-lived `vite dev` does not reload `tailwind.config.js`, and the way
   it fails looks like a design regression rather than a stale server.**
 
@@ -4826,8 +5273,8 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   bump, v6 moved the credentials, v7 blocked fork checkouts for
   `pull_request_target` and `workflow_run`, which this repository does not use.
 
-- **End to end: `npm install` once, then `npx playwright test`.** 105 tests
-  across twenty-two spec files, and it starts the static server and
+- **End to end: `npm install` once, then `npx playwright test`.** 108 tests
+  across twenty-four spec files, and it starts the static server and
   `wrangler dev` itself when it is pointed at localhost.
 
   Measured 27 August 2026 against production: **89 passed, 1 skipped, 0
@@ -4866,10 +5313,11 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   leaving and rejoining, the phone layout, what the player sheet says about
   the Juke score, that every club's colour is drawn where no text can land on
   it, that a news payload cannot put script in the page, that the positions we
-  refuse to rank are refused consistently, and — since the design pass — that
-  the door is door-shaped rather than book-shaped, that a board cell is a
-  card, what the draft header says, and that a claim on the landing page
-  carries its proof.
+  refuse to rank are refused consistently, that no league the setup screen
+  allows can force a seat onto a player the app's own rules refuse, and —
+  since the design pass — that the door is door-shaped rather than
+  book-shaped, that a board cell is a card, what the draft header says, and
+  that a claim on the landing page carries its proof.
 
   **The static server is `py` on Windows and `python3` everywhere else**, picked
   in `playwright.config.mjs` from `process.platform`. It was `py` outright,
@@ -4946,10 +5394,14 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   harness stalling, not the app.
 
 - Before claiming a change works, run a full simulated draft and confirm
-  140 picks, no duplicate players, 14 per team, no kicker before round 13.
-  Then run one at a different shape — 12 teams, 15 rounds, full PPR, **bench
-  6** — and confirm 180 picks, 15 per team, one QB each and no kicker before
-  round 14.
+  140 picks, no duplicate players, 14 per team, and every seat holding exactly
+  the kicker and defense the format starts. Then run one at a different shape —
+  12 teams, 15 rounds, full PPR, **bench 6** — and confirm 180 picks, 15 per
+  team, one QB each and the same K/DST check.
+
+  That check used to be "no kicker before round 13", which was the round gate
+  and could not fail while the gate existed. The gate is gone; what it was
+  really protecting is the roster, and that is what to assert.
 
   The bench matters and this file used to leave it out. The default lineup is
   eight starters plus a FLEX plus five bench, which is fourteen roster spots,
@@ -5111,6 +5563,62 @@ running app before it is believed**, which is the same instruction the
 `?cb=` note gives about deployment and the `LOCAL_WORKER` skip gives about
 news.
 
+### A wait that short-circuits stops waiting, and the product is what moved
+
+`openApp()` waited for the cold-load overlay to leave before handing a page
+back. The predicate was:
+
+```js
+!document.documentElement.hasAttribute("data-standalone") || !document.getElementById("boot-sonar")
+```
+
+which was exactly right when it was written. Breach was scoped to the installed
+app's cold launch, `index.html` hid it everywhere else with
+`html:not([data-standalone]) #boot-sonar { display: none }`, `theme.js` stamped
+that attribute only under `matchMedia('(display-mode: standalone)')`, and a
+plain `browser.newContext()` never reports standalone. So the left side was true
+on the first tick and there was genuinely nothing to wait for — the short-circuit
+was the fix for a predicate that used to time out a full 12 seconds on every
+call.
+
+**Then the owner reversed the scoping**, because an overlay only installed users
+see is an overlay almost nobody sees. Breach plays on every cold load now,
+`theme.js` no longer stamps the attribute, and `main.jsx`'s teardown runs
+unconditionally. Every one of those three changes is right. Together they left
+the left-hand side of that `||` permanently true against an overlay that had
+just stopped being inert, so `openApp()` resolved on the first frame and handed
+back a page with five seconds of animation still over it.
+
+**It surfaced as two app bugs and was neither.** `phone.spec.mjs`'s "nothing is
+sitting on top of the Start button" reported the overlay's own artwork as the
+thing covering the button — true, and not the bug that test exists to find — and
+"the bottom sheet cycles through its three snap heights" failed because
+`page.mouse.down()` on the drag handle was being swallowed. Measured on the real
+build: the button hit-tests as covered from 600ms through 5000ms and is
+clickable from 6000ms, which is the same 4800–5800ms window `sonar.spec.mjs`
+asserts the removal in. The two specs had been contradicting each other, and the
+one asserting the overlay *stays* was the one telling the truth.
+
+**The shape to remember is that nothing broke — a condition retired.** A guard
+written as "A or B" degrades silently the day A becomes permanently true, and it
+degrades into *always passing*, which is the direction no test catches. The tell
+here was two failures in one file that both described input going somewhere
+unexpected rather than a value being wrong, which is the sixth time in this file
+that the tooling has worn a bug's clothes.
+
+`openApp()` waits on the overlay's actual absence now, ceiling 8000ms, and
+removes the element if it outstays that rather than failing — an overlay that
+never leaves is one bug and it is `sonar.spec.mjs`'s to report, where a hard wait
+here would turn it into ninety-six timeouts spread across every other file.
+`sonar.spec.mjs` passes `{ keepBootOverlay: true }`, because it measures the
+overlay's whole life from an init script and is the one caller that needs it
+played exactly as shipped.
+
+**It costs the suite real time and that is the honest price.** Waiting out a
+five-second overlay on 96 `openApp()` calls is minutes, not seconds. It is worth
+paying because a person waits too: the overlay is not decoration the tests may
+skip, it is the first five seconds of using the product.
+
 ### A standing red that was not the pass that found it
 
 `autopick-adp.spec.mjs`'s "the autopicked seat's draft value is not a
@@ -5199,6 +5707,42 @@ the header's real height now. **Assert the relationship, never an absolute
 offset** — the same rule this file already states about the padding that
 stands in for a fixed header's height, learned again on the number underneath
 it.
+
+### A one-draft correlation is not a bound, and a bigger wobble found out
+
+`grade.spec.mjs`'s "the chair a manager drafts from does not decide their grade"
+ran one draft, correlated chair against finishing rank across ten seats, and
+asserted the result stayed under 0.35. It went red at **0.370** when the board
+wobble started using each player's real ADP standard deviation.
+
+**Nothing about the seat bias got worse — it got better.** Measured per chair
+over twenty seeds, |chair vs mean rank| went **0.289 before to 0.185 after**.
+What changed is that the wobble roughly doubled, which is realistic and makes
+any *single* draft noisier: across sixteen seeds the one-draft figure crossed
+0.35 on **3 of 16** after and **1 of 16** before. The test had a standard error
+near 0.38 on a bound of 0.35 — the estimator was noisier than the effect it was
+bounding, and it had been passing on the luck of one hard-coded seed.
+
+**The fix is not a looser number on the same estimate.** It is to measure the
+mean by chair, which is how the par work in this file was actually done ("mean
+`startersVsPar` by chair over ten mocks") and how the test was implemented
+nowhere. Averaged over six seeds the figure came out 0.057, 0.195, 0.254 and
+0.272 across four independent sets, so **0.40 is a bound with margin rather than
+a threshold sitting inside its own noise**.
+
+**Averaging made the test stronger in both directions**, which is the tell that
+it was the right change rather than a way to get to green. Draft luck cancels
+and the structural seat effect is all that survives, so the premise assertion —
+raw starter strength is still seat-driven — went from about 0.5 to **0.78–0.85**
+and its bound could be raised from 0.4 to 0.5. And against the bug it exists for
+(scaling `starters` instead of `startersVsPar`) it now reads **0.838 against a
+0.40 bound**, where the one-draft version read 0.50 against 0.35.
+
+**A sweep over seeds has two traps and this one had both.** `PAR_CACHE` is keyed
+without the seed, so a sweep that does not clear it grades every seed against
+the first one's par; and `startDraft()` does not clear `state.picks`, so a loop
+that forgets measures one draft six times at a variance of exactly zero. Both
+are reset by hand inside the evaluate.
 
 ### `actionTimeout` was unset, and that is why a stale locator cost six minutes
 
@@ -5567,9 +6111,9 @@ has already half-found.
 cap is not one rule: `maxAt()` for the skill positions, the starting
 requirement for a kicker or a defense, `starters.QB + superflex` for a
 quarterback. Writing that down a second time is precisely how the superflex bug
-happened. The last round is passed in so the K and DST *timing* gates do not
-fire — this is a question about a roster, not about when a kicker becomes
-legal.
+happened. The round argument no longer changes the answer — the K and DST
+timing gates it used to step around are gone, and every remaining 999 comes
+from a cap that has nothing to do with the calendar.
 
 And when a test asks "was it my turn", **read it before the test stuffs the
 roster, not after.** Pushing picks straight into `state.picks` to reach a cap

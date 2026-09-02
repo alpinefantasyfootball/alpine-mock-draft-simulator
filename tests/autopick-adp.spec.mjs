@@ -14,11 +14,17 @@
       reach for a player no CPU at the table would ever take.
 
    2. queueTop() returned the first still-on-the-board star with no legality
-      check at all — not a roster-cap check, not the K/DST timing gate. A
-      star queued early and left alone past the point it stopped being
-      legal (a fourth tight end past the cap, a kicker queued before he is
-      draftable) would be drafted exactly as queued, straight into a roster
-      the engine would otherwise refuse.
+      check at all — not a roster-cap check, not anything. A star queued
+      early and left alone past the point it stopped being legal (a fourth
+      tight end past the cap) would be drafted exactly as queued, straight
+      into a roster the engine would otherwise refuse.
+
+      There was a K/DST timing gate among those refusals when this file was
+      written, and it is gone: a seat picks its own moment for both positions
+      now. A queued kicker is taken when his turn in the queue comes, which is
+      what starring him said, so the test below asks what the rule that
+      replaced it actually promises — every seat finishes with exactly the
+      kicker and defense the format requires — rather than a round number.
 
    Both are fixed the same way: the fallback is cpuChoice() itself, the
    literal function object every CPU seat calls, and the queue walk skips
@@ -127,38 +133,53 @@ test("a queued tight end past the roster cap is skipped, not drafted into an ill
     const teCount = await page.evaluate(() => countAt(state.mySlot, "TE"));
     expect(teCount, "the fourth queued tight end never overflows the cap").toBeLessThanOrEqual(cap);
 
-    // No pick from my seat is ever a K before the last two rounds or a DST
-    // before the last three — the exact gate needFromCount() enforces, and
-    // the one a stale queue entry used to bypass outright.
-    const illegal = out.mine.filter((p) =>
-      (p.pos === "K" && p.round < out.rounds - 1) ||
-      (p.pos === "DST" && p.round < out.rounds - 2));
-    expect(illegal, `illegal-timing picks: ${illegal.map((p) => `${p.pos} round ${p.round}`).join(", ")}`)
-      .toEqual([]);
+    /* The cap that replaced the timing gate: one kicker and one defense, never
+       two. needFromCount() refuses both at `starters`, which is the refusal a
+       stale queue entry used to bypass outright — the same bug this test
+       exists for, at the position it can still happen to. */
+    const held = await page.evaluate(() => ({
+      K: countAt(state.mySlot, "K"), DST: countAt(state.mySlot, "DST"),
+      wantK: league.starters.K, wantDST: league.starters.DST
+    }));
+    expect(held.K, "exactly the kickers the format starts").toBe(held.wantK);
+    expect(held.DST, "exactly the defenses the format starts").toBe(held.wantDST);
 
     expect(out.over, "the draft still finishes rather than stalling on a bad queue entry").toBe(true);
 
     await context.close();
   });
 
-test("a kicker queued before he is legal is skipped until the round he actually is",
+/* This was "a kicker queued before he is legal is skipped until the round he
+   actually is", and its premise was the round gate. Starring a kicker in round
+   one now means what starring anybody means: he is taken at your next turn.
+
+   Re-aimed rather than deleted, because the bug underneath it was real — a
+   queue entry drafted with no check at all — and the check that survives is
+   the roster cap. So: the star is honoured, once, and the seat still finishes
+   with exactly one kicker rather than a queue's worth. */
+test("a kicker starred in round one is taken as starred, and still only one of him",
   async ({ browser }) => {
     const context = await browser.newContext();
     const page = await openApp(context, "#/draft-room");
     await startSoloDraft(page);
 
-    // Starred in round 1, for a kicker who is not legal until round 13 of 14.
-    await page.evaluate(() => {
-      const k = board.filter((p) => p.pos === "K").sort((a, b) => a.adp - b.adp)[0];
-      queueToggle(k.name);
+    const starred = await page.evaluate(() => {
+      const ks = board.filter((p) => p.pos === "K").sort((a, b) => a.adp - b.adp).slice(0, 3);
+      ks.forEach((p) => queueToggle(p.name));
+      return { first: ks[0].name, wantK: league.starters.K };
     });
 
     const out = await finishTrackingMyPicks(page);
     const kPicks = out.mine.filter((p) => p.pos === "K");
 
-    expect(kPicks.length, "a kicker is still drafted eventually").toBeGreaterThan(0);
-    expect(Math.min(...kPicks.map((p) => p.round)), "never before the round the app itself allows")
-      .toBeGreaterThanOrEqual(out.rounds - 1);
+    expect(kPicks.length, "exactly the kickers the format starts, never the whole queue")
+      .toBe(starred.wantK);
+    expect(kPicks[0].name, "and he is the one that was starred").toBe(starred.first);
+    expect(kPicks[0].fromQueue, "taken out of the queue rather than coincidentally").toBe(true);
+    expect(kPicks[0].round, "at my first turn after starring him, not a round the app picked")
+      .toBe(1);
+
+    expect(out.over, "the draft still finishes").toBe(true);
 
     await context.close();
   });

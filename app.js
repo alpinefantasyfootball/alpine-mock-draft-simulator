@@ -139,6 +139,73 @@ const RISKY = ["D", "PUP"];
 // on TE, K and DST are what stop a team hoarding them.
 const DEPTH_ALLOWANCE = { QB: 3, RB: 5, WR: 5, TE: 2, K: 2, DST: 2 };
 
+/* How a seat feels about kickers and defenses.
+
+   This replaced a pair of hard round gates - no kicker before `rounds - 1`,
+   no defense before `rounds - 2` - and the gates were not a small error.
+   Measured 1 September 2026 against the real 480-player board, driving this
+   file's own cpuChoice() in a browser. With the gate, over 60 drafts: the first
+   defense came off between picks **111 and 112** and the first kicker between
+   **121 and 123**, defenses spread over 2 to 3 distinct rounds and kickers over
+   exactly 2. Without it, over 120 drafts: the first defense lands between **72
+   and 89** and the first kicker between **103 and 128**, defenses across **4 to
+   7** rounds and kickers across **2 to 4**.
+
+   A one-pick spread across sixty drafts is the indictment. A calendar rule has
+   no variance to give, so every room the app had ever run took its first
+   defense on the same pick of the same round. Real 2026 rooms put it anywhere
+   from 86 to 131.
+
+   The board's own data already disagreed with the gate: Seattle Defense carried
+   an FFC ADP of 81.6 that morning, which is round nine of a ten-team draft,
+   while the CPU refused to look at a defense until round twelve. The exact
+   figure moves nightly; a defense going three rounds before the CPU will
+   consider one is the part that does not.
+
+   So the two positions are gated player by player, the way every other position
+   already is - by what they cost against what else is on the board - plus this:
+   ten managers do not all decide they need a defense on the same pick, and a
+   single shared opinion is what produced the wall. Values multiply ADP, so
+   below 1 reaches and above 1 waits.
+
+   Kickers wait longer than defenses because the market does: FFC's first
+   defense goes around 81 and its first kicker around 126, and almost nobody
+   takes a kicker early on purpose. */
+const KD_ARCHETYPES = {
+  DST: { vals: [0.85, 1.05, 2.40], weights: [0.22, 0.48, 0.30] },
+  K:   { vals: [1.05, 1.45, 2.40], weights: [0.18, 0.47, 0.35] }
+};
+
+/* Last call. Small enough that adp x this beats anything else on the board, so
+   a seat that has run out of room fills its mandatory slots rather than
+   finishing the draft with an empty one - which is the one thing the round
+   gates did buy and the one thing that may not be given up with them. */
+const KD_LAST_CALL = 0.05;
+
+/* Which archetype this chair drew, for this position, in this draft.
+
+   `seed` is threaded rather than read off `state` so par can ask the question
+   under its own wobble. seatParTable() runs twelve drafts under PAR_SEEDS
+   precisely so par is a property of the board rather than of tonight's draft,
+   and PAR_CACHE's key does not carry `state.seed` - so an appetite that read
+   the global would make par silently seed-dependent and then serve a stale
+   table to the next draft on the same board.
+
+   Guarded like every other DraftEngine caller in this file: a bridge entry is
+   only as safe as its own guard, and needFromCount() is reachable from React on
+   mount while draft-engine.js is still deferred. The middle archetype is what
+   an unguarded call would mostly have drawn anyway. */
+function kdAppetite(slot, pos, seed) {
+  const a = KD_ARCHETYPES[pos];
+  if (!a) return 1;
+  if (typeof DraftEngine === "undefined") return a.vals[1];
+  const s = typeof seed === "number" ? seed : state.seed;
+  const r = DraftEngine.seatRoll(typeof slot === "number" ? slot : 0, s, pos === "K" ? 7 : 11);
+  if (r < a.weights[0]) return a.vals[0];                   // takes one early
+  if (r < a.weights[0] + a.weights[1]) return a.vals[1];    // normal
+  return a.vals[2];                                         // waits it out
+}
+
 /* `lg` is an explicit league for the one caller that has to ask about a shape
    that is not the one on screen: the Locker reconstructs a mock played at 12
    teams while you are sitting in a 10-team league, and par for that mock has
@@ -157,6 +224,45 @@ function maxAt(pos, lg) {
   // superflex league drafts like a normal one.
   const superShare = pos === "QB" ? L.superflex : 0;
   return L.starters[pos] + flexShare + superShare + DEPTH_ALLOWANCE[pos];
+}
+
+/* How many at a position this lineup can actually START — Infinity where the
+   question does not arise, which is every position a bench body is a
+   perfectly ordinary pick at.
+
+   Three positions have an answer and it is the same rule the grade charges
+   nine points a head for: a second kicker or a second defense can never be
+   played, and nor can a second quarterback unless the format opened a seat
+   for one. `league.starters.QB` is 1 in a superflex league too — the extra
+   seat is a SFLEX, not a second QB slot — which is exactly the drift that
+   caused the superflex grading bug, and this expression was written out by
+   hand in three places at once when that bug was found: needFromCount(),
+   analyseTeam()'s construction charge and buildText()'s caption. One rule,
+   one place; the rest ask.
+
+   Infinity rather than a big number, so the callers that subtract from it
+   (`count - startableCap(pos)`) come out at or below zero for RB, WR and TE
+   and need no list of which three positions this applies to. */
+function startableCap(pos, lg) {
+  const L = lg || league;
+  if (pos === "QB") return L.starters.QB + L.superflex;
+  if (pos === "K" || pos === "DST") return L.starters[pos];
+  return Infinity;
+}
+
+/* How many at a position one roster may legally hold, which is the tighter of
+   the two ceilings above: the depth allowance that stops a team hoarding
+   backs, and — for the three positions that have one — the number it could
+   ever start. For QB, K and DST the second always wins, so holdCap() and
+   startableCap() are the same number there by construction.
+
+   needFromCount() is the caller that matters: this is precisely the line
+   above which it refuses a position outright. Everything that wants to know
+   what a roster is allowed to contain asks here rather than restating either
+   half. */
+function holdCap(pos, lg) {
+  const L = lg || league;
+  return Math.min(maxAt(pos, L), startableCap(pos, L));
 }
 
 // Replacement level: the last player at a position who would realistically
@@ -606,7 +712,8 @@ function shotPicks() {
     let best = null, bestScore = Infinity;
     pool.forEach(function (p) {
       const score = (p.adp + p.jitter)
-        * needFromCount(have[c.slot][p.pos] || 0, p.pos, c.round)
+        * needFromCount(have[c.slot][p.pos] || 0, p.pos, c.round, null,
+                        { slot: c.slot, counts: have[c.slot] })
         * (isRisky(p) ? 1.35 : 1)
         * modelMultiplier(p);
       if (score < bestScore) { bestScore = score; best = p; }
@@ -1069,10 +1176,58 @@ function inPool(player) {
   return pool === "rookies" ? exp === 0 : exp > 0;
 }
 
-// How many picks the selected set can actually support. A 14-team, 15-round
-// draft wants 210 players and the standard set only carries 205, so this is
-// what the setup screen validates against.
+// How many players the selected set carries at all. A 14-team, 15-round draft
+// wants 210 players and the standard set only carries 205.
 function poolSize() { return adpSet().length; }
+
+/* How many of them this room could legally hold, which is a smaller number and
+   is the one a draft is actually limited by.
+
+   poolSize() counts every row on the board, and a board is not inventory. A
+   22-team room may hold twenty-two quarterbacks and the half-PPR board carries
+   fifty-six; it may hold sixty-six tight ends and the board carries ninety-two.
+   Those spare thirty-four and twenty-six are on the board and can never be
+   drafted by anybody, so counting them as picks the league has room for is the
+   same class of error as posRank standing in for value — a right number
+   answering the wrong question.
+
+   Measured 1 September 2026 on the 480-player half-PPR board. The clearest
+   case is the deepest league the setup screen offers: **24 teams over 20 rounds
+   is 480 picks against a 480-player board**, which poolSize() waves through on
+   a dead heat, and 411 the room can actually hold. The other 69 picks are spent
+   by construction on somebody nobody can start — and roster construction then
+   docks nine points a head for a pick the format left no alternative to.
+
+   **This example used to be 16 teams over 14 rounds, and that is worth keeping
+   as a warning.** It was true of the 232-player board this was written against
+   — 224 picks, 214 absorbable — and the deep bench landed the next day, taking
+   the pool to 480 and 16-team capacity to 334. The bug did not move; the board
+   grew out from under the number chosen to illustrate it. A measurement is true
+   of the board it was taken on, and this project regenerates the board nightly.
+
+   **It is a necessary condition and not a sufficient one, which is a real
+   limit rather than a rounding error.** This is an aggregate ceiling: it says
+   how many players the room could hold if every pick went to a seat that could
+   still use it. A snake draft is greedy and strands scarce positions late, so
+   a league can clear this bar and still waste picks — measured across all 44
+   shapes the screen offers, at the largest bench each still allows, sixteen of
+   them land 7 to 19 picks on somebody unstartable even though capacity said
+   yes. What holds everywhere is the part that breaks a roster rather than
+   merely wasting a bench spot: every draft completes, and **no seat is ever
+   short of the kicker or defense its format starts** (0 across all 44). See
+   tests/pool-capacity.spec.mjs, which asserts exactly that split.
+
+   Per position, because that is where the ceiling is: holdCap() is exactly the
+   count above which needFromCount() refuses, so this is the board filtered
+   through the same rule the draft itself runs on rather than a second opinion
+   about what a roster may contain. */
+function absorbableSize() {
+  const counts = {};
+  adpSet().forEach(function (p) { counts[p.pos] = (counts[p.pos] || 0) + 1; });
+  return POSITIONS.reduce(function (n, pos) {
+    return n + Math.min(counts[pos] || 0, holdCap(pos) * league.teams);
+  }, 0);
+}
 
 function buildBoard() {
   // Copied, not referenced: posRank, tier and drafted belong to this draft,
@@ -1193,20 +1348,46 @@ function countAt(slot, pos) {
    which is the point — the superflex bug was this rule written down twice. */
 // `lg` as in maxAt() above — an explicit shape for the Locker's par, the live
 // league for everybody else.
-function needFromCount(have, pos, round, lg) {
+//
+// `ctx` is `{ slot, counts, seed }` and only the two positions the app used to
+// schedule for you need it: which chair is asking, everything that chair
+// already holds, and which wobble to ask under. Threaded rather than looked up,
+// for the same reason `lg` is — the hero shot and par both simulate rooms that
+// are not in `state.picks` and must not touch the real draft. A caller that
+// omits it gets the middle archetype and a conservative reading of what the
+// seat still owes, which is safe rather than right; every caller that has a
+// seat to name passes one.
+function needFromCount(have, pos, round, lg, ctx) {
   const L = lg || league;
-  if (have >= maxAt(pos, L)) return 999;           // roster limit
+  // The roster limit, both halves of it: the depth allowance, and — for a
+  // quarterback, a kicker or a defense — the number this lineup could ever
+  // start. holdCap() is the one place either is written down.
+  if (have >= holdCap(pos, L)) return 999;
 
-  // Kickers and defenses go at the very end of any draft, so the cutoffs are
-  // measured back from the last round rather than written down as 13 and 12.
-  if (pos === "K"   && round < L.rounds - 1) return 999;
-  if (pos === "DST" && round < L.rounds - 2) return 999;
+  /* No round gate — see KD_ARCHETYPES for what used to be here and what it
+     measured. A kicker at ADP 131 cannot out-value a receiver at ADP 40 on his
+     own, so the board prices these two player by player like everything else
+     and what is left is each seat's own appetite, plus a closing safety net so
+     nobody finishes with an empty mandatory slot.
 
-  // One of each is enough, whatever "enough" is set to. A superflex league
-  // that starts two quarterbacks gets two.
-  if (pos === "QB"  && have >= L.starters.QB + L.superflex) return 999;
-  if (pos === "K"   && have >= L.starters.K)   return 999;
-  if (pos === "DST" && have >= L.starters.DST) return 999;
+     The one-each ceiling that used to be spelled out here for QB, K and DST is
+     gone from this function rather than deleted: holdCap() above is that rule
+     now, for every caller, which is the whole point of it existing. */
+  if (pos === "K" || pos === "DST") {
+    let m = kdAppetite(ctx && ctx.slot, pos, ctx && ctx.seed);
+
+    /* `have` is authoritative for the position being asked and `ctx.counts`
+       supplies the other one. Without a ctx both read as still owed, which
+       brings last call forward by a round rather than dropping it — the
+       failure direction that leaves a roster complete. */
+    const held = (ctx && ctx.counts) || {};
+    const owedK   = Math.max(0, L.starters.K   - (pos === "K"   ? have : (held.K   || 0)));
+    const owedDST = Math.max(0, L.starters.DST - (pos === "DST" ? have : (held.DST || 0)));
+    const left = L.rounds - round + 1;              // picks this team has left
+    if (left <= owedK + owedDST) m = KD_LAST_CALL;  // last call: must fill
+
+    return m;
+  }
 
   const need = L.starters[pos] || 0;
   if (have < need)       return 0.80;   // still filling a starting slot
@@ -1214,23 +1395,73 @@ function needFromCount(have, pos, round, lg) {
   return 1.45;                          // hoarding
 }
 
+/* Everything one seat already holds, in one pass.
+
+   countAt() answers for a single position and needFromCount() now wants two of
+   them at once, so asking it twice would walk `state.picks` twice to learn one
+   thing. Hoisted out of the per-player loops below for the same reason. */
+function countsAt(slot) {
+  const counts = {};
+  rosterOf(slot).forEach(function (p) { counts[p.pos] = (counts[p.pos] || 0) + 1; });
+  return counts;
+}
+
 function needMultiplier(slot, pos, round) {
-  return needFromCount(countAt(slot, pos), pos, round);
+  const counts = countsAt(slot);
+  return needFromCount(counts[pos] || 0, pos, round, null, { slot: slot, counts: counts });
+}
+
+/* What one CPU seat thinks a player costs. Factored out of cpuChoice() so
+   kdInPlay() can ask the identical question rather than restating the
+   expression — the two disagreeing is how a suggestion offers a kicker the
+   room's own CPUs would not take for another four rounds.
+
+   `counts` is optional and hoisted by both callers: the loop is over the whole
+   board and the roster does not change inside it. */
+function cpuScore(player, slot, round, counts) {
+  const held = counts || countsAt(slot);
+  const need = needFromCount(held[player.pos] || 0, player.pos, round, null,
+                             { slot: slot, counts: held });
+  return (player.adp + player.jitter) * need * (isRisky(player) ? 1.35 : 1);
 }
 
 function cpuChoice(slot, round) {
   let best = null;
   let bestScore = Infinity;
+  const counts = countsAt(slot);
 
   board.forEach(function (player) {
     if (player.drafted) return;
     if (isRuledOut(player)) return;                    // never draft someone who is out
-    const risk = isRisky(player) ? 1.35 : 1;           // discount the questionable ones
-    const score = (player.adp + player.jitter) * needMultiplier(slot, player.pos, round) * risk;
+    const score = cpuScore(player, slot, round, counts);
     if (score < bestScore) { bestScore = score; best = player; }
   });
 
   return best;
+}
+
+/* Would a CPU in this chair be choosing between a kicker or a defense and the
+   best skill player left on the board?
+
+   The two positions used to be excluded from anything that recommends a player
+   by a flat rule, because the round gate was what stopped a simulation
+   noticing that an empty mandatory slot costs 14 points of roster construction
+   and "fixing" it in round two. With the gate gone the containment has to come
+   from the same place every other timing decision now comes from: the price.
+   Early in a draft the best skill player left scores single figures and a
+   defense at 80 cannot get near it; by round nine it can, which is exactly when
+   a real room starts taking one. No new threshold to pick, and it moves with
+   the seat's own appetite. */
+function kdInPlay(slot, round) {
+  const counts = countsAt(slot);
+  let bestSkill = Infinity, bestKd = Infinity;
+  board.forEach(function (player) {
+    if (player.drafted || isRuledOut(player)) return;
+    const score = cpuScore(player, slot, round, counts);
+    if (FORCED_LATE[player.pos]) { if (score < bestKd) bestKd = score; }
+    else if (score < bestSkill) bestSkill = score;
+  });
+  return bestKd <= bestSkill;
 }
 
 
@@ -1268,7 +1499,32 @@ function makePick(player) {
    lands. Below about 300 they start treading on each other. */
 const CPU_DELAY = 350;
 
-// Deterministic pseudo-random offset of roughly -3 to +3 ADP places.
+// Deterministic pseudo-random offset, scaled by each player's own published ADP
+// standard deviation rather than a flat -3 to +3 for everybody.
+//
+// `sd` has been on every row of players.js all along — Fantasy Football
+// Calculator's real dispersion across real recorded drafts — and applyJitter()
+// discarded it. It is most of what a realistic board wobble needs, for nothing:
+// Jahmyr Gibbs' sd is 0.7, so the first pick stops being a coin toss the way a
+// flat +/-3 made it, while Jason Myers' is 23.3 and Seattle Defense's is 8.6 —
+// which is precisely why real rooms cluster on the elite defenses and scatter
+// on kickers, and why one number for the whole board could not produce either.
+// (Those three figures are off the 1 September 2026 half-PPR board and move
+// every night with the pipeline. Nothing reads them; they are here to say what
+// the spread of `sd` looks like, which is the part that does not drift.)
+//
+// A deep-bench row carries `sd: 0` — extend_deep_bench() has no real ADP sample
+// to take a deviation from — and 0 is falsy, so `|| 6` catches it. That is the
+// "treat 0 from a feed as missing" rule doing its job on 247 of the 480 rows.
+//
+// K and DST take a smaller share of their own sd because kdAppetite() is
+// already modelling most of their spread; applying both at full strength counts
+// the same dispersion twice.
+//
+// Deliberately not gated on MIN_ADP_SAMPLE, which surviveProbability() does use.
+// That refusal is about not dressing a thin sample as a probability a reader
+// will act on. This is a wobble: a noisy sd on the deep bench produces a noisy
+// wobble on the deep bench, which is where real drafts are noisiest anyway.
 //
 // Four of this function's five callers fire in response to a click (Start,
 // Resume, a history entry), by which point draft-engine.js's deferred boot
@@ -1288,10 +1544,22 @@ const CPU_DELAY = 350;
 // the guard belongs on the function, not on each caller. Jitter simply
 // stays at buildBoard()'s own zero-fill until the next call succeeds,
 // which is a quieter CPU wobble for a moment, not a crash.
+const JITTER_SPREAD    = 0.80;   // skill positions
+const JITTER_SPREAD_KD = 0.60;   // K and DST, whose appetite carries the rest
+
+/* One expression, two callers: the live board here and par's twelve reference
+   drafts in seatParTable(), which run under PAR_SEEDS rather than state.seed.
+   Written down twice is how par ends up wobbling differently from the draft it
+   is the baseline for. */
+function jitterFor(p, seed) {
+  const share = (p.pos === "K" || p.pos === "DST") ? JITTER_SPREAD_KD : JITTER_SPREAD;
+  return DraftEngine.spread(p.overall, seed) * (p.sd || 6) * share;
+}
+
 function applyJitter() {
   if (typeof DraftEngine === "undefined") return;
   board.forEach(function (p) {
-    p.jitter = DraftEngine.jitter(p.overall, state.seed);
+    p.jitter = jitterFor(p, state.seed);
   });
 }
 
@@ -2204,16 +2472,17 @@ function pruneQueue() {
 // screen should not throw away the plan you made before you left it.
 //
 // A star can go stale: queued in round 3 for a position that fills up by
-// round 8, or for a kicker before he is legal at all. needFromCount() is
-// the same refusal cpuChoice() and atPositionCap()'s own fraction already
-// ask — a roster limit, a still-too-early K or DST, a superflex-aware
-// quarterback cap — so an entry that would now be illegal is skipped
-// rather than drafted into a roster the engine would reject.
+// round 8. needMultiplier() is the same refusal cpuChoice() and
+// atPositionCap()'s own fraction already ask — a roster limit, the one-each
+// ceiling on K and DST, a superflex-aware quarterback cap — so an entry that
+// would now be illegal is skipped rather than drafted into a roster the engine
+// would reject. Timing is no longer among those refusals: a queued kicker is
+// taken when his turn in the queue comes, which is what starring him said.
 function queueTop(round) {
   for (let i = 0; i < state.queue.length; i++) {
     const player = board.find((p) => p.name === state.queue[i]);
     if (!player || player.drafted || isRuledOut(player)) continue;
-    if (needFromCount(countAt(state.mySlot, player.pos), player.pos, round) === 999) continue;
+    if (needMultiplier(state.mySlot, player.pos, round) === 999) continue;
     return player;
   }
   return null;
@@ -2252,10 +2521,12 @@ function autoPickForMe() {
 /* The best player still on the board, ignoring every preference there is.
 
    A last resort, and it only has to beat one thing: a draft that stops
-   halfway. K and DST come last even here, because the whole app already
-   refuses them until the closing rounds and a kicker in the sixth would read
-   as a bug in its own right — but they are still better than nothing if the
-   board somehow holds nothing else.
+   halfway. K and DST come last even here — nothing refuses them by round any
+   more, but this function has no roster and no round to reason with, so it
+   cannot tell a seat that genuinely needs its kicker from one whose sixth-round
+   kicker would read as a bug. Deprioritising them is the safe answer when the
+   caller has already run out of better ones, and they are still better than
+   nothing if the board somehow holds nothing else.
 
    `board` is in ADP order and must never be sorted in place, so this filters,
    which already returns a copy. */
@@ -2851,21 +3122,7 @@ function draftFit(player) {
        0.25 — marketGap() rests on projPosRank, which is the very ordering
        those numbers say is noise. */
     unranked: UNRANKED_POSITIONS.indexOf(pos) >= 0,
-    market: UNRANKED_POSITIONS.indexOf(pos) >= 0 ? null : marketGap(player),
-
-    /* The round this position becomes a pick the app would actually make.
-       Derived by asking needFromCount() itself rather than repeating "last
-       round minus one" — those cutoffs are already measured back from
-       league.rounds in one place, and a second copy is exactly the league
-       shape written down twice. Null for everything but K and DST, which
-       are the only positions the app schedules on the manager's behalf. */
-    legalFromRound: earliestRoundFor(pos),
-    /* Null once the board is full: onTheClock() has no pick to describe and
-       returns null, and reading .round off it threw — on the player sheet,
-       opened on a finished draft, which is precisely when somebody browses
-       what is left. The timing banner reads a null round as "no longer a
-       question", which it is. */
-    round: onClockRound()
+    market: UNRANKED_POSITIONS.indexOf(pos) >= 0 ? null : marketGap(player)
   };
 }
 
@@ -2930,21 +3187,21 @@ function positionDepthRemaining(pos) {
   ).length;
 }
 
-/* The first round in which a position is not gated out on timing alone.
-   Asked with an empty roster at that position, so a 999 can only be the
-   timing rule rather than a roster cap. Returns null when nothing gates it,
-   which is every position except the two the app drafts for you. */
+/* Which round the draft is actually in, or null once the board is full —
+   onTheClock() has no pick to describe then and reading `.round` off it threw,
+   on the player sheet opened on a finished draft, which is precisely when
+   somebody browses what is left.
+
+   It used to have a companion, earliestRoundFor(), feeding a `legalFromRound`
+   field on draftFit() and a banner on the player sheet reading "the app doesn't
+   take a K before round 13". Both are gone with the round gates that made the
+   sentence true. Left in place earliestRoundFor() would have returned 1 for
+   every position and the banner would simply never have fired — a field
+   nothing can draw and an invitation to put the sentence back without the
+   reasoning that took it out. */
 function onClockRound() {
   const now = DraftEngine.onTheClock(league, state.picks.length);
   return now ? now.round : null;
-}
-
-function earliestRoundFor(pos) {
-  if (!FORCED_LATE[pos]) return null;
-  for (let r = 1; r <= league.rounds; r++) {
-    if (needFromCount(0, pos, r) !== 999) return r;
-  }
-  return null;
 }
 
 /* The next pick this seat holds, as an overall number, or null if the draft
@@ -3812,21 +4069,28 @@ function bestLineup(roster) {
   });
 }
 
-/* Kickers and defenses are drafted when the app says they may be, not when
-   the manager decides. cpuScore() refuses a kicker before the last two rounds
-   and a defense before the last three, and the suggestions never offer them
-   earlier — so their draft slot is the rule's, not yours.
+/* Kickers and defenses sit out of draft value and out of both callouts, and
+   the reason is now only the second one below.
 
-   Judging them on ADP then punishes obeying that rule. Their ADP comes from
-   drafts that run more rounds than most leagues set up here, so a kicker's
-   board rank routinely lands past the last pick that exists: in a measured
-   ten-team, fourteen-round draft every one of the ten kickers scored as a
-   reach, averaging 35 picks early, and not a single one came out neutral.
+   It used to lead with "their draft slot is the rule's, not yours" — true while
+   needFromCount() refused a kicker before the last two rounds and a defense
+   before the last three, and false since those gates came out. A seat picks its
+   own moment for both now, so grading that moment would be grading drafting.
+   The exclusion survives the argument that justified it because the other
+   argument was always the stronger one:
+
+   Judging them on ADP punishes a league for being shorter than the drafts FFC
+   samples from. Their ADP comes from drafts that run more rounds than most
+   leagues set up here, so a kicker's board rank routinely lands past the last
+   pick that exists: in a measured ten-team, fourteen-round draft every one of
+   the ten kickers scored as a reach, averaging 35 picks early, and not a single
+   one came out neutral.
    The "biggest reach" callout was therefore a lottery among kickers rather
-   than anything about drafting.
+   than anything about drafting. That measurement is about the board's depth
+   against the league's length and has nothing to do with the timing rule, so
+   removing the rule does not touch it.
 
-   So the two of them sit out of draft value and out of both callouts. It is
-   not a thumb on the scale: recomputed across a full room, dropping them
+   It is not a thumb on the scale: recomputed across a full room, dropping them
    moved no team more than two places, because every team drafts the same
    forced pair. It removes a constant that was drowning the signal. */
 const FORCED_LATE = { K: true, DST: true };
@@ -3941,10 +4205,20 @@ function parKey(lg) {
 
    `PAR_SEEDS` is fixed and hard-coded rather than drawn from `state.seed`, for
    the reason par exists: it has to be a property of the board, identical for
-   every client in a room and for the same board tomorrow. Twelve puts the
-   standard error of each chair's par at 18.9/sqrt(12) = 5.5 points, comfortably
-   inside `MIN_SPAN.startersVsPar`; twenty-four would buy 3.9 for twice the
-   work, which is not worth paying on a cache miss a person is waiting through. */
+   every client in a room and for the same board tomorrow.
+
+   **Twelve was derived against a wobble that has since changed, so it is
+   re-derived here rather than left standing.** Under the old flat +/-3 a
+   chair's par moved with a standard deviation of 18.9 points, giving a standard
+   error of 18.9/sqrt(12) = 5.5. Scaling the wobble by each player's real ADP
+   standard deviation roughly doubled the average board offset, and measured 30
+   August 2026 the per-chair par sd is now **28.4** — so the standard error at
+   twelve is **8.2 points**, still comfortably inside `MIN_SPAN.startersVsPar`
+   (20) but on a narrower margin than before. Twenty-four would buy 5.8 for
+   twice the work, and the whole table costs 42ms cold and nothing warm, so the
+   trade is the same one it always was and lands the same way. Re-measure this
+   if the wobble is scaled again — the conclusion held, the arithmetic behind it
+   did not. */
 const PAR_SEEDS = [1, 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31];
 
 /* One full simulated draft under one wobble. Returns, per seat, two running
@@ -3974,7 +4248,8 @@ const PAR_SEEDS = [1, 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31];
    which is a guard rather than a behaviour: the only caller that passes a
    foreign shape (the Locker's net ADP chart) asks for value and never
    strength. */
-function parRun(jitterOf, lg) {
+function parRun(seed, lg) {
+  const jitterOf = function (p) { return jitterFor(p, seed); };
   const L = lg || league;
   const liveShape = !lg || lg === league;
   const teams = L.teams;
@@ -3991,7 +4266,8 @@ function parRun(jitterOf, lg) {
     const c = DraftEngine.pickInfo(n, L);
     const pool = board.filter((p) => !taken[p.name] && !isRuledOut(p));
     if (!pool.length) break;
-    const best = bestAvailable(pool, have, c.slot, c.round, { jitterOf: jitterOf, model: false, league: L });
+    const best = bestAvailable(pool, have, c.slot, c.round,
+      { jitterOf: jitterOf, seed: seed, model: false, league: L });
     if (!best) break;
 
     taken[best.name] = true;
@@ -4020,9 +4296,7 @@ function seatParTable(lg) {
   const key = parKey(L);
   if (PAR_CACHE.has(key)) return PAR_CACHE.get(key);
 
-  const runs = PAR_SEEDS.map(function (seed) {
-    return parRun(function (p) { return DraftEngine.jitter(p.overall, seed); }, L);
-  });
+  const runs = PAR_SEEDS.map(function (seed) { return parRun(seed, L); });
 
   /* Averaged pick by pick. The runs can differ in length — a pool that runs
      dry stops that run early — so each cell is divided by how many runs
@@ -4079,9 +4353,11 @@ function buildText(t) {
   const gaps = [];
   const holes = t.lineup.filter((s) => !s.player).length;
   if (holes) gaps.push(holes + (holes === 1 ? " empty starting slot" : " empty starting slots"));
-  ["QB", "K", "DST"].forEach(function (pos) {
-    const allowed = league.starters[pos] + (pos === "QB" ? league.superflex : 0);
-    const over = Math.max(0, countAt(t.slot, pos) - allowed);
+  // Every position, not a list of the three that can overflow: startableCap()
+  // is Infinity everywhere else, so `over` is zero there and the three name
+  // themselves. Same rule the charge below it reads.
+  POSITIONS.forEach(function (pos) {
+    const over = Math.max(0, countAt(t.slot, pos) - startableCap(pos));
     if (over) gaps.push(over + " spare " + posLabel(pos));
   });
   /* Cover is graded rather than a cliff — the penalty scales with how far past
@@ -4199,7 +4475,7 @@ function analyseTeam(slot, extra) {
 
   let build = 100;
   lineup.forEach(function (s) { if (!s.player) build -= 14; });          // hole in the lineup
-  ["QB", "K", "DST"].forEach(function (pos) {
+  POSITIONS.forEach(function (pos) {
     /* A second kicker is wasted; a second quarterback is only wasted in a
        league that starts one. That was always the intent and the sum did not
        carry it: `league.starters.QB` is 1 in a superflex league too, since
@@ -4210,11 +4486,13 @@ function analyseTeam(slot, extra) {
        quarterback out and putting a spare receiver there cost five points of
        starter strength and gained seven of construction.
 
-       `cpuScore()` has had the right expression all along, which is why the
-       CPU drafts two and then got marked down for it. */
-    const allowed = league.starters[pos] + (pos === "QB" ? league.superflex : 0);
+       That expression lived here, in buildText() and in needFromCount() at
+       once — the same league rule written down three times, which is how it
+       drifted in the first place. startableCap() is the one copy now, and it
+       answers Infinity for RB, WR and TE, so this walks every position rather
+       than carrying its own list of which three can overflow. */
     const extraCount = extra && extra.pos === pos ? 1 : 0;
-    build -= Math.max(0, countAt(slot, pos) + extraCount - allowed) * 9;
+    build -= Math.max(0, countAt(slot, pos) + extraCount - startableCap(pos)) * 9;
   });
 
   const benched = roster.filter(function (p) {
@@ -4531,13 +4809,21 @@ function bestUpgrade(slot, componentKey) {
   const baseline = [];
   for (let i = 0; i < league.teams; i++) baseline.push(analyseTeam(i));
 
-  /* FORCED_LATE excluded on purpose — an empty K/DST slot costs -14 of
-     build and any rostered kicker would fill it, so without this the
-     simulation would happily recommend drafting one in round 2. Same
-     reasoning as freelyChosen(): the app schedules these two, not the
-     manager, so neither may be judged — or, here, recommended — outside
-     the rounds the app actually allows them. */
-  const pool = board.filter((p) => !p.drafted && !isRuledOut(p) && !FORCED_LATE[p.pos]);
+  /* K and DST used to be excluded outright, because an empty mandatory slot
+     costs 14 points of roster construction and any rostered kicker fills it —
+     so without a guard this simulation recommends one in round 2. The round
+     gate was doing the containing, and the blanket exclusion was the cheap way
+     to say so.
+
+     With the gate gone the containment comes from the same place every other
+     timing decision now does: kdInPlay() asks whether a CPU in this chair would
+     currently be choosing one, which is the price of a defense against the best
+     skill player left rather than a round written down. So the panel offers a
+     defense at the point the room starts taking them, and not before. */
+  const round = onClockRound() || league.rounds;
+  const kdOffered = kdInPlay(slot, round);
+  const pool = board.filter((p) =>
+    !p.drafted && !isRuledOut(p) && (kdOffered || !FORCED_LATE[p.pos]));
   let best = null;
   pool.forEach(function (candidate) {
     const withHim = analyseTeam(slot, candidate);
@@ -4698,10 +4984,17 @@ function bestAvailable(pool, have, slot, round, opts) {
   const modelMultiplier = (!opts || opts.model !== false)
     ? modelMultipliers(pool)
     : null;
+  /* `opts.seed` goes with `opts.jitterOf` and for the identical reason: par's
+     runs are under PAR_SEEDS, not state.seed, and a seat's K/DST appetite is
+     drawn from a seed the same way its wobble is. Left off, an appetite read
+     off the global would make par vary with tonight's draft while PAR_CACHE's
+     key says it does not. */
+  const ctxSeed = opts && typeof opts.seed === "number" ? opts.seed : undefined;
   let best = null, bestScore = Infinity;
   pool.forEach(function (p) {
     const score = (p.adp + jitterOf(p))
-      * needFromCount(have[slot][p.pos] || 0, p.pos, round, opts && opts.league)
+      * needFromCount(have[slot][p.pos] || 0, p.pos, round, opts && opts.league,
+                      { slot: slot, counts: have[slot], seed: ctxSeed })
       * (isRisky(p) ? 1.35 : 1)
       * (modelMultiplier ? modelMultiplier(p) : 1);
     if (score < bestScore) { bestScore = score; best = p; }
@@ -4964,6 +5257,38 @@ function adpConflict(player) { return isRuledOut(player) && player.adp <= 150; }
 function headerInfo() {
   if (!state.started) return { started: false };
 
+  /* A started draft the engine cannot yet describe reads as no draft, for the
+     one render that is true for.
+
+     `pickInfo()` returns null while `DraftEngine` is undefined — every wrapper
+     at the top of this file does something like it — and the "somebody else is
+     up" branch below dereferences `.slot` off it. Nothing above catches that
+     first: `draftOver()` answers false when the engine is missing and
+     `isMyTurn()` answers false, so both guarded branches decline and execution
+     falls through to the one line that is not guarded.
+
+     `state.started` is true before `draft-engine.js` has landed on exactly the
+     path this file already documents for applyJitter(): `adoptRoom()` runs from
+     onRoomChange(), off the room's own "state" broadcast, which reaches a
+     client the instant its socket is open — and live.js connects at boot, ahead
+     of the requestIdleCallback that loads the engine at all. So a manager
+     joining a room mid-draft could take a TypeError out of headerInfo(), and
+     because renderHeader() is called from render(), it took the whole render
+     with it: no board, no clock, nothing, until some later broadcast happened
+     to arrive after the engine had loaded.
+
+     Reproduced by blocking draft-engine.js outright, which is the same window
+     held open — see tests/header-boot.spec.mjs.
+
+     Returning the resting shape rather than a fourth kind of header because
+     that is what renderHeader() already draws when there is nothing to say, and
+     this is self-correcting: headerInfo() runs again on every render and tick,
+     and the first one after the engine lands paints the real thing. The guard
+     is on the function rather than on that one expression so the next line
+     added below inherits it — the same rule this file states for every other
+     DraftEngine caller. */
+  if (typeof DraftEngine === "undefined") return { started: false };
+
   /* What this draft is, beside what it is doing. The shape was only ever on
      the setup screen, which folds away the moment a draft starts, so four
      rounds in there was no way to check whether this was a 14-round league
@@ -5112,8 +5437,11 @@ function renderSuggestions() {
    that down again is exactly how the superflex bug happened — one rule in two
    places, left to drift.
 
-   The last round is passed in so the K and DST *timing* gates do not fire.
-   This is a question about the roster, not about when a kicker becomes legal. */
+   The round argument no longer changes this answer — the K and DST timing
+   gates it used to have to step around are gone, and every remaining 999 comes
+   from a cap that has nothing to do with the calendar. The last round is still
+   what gets passed, because this is a question about the roster and the last
+   round is the one at which every cap that will ever apply already does. */
 function atPositionCap(pos) {
   return needMultiplier(state.mySlot, pos, league.rounds) === 999;
 }
@@ -5483,14 +5811,20 @@ function renderPlayers() {
    pick legible: three running backs and no quarterback is a team about to
    take a quarterback.
 
-   **Which positions get counted is derived, not listed.** FORCED_LATE already
-   names the two the app itself schedules — cpuScore() refuses a kicker before
-   the last two rounds and a defense before the last three, and the
-   suggestions never offer one earlier. Counting a position nobody is choosing
-   is eight columns of "0 0" until the closing rounds and then eight of "1 1".
-   Listing QB, RB, WR and TE here instead would be the league shape written
-   down a second time, which is the failure this project has already paid for
-   twice.
+   **Which positions get counted was derived from FORCED_LATE and is not any
+   more, because the measurement moved under it.** The old reason was that the
+   app scheduled K and DST itself, so counting either was eight columns of
+   "0 0" until the closing rounds and then eight of "1 1". The round gates are
+   gone and that is now true of exactly one of them. Measured 1 September 2026,
+   over 120 simulated ten-team drafts on the real board: defenses land in **4 to
+   7 distinct rounds** starting around round 8, and kickers in **2 to 4**,
+   effectively all of them in the last two. So a DST column says something a reader of this
+   strip wants — the team above you already has one — and a K column is twelve
+   rounds of "0" followed by "1".
+
+   Listing QB, RB, WR and TE would still be the league shape written down a
+   second time, which is why this names the single position it excludes rather
+   than enumerating the four it keeps.
 
    **Each count carries its own ground, and that is what makes it safe.** A
    chip is white on a position solid, which is the contract those colours were
@@ -5500,7 +5834,7 @@ function renderPlayers() {
    survive: the light-theme --*-fg tones are 4.85 to 5.69 on --board-hd and
    2.15 to 2.52 on your own column's navy, so the one team a manager looks at
    most would be the one that failed. */
-const COUNTED_POSITIONS = POSITIONS.filter(function (p) { return !FORCED_LATE[p]; });
+const COUNTED_POSITIONS = POSITIONS.filter(function (p) { return p !== "K"; });
 
 function rosterStrip(slot) {
   return '<span class="hd-roster">' + COUNTED_POSITIONS.map(function (pos) {
@@ -6045,9 +6379,9 @@ function renderGrades() {
     places above replacement level they rank at their position, where replacement is
     ${replacementText()} for this ${league.teams}-team league, which starts ${lineupText()}.
     Draft value is 25%: how far each
-    player fell past their ADP when you took them, counting only the picks you were free to
-    time &mdash; kickers and defenses are left out, because the room will not let anyone take
-    one before the closing rounds and their ADP is set by longer drafts than this one.
+    player fell past their ADP when you took them, counting only the picks where a fall past
+    ADP means anything &mdash; kickers and defenses are left out, because their ADP is set by
+    longer drafts than this one, so every one of them reads as a reach.
     Roster construction is 15%, docking unfilled
     starting slots, spots spent on a quarterback, kicker or defense you can never start, and how
     far from startable your best benched running back and receiver are &mdash; nothing if either
@@ -8029,9 +8363,9 @@ function historyStats() {
   // rather than leaving it a magic number in the loop below — five rounds,
   // not this file's usual three, to match the design review's own "top
   // 5-round picks" framing for this specific card. Kickers and defenses
-  // sit out, same reason draft value does everywhere else: the app
-  // schedules them into the closing rounds itself, so neither is ever a
-  // real candidate for an early pick to begin with.
+  // sit out, same reason draft value does everywhere else: their ADP comes
+  // from longer drafts than these, so neither is a real candidate for an
+  // early pick and counting them would only dilute the shares that are.
   const CAPITAL_EARLY_ROUNDS = 5;
   const earlyCounts = {};
   let earlyTotal = 0;
@@ -8557,7 +8891,17 @@ function fillSlotOptions() {
   slotSelect.value = keep;
 }
 
-const SLOT_LIMITS = { QB: 2, RB: 4, WR: 5, TE: 3, K: 2, DST: 2 };
+/* How high the hidden legacy starter <select>s count.
+
+   It was per position — QB 2, RB 4, WR 5, TE 3, K 2, DST 2 — which was that
+   screen's own taste about a sane lineup and is enforced nowhere else in the
+   app. DraftSettingsModal.jsx's steppers go to 9, and since setLeague()
+   mirrors the roster back onto these controls (see mirrorToLegacy), a range
+   narrower than the control writing to it is a mirror that fails without
+   saying so: a <select> silently keeps its old value, and readSetup() reads
+   that back on the next refreshSetup(). One number, matching the screen that
+   is actually reachable. */
+const SLOT_LIMIT = 9;
 
 /* ---- the scoring editor ----
 
@@ -8730,16 +9074,50 @@ function fillSetupControls() {
   // dropdown cannot drift from the labels the rest of the app prints.
   fillList($("scoring"), Object.keys(SCORING_NAMES), league.scoring,
            (k) => SCORING_NAMES[k]);
-  fillRange($("roundCount"), 8, 20, league.rounds, (i) => i + " rounds");
+  fillRange($("roundCount"), 8, 24, league.rounds, (i) => i + " rounds");
   POSITIONS.forEach(function (pos) {
     const label = posLabel(pos);
-    fillRange($("start" + pos), 0, SLOT_LIMITS[pos], league.starters[pos],
+    fillRange($("start" + pos), 0, SLOT_LIMIT, league.starters[pos],
               (i) => label + " " + i);
   });
   fillRange($("startFLEX"), 0, 3, league.flex, (i) => "FLEX " + i);
   fillRange($("startSFLEX"), 0, 2, league.superflex, (i) => "SFLEX " + i);
-  fillRange($("benchCount"), 0, 12, league.bench, (i) => "BN " + i);
+  /* 15 and 24 rather than 12 and 20, to cover everything the React settings
+     screen can produce: its bench stepper goes to 15, and rounds is the roster
+     size, so 8 starters + 1 FLEX + 15 bench is a 24-round draft. A <select>
+     silently refuses a value that is not one of its options — `.value` stays
+     put and readSetup() then reads the old number back — so a range narrower
+     than the control that writes to it is a mirror that fails without saying
+     so. TEAM_COUNTS already tops out at 24 for its own reasons. */
+  fillRange($("benchCount"), 0, 15, league.bench, (i) => "BN " + i);
   fillSlotOptions();
+}
+
+/* Which keys of `league` the roster is made of, and therefore which ones
+   `rounds` is derived from. Named once because setLeague() asks twice — once
+   to re-derive rounds and once to mirror the values back to the legacy
+   controls readSetup() reads. */
+const ROSTER_KEYS = ["starters", "flex", "superflex", "bench"];
+
+/* Write the league back onto the hidden legacy <select>s.
+
+   Not decoration: readSetup() reads every one of these on the next
+   refreshSetup(), so a value React set and this did not mirror is a value the
+   next trip home quietly discards. See setLeague()'s own note.
+
+   From `league` rather than from the patch that caused the call, which is the
+   version that cannot miss: a scoring preset moves `superflex` without
+   `superflex` ever appearing in the patch, and setLeague() re-derives `rounds`
+   from the roster rather than being handed it. Reading the object everything
+   else already agrees is the source of truth removes both special cases. */
+function mirrorToLegacy() {
+  $("teamCount").value  = String(league.teams);
+  $("scoring").value    = league.scoring;
+  $("roundCount").value = String(league.rounds);
+  $("startFLEX").value  = String(league.flex);
+  $("startSFLEX").value = String(league.superflex);
+  $("benchCount").value = String(league.bench);
+  POSITIONS.forEach(function (pos) { $("start" + pos).value = String(league.starters[pos]); });
 }
 
 // Tracks the format across reads, so the reception preset applies once when
@@ -8794,6 +9172,30 @@ function setupProblem() {
     return `${league.teams} teams over ${league.rounds} rounds is ${totalPicks()} picks, ` +
            `and the ${scoringLabel(league.scoring)} board only ` +
            `carries ${poolSize()} players.`;
+  }
+  /* And the same refusal for the case the count above cannot see: enough
+     players on the board, not enough that this room is allowed to hold.
+
+     absorbableSize() is always the smaller of the two, so this branch is only
+     ever reached when the raw pool was sufficient — which is why the message
+     names the lineup rather than the board. The shortfall is not a rounding
+     error and it is not the drafter's to avoid: every pick past the ceiling
+     has to go on a second kicker, a second defense or a spare quarterback,
+     roster construction docks nine for each of them, and no ordering rule
+     inside cpuChoice() can make the total any smaller — the waste is
+     conserved. Measured across the whole (scoring x teams x bench 0-15) space,
+     60 of 528 configurations are in it, worst 40 unstartable roster spots in a
+     single draft; the reported one is 16 teams over 14 rounds, at 10.
+
+     "A control that cannot act must not merely fail; it must not be offered."
+     The draft it would run does finish, which is exactly what made this hard
+     to see — it finishes with ten roster spots nobody chose to waste. */
+  if (totalPicks() > absorbableSize()) {
+    return `${league.teams} teams over ${league.rounds} rounds is ${totalPicks()} picks, ` +
+           `but a ${league.teams}-team room can only hold ${absorbableSize()} of the ` +
+           `${poolSize()} players on this board — so ${totalPicks() - absorbableSize()} ` +
+           `picks would have to go on somebody nobody can start. ` +
+           `Run fewer teams, or a shorter roster.`;
   }
   return "";
 }
@@ -9960,31 +10362,53 @@ window.JukeEngine = {
        the same side effect readSetup() has always had for `rec`, kept in one
        place.
 
-       The lineup patch has to move `rounds` with it, for the reason
-       DraftSettingsModal's own setLineup() already documents: setupProblem()
-       refuses a draft whose roster size and round count disagree, so a
-       preset that adds a starting slot without adding a round would leave
-       the Start button refusing and nothing on screen saying which control
-       caused it. Derived here rather than left to the caller, because the
-       caller is a settings screen that did not choose to change the roster. */
+       The lineup patch has to move `rounds` with it: setupProblem() refuses a
+       draft whose roster size and round count disagree, so a preset that adds
+       a starting slot without adding a round would leave the Start button
+       refusing and nothing on screen saying which control caused it. Derived
+       here rather than left to the caller, because the caller is a settings
+       screen that did not choose to change the roster. */
+    let rosterMoved = ROSTER_KEYS.some(function (k) { return patch[k] !== undefined; });
     if (patch.scoring) {
       league.rules.rec = REC_BY_FORMAT[patch.scoring] === undefined ? 0.5 : REC_BY_FORMAT[patch.scoring];
       const preset = SCORING_PRESET[patch.scoring];
-      if (preset && preset.lineup) {
-        Object.assign(league, preset.lineup);
-        league.rounds = rosterSize();
-      }
+      // A preset that moves the lineup moves the roster, even though nothing
+      // in `patch` says so — superflex is set here, not by the caller.
+      if (preset && preset.lineup) { Object.assign(league, preset.lineup); rosterMoved = true; }
     }
-    // readSetup() re-reads teams/scoring off these same two legacy <select>
-    // elements every time refreshSetup() runs — goHome() among other places
-    // — and until this line it always won: the legacy controls are hidden
-    // and nothing else in this file writes to them any more, so they sat
-    // frozen at whatever fillSetupControls() drew at boot, and the next
-    // refreshSetup() silently reverted whatever this function had just set.
-    // Mirroring the value here is what makes `league` the one real object in
-    // both directions, not just this one.
-    if (patch.teams !== undefined)   $("teamCount").value = String(patch.teams);
-    if (patch.scoring !== undefined) $("scoring").value = patch.scoring;
+
+    /* And from every other direction too, which is what the paragraph above
+       had only ever done for a scoring preset.
+
+       DraftSettingsModal.jsx's Roster steppers write `bench`, `flex`,
+       `superflex` and `starters` straight through here, and nothing moved
+       `rounds` with them — so stepping the bench from 5 to 4 produced
+       "13 roster spots, but the draft runs 14 rounds" on the spot, with no
+       rounds control anywhere on the screen to answer it with. The whole
+       Roster section was a dead control: every press refused the draft and
+       the only way back was to undo it. Confirmed on the deployed site
+       before it was fixed here, and both this file and that component
+       carried comments crediting the derivation to a `setLineup()` that has
+       never existed.
+
+       It is the same rule the preset already followed, applied to the keys
+       the roster is actually made of. `rounds` is never a second number kept
+       equal to the roster by hand — it IS the roster's size. */
+    if (rosterMoved) league.rounds = rosterSize();
+
+    // readSetup() re-reads all of these off the legacy <select> elements every
+    // time refreshSetup() runs — goHome() among other places — and until this
+    // line it always won: the legacy controls are hidden and nothing else in
+    // this file writes to them any more, so they sat frozen at whatever
+    // fillSetupControls() drew at boot, and the next refreshSetup() silently
+    // reverted whatever this function had just set. Mirroring the values here
+    // is what makes `league` the one real object in both directions.
+    //
+    // It was teams and scoring only, which was the whole of what React could
+    // reach at the time. The roster steppers reach the other seven, and a
+    // bench trimmed in the settings screen was reverted by the next trip home
+    // — silently, since nothing on that screen reads the legacy controls.
+    mirrorToLegacy();
 
     /* And draw the result. setClockLength() has always done this and this one
        never did, so the settings modal's own redraw() re-rendered the modal
@@ -10012,9 +10436,12 @@ window.JukeEngine = {
   // What a preset does beyond its rec value, plus the caveat it carries.
   scoringPreset: (key) => SCORING_PRESET[key] || null,
   // How many players the current league/pool combination actually has to
-  // draft from — the same number setupProblem() validates against, so a
-  // screen can show the constraint rather than only the refusal.
+  // draft from, and how many of them this many teams are allowed to hold —
+  // the two numbers setupProblem() validates against, so a screen can show
+  // the constraint rather than only the refusal. They are different numbers
+  // and the second is the binding one; see absorbableSize().
   poolSize: poolSize,
+  absorbableSize: absorbableSize,
   // Draft order, as the settings screen's own list: seat, who sits there,
   // and which overall pick they hold first. cpuName() rather than
   // teamLabel() for the reason the bridge already records beside it —
@@ -10392,11 +10819,10 @@ window.JukeEngine = {
      reads this rather than keeping its own idea of what a roster is. */
   /* What each team holds, for the board header.
 
-     Which positions get counted is derived, never listed: FORCED_LATE
-     already names the two the app schedules itself, so COUNTED_POSITIONS is
-     POSITIONS minus those. Listing QB, RB, WR, TE here would be the league
-     shape written down a second time — and counting a kicker would be eight
-     columns of "0" until the closing rounds and eight of "1" after them.
+     Which positions get counted is COUNTED_POSITIONS' decision and is argued
+     where that constant is declared: everything but the kicker, who is the one
+     position still taken late enough that his column would be twelve rounds of
+     "0" and then a "1".
 
      An empty count is returned as 0 rather than omitted: a gap where a chip
      should be is the fact somebody is reading this strip for. */

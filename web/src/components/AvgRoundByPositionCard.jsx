@@ -5,9 +5,11 @@ const SKILL_POSITIONS = ['QB', 'RB', 'WR', 'TE']
 
 // The two fastest and the one slowest among the four skill positions,
 // named directly rather than left for a reader to compare six-to-eight
-// bars by eye. K and DST sit out — the app schedules both into the closing
-// rounds itself (CLAUDE.md's FORCED_LATE), so naming either as "slowest"
-// would describe a rule the app enforces, not a drafting tendency.
+// bars by eye. K and DST sit out — every team fills exactly one of each
+// because the format says so, so naming either as "slowest" would describe
+// the shape of the league rather than a drafting tendency. (It used to be
+// that the app scheduled both into the closing rounds; it no longer does,
+// and the exclusion outlived that reason on this one.)
 // Abbreviations, not full names — matches how every other label on this
 // card already reads (RB, WR, QB, not "Running back").
 function buildInsight(rows) {

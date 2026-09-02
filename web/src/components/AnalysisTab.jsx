@@ -381,9 +381,9 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
       Starter strength is 50% of the grade: every starter scored by how many places above replacement level
       they rank at their position, where replacement is {engine.replacementText()} for this {teams}-team
       league, which starts {engine.lineupText()}. Draft value is 25%: how far each player fell past their
-      ADP when you took them, counting only the picks you were free to time — kickers and defenses are left
-      out, because the room will not let anyone take one before the closing rounds and their ADP is set by
-      longer drafts than this one. Roster construction is 15%, docking unfilled starting slots, spots spent
+      ADP when you took them, counting only the picks where a fall past ADP means anything — kickers and
+      defenses are left out, because their ADP is set by longer drafts than this one, so every one of them
+      reads as a reach. Roster construction is 15%, docking unfilled starting slots, spots spent
       on a quarterback, kicker or defense you can never start, and how far from startable your best benched
       running back and receiver are — nothing if either could start today. Bye week safety is the last 10%,
       charging every week that leaves more than two starters out — by the square of how many are missing
