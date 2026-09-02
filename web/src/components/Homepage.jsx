@@ -267,9 +267,28 @@ export default function Homepage() {
             ))}
           </FooterColumn>
 
+          {/* The address itself, not the word "Contact".
+
+              A mailto: does nothing visible unless the machine has a
+              registered mail handler, and on Windows with Chrome and
+              webmail it usually does not — the click is simply swallowed.
+              Behind a label the address is never shown either, so a reader
+              is left with a link that does nothing and no way to find out
+              what it would have done. That is the dead-control rule this
+              project already holds, arrived at through the one affordance
+              on the page for reaching a person. Reported exactly that way:
+              "nothing happens when I click on either link in the footer."
+
+              Showing the address fixes both halves at once. Somebody with a
+              mail client still gets their compose window; everybody else can
+              read it and copy it, which is what they were trying to do. */}
           <FooterColumn title="Company">
-            <a href={`mailto:${CONTACT_EMAIL}`} className={roomLinkClass}>
-              Contact
+            <a
+              href={`mailto:${CONTACT_EMAIL}`}
+              className={roomLinkClass}
+              title={`Email ${CONTACT_EMAIL}`}
+            >
+              {CONTACT_EMAIL}
             </a>
           </FooterColumn>
 
@@ -279,8 +298,17 @@ export default function Homepage() {
                 {link.label}
               </a>
             ))}
-            <a href={`mailto:${CONTACT_EMAIL}`} className={roomLinkClass}>
-              Support
+            {/* Same address, same reason it is shown rather than labelled.
+                Two columns naming one address is deliberate: Company is
+                "who to write to" and Legal is "who to write to about this
+                page", and a reader looking under one heading should not
+                have to think to look under the other. */}
+            <a
+              href={`mailto:${CONTACT_EMAIL}`}
+              className={roomLinkClass}
+              title={`Email ${CONTACT_EMAIL}`}
+            >
+              {CONTACT_EMAIL}
             </a>
           </FooterColumn>
         </div>
