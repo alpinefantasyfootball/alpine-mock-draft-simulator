@@ -5205,6 +5205,55 @@ claims: the signed-in path cannot be exercised on a preview, so the gap the
 merge to production. Setting the same variable for Preview is a dashboard
 change nobody has made, not a code change.
 
+## Copy goes stale the day a feature ships, and nothing fails when it does
+
+A content audit on 2 September 2026 found the same defect in eight places,
+and every one of them was written true. Accounts shipped; nothing that
+described their absence was rewritten, because nothing breaks when prose
+stops being accurate. **The privacy policy opened with "Juke has no
+accounts, no sign-up and nowhere to enter a password, an email address or a
+card number"** on a site with all four.
+
+The full list, because the shape is more useful than any one of them: the
+privacy policy's intro, its "no form anywhere asks for an email" (the
+early-access capture has always asked), its "Juke's own code sets no
+cookies" (Clerk's do, once you sign in), its "nothing about your draft is
+sent to a server at all" (true only signed out), and its "there's no
+sign-up to ask at" about a child's age; the terms' "there's no account to
+cancel or delete"; the how-it-works page's "stored in your own browser and
+nowhere else"; and a header button offering to email you *when accounts
+arrive*.
+
+**None of it was reachable by any check this project runs.** It renders, it
+contrasts, it does not overflow, no console error, no failing assertion —
+the dead-control failure this file already records, applied to sentences
+rather than to buttons. The only thing that finds it is reading the page
+against what the code now does.
+
+**So the rule is a release rule rather than a testing one.** A feature that
+changes what the product *is* — not what it looks like — has a copy pass in
+its own definition of done, and the places to check are the ones that
+describe the product rather than the feature: the two legal pages, the
+how-it-works doc, the homepage's own pitch, and every "coming soon" modal.
+Grep for the thing you just built (`no account`, `sign-up`, `cookie`) and
+read what comes back.
+
+**Two smaller instances of the same thing, worth keeping because they are
+not prose.** The 404 page's own "Open the Draft Room" pointed at `#/draft`,
+the retired route — it *worked*, by landing on the compatibility redirect
+written for old bookmarks, which is exactly why nobody noticed. And all
+three `docs/` pages said "Back to the Draft Room" over a link to the
+marketing homepage. **A link that works is not the same as a link that goes
+where it says**, and neither costs anything to be wrong.
+
+**And one that was a number in a false sentence.** The phone draft header
+had two states, "your pick" and "somebody else's", and none for "the draft
+is over" — so it ran a live countdown on a finished board. `headerInfo()`
+had answered `over` all along and the desktop header read it. A component
+drawing its own version of a fact the bridge already computes is the
+"written down twice" rule, and the second copy is always the one that
+misses a case.
+
 ## Security
 
 The zone is set beyond Cloudflare's defaults, and the defaults were not
