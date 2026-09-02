@@ -38,7 +38,7 @@ const CHIPS = [
 ]
 
 export default function PlayersTabPhone({
-  engine, league, board, mySlot, myTurn,
+  engine, league, board, tick, mySlot, myTurn,
   pointsFor, vorpFor, valueFor, survivalFor,
   photoFor, initialsFor, flexPositions, draftedByFor,
   queuedNames, onToggleQueue, onDraft,
@@ -59,6 +59,17 @@ export default function PlayersTabPhone({
 
   const columns = PHONE_POSITION_COLUMNS[posFilter] || PHONE_POSITION_COLUMNS.ALL
 
+  /* `tick` leads the dependency list and it is the only one that does any
+     work when a pick lands. `board` is mutated in place — a pick sets
+     p.drafted on an existing object and nothing ever replaces the array
+     reference — which CLAUDE.md already records as the reason board is
+     useless as a memo key, and this memo was keyed on exactly that. So the
+     phone pool was computed once and frozen: a drafted player stayed in
+     the list (relabelled "Your Team" by the row itself, which re-renders
+     fine) and the "N AVAILABLE" count never moved off its opening number.
+     Reported from a real mobile draft. DraftRoom.jsx's own availablePlayers
+     memo has had `tick` first in its key all along, which is why the
+     desktop pool never showed this. */
   const rows = useMemo(() => {
     let list = board
       .filter((p) => showDrafted || !p.drafted)
@@ -91,7 +102,7 @@ export default function PlayersTabPhone({
     })
     return list
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [board, showDrafted, showWatchlist, posFilter, expBand, search, sortKey, sortDir, season, flexPositions])
+  }, [tick, board, showDrafted, showWatchlist, posFilter, expBand, search, sortKey, sortDir, season, flexPositions])
 
   const handleSort = (key) => {
     if (key === sortKey) setSortDir((d) => (d === 'desc' ? 'asc' : 'desc'))

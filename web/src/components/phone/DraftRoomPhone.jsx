@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react'
 import CockpitHeaderPhone from './CockpitHeaderPhone.jsx'
 import DraftBoardPeekPhone from './DraftBoardPeekPhone.jsx'
-import BottomSheet from '../BottomSheet.jsx'
+import BottomSheet, { SHEET_SNAPS } from '../BottomSheet.jsx'
 import PlayersTabPhone from './PlayersTabPhone.jsx'
 import QueueTabPhone from './QueueTabPhone.jsx'
 import TeamTabPhone from './TeamTabPhone.jsx'
@@ -34,8 +34,15 @@ const TABS = [
 // Every value below is something DraftRoom.jsx already computed for the
 // desktop/tablet render — nothing here re-derives from `engine` a second
 // time, same rule this whole file's siblings already follow.
+//
+// `tick` is the one prop here that carries no data of its own: it is
+// DraftRoom.jsx's own useJukeTick counter, passed down purely so a child
+// that memoizes over the board has something that actually changes when a
+// pick lands. `board` and `picks` are both mutated in place, so neither
+// can say "something moved" — see PlayersTabPhone's own note on the pool
+// that stopped clearing because its memo was keyed on `board`.
 export default function DraftRoomPhone({
-  engine, league, picks, board, mySlot, onClock, overall, myTurn, code, urgent,
+  engine, league, picks, board, tick, mySlot, onClock, overall, myTurn, code, urgent,
   timeLeft, clockLength, onOpenMenu,
   autopick, onToggleAutopick, over,
   rules, pointsFor, valueFor, vorpFor, survivalFor,
@@ -64,6 +71,21 @@ export default function DraftRoomPhone({
      disappear mid-draft. */
   const [viewportH] = useState(() => (typeof window !== 'undefined' ? window.innerHeight : 0))
   const sheetMaxHeight = viewportH ? viewportH - headerH : undefined
+  /* How much of the board the sheet is covering right now, worked out the
+     same way BottomSheet works out its own resting height — the snap,
+     clamped to the same ceiling. The board is `fixed ... bottom: 0` and the
+     sheet is drawn over it, so without this the board centres the live pick
+     in a box whose lower half nobody can see: measured at 375x812 with the
+     sheet at its default snap, the crosshair put the live cell at y=444
+     under a sheet starting at y=342. Arithmetically centred, invisible, and
+     indistinguishable from a board that never scrolled — which is how it
+     was reported.
+
+     Read off SHEET_SNAPS rather than measured from the DOM so the board
+     never has to wait a frame for a layout read, and so a drag in progress
+     (which drives height off a motion value, not off this) does not make
+     the board chase it. */
+  const sheetCover = Math.min(SHEET_SNAPS[sheetSnap], sheetMaxHeight || SHEET_SNAPS[sheetSnap])
 
   return (
     <>
@@ -89,6 +111,7 @@ export default function DraftRoomPhone({
         onSelectPlayer={setSelectedPlayer}
         headerH={headerH}
         scrollToLiveSignal={findLive}
+        bottomInset={sheetCover}
       />
 
       <BottomSheet
@@ -118,6 +141,7 @@ export default function DraftRoomPhone({
             engine={engine}
             league={league}
             board={board}
+            tick={tick}
             mySlot={mySlot}
             myTurn={myTurn}
             rules={rules}

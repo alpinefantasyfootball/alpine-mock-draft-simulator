@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { BarChart3, ChevronLeft, Lock, Play, Settings, Trash2 } from 'lucide-react'
+import { BarChart3, ChevronLeft, ChevronRight, Lock, Play, Settings, Trash2, Users } from 'lucide-react'
 import { NAV_PILL_CLEARANCE } from './FloatingNavPill.jsx'
 import { POS_CHALK, CELL_INK } from '../draftRoomPositions.js'
 
@@ -75,7 +75,8 @@ function StatusPill({ status }) {
 
 export default function MockDraftsPhone({
   engine, tick, problem, inProgress, onStartNew, onResume, onDiscard,
-  onOpenSettings, onOpenAnalytics, onAnalyze, onDelete, onSignupSport,
+  onOpenSettings, onOpenAnalytics, onDraftWithFriends, onAnalyze, onDelete,
+  onSignupSport, roomActive,
 }) {
   const [history, setHistory] = useState([])
   const [confirmDelete, setConfirmDelete] = useState(null)
@@ -229,6 +230,38 @@ export default function MockDraftsPhone({
             Your insights
           </button>
         </div>
+
+        {/* ---- Draft with friends ----
+
+            It was missing from this screen entirely, and the path that
+            leads here is exactly the one that needed it: HomePhone's own
+            "Or draft with friends — same board, real managers" row links
+            to #/drafts, which on a phone IS this screen. So the one
+            advertised route to multiplayer landed on a launcher with no
+            multiplayer on it. Reported in those words.
+
+            Everything behind it already worked at this width — the same
+            DraftWithFriendsModal and RoomPanel the desktop Lobby opens,
+            which DraftRoom.jsx already renders for both branches — so
+            this is the control that was missing rather than the feature.
+
+            Its own full-width row rather than a third button beside the
+            pair above: "Draft with friends" does not fit a third of a
+            390px row (HomePhone's own note measures the same string
+            wanting 208px), and it is a different KIND of action from the
+            two under it anyway — those change what the button above
+            starts, this starts something else. */}
+        <button
+          type="button"
+          onClick={onDraftWithFriends}
+          className="mt-2 flex w-full items-center gap-2.5 rounded-[14px] border border-dashed border-line-hairline px-3.5 py-3 text-left active:bg-white/[0.04]"
+        >
+          <Users className="h-4 w-4 shrink-0 text-teal-300" aria-hidden="true" />
+          <span className="min-w-0 flex-1 text-[13px] font-semibold text-voidInk-body">
+            {roomActive ? 'Your draft room — invite or enter' : 'Draft with friends'}
+          </span>
+          <ChevronRight className="h-4 w-4 shrink-0 text-white/35" aria-hidden="true" />
+        </button>
 
         {problem && (
           <p className="mt-3 rounded-xl border border-rose-500/25 bg-rose-500/10 px-3 py-2 text-[12px] leading-relaxed text-rose-200/90">

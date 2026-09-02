@@ -14,6 +14,12 @@ import DraftBoardGrid from '../DraftBoardGrid.jsx'
 // league runs more than a handful of rounds, where the prototype's mock
 // data never had to.
 //
+// followLive: the board tracks the live pick until the reader scrolls it
+// themselves, and the header's crosshair puts it back — see
+// DraftBoardGrid's own note. On a phone the board is several screens tall
+// and wider than the viewport, so without it an auto-picked draft happens
+// entirely off-screen; that is exactly what was reported.
+//
 // What IS new here is the strip above it: not a "fill = position" colour
 // legend — DraftBoardGrid dropped its own built-in one entirely once the
 // cell, the pool row and the filter chips all started saying what a fill
@@ -31,7 +37,7 @@ import DraftBoardGrid from '../DraftBoardGrid.jsx'
 // panel itself (#232D3A).
 const POSITIONS = ['QB', 'RB', 'WR', 'TE', 'K', 'DST']
 
-export default function DraftBoardPeekPhone({ engine, league, picks, mySlot, onClock, onSelectPlayer, headerH, scrollToLiveSignal }) {
+export default function DraftBoardPeekPhone({ engine, league, picks, mySlot, onClock, onSelectPlayer, headerH, scrollToLiveSignal, bottomInset }) {
   const counts = engine.filterCounts()
 
   return (
@@ -63,6 +69,8 @@ export default function DraftBoardPeekPhone({ engine, league, picks, mySlot, onC
           shortNameOf={engine.shortName}
           onSelectPlayer={onSelectPlayer}
           scrollToLiveSignal={scrollToLiveSignal}
+          followLive
+          bottomInset={bottomInset}
         />
       </div>
     </div>

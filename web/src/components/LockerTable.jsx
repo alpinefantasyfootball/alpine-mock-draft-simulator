@@ -1,7 +1,8 @@
 import { useMemo, useRef, useState } from 'react'
-import { Search, ChevronDown, ChevronRight, MoreHorizontal, HardDrive } from 'lucide-react'
+import { Search, ChevronDown, ChevronRight, MoreHorizontal, HardDrive, CloudAlert, CloudCheck } from 'lucide-react'
 import EarlyAccessModal from './EarlyAccessModal.jsx'
 import { POS_BADGE } from './draftRoomPositions.js'
+import { useSignedIn } from '../hooks/useAuthState.js'
 
 const FORMAT_FILTERS = [
   { key: 'all', label: 'All formats' },
@@ -264,7 +265,87 @@ function Row({ entry, onAnalyze, onDeleteRequest, menuOpen, onToggleMenu }) {
 // than it would have on the old card layout.
 const UNDO_MS = 5000
 
-export default function LockerTable({ entries, onAnalyze, onDeleteConfirmed }) {
+/* The strip under the table, and it says three different things because
+   there are three genuinely different situations under it.
+
+   It used to say one: "these live in this browser only... sign up to keep
+   it," unconditionally, with a button opening the early-access dialog.
+   That was true and it was the strongest argument on the page — right up
+   until accounts shipped and started actually syncing the locker, at
+   which point it was telling signed-in people to sign up for something
+   they already had, in front of rows that were already backed up.
+   Reported with a screenshot of exactly that.
+
+   The third state is the one worth keeping past this fix. "Signed in" and
+   "signed in and actually reaching the account" are not the same fact,
+   and the whole sync path answers a failure with a falsy value rather
+   than an error (see app.js's noteSyncResult) — so a browser writing to
+   nowhere looked identical to one that was working, on both devices, and
+   that is the shape the "my phone's draft never reached my laptop" report
+   took. A page that claims a backup it does not have is worse than one
+   that claims nothing, so the error state says so plainly rather than
+   softening it into the local-only line. */
+function StorageNote({ count, signedIn, syncStatus, earlyAccessRef }) {
+  // "These 1 mock live in this browser only" was what the old single
+  // template produced for a locker with one entry in it, and one entry is
+  // exactly what a first-time visitor has. The determiner and the verb
+  // have to agree with the count as well as the noun does.
+  const one = count === 1
+  const these = one ? 'This' : 'These'
+  const mocks = `${count} mock${one ? '' : 's'}`
+  const live = one ? 'lives' : 'live'
+  const are = one ? 'is' : 'are'
+
+  if (signedIn && syncStatus === 'error') {
+    return (
+      <div className="flex flex-wrap items-center gap-4 border-t border-amber-400/20 bg-amber-400/[0.04] px-5 py-[13px]">
+        <CloudAlert className="h-[15px] w-[15px] shrink-0 text-amber-300" aria-hidden="true" />
+        <p className="min-w-0 flex-1 text-[13px] leading-snug text-white/80">
+          Signed in, but Juke could not reach your account &mdash; {these.toLowerCase()} {mocks} {are} in{' '}
+          <b>this browser only</b> for now. {one ? 'It' : 'They'} will sync on {one ? 'its' : 'their'} own
+          once the connection is back.
+        </p>
+      </div>
+    )
+  }
+
+  if (signedIn) {
+    return (
+      <div className="flex flex-wrap items-center gap-4 border-t border-teal-400/[0.15] bg-teal-400/[0.03] px-5 py-[13px]">
+        <CloudCheck className="h-[15px] w-[15px] shrink-0 text-teal-300" aria-hidden="true" />
+        <p className="min-w-0 flex-1 text-[13px] leading-snug text-white/80">
+          {these} {mocks} {are} saved to <b>your account</b>. {one ? 'It follows' : 'They follow'} you to
+          any browser you sign in on.
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-4 border-t border-teal-400/[0.15] bg-teal-400/[0.03] px-5 py-[13px]">
+      <HardDrive className="h-[15px] w-[15px] shrink-0 text-teal-300" aria-hidden="true" />
+      <p className="min-w-0 flex-1 text-[13px] leading-snug text-white/80">
+        {these} {mocks} {live} in <b>this browser only</b>. Clear your history and the
+        locker and your tendencies go with {one ? 'it' : 'them'}.
+      </p>
+      <button
+        type="button"
+        onClick={() =>
+          earlyAccessRef.current?.open(
+            'Your mocks live in this browser today. Sign in and they follow you to any device.',
+            'locker'
+          )
+        }
+        className="shrink-0 rounded-lg bg-teal-400 px-[18px] py-2.5 text-xs font-bold uppercase tracking-wide text-obsidian transition-colors hover:bg-teal-300"
+      >
+        Sign up to keep it
+      </button>
+    </div>
+  )
+}
+
+export default function LockerTable({ entries, onAnalyze, onDeleteConfirmed, syncStatus = 'off' }) {
+  const signedIn = useSignedIn()
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState('all')
   const [seatFilter, setSeatFilter] = useState('all')
@@ -487,32 +568,7 @@ export default function LockerTable({ entries, onAnalyze, onDeleteConfirmed }) {
             )}
           </div>
 
-          {/* The honest and strongest sign-up argument on the page: every
-              row above is real, local, and one cache-clear from gone. The
-              button is real too, not a dead click — same EarlyAccessModal
-              every other not-built-yet account control in this app now
-              opens (SiteNav.jsx's AccountButtons), not a second, silent
-              implementation of "coming soon." */}
-          <div className="flex flex-wrap items-center gap-4 border-t border-teal-400/[0.15] bg-teal-400/[0.03] px-5 py-[13px]">
-            <HardDrive className="h-[15px] w-[15px] shrink-0 text-teal-300" aria-hidden="true" />
-            <p className="min-w-0 flex-1 text-[13px] leading-snug text-white/80">
-              These {entries.length} mock{entries.length === 1 ? '' : 's'} live in <b>this browser only</b>. Clear
-              your history and the locker and your tendencies go with them.
-            </p>
-            <button
-              type="button"
-              onClick={() =>
-                earlyAccessRef.current?.open(
-                  "Your mocks live in this browser today. Leave an email and we'll tell you when they can live " +
-                    'in an account instead.',
-                  'locker'
-                )
-              }
-              className="shrink-0 rounded-lg bg-teal-400 px-[18px] py-2.5 text-xs font-bold uppercase tracking-wide text-obsidian transition-colors hover:bg-teal-300"
-            >
-              Sign up to keep it
-            </button>
-          </div>
+          <StorageNote count={entries.length} signedIn={signedIn} syncStatus={syncStatus} earlyAccessRef={earlyAccessRef} />
         </>
       )}
 

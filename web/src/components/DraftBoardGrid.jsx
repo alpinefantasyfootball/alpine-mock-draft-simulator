@@ -234,22 +234,117 @@ function RaiseLowerButton({ onClick, disabled, title, children }) {
    starts an animation whether or not the target moved, so a caller that
    fires this on every render would restart one every few hundred
    milliseconds. 4px of slop is what turns "moves constantly" into "moves
-   once, when asked." */
-function centreOnLive(scroller, cell) {
+   once, when asked."
+
+   `bottomInset` is the third: the scroller's own box is not always the
+   part of it a person can see. On a phone the board is `fixed ... bottom:
+   0` and the draft sheet is drawn OVER its lower half, so centring in the
+   scroller's own height put the live pick behind the sheet — measured at
+   375x812 with the sheet at its default snap, the cell landed at y=444
+   against a sheet whose top edge is y=342. The scroll was arithmetically
+   perfect and the pick was invisible, which reads as "it did not scroll
+   at all." Centre in the visible band instead; a caller with nothing over
+   it passes nothing and gets the old behaviour exactly.
+
+   Floored at the target's own height so a sheet taller than the board
+   cannot invert the term and push the live pick off the top. */
+function centreOnLive(scroller, cell, bottomInset = 0) {
   if (!scroller || !cell) return
   const box = scroller.getBoundingClientRect()
   const target = cell.getBoundingClientRect()
+  const visibleH = Math.max(target.height, box.height - bottomInset)
   const left = scroller.scrollLeft + (target.left - box.left) - (box.width - target.width) / 2
-  const top = scroller.scrollTop + (target.top - box.top) - (box.height - target.height) / 2
+  const top = scroller.scrollTop + (target.top - box.top) - (visibleH - target.height) / 2
   const x = Math.max(0, Math.min(left, scroller.scrollWidth - scroller.clientWidth))
   const y = Math.max(0, Math.min(top, scroller.scrollHeight - scroller.clientHeight))
   if (Math.abs(x - scroller.scrollLeft) < 4 && Math.abs(y - scroller.scrollTop) < 4) return
   scroller.scrollTo({ left: x, top: y, behavior: 'smooth' })
 }
 
-export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLabelOf, onTeamClick, shortNameOf, onClaimSeat, seats, onSelectPlayer, trayPos, onTrayUp, onTrayDown, scrollToLiveSignal }) {
+export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLabelOf, onTeamClick, shortNameOf, onClaimSeat, seats, onSelectPlayer, trayPos, onTrayUp, onTrayDown, scrollToLiveSignal, followLive = false, bottomInset = 0 }) {
   const scrollerRef = useRef(null)
   const liveCellRef = useRef(null)
+  /* Whether the board is currently tracking the live pick. A ref, not
+     state: nothing renders differently for it, and the gesture listeners
+     below have to read and write the latest value from a closure that is
+     set up once. */
+  const followingRef = useRef(true)
+
+  /* ---- Following the live pick ----
+
+     The board follows by default and stops the moment a person scrolls it
+     themselves; the crosshair is how they get back. Reported from a real
+     mobile draft with auto-pick on: the board simply never moved, so
+     watching your own draft happen meant dragging the grid down a round at
+     a time.
+
+     Auto-follow IS a bug this project has shipped and removed once, on the
+     legacy board — it pulled a reader back to the live pick two or three
+     times a second for as long as they kept trying to look elsewhere — and
+     the fix there was never "stop following", it was `boardFollow`: follow
+     until a person says otherwise. That is what this is, and the two rules
+     that made it work there are both kept.
+
+     **The gesture list may not include `scroll`.** A smooth programmatic
+     scroll fires a stream of scroll events, so a board that disengaged on
+     `scroll` would disengage on its own animation and follow exactly one
+     pick. Only events a person produces count.
+
+     **And `pointerdown` is deliberately not one of them either**, which is
+     where this differs from the legacy board. Every cell on this grid is
+     clickable — tapping a name opens the player sheet — so a pointerdown
+     listener would treat reading a player as "I want to look elsewhere"
+     and quietly stop following. `touchmove` is the touch gesture that
+     actually means scrolling; a tap never fires it. */
+  useEffect(() => {
+    const scroller = scrollerRef.current
+    if (!scroller || !followLive) return
+    const release = () => { followingRef.current = false }
+    /* And the way back that needs no control at all: scrolling the live
+       pick back into view IS "done looking." The legacy board took the
+       same line, and it is the reason `scroll` can be listened to here
+       while it may not be listened to above — this only ever RE-enables
+       following, so a programmatic smooth scroll re-arming the thing that
+       started it is a no-op rather than a feedback loop. It is also what
+       makes following safe on the desktop board, which has no crosshair
+       of its own to press. */
+    const regain = () => {
+      if (followingRef.current) return
+      const cell = liveCellRef.current
+      if (!cell) return
+      const box = scroller.getBoundingClientRect()
+      const target = cell.getBoundingClientRect()
+      // The same visible band centreOnLive() uses, for the same reason: a
+      // cell behind the sheet is inside the scroller's box and is not in
+      // view, and treating it as in view re-arms following against a
+      // reader who cannot see the thing being followed.
+      const visible =
+        target.top >= box.top && target.bottom <= box.bottom - bottomInset &&
+        target.left >= box.left && target.right <= box.right
+      if (visible) followingRef.current = true
+    }
+    scroller.addEventListener('wheel', release, { passive: true })
+    scroller.addEventListener('touchmove', release, { passive: true })
+    scroller.addEventListener('keydown', release)
+    scroller.addEventListener('scroll', regain, { passive: true })
+    return () => {
+      scroller.removeEventListener('wheel', release)
+      scroller.removeEventListener('touchmove', release)
+      scroller.removeEventListener('keydown', release)
+      scroller.removeEventListener('scroll', regain)
+    }
+  }, [followLive, bottomInset])
+
+  /* Keyed on where the live pick IS, not on picks.length, so this also
+     fires the one time that matters most and does not change the count:
+     the first paint of a resumed draft. centreOnLive() returns early
+     inside 4px, so a re-run that finds the board already centred costs
+     nothing and starts no animation. */
+  const liveKey = onClock ? onClock.round + '-' + onClock.slot : ''
+  useEffect(() => {
+    if (!followLive || !followingRef.current) return
+    centreOnLive(scrollerRef.current, liveCellRef.current, bottomInset)
+  }, [followLive, liveKey, bottomInset])
 
   /* Driven by a counter the caller increments, not by a ref handed up or a
      window event. A counter is the smallest thing that can express "the
@@ -261,11 +356,19 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
 
      Deliberately skipped on the first render (signal 0 / undefined): a
      caller that has never pressed it must not have the board jump on
-     mount, which is a different feature (auto-follow) with its own
-     "the board yanks while I'm reading round one" failure mode. */
+     mount.
+
+     It re-arms following as well as scrolling once. The crosshair's whole
+     job is "put me back on the live pick", and a version that scrolled
+     there and then let the next pick drift away again answers half of it. */
   useEffect(() => {
     if (!scrollToLiveSignal) return
-    centreOnLive(scrollerRef.current, liveCellRef.current)
+    followingRef.current = true
+    centreOnLive(scrollerRef.current, liveCellRef.current, bottomInset)
+    // bottomInset deliberately out of the dependency list: this fires on a
+    // press, and re-running it because the sheet moved would scroll the
+    // board every time somebody dragged the sheet.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scrollToLiveSignal])
 
   const byCell = new Map()

@@ -803,6 +803,8 @@ export default function DraftRoom() {
               onDiscard={() => engine.restart()}
               onOpenSettings={() => setSettingsOpen(true)}
               onOpenAnalytics={() => setLockerView('dashboard')}
+              onDraftWithFriends={handleDraftWithFriends}
+              roomActive={roomActive}
               onAnalyze={(id) => setLockerView(id)}
               onDelete={(id) => { engine.deleteHistoryDraft(id); forceTick() }}
               onSignupSport={(sport) =>
@@ -1264,6 +1266,7 @@ export default function DraftRoom() {
           league={league}
           picks={picks}
           board={board}
+          tick={tick}
           mySlot={mySlot}
           onClock={onClock}
           overall={overall}
@@ -1599,6 +1602,11 @@ export default function DraftRoom() {
                   the segmented control above is itself lg:hidden, so
                   boardPane is meaningless at desktop width and the grid
                   must never hide because of it there. */}
+              {/* followLive: the board tracks the live pick, and stops
+                  the moment the reader scrolls it themselves. There is no
+                  crosshair on this board, which is why DraftBoardGrid
+                  re-arms following on its own once the live cell is
+                  scrolled back into view — see its own note. */}
               <div className={(boardPane === 'board' ? 'flex' : 'hidden') + ' min-h-0 flex-1 flex-col lg:flex'}>
                 <DraftBoardGrid
                   shortNameOf={engine.shortName}
@@ -1616,6 +1624,7 @@ export default function DraftRoom() {
                   trayPos={tray}
                   onTrayUp={() => moveTray(1)}
                   onTrayDown={() => moveTray(-1)}
+                  followLive
                 />
               </div>
 
