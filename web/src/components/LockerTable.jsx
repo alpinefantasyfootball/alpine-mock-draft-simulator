@@ -2,7 +2,9 @@ import { useMemo, useRef, useState } from 'react'
 import { Search, ChevronDown, ChevronRight, MoreHorizontal, HardDrive, CloudAlert, CloudCheck } from 'lucide-react'
 import EarlyAccessModal from './EarlyAccessModal.jsx'
 import { POS_BADGE } from './draftRoomPositions.js'
+import { SignUpButton } from '@clerk/clerk-react'
 import { useSignedIn } from '../hooks/useAuthState.js'
+import { useAccountUiReady } from '../hooks/useAccountUiReady.js'
 
 const FORMAT_FILTERS = [
   { key: 'all', label: 'All formats' },
@@ -285,7 +287,16 @@ const UNDO_MS = 5000
    took. A page that claims a backup it does not have is worse than one
    that claims nothing, so the error state says so plainly rather than
    softening it into the local-only line. */
+// One class string for both triggers below: which of them renders is a
+// question about whether Clerk is available, never about how the control
+// should look.
+const SIGNUP_BTN =
+  'shrink-0 rounded-lg bg-teal-400 px-[18px] py-2.5 text-xs font-bold uppercase tracking-wide text-obsidian transition-colors hover:bg-teal-300'
+
 function StorageNote({ count, signedIn, syncStatus, earlyAccessRef }) {
+  // Whether Clerk can be rendered at all — see that hook's own comment for
+  // the two independent ways it answers false (no key; not mounted yet).
+  const accountUiReady = useAccountUiReady()
   // "These 1 mock live in this browser only" was what the old single
   // template produced for a locker with one entry in it, and one entry is
   // exactly what a first-time visitor has. The determiner and the verb
@@ -328,18 +339,38 @@ function StorageNote({ count, signedIn, syncStatus, earlyAccessRef }) {
         {these} {mocks} {live} in <b>this browser only</b>. Clear your history and the
         locker and your tendencies go with {one ? 'it' : 'them'}.
       </p>
-      <button
-        type="button"
-        onClick={() =>
-          earlyAccessRef.current?.open(
-            'Your mocks live in this browser today. Sign in and they follow you to any device.',
-            'locker'
-          )
-        }
-        className="shrink-0 rounded-lg bg-teal-400 px-[18px] py-2.5 text-xs font-bold uppercase tracking-wide text-obsidian transition-colors hover:bg-teal-300"
-      >
-        Sign up to keep it
-      </button>
+      {/* A real sign-up, not the waitlist form this used to open.
+
+          The old handler said "leave an email and we'll tell you when they
+          can live in an account instead", which was honest right up until
+          accounts shipped — after which it was a control promising to
+          notify somebody about a thing they could have done by pressing
+          it. Same dead-control fix the phone nav's own You tab already
+          took for the identical stale sentence.
+
+          The EarlyAccessModal fallback stays for the one case that is
+          still true: a checkout with no publishable key, where Clerk
+          cannot render and a button that throws is worse than a button
+          that collects an email. */}
+      {accountUiReady ? (
+        <SignUpButton mode="modal">
+          <button type="button" className={SIGNUP_BTN}>Sign up to keep it</button>
+        </SignUpButton>
+      ) : (
+        <button
+          type="button"
+          onClick={() =>
+            earlyAccessRef.current?.open(
+              'Your mocks live in this browser today. Leave an email and we will tell you when ' +
+                'accounts are open here.',
+              'locker'
+            )
+          }
+          className={SIGNUP_BTN}
+        >
+          Sign up to keep it
+        </button>
+      )}
     </div>
   )
 }
