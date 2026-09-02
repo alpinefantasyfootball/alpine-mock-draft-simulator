@@ -521,6 +521,35 @@ export async function getSavedDraft(env, clerkId) {
   }
 }
 
+/* The `users` row every write below depends on, created on the way past.
+
+   `saved_drafts.clerk_id` and `draft_history.clerk_id` both carry
+   `REFERENCES users(clerk_id)`, and D1 enforces foreign keys — verified,
+   not assumed: an insert against a clerk_id with no users row fails with
+   `FOREIGN KEY constraint failed: SQLITE_CONSTRAINT_FOREIGNKEY`.
+
+   That row was only ever created by touchUser(), and touchUser() is only
+   called from `GET /me` — which nothing on the client has ever called.
+   So every save and every history entry, for every account, failed the
+   moment it reached D1: reads answered 200 (an empty account and a
+   missing row look identical), writes came back `{ok:false}`, and because
+   every layer here answers a failure with a falsy value the page could
+   only say "could not reach your account". Reported from a real signed-in
+   locker showing eight mocks it could not upload.
+
+   Batched with the write rather than run before it: one round trip, and
+   the two either both land or neither does, which is what the foreign key
+   is asking for. ON CONFLICT DO UPDATE keeps it a touch rather than an
+   error on the ordinary case where the row is already there — the same
+   statement touchUser() runs, deliberately identical so the two cannot
+   drift about what a user row is. */
+function upsertUser(env, clerkId, stamp) {
+  return env.DB.prepare(
+    "INSERT INTO users (clerk_id, created_at, last_seen_at) VALUES (?, ?, ?)" +
+    " ON CONFLICT(clerk_id) DO UPDATE SET last_seen_at = excluded.last_seen_at"
+  ).bind(clerkId, stamp, stamp);
+}
+
 /* Replace the one saved draft, whole — the same "there is only ever one"
    contract saveDraft() already enforces client-side by writing to a
    single localStorage key rather than appending to a list. `dataText` is
@@ -531,10 +560,14 @@ export async function putSavedDraft(env, clerkId, dataText) {
   if (!env.DB) return false;
 
   try {
-    await env.DB.prepare(
-      "INSERT INTO saved_drafts (clerk_id, data, updated_at) VALUES (?, ?, ?)" +
-      " ON CONFLICT(clerk_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at"
-    ).bind(clerkId, dataText, nowSeconds()).run();
+    const stamp = nowSeconds();
+    await env.DB.batch([
+      upsertUser(env, clerkId, stamp),
+      env.DB.prepare(
+        "INSERT INTO saved_drafts (clerk_id, data, updated_at) VALUES (?, ?, ?)" +
+        " ON CONFLICT(clerk_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at"
+      ).bind(clerkId, dataText, stamp)
+    ]);
     return true;
   } catch (err) {
     console.error("saved-draft write failed:", err && err.message);
@@ -585,12 +618,15 @@ export async function putHistoryEntry(env, clerkId, id, dataText, completedAt) {
 
   try {
     const stamp = nowSeconds();
-    await env.DB.prepare(
-      "INSERT INTO draft_history (id, clerk_id, data, completed_at, updated_at)" +
-      " VALUES (?, ?, ?, ?, ?)" +
-      " ON CONFLICT(id) DO UPDATE SET data = excluded.data," +
-      "   completed_at = excluded.completed_at, updated_at = excluded.updated_at"
-    ).bind(id, clerkId, dataText, completedAt, stamp).run();
+    await env.DB.batch([
+      upsertUser(env, clerkId, stamp),
+      env.DB.prepare(
+        "INSERT INTO draft_history (id, clerk_id, data, completed_at, updated_at)" +
+        " VALUES (?, ?, ?, ?, ?)" +
+        " ON CONFLICT(id) DO UPDATE SET data = excluded.data," +
+        "   completed_at = excluded.completed_at, updated_at = excluded.updated_at"
+      ).bind(id, clerkId, dataText, completedAt, stamp)
+    ]);
     return true;
   } catch (err) {
     console.error("history write failed:", err && err.message);
