@@ -8929,6 +8929,22 @@ document.addEventListener("visibilitychange", function () {
 });
 window.addEventListener("online", reconcileIfStale);
 
+/* And arriving at the locker, which is the one screen whose whole question
+   is "what have I drafted" — the moment somebody would notice an answer
+   that is missing a device. A tab that has been open and focused all
+   afternoon fires no visibilitychange at all, so without this the only
+   person the two events above cannot help is the one sitting on the very
+   screen this is for. Same debounce, so walking between routes costs
+   nothing. */
+window.addEventListener("hashchange", function () {
+  // The hash itself, not route(): that function answers "draft" or "home"
+  // for app.js's own two legacy views and has never had a name for the
+  // React locker, which owns its own hash-watching (see the note beside
+  // #draftroom-root). Matching the prefix keeps #/drafts and any future
+  // query on it, the same shape #/draft-room's own invite links take.
+  if (location.hash.replace(/^#\/?/, "").split("?")[0] === "drafts") reconcileIfStale();
+});
+
 // Never runs synchronously at boot — Clerk has not loaded by the time this
 // classic script does, so the first real answer arrives as an event,
 // exactly like headerInfo()'s juke:header. Resets the once-per-session
