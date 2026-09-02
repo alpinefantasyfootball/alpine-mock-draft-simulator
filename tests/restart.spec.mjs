@@ -34,11 +34,13 @@ import { openApp, startSoloDraft } from "./helpers.mjs";
 const REPORT = '#draftroom-root button:text-is("Run another mock")';
 
 /* Pressing Start raises DraftRoom's `starting` loader, which covers the whole
-   room for SonarLoader's full ring (2100ms). Asserting the view before it
+   room for its own floor plus a 220ms fade-out. Asserting the view before it
    lifts finds no report because nothing at all is rendered yet — which passes
    against the bug and proves nothing. phone.spec.mjs already waits this out
    the same way: wait for the room's own nav to exist rather than for a
-   duration, so the wait cannot rot the next time that floor moves. */
+   duration, so the wait cannot rot the next time that floor moves. It has
+   moved twice since this was written (2100 -> 500, and the loader itself
+   changed underneath it) and this function needed no edit either time. */
 async function waitForRoom(page) {
   await page.waitForFunction(() => {
     const root = document.getElementById("draftroom-root");
