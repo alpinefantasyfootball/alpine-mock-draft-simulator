@@ -48,16 +48,28 @@ import React from "react";
 const FOREGROUND = "#F2F5FA";
 
 // Assets live in web/public, same as the icons already there.
-// One entry per ground the mark can land on. `void` is the React marketing
-// ground, `obsidian` the legacy pages and the boot overlay, and the two
-// slate steps come from the two-surface split (see tailwind.config.js).
-const SURFACE = {
-  void:     "/juke-mark-void.svg",    // #070A0D negatives — Hero, Header, footer
-  obsidian: "/juke-mark.svg",         // #0B0E14 — 404, docs, the boot sonar
-  appbar:   "/juke-mark-appbar.svg",  // #1A222D — cockpit header, lobby bar
-  app:      "/juke-mark-app.svg",     // #1E2733 — anything on the app ground
-  light:    "/juke-mark-light.svg",   // #0E7C74 on #FFFFFF — light grounds
-};
+//
+// THERE IS ONE FILE NOW, AND THE FIVE-ENTRY TABLE THAT USED TO BE HERE IS
+// GONE. It is worth saying why, because the argument for that table was a good
+// one and it is still in CLAUDE.md: "a variant per ground, not one file you
+// recolour". The supplied artwork filled the eyes, teeth and jaw with the
+// CANVAS colour, so the mark was a cut-out and only worked on the exact ground
+// it was cut for - hence /juke-mark-void.svg at #070A0D, /juke-mark.svg at
+// #0B0E14, and three more.
+//
+// Design package 02's mark is not a cut-out. Its body is #1A222D, a real slate
+// that is not any page ground in this app, so the negatives are the shark
+// rather than a hole in the shape of one. Checked rather than taken on trust:
+// the old /juke-mark.svg fills 16 paths with #0B0E14 (obsidian, the page) and
+// the new one fills 11 with #1A222D (nothing). That is the whole difference,
+// and it is exactly the property the five variants were compensating for.
+//
+// So `surface` stays in the signature and is now ignored for the source. Kept
+// rather than removed because every call site passes it and a prop that
+// vanishes is a silent behaviour change at a dozen sites; it also still says
+// something true about intent, and if a ground ever needs its own cut again
+// this is where that comes back.
+const MARK = "/juke-shark-mark.svg";
 const MARK_DETAIL = "/juke-mark-detail.svg";         // adds shading, >= 120px only
 const MARK_FG = "/juke-mark-fg.svg";                 // white linework, for gradient/photo chrome
 const SILHOUETTE = "/juke-mark-mono.svg";            // one shape, used as a CSS mask
@@ -108,13 +120,14 @@ export function JukeMark({
     );
   }
 
-  // onLight predates `surface` and still wins, so the existing call sites
-  // that pass it keep behaving exactly as they did.
+  // onLight and `surface` both survive in the signature and neither picks a
+  // file any more — see the note on MARK for why there is only one. onLight
+  // still suppresses the detail variant, which is the one thing it did that
+  // was about more than which cut-out to load: MARK_DETAIL adds shading tuned
+  // for a dark ground and is genuinely wrong on white.
   const ground = onLight ? "light" : surface;
   const src =
-    detail && width >= DETAIL_ABOVE && ground !== "light"
-      ? MARK_DETAIL
-      : SURFACE[ground] || SURFACE.void;
+    detail && width >= DETAIL_ABOVE && ground !== "light" ? MARK_DETAIL : MARK;
 
   return (
     <img

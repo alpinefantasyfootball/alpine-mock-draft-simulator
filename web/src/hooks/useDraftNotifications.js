@@ -127,7 +127,7 @@ export function useDraftNotifications({ engine, myTurn, over, code }) {
     if (typeof document !== 'undefined' && document.visibilityState === 'visible') return
     try {
       // eslint-disable-next-line no-new
-      new Notification(title, { body, tag, icon: '/juke-app-icon-192.png' })
+      new Notification(title, { body, tag, icon: '/juke-icon-tile-192.png' })
     } catch {
       /* Notification construction throws on some engines even with
          permission granted (Android Chrome requires a service worker

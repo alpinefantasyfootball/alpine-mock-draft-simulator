@@ -118,7 +118,7 @@
   <link rel="stylesheet" href="/style.css?v=202609021105">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <link rel="manifest" href="/manifest.json">
-  <link rel="apple-touch-icon" href="/juke-app-icon-180.png">
+  <link rel="apple-touch-icon" href="/juke-icon-tile-180.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Juke">
@@ -130,9 +130,18 @@
        Unstamped, like every other file under web/public: these are Vite
        assets rather than legacy no-build files, so the ?v= convention above
        does not reach them. -->
-  <link rel="icon" href="/juke-favicon.svg" type="image/svg+xml">
-  <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png">
-  <link rel="icon" href="/favicon-16.png" sizes="16x16" type="image/png">
+  <!-- Design package 02. The head crop, not the full mark: at 16px the full
+       mark's fins swallow the head and it reads as a smudge, which is why the
+       package ships two crops rather than one asset at two sizes.
+
+       Order is the package's own and it matters. A browser takes the LAST
+       icon it understands, so the SVG leads and the rasters follow as the
+       fallback for anything that cannot render it; favicon.ico is last and
+       exists for the clients that ask for /favicon.ico by path and ignore
+       these tags entirely. -->
+  <link rel="icon" href="/juke-icon-tile.svg" type="image/svg+xml">
+  <link rel="icon" href="/juke-icon-tile-32.png" sizes="32x32" type="image/png">
+  <link rel="icon" href="/juke-icon-tile-16.png" sizes="16x16" type="image/png">
   <link rel="icon" href="/favicon.ico" sizes="any">
 
   <!-- ================ Deepwater, the cold-load overlay ================
@@ -358,8 +367,8 @@
        React header took over. It was also the goalpost's predecessor, which
        is to say two brand generations behind what the app actually shows.
 
-       The two <img> tags that replaced it name /juke-mark.svg, the same file
-       the React header loads, so they cost no extra request. Nothing in
+       The two <img> tags that replaced it name /juke-shark-mark.svg, the
+       same file the React header loads, so they cost no extra request. Nothing in
        app.js, theme.js or back-to-top.js ever referenced #jukeMark, .mark,
        .mark-body or .mark-accent - checked before removing it, because the
        rule about this file is that an unguarded lookup against missing
@@ -394,7 +403,7 @@
         </div>
 
         <a class="shell-brand" href="#/" aria-label="Juke home">
-          <img class="mark sm" src="/juke-mark.svg" width="51" height="32"
+          <img class="mark sm" src="/juke-shark-mark.svg" width="51" height="32"
                style="width:51px;height:32px;min-width:51px"
                alt="" aria-hidden="true">
           <span class="wordmark">JUKE</span>
@@ -436,7 +445,7 @@
                stroke-linecap="round" stroke-linejoin="round">
             <path d="M15 5 8 12l7 7"/>
           </svg>
-          <img class="mark" src="/juke-mark.svg" width="58" height="36"
+          <img class="mark" src="/juke-shark-mark.svg" width="58" height="36"
                style="width:58px;height:36px;min-width:58px"
                alt="" aria-hidden="true">
         </button>

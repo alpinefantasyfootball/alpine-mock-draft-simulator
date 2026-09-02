@@ -27,7 +27,15 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-SOURCES = ["favicon-16.png", "favicon-32.png", "favicon-48.png"]
+# Design package 02, item 8: the .ico carries 16/32/48 of the ICON TILE --
+# the head crop on navy -- not the full mark. At 16px the full mark's fins
+# swallow the head and it reads as a smudge, which is the whole reason the
+# package ships two crops rather than one asset at two sizes.
+#
+# These are written by scripts/build_brand_assets.mjs, which derives them
+# from juke-mark.js's own artwork. Run that first; this script re-traces
+# nothing and only wraps the PNG payloads in an .ico container.
+SOURCES = ["juke-icon-tile-16.png", "juke-icon-tile-32.png", "juke-icon-tile-48.png"]
 SRC_DIR = ROOT / "web" / "public"
 TARGETS = [ROOT / "favicon.ico", SRC_DIR / "favicon.ico"]
 
