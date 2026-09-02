@@ -2429,6 +2429,39 @@ check `dataReady()` first — `ScoringDemoCard.jsx` and `TakeAPick.jsx` do
 check it, and were fine; the bug was in the two bridge functions that had no
 guard of their own to fall back on.
 
+**And a guarded wrapper is only as safe as what its caller does with the
+answer.** `headerInfo()` was the third instance of this, found 1 September 2026,
+and it is the one where every guard involved was already correct. `pickInfo()`
+returns null while the engine is missing, exactly as designed. `headerInfo()`
+dereferenced `.slot` off it.
+
+Nothing above caught it first, and that is the part worth keeping: `draftOver()`
+answers **false** without the engine and `isMyTurn()` answers **false**, so both
+of the guarded branches above politely decline and execution falls through to
+the single line that is not guarded. Three wrappers behaving exactly as
+documented, composing into a TypeError.
+
+`state.started` is true inside that window on the path this section already
+names: `adoptRoom()`, off the room's own "state" broadcast, before the idle
+callback loads the engine. And `renderHeader()` is called from `render()`, so it
+was never one wrong string in a header — it took every panel with it, which is
+the same blast radius `applyJitter()` had from the same door.
+
+The fix is one early return at the top of `headerInfo()` rather than a check
+around that one expression, so the next line added below inherits it.
+`tests/header-boot.spec.mjs` holds it open by aborting the request for
+`draft-engine.js`, which covers the worse case as well: a deferred script that
+fails on a bad connection and never arrives. **It asserts both directions** — a
+guard that returned the resting header whether or not the engine had landed
+would fix the crash and leave every real draft with a blank header, which is a
+worse bug wearing a styling problem's clothes.
+
+**So the rule is not "guard the wrapper", it is "a null-returning wrapper needs
+a caller that reads null".** Grep for a `.` immediately after one of them before
+trusting the guard at the top of this file — `pickInfo()` and `onTheClock()` are
+the two that return null, and `inProgressSummary()` is the one that already
+guards itself.
+
 **Bump `?v=` in `index.html` on every deploy that changes a file it loads.**
 Everything the page asks for is cached, so without a version in the address a
 returning visitor runs today's HTML against Tuesday's JavaScript. That does
