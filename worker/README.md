@@ -18,8 +18,9 @@ the multi-user section of `CLAUDE.md`.
 | File | Role |
 |---|---|
 | `draft-room.js` | The Durable Object. Sockets, storage, the alarm — and nothing else. |
-| `store.js` | The D1 cache: the player pool and the headlines. Every function answers "no" to a missing binding rather than throwing. |
-| `migrations/` | The SQL. `0001_init.sql` creates `players`, `player_news` and `news_lookups`. |
+| `store.js` | The D1 cache: the player pool and the headlines. Every function answers "no" to a missing binding rather than throwing. Also the account-owned rows — `touchUser()`, the saved draft, the locker — which are not a cache and are the one thing in here that cannot be rebuilt from a feed. |
+| `auth.js` | `verifiedUser()`: is this `Authorization: Bearer` header a session Clerk actually issued. The one place the worker decides who is asking. |
+| `migrations/` | The SQL. `0001_init.sql` creates `players`, `player_news` and `news_lookups`; `0002_signup.sql` the waitlist; `0003_accounts.sql` and `0004_drafts.sql` the account, its saved draft and its locker. |
 | `wrangler.toml` | Bindings, the DO migration and the cron. One class, `DraftRoom`; one database, `juke_db`. |
 | `../room.js` | Who is sitting where, what has been picked, how long is left. Pure. |
 | `../draft-engine.js` | The rules of a snake draft. Pure. |
@@ -166,14 +167,46 @@ actually issued, and answer null rather than throwing if it is missing,
 malformed, expired or simply absent — no key configured included, same
 "answer no to a missing binding" contract `store.js` already uses for D1.
 
-**`GET /me`** is the first route built on it, and deliberately the simplest
-one possible: verify, record that this person was seen (`touchUser()` in
-`store.js`), answer `{ signedIn }`. Nothing saves or loads a draft yet — that
-is a later change, and it will call `verifiedUser()` the same way rather than
-re-deriving "who is this" a second time.
+**`GET /me`** is the simplest route built on it: verify, record that this
+person was seen (`touchUser()` in `store.js`), answer `{ signedIn }`.
+
+**`/me/draft` and `/me/history`** are what actually save and read anything,
+and they shipped — both go through `requireUser()`, which calls the same
+`verifiedUser()` rather than re-deriving "who is this" a second time.
+
+They answer **401** where `/me` answers `signedIn: false`, and the split is
+deliberate: `/me` exists so a caller can ask "am I logged in" without it
+being an error either way, while a route that can lose or leak somebody's
+draft draws the harder line.
+
+Both store the client's JSON **whole**, in a `data` column, rather than
+decomposed into columns here — `app.js` already carries its own
+backward-compatibility rules for both shapes, and a second server-side schema
+would either duplicate every one of them or drift from them. `completed_at`
+is the one field pulled out as a real column, for `ORDER BY` and nothing
+else, converted from `recordHistory()`'s milliseconds to this project's
+epoch-seconds convention at the route rather than leaving `store.js` to guess
+the unit. History is written one entry at a time, never in bulk: only one
+entry has ever actually changed, and sending the other 199 back every time is
+all cost.
 
 `wrangler secret put CLERK_SECRET_KEY` in production, same shape as
-`GIPHY_KEY`/`TANK01_KEY`; locally it goes in `.dev.vars` (see above).
+`GIPHY_KEY`/`TANK01_KEY`; locally it goes in `.dev.vars` (see above). **It
+belongs on this worker and nowhere else** — a `CLERK_SECRET_KEY` set on the
+Pages project does nothing at all, and looks exactly as configured as one
+that works. Production uses an `sk_live_` key from Clerk's production
+instance, which is a different instance from the development one with its own
+keys and its own user list.
+
+**Read `auth.js`'s comment before changing how the token is checked.** The
+`verifyToken` exported from `@clerk/backend`'s package root is
+`withLegacyReturn(verifyToken)` — it returns the JWT payload directly on
+success and **throws** on failure, which is not the `{ data } | { errors }`
+union the package's own internal `src/tokens/verify.ts` documents. Written
+against that union, this file rejected every valid session from the day
+accounts shipped until 1 September 2026, and logged `verifyToken refused: []`
+while doing it — an empty errors array being this code finding nothing to
+report rather than Clerk reporting no problem.
 
 **The `users` table has no email or name column, on purpose.** The client
 already has both, verified, straight from its own Clerk session the moment
@@ -370,10 +403,23 @@ binding is missing.
 
 ## Not done yet
 
-- `chooseFor()` returns `null`. The CPU's real opinion needs the board, which
-  is a megabyte of generated data the worker does not have. It will either be
-  handed it at deploy time or ask the first connected client for it.
-- No client. `app.js` does not know rooms exist yet.
-- Chat is relayed but not stored, so a late joiner sees an empty room.
-- GIPHY is not wired. The key must live here, not in the page — a key in
-  client-side JavaScript is public.
+Every item this list used to carry has since shipped, and the list stood
+unchanged long enough to describe a worker that no longer existed — a
+`chooseFor()` that is not in this file any more, an `app.js` that "does not
+know rooms exist yet", unstored chat, an unwired GIPHY. Checked before
+rewriting rather than assumed: `hostPick()` in `room.js` is the answer to the
+first (the host's browser is the CPU, because the board is a megabyte the
+worker does not have), and the other three are plainly in the code.
+
+What is actually open:
+
+- **The signed-in path has no automated coverage anywhere.**
+  `test-auth.mjs` proves every way of being *signed out* is refused cleanly,
+  and nothing offline can produce a token Clerk would sign. That gap is
+  exactly where the `verifyToken` bug above lived for as long as it did.
+- **Room creation is unlimited.** Actions within a room are rate limited
+  (forty per socket per ten seconds); creating rooms is not, and that belongs
+  on the edge rather than in the room.
+
+A roadmap for the product rather than this worker — the five rooms that are
+not built, auction drafts — lives in the repository's own `CLAUDE.md`.
