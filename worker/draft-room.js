@@ -29,7 +29,7 @@ import Room from "../room.js";
    rather than throwing, so this file works unchanged with no database — which
    is what keeps `wrangler dev --local` and the keyless news test running. */
 import {
-  syncPlayerPool, cachedNews, storeNews, usableNews, storeSignup, touchUser,
+  syncPlayerPool, cachedNews, storeNews, usableNews, storeSignup, touchUser, deleteUserData,
   getSavedDraft, putSavedDraft, deleteSavedDraft,
   listDraftHistory, putHistoryEntry, deleteHistoryEntry
 } from "./store.js";
@@ -41,6 +41,16 @@ import {
    (draft-engine.js) and its storage (this file) meet in DraftRoom rather
    than either one reaching into the other. */
 import { verifiedUser } from "./auth.js";
+/* Clerk signs its webhooks to the Standard Webhooks spec, and this is the
+   library it uses itself — it arrives as a transitive dependency of
+   @clerk/backend, and worker/package.json names it directly anyway so it
+   cannot vanish under us when that package reorganises its own deps.
+
+   Pure JavaScript (@stablelib/base64 and fast-sha256, with its own
+   constant-time compare), which is why it runs here at all: the Workers
+   runtime has no node:crypto, and a verifier that reached for one would
+   fail at the edge rather than in a test. Checked before it was chosen. */
+import { Webhook } from "standardwebhooks";
 
 /* How long after the last socket closes before the room is forgotten. Long
    enough that a phone locking, a tunnel, or closing a laptop for lunch does
@@ -1102,9 +1112,97 @@ async function meHistoryRoute(request, env) {
   return new Response(JSON.stringify(ok ? { ok: true } : { ok: false, error: "store-failed" }), { headers });
 }
 
+/* POST /webhooks/clerk — Clerk telling us an account is gone.
+
+   Clerk owns the account; this is the half Juke owns. Without it, deleting
+   a Clerk account left the drafts stored against it behind for ever, which
+   the privacy policy said out loud rather than pretending otherwise.
+
+   ---- Three things about this route are not like the others ----
+
+   **originAllowed() must not be applied to it.** Every other route here
+   refuses a caller whose Origin is not ours, which is right for a browser
+   and wrong for a server: Clerk posts from its own infrastructure and
+   sends no Origin header at all, so the check that protects the rest of
+   the worker would reject every real delivery and accept nothing else.
+   What replaces it is the signature, which is a stronger claim anyway —
+   an allowed Origin is a request that came from our page, a valid
+   signature is a request that came from Clerk.
+
+   **A missing secret is a refusal, not a shrug.** Everywhere else in this
+   worker an unconfigured binding answers "no" quietly and the product
+   carries on — the D1 cache, GIPHY, Tank01. That contract is exactly wrong
+   here, twice over: honouring an unverified delete would let anybody
+   delete anybody's drafts, and answering 200 without acting would tell
+   Clerk the delivery succeeded so it would never retry, losing the
+   deletion silently. A 500 is the honest answer: nothing was done, say so,
+   and Clerk redelivers once the secret exists.
+
+   **It is idempotent on purpose.** Clerk retries anything it does not hear
+   back from, so the same deletion can arrive twice; deleteUserData() is
+   DELETE-only and a delete of nothing is a success.
+
+   Events other than user.deleted are acknowledged and ignored. Clerk sends
+   whatever the endpoint is subscribed to, and a 200 for "understood, not
+   for me" keeps a misconfigured subscription from turning into an endless
+   retry loop against a route that will never care. */
+async function clerkWebhook(request, env) {
+  const json = { "content-type": "application/json" };
+
+  if (request.method !== "POST") {
+    return new Response(JSON.stringify({ error: "method" }), { status: 405, headers: json });
+  }
+
+  if (!env.CLERK_WEBHOOK_SECRET) {
+    console.error("clerk webhook: no CLERK_WEBHOOK_SECRET configured, refusing");
+    return new Response(JSON.stringify({ error: "not-configured" }), { status: 500, headers: json });
+  }
+
+  // The raw text, not a re-serialised object: the signature is over the
+  // exact bytes Clerk sent, and JSON.parse(...)+JSON.stringify(...) is not
+  // guaranteed to reproduce them.
+  const body = await request.text();
+  let event;
+  try {
+    event = new Webhook(env.CLERK_WEBHOOK_SECRET).verify(body, {
+      "webhook-id": request.headers.get("svix-id") || request.headers.get("webhook-id") || "",
+      "webhook-timestamp": request.headers.get("svix-timestamp") || request.headers.get("webhook-timestamp") || "",
+      "webhook-signature": request.headers.get("svix-signature") || request.headers.get("webhook-signature") || ""
+    });
+  } catch (err) {
+    // Deliberately terse to the caller and specific in the log. An
+    // unverified request is told nothing about why, and we are told
+    // everything — the same split the room's own refusals already keep.
+    console.error("clerk webhook: signature rejected:", err && err.message);
+    return new Response(JSON.stringify({ error: "bad-signature" }), { status: 400, headers: json });
+  }
+
+  if (!event || event.type !== "user.deleted") {
+    return new Response(JSON.stringify({ ok: true, ignored: (event && event.type) || null }), { headers: json });
+  }
+
+  const clerkId = event.data && event.data.id;
+  if (!clerkId) {
+    console.error("clerk webhook: user.deleted with no id");
+    return new Response(JSON.stringify({ error: "bad-request" }), { status: 400, headers: json });
+  }
+
+  const ok = await deleteUserData(env, clerkId);
+  if (!ok) {
+    // 500 so Clerk retries. A deletion that failed and reported success is
+    // the one outcome this route must never produce.
+    return new Response(JSON.stringify({ ok: false, error: "store-failed" }), { status: 500, headers: json });
+  }
+  return new Response(JSON.stringify({ ok: true }), { headers: json });
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+
+    /* Before the /me routes and outside their CORS handling entirely — a
+       webhook has no preflight and no Origin. See the route's own note. */
+    if (url.pathname === "/webhooks/clerk") return clerkWebhook(request, env);
 
     if (url.pathname === "/me") {
       if (request.method === "OPTIONS") {

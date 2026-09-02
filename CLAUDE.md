@@ -5156,6 +5156,54 @@ pill, Log in is plain text beside it: two equally loud controls in one row is
 the same "one primary action" rule the legacy stylesheet's teal buttons
 already answer to.
 
+### Deleting an account deletes what Juke holds, and that is a webhook
+
+Clerk owns the account and deletes it on its own. The half Juke owns did
+not exist: `saved_drafts` and `draft_history` rows outlived the account
+they belonged to, and the privacy policy said so out loud rather than
+promising otherwise — which was honest and is not a resting place, since
+somebody exercising a deletion right should not also have to send an email.
+
+`POST /webhooks/clerk` closes it. Three things about that route are not
+like the others here:
+
+- **`originAllowed()` may not be applied to it.** Clerk posts from its own
+  servers with no Origin header, so the check that protects every other
+  route would reject every real delivery. The signature replaces it and is
+  the stronger claim anyway: an allowed Origin says the request came from
+  our page; a valid signature says it came from Clerk.
+- **A missing secret refuses with a 500 rather than shrugging.** Everywhere
+  else an unconfigured binding answers "no" quietly and the product carries
+  on. Here that is wrong twice: honouring an unverified delete lets anybody
+  delete anybody's drafts, and a 200 that did nothing would tell Clerk the
+  delivery succeeded, so it would never retry and the deletion would be lost
+  in silence.
+- **It is idempotent because retries are the normal path.** Clerk redelivers
+  anything it did not hear back from. `deleteUserData()` is DELETE-only, and
+  a delete of nothing is a success.
+
+**Children before the parent, or the foreign key refuses** — the same
+constraint that made every write fail, from the other end. One batch, so a
+half-deleted account is not a state that can exist.
+
+**The verifier is `standardwebhooks`, and it is declared rather than
+inherited.** It arrives as a transitive dependency of `@clerk/backend`,
+which is not a thing to rely on; `worker/package.json` names it directly.
+It is pure JavaScript — no `node:crypto` — which is why it runs in the
+Workers runtime at all, and that was checked before it was chosen rather
+than after it failed at the edge.
+
+**The accept path cannot be tested offline**, the same gap the signed-in
+path has and for the same reason: nothing here can produce a signature the
+worker will accept without knowing its secret. `test-auth.mjs` covers every
+way of *not* being Clerk, which is the half that matters most — a false
+accept is somebody else's drafts gone — and the accept path is verified by
+hand against `wrangler dev` with a secret in `worker/.dev.vars`. See
+`worker/README.md`, including the trap that cost twenty minutes: `wrangler
+dev` reads `.dev.vars` at boot and hot-reloads code without re-reading it,
+so a server started before the file existed serves the new route with no
+secret for ever.
+
 ### What can be tested offline, and what cannot
 
 `node worker/test-auth.mjs`, against a running `wrangler dev --local`, covers
