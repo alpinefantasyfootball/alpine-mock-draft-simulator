@@ -74,12 +74,35 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: "22"
+          cache: npm
+          cache-dependency-path: worker/package-lock.json
+
+      # wrangler bundles the worker itself, but it does not fetch what the
+      # worker imports: auth.js does `import { verifyToken } from
+      # "@clerk/backend"`, and without node_modules that is an unresolved
+      # module and the build fails outright. This is the one place in the
+      # project where the worker needs an install — the site's own build has
+      # its own, and nothing else here has a dependency at all.
+      #
+      # It went missing from the first version of this file because a local
+      # dry-run compiled perfectly: worker/node_modules was simply already
+      # there. The first real run on a clean runner is what said otherwise,
+      # which is the whole argument for the dry-run step below running
+      # before the deploy rather than after it.
+      #
+      # `npm ci`, not `npm install`: the lockfile is committed and CI should
+      # build what it pins rather than resolving a fresh tree.
+      - name: Install the worker's dependencies
+        run: npm ci --prefix worker
 
       # Compiles the bundle without an account, which is the quickest check
       # that it is still valid — worker/README.md names this exact command.
       # Deliberately BEFORE the credential guard: an unconfigured repository
       # still gets a real answer about whether the worker builds, which is
-      # most of what a pull request wants to know anyway.
+      # most of what a pull request wants to know anyway. And deliberately
+      # before the deploy: a bundle that cannot compile must never reach a
+      # `wrangler deploy`, which is exactly what this step caught on its own
+      # first run.
       - name: Check the bundle compiles
         run: npx --yes wrangler@4 deploy --dry-run --outdir=/tmp/worker-build -c worker/wrangler.toml
 
