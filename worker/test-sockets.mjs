@@ -236,7 +236,27 @@ check("renaming rewrites what was already said",
    Stored against a message id and reported as a count plus whether it was
    you. The count is the point; who reacted is nobody's business, because
    telling anyone would mean handing out member ids. */
-const target = lastState(bob).chat.filter((m) => !m.system)[0];
+/* Waited for, not read off whatever happened to have arrived.
+
+   This was a snapshot taken at whatever moment the previous assertion
+   finished. Locally the message is always there by then; from a GitHub
+   runner, further from the Durable Object, it sometimes is not. The check
+   below used `target?.id` and so degraded politely to a recorded failure —
+   and the next line dereferenced `target.id` unguarded and took the whole
+   suite down with a TypeError, losing a hundred passing assertions to one
+   slow message.
+
+   That is this project's own "a null-returning read needs a caller that
+   reads null" rule, in the harness rather than the app. It surfaced only
+   once the deploy workflow began running this against production from a
+   machine that is not mine. Every other wait in this file already goes
+   through until(); this was the one that did not.
+
+   The fallback id is what keeps a timeout reporting rather than crashing:
+   the reaction assertions below then fail on their own terms, in a run
+   that still gets to the end and says what else was fine. */
+const target = (await until("a stored message reaches bob",
+                            () => lastState(bob)?.chat?.filter((m) => !m.system)[0])) || { id: -1 };
 check("a stored message carries an id", typeof target?.id, "number");
 
 bob.send(JSON.stringify({ type: "react", id: target.id, emoji: "\u{1F525}" }));
