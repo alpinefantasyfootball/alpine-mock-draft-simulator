@@ -796,10 +796,20 @@ error twelve samples buy.
 
 `PAR_SEEDS` is hard-coded and never `state.seed`, for the reason par exists at
 all: it has to be a property of the board, the same for every client in a room
-and the same tomorrow. Twelve puts the standard error of a chair's par at
-18.9/√12 = 5.5, well inside `MIN_SPAN.startersVsPar`; twenty-four would buy 3.9
-for twice the work. **The whole thing costs 30ms cold and 0ms warm**, measured,
-so the cache carries it comfortably.
+and the same tomorrow.
+
+**Twelve was derived against a wobble that has since changed, and the
+arithmetic had to be redone even though the answer did not move.** Under the old
+flat ±3 a chair's par moved with a standard deviation of 18.9 points, so twelve
+put the standard error at 18.9/√12 = 5.5. Scaling the wobble by each player's
+real ADP standard deviation roughly doubled the average board offset: measured
+30 August 2026 the per-chair par sd is **28.4**, so the standard error at twelve
+is **8.2** — still well inside `MIN_SPAN.startersVsPar` (20), on a margin of
+2.4× where it used to be 3.4×. Twenty-four would buy 5.8 for twice the work.
+**The whole thing costs 42ms cold and 0ms warm**, measured, so the cache carries
+it comfortably. Re-measure both if the wobble is ever scaled again; this is the
+"a justification can be sound and still be about something else" rule pointed at
+its own section.
 
 `bestAvailable()` grew `jitterOf` for this rather than the par run writing to
 `board[].jitter` and restoring it. That save-and-restore is exactly the shape
@@ -1029,16 +1039,19 @@ inverted arithmetic reads as correct until somebody knows enough football to
 notice the answer is absurd.
 
 **Kickers and defenses are excluded from draft value and from both
-callouts.** `cpuScore()` refuses a kicker before the last two rounds and a
-defense before the last three, and the suggestions never offer one earlier —
-so the app picks the timing, not the manager. Their ADP comes from drafts
-that run more rounds than most leagues here, which routinely puts a kicker's
-board rank past the last pick that exists, so taking one at all reads as
-early. Measured over a ten-team, fourteen-round draft, the mean gap ran
-WR +6, RB −2, QB −9, DST −12, TE −22, **K −35**, and every one of the ten
-kickers scored as a reach with none neutral. Grading somebody for obeying a
-rule the app enforces is not a judgement about drafting. Dropping them moved
-no team more than two places, because every team drafts the same forced pair.
+callouts, and only one of the two original reasons still holds.** This used
+to lead with "the app picks the timing, not the manager" — true while
+`needFromCount()` refused a kicker before the last two rounds and a defense
+before the last three, and false since those gates came out (see "Kickers and
+defenses are priced, not scheduled"). The exclusion survives on the argument
+that was always the stronger one. Their ADP comes from drafts that run more
+rounds than most leagues here, which routinely puts a kicker's board rank past
+the last pick that exists, so taking one at all reads as early. Measured over a
+ten-team, fourteen-round draft, the mean gap ran WR +6, RB −2, QB −9, DST −12,
+TE −22, **K −35**, and every one of the ten kickers scored as a reach with none
+neutral. That measurement is about the board's depth against the league's
+length, so removing the timing rule does not touch it. Dropping them moved no
+team more than two places, because every team drafts the same forced pair.
 
 **Roster construction measures cover, and it has to be graded rather than a
 threshold.** The old test was "fewer than starters + FLEX + 1 at the
@@ -1559,6 +1572,140 @@ is removed. `openSheet()` removes rather than blanks.
 three pixels out of the *inside* — `clientWidth` drops to 56 and the headshot
 is inset and shrunk. A test asserting the outer rect passes either way and
 proves nothing, which is what the first version of it did.
+
+## Kickers and defenses are priced, not scheduled
+
+`needFromCount()` refused a kicker before `rounds - 1` and a defense before
+`rounds - 2`. Both are gone. The two positions are now gated player by player
+by what they cost against the rest of the board, which is how every other
+position has always been gated, plus a per-seat appetite and a closing safety
+net.
+
+**The gate's real cost was that a calendar rule has no variance in it.**
+Measured 1 September 2026 against the real 480-player board, driving the app's
+own `cpuChoice()` in a browser — 60 drafts with the gate, 120 without. Every ADP
+and `sd` quoted in this section is off that morning's board and moves every
+night; the shapes are what do not:
+
+```
+                        gate             after           reference
+first D/ST           111-112         72-89 (avg 81)   FFC DST1 ADP 81.6
+first K              121-123        103-128 (avg 114)  FFC K1 ADP 125.8
+rounds with a DST        2-3              4-7          Sleeper 2026: 2-7
+rounds with a K            2              2-4          Sleeper 2026: 2-5
+K+DST in the last round 8-10 of 20    8-10 of 20       Sleeper 2026: 7-10 of 20
+seats short a K or DST  0 of 600      0 of 1200        must stay 0
+```
+
+**A one-pick spread across sixty drafts is the indictment**, and the first row
+is the whole of it: every room the app had ever run took its first defense on
+the same pick of the same round, thirty picks after the market says it goes.
+
+**This table was first written against the 232-player board of 30 August and
+two of its rows were wrong within a day**, which is worth keeping as a warning
+rather than quietly correcting. On that board the gate produced *all ten*
+defenses in round 12, *all ten* kickers in round 13, and **nothing at all** in
+the final round. The deep-bench work landed on `main` the next day, the pool
+went 232 to 480, and with more skill players still worth taking in round 12 the
+gated draft started spilling into 13 and 14 on its own. So "not one of either in
+the final round" — a line that read as the most damning fact in the whole
+section — became false without anybody touching the gate. **A measurement is
+true of the board it was taken on, and this project regenerates the board
+nightly.** The rows that survived are the ones about variance.
+
+**The board's own data already disagreed with the CPU.** Seattle Defense carries
+an FFC ADP of 81.6 — round nine of a ten-team draft — while the CPU refused to
+look at a defense until round twelve. A rule contradicted by the data file
+sitting next to it is not a modelling choice.
+
+**`sd` was on every row of `players.js` all along and `applyJitter()` threw it
+away.** FFC publishes the real standard deviation of each player's draft
+position and the wobble was a flat ±3 for everybody. Jahmyr Gibbs' sd is 0.7 and
+Jason Myers' is 23.3 — so the top of the board is now nearly settled, as it is in
+life, and the deep bench scatters. A deep-bench row carries `sd: 0`, having no
+real ADP sample to take a deviation from, and 0 is falsy, so `p.sd || 6` catches
+it — the "treat 0 from a feed as missing" rule doing its job on 247 of 480 rows. It is most of the realism, from data already
+in the repository, for the cost of reading a field. It also made drafts *more*
+different from each other, not less: 102 to 122 of 140 picks differ between
+seeds, against the 60 to 73 CLAUDE.md records under the flat wobble.
+
+**A seat's appetite is what breaks the wall, and it has to be per seat.**
+`KD_ARCHETYPES` gives each chair one of three opinions per position — reaches,
+normal, waits it out — drawn deterministically from `DraftEngine.seatRoll(slot,
+seed, salt)`. Ten managers do not all decide they need a defense on the same
+pick, and a single shared opinion is a wall however it is priced. The salt
+separates the two questions: unsalted, every seat that reaches for a defense
+reaches for a kicker too.
+
+**`seatRoll`'s slot multiplier is doing real work.** It is odd and coprime with
+the modulus, so consecutive chairs land an irrational-looking step apart and ten
+seats come out spread across 0..1 rather than clumped. A plain random draw would
+occasionally hand a whole room the same archetype, which is the failure being
+fixed.
+
+**Last call is the one thing the gate did buy and the one thing that may not be
+given up.** When a seat's remaining picks equal what it still owes at K and DST,
+the multiplier drops to `KD_LAST_CALL` and it fills. Zero rosters short across
+2500 seats, and `tests/kd-timing.spec.mjs` asserts that one exactly while every
+other bound in it is a loose tolerance.
+
+### `spread()`'s multipliers may not agree modulo the modulus
+
+The triangular draw is two uniforms summed. The first pair tried was
+`7919`/`5081`, and it produced a textbook triangle: mean 0.000, sd 0.408, three
+quarters of the mass inside the middle half — every property the function is
+supposed to have, on the only check anybody thinks to run.
+
+It was still wrong. 919 + 81 is exactly 1000, so x and y step in opposite
+directions by the same amount and their sum only moves when one of them wraps.
+**Consecutive board positions came back correlated at 0.57**: the board shifted
+in blocks of a dozen players rather than neighbours swapping, which is the
+entire point of a wobble. Visible on the live board as the first seven players
+all wobbling −0.2 to −0.6 and the next three all +0.7 to +0.9.
+
+`3571` puts that correlation at **0.014** with the marginal shape unchanged.
+**Measure the correlation along the board, not just the distribution** —
+`scripts/test_engine.py` now asserts both, and only the second one fails.
+
+### What the gate was silently holding up
+
+Removing it invalidated the *justification* for four other things, and only one
+of them actually had to change:
+
+- **`FORCED_LATE` / `freelyChosen()` — kept, reasoning rewritten.** See the
+  draft-grade section above.
+- **`bestUpgrade()`'s pool — had to change.** It excluded K and DST outright,
+  because an empty mandatory slot costs 14 points of build and any rostered
+  kicker fills it, so the simulation would recommend one in round 2. The gate
+  was the containment and the blanket exclusion was shorthand for it. It is
+  `kdInPlay()` now — would a CPU in this chair currently be choosing between a
+  defense and the best skill player left — which is the same price test the CPU
+  itself applies and needs no new threshold.
+- **`COUNTED_POSITIONS` — DST earned a column, K did not.** See above.
+- **`bestLeft()` — kept.** Deprioritising these two in a last-resort fallback is
+  still right; it has no roster and no round to reason with.
+
+**And `draftFit().legalFromRound` with it.** It fed a banner on the player sheet
+reading "the app doesn't take a K before round 13". Left in place,
+`earliestRoundFor()` would have returned 1 for every position and the banner
+would simply never have fired — a field nothing can draw, and an invitation to
+put the sentence back without the reasoning that took it out. Both are deleted,
+along with the banner in `DraftFitTab.jsx`.
+
+**Eight assertions across three spec files described the gate rather than the
+product, and none of them could fail while it stood.** Five in `solo.spec.mjs`,
+two in `autopick-adp.spec.mjs` and one in `journey.spec.mjs` — "no kicker before
+round 13", `earlyKicker === 0`, and the rest — were restating `needFromCount()`
+back to itself, which is a tautology wearing a test's clothes. **The eighth was
+written after this change was already made**, in `main`'s deep-board test ("no
+kicker before round 19" at twenty rounds), which is the thing to expect when a
+rule is removed on a branch: the rest of the world goes on writing assertions
+about it until the branch lands. Every one is
+re-aimed at what the new rule actually promises: every seat finishes with
+exactly the kicker and defense the format starts, which is the promise the gate
+was really protecting and the only one worth asserting exactly. (An eighth,
+`grade.spec.mjs`'s seat-bias test, went red for a different reason — see "A
+one-draft correlation is not a bound".)
 
 ## The suggestions
 
@@ -2376,10 +2523,10 @@ overwrites them. Change `build_players.py` instead.
 
 **Nothing about the league shape may be written down twice.** `app.js` has
 one `league` object and everything else derives from it — replacement level,
-roster limits, the starting lineup, the round a kicker becomes legal, even
-the prose in the method notes. The old code spelled "ten teams" out in a
-dozen places and carried a hand-picked replacement level that was only
-correct for one of them.
+roster limits, the starting lineup, the last call that makes a seat fill its
+mandatory slots, even the prose in the method notes. The old code spelled
+"ten teams" out in a dozen places and carried a hand-picked replacement level
+that was only correct for one of them.
 
 **FFC's `teams=` parameter does nothing.** It is echoed back in the response
 meta, so it looks like it worked, but 8, 10, 12 and 14 all return the same
@@ -3782,11 +3929,15 @@ the defect is in what is *absent*, and absence renders, contrasts and passes.
 **Your own turn draws both rings, nested.** It is the one cell on the board
 where the two facts coincide, and letting either win throws the other away.
 
-**What each team holds is on the board, and which positions get counted is
-derived.** `FORCED_LATE` already names the two the app schedules itself, so
-`COUNTED_POSITIONS` is `POSITIONS` minus those — listing QB, RB, WR and TE
-would be the league shape written down a second time. Counting a kicker is
-eight columns of "0" until the closing rounds and eight of "1" after them.
+**What each team holds is on the board, and `COUNTED_POSITIONS` is everything
+but the kicker.** It was `POSITIONS` minus `FORCED_LATE`, on the grounds that
+counting either of those two was eight columns of "0" until the closing rounds
+and eight of "1" after them. That is now true of one of them and not the other:
+with the round gates gone, defenses land across four to seven distinct rounds
+from about round 8, and kickers across two to four, effectively all in the last
+two (measured 1 September 2026 over 120 drafts). So DST earns a column and K does not. Listing QB, RB, WR and TE would still
+be the league shape written down a second time, which is why the constant names
+the one position it excludes rather than the four it keeps.
 
 **Each count carries its own ground, and that is the whole reason it is a chip
 rather than coloured text.** White on a position solid is the contract those
@@ -4618,6 +4769,28 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   machinery exists and simply was not used. Stage explicit paths, never the
   tree, and restart any dev server after another session touches config.
 
+  **A worktree does not separate the test ports, and that is the one thing it
+  cannot fix.** `playwright.config.mjs` pins 8765 and 8787 deliberately —
+  `live.js` decides where the room is from the address bar, so the worker has to
+  be on that port — which means two sessions running the suite at once are
+  fighting over one pair of ports whatever directory they are in. Measured 30
+  August 2026: a full run went 42 tests in and then failed 25 with
+  `net::ERR_CONNECTION_REFUSED`, because a second session's servers came up on
+  8765 at 23:04 and took the port out from under it.
+
+  **The tell is a byte count, not an error.** `reuseExistingServer` is true, so
+  the surviving server is *adopted* rather than refused, and the suite goes on
+  running against whatever it serves. Here it was a different checkout: 511,837
+  bytes of `app.js` against 508,633 in this one's `web/dist`, and the feature
+  under test absent from it. Ask what is actually being served before believing
+  a red run — `curl -s "http://localhost:8765/app.js?cb=1" | grep -c <a symbol
+  your change adds>` settles it in one line, and it is the same `?cb=`
+  instruction this file already gives about deploys, pointed at localhost.
+
+  So check the ports before starting a long run, and treat a cascade of
+  connection failures partway through as the other session arriving rather than
+  as anything about the app.
+
 - **A long-lived `vite dev` does not reload `tailwind.config.js`, and the way
   it fails looks like a design regression rather than a stale server.**
 
@@ -4979,10 +5152,14 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   harness stalling, not the app.
 
 - Before claiming a change works, run a full simulated draft and confirm
-  140 picks, no duplicate players, 14 per team, no kicker before round 13.
-  Then run one at a different shape — 12 teams, 15 rounds, full PPR, **bench
-  6** — and confirm 180 picks, 15 per team, one QB each and no kicker before
-  round 14.
+  140 picks, no duplicate players, 14 per team, and every seat holding exactly
+  the kicker and defense the format starts. Then run one at a different shape —
+  12 teams, 15 rounds, full PPR, **bench 6** — and confirm 180 picks, 15 per
+  team, one QB each and the same K/DST check.
+
+  That check used to be "no kicker before round 13", which was the round gate
+  and could not fail while the gate existed. The gate is gone; what it was
+  really protecting is the roster, and that is what to assert.
 
   The bench matters and this file used to leave it out. The default lineup is
   eight starters plus a FLEX plus five bench, which is fourteen roster spots,
@@ -5288,6 +5465,42 @@ the header's real height now. **Assert the relationship, never an absolute
 offset** — the same rule this file already states about the padding that
 stands in for a fixed header's height, learned again on the number underneath
 it.
+
+### A one-draft correlation is not a bound, and a bigger wobble found out
+
+`grade.spec.mjs`'s "the chair a manager drafts from does not decide their grade"
+ran one draft, correlated chair against finishing rank across ten seats, and
+asserted the result stayed under 0.35. It went red at **0.370** when the board
+wobble started using each player's real ADP standard deviation.
+
+**Nothing about the seat bias got worse — it got better.** Measured per chair
+over twenty seeds, |chair vs mean rank| went **0.289 before to 0.185 after**.
+What changed is that the wobble roughly doubled, which is realistic and makes
+any *single* draft noisier: across sixteen seeds the one-draft figure crossed
+0.35 on **3 of 16** after and **1 of 16** before. The test had a standard error
+near 0.38 on a bound of 0.35 — the estimator was noisier than the effect it was
+bounding, and it had been passing on the luck of one hard-coded seed.
+
+**The fix is not a looser number on the same estimate.** It is to measure the
+mean by chair, which is how the par work in this file was actually done ("mean
+`startersVsPar` by chair over ten mocks") and how the test was implemented
+nowhere. Averaged over six seeds the figure came out 0.057, 0.195, 0.254 and
+0.272 across four independent sets, so **0.40 is a bound with margin rather than
+a threshold sitting inside its own noise**.
+
+**Averaging made the test stronger in both directions**, which is the tell that
+it was the right change rather than a way to get to green. Draft luck cancels
+and the structural seat effect is all that survives, so the premise assertion —
+raw starter strength is still seat-driven — went from about 0.5 to **0.78–0.85**
+and its bound could be raised from 0.4 to 0.5. And against the bug it exists for
+(scaling `starters` instead of `startersVsPar`) it now reads **0.838 against a
+0.40 bound**, where the one-draft version read 0.50 against 0.35.
+
+**A sweep over seeds has two traps and this one had both.** `PAR_CACHE` is keyed
+without the seed, so a sweep that does not clear it grades every seed against
+the first one's par; and `startDraft()` does not clear `state.picks`, so a loop
+that forgets measures one draft six times at a variance of exactly zero. Both
+are reset by hand inside the evaluate.
 
 ### `actionTimeout` was unset, and that is why a stale locator cost six minutes
 
@@ -5656,9 +5869,9 @@ has already half-found.
 cap is not one rule: `maxAt()` for the skill positions, the starting
 requirement for a kicker or a defense, `starters.QB + superflex` for a
 quarterback. Writing that down a second time is precisely how the superflex bug
-happened. The last round is passed in so the K and DST *timing* gates do not
-fire — this is a question about a roster, not about when a kicker becomes
-legal.
+happened. The round argument no longer changes the answer — the K and DST
+timing gates it used to step around are gone, and every remaining 999 comes
+from a cap that has nothing to do with the calendar.
 
 And when a test asks "was it my turn", **read it before the test stuffs the
 roster, not after.** Pushing picks straight into `state.picks` to reach a cap

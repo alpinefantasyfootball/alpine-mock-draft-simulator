@@ -411,12 +411,12 @@ export default function DraftInsightsDashboard({
     const forced = engine.forcedLate() || {}
     const teamPicks = picks.filter((p) => p.slot === viewSlot).slice().sort((a, b) => a.overall - b.overall)
 
-    /* The value timeline judges only the picks this team was free to time —
-       the same FORCED_LATE exclusion the grade's value component applies,
-       and for the same documented reason: the app itself schedules kickers
-       and defenses into the closing rounds, and their long-draft ADP makes
-       every one of them read as a reach. Naming a kicker the worst pick was
-       a real bug once; it does not come back through a new panel. */
+    /* The value timeline leaves out the two positions a fall past ADP says
+       nothing about — the same FORCED_LATE exclusion the grade's value
+       component applies, and for the same documented reason: kicker and
+       defense ADP is drawn from drafts longer than these, so every one of
+       them reads as a reach. Naming a kicker the worst pick was a real bug
+       once; it does not come back through a new panel. */
     timeline = teamPicks
       .filter((p) => !forced[p.player.pos])
       .map((p) => ({ round: p.round, overall: p.overall, pos: p.player.pos, name: engine.shortName(p.player), gap: p.overall - p.player.overall }))
@@ -765,8 +765,8 @@ export default function DraftInsightsDashboard({
               ))}
             </div>
             <p className="mt-3 text-[10px] leading-relaxed text-ink-muted">
-              Kickers and defenses sit this out too — the app schedules those picks itself, so their
-              timing says nothing about the drafting.
+              Kickers and defenses sit this out too — their ADP comes from longer drafts than this one,
+              so every one of them reads as a reach whenever you take him.
             </p>
           </motion.section>
 

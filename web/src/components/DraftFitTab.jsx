@@ -34,13 +34,13 @@ export default function DraftFitTab({ fit, player }) {
   }
 
   const { tierLeft, posLeft, picksAway, nextOverall, adp, have, atCap,
-          startsNow, byeClash, bye, market, unranked, legalFromRound, round } = fit
+          startsNow, byeClash, bye, market, unranked } = fit
 
-  // The app schedules kickers and defenses itself — it refuses one before the
-  // closing rounds and never suggests one earlier. So "should I take him now"
-  // has an answer here that has nothing to do with the player, and saying it
-  // is the difference between advice and a shrug.
-  const tooEarly = legalFromRound !== null && round !== null && round < legalFromRound
+  /* There was a banner here saying the app would not take a kicker or a
+     defense before a named round. It came off with the round gates in app.js
+     that made it true: a seat picks its own moment for both positions now, so
+     `legalFromRound` no longer exists to read and the sentence it wrote was
+     the opposite of what the engine does. */
 
   // A gap of one is a spot, not spots. Small, and it is the sort of thing
   // that makes generated copy read as generated.
@@ -70,14 +70,6 @@ export default function DraftFitTab({ fit, player }) {
 
   return (
     <div className="flex flex-col gap-4">
-      {tooEarly && (
-        <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] leading-relaxed text-amber-200/90">
-          It's round {round}. The app doesn't take a {player.pos} before round{' '}
-          {legalFromRound}, and won't suggest one until then — those points are
-          still there in the closing rounds, and the roster spot isn't.
-        </p>
-      )}
-
       <div className="grid grid-cols-2 gap-2">
         <FitRow
           label="Left in his tier"

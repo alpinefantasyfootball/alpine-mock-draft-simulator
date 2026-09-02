@@ -527,55 +527,112 @@ test("a room of identical drafters does not produce a full-scale grade spread", 
    of re-centring it.
 
    Confirmed against the bug: scaling `starters` instead of `startersVsPar` in
-   analyseDraft() puts seat-vs-rank at +0.50 and fails the first assertion. */
+   analyseDraft() makes finishing rank track raw starter strength, whose own
+   chair correlation is 0.78 to 0.85 here — far past the bound below.
+
+   **It averages over seeds, and it used to be one draft.** A single room is ten
+   points, so a correlation off it carries a standard error near 0.38 — the
+   estimator was noisier than the effect it was bounding, and it passed on seed
+   24757 because that seed happened to land at -0.07. Sizing the wobble by each
+   player's real ADP standard deviation rather than a flat +/-3 roughly doubled
+   the average board offset, which is realistic and made every single-draft
+   correlation noisier with it: measured across sixteen seeds, |seat vs rank|
+   went over 0.35 on 3 of 16 after the change and 1 of 16 before, on a bound of
+   0.35. Nothing about the seat bias itself got worse — averaged per chair over
+   twenty seeds it *improved*, from 0.289 to 0.185.
+
+   So the fix is not a looser number on the same one-sample estimate. It is to
+   measure what the comment above always claimed to measure: **the mean by
+   chair**, which is how CLAUDE.md's own par work was done ("mean
+   `startersVsPar` by chair over ten mocks") and how it was implemented nowhere.
+   Over four independent six-seed sets the averaged figure came out 0.057,
+   0.195, 0.254 and 0.272, so 0.40 is a real bound with real margin rather than
+   a threshold sitting inside its own noise. */
+const CHAIR_SEEDS = [1103, 2207, 3301, 4409, 5501, 6607];
+
 test("the chair a manager drafts from does not decide their grade", async ({ browser }) => {
   const context = await browser.newContext();
   const page = await openApp(context, "#/draft-room");
   await startSoloDraft(page);
 
-  const out = await page.evaluate(() => {
-    state.seed = 24757;
-    applyJitter();
-    let guard = 0;
-    while (!draftOver() && guard++ < 900) {
-      const c = onTheClock();
-      if (!c) break;
-      // Every seat on the identical rule, so any seat-shaped signal left in
-      // the result is the metric rather than the drafting.
-      const choice = cpuChoice(c.slot, c.round);
-      if (!choice) break;
-      makePick(choice);
-    }
-    const all = analyseDraft().slice().sort((a, b) => a.slot - b.slot);
+  const out = await page.evaluate((seeds) => {
+    const teams = league.teams;
+    const rank = new Array(teams).fill(0);
+    const raw = new Array(teams).fill(0);
+    const vsPar = new Array(teams).fill(0);
+    let everySeatHasPar = true;
+
+    seeds.forEach(function (seed) {
+      /* Par is cached on the board and keyed without the seed, so a sweep that
+         does not clear it grades every seed against the first one's par. And
+         startDraft() never clears state.picks — CLAUDE.md's "a loop over seeds
+         is a lie" — so both are reset by hand or this measures one draft six
+         times, at a variance of exactly zero. */
+      PAR_CACHE.clear();
+      state.picks.length = 0;
+      board.forEach(function (p) { p.drafted = false; });
+      state.seed = seed;
+      applyJitter();
+
+      let guard = 0;
+      while (!draftOver() && guard++ < 900) {
+        const c = onTheClock();
+        if (!c) break;
+        // Every seat on the identical rule, so any seat-shaped signal left in
+        // the result is the metric rather than the drafting.
+        const choice = cpuChoice(c.slot, c.round);
+        if (!choice) break;
+        makePick(choice);
+      }
+
+      analyseDraft().forEach(function (t) {
+        rank[t.slot] += t.rank;
+        raw[t.slot] += t.starters;
+        vsPar[t.slot] += t.startersVsPar;
+        if (!(t.par > 0)) everySeatHasPar = false;
+      });
+    });
+
+    PAR_CACHE.clear();
+    state.picks.length = 0;
+    board.forEach(function (p) { p.drafted = false; });
+
+    const n = seeds.length;
     const corr = (a, b) => {
       const mean = (x) => x.reduce((p, q) => p + q, 0) / x.length;
       const ma = mean(a), mb = mean(b);
-      let n = 0, da = 0, db = 0;
+      let num = 0, da = 0, db = 0;
       for (let i = 0; i < a.length; i++) {
-        n += (a[i] - ma) * (b[i] - mb);
+        num += (a[i] - ma) * (b[i] - mb);
         da += (a[i] - ma) ** 2;
         db += (b[i] - mb) ** 2;
       }
-      return n / Math.sqrt(da * db);
+      return num / Math.sqrt(da * db);
     };
-    const seats = all.map((t) => t.slot + 1);
+    const chairs = [];
+    for (let i = 0; i < teams; i++) chairs.push(i + 1);
+    const meanVsPar = vsPar.map((v) => v / n);
+
     return {
-      seatVsRank: corr(seats, all.map((t) => t.rank)),
-      seatVsRawStarters: corr(seats, all.map((t) => t.starters)),
-      parIsReal: all.every((t) => t.par > 0),
+      seatVsRank: corr(chairs, rank.map((v) => v / n)),
+      seatVsRawStarters: corr(chairs, raw.map((v) => v / n)),
+      parIsReal: everySeatHasPar,
       // par has to re-centre the number, not flatten it
-      vsParSpread: Math.max(...all.map((t) => t.startersVsPar))
-                 - Math.min(...all.map((t) => t.startersVsPar)),
+      vsParSpread: Math.max(...meanVsPar) - Math.min(...meanVsPar),
+      drafts: n
     };
-  });
+  }, CHAIR_SEEDS);
   await context.close();
 
-  expect(Math.abs(out.seatVsRank), "the chair does not predict finishing rank").toBeLessThan(0.35);
+  expect(out.drafts, "the sweep really ran every seed").toBe(CHAIR_SEEDS.length);
+  expect(Math.abs(out.seatVsRank), "the chair does not predict finishing rank").toBeLessThan(0.4);
 
   /* The premise. If identically-drafted seats ever stop differing this much in
      raw terms there is no seat bias left to correct and the assertion above is
-     measuring nothing. */
-  expect(Math.abs(out.seatVsRawStarters), "while the raw figure is still seat-driven").toBeGreaterThan(0.4);
+     measuring nothing. Averaging makes this one sharper, not looser: the draft
+     luck cancels and the structural seat effect is all that is left, so it runs
+     0.78 to 0.85 where a single room gave about 0.5. */
+  expect(Math.abs(out.seatVsRawStarters), "while the raw figure is still seat-driven").toBeGreaterThan(0.5);
   expect(out.parIsReal, "every seat got a par, so none was silently ungraded").toBe(true);
   expect(out.vsParSpread, "par re-centres the component rather than flattening it").toBeGreaterThan(20);
 });

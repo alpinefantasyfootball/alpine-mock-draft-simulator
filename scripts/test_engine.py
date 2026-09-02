@@ -169,6 +169,64 @@ check("jitter is in range", (function () {
 })(), [true, true]);
 check("jitter differs by seed", E.jitter(42, 1) === E.jitter(42, 2), false);
 
+// seatRoll: the CPU's kicker/defense appetite is drawn from this, so a room
+// where two clients disagree about it drafts two different rooms.
+check("seatRoll is stable", E.seatRoll(3, 12345, 7), E.seatRoll(3, 12345, 7));
+check("seatRoll is a 0..1 roll", (function () {
+  let lo = 9, hi = -9;
+  for (let seed = 0; seed < 500; seed++) {
+    for (let slot = 0; slot < 24; slot++) {
+      for (const salt of [7, 11]) {
+        const r = E.seatRoll(slot, seed * 1997, salt);
+        if (r < lo) lo = r;
+        if (r > hi) hi = r;
+      }
+    }
+  }
+  return [lo >= 0, hi < 1];
+})(), [true, true]);
+// The salt is what keeps two questions of one seat apart. Unsalted, every
+// chair that reaches early for a defense would reach early for a kicker too.
+check("seatRoll separates its two salts",
+  E.seatRoll(3, 12345, 7) === E.seatRoll(3, 12345, 11), false);
+// Ten chairs must not draw the same number, or the appetite is one shared
+// opinion again and the wall it replaced comes straight back.
+check("seatRoll spreads across the chairs", (function () {
+  const seen = new Set();
+  for (let slot = 0; slot < 10; slot++) seen.add(Math.floor(E.seatRoll(slot, 12345, 11) * 5));
+  return seen.size >= 4;
+})(), true);
+
+// spread: a triangular -1..+1 draw, scaled by a player's own published ADP
+// standard deviation on the way out.
+check("spread is stable", E.spread(42, 12345), E.spread(42, 12345));
+check("spread is in range", (function () {
+  let lo = 9, hi = -9;
+  for (let seed = 0; seed < 300; seed++) {
+    for (let pos = 1; pos <= 300; pos++) {
+      const v = E.spread(pos, seed * 4999);
+      if (v < lo) lo = v;
+      if (v > hi) hi = v;
+    }
+  }
+  return [lo >= -1, hi <= 1];
+})(), [true, true]);
+/* The one that actually failed. 7919 and 5081 give a textbook triangular
+   histogram and still correlate adjacent board positions at 0.57, because
+   919 + 81 is exactly 1000 — the two uniforms step in opposite directions by
+   the same amount, so their sum only moves when one of them wraps, and the
+   board shifts in blocks of a dozen players instead of neighbours swapping.
+   The marginal shape does not catch it; this does. */
+check("spread does not correlate along the board", (function () {
+  const row = [];
+  for (let pos = 1; pos <= 300; pos++) row.push(E.spread(pos, 12345));
+  const mean = row.reduce((a, b) => a + b, 0) / row.length;
+  let num = 0, den = 0;
+  for (let i = 0; i < row.length - 1; i++) num += (row[i] - mean) * (row[i + 1] - mean);
+  for (let i = 0; i < row.length; i++) den += (row[i] - mean) * (row[i] - mean);
+  return Math.abs(num / den) < 0.2;
+})(), true);
+
 // A full simulated draft driven only by the engine: no duplicates, right
 // number of picks, every seat with the right count.
 (function () {
