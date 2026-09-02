@@ -17,6 +17,7 @@ export default function DraftEntryScreen({
   onClaimSeat,
   autopick,
   onOpenSettings,
+  onInvite,
 }) {
   const scoringNames = engine.scoringNames()
   const lineup = engine.seatedLineup(mySlot)
@@ -80,9 +81,39 @@ export default function DraftEntryScreen({
       <div className="border-white/[0.06] px-[18px] py-5 lg:border-r">
         <div className="mb-3.5 flex items-baseline justify-between">
           <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-white/50">This draft</span>
-          <button type="button" onClick={onOpenSettings} className="text-xs font-semibold text-teal-300 hover:text-teal-200">
-            Edit
-          </button>
+          <span className="flex items-baseline gap-3">
+            {/* The invite, on the one screen a host can reach without ever
+                having seen it.
+
+                DraftWithFriendsModal surfaces the link the moment a room is
+                created and deliberately does not advance past it — but that
+                whole screen is the Lobby, and a host does not always come
+                through the Lobby. `state.started` stays true once a draft
+                has finished (CLAUDE.md says so under "leaving the draft is
+                not discarding it"), so DraftRoom's `enteredRoom` is already
+                true by then and the Lobby branch never renders: finish a
+                mock, press Draft with friends, create a room, and you land
+                here with the room real, the link minted, and nothing on
+                screen offering it. Reproduced on production in that exact
+                order.
+
+                So the invite lives where the room does rather than only
+                where it was born. It opens the same modal — RoomPanel, one
+                copy of "your room, its link, its seats" — rather than a
+                second rendering of a link that would drift from it. */}
+            {onInvite && (
+              <button
+                type="button"
+                onClick={onInvite}
+                className="text-xs font-semibold text-teal-300 hover:text-teal-200"
+              >
+                Invite
+              </button>
+            )}
+            <button type="button" onClick={onOpenSettings} className="text-xs font-semibold text-teal-300 hover:text-teal-200">
+              Edit
+            </button>
+          </span>
         </div>
         <div className="flex flex-col gap-[3px]">
           {rows.map((r) => (

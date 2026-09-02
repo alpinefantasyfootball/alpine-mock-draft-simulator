@@ -215,9 +215,21 @@ export default function DraftLocker({ onStartNew, onRunAtSeat, problem, lobbySlo
      there is one, and the ref is what stops it re-opening a report the
      reader has since closed. */
   const openedInitial = useRef(false)
+  /* Whether the report on screen was opened FROM the phone's Mock Drafts
+     list rather than from the dashboard's own table.
+
+     Closing has to land where the reader came from, and those are two
+     different places. Reported directly: open a finished mock from the
+     phone list, close the report, and you arrive on the desktop-style
+     "Draft Lobby" dashboard — a screen that was never on the way in.
+     setAnalyzingId(null) alone can only ever fall back to this component's
+     own table, because that is what this component renders; getting all
+     the way back to the list means calling the caller's own exit. */
+  const [fromList, setFromList] = useState(false)
   useEffect(() => {
     if (!engine || !initialAnalyzeId || openedInitial.current) return
     openedInitial.current = true
+    setFromList(true)
     analyze(initialAnalyzeId)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [engine, initialAnalyzeId])
@@ -297,6 +309,11 @@ export default function DraftLocker({ onStartNew, onRunAtSeat, problem, lobbySlo
       if (!historyReport) engine.closeHistoryDraft()
       setAnalyzingId(null)
       setHistoryReport(null)
+      // Straight back to the list when that is where this came from, rather
+      // than surfacing on the dashboard in between — see `fromList`. The
+      // local state above is still cleared first, so a later return to this
+      // component starts from its table rather than re-opening the report.
+      if (fromList && onBackToList) { setFromList(false); onBackToList() }
     }
     return (
       <DraftInsightsDashboard

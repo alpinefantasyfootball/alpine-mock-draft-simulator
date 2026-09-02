@@ -348,7 +348,7 @@ export default function HomePhone() {
             and an overflow outright at 360. Dropping Play to make room was
             the other option and it is backwards for this product: Play is
             what a signed-out visitor is here for, which is the same thing
-            the "FREE · NO ACCOUNT" line below promises.
+            the "FREE · NO ACCOUNT NEEDED" line below promises.
 
             Which is also why the copy leads with what an account is *for*
             rather than with "Sign up". This page tells you two screens
@@ -417,8 +417,17 @@ export default function HomePhone() {
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-1.5">
                   <span className="h-[6px] w-[6px] rounded-full bg-teal-400" aria-hidden="true" />
+                  {/* "Free Access", not "Live" — the same label the desktop
+                      RoomsGrid and the Rooms dropdown carry for this same
+                      room, and for the same reason: every other room now
+                      wears a Juke Pro / All-Access tag, so what distinguishes
+                      this one is not that it works but that it costs
+                      nothing. This row was the last place still saying
+                      "Live", which is exactly the drift the shared
+                      ROOM_TIER data was introduced to stop, surviving in the
+                      half of the homepage that data never reached. */}
                   <span className="font-plex text-[10px] font-bold uppercase tracking-[0.1em] text-teal-300">
-                    Live · {liveRoom.season}
+                    Free Access · {liveRoom.season}
                   </span>
                 </span>
                 <span className="mt-0.5 block truncate font-display text-[21px] font-bold text-white">{liveRoom.name}</span>
@@ -478,9 +487,24 @@ export default function HomePhone() {
             Needed") and it is one of the two things a visitor most wants to
             know — a launcher that omits it is not being concise, it is
             leaving out a reason to press the button. The browser half is
-            Juke's own, and true: a solo mock sends nothing anywhere. */}
+            Juke's own, and true: a solo mock, signed out, sends nothing
+            anywhere.
+
+            "NO ACCOUNT NEEDED", not "NO ACCOUNT" — which is what this said
+            until accounts shipped, and which stopped being true while
+            sitting three cards below one offering to make you one. The
+            promise a visitor cares about is that nothing is being asked of
+            them, and that is still exactly true; the flat version now reads
+            as a claim about the product that the same screen contradicts. */}
+        {/* Each claim is its own nowrap span so the line breaks BETWEEN
+            them rather than through one. At 375px the three no longer fit
+            on one line ("NO ACCOUNT" became "NO ACCOUNT NEEDED"), and the
+            default break put "RUNS IN YOUR / BROWSER" across two lines,
+            which reads as a typo rather than as a list. */}
         <p className="mt-1.5 text-center font-plex text-[11px] tracking-[0.08em] text-voidInk-muted">
-          FREE &middot; NO ACCOUNT &middot; RUNS IN YOUR BROWSER
+          <span className="whitespace-nowrap">FREE</span>{' '}&middot;{' '}
+          <span className="whitespace-nowrap">NO ACCOUNT NEEDED</span>{' '}&middot;{' '}
+          <span className="whitespace-nowrap">RUNS IN YOUR BROWSER</span>
         </p>
         <div className="mt-4 flex justify-center gap-4">
           <a href="/docs/draft-room-how-it-works.html" className="text-[12px] text-voidInk-body underline-offset-2 hover:underline">How it works</a>

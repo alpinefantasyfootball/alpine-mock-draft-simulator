@@ -73,7 +73,7 @@
 
   <header class="appbar">
    <div class="appbar-inner">
-    <a class="home" href="../index.html" title="Back to the Draft Room"
+    <a class="home" href="../index.html" title="Juke home"
        aria-label="Back to the Draft Room">
     <!-- class="mark" is kept so .home's layout rules and the 560px hide rule
          still find it, and the size is overridden inline because .mark is
@@ -96,55 +96,105 @@
   <main class="doc">
 
     <p class="doc-intro">
-      Juke has no accounts, no sign-up and nowhere to enter a password, an
-      email address or a card number &mdash; there has never been a form on
-      this site that asks for any of them. What follows is a complete,
-      specific account of what the app actually does, not a template filled
-      in with the usual disclaimers.
+      You can use Juke without an account, and most people do &mdash; a mock
+      draft runs entirely in your own browser and needs nothing from us but
+      the page. There is now also an optional account, which exists for one
+      reason: so your drafts follow you from your phone to your laptop. What
+      follows is a specific account of what the app actually does in each
+      case, not a template filled in with the usual disclaimers.
     </p>
 
     <div class="note">
-      This is a first version, written to describe what the code actually
-      does rather than to read like a generic policy &mdash; every claim
-      below was checked against the source and the live configuration before
-      being written down. It hasn't been reviewed by a lawyer. Last updated
-      21 August 2026.
+      Written to describe what the code actually does rather than to read
+      like a generic policy &mdash; every claim below was checked against the
+      source and the live configuration before being written down. It hasn't
+      been reviewed by a lawyer. Last updated 2 September 2026: accounts
+      arrived, and the previous version of this page said Juke had none.
     </div>
 
     <div class="toc">
       <ol>
         <li><a href="#s01">A mock draft on your own</a></li>
-        <li><a href="#s02">Drafting with your league</a></li>
-        <li><a href="#s03">What your browser talks to directly</a></li>
-        <li><a href="#s04">What goes through Juke's own server</a></li>
-        <li><a href="#s05">Hosting, and Cloudflare's own analytics</a></li>
-        <li><a href="#s06">What we never collect</a></li>
-        <li><a href="#s07">Cookies</a></li>
-        <li><a href="#s08">Children</a></li>
-        <li><a href="#s09">Changes to this page</a></li>
-        <li><a href="#s10">Contact</a></li>
+        <li><a href="#s02">Accounts, and what signing in changes</a></li>
+        <li><a href="#s03">Drafting with your league</a></li>
+        <li><a href="#s04">Email you give us on purpose</a></li>
+        <li><a href="#s05">What your browser talks to directly</a></li>
+        <li><a href="#s06">What goes through Juke's own server</a></li>
+        <li><a href="#s07">Hosting, and Cloudflare's own analytics</a></li>
+        <li><a href="#s08">What we never collect</a></li>
+        <li><a href="#s09">Cookies and local storage</a></li>
+        <li><a href="#s10">Children</a></li>
+        <li><a href="#s11">Changes to this page</a></li>
+        <li><a href="#s12">Contact</a></li>
       </ol>
     </div>
 
     <h2 id="s01"><span class="no">01</span>A mock draft on your own</h2>
     <p>
-      Drafting solo, the whole app runs in your browser and nothing about
-      your draft is sent to a server at all &mdash; there is no server in that
-      path to send it to. The board, the projections, the scoring and the
-      grade are all computed on your own machine from files the page already
-      downloaded.
+      Drafting solo and signed out, the whole app runs in your browser and
+      nothing about your draft is sent to a server at all &mdash; there is no
+      server in that path to send it to. The board, the projections, the
+      scoring and the grade are all computed on your own machine from files
+      the page already downloaded.
     </p>
     <p>
       Your progress &mdash; the seat you picked, every pick made, your league
       settings, your queue and watchlist, and any draft you've finished
       &mdash; is written to your browser's own local storage
-      (<code>localStorage</code>), on your device only. Juke has no way to
-      read it back, because there is nowhere for it to be read back from
-      except the browser it was written on. Clearing your browser's site data
-      deletes it permanently, the same as clearing it for any other site.
+      (<code>localStorage</code>), on your device only. Signed out, Juke has
+      no way to read it back, because there is nowhere for it to be read back
+      from except the browser it was written on. Clearing your browser's site
+      data deletes it permanently, the same as clearing it for any other site.
+    </p>
+    <p>
+      That local copy is always written first and is always the real one.
+      Signing in adds a second copy on our server; it does not move anything
+      off your device or make an account necessary to draft. Section 02 is
+      what that adds.
     </p>
 
-    <h2 id="s02"><span class="no">02</span>Drafting with your league</h2>
+    <h2 id="s02"><span class="no">02</span>Accounts, and what signing in changes</h2>
+    <p>
+      An account is optional. Nothing about drafting requires one, and the
+      whole app works signed out exactly as section 01 describes. What an
+      account buys is one thing: the draft you are in the middle of, and the
+      locker of drafts you have finished, follow you to any browser you sign
+      in on instead of living in one.
+    </p>
+    <p>
+      <b>Identity is handled by Clerk</b>, a third-party authentication
+      provider, not by us. Signing up, logging in, your password, signing in
+      with Google, verifying your email address and keeping you signed in all
+      happen inside Clerk's own components, and the details go to Clerk
+      rather than through Juke. Juke's own code never sees or stores your
+      password. Clerk is a separate company processing that data on our
+      behalf, under its own privacy policy.
+    </p>
+    <p>
+      <b>What Juke's own database stores about you is deliberately small.</b>
+      Three tables, and only the first exists merely because you signed in:
+    </p>
+    <table>
+      <tr><td class="k">Who you are</td><td>The account id Clerk issues, and two timestamps &mdash; when the row was created and when you were last seen. <b>Not</b> your email address, and not your name: the page already has both from your own session, so a second copy here would be a copy we did not need and would have to protect.</td></tr>
+      <tr><td class="k">Your draft in progress</td><td>The same saved draft described in section 01 &mdash; seat, picks, settings, queue, watchlist &mdash; stored whole against your account id, and replaced each time you save. There is only ever one.</td></tr>
+      <tr><td class="k">Your finished drafts</td><td>One row per completed mock: the picks, the league it was, and the grade report, against your account id and the date it finished.</td></tr>
+    </table>
+    <p>
+      That is the whole of it. No behavioural profile, no record of what you
+      looked at, nothing about you beyond the drafts you chose to run.
+    </p>
+    <p>
+      <b>Deleting things.</b> Removing a draft from your locker deletes it
+      from your account as well as from your browser. Your account itself is
+      Clerk's to delete, from the account screen behind your avatar.
+      <b>Deleting a Clerk account does not currently delete the drafts Juke
+      stored against it</b> &mdash; there is no automatic link between the two
+      yet, and saying otherwise would be describing a version of Juke that
+      does not exist. Ask us at the address in section 12 and we will remove
+      them.
+    </p>
+
+    <h2 id="s03"><span class="no">03</span>Drafting with your league</h2>
     <p>
       Sending an invite link creates a shared room, and a room is the one
       case where drafting does involve a server &mdash; everyone in it has to
@@ -157,11 +207,12 @@
       <li>the chat messages sent in that room.</li>
     </ul>
     <p>
-      There's still no account behind any of this. Your browser generates a
-      random id the first time you join a room, stored the same way as
+      A room needs no account, signed in or not. Your browser generates a
+      random id the first time you join one, stored the same way as
       everything in section 01, and that id is what the room uses to tell you
-      apart from the person in the next seat &mdash; it isn't tied to your
-      name, an email address, or anything else about you.
+      apart from the person in the next seat. It is not your Clerk account
+      id, and the room is never told your email address or your real name
+      &mdash; only the display name you type into it yourself.
     </p>
     <p>
       A room isn't kept forever. Once every participant has been disconnected
@@ -169,7 +220,23 @@
       display names &mdash; is deleted automatically.
     </p>
 
-    <h2 id="s03"><span class="no">03</span>What your browser talks to directly</h2>
+    <h2 id="s04"><span class="no">04</span>Email you give us on purpose</h2>
+    <p>
+      Several parts of the site are not built yet &mdash; the Waiver, Trade,
+      Prospect, Strategy and League rooms, and sports other than football.
+      Where one of those is offered, pressing it opens a short form that asks
+      for an email address so we can tell you when it opens. That form is the
+      only place Juke itself collects an email address, and it is always
+      something you type on purpose.
+    </p>
+    <p>
+      What is stored is the address, which button asked for it, and when. It
+      is used to email you about the thing you asked about, and it is not
+      sold, shared or used for advertising. Ask us at the address in section
+      12 to be removed.
+    </p>
+
+    <h2 id="s05"><span class="no">05</span>What your browser talks to directly</h2>
     <p>
       A few things load straight from someone else's server, the same way an
       embedded video or a web font does on most sites &mdash; that server sees
@@ -179,7 +246,8 @@
     <table>
       <tr><td class="k">Player photos</td><td>Sleeper's own image server, linked directly rather than copied onto ours.</td></tr>
       <tr><td class="k">Live scores</td><td>ESPN's public scoreboard, only fetched while there are games actually being played.</td></tr>
-      <tr><td class="k">Fonts</td><td>Google Fonts (Barlow Condensed, Inter, Archivo).</td></tr>
+      <tr><td class="k">Fonts</td><td>Google Fonts (Barlow Condensed, Hanken Grotesk, Montserrat, Inter). Archivo and IBM Plex Mono are served from Juke's own domain instead.</td></tr>
+      <tr><td class="k">Sign-in</td><td>Clerk, while you are signing up, logging in or signed in &mdash; see section 02. Its own bot check (Cloudflare Turnstile) and its avatar images load the same way.</td></tr>
     </table>
     <p>
       None of these get anything from Juke beyond the ordinary fact that your
@@ -187,11 +255,12 @@
       you've typed.
     </p>
 
-    <h2 id="s04"><span class="no">04</span>What goes through Juke's own server</h2>
+    <h2 id="s06"><span class="no">06</span>What goes through Juke's own server</h2>
     <p>
-      Two things are proxied through Juke's server instead of being called
-      directly, specifically so the provider's own access key never has to
-      sit in a page your browser can read:
+      Besides the account storage in section 02, two things are proxied
+      through Juke's server instead of being called directly, specifically so
+      the provider's own access key never has to sit in a page your browser
+      can read:
     </p>
     <ul>
       <li><b>Player news headlines</b>, from Tank01 &mdash; fetched when you open a
@@ -206,7 +275,7 @@
       to answer that one request (a player id, or a search term).
     </p>
 
-    <h2 id="s05"><span class="no">05</span>Hosting, and Cloudflare's own analytics</h2>
+    <h2 id="s07"><span class="no">07</span>Hosting, and Cloudflare's own analytics</h2>
     <p>
       The site is hosted on Cloudflare, which sees the same standard request
       information &mdash; your IP address, browser and the page requested
@@ -218,33 +287,47 @@
       that follows you across other, unrelated sites.
     </p>
 
-    <h2 id="s06"><span class="no">06</span>What we never collect</h2>
+    <h2 id="s08"><span class="no">08</span>What we never collect</h2>
     <ul>
-      <li>No sign-up, no password, no email address &mdash; there is no form
-        anywhere in the app that asks for one.</li>
-      <li>No payment information. Juke is free and nothing in it is for sale.</li>
-      <li>No advertising trackers, and nothing here is sold or shared with
-        anyone for marketing.</li>
-      <li>No location data beyond the coarse, IP-level location any web
+      <li><b>No payment information.</b> Juke is free, there is nowhere in the
+        app to enter a card number, and nothing in it is for sale today.</li>
+      <li><b>No password reaches Juke's own code.</b> If you set one, it goes
+        to Clerk and stays there &mdash; see section 02.</li>
+      <li><b>No advertising trackers</b>, and nothing here is sold or shared
+        with anyone for marketing.</li>
+      <li><b>No location data</b> beyond the coarse, IP-level location any web
         request already carries.</li>
+      <li><b>No record of what you browse.</b> Juke stores the drafts you run,
+        not the players you looked at, the pages you visited or how long you
+        stayed.</li>
     </ul>
 
-    <h2 id="s07"><span class="no">07</span>Cookies</h2>
+    <h2 id="s09"><span class="no">09</span>Cookies and local storage</h2>
     <p>
-      Juke's own code sets none. Everything in sections 01 and 02 is held in
-      local storage, which is not a cookie and is never sent to a server
-      automatically the way a cookie is &mdash; it only leaves your browser
-      when the app deliberately sends it, as in a room.
+      <b>Juke's own code sets no cookies.</b> Everything in sections 01 and 03
+      is held in local storage, which is not a cookie and is never sent to a
+      server automatically the way a cookie is &mdash; it only leaves your
+      browser when the app deliberately sends it, as in a room or a sync.
+    </p>
+    <p>
+      <b>Signing in does set cookies</b>, because keeping you signed in is
+      what they are for. They are Clerk's, set on Juke's domain by Clerk's own
+      code, and they hold your session &mdash; not your draft, and nothing
+      about what you do here. Signing out clears them. Signed out and never
+      signed in, there are no cookies on this site at all.
     </p>
 
-    <h2 id="s08"><span class="no">08</span>Children</h2>
+    <h2 id="s10"><span class="no">10</span>Children</h2>
     <p>
-      Juke isn't directed at children and isn't built to identify anyone's
-      age &mdash; there's no sign-up to ask at. It's a fantasy football tool,
-      built with an adult fantasy-football audience in mind.
+      Juke isn't directed at children. It's a fantasy football tool, built
+      with an adult fantasy-football audience in mind. There is now a sign-up,
+      and it does not ask for an age or attempt to verify one &mdash; so this
+      is a statement about who the site is for, not a gate that enforces it.
+      If you believe a child has created an account here, write to the address
+      below and we will remove it.
     </p>
 
-    <h2 id="s09"><span class="no">09</span>Changes to this page</h2>
+    <h2 id="s11"><span class="no">11</span>Changes to this page</h2>
     <p>
       If what the app actually does changes, this page changes with it
       &mdash; the same rule the rest of the app follows: nothing here should
@@ -252,12 +335,14 @@
       moves when it does.
     </p>
 
-    <h2 id="s10"><span class="no">10</span>Contact</h2>
+    <h2 id="s12"><span class="no">12</span>Contact</h2>
     <p>
-      Questions about this page, or a request about your own data: <a href="mailto:PLACEHOLDER@jukeff.com">[owner &mdash; add a real contact address here before this goes live]</a>.
+      Questions about this page, a request to delete the drafts stored against
+      your account, or to be taken off the early-access list:
+      <a href="mailto:privacy@jukeff.com">privacy@jukeff.com</a>.
     </p>
 
-    <a class="backlink" href="../index.html">&larr; Back to the Draft Room</a>
+    <a class="backlink" href="../index.html#/drafts">&larr; Back to the Draft Room</a>
     <a class="backlink" href="terms.html">Terms of Service &rarr;</a>
 
   </main>
