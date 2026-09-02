@@ -193,37 +193,46 @@ if (boot) {
       // .now() is measured from the time origin, so it is exactly how long this
       // page has been loading — no separate start timestamp to keep in step.
       //
-      // Breach II replaced Breach I's choreography wholesale — a second,
-      // hardened handoff, built specifically to fix the sync-drift class of
-      // bug that caused the glitching reported against Breach I. Every
-      // breach* element now reads a single --total (4000ms) with no separate
-      // start-delay layered on top; see index.html's own comment on
-      // --total for why that second variable is gone rather than kept and
-      // pointed at a different value.
+      // Deepwater replaced Breach II's choreography wholesale, and shortened
+      // the hold from 4900ms to 2500. The composition's own timing marks,
+      // from the design package:
       //
-      //   shark/water breachMark/Pulse  --total, no delay                 -> fade complete   4000ms
-      //   wordmark    sonar-label       500ms after .65 * --total delay   -> settles          3100ms
-      //   ripple      breachRipple      --total after .55 * --total delay -> visually done  ~4680ms
-      //   idle ring 1 sonar-ring        2100ms, --total delay             -> enters           4000ms
+      //   specks    speckIn   0            -> 0.66s
+      //   droplet   blobForm  0.46s        -> 1.01s
+      //   mark      fIn       0.66s        -> 1.24s
+      //   teeth     fTooth    0.90s        -> 2.07s
+      //   eyes      fEye/fBloom 1.10s      -> 2.50s
       //
-      // The ripple's own animation technically keeps running past that
-      // ~4680ms (both the mark and the ripple are declared with a duration of
-      // --total itself, not a short fixed clip — see index.html for why:
-      // matching Breach II's own file exactly, rather than reintroducing the
-      // fixed-millisecond sub-durations that caused the drift Breach II was
-      // built to fix), but breachRipple's own 62% keyframe already holds it
-      // at opacity 0 from there on, so nothing after ~4680ms is visible.
-      // 4900ms leaves that a little room rather than cutting it off flush. A
-      // loading state that never shows its own last element is not finished,
-      // it is interrupted — the lesson the first version of this hold (900ms,
-      // the mark alone) was written to fix, and it applies exactly as much to
-      // a ripple as it did to a third ring.
+      // 2500 exactly, not 2500-plus-a-margin, and that is the one number here
+      // with a reason not to drift. The last two rows are inside
+      // <juke-mark variant="form">'s shadow root — juke-mark.js ships
+      // unedited — so this file cannot see them and cannot be retimed against
+      // them by measurement. It matches a published figure instead. Cutting
+      // early truncates the eye flicker, which is the beat the whole reveal
+      // ends on; the design package's own acceptance criterion is that it
+      // "ends on a dead-still mark", and a mark still flickering when the
+      // layer fades has not ended at all.
+      //
+      // Holding LONGER is equally wrong and less obvious: nothing finite runs
+      // past 2.5s, so every extra millisecond is a still frame the visitor
+      // waits through. That is what index.html's --total means by ending on a
+      // hold rather than a loop — a slow boot simply holds longer, and the
+      // hold is the ambient water, not a stalled animation.
       //
       // This whole hold replaces an early return that removed the element
       // outright while it was still at opacity 0 — the branch a fast load
       // always took, and the reason the loader was invisible to anyone on a
       // quick connection.
-      const MIN_VISIBLE_MS = 4900
+      //
+      // Reduced motion gets 600ms, the design package's own figure. There is
+      // no reveal to wait out in that branch — splash-boot.js has already
+      // swapped the mark to variant="static" and the CSS has dropped the
+      // specks and the droplet — so the whole of what is on screen is the
+      // finished frame, and 600ms is long enough to register it as a
+      // deliberate screen rather than a flash. The attribute is written by
+      // splash-boot.js rather than re-derived from matchMedia here, so the
+      // two files cannot disagree about what this particular load decided.
+      const MIN_VISIBLE_MS = boot.hasAttribute('data-splash-reduced') ? 600 : 2500
       setTimeout(() => {
       const shown = getComputedStyle(boot).opacity
 
@@ -233,11 +242,13 @@ if (boot) {
 
       boot.style.opacity = ''
       boot.setAttribute('data-sonar-out', '')
-      // 240 rather than 220: the element leaves the DOM a frame after the
-      // transition ends, never during it. A fixed overlay at z-index 9999
-      // swallows every click on the page, so the one thing that must not happen
-      // is this element outliving the load - not a few spare milliseconds.
-      setTimeout(() => boot.remove(), 240)
+      // 280 against a 260ms transition: the element leaves the DOM a frame
+      // after the transition ends, never during it. A fixed overlay at
+      // z-index 9999 swallows every click on the page, so the one thing that
+      // must not happen is this element outliving the load - not a few spare
+      // milliseconds. Both numbers moved together when the design package set
+      // the dismissal at 260ms (it was 220/240); keep the gap if either does.
+      setTimeout(() => boot.remove(), 280)
       }, Math.max(0, MIN_VISIBLE_MS - performance.now()))
     }),
   )

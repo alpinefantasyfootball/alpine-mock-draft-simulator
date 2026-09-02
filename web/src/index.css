@@ -82,6 +82,21 @@ body,
 html {
   scroll-behavior: smooth;
   scroll-padding-top: 64px;
+
+  /* The cold-load overlay's own deepest stop, so the frames between the first
+     paint and #boot-sonar existing are the splash's ground rather than the
+     browser's white. Package 01, item 2, asks for this explicitly.
+
+     It has to be here and not only on the overlay: this rule ships in the
+     stylesheet Vite <link>s from <head>, which is painted before <body> is
+     parsed. #boot-sonar's own background cannot cover a frame in which
+     #boot-sonar does not exist yet.
+
+     #0a1119 rather than the gradient — this is the flash-guard, not the
+     picture, and it is the gradient's midpoint stop, so the overlay arriving
+     on top of it is not a visible step. `body` keeps obsidian below, which is
+     the page's real ground once the overlay has gone. */
+  background-color: #0a1119;
 }
 
 @media (min-width: 768px) {
