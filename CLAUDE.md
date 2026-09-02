@@ -118,6 +118,12 @@ the Stack section above, not a one-time migration hiccup.
 | `web/index.html` | The real homepage entry Vite builds from. Loads the legacy files above as root-relative classic scripts, alongside Vite's own hashed module bundle for React. The Draft Room markup lives here too, hidden — see the Stack section. |
 | `web/src/components/phone/` | The phone-only screens, mounted below `sm` (`usePhoneWidth()`): the draft room, the homepage, the Mock Drafts Lobby, the floating nav pill. Each is a different screen from its desktop counterpart rather than a narrower one — see "The mobile pass" below for why that is a product decision and what it costs. |
 | `web/src/components/settings/` | The Draft Settings screen's own controls, the scoring-rule editor and the draft-order list. Split out of `DraftSettingsModal.jsx` when that file became the whole settings screen rather than a three-tab modal. |
+| `web/src/clerkConfig.js` | The publishable key (from `VITE_CLERK_PUBLISHABLE_KEY`, public by design) and the one appearance object every Clerk component is themed by. Two hand-tuned copies of "make Clerk look like Juke" would drift the first time either changed. |
+| `web/src/components/AuthBridge.jsx` | Writes `window.JukeAuth` and fires `juke:auth`, so `app.js` — a classic script, where Clerk's hooks cannot reach — can read who is signed in. `window.JukeEngine` pointing the other way. Renders nothing. |
+| `web/src/hooks/useAccountUiReady.js` | "Is it safe to render Clerk's components yet": a key exists *and* we are past the first client pass. Both halves fail silently on their own — see the Accounts section. |
+| `web/.env.example` | The local-dev template. Keeps a `pk_test_` key on purpose: production's `pk_live_` belongs in the Pages dashboard, and a developer running `vite dev` against the production Clerk instance would be polluting the real user list. |
+| `worker/auth.js` | `verifiedUser()` — the one place the worker decides who is asking. Answers null for a missing, malformed, expired or forged token alike, and for no key configured at all. Read its comment before touching it: the public `verifyToken` export does not have the return shape its own internals document. |
+| `worker/test-auth.mjs` | Every way of being signed out, against a real `wrangler dev`. Cannot cover the signed-in path — that needs a token Clerk actually signed — which is precisely the gap the `verifyToken` bug lived in. |
 | `web/src/` | The React homepage: `Homepage.jsx` composes `Header`, `Hero`, `ScoresStrip`, `ShowYourWorking`, `RoomsGrid`, `ClosingCta`. Every one of them reads real data through `window.JukeEngine` (or `window.DraftEngine` directly, for `pickCode()`) rather than inventing sample content — the header ticker used to be six fabricated stats and is now five real ones read off the live board. |
 | `web/vite.config.js` | The Vite build config, plus a dev-server middleware that serves the same `LEGACY_FILES`/`LEGACY_DIRS` list `copy-legacy-assets.mjs` uses, from the true repo root, so `window.JukeEngine` carries real data under `vite dev` too — not just after a full build. |
 | `web/scripts/copy-legacy-assets.mjs` | Copies the legacy files into `web/dist/` after `vite build`, chained as this package's `build` script. Fails loudly (`process.exit(1)`) and lists exactly what's missing rather than shipping a partial site quietly. |
@@ -4736,6 +4742,296 @@ changed between renders and React threw on the first press of the button that
 mounts it. It is keyed on `engine` rather than `[]` for a second reason:
 `analyze` is a const further down the same function, in its temporal dead
 zone on exactly the render that early return takes.
+
+## Accounts
+
+**Clerk owns identity; Juke owns what identity is for.** Signup, login,
+password and OAuth, email verification, sessions and their refresh all happen
+on the client, inside Clerk's own components (`web/src/clerkConfig.js`,
+`SiteNav.jsx`'s `AccountButtons`). Nothing in this repository stores a
+password, mints a session, or sends a verification email, and nothing should.
+What Juke stores is the small set of things that have to belong to somebody:
+one in-progress draft and a locker of finished ones.
+
+**The `users` table is an id and two timestamps, deliberately.** No email, no
+display name. The client already has both, verified, from its own session the
+moment anybody is signed in (`useUser()`), so a second copy cached worker-side
+would be the "two sources of truth for one fact" failure this file keeps
+finding elsewhere. The moment a feature genuinely needs Juke's own copy — a
+locker that must render without asking Clerk again — is the moment to add the
+columns and the fetch that fills them, and not before.
+
+**Solo drafting still needs no account, and that is a product rule rather than
+a stage we are at.** `saveDraft()`, `recordHistory()` and every localStorage
+path run identically signed out; section 11e of `app.js` is what happens *in
+addition*. The phone homepage says so in the footer ("FREE · NO ACCOUNT ·
+RUNS IN YOUR BROWSER") and the account card above it is written to match — see
+"The phone account card" below.
+
+### One `<ClerkProvider>` per page, which is why three roots became one
+
+`@clerk/clerk-react` hard-limits to exactly one provider per page — a
+module-level singleton with `maxCount = 1`, verified directly against the
+installed package's `useMaxAllowedInstancesGuard`, not assumed. The app had
+three independent `createRoot()` calls (`#root`, `#appbar-root`,
+`#draftroom-root`), each of which would have needed its own provider for
+`AccountButtons` to have context wherever it landed. Three of them threw, and
+the throw took React's whole boot down before anything painted.
+
+So there is one root now, at `#root`, and `AppHeader`/`DraftRoom` reach their
+own DOM nodes through `createPortal()` instead. A portal changes *where* a
+subtree paints, never which tree or which context it belongs to. **It does not
+change whether that subtree is hydrated, which is a separate question and cost
+a real bug** — see "A portal is hydrated too" above.
+
+### `window.JukeAuth` is `window.JukeEngine` pointing the other way
+
+Clerk's hooks only work inside a React component and `app.js` is a classic
+script, so `AuthBridge.jsx` writes `{ isSignedIn, userId, getToken }` onto
+`window.JukeAuth` and fires a plain `juke:auth` event — the same shape
+`headerInfo()` already uses with `juke:header`, and the mirror image of the
+bridge React reads real board data through.
+
+`getToken` is reassigned on every render rather than captured once: it is a new
+function each time Clerk's SDK hands it back, and calling the latest one is
+what keeps a caller from holding a stale closure across a token refresh.
+
+**And it is read defensively on the `app.js` side**, because a bridge global is
+only as safe as its own guard — the rule this file already states about
+`window.JukeEngine`, arriving from the opposite direction.
+
+### Rendering Clerk's components at all needs two questions answered
+
+`useAccountUiReady()` (`web/src/hooks/`) answers both, and each fails silently
+on its own:
+
+- **Is there a key.** With none, `main.jsx` renders no provider at all, and
+  every Clerk component — `<SignedIn>`, `<SignInButton>`, `<UserButton>` —
+  throws without one above it. A fresh clone or a CI build would crash the
+  page rather than simply not offering accounts.
+- **Has it mounted.** The prerender cannot render `<SignedIn>`/`<SignedOut>`
+  (no provider, no `window`), so a first client pass that does is a hydration
+  mismatch against the server's markup.
+
+Nothing in that hook calls into Clerk, deliberately: a hook that called
+`useAuth()` would itself throw in the no-key case, and hooks cannot be called
+conditionally to dodge it. **What each caller does with `false` differs**, and
+that is why it returns a boolean rather than rendering anything: the nav row
+still draws its inert triggers (a row with a hole in it reads as broken), the
+phone's account card draws nothing (a card whose whole purpose is two buttons
+has nothing to say without them), and the phone's "You" tab draws normally but
+does nothing when tapped (it is always on screen, so anything that looks
+different for one tick is a flicker).
+
+### `verifyToken`'s public export is not the union its own internals document
+
+**This rejected every valid login from the day accounts shipped until 1
+September 2026**, and it looked exactly like an expired-token refusal from the
+outside.
+
+`@clerk/backend`'s internal `src/tokens/verify.ts` really does return
+`{ data } | { errors }`, and `worker/auth.js` was written against that. But the
+package root — what `import { verifyToken } from "@clerk/backend"` actually
+resolves to — exports `withLegacyReturn(verifyToken)`, which **returns the JWT
+payload directly on success** (`sub` at the top level, no `.data` wrapper) and
+**throws `errors[0]` on failure**. `dist/index.d.ts` says so in its own
+declared return type: `Promise<JwtPayload>`, not a union.
+
+So `const { data, errors } = await verifyToken(...)` destructured a payload
+that has neither field. Both came back `undefined`, and `errors || !data ||
+!data.sub` read that as a refusal — on the success path, every time.
+
+**The diagnostic that should have caught it read as innocent.** `wrangler
+tail` printed `verifyToken refused: []` on every attempt, and an empty errors
+array is not Clerk reporting zero problems: it is this code finding no error to
+report because there wasn't one. Worse, the log line could not distinguish
+"`errors` was undefined" from "`errors` was an empty array" — `(errors || [])`
+prints `[]` either way — so the one field that would have named the bug was
+being collapsed before it was printed. **A log line that cannot separate two
+causes is not evidence for either of them.**
+
+The refusals arrive in the `catch` now, which is where the throw-based contract
+actually puts them.
+
+### Two keys, two homes, and neither is where you would first look
+
+| | Publishable (`pk_…`) | Secret (`sk_…`) |
+|---|---|---|
+| Public? | Yes, by design — Clerk embeds it in client bundles | No |
+| Read by | `web/src/clerkConfig.js`, in the browser | `worker/auth.js`, in the worker |
+| Set where | Cloudflare **Pages** project `juke` → Settings → Variables, **Production** environment | `wrangler secret put CLERK_SECRET_KEY`, on the **`juke-draft-room` Worker** |
+| Named | `VITE_CLERK_PUBLISHABLE_KEY` | `CLERK_SECRET_KEY` |
+| Takes effect | On the next **build** | On the next request |
+
+Four ways to get this wrong, all of which have happened:
+
+- **Any prefix but `VITE_`.** Vite only exposes `VITE_`-prefixed variables to
+  client code, so a `NEXT_PUBLIC_…` name (this is not Next.js) is never
+  inlined and the app sees nothing.
+- **The Preview environment instead of Production.** `jukeff.com` serves
+  Production; Preview is for branch builds and never touches it.
+- **`CLERK_SECRET_KEY` on the Pages project.** It does nothing there. The
+  worker is a separate deployment with its own secret store, and a key sitting
+  in the Pages settings looks exactly as configured as one that works.
+- **Expecting a saved variable to change anything on its own.** Vite bakes the
+  publishable key in at build time, so it needs a fresh deployment; saving it
+  does not create one.
+
+**And the worker still does not deploy itself.** The site rebuilds from `main`
+on every push and the worker only ships on `wrangler deploy -c
+worker/wrangler.toml` — so an auth fix can be merged, live in git, and doing
+nothing at all. Same gap this file already records for D1, and the same
+instruction: ask the thing itself, not the response.
+
+### A production instance is a different instance, with its own domain
+
+The "Development mode" badge under Clerk's own UI means the publishable key is
+a `pk_test_` one. It is not a setting; it goes away by moving to a production
+instance, which has its own keys, its own user list, and — the part that has
+teeth — **its own verified domain**.
+
+Measured through the migration on 1–2 September 2026:
+
+- The dev instance is `hopeful-termite-4236.clerk.accounts.dev`, verified and
+  covered by the CSP's existing `*.clerk.accounts.dev` wildcard.
+- The production instance is `jukeff.com`, whose Frontend API is
+  **`clerk.jukeff.com`** — a CNAME to `frontend-api.clerk.services`, alongside
+  `accounts` for the account portal and three more for email. Cloudflare's
+  Domain Connect flow adds all five; the manual list is the same records typed
+  by hand.
+- **Until that domain verifies, a `pk_live_` key makes the sign-in control
+  disappear entirely.** `<SignedIn>`/`<SignedOut>` render nothing until Clerk
+  finishes loading, and it can never finish against a Frontend API that does
+  not resolve yet — so the header renders no button at all rather than a broken
+  one. Reported as "log in completely disappeared", and it was neither the
+  code nor the key: it was DNS.
+- **`clerk.jukeff.com` is not covered by `*.clerk.accounts.dev`** and needed
+  its own `script-src`/`connect-src` entry in `_headers`. Without it the SDK is
+  blocked by the CSP the same silent way Turnstile was, which looks identical
+  to the DNS failure above.
+
+**Do not decode the Frontend API host out of the publishable key by eye.** The
+segment after `pk_live_` is base64 of `<host>$`, and reading it off a
+screenshot produced `clurk.juseff.com` — close enough to look right and wrong
+enough to put a useless entry in the CSP. Clerk's own Domains page states the
+hostname; the CNAME's `Name` column is the answer.
+
+**A social provider enabled without credentials fails at Google, not at
+Clerk.** Production instances need your own OAuth client; with Google switched
+on and none configured, Clerk builds a consent URL with no `client_id` and
+Google answers `Error 400: invalid_request`. The sign-in button looks fine
+until it is pressed. Either configure it in Google Cloud Console or switch the
+provider off — an offered control that cannot work is the dead-control problem
+in somebody else's UI.
+
+### What the worker stores, and what it refuses to know
+
+`GET /me` verifies, records the visit (`touchUser()`, off the response path
+via `after(ctx, …)` — asking "am I signed in" must not fail on a D1 hiccup),
+and answers `{ signedIn }`. **`/me` answers `signedIn: false` where
+`/me/draft` and `/me/history` answer 401**, and the split is deliberate: "am I
+logged in" is a question with two fine answers, while a route that can lose or
+leak somebody's draft needs the harder line.
+
+Both storage tables keep the client's JSON **whole, in a `data` column**,
+rather than decomposed into columns of their own. `app.js` already carries its
+own backward-compatibility rules for both shapes; a second server-side schema
+would either duplicate every one of them or drift from them. `completed_at` is
+the one field pulled out and duplicated as a real column, for `ORDER BY` and
+nothing else — and it is converted from `recordHistory()`'s milliseconds to
+this project's epoch-seconds convention at the route, once, rather than asking
+`store.js` to guess which unit a caller meant.
+
+History is written **one entry at a time**, never in bulk: `writeHistory()`
+rewrites the whole array locally on every change, but only one entry has ever
+actually changed, and sending the other 199 back every time is all cost.
+
+**Ids are minted client-side and reused**, not re-issued by the database, so an
+entry has one id its whole life rather than a local one and a server one that
+can disagree.
+
+### Merging is a decision, and it is made in one place
+
+`reconcileWithServer()` runs once per sign-in — not once per `juke:auth` event,
+since that fires on any change to `getToken`, which is a new reference on most
+renders. Both halves compare what the browser has against what the account
+has, rather than assuming the server should win:
+
+- **The saved draft is last-write-wins by `savedAt`**, because there is only
+  ever one. Assuming the server wins would let a phone that has been offline
+  all week nuke a laptop's draft from an hour ago.
+- **History is a union by id**, because every entry is a frozen record of a
+  draft that already finished — two entries with the same id are identical, so
+  there is nothing to pick between, and whichever side is missing one gets it.
+
+Everything else is fire-and-forget: `localStorage` is already written by the
+time any of it runs, so a slow or failed request must never hold up the thing
+that actually keeps a draft from being lost.
+
+### The phone account card, and the tab that had gone stale
+
+Accounts shipped to **desktop only**, and not by decision — every
+`AccountButtons` call site (`Header`, `LobbyBar`, `MobileNavSheet`) sits inside
+`Homepage.jsx`'s `hidden sm:block` half, so below 640px the phone tree rendered
+instead and offered no way to sign up or log in at all. That is the
+breakpoint-split hazard this file already records for `data-hero-cta` —
+"splitting a page by breakpoint orphans every attribute only one half of it
+carries" — reached with a whole feature rather than a test marker. **Grep the
+phone tree, not just the shared components, when a feature is meant to be
+everywhere.**
+
+`HomePhone`'s account card is a card in the content flow rather than two more
+controls in the top bar, and that is a measurement: the wordmark, Play, Log in
+and Sign up come to about **370px of content on a 390px screen**, and overflow
+outright at 360. Dropping Play to make room is backwards on a page whose own
+footer promises no account is needed — Play is what a signed-out visitor came
+for. So the card leads with what an account *buys* (the cross-device sync that
+already exists) rather than with a Sign Up button, which on that page would
+read as a gate.
+
+The nav pill's **"You" tab** opened the waitlist modal on a line that had gone
+false — *"The You room is in build. Leave an email and we'll tell you when it
+opens."* It is Clerk's sign-in trigger signed out, and an action sheet signed
+in. **A sheet rather than `<UserButton/>` for a reason worth keeping**: that
+component renders its own avatar-sized button, which inside a 58px tab would
+leave the "You" label beside it inert — and more importantly its menu is the
+only place Clerk offers sign-out by default, and it renders nowhere a phone can
+reach. Without an explicit row, anybody who signed in on a phone could never
+sign out anywhere in the app.
+
+`isLoaded` gets its own branch rather than folding into "signed out": Clerk
+answers `isSignedIn: undefined` until it resolves, and treating that as signed
+out hands a signed-in person a sign-in modal for the account they are already
+in.
+
+**Log in and Sign up are two buttons again.** They were collapsed into one
+"Log in" trigger on the reasoning that Clerk's modal carries a Sign up toggle
+inside it — but that reasoning was really about the *previous* pair being two
+fake buttons opening the same "not live yet" modal, and it cost a click for
+exactly the visitor the control most wants to convert. Sign up is the loud
+pill, Log in is plain text beside it: two equally loud controls in one row is
+the same "one primary action" rule the legacy stylesheet's teal buttons
+already answer to.
+
+### What can be tested offline, and what cannot
+
+`node worker/test-auth.mjs`, against a running `wrangler dev --local`, covers
+**every way of being signed out** — no Origin, a wrong Origin, no token, a
+malformed token, a well-formed but unsigned one — and asserts that none of them
+ever produces anything but a clean refusal.
+
+**It cannot cover the signed-in path, and neither can anything else here**: that
+needs a token actually signed by Clerk, which nothing offline can produce. The
+`verifyToken` bug above lived in exactly that gap. It is verified by hand,
+against a real deploy, with a real sign-in — and the cheapest honest check is
+the network tab: `/me/draft` and `/me/history` returning **200** while signed
+in means the worker's verification genuinely works, where a page that merely
+*looks* signed in proves only that Clerk's client half does.
+
+**`PREVIEW_ORIGIN_RE`** allows any `https://<hash>.juke-1mw.pages.dev` through
+`originAllowed()`, because every branch push gets its own preview address and
+that is where this is tested before a merge. Without it every authenticated
+route 403s on a preview with nothing on screen to say why.
 
 ## Security
 
