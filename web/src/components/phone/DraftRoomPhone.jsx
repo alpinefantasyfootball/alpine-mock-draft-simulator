@@ -100,6 +100,7 @@ export default function DraftRoomPhone({
         autopick={autopick}
         onToggleAutopick={onToggleAutopick}
         onHeight={onHeaderHeight}
+        over={over}
       />
 
       <DraftBoardPeekPhone
