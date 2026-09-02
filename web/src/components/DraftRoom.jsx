@@ -957,6 +957,12 @@ export default function DraftRoom() {
                kept seeing "Autopick: Off" here regardless. */
             autopick={autopick}
             onOpenSettings={() => setSettingsOpen(true)}
+            /* Only in a room — off-room there is nobody to invite, and a
+               control that opens a "create a room" panel from inside a
+               draft you are about to start solo is a different action
+               wearing this one's label. See DraftEntryScreen's own note
+               for why this screen needs it at all. */
+            onInvite={roomActive ? () => setFriendsModalOpen(true) : undefined}
             onClaimSeat={(seat) => {
               // In a room the room decides; off-room this is just my chair.
               if (roomActive) engine.claimSeat(seat)
@@ -964,6 +970,20 @@ export default function DraftRoom() {
             }}
           />
         </div>
+
+        {/* The same modal the Lobby renders, mounted here too rather than
+            moved: both screens can be the one a host is looking at when
+            they want the link, and the Lobby's own copy is what surfaces it
+            the moment a room is created. onCreated is not passed — a room
+            already exists by the time this branch can render at all, so
+            there is no creation for it to suppress the auto-enter of, and
+            onEnter is what this screen's own Start button already does. */}
+        {friendsModalOpen && (
+          <DraftWithFriendsModal
+            onClose={() => setFriendsModalOpen(false)}
+            onEnter={() => setFriendsModalOpen(false)}
+          />
+        )}
       </div>
     )
   }
