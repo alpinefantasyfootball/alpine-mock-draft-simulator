@@ -4964,6 +4964,38 @@ function adpConflict(player) { return isRuledOut(player) && player.adp <= 150; }
 function headerInfo() {
   if (!state.started) return { started: false };
 
+  /* A started draft the engine cannot yet describe reads as no draft, for the
+     one render that is true for.
+
+     `pickInfo()` returns null while `DraftEngine` is undefined — every wrapper
+     at the top of this file does something like it — and the "somebody else is
+     up" branch below dereferences `.slot` off it. Nothing above catches that
+     first: `draftOver()` answers false when the engine is missing and
+     `isMyTurn()` answers false, so both guarded branches decline and execution
+     falls through to the one line that is not guarded.
+
+     `state.started` is true before `draft-engine.js` has landed on exactly the
+     path this file already documents for applyJitter(): `adoptRoom()` runs from
+     onRoomChange(), off the room's own "state" broadcast, which reaches a
+     client the instant its socket is open — and live.js connects at boot, ahead
+     of the requestIdleCallback that loads the engine at all. So a manager
+     joining a room mid-draft could take a TypeError out of headerInfo(), and
+     because renderHeader() is called from render(), it took the whole render
+     with it: no board, no clock, nothing, until some later broadcast happened
+     to arrive after the engine had loaded.
+
+     Reproduced by blocking draft-engine.js outright, which is the same window
+     held open — see tests/header-boot.spec.mjs.
+
+     Returning the resting shape rather than a fourth kind of header because
+     that is what renderHeader() already draws when there is nothing to say, and
+     this is self-correcting: headerInfo() runs again on every render and tick,
+     and the first one after the engine lands paints the real thing. The guard
+     is on the function rather than on that one expression so the next line
+     added below inherits it — the same rule this file states for every other
+     DraftEngine caller. */
+  if (typeof DraftEngine === "undefined") return { started: false };
+
   /* What this draft is, beside what it is doing. The shape was only ever on
      the setup screen, which folds away the moment a draft starts, so four
      rounds in there was no way to check whether this was a 14-round league
