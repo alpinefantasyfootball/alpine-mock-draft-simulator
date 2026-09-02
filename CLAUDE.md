@@ -1320,6 +1320,203 @@ written down twice" exists to prevent. When something here needs to know what
 a league permits, check whether the engine or the CPU already answers it
 before writing a second answer.
 
+## The pool a league can hold is not the pool it can see
+
+Reported 30 August 2026: `cpuChoice()` drafts players its own `needFromCount()`
+has already refused. Measured in a real browser against the half-PPR board of
+that morning, at 16 teams over 14 rounds: 224 picks, 232 players, **eight left
+at the end** — and in the last ten picks the board holds nothing but
+quarterbacks, kickers and defenses, every seat already holding one of each.
+
+**That shape stopped reproducing the next day, and the bug did not go away with
+it.** The deep bench landed on `main` on 31 August, the pool went 232 to 480,
+and 16-team capacity went 214 to 334 — so the example this section was written
+around is now comfortably legal and wastes nothing. Everything below is
+re-measured against the 480-player board of 1 September; the shapes moved, the
+argument did not. **A measurement is true of the board it was taken on**, and
+this project regenerates the board nightly. `cpuChoice()` has no notion of
+illegal, only of expensive, so it takes the least-bad 999. Nine of the sixteen
+seats finished with two quarterbacks and one or two with two defenses, on every
+seed tried — roster spots the format can never start, which roster construction
+then docks nine points a head for.
+
+**The bug is not in `cpuChoice()`, and the report's own first instinct — prefer
+an unrefused player, and failing that the least-full position — was built,
+measured and thrown away.** See below. What is wrong is one line further back:
+`setupProblem()` was validating against `poolSize()`, and **a board is not
+inventory.**
+
+### `poolSize()` counts rows; `absorbableSize()` counts picks the league can use
+
+A 22-team room may hold twenty-two quarterbacks — one a team, unless the format
+opened a second seat — and the half-PPR board carries fifty-six; sixty-six tight
+ends against ninety-two; twenty-two kickers against thirty-three. Those spare
+thirty-four, twenty-six and eleven are on the board and undraftable by anybody,
+so counting them as picks the league has room for is the same class of error as
+`posRank` standing in for value: a right number answering the wrong question.
+
+Measured on the 1 September 480-player half-PPR board:
+
+```
+                 picks   poolSize()   absorbableSize()   verdict
+16 teams / 14r    224       480             334           allowed, no waste
+24 teams / 17r    408       480             411           allowed, 19 wasted
+22 teams / 19r    418       480             399           refused
+24 teams / 20r    480       480             411           refused
+```
+
+The last row is the one to remember: **the deepest league the setup screen
+offers is a dead heat on `poolSize()` — 480 picks against 480 players — and 69
+picks past what the room can actually hold.**
+
+`absorbableSize()` is `Σ min(pool at that position, holdCap(pos) × teams)`, and
+`holdCap()` is *literally* the count above which `needFromCount()` refuses — so
+this is the board filtered through the same rule the draft runs on, not a second
+opinion about what a roster may contain. The shortfall column is not an estimate:
+it is exactly the number of picks a completed draft spends on somebody nobody
+can start, confirmed pick by pick.
+
+**Three copies of one league rule became one, because the check needed it.**
+`league.starters.QB + league.superflex` — the expression whose drift caused the
+superflex grading bug — was written out by hand in `needFromCount()`,
+`analyseTeam()`'s construction charge and `buildText()`'s caption at once.
+`startableCap(pos)` is the single copy now and answers **Infinity** where the
+question does not arise, so the two grade call sites walk every position rather
+than carrying their own list of which three can overflow. `holdCap()` is
+`Math.min(maxAt, startableCap)` and is what `needFromCount()` refuses above.
+Verified byte-identical across **328,536** `(have, pos, round)` combinations
+over 324 league shapes, and the grade's charge and captions against real
+finished rosters at 10 teams, 12 teams and superflex.
+
+### Tried and rejected: tiering `cpuChoice()`'s fallback
+
+The obvious fix, and the one the report led with: prefer any player
+`needFromCount()` does not refuse; only when none exists fall through to a
+refused one, and there prefer a position the roster is not already full at — a
+spare running back is a bench body, a spare defense is a wasted spot. It was
+prototyped in the browser against the real board and run both ways from the
+same seed, which is the only thing that settles this.
+
+**It moves nothing where it was measured, and the reason is a conservation
+law.** The room must absorb `picks − absorbableSize()` players it cannot use,
+whoever takes them. Measured 30 August 2026 against the 232-player board, on
+shapes the guard now refuses outright — so these are all cases where that
+difference is positive:
+
+```
+                    spare unstartable spots   mean build
+16 teams / 14r          10  ->  10            82.5 -> 82.5
+14 teams / 16r          16  ->  16            78.8 -> 78.8
+12 teams / 19r          26  ->  26            71.1 -> 71.1
+10 teams / 14r (default) 0  ->   0            90.8 -> 90.8, trajectory identical
+```
+
+At 14/16 and 12/19 it does change *which* player is taken — a seat takes its
+first kicker four rounds early rather than a second defense — and the waste
+simply lands on whoever picks the kicker later. At the reported 16/14 it changes
+nothing at all: every remaining player is refused for every seat, so there is no
+choice left to make well.
+
+**The first half of it is unreachable too.** A refusal is a 999 multiplier
+against a legal 0.80–1.45, so a refused player can only win on
+`(adp + jitter) × 999`, which needs `adp + jitter ≤ 0` — reachable in the
+arithmetic (Jahmyr Gibbs measures −1.37 on some seeds) and not in a draft,
+because a player with ADP under 3 is gone in round one, when nothing is capped.
+It is a latent sign inversion worth knowing about and not a bug anyone can hit.
+
+And with the refusal in place it is dead code: across all 33
+(scoring × team count) combinations at their **tightest legal bench**, driven to
+completion on pinned seeds, `cpuChoice()` takes a refused player **zero** times.
+`tests/pool-capacity.spec.mjs` asserts exactly that, so if it ever stops being
+true the tiering can come back with a measurement behind it.
+
+### What the refusal costs, and the answer about 24 teams
+
+Shapes move from allowed to refused and **none moves the other way** —
+`absorbableSize() ≤ poolSize()` always, which is its own assertion in the spec,
+because a check that loosened here would be the opposite of the fix and would
+show up nowhere else.
+
+What it costs, measured 1 September against the 480-player board, as the longest
+roster each team count may still run:
+
+```
+teams      4   6   8  10  12  14  16  18  20  22  24
+was       24  24  24  24  24  24  24  24  24  21  20
+now       22  22  22  22  22  21  20  20  19  18  17
+```
+
+Two to five rounds off the very deepest rosters, and **nothing a person meets in
+an ordinary league**: the default ten- and twelve-team shapes run to 22 rounds
+before the guard has anything to say, against the 14 they actually use. A single
+seat can legally hold 22 players under the default lineup (1 QB, 8 RB, 8 WR,
+3 TE, 1 K, 1 DST), so a 23- or 24-round draft is impossible at *any* team count
+and the aggregate check catches it — `absorbableSize()` can never exceed
+`teams × 22`.
+
+**So `TEAM_COUNTS` should keep going to 24, and the round count is what has to
+give.** 24 teams is genuinely runnable at seventeen rounds. The entry is not
+dead; it is constrained, and the refusal now names the real ceiling instead of a
+pool count that overstated it — most sharply at 24 × 20, where `poolSize()` saw
+480 picks against 480 players and called it fine.
+
+### The guard is a necessary condition, not a sufficient one
+
+`absorbableSize()` is an *aggregate* ceiling: it says how many players the room
+could hold if every pick went to a seat that could still use one. A snake draft
+is greedy and does not achieve that ceiling — it strands the scarce positions
+late, and a seat whose remaining legal positions have run dry takes somebody it
+can never start.
+
+Measured across all 44 shapes the screen offers, each at the largest bench
+`setupProblem()` still allows — the tightest corner there is:
+
+```
+every draft completes                     44 of 44
+seats short a mandatory K or DST           0
+shapes wasting a pick on the unstartable  16 of 44
+worst waste in one draft                  19 picks
+any waste below 18 teams                   0
+```
+
+So the guard closes the gross case and leaves a bounded residue at the deep end.
+The split worth holding on to is between **the thing that breaks a roster and
+the thing that wastes a bench spot on it**: nobody is ever left without the
+kicker or defense their format starts, and no league anybody actually plays
+wastes a pick at all.
+
+`tests/pool-capacity.spec.mjs` asserts exactly that split — the first three
+exactly, the last as a bound with headroom — rather than asserting zero waste
+everywhere, which is a property this guard was never able to give and which
+would have stood red.
+
+**This residue is not the conservation law below, and the two must not be
+confused.** "Tried and rejected: tiering `cpuChoice()`'s fallback" settles the
+case where `picks > absorbableSize()`: there the room *must* absorb
+`picks − absorbableSize()` unusable players whoever takes them, so reordering
+the fallback moves the waste around and never removes it. Every shape in the
+table above is one the guard **allows**, which means `picks ≤ absorbableSize()`
+and the conservation law says the forced waste is zero. It is not zero, so what
+is left is a greedy snake failing to reach a feasible assignment that demonstrably
+exists — 380 picks against 387 capacity still landing 15 on the unstartable.
+
+That is a real, open problem and a different one from the rejected experiment.
+It lives in `cpuChoice()`, the one function every client and the worker must
+agree on, so it is a separate change with a worker deploy attached rather than a
+tightening of this guard — and anybody picking it up should read the section
+below first and note that its conclusion does not cover this case.
+
+**And the draft it would have run does finish**, which is exactly what made this
+hard to see. It finishes with roster spots nobody chose to waste, and a grade
+that docks them for it.
+
+**The message ends "Run fewer teams, or a shorter roster", and the second half
+of that sentence did not work.** Every stepper in the settings screen's Roster
+section refused the draft on the first press, because `setLeague()` moved
+`rounds` with the roster only for a scoring preset. That is written up under
+"The Draft Settings screen" — a refusal is only as good as the way out it
+names, so the two changes ship together and one test covers the path.
+
 ## The Juke score
 
 Projected points above a replacement starter at that position, as a share of
@@ -4291,6 +4488,50 @@ every setting is a settings screen with worse formatting; a summary listing
 none of the unusual ones lets somebody sit in a linear rookies-only draft
 under a header reading "10 teams · 14 rounds · Half PPR".
 
+**And the Roster section was one too, found the same way `Draft order` was.**
+Every stepper in it writes `bench` / `flex` / `superflex` / `starters` through
+`setLeague()`, and `setLeague()` moved `rounds` with them **only for a scoring
+preset** — so one press of the bench stepper produced *"13 roster spots, but
+the draft runs 14 rounds"*, and there is no rounds control on that screen to
+answer it with. The only way back was to undo the press. Confirmed on the
+deployed site, not inferred: `setLeague({ bench: 4 })` there leaves
+`rounds` at 14 and `setupProblem()` refusing.
+
+**Both this file and the component's own comment credited that derivation to a
+`setLineup()` that has never existed.** Not renamed, not moved — `grep -n
+"setLineup" app.js` has always come back empty. Two comments describing a
+function nobody wrote, and the control they describe silently refusing every
+press, which is the dead-control failure this project has now shipped three
+times.
+
+It is `ROSTER_KEYS` in `setLeague()` now: any patch touching a key the roster
+is made of re-derives `league.rounds = rosterSize()`, and a scoring preset that
+moves the lineup counts as one even though nothing in the patch says so —
+`superflex` is set by the preset, not by the caller.
+
+**The second half is the mirror, and it is the same trap one level down.**
+`readSetup()` reads all nine of these off the hidden legacy `<select>`s on the
+next `refreshSetup()` — which `goHome()` calls — and `setLeague()` mirrored
+only `teams` and `scoring` back to them. So a bench trimmed in the settings
+screen was reverted by the next trip home, silently, because nothing on that
+screen reads the legacy controls. `mirrorToLegacy()` writes all nine, and it
+writes them **from `league` rather than from the patch**: a scoring preset
+moves `superflex` without `superflex` ever appearing in the patch, and `rounds`
+is derived rather than handed in, so reading the object everything already
+agrees is the source of truth removes both special cases.
+
+**A `<select>` silently refuses a value that is not one of its options.**
+`.value` stays where it was and `readSetup()` then reads the old number back —
+a mirror that fails without saying so. `#benchCount` ran 0–12 and `#roundCount`
+8–20 while the React stepper goes to 15 bench, which is a 24-round roster, so
+the ranges had to be widened to match the control that writes to them. There is
+no UI cost: the legacy screen is unreachable by mouse.
+
+This is what makes the refusal in "The pool a league can hold is not the pool
+it can see" honest. That message ends *"Run fewer teams, or a shorter roster"*,
+and until this the second half of that sentence was advice the app would not
+let anybody take.
+
 ## The phone draft room's own controls
 
 **A crosshair, not an auto-follow.** The board is a real scroller in both axes
@@ -5032,8 +5273,8 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   bump, v6 moved the credentials, v7 blocked fork checkouts for
   `pull_request_target` and `workflow_run`, which this repository does not use.
 
-- **End to end: `npm install` once, then `npx playwright test`.** 105 tests
-  across twenty-two spec files, and it starts the static server and
+- **End to end: `npm install` once, then `npx playwright test`.** 108 tests
+  across twenty-four spec files, and it starts the static server and
   `wrangler dev` itself when it is pointed at localhost.
 
   Measured 27 August 2026 against production: **89 passed, 1 skipped, 0
@@ -5072,10 +5313,11 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   leaving and rejoining, the phone layout, what the player sheet says about
   the Juke score, that every club's colour is drawn where no text can land on
   it, that a news payload cannot put script in the page, that the positions we
-  refuse to rank are refused consistently, and — since the design pass — that
-  the door is door-shaped rather than book-shaped, that a board cell is a
-  card, what the draft header says, and that a claim on the landing page
-  carries its proof.
+  refuse to rank are refused consistently, that no league the setup screen
+  allows can force a seat onto a player the app's own rules refuse, and —
+  since the design pass — that the door is door-shaped rather than
+  book-shaped, that a board cell is a card, what the draft header says, and
+  that a claim on the landing page carries its proof.
 
   **The static server is `py` on Windows and `python3` everywhere else**, picked
   in `playwright.config.mjs` from `process.platform`. It was `py` outright,

@@ -316,10 +316,18 @@ export default function DraftSettingsModal({ engine, onClose, started, inRoom, m
         </div>
         {/* Rounds follow the roster rather than being a second number kept
             equal to it by hand — setupProblem() refuses a draft whose roster
-            size and round count disagree, and setLineup()'s own derivation
-            in app.js closes every way of tripping that from here. This line
-            is what makes the consequence visible while somebody is doing it,
-            rather than at the Save button. */}
+            size and round count disagree, and setLeague()'s own derivation in
+            app.js closes every way of tripping that from here. This line is
+            what makes the consequence visible while somebody is doing it,
+            rather than at the Save button.
+
+            That derivation credited a `setLineup()` that has never existed,
+            and until 30 August 2026 it only ran for a scoring preset — so
+            every stepper below was a dead control: one press produced
+            "13 roster spots, but the draft runs 14 rounds" and there is no
+            rounds control on this screen to answer it with. It is
+            ROSTER_KEYS in setLeague() now, and this line is the proof it
+            works: the number moves with the press. */}
         <p className="mt-3 text-[12px] text-ink-muted">
           {league.rounds} roster spots, so the draft runs {league.rounds} rounds.
         </p>
