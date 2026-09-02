@@ -84,7 +84,11 @@ const PROBE = () => {
 async function loadWithProbe(browser, opts, path = "#/") {
   const context = await browser.newContext(opts);
   await context.addInitScript(PROBE);
-  const page = await openApp(context, path);
+  /* `keepBootOverlay` because this file is the one that measures the overlay
+     itself: openApp() otherwise waits it out (and removes it if it outstays
+     its window), which is right for every other spec and would erase exactly
+     what PROBE is here to record. */
+  const page = await openApp(context, path, { keepBootOverlay: true });
   return { context, page };
 }
 

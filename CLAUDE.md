@@ -5111,6 +5111,62 @@ running app before it is believed**, which is the same instruction the
 `?cb=` note gives about deployment and the `LOCAL_WORKER` skip gives about
 news.
 
+### A wait that short-circuits stops waiting, and the product is what moved
+
+`openApp()` waited for the cold-load overlay to leave before handing a page
+back. The predicate was:
+
+```js
+!document.documentElement.hasAttribute("data-standalone") || !document.getElementById("boot-sonar")
+```
+
+which was exactly right when it was written. Breach was scoped to the installed
+app's cold launch, `index.html` hid it everywhere else with
+`html:not([data-standalone]) #boot-sonar { display: none }`, `theme.js` stamped
+that attribute only under `matchMedia('(display-mode: standalone)')`, and a
+plain `browser.newContext()` never reports standalone. So the left side was true
+on the first tick and there was genuinely nothing to wait for — the short-circuit
+was the fix for a predicate that used to time out a full 12 seconds on every
+call.
+
+**Then the owner reversed the scoping**, because an overlay only installed users
+see is an overlay almost nobody sees. Breach plays on every cold load now,
+`theme.js` no longer stamps the attribute, and `main.jsx`'s teardown runs
+unconditionally. Every one of those three changes is right. Together they left
+the left-hand side of that `||` permanently true against an overlay that had
+just stopped being inert, so `openApp()` resolved on the first frame and handed
+back a page with five seconds of animation still over it.
+
+**It surfaced as two app bugs and was neither.** `phone.spec.mjs`'s "nothing is
+sitting on top of the Start button" reported the overlay's own artwork as the
+thing covering the button — true, and not the bug that test exists to find — and
+"the bottom sheet cycles through its three snap heights" failed because
+`page.mouse.down()` on the drag handle was being swallowed. Measured on the real
+build: the button hit-tests as covered from 600ms through 5000ms and is
+clickable from 6000ms, which is the same 4800–5800ms window `sonar.spec.mjs`
+asserts the removal in. The two specs had been contradicting each other, and the
+one asserting the overlay *stays* was the one telling the truth.
+
+**The shape to remember is that nothing broke — a condition retired.** A guard
+written as "A or B" degrades silently the day A becomes permanently true, and it
+degrades into *always passing*, which is the direction no test catches. The tell
+here was two failures in one file that both described input going somewhere
+unexpected rather than a value being wrong, which is the sixth time in this file
+that the tooling has worn a bug's clothes.
+
+`openApp()` waits on the overlay's actual absence now, ceiling 8000ms, and
+removes the element if it outstays that rather than failing — an overlay that
+never leaves is one bug and it is `sonar.spec.mjs`'s to report, where a hard wait
+here would turn it into ninety-six timeouts spread across every other file.
+`sonar.spec.mjs` passes `{ keepBootOverlay: true }`, because it measures the
+overlay's whole life from an init script and is the one caller that needs it
+played exactly as shipped.
+
+**It costs the suite real time and that is the honest price.** Waiting out a
+five-second overlay on 96 `openApp()` calls is minutes, not seconds. It is worth
+paying because a person waits too: the overlay is not decoration the tests may
+skip, it is the first five seconds of using the product.
+
 ### A standing red that was not the pass that found it
 
 `autopick-adp.spec.mjs`'s "the autopicked seat's draft value is not a

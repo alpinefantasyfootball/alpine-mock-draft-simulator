@@ -141,7 +141,7 @@ export function clickHidden(page, id) {
   return page.evaluate((id) => document.getElementById(id).click(), id);
 }
 
-export async function openApp(context, path = "#/draft-room") {
+export async function openApp(context, path = "#/draft-room", opts = {}) {
   const page = await context.newPage();
   await page.addInitScript(instrumentation);
   await page.goto(`${SITE}/index.html${path}`);
@@ -153,59 +153,60 @@ export async function openApp(context, path = "#/draft-room") {
   await page.waitForFunction(
     () => typeof state === "object" && typeof Live === "object" && typeof suggestions === "function");
 
-  /* Then wait for the cold-load overlay to leave — but only when it could
-     possibly still be up.
+  /* Then wait for the cold-load overlay to leave, because a person has to.
 
-     #boot-sonar is fixed at z-index 9999 over the whole page, and when it was
-     unconditional it was genuinely held for the better part of a second after
-     React painted. Every test that clicked or hit-tested immediately was
-     racing it — phone.spec.mjs's "nothing is sitting on top of the Start
-     button" caught it first, reporting the overlay's own wordmark as the
-     thing covering the button, which was true and not the bug that test
-     exists to find.
+     #boot-sonar is fixed at z-index 9999 over the whole page and it takes
+     input: `elementFromPoint` at the Start button's centre returns the
+     overlay's own artwork, and `page.mouse.down()` on the bottom sheet's drag
+     handle is swallowed outright. Handled here rather than per-test because it
+     is not one test's problem — it is a property of every page load, and
+     waiting for it is what makes a test's timing match a user's.
 
-     Handled here rather than per-test because it is not one test's problem:
-     it is a property of every page load, and a person cannot click through
-     the overlay either. Waiting for it is what makes a test's timing match a
-     user's.
+     **The predicate this replaces had stopped waiting for anything, and the
+     reason is a reversal in the product rather than a mistake in the test.**
+     It read `!document.documentElement.hasAttribute("data-standalone") ||
+     !document.getElementById("boot-sonar")`, which was exactly right while the
+     overlay was scoped to the installed app's cold launch: index.html hid it
+     outright everywhere else, theme.js stamped `data-standalone` only under
+     `matchMedia('(display-mode: standalone)')`, and a plain
+     `browser.newContext()` never reports standalone — so the left side was
+     true on the first tick and there was genuinely nothing to wait for.
 
-     It stopped being unconditional when the overlay was scoped to the
-     installed app's cold launch: index.html now hides it outright with
-     `html:not([data-standalone]) #boot-sonar { display: none }`, and
-     `data-standalone` is stamped on <html> by theme.js only when
-     `matchMedia('(display-mode: standalone)')` matches. A plain
-     `browser.newContext()` never reports standalone — confirmed empirically,
-     and CDP's Emulation.setEmulatedMedia with a display-mode feature is a
-     silent no-op in this Chromium build — so on every page this suite loads
-     today, main.jsx's teardown (gated on that identical attribute) never
-     runs because there is nothing for it to tear down: the element the old
-     predicate waited on was never going to be removed, ever, because it was
-     display:none and inert from the very first frame. The predicate below
-     polled the full 12000ms out on every single call regardless — measured at
-     12.06s, every time, in every spec file that loads a page — before the
-     .catch swallowed the timeout and the test carried on anyway.
+     The owner then reversed that scoping (see index.html's own note: "an
+     overlay restricted to installed users is an overlay almost nobody sees at
+     all"). Breach plays on every cold load now, theme.js no longer stamps the
+     attribute, and main.jsx's teardown runs unconditionally. Which left the
+     left-hand side of that `||` permanently true against an overlay that had
+     just stopped being inert: the predicate resolved on the first raf tick and
+     openApp() handed back a page with five seconds of animation still over it.
 
-     So the predicate asks the same question main.jsx already answers rather
-     than re-deriving it, and short-circuits on it: with `data-standalone`
-     absent, the left side of the || is already true on the first raf tick,
-     which resolves in a few milliseconds rather than 12 seconds. With it
-     present — nothing in this suite can do that today, but the day something
-     can, this is what it needs — the 5000ms ceiling is real headroom over the
-     overlay's own documented worst case (2100ms MIN_VISIBLE_MS plus the fade
-     and removal, call it 2.5s), not a resigned "wait as long as possible and
-     hope."
+     It surfaced as two phone.spec.mjs failures that read like app bugs —
+     "nothing is sitting on top of the Start button" reporting the overlay's
+     own artwork as the thing covering the button, and the bottom sheet
+     refusing to grow on a tap — and both were the page being handed over too
+     early. Measured on the real build: the button hit-tests as covered at
+     600ms through 5000ms and is clickable from 6000ms, which is the same
+     4800-5800ms window sonar.spec.mjs asserts the overlay's removal in.
 
-     Tolerant of the overlay not existing at all — 404.html and the docs pages
-     have no loader — and of it never leaving, which is the failure sonar
-     .spec.mjs owns; a hard wait here would turn that into a timeout in every
-     other file instead. */
-  await page
-    .waitForFunction(
-      () => !document.documentElement.hasAttribute("data-standalone") || !document.getElementById("boot-sonar"),
-      null,
-      { timeout: 5000 }
-    )
-    .catch(() => {});
+     The ceiling is 8000ms, real headroom over that documented window rather
+     than a hopeful number. If the overlay outstays it the element is removed
+     rather than the wait failing: an overlay that never leaves is one bug and
+     it is sonar.spec.mjs's to report, and a hard wait here would turn it into
+     ninety-six timeouts in every other file instead — the same tolerance the
+     predicate this replaces was written with.
+
+     `keepBootOverlay` is for sonar.spec.mjs alone, which measures the
+     overlay's whole life from an init script and needs it left exactly as the
+     app plays it. Tolerant of the overlay not existing at all, too: 404.html
+     and the docs pages have no loader. */
+  if (!opts.keepBootOverlay) {
+    await page
+      .waitForFunction(() => !document.getElementById("boot-sonar"), null, { timeout: 8000 })
+      .catch(() => page.evaluate(() => {
+        const el = document.getElementById("boot-sonar");
+        if (el) el.remove();
+      }).catch(() => {}));
+  }
 
   await page.evaluate(() => window.__watchSends());
   return page;
