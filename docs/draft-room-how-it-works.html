@@ -133,7 +133,7 @@
          the only way back was the one at the very bottom, and this page is
          about fifteen thousand pixels long. The <svg> stays aria-hidden and
          the name lives on the link, or a screen reader announces a shape. -->
-    <a class="home" href="../index.html" title="Back to the Draft Room"
+    <a class="home" href="../index.html" title="Juke home"
        aria-label="Back to the Draft Room">
     <!-- class="mark" is kept so .home's layout rules and the 560px hide rule
          still find it, and the size is overridden inline because .mark is
@@ -305,10 +305,18 @@
       <li><b>The roster does not fill the rounds.</b> Starters plus FLEX plus
         bench has to equal the number of rounds, or teams would finish the
         draft with seats unfilled or players with nowhere to sit.</li>
-      <li><b>The draft is bigger than the board.</b> Teams times rounds cannot
-        exceed the number of players in the ADP list. Fourteen teams over
-        sixteen rounds wants 224 players, and the half PPR list carries about
-        205, so that one is blocked rather than allowed to run out mid-draft.</li>
+      <li><b>The draft is bigger than the room can use.</b> Teams times rounds
+        cannot exceed what the league is actually able to absorb &mdash; which
+        is not the same as how many players are on the board. A ten-team
+        league may hold ten quarterbacks, one each, and the board carries far
+        more than ten; the spares are on it and draftable by nobody, so
+        counting them as picks the room has space for would let a draft finish
+        having spent its closing rounds on players who can never be started.
+        The check counts, per position, the smaller of what the board has and
+        what the room may legally hold. In practice it only has anything to
+        say at the very deep end &mdash; the default ten- and twelve-team
+        leagues run to twenty-two rounds before it objects, against the
+        fourteen they actually use.</li>
     </ul>
 
     <h3>Replacement level</h3>
@@ -700,9 +708,17 @@
     <h2 id="s08"><span class="no">08</span>Saving and resuming</h2>
 
     <p>
-      A draft on your own is stored in your own browser and nowhere else: your
-      seat, the clock length, the wobble, the league settings and an ordered
-      list of player names. Refreshing the page no longer destroys a draft.
+      A draft on your own is stored in your own browser: your seat, the clock
+      length, the wobble, the league settings and an ordered list of player
+      names. Refreshing the page no longer destroys a draft.
+    </p>
+    <p>
+      Signed in, that same save is also copied to your account, and so is the
+      locker of drafts you have finished &mdash; which is the whole of what an
+      account is for here. The browser's copy is still written first and is
+      still the one the page reads; the copy on the server exists so the next
+      browser you sign in on can read it too. Signed out, there is no second
+      copy and nowhere for one to go.
     </p>
     <p>
       A draft with your league works differently, because everyone in it has
@@ -839,7 +855,7 @@
       daily; the app shows you when, under the Start button.
     </p>
 
-    <a class="backlink" href="../index.html">&larr; Back to the Draft Room</a>
+    <a class="backlink" href="../index.html#/drafts">&larr; Back to the Draft Room</a>
 
   </main>
 

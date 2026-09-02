@@ -103,7 +103,12 @@
 
     <div class="nf-acts">
       <a class="nf-go" href="/">Go to Juke</a>
-      <a class="nf-alt" href="/#/draft">Open the Draft Room</a>
+      <!-- #/drafts, not #/draft. The latter is the retired route: applyRoute()
+           still redirects it, so this link "worked", but it worked by landing
+           on a redirect written for old bookmarks rather than by pointing at
+           the room. The one page whose entire job is recovering from a bad
+           address should not itself carry one. -->
+      <a class="nf-alt" href="/#/drafts">Open the Draft Room</a>
     </div>
   </main>
 
