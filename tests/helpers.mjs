@@ -187,16 +187,18 @@ export async function openApp(context, path = "#/draft-room", opts = {}) {
      early. Measured on the Breach build: the button hit-tested as covered at
      600ms through 5000ms and was clickable from 6000ms.
 
-     Deepwater moved that window forward by more than half. The overlay now
-     holds 2500ms and is gone by ~2780 (2500 + a 260ms fade + the 280ms
-     removal beat), which is the 2400-3400ms window sonar.spec.mjs asserts.
+     Deepwater moved that window forward by more than half. The overlay holds
+     3100ms and is gone by ~3380 (3100 + a 260ms fade + the 280ms removal
+     beat), which is the 3000-4200ms window sonar.spec.mjs asserts. It held
+     2500 when it shipped; the extra 600ms is a beat on the finished mark,
+     added after the owner watched the deployed site — see main.jsx.
      That is worth roughly three seconds on each of the ninety-six openApp()
      calls in this suite — several minutes of wall clock, and the largest
      single saving in it. Nothing about this wait had to change to collect it,
      which is the argument for having written it as a wait on the overlay's
      actual absence rather than on a duration.
 
-     The ceiling is 5000ms, real headroom over that documented window rather
+     The ceiling is 6000ms, real headroom over that documented window rather
      than a hopeful number. If the overlay outstays it the element is removed
      rather than the wait failing: an overlay that never leaves is one bug and
      it is sonar.spec.mjs's to report, and a hard wait here would turn it into
@@ -216,7 +218,7 @@ export async function openApp(context, path = "#/draft-room", opts = {}) {
      and the docs pages have no loader. */
   if (!opts.keepBootOverlay) {
     await page
-      .waitForFunction(() => !document.getElementById("boot-sonar"), null, { timeout: 5000 })
+      .waitForFunction(() => !document.getElementById("boot-sonar"), null, { timeout: 6000 })
       .catch(() => page.evaluate(() => {
         const el = document.getElementById("boot-sonar");
         if (el) el.remove();

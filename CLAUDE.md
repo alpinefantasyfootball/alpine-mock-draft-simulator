@@ -3915,8 +3915,20 @@ bytes would be a false provenance claim, and an invalid one.
 
 Four specks fall through deep water, gather at centre, merge into a droplet,
 and the droplet expands into the mark; teeth light left to right, the eyes
-flicker twice and hold. 2500ms, then the frame is dead still until the app is
-ready. It replaced Breach, a 4000ms shark leaping through a waterline.
+flicker twice and hold. The reveal is 2500ms and the overlay holds **3100**,
+then the frame is dead still until the app is ready. It replaced Breach, a
+4000ms shark leaping through a waterline.
+
+**The 600ms difference is the composition's last beat, not slack.** It shipped
+dismissing at exactly 2500 — the reveal's own length — on the reasoning that
+nothing finite runs past 2.5s, so every extra millisecond is a still frame the
+visitor waits through. The owner watched the deployed site and reported it
+"close but could last slightly longer", and the reasoning was wrong in a
+nameable way: at 2500 the fade begins on the same frame the flicker ends, so
+the finished mark is never actually SEEN finished. The design package's own
+sentence is "2.5 seconds, then the frame sits completely still until the app is
+ready", and at 2500 there is no *then*. A still frame is not waste here; it is
+the last beat, and it was the one beat that never played.
 
 The element id is still `#boot-sonar` — `theme.js`'s comment, `main.jsx`'s
 teardown and `sonar.spec.mjs` all key off that literal string, and none of it
@@ -3971,19 +3983,33 @@ decided three times.
 `DraftRoomLoader.jsx` replaced SonarLoader at the one call site that was a
 full-screen wait. SonarLoader is untouched and still correct everywhere else.
 
-**The floor dropped 2100ms to 500ms, which is a reduction toward a number that
-has already failed once**, so it needs its argument written down. 400ms failed
-because SonarLoader's ring is a sweep with a beginning: `dataReady()` is
-usually already true here, so the screen was gone before one cycle completed
-and it read as a flash. 2100 was `RING_MS` exactly — one full sweep — so the
-thing always finished what it started.
+**The floor is 1600ms — one full turn of the loop — and it shipped at 500,
+which was wrong on the real screen.** Reported by the owner off the deployed
+site: "way too short and you almost can't make out what's on the screen before
+you get sent into the draft room."
 
-`DraftRoomLoader` has no sweep to complete. Its teeth run on negative delays
-stepped 55ms apart, so it is mid-loop on its first painted frame and there is
-no cycle boundary to land on; it looks the same held for 500ms as for 5000. The
-cost 2100 was buying does not exist here. What 500 still buys is the other half
-of the original complaint, which does survive: below about 400ms a person
-perceives a flicker rather than a transition.
+The argument that produced 500 is worth keeping for the way it failed. 400ms
+had failed historically because SonarLoader's ring is a sweep with a beginning:
+`dataReady()` is usually already true here, so the screen was gone before one
+cycle completed and it read as a flash. 2100 was `RING_MS` exactly — one full
+sweep — so the thing always finished what it started. `DraftRoomLoader` has no
+sweep to complete: its teeth run on negative delays stepped 55ms apart, so it
+is mid-loop on its first painted frame and there is no cycle boundary to land
+on. Every sentence of that is true, and it does look the same held for 500ms as
+for 5000.
+
+**And it answers the wrong question.** "Does it look stuttery" and "can a person
+see it" are different quantities, and only the first one is about the
+animation. Dwell is about the reader. At a 500ms floor the layer is up for 500
+plus a 220ms fade-out, and the first 160 of that is still fading IN — about a
+third of a second at full opacity, for a screen carrying a mark, a heading and
+a sub-line. No property of the loop's seamlessness changes that. Measured after
+the fix: **2268ms on screen against roughly 720 before.**
+
+1600 is one complete cycle, so the whole gesture plays through rather than
+being sampled — the shortest hold that shows the composition entire, and it
+lands between the 2100 nobody complained about and the 500 that was reported.
+The package's 500 is a MINIMUM; what it forbids is going lower.
 
 **Do not remount it while the layer is up.** The loop is seamless precisely
 because it starts mid-flight; remounting resets the sweep and reads as a
@@ -4002,9 +4028,9 @@ existing reason: `DraftRoom` does not unmount between drafts, so a stuck
 
 ### What the suite got back
 
-`openApp()` waits on the overlay's absence, so halving the overlay halved the
-wait with no edit: its ceiling went 8000ms to 5000ms and roughly two seconds
-came off each of 96 calls. The session gate means most of those calls now find
+`openApp()` waits on the overlay's absence, so shortening the overlay shortened
+the wait with no edit: its ceiling went 8000ms to 6000ms and over a second came
+off each of 96 calls. The session gate means most of those calls now find
 no overlay at all. A spec that needs to watch the splash play needs a fresh
 browser context — `loadWithProbe()` in `sonar.spec.mjs` already made one, which
 is why it kept working without being told the gate existed.
@@ -5876,6 +5902,50 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   the repository, because design tokens are exactly what the *other* session
   edits while yours has a server up — so restart the preview after any change
   to `tailwind.config.js`, whoever made it.
+- **`preview_start` serves the repo root, not your worktree, and says nothing
+  about it.** This is the seventh time in this file that the tooling has worn a
+  bug's clothes, and it is the most expensive one yet: it produced eight
+  consecutive measurements of a bundle that was not under test, and a confident,
+  fully-evidenced, completely wrong diagnosis.
+
+  `.claude/launch.json`'s `web-dist` entry is `py -m http.server 8766
+  --directory web/dist`, and that relative path resolves against the repository
+  root even when the session is inside `.claude/worktrees/<name>`. So a
+  worktree builds its own `web/dist`, starts the preview, and is served the
+  *other* checkout's build. Nothing errors. The page renders. Every number you
+  take off it is about somebody else's code.
+
+  What it produced: a loader whose 1600ms floor appeared not to apply, then a
+  floor raised to 5000ms that appeared not to apply either, then a
+  `console.log` in the effect that never fired, then a `window` probe showing
+  the effect body running **zero** times — each result more alarming than the
+  last, and all eight of them read off `assets/index-Wmn5_klo.js` while the
+  worktree had built `index-BAYdEqfC.js`. Against the real bundle the effect
+  runs 289 times and the floor works exactly as written.
+
+  **The check is one line and this file already prescribes it** — it is the
+  same `?cb=` instruction the deploy notes give, pointed at localhost:
+
+  ```bash
+  curl -s "http://localhost:8766/?cb=1" | grep -o 'assets/index-[A-Za-z0-9_-]*\.js'
+  ```
+
+  Compare that against `ls web/dist/assets/index-*.js`. If they differ you are
+  measuring another checkout. **Ask before the first measurement, not after the
+  eighth**, and be especially suspicious when a result is surprising rather than
+  reassured by a plausible story that explains it — a confident explanation of a
+  phantom is exactly what this failure mode generates.
+
+  **Playwright is the way to measure from a worktree**, because its `webServer`
+  command runs with the test's own cwd and therefore builds and serves the
+  worktree. That is why the full suite has always been correct from a worktree
+  while `preview_start` is not. Put the measurement in a temporary spec under
+  `tests/` rather than a standalone node script pointed at a preview port.
+
+  And a temporary spec that measures anything should assert what it is looking
+  at before it looks: fetch the served HTML, pull the bundle name out of it, and
+  print whether that bundle contains a symbol the change introduces.
+
 - **A proxied sandbox makes a render-blocking `<link>` look like a broken
   loader.** `sonar.spec.mjs` held `#boot-sonar` to leaving between 4800ms and
   5800ms of navigation start (2400–3400 since Deepwater; the diagnosis below is

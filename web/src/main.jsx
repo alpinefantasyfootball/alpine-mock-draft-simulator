@@ -203,21 +203,31 @@ if (boot) {
       //   teeth     fTooth    0.90s        -> 2.07s
       //   eyes      fEye/fBloom 1.10s      -> 2.50s
       //
-      // 2500 exactly, not 2500-plus-a-margin, and that is the one number here
-      // with a reason not to drift. The last two rows are inside
-      // <juke-mark variant="form">'s shadow root — juke-mark.js ships
-      // unedited — so this file cannot see them and cannot be retimed against
-      // them by measurement. It matches a published figure instead. Cutting
-      // early truncates the eye flicker, which is the beat the whole reveal
-      // ends on; the design package's own acceptance criterion is that it
-      // "ends on a dead-still mark", and a mark still flickering when the
-      // layer fades has not ended at all.
+      // 2500 is when the REVEAL ends — the eye flicker's last frame. This hold
+      // is 3100, and the 600ms difference is the point rather than slack.
       //
-      // Holding LONGER is equally wrong and less obvious: nothing finite runs
-      // past 2.5s, so every extra millisecond is a still frame the visitor
-      // waits through. That is what index.html's --total means by ending on a
-      // hold rather than a loop — a slow boot simply holds longer, and the
-      // hold is the ambient water, not a stalled animation.
+      // It shipped at 2500 exactly, on the reasoning that nothing finite runs
+      // past 2.5s so every extra millisecond is a still frame the visitor
+      // waits through. Reported by the owner off the deployed site: the splash
+      // is "close but could last slightly longer". The reasoning was wrong in
+      // a specific way worth keeping. Dismissing at exactly 2500 means the
+      // fade begins on the same frame the flicker ends, so the finished mark
+      // is never actually SEEN finished — the design package's own sentence is
+      // "2.5 seconds, then the frame sits completely still until the app is
+      // ready", and at 2500 there is no "then". A still frame is not waste
+      // here; it is the last beat of the composition, and it was the one beat
+      // that never played.
+      //
+      // 600ms of dead-still mark, which is long enough to register as a held
+      // frame rather than a hitch before the fade. The reveal itself is
+      // untouched: 2500 is inside <juke-mark variant="form">'s shadow root,
+      // juke-mark.js ships unedited, and this number cannot and must not
+      // retime it. What moved is how long the finished picture stays up, which
+      // is this file's to decide and index.html's --total has no part in.
+      //
+      // Cutting BACK below 2500 is still wrong for the original reason: it
+      // truncates the eye flicker, and a mark still flickering when the layer
+      // fades has not ended at all.
       //
       // This whole hold replaces an early return that removed the element
       // outright while it was still at opacity 0 — the branch a fast load
@@ -232,7 +242,7 @@ if (boot) {
       // deliberate screen rather than a flash. The attribute is written by
       // splash-boot.js rather than re-derived from matchMedia here, so the
       // two files cannot disagree about what this particular load decided.
-      const MIN_VISIBLE_MS = boot.hasAttribute('data-splash-reduced') ? 600 : 2500
+      const MIN_VISIBLE_MS = boot.hasAttribute('data-splash-reduced') ? 600 : 3100
       setTimeout(() => {
       const shown = getComputedStyle(boot).opacity
 
