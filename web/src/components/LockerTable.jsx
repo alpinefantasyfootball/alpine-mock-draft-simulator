@@ -307,14 +307,44 @@ function StorageNote({ count, signedIn, syncStatus, earlyAccessRef }) {
   const live = one ? 'lives' : 'live'
   const are = one ? 'is' : 'are'
 
-  if (signedIn && syncStatus === 'error') {
+  /* Three different faults used to share one sentence, and it was the
+     sentence a reader could do least with. They have three different
+     answers — sign in again, the account's storage is not set up, the
+     network is gone — and telling them apart took a console probe against
+     a live session. The engine keeps the reason now (app.js's
+     noteSyncResult); this is where it becomes something to act on.
+
+     The prose lives here rather than travelling up with the reason: a
+     second copy of it in app.js would be the "written down twice" rule
+     with the copy furthest from the reader winning. */
+  if (signedIn && syncStatus !== 'ok' && syncStatus !== 'off') {
+    const SAY = {
+      unauthorized: {
+        // Deliberately not "your session expired", which is a guess. This
+        // is true of an expired session and of a worker with no
+        // CLERK_SECRET_KEY, and signing in again is the right first move
+        // either way.
+        what: 'Juke could not confirm your sign-in',
+        next: `Signing out and back in usually fixes it. ${one ? 'This mock is' : 'These are'} safe here meanwhile.`,
+      },
+      'store-failed': {
+        // The one case where the reader is not the person who can fix it,
+        // and saying so is better than implying they should retry.
+        what: "Juke reached your account but couldn't save to it",
+        next: 'That is our end, not yours, and nothing is lost here while it is sorted out.',
+      },
+      offline: {
+        what: "Juke can't reach your account right now",
+        next: `${one ? 'It' : 'They'} will sync on ${one ? 'its' : 'their'} own once the connection is back.`,
+      },
+    }
+    const say = SAY[syncStatus] || SAY.offline
     return (
       <div className="flex flex-wrap items-center gap-4 border-t border-amber-400/20 bg-amber-400/[0.04] px-5 py-[13px]">
         <CloudAlert className="h-[15px] w-[15px] shrink-0 text-amber-300" aria-hidden="true" />
         <p className="min-w-0 flex-1 text-[13px] leading-snug text-white/80">
-          Signed in, but Juke could not reach your account &mdash; {these.toLowerCase()} {mocks} {are} in{' '}
-          <b>this browser only</b> for now. {one ? 'It' : 'They'} will sync on {one ? 'its' : 'their'} own
-          once the connection is back.
+          {say.what} &mdash; {these.toLowerCase()} {mocks} {are} in <b>this browser only</b> for now.{' '}
+          {say.next}
         </p>
       </div>
     )

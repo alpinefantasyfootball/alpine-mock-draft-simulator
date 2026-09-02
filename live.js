@@ -317,6 +317,31 @@
   root.addEventListener("online", awake);
   root.addEventListener("pageshow", awake);
 
+  /* One shape for every sync method, so a caller never has to remember
+     which of them says what. Extra fields are merged in rather than
+     replacing the envelope — see loadDraft/loadHistory.
+
+     Module scope rather than a method on the returned object, and that is
+     not style: `live` in this file is the internal state object a few
+     hundred lines up, not the API being returned, so `live.syncResult()`
+     would be undefined at the moment any of these actually failed — which
+     is to say only ever in production, on the path that exists to explain
+     failures. Written the wrong way first and caught by reading it back. */
+  function syncResult(ok, reason, extra) {
+    const out = { ok: !!ok, reason: ok ? null : (reason || "offline") };
+    if (extra) for (const k in extra) out[k] = extra[k];
+    return out;
+  }
+
+  /* HTTP status to reason, in one place. Every one of these routes answers
+     with the same refusals, so a fifth would otherwise have to be added in
+     six methods. */
+  function reasonForStatus(status) {
+    if (status === 401) return "unauthorized";
+    if (status === 403) return "forbidden";
+    return "offline";
+  }
+
   return root.Live = {
     WORKER: WORKER,
     configured: configured,
@@ -491,80 +516,139 @@
        `token` is a Clerk session token, gotten by the caller from
        window.JukeAuth.getToken() — this file has no Clerk of its own and
        no opinion about who is signed in, only how to ask the worker once
-       somebody hands it a token. Every method below resolves to a safe,
-       falsy-ish answer (false, null, []) rather than rejecting, on a
-       missing token exactly as much as on a network failure — a caller
-       that is not signed in and a caller that could not reach the worker
-       need to be handled identically, which they cannot be if only one of
-       them throws. */
+       somebody hands it a token.
+
+       ---- Every method resolves; none of them rejects ----
+
+       That part is unchanged and is the point: a caller that is not signed
+       in and a caller that could not reach the worker need to be handled
+       identically, which they cannot be if only one of them throws, and a
+       draft must never be held up by a sync.
+
+       ---- What changed: they say WHY ----
+
+       They used to resolve to a bare falsy answer — false, null, [] — and
+       that collapsed every distinct failure into one. It cost a real bug:
+       a foreign key was failing every account write while the read beside
+       it answered 200, and from the page the symptom was identical to a
+       missing CLERK_SECRET_KEY and to an unapplied migration. Three
+       different causes, three different fixes, one indistinguishable
+       "could not reach your account", and it took a hand-written console
+       probe to tell them apart.
+
+       So each one resolves to `{ ok, reason, ... }`. `reason` is null when
+       ok, and otherwise one of:
+
+         "signed-out"    no token was handed in; nothing was attempted
+         "offline"       the request never completed — no network, worker
+                         down, DNS, a blocked origin at the browser
+         "unauthorized"  401: the worker would not accept the token. A
+                         missing CLERK_SECRET_KEY on the worker looks
+                         exactly like this, and so does an expired session
+         "forbidden"     403: originAllowed() refused the caller's Origin
+         "store-failed"  200, and the worker could not write it — a missing
+                         table, a constraint, D1 itself being unwell
+         "bad-response"  a 2xx that was not the JSON this expects
+
+       The data still comes back beside it (`data` for a draft, `entries`
+       for history) rather than in place of it, so a caller reads one field
+       for the answer and another for whether to believe it. */
+
+
     saveDraft: function (token, data) {
-      if (!token) return Promise.resolve(false);
+      if (!token) return Promise.resolve(syncResult(false, "signed-out"));
       const http = WORKER.replace(/^ws/, "http");
       return fetch(http + "/me/draft", {
         method: "POST",
         headers: { "content-type": "application/json", "authorization": "Bearer " + token },
         body: JSON.stringify(data)
       })
-        .then((r) => r.json())
-        .then((body) => !!(body && body.ok))
-        .catch(() => false);
+        .then(function (r) {
+          if (!r.ok) return syncResult(false, reasonForStatus(r.status));
+          return r.json()
+            .then((body) => (body && body.ok) ? syncResult(true) : syncResult(false, "store-failed"))
+            .catch(() => syncResult(false, "bad-response"));
+        })
+        .catch(() => syncResult(false, "offline"));
     },
 
     loadDraft: function (token) {
-      if (!token) return Promise.resolve(null);
+      if (!token) return Promise.resolve(syncResult(false, "signed-out", { data: null }));
       const http = WORKER.replace(/^ws/, "http");
       return fetch(http + "/me/draft", { headers: { "authorization": "Bearer " + token } })
-        .then((r) => r.json())
-        .then((body) => (body && body.data) || null)
-        .catch(() => null);
+        .then(function (r) {
+          if (!r.ok) return syncResult(false, reasonForStatus(r.status), { data: null });
+          return r.json()
+            .then((body) => syncResult(true, null, { data: (body && body.data) || null }))
+            .catch(() => syncResult(false, "bad-response", { data: null }));
+        })
+        .catch(() => syncResult(false, "offline", { data: null }));
     },
 
     clearDraft: function (token) {
-      if (!token) return Promise.resolve(false);
+      if (!token) return Promise.resolve(syncResult(false, "signed-out"));
       const http = WORKER.replace(/^ws/, "http");
       return fetch(http + "/me/draft", {
         method: "DELETE",
         headers: { "authorization": "Bearer " + token }
       })
-        .then((r) => r.json())
-        .then((body) => !!(body && body.ok))
-        .catch(() => false);
+        .then(function (r) {
+          if (!r.ok) return syncResult(false, reasonForStatus(r.status));
+          return r.json()
+            .then((body) => (body && body.ok) ? syncResult(true) : syncResult(false, "store-failed"))
+            .catch(() => syncResult(false, "bad-response"));
+        })
+        .catch(() => syncResult(false, "offline"));
     },
 
     loadHistory: function (token) {
-      if (!token) return Promise.resolve([]);
+      if (!token) return Promise.resolve(syncResult(false, "signed-out", { entries: [] }));
       const http = WORKER.replace(/^ws/, "http");
       return fetch(http + "/me/history", { headers: { "authorization": "Bearer " + token } })
-        .then((r) => r.json())
-        .then((body) => (body && Array.isArray(body.entries)) ? body.entries : [])
-        .catch(() => []);
+        .then(function (r) {
+          if (!r.ok) return syncResult(false, reasonForStatus(r.status), { entries: [] });
+          return r.json()
+            .then((body) => syncResult(true, null, {
+              entries: (body && Array.isArray(body.entries)) ? body.entries : []
+            }))
+            .catch(() => syncResult(false, "bad-response", { entries: [] }));
+        })
+        .catch(() => syncResult(false, "offline", { entries: [] }));
     },
 
     // One entry, added or replaced — see worker/README.md on why there is
     // no bulk write: the server only ever needs the one that changed.
     saveHistoryEntry: function (token, entry) {
-      if (!token) return Promise.resolve(false);
+      if (!token) return Promise.resolve(syncResult(false, "signed-out"));
       const http = WORKER.replace(/^ws/, "http");
       return fetch(http + "/me/history", {
         method: "POST",
         headers: { "content-type": "application/json", "authorization": "Bearer " + token },
         body: JSON.stringify(entry)
       })
-        .then((r) => r.json())
-        .then((body) => !!(body && body.ok))
-        .catch(() => false);
+        .then(function (r) {
+          if (!r.ok) return syncResult(false, reasonForStatus(r.status));
+          return r.json()
+            .then((body) => (body && body.ok) ? syncResult(true) : syncResult(false, "store-failed"))
+            .catch(() => syncResult(false, "bad-response"));
+        })
+        .catch(() => syncResult(false, "offline"));
     },
 
     deleteHistoryEntry: function (token, id) {
-      if (!token) return Promise.resolve(false);
+      if (!token) return Promise.resolve(syncResult(false, "signed-out"));
       const http = WORKER.replace(/^ws/, "http");
       return fetch(http + "/me/history?id=" + encodeURIComponent(id), {
         method: "DELETE",
         headers: { "authorization": "Bearer " + token }
       })
-        .then((r) => r.json())
-        .then((body) => !!(body && body.ok))
-        .catch(() => false);
+        .then(function (r) {
+          if (!r.ok) return syncResult(false, reasonForStatus(r.status));
+          return r.json()
+            .then((body) => (body && body.ok) ? syncResult(true) : syncResult(false, "store-failed"))
+            .catch(() => syncResult(false, "bad-response"));
+        })
+        .catch(() => syncResult(false, "offline"));
     }
   };
 })(window);
