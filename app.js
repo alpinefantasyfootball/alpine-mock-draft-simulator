@@ -8871,15 +8871,25 @@ function reconcileWithServer() {
        that reads the locker (DraftLocker, MockDraftsPhone through
        DraftRoom's own tick) re-reads on "juke:header" and on nothing
        else, so a merge that lands after mount left a phone's finished
-       draft invisible on the laptop until a manual reload. `render()`
-       rather than a bare dispatchEvent: showResumeBar() above has already
-       rewritten legacy DOM this same tick, and render() is what puts the
-       rest of the page back in step with a save that just changed
-       underneath it — the event falls out of renderHeader() as it always
-       has. */
+       draft invisible on the laptop until a manual reload.
+
+       The event, deliberately, and NOT render(). render() ends in
+       saveDraft(), which writes SAVE_KEY and pushes it up — so reconciling
+       through it would answer every pull with a write of whatever this tab
+       happens to hold, which is the one thing a merge must not do. It is
+       guarded (`!state.started` returns early) and would very likely never
+       have fired, and "very likely never" is not a property to give the
+       function whose job is deciding which device's draft survives. The
+       legacy half of the screen is already handled: showResumeBar() above
+       is the only legacy DOM a merge can change.
+
+       Unconditional, rather than leaning on noteSyncResult()'s own
+       dispatch — that one only fires when the status CHANGES, and the
+       second successful sync of a session is exactly when a second
+       device's draft arrives. */
     return Promise.all([draftDone, historyDone]).then(function (results) {
       noteSyncResult(results.every(Boolean));
-      render();
+      window.dispatchEvent(new Event("juke:header"));
     });
   })
     .catch(function () { noteSyncResult(false); })

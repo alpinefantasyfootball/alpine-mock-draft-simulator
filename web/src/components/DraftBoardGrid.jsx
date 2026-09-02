@@ -250,6 +250,14 @@ function RaiseLowerButton({ onClick, disabled, title, children }) {
    cannot invert the term and push the live pick off the top. */
 function centreOnLive(scroller, cell, bottomInset = 0) {
   if (!scroller || !cell) return
+  /* A CSS-hidden board is still a mounted board. Below lg the Board tab's
+     own segmented control hides this grid with `hidden` rather than
+     unmounting it, and a display:none scroller measures 0 by 0 — every
+     term below then works out to 0, and a "centre" would quietly scroll a
+     board nobody is looking at back to its top-left corner. Harmless in
+     the end (the next pick re-centres it once it is visible again) and
+     still a scroll nobody asked for, on an element that cannot be seen. */
+  if (!scroller.clientWidth && !scroller.clientHeight) return
   const box = scroller.getBoundingClientRect()
   const target = cell.getBoundingClientRect()
   const visibleH = Math.max(target.height, box.height - bottomInset)
