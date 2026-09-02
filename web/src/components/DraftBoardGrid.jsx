@@ -500,9 +500,28 @@ export default function DraftBoardGrid({ league, picks, mySlot, onClock, teamLab
           rowsTemplate above): the header row sizes to its own content and
           every round is exactly 50px, never a minimum a tall cell could
           push past. */}
+      {/* bottomInset becomes real scroll room, not just a centring offset,
+          and without it following quietly stops working half way down the
+          board. On a phone the sheet covers 470px of a 686px board, so the
+          visible band is about 217px — four and a half rounds — and the
+          board's own scroll range is the same 217. Measured on a live
+          14-round draft: the live pick tracks perfectly to round 7 and
+          then pins at the bottom of the scroller with rounds 8 to 14
+          permanently behind the sheet, because there is no further to
+          scroll. Padding the grid by exactly what is covering it gives
+          every round somewhere to go.
+
+          Inline, so it overrides the class rather than adding to it — the
+          `pb-[calc(...)]` beside it was sized for the flush tab bar that
+          used to sit under this and is the smaller of the two whenever a
+          sheet is present. Zero when no caller passes one, which is every
+          board but the phone's. */}
       <div
         className="grid min-w-max pb-[calc(7rem+58px+env(safe-area-inset-bottom))] lg:pb-0 [grid-template-columns:var(--cols)] lg:[grid-template-columns:var(--cols-wide)] [grid-template-rows:var(--rows)] lg:[grid-template-rows:var(--rows-wide)]"
-        style={{ '--cols': cols, '--cols-wide': colsWide, '--rows': rowsTemplate, '--rows-wide': rowsWide }}
+        style={{
+          '--cols': cols, '--cols-wide': colsWide, '--rows': rowsTemplate, '--rows-wide': rowsWide,
+          ...(bottomInset ? { paddingBottom: bottomInset } : null),
+        }}
       >
         {/* header row */}
         <div className="sticky left-0 top-0 z-20 flex items-center justify-center border-b border-r border-slate-rule bg-slate-panel/95 py-1 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">
