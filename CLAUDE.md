@@ -5171,6 +5171,17 @@ the network tab: `/me/draft` and `/me/history` returning **200** while signed
 in means the worker's verification genuinely works, where a page that merely
 *looks* signed in proves only that Clerk's client half does.
 
+**A 200 proves the token, and it does not prove the table.** `listDraftHistory()`
+catches a missing `draft_history` and answers `[]`, so a D1 that never had
+`0004_drafts.sql` applied returns a perfectly healthy `200 {"entries":[]}` to
+every read — indistinguishable from an account with nothing in it. The write is
+what separates them: finishing a mock while signed in posts to `/me/history`,
+and the body is `{"ok":true}` against a real table and `{"ok":false}` against a
+missing one, both under a 200. **Read the body, not the status** — the same
+"ask the database, not the response" rule this file already states, one level
+in. The Locker's own storage strip is now the version of that check a person
+can run: it says "could not reach your account" on exactly this.
+
 **`PREVIEW_ORIGIN_RE`** allows any `https://<hash>.juke-1mw.pages.dev` through
 `originAllowed()`, because every branch push gets its own preview address and
 that is where this is tested before a merge. Without it every authenticated
