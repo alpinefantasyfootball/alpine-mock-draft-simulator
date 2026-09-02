@@ -76,7 +76,7 @@ const PROBE = () => {
     } else if (window.__sonar.existed && window.__sonar.removedAt == null) {
       window.__sonar.removedAt = Date.now() - t0;
     }
-    if (Date.now() - t0 < 4000) setTimeout(tick, 16);
+    if (Date.now() - t0 < 5000) setTimeout(tick, 16);
   };
   tick();
 };
@@ -95,7 +95,7 @@ async function loadWithProbe(browser, opts, path = "#/") {
 for (const [label, opts] of [["a phone", PHONE], ["a desktop", DESKTOP]]) {
   test(`the cold-load overlay comes down on ${label}, and leaves nothing over the page`, async ({ browser }) => {
     const { context, page } = await loadWithProbe(browser, opts);
-    await page.waitForTimeout(3600);
+    await page.waitForTimeout(4600);
 
     const sonar = await page.evaluate(() => window.__sonar);
     expect(sonar.existed, "the overlay is in the served markup").toBe(true);
@@ -159,7 +159,7 @@ for (const [label, opts] of [["a phone", PHONE], ["a desktop", DESKTOP]]) {
    thing to catch is that price quietly growing. */
 test("the loader is shown on every load, and does not outstay its welcome", async ({ browser }) => {
   const { context, page } = await loadWithProbe(browser, DESKTOP);
-  await page.waitForTimeout(3600);
+  await page.waitForTimeout(4600);
   const sonar = await page.evaluate(() => window.__sonar);
 
   expect(sonar.existed, "the overlay is in the served markup").toBe(true);
@@ -187,14 +187,20 @@ test("the loader is shown on every load, and does not outstay its welcome", asyn
      composition short fails here rather than shipping a reveal nobody sees
      complete.
 
-     2400 rather than 2500 for the floor: removedAt is sampled on a 16ms tick
+     The hold is 3100, not the reveal's own 2500: the extra 600ms is a
+     deliberate beat on the finished, dead-still mark, added after the owner
+     reported off the deployed site that the splash "could last slightly
+     longer". See main.jsx for why dismissing on the reveal's last frame meant
+     the finished picture was never actually seen finished.
+
+     3000 rather than 3100 for the floor: removedAt is sampled on a 16ms tick
      against a Date.now() taken in an init script, so it carries a frame or
      two of slack in both directions and a bound sitting exactly on the
-     figure would flake. The ceiling is the real assertion — 2500 hold plus a
-     260ms fade plus the 280ms removal beat is ~2780, and 3400 leaves room
+     figure would flake. The ceiling is the real assertion — 3100 hold plus a
+     260ms fade plus the 280ms removal beat is ~3380, and 4200 leaves room
      for a slow CI frame without admitting the 4900ms hold this replaced. */
-  expect(sonar.removedAt, "it stays until the whole composition has arrived").toBeGreaterThan(2400);
-  expect(sonar.removedAt, "and it is gone inside a reasonable window").toBeLessThan(3400);
+  expect(sonar.removedAt, "it stays until the whole composition has arrived").toBeGreaterThan(3000);
+  expect(sonar.removedAt, "and it is gone inside a reasonable window").toBeLessThan(4200);
 
   await context.close();
 });

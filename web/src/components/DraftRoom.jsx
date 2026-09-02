@@ -233,30 +233,41 @@ export default function DraftRoom() {
   // its job, not a real wait, but the brief's requirement is unconditional
   // ("every surface, always"), not "only when slow".
   //
-  // The floor is 500ms, from design package 03, and it is a REDUCTION from
-  // 2100 that does not reopen the bug 2100 was fixing.
+  // The floor is 1600ms: one full turn of the loader's own 1.6s loop.
   //
-  // The history matters, because 500 is closer to the 400 that failed than to
-  // the 2100 that worked. 400 was too short because SonarLoader's ring is a
-  // sweep with a beginning: dataReady() is usually already true here, so the
-  // screen was gone before one cycle completed and it read as a flash.
-  // Reported directly. 2100 was RING_MS — exactly one full sweep — chosen so
-  // the thing always finished what it started.
+  // It shipped at 500 — the design package's stated minimum — and that was
+  // wrong on the real screen. Reported by the owner off the deployed site:
+  // "way too short and you almost can't make out what's on the screen before
+  // you get sent into the draft room."
   //
-  // DraftRoomLoader has no sweep to complete. Its teeth run on negative delays
-  // stepped 55ms apart, so it is already mid-loop on its first painted frame
-  // and there is no cycle boundary to land on: it looks the same held for
-  // 500ms as for 5000. The cost 2100 was buying is a cost this loader does not
-  // incur, so paying it would be 1.6 seconds of nothing on the common path
-  // where the draft is genuinely ready.
+  // The argument that produced 500 is worth keeping because of how it failed.
+  // It went: 400 was too short historically because SonarLoader's ring is a
+  // sweep with a beginning, so a screen gone before one cycle completed read
+  // as a flash; 2100 was RING_MS, one full sweep, so the thing always finished
+  // what it started; and DraftRoomLoader has no sweep to complete, because its
+  // teeth run on negative delays stepped 55ms apart and it is mid-loop on its
+  // first painted frame. All of that is true. It looks the same held for 500ms
+  // as for 5000.
   //
-  // What 500 still buys is the other half of the original complaint, which
-  // does survive: a loader that flashes for 80ms reads as a glitch whatever is
-  // drawn in it. Below ~400ms a person perceives a flicker rather than a
-  // transition, which is why the package puts the floor just above it.
+  // And it answers the wrong question. "Does it look stuttery" and "can a
+  // person see it" are different quantities, and only the first one is about
+  // the animation. Dwell time is about the reader. At a 500ms floor the layer
+  // is on screen for 500 plus a 220ms fade-out, and the first 160 of that is
+  // still fading IN — so roughly a third of a second at full opacity, for a
+  // screen carrying a mark, a heading and a sub-line. That is not enough to
+  // read, and no property of the loop's seamlessness changes it.
+  //
+  // 1600 is one complete cycle: the teeth sweep left to right once and the
+  // eyes flicker once, so the whole gesture plays through rather than being
+  // sampled. That is a reason rather than a taste — it is the shortest hold
+  // that shows the composition entire. It also lands between the 2100 nobody
+  // complained about and the 500 that was reported, nearer the former.
+  //
+  // The package's 500 is a MINIMUM and this does not contradict it. What it
+  // forbids is going lower.
   const [starting, setStarting] = useState(false)
   const startingSinceRef = useRef(0)
-  const START_TRANSITION_MIN_MS = 500
+  const START_TRANSITION_MIN_MS = 1600
   // The layer stays mounted through its own 220ms fade-out, so the board is
   // not revealed by a hard cut. `leaving` is what separates "the draft is
   // ready" from "the loader has finished getting out of the way" — without it
