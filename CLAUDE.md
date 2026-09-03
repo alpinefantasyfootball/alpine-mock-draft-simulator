@@ -6641,6 +6641,61 @@ the first one's par; and `startDraft()` does not clear `state.picks`, so a loop
 that forgets measures one draft six times at a variance of exactly zero. Both
 are reset by hand inside the evaluate.
 
+### A precondition sampled across three round trips is not sampled at once
+
+`room.spec.mjs`'s "a dropped socket comes back on its own, and the chair comes
+with it" was red on the nightly `browser-tests.yml` run for five nights
+running (1-3 September), never on a PR - `tests.yml` does not run this file at
+all, and the nightly is the only thing that ever drives it against a real
+worker. It read:
+
+```js
+await guest.waitForFunction(() => !Live.active(), null, { timeout: 10000 });
+expect(await guest.evaluate(() => !!Live.room()), "still in the room").toBe(true);
+expect(await guest.evaluate(() => Live.active()), "but the socket is down").toBe(false);
+```
+
+Three separate hops to the browser, and the thing being asserted absent -
+`Live.active()` - is exactly the fact `live.js` is built to make stop being
+true as fast as it possibly can: an immediate reconnect attempt (`RETRY_MS[0]`
+is 1000ms) plus `visibilitychange`/`online`/`pageshow` listeners. The wait
+correctly caught the socket down. The two `evaluate()` calls after it were two
+more chances for the reconnect to land before the second one asked again, and
+against the real worker - not the local `wrangler dev` this file otherwise
+runs against - it sometimes did.
+
+**Reproduced locally rather than assumed**, because a test that only fails
+against infrastructure the local run doesn't use is exactly the kind of thing
+worth confirming before touching: a 2000ms delay inserted between the wait and
+the reads reproduced the identical failure (`Expected: false, Received: true`)
+on a local `wrangler dev` too, which is proof the mechanism is the gap and not
+some property of the real worker specifically.
+
+**The fix samples both facts in the same browser-side turn the wait itself
+resolves in**, rather than reducing the gap:
+
+```js
+const downState = await guest
+  .waitForFunction(() => (Live.active() ? null : { inRoom: !!Live.room(), active: Live.active() }),
+    null, { timeout: 10000 })
+  .then((h) => h.jsonValue());
+expect(downState.inRoom, "still in the room").toBe(true);
+expect(downState.active, "but the socket is down").toBe(false);
+```
+
+JS is single-threaded, so the predicate's read of `Live.active()` and its
+construction of the returned object happen in the same synchronous tick -
+there is no window between "observed down" and "recorded down" for a
+reconnect to land in, which is a property of *when* the read happens rather
+than a smaller chance of losing the race. Confirmed against the bug the same
+way it was found: the 2000ms delay put back, on the fixed shape, and it still
+passes, because there is no later read left for a delay to land in front of.
+
+Five repeats plus the delay-reproduction, all green. **Nightly-only red is
+still red** - a failure nobody sees because it never touches a PR is exactly
+the "reported a plausible wrong cause" trap this file's testing section
+already warns about in other shapes, just with a longer fuse.
+
 ### `actionTimeout` was unset, and that is why a stale locator cost six minutes
 
 `playwright.config.mjs` set none, so the default was **no ceiling at all**. A
