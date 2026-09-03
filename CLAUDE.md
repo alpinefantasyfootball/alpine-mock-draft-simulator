@@ -4063,11 +4063,50 @@ path still uses it, because there it is the only deferral there is.
 **One `?v=` stamp for all three, read by both the preload and the script.**
 Written down twice it is worse than a stale address: a preload whose URL
 differs by one character is not a warm cache, it is 636KB downloaded twice.
-Worth knowing while you are in there — **the nightly's `?v=` sed covers
-`web/index.html`, `404.html` and the how-it-works page, and not `app.js`**, so
-this stamp does not move when the pipeline rewrites `players.js`/`stats.js`.
-That is the "a rebuild nobody sees" failure this file already describes,
-pointed at the two generated files it is most about. Not fixed here.
+
+### The stamp on the deferred data is read, not written down
+
+`app.js` used to carry its own literal copy of the version stamp, and **the
+nightly's `?v=` sed covers `web/index.html`, `404.html` and the how-it-works
+page — not `app.js`**. So the pipeline rewrote `players.js` and `stats.js`
+every morning and left them at an address that never changed: new data behind
+a cached URL, which is this file's own "a rebuild nobody sees" failure landing
+on the two generated files it is most about. The two stamps had already
+drifted a fortnight apart — `202608231526` against `202609031105` — by the
+time anybody compared them.
+
+**Adding `app.js` to that sed is not the fix, and it is worth knowing why
+because it is the obvious move and it fails twice.** It would match nothing:
+once the stamp became a named constant there was no literal `?v=<stamp>` left
+in the file for the pattern to find, so the run would be a silent no-op
+wearing a fix's clothes — the exact shape this file warns about elsewhere.
+And if it were made to match, it would rewrite the project's largest and
+most-edited source file every night: `git log app.js` becomes a wall of stamp
+bumps, and **every open branch touching `app.js` conflicts with the nightly
+daily**. This file already records that pain for `index.html` and the docs
+page, where it is two small files and still costs a merge on a pull request
+that was open for one hour.
+
+So the second copy is removed rather than kept in step. `DEFERRED_V` reads
+the stamp off `app.js`'s own `<script>` tag — `document.currentScript.src`,
+parsed with `URL` — so there is one stamp on the page, in `index.html`, and
+nothing left to drift from. **`document.currentScript` is only the element
+during a classic script's own synchronous execution**, which is where that
+line runs; read it later from a handler and it is null, which is why it is an
+IIFE at the point of declaration rather than a lookup inside `deferredSrc()`.
+
+`tests/asset-stamp.spec.mjs` pins the **relationship** rather than a number —
+whatever `index.html` stamps `app.js` with is what the three deferred files
+are requested with — because a literal would be wrong within a day, which is
+the same reason every measured figure in this file carries a date. It also
+asserts each file is fetched under exactly one stamp, which is the
+two-constants failure above. Confirmed red against the bug, reporting the real
+drift: expected `202609031105`, received `202608231526`.
+
+**And it guards the workflow from both sides**, because the browser cannot
+see that half: dropping `web/index.html` from the sed list would leave every
+other assertion passing on a stamp that had quietly stopped moving, and adding
+`app.js` to it is the naive fix above. Both were confirmed red.
 
 **`splash-boot.js` answers two questions before the first frame**, and is
 parser-blocking immediately after the overlay rather than in `<head>`, because
