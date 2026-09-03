@@ -10488,17 +10488,57 @@ $("playerFilter").addEventListener("click", function (e) {
    shared-scope globals would break under import()'s module namespace. */
 const DEFERRED_FILES = ["draft-engine.js", "players.js", "stats.js"];
 
-/* One stamp, read twice — by the preload that warms these and by the script
-   that runs them. Written down twice it would be worse than a stale address:
-   a preload whose URL differs from the script's by one character is not a
-   warm cache, it is the same 636KB downloaded twice.
+/* The stamp these three are addressed with, and it is READ rather than
+   written down.
 
-   NOTE, and it is not this change's to fix: the nightly's `?v=` sed covers
-   web/index.html, 404.html and the how-it-works page, and not this file — so
-   this stamp does not move when the pipeline rewrites players.js/stats.js.
-   That is the "a rebuild nobody sees" failure CLAUDE.md already describes,
-   pointed at the two generated files it is most about. */
-const DEFERRED_V = "202608231526";
+   It has to be one value for both callers below — the preload that warms
+   these and the script that runs them — because a preload whose URL differs
+   from the script's by a single character is not a warm cache, it is the same
+   636KB fetched twice.
+
+   And it has to be INDEX.HTML'S value, which is the part that was wrong. This
+   file used to carry its own literal, and the nightly's `?v=` sed covers
+   web/index.html, 404.html and the how-it-works page — not this one. So the
+   pipeline rewrote players.js and stats.js every morning and left them at an
+   address that never changed: new data behind a cached URL, which is exactly
+   the "a rebuild nobody sees" failure CLAUDE.md describes, landing on the two
+   generated files it is most about. The two stamps had already drifted a
+   fortnight apart by the time anybody looked.
+
+   ADDING app.js TO THAT SED IS NOT THE FIX, and it is worth saying why
+   because it is the obvious move and it fails twice. It would match nothing —
+   there is no literal `?v=<stamp>` left in this file for the pattern to find,
+   so the run would be a silent no-op wearing a fix's clothes. And if it were
+   made to match, it would rewrite the project's largest and most-edited source
+   file every single night: `git log app.js` becomes a wall of stamp bumps, and
+   every open branch touching app.js conflicts with the nightly daily. This
+   file already records that pain for index.html and the docs page, where it is
+   two small files and still costs a merge; app.js is the file most changes
+   touch.
+
+   So the second copy is removed instead of being kept in step. There is one
+   stamp on the page, in index.html, and this reads it off this file's own
+   <script> tag. It cannot drift, because there is nothing left to drift from.
+
+   document.currentScript is only the <script> element during a classic
+   script's own synchronous execution, which is what this is and where this
+   line runs — read it later, from a handler, and it is null. Hence an IIFE at
+   the point of declaration rather than a lookup inside deferredSrc().
+
+   The fallback is the last stamp this file carried by hand. It is reached only
+   if index.html stops addressing app.js with a `?v=` at all, which would mean
+   the caching doctrine this whole file rests on had been abandoned — at which
+   point a fixed stamp is no worse than the situation it is in. */
+const DEFERRED_V = (function () {
+  try {
+    const self = document.currentScript && document.currentScript.src;
+    if (self) {
+      const v = new URL(self, location.href).searchParams.get("v");
+      if (v) return v;
+    }
+  } catch (e) { /* fall through */ }
+  return "202608231526";
+})();
 const deferredSrc = (name) => "/" + name + "?v=" + DEFERRED_V;
 
 /* Downloading is not executing, and separating the two is the whole trick.
