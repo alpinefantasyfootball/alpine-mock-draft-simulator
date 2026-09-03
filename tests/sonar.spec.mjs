@@ -80,19 +80,43 @@ const PROBE = () => {
       /* When the composition actually began, read off the composition. A CSS
          animation is play-pending until its first rendering opportunity, so
          this is the first painted frame of the reveal rather than the moment
-         the element was parsed — which is the whole point of recording it. */
+         the element was parsed — which is the whole point of recording it.
+
+         THE SET SCANNED HERE HAS TO BE THE SET main.jsx SCANS, and getting
+         that wrong made this test flake against production. It read the
+         mark's shadow root alone, while main.jsx takes the minimum across the
+         overlay's own light-DOM animations as well — the specks and the
+         droplet, which are the composition's first beat (0 -> 1.01s in the
+         design package's timing table) and start before the mark rises.
+
+         Two different zeroes, and the assertion below was derived for
+         main.jsx's. They normally coincide to the millisecond — measured
+         across four production loads, gap 0ms every time, held a steady
+         3399-3405 — but when the shadow root's styles resolve a frame or more
+         later than the overlay's inline <style>, they part, and `held`
+         measured from the later zero comes out short by exactly that gap. One
+         run in seven against jukeff.com reported 2973 against a floor of 3000
+         on a build that was behaving correctly.
+
+         The product is right and this was wrong: the composition does begin
+         with the specks, so charging the hold from them is correct. Scanning
+         the same set is what makes the two agree by construction rather than
+         by luck. */
       if (window.__sonar.revealStart == null) {
-        const mark = el.querySelector("juke-mark");
-        if (mark && mark.shadowRoot && mark.shadowRoot.getAnimations) {
-          let earliest = Infinity;
-          for (const a of mark.shadowRoot.getAnimations({ subtree: true })) {
+        let earliest = Infinity;
+        const scan = (root) => {
+          if (!root || typeof root.getAnimations !== "function") return;
+          for (const a of root.getAnimations({ subtree: true })) {
             if (a.startTime == null || !a.effect) continue;
             const d = a.effect.getComputedTiming().activeDuration;
             if (!isFinite(d) || d > 60000) continue;   // ambient loops
             if (a.startTime < earliest) earliest = a.startTime;
           }
-          if (earliest !== Infinity) window.__sonar.revealStart = earliest;
-        }
+        };
+        scan(el);
+        const mark = el.querySelector("juke-mark");
+        if (mark) scan(mark.shadowRoot);
+        if (earliest !== Infinity) window.__sonar.revealStart = earliest;
       }
     } else if (window.__sonar.existed && window.__sonar.removedAt == null) {
       window.__sonar.removedAt = performance.now();
