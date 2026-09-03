@@ -189,9 +189,12 @@ const boot = document.getElementById('boot-sonar')
 if (boot) {
   requestAnimationFrame(() =>
     requestAnimationFrame(() => {
-      // Hold for MIN_VISIBLE_MS from navigation start, then leave. performance
-      // .now() is measured from the time origin, so it is exactly how long this
-      // page has been loading — no separate start timestamp to keep in step.
+      // Hold for MIN_VISIBLE_MS, then leave.
+      //
+      // This used to say "from navigation start", and that was the bug — see
+      // revealStart below, which is what it is measured from now. What follows
+      // is why the number is 3100 rather than 2500; both halves matter and
+      // only one of them was ever right.
       //
       // Deepwater replaced Breach II's choreography wholesale, and shortened
       // the hold from 4900ms to 2500. The composition's own timing marks,
@@ -243,6 +246,79 @@ if (boot) {
       // splash-boot.js rather than re-derived from matchMedia here, so the
       // two files cannot disagree about what this particular load decided.
       const MIN_VISIBLE_MS = boot.hasAttribute('data-splash-reduced') ? 600 : 3100
+
+      /* ...from when the reveal actually STARTED, which is not navigation
+         start, and charging it to navigation start is a real defect rather
+         than a rounding difference.
+
+         A CSS animation is play-pending until its first rendering
+         opportunity, so the composition does not begin at style resolution —
+         it begins at the first painted frame. And the first painted frame is
+         gated on every render-blocking stylesheet in <head>, which here
+         includes a cross-origin Google Fonts request the overlay cannot use
+         (it has no text in it at all — see the markup's own note on why there
+         is no wordmark).
+
+         Measured against a stub for that request at four latencies, on the
+         built site: the reveal's own start time tracks first-contentful-paint
+         one for one — 130ms / 172ms / 426ms / 926ms at font latencies of
+         0 / 150 / 400 / 900ms. The dismissal, meanwhile, was pinned at 3100ms
+         from navigation start whatever happened. So at a 900ms font fetch the
+         reveal runs 926 -> 3426 and the layer began fading at 3100: the eye
+         flicker, the composition's last beat, was cut off by 326ms — on
+         exactly the slow connections where the splash is doing the most work.
+         Past about 1200ms of pre-paint delay it starts eating the teeth
+         sweep, and past ~2500 there is nothing left to see but a fade.
+
+         That is this file's own rule about not cutting back below 2500,
+         broken from a direction the number could not see. It is fixed by
+         measuring the hold from the thing being held rather than from the
+         clock: the composition's real start is readable off its own
+         animations, so there is no second guess at it and no constant to keep
+         in step with juke-mark.js.
+
+         The cascade falls back rather than throwing: the animations, then the
+         paint entry, then navigation start, which is exactly today's
+         behaviour. Under reduced motion there are no animations to read — the
+         mark is variant="static" and the finite layers are display:none — so
+         that branch lands on the paint entry, which is the right answer there
+         too and a better one than 0. */
+      const revealStart = (() => {
+        let earliest = Infinity
+        const scan = (root) => {
+          if (!root || typeof root.getAnimations !== 'function') return
+          let list
+          try { list = root.getAnimations({ subtree: true }) } catch (e) { return }
+          for (const a of list) {
+            if (a.startTime == null || !a.effect) continue
+            // Ambient only: the caustics, shafts and motes run `infinite` and
+            // are still going when the layer leaves, so they say nothing about
+            // where the finite composition has got to.
+            let d
+            try { d = a.effect.getComputedTiming().activeDuration } catch (e) { continue }
+            if (!isFinite(d) || d > 60000) continue
+            if (a.startTime < earliest) earliest = a.startTime
+          }
+        }
+        scan(boot)
+        const mark = boot.querySelector('juke-mark')
+        if (mark) scan(mark.shadowRoot)
+        if (earliest !== Infinity) return earliest
+        const fcp = performance.getEntriesByType('paint')
+          .find((p) => p.name === 'first-contentful-paint')
+        return fcp ? fcp.startTime : 0
+      })()
+
+      /* Capped so a pathologically slow first paint cannot hold the page
+         hostage, and 7000 rather than a round number because it is derived:
+         #boot-sonar carries `splash-boot-failsafe ... 8s`, which fades the
+         overlay on its own if this teardown never runs. A hold scheduled past
+         that would have the failsafe fading the layer out from under a reveal
+         this code still believes it is showing — two dismissals fighting, and
+         the visible one is the one nothing here can flush. 7000 leaves the
+         280ms removal and a margin inside it. Move both together. */
+      const leaveAt = Math.min(revealStart + MIN_VISIBLE_MS, 7000)
+
       setTimeout(() => {
       const shown = getComputedStyle(boot).opacity
 
@@ -259,7 +335,7 @@ if (boot) {
       // milliseconds. Both numbers moved together when the design package set
       // the dismissal at 260ms (it was 220/240); keep the gap if either does.
       setTimeout(() => boot.remove(), 280)
-      }, Math.max(0, MIN_VISIBLE_MS - performance.now()))
+      }, Math.max(0, leaveAt - performance.now()))
     }),
   )
 }

@@ -9302,6 +9302,26 @@ function mirrorToLegacy() {
 // the dropdown moves rather than on every refresh.
 let lastFormat = league.scoring;
 
+/* A seat only exists inside a league, so shrinking the league has to move
+   anybody sitting past the new edge.
+
+   Nothing did. setMySlot() refuses an out-of-range seat on the way IN, which
+   made this look covered — but it is the team count that moves underneath a
+   seat already chosen, and no writer of `teams` had anything to say about it.
+   Take seat 10 of 12 and then drop to 8 teams and state.mySlot stays 9:
+   onTheClock() only ever returns 0..7, so isMyTurn() is never true and the
+   draft runs to the end without ever offering a pick. It does not throw and
+   nothing on screen says so — it looks like a draft that simply skips you.
+
+   Both doors call this, because there are two: setLeague() is React's and
+   readSetup() is the legacy screen's, and a clamp on one of them is a clamp
+   nobody can rely on. Clamping to the last chair rather than to 0 keeps a
+   deliberate choice of "late" as late as the new league allows, which is
+   nearer what was asked for than jumping back to first. */
+function clampSeat() {
+  if (state.mySlot >= league.teams) state.mySlot = Math.max(0, league.teams - 1);
+}
+
 // Read every control into `league`. Called on any change, so the object is
 // the single description of the league from that moment on.
 function readSetup() {
@@ -9322,6 +9342,7 @@ function readSetup() {
   POSITIONS.forEach(function (pos) {
     league.starters[pos] = Number($("start" + pos).value);
   });
+  clampSeat();
 }
 
 /* Two ways a league can be impossible rather than merely unusual:
@@ -9329,6 +9350,30 @@ function readSetup() {
    wants more players than the ADP set actually carries. Either one is
    reported here and blocks the start rather than failing mid-draft. */
 function setupProblem() {
+  /* A board that has not arrived is not a board that is too small, and until
+     this line the two were the same sentence.
+
+     poolSize() reads adpSet(), which is empty until players.js lands — so
+     every check below it measured a league against nothing and reported
+     "10 teams over 14 rounds is 140 picks, and the half PPR board only
+     carries 0 players." Every word of that is false and the reader has no
+     way to know it: it names their league, their format and a number, and it
+     is really just "wait a moment".
+
+     It was always reachable — the deferred data has never been synchronous,
+     and on a slow connection it lands well after the Lobby is on screen —
+     and it became easy to hit when the deferred load moved behind the cold-
+     load reveal (see loadAfterTheReveal()). Three specs found it within one
+     run by pressing Start on the frame the overlay lifted, which is a thing
+     a person can do.
+
+     Still a refusal, because a draft genuinely cannot start without a board.
+     What changes is that the reason is true and clears itself: the
+     "juke:data-loaded" listener at the foot of this file re-runs
+     refreshSetup(), which re-renders and redispatches "juke:header" for the
+     React screens to re-read. */
+  if (!dataReady()) return "Loading the player board…";
+
   const filled = rosterSize();
   if (filled !== league.rounds) {
     return `${starterCount()} starters + ${flexCount()} FLEX + ${league.bench} bench ` +
@@ -10441,27 +10486,203 @@ $("playerFilter").addEventListener("click", function (e) {
    const, draft-engine.js assigns window.DraftEngine itself for exactly
    this reason), and app.js's whole dependency on them being plain
    shared-scope globals would break under import()'s module namespace. */
+const DEFERRED_FILES = ["draft-engine.js", "players.js", "stats.js"];
+
+/* One stamp, read twice — by the preload that warms these and by the script
+   that runs them. Written down twice it would be worse than a stale address:
+   a preload whose URL differs from the script's by one character is not a
+   warm cache, it is the same 636KB downloaded twice.
+
+   NOTE, and it is not this change's to fix: the nightly's `?v=` sed covers
+   web/index.html, 404.html and the how-it-works page, and not this file — so
+   this stamp does not move when the pipeline rewrites players.js/stats.js.
+   That is the "a rebuild nobody sees" failure CLAUDE.md already describes,
+   pointed at the two generated files it is most about. */
+const DEFERRED_V = "202608231526";
+const deferredSrc = (name) => "/" + name + "?v=" + DEFERRED_V;
+
+/* Downloading is not executing, and separating the two is the whole trick.
+
+   The bytes are fetched immediately, as they always were — this costs the
+   network and never the main thread, so it cannot disturb the cold-load
+   reveal. What waits is the *parse*, which is what actually froze it: see
+   scheduleDeferredData() below. By the time that runs, these are in the HTTP
+   cache and the script tag executes without a round trip.
+
+   Which is why this is a net improvement on a slow connection rather than a
+   trade. Before, the download did not even start until requestIdleCallback's
+   2000ms timeout fired; now it starts at boot, so the data is ready EARLIER
+   than it used to be on exactly the connections where that matters, while
+   the reveal gets a main thread to draw on. */
+function preloadDeferredData() {
+  if (dataReady()) return;
+  DEFERRED_FILES.forEach(function (name) {
+    const l = document.createElement("link");
+    l.rel = "preload";
+    l.as = "script";
+    l.href = deferredSrc(name);
+    document.head.appendChild(l);
+  });
+}
+
 function loadDeferredData() {
   if (dataReady()) return;
-  let remaining = 3;
+  let remaining = DEFERRED_FILES.length;
   const done = function () {
     remaining--;
     if (remaining === 0) window.dispatchEvent(new Event("juke:data-loaded"));
   };
-  ["draft-engine.js", "players.js", "stats.js"].forEach(function (name) {
+  DEFERRED_FILES.forEach(function (name) {
     const s = document.createElement("script");
-    s.src = "/" + name + "?v=202608231526";
+    s.src = deferredSrc(name);
     s.onload = done;
     s.onerror = done;   // a missing file must not hang the retry forever
     document.head.appendChild(s);
   });
 }
 
-if (typeof requestIdleCallback === "function") {
-  requestIdleCallback(loadDeferredData, { timeout: 2000 });
-} else {
-  setTimeout(loadDeferredData, 200);   // Safari has no requestIdleCallback
+/* ...but not while the cold-load reveal is drawing, which is the whole of a
+   second defect and the reason preloadDeferredData() exists above.
+
+   requestIdleCallback with a 2000ms timeout fires at 2000ms on a page that
+   never goes idle, and the reveal in #boot-sonar runs from its own first
+   painted frame to that frame + 2500ms. So these three landed squarely inside
+   it — and parsing 769KB of stats.js is not something a compositor can
+   absorb. Worse, the parts of the reveal that read AS the reveal are the
+   teeth and the eyes, and those are `fill` animations (see juke-mark.js's
+   `form` variant): `fill` is not a compositable property, so every frame of
+   them needs the main thread stats.js is holding.
+
+   Measured on the built site under CPU throttling, counting long tasks
+   overlapping the reveal window:
+
+     6x slowdown, as shipped     1989ms of the 2500ms reveal blocked,
+                                 worst single block 975ms
+     6x slowdown, stats.js gone  882ms blocked, worst single block 306ms
+
+   That 975ms block lands in the middle of the teeth sweep and across the
+   whole eye flicker. It is the "not remotely as smooth as the design file"
+   report, and the design file is of course smooth: nothing else is running
+   underneath it there.
+
+   WHY THE REVEAL AND NOT THE OVERLAY. Waiting for #boot-sonar to leave was
+   the first version and it is wrong by about 900ms: the overlay outlives the
+   reveal by a 600ms held frame plus a 260ms fade, and neither of those can be
+   disturbed by a busy main thread — the mark is dead still through the first
+   and the second is an opacity transition the compositor owns. Holding
+   through them buys no smoothness and costs real time, and that time is not
+   free: setupProblem() reports an empty board as "the half PPR board only
+   carries 0 players", so every millisecond the data is late is a millisecond
+   the Lobby can be showing a refusal that is not true. Three specs caught it
+   immediately (appbar, and two in pickcode) by starting a draft the moment
+   the overlay lifted and finding no board — which is exactly what a person
+   pressing Start on that frame would find.
+
+   So the gate is the composition's own end, read off the composition:
+   startTime + endTime for each finite animation, maximised. That is asking
+   the animation rather than restating 2500 here, which would be juke-mark.js's
+   number written down in a third place — index.html's own --total comment
+   already records what happens when those drift.
+
+   Three ways out, because a gate with one is a gate that can hang:
+   - no splash at all (a warm same-session load, where splash-boot.js removes
+     the overlay before first paint) loads immediately, unchanged;
+   - the overlay disappearing while we are still waiting also releases it;
+   - and a ceiling, because rAF does not fire in a background tab and a wedged
+     reveal must not be able to strand the board behind it. */
+const DEFERRED_REVEAL_MAX_MS = 5000;
+
+function scheduleDeferredData() {
+  if (typeof requestIdleCallback === "function") {
+    requestIdleCallback(loadDeferredData, { timeout: 2000 });
+  } else {
+    setTimeout(loadDeferredData, 200);   // Safari has no requestIdleCallback
+  }
 }
+
+/* When the cold-load composition finishes, in performance.now() terms, or
+   null while that cannot yet be known. A CSS animation is play-pending until
+   its first rendering opportunity, so this answers null until the reveal has
+   actually begun — which is the point: the reveal starts when the page can
+   first paint, not when this file parses. */
+function revealEndsAt(el) {
+  let latest = -Infinity;
+  const scan = function (root) {
+    if (!root || typeof root.getAnimations !== "function") return;
+    let list;
+    try { list = root.getAnimations({ subtree: true }); } catch (e) { return; }
+    list.forEach(function (a) {
+      if (a.startTime == null || !a.effect) return;
+      /* The overlay's own animation is its DISMISSAL, not part of the
+         composition, and counting it put this out by six seconds.
+         #boot-sonar carries `splash-boot-failsafe 600ms ease-in 8s` — a
+         perfectly finite animation with an endTime of 8600ms — so the
+         "when does the reveal finish" answer came back 8700 instead of 2650,
+         hit the ceiling below, and the board landed at 5406ms instead of
+         2850. It measured as smooth and shipped a late board, which is the
+         half of this trade that is easy not to look at.
+
+         Excluded by target rather than by name: the distinction is that the
+         layer's own fade-out belongs to the teardown and everything inside
+         it belongs to the picture. A keyframe name would be a second place
+         to keep index.html's CSS written down. */
+      if (a.effect.target === el) return;
+      let timing;
+      try { timing = a.effect.getComputedTiming(); } catch (e) { return; }
+      // Ambient only: the caustics, shafts and motes run `infinite` and are
+      // still going when the layer leaves, so they say nothing about where
+      // the finite composition has got to.
+      if (!isFinite(timing.endTime)) return;
+      const ends = a.startTime + timing.endTime;
+      if (ends > latest) latest = ends;
+    });
+  };
+  scan(el);
+  const mark = el.querySelector("juke-mark");
+  if (mark) scan(mark.shadowRoot);
+  return latest === -Infinity ? null : latest;
+}
+
+preloadDeferredData();
+
+(function loadAfterTheReveal() {
+  const splash = document.getElementById("boot-sonar");
+  if (!splash) { scheduleDeferredData(); return; }
+
+  let fired = false;
+  const go = function () {
+    if (fired) return;
+    fired = true;
+    clearTimeout(ceiling);
+    /* Straight to it, NOT back through scheduleDeferredData().
+       requestIdleCallback's 2000ms timeout is a ceiling rather than a delay,
+       but on a page that never goes idle it is reached — and stacked on top
+       of this gate it was adding the full two seconds to a wait that had
+       already picked its moment. Measured: dataReady at 5449ms, against an
+       overlay that lifts at 3580. The idle callback's job was to keep this
+       off the first paint, and the gate now does that job better; asking for
+       it twice only makes the board late. The warm-load path below still
+       uses it, because there it is still the only deferral there is. */
+    loadDeferredData();
+  };
+  const ceiling = setTimeout(go, DEFERRED_REVEAL_MAX_MS);
+
+  const poll = function () {
+    if (fired) return;
+    if (!document.getElementById("boot-sonar")) { go(); return; }
+    const ends = revealEndsAt(splash);
+    if (ends != null) {
+      // Capped against the same ceiling, so a reveal that somehow reports an
+      // end time far in the future cannot outlast it either.
+      const wait = Math.max(0, Math.min(ends - performance.now(), DEFERRED_REVEAL_MAX_MS));
+      clearTimeout(ceiling);
+      setTimeout(go, wait);
+      return;
+    }
+    requestAnimationFrame(poll);
+  };
+  requestAnimationFrame(poll);
+})();
 
 // refreshSetup() below runs the moment this file finishes parsing, almost
 // certainly before the deferred data above has landed — it renders the
@@ -10578,6 +10799,9 @@ window.JukeEngine = {
        the roster is actually made of. `rounds` is never a second number kept
        equal to the roster by hand — it IS the roster's size. */
     if (rosterMoved) league.rounds = rosterSize();
+
+    // A smaller league can leave the chosen seat outside it — see clampSeat().
+    clampSeat();
 
     // readSetup() re-reads all of these off the legacy <select> elements every
     // time refreshSetup() runs — goHome() among other places — and until this

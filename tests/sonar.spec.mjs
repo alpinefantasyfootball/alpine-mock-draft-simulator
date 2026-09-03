@@ -64,8 +64,12 @@ test.beforeEach(() => {
    with addInitScript so it is in place ahead of the inline <style>, which is
    the only way to catch a flash that resolves in 300ms. */
 const PROBE = () => {
-  window.__sonar = { seen: false, maxOpacity: 0, removedAt: null, existed: false };
-  const t0 = Date.now();
+  window.__sonar = { seen: false, maxOpacity: 0, removedAt: null, existed: false, revealStart: null };
+  /* performance.now() rather than a Date.now() delta, so every figure here is
+     on the same clock as the animations' own startTime and the two can be
+     subtracted. It was Date.now() minus a t0 taken in this init script, which
+     is within a few ms of the same thing and could not be compared to an
+     animation at all. */
   const tick = () => {
     const el = document.getElementById("boot-sonar");
     if (el) {
@@ -73,10 +77,27 @@ const PROBE = () => {
       const o = parseFloat(getComputedStyle(el).opacity) || 0;
       if (o > window.__sonar.maxOpacity) window.__sonar.maxOpacity = o;
       if (o > 0.02) window.__sonar.seen = true;
+      /* When the composition actually began, read off the composition. A CSS
+         animation is play-pending until its first rendering opportunity, so
+         this is the first painted frame of the reveal rather than the moment
+         the element was parsed — which is the whole point of recording it. */
+      if (window.__sonar.revealStart == null) {
+        const mark = el.querySelector("juke-mark");
+        if (mark && mark.shadowRoot && mark.shadowRoot.getAnimations) {
+          let earliest = Infinity;
+          for (const a of mark.shadowRoot.getAnimations({ subtree: true })) {
+            if (a.startTime == null || !a.effect) continue;
+            const d = a.effect.getComputedTiming().activeDuration;
+            if (!isFinite(d) || d > 60000) continue;   // ambient loops
+            if (a.startTime < earliest) earliest = a.startTime;
+          }
+          if (earliest !== Infinity) window.__sonar.revealStart = earliest;
+        }
+      }
     } else if (window.__sonar.existed && window.__sonar.removedAt == null) {
-      window.__sonar.removedAt = Date.now() - t0;
+      window.__sonar.removedAt = performance.now();
     }
-    if (Date.now() - t0 < 5000) setTimeout(tick, 16);
+    if (performance.now() < 9000) setTimeout(tick, 16);
   };
   tick();
 };
@@ -150,8 +171,11 @@ for (const [label, opts] of [["a phone", PHONE], ["a desktop", DESKTOP]]) {
    Fast 4G (first visible 947ms) or slower ever did.
 
    The owner overruled that deliberately. The delay is gone and main.jsx holds
-   the overlay for MIN_VISIBLE_MS (4900) measured from navigation start, so it
-   is seen every time and always for long enough to finish its own animation.
+   the overlay for MIN_VISIBLE_MS (3100) measured from the reveal's own first
+   painted frame, so it is seen every time and always for long enough to
+   finish its own animation — on a slow connection as well as a fast one,
+   which the earlier "measured from navigation start" version could not
+   promise. See main.jsx's revealStart.
 
    Two bounds, not one. A floor, because the whole point is that it is actually
    seen. And a ceiling, because this now costs every visit about a second before
@@ -193,14 +217,38 @@ test("the loader is shown on every load, and does not outstay its welcome", asyn
      longer". See main.jsx for why dismissing on the reveal's last frame meant
      the finished picture was never actually seen finished.
 
-     3000 rather than 3100 for the floor: removedAt is sampled on a 16ms tick
-     against a Date.now() taken in an init script, so it carries a frame or
-     two of slack in both directions and a bound sitting exactly on the
-     figure would flake. The ceiling is the real assertion — 3100 hold plus a
-     260ms fade plus the 280ms removal beat is ~3380, and 4200 leaves room
-     for a slow CI frame without admitting the 4900ms hold this replaced. */
-  expect(sonar.removedAt, "it stays until the whole composition has arrived").toBeGreaterThan(3000);
-  expect(sonar.removedAt, "and it is gone inside a reasonable window").toBeLessThan(4200);
+     MEASURED FROM THE REVEAL, NOT FROM NAVIGATION START, and that is a fix
+     rather than a tidy-up. Both bounds used to be absolute offsets from the
+     init script's own t0, which is a claim about how long the whole page
+     takes to load and only incidentally about the overlay. The hold in
+     main.jsx is charged to the reveal's real first frame now — because a
+     render-blocking cross-origin font request was delaying that frame and
+     the fixed 3100 was eating the composition's last beat to pay for it —
+     so an absolute bound here would fail for the fix as loudly as for a
+     regression, and pass on a fast run while a slow one shipped truncated.
+
+     The invariant is a relationship: the overlay stays for the whole
+     composition plus the held beat, however long the page took to start
+     painting. That is what these two bound, and they bound it identically at
+     every connection speed. Confirmed against font latencies of 0, 400, 900
+     and 1800ms: heldAfterReveal came out 603, 615, 611 and 614ms.
+
+     3000 rather than 3100 for the floor: removedAt is sampled on a 16ms tick,
+     so it carries a frame or two of slack in both directions and a bound
+     sitting exactly on the figure would flake. The ceiling is the real
+     assertion — 3100 hold plus a 260ms fade plus the 280ms removal beat is
+     ~3380, and 4200 leaves room for a slow CI frame without admitting the
+     4900ms hold this replaced.
+
+     The absolute ceiling stays as a separate, much looser assertion, because
+     "relative to the reveal" stops meaning anything if the reveal itself
+     never starts: 8000 is #boot-sonar's own splash-boot-failsafe delay, past
+     which two dismissals are fighting each other. */
+  expect(sonar.revealStart, "the reveal's own start time is readable").not.toBeNull();
+  const held = sonar.removedAt - sonar.revealStart;
+  expect(held, "it stays until the whole composition has arrived").toBeGreaterThan(3000);
+  expect(held, "and it is gone inside a reasonable window").toBeLessThan(4200);
+  expect(sonar.removedAt, "and never past its own failsafe").toBeLessThan(8000);
 
   await context.close();
 });
