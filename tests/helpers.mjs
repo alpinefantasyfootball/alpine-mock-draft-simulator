@@ -339,6 +339,30 @@ export async function startSoloDraft(page) {
     await startBtn.click();
   }
   await page.waitForFunction(() => state.started, null, { timeout: 15000 });
+
+  /* And then wait for the room to actually be on screen, which is a
+     different fact from the draft having started.
+
+     state.started flips synchronously inside engine.startDraft(), while
+     DraftRoom.jsx holds a full-viewport DraftRoomLoader over the room for a
+     floor of its own before rendering anything. So a caller that starts a
+     draft and then reads #draftroom-root is reading the loader — "Entering
+     draft roomSeating 12 teams" — not the room.
+
+     deep-board.spec.mjs found this the moment that floor moved from 1600ms
+     to 2400: it waited a flat 2000ms after starting and asked whether the
+     Players table carried its "Real ADP ends here" divider. The divider was
+     fine; the table simply had not been drawn yet, and the test reported it
+     as missing. At 3500ms it was there.
+
+     Waiting for the loader to leave rather than for a duration is the same
+     rule phone.spec.mjs already follows — and the reason it belongs here
+     rather than in that one spec is that the duration was never the thing
+     any caller cared about. A number in a spec is a number that has to be
+     found and changed every time this floor moves; this does not. */
+  await page
+    .waitForFunction(() => !document.querySelector("[data-draft-loader]"), null, { timeout: 20000 })
+    .catch(() => {});
 }
 
 export function roomView(page) {

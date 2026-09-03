@@ -210,8 +210,32 @@ export default function DraftRoom() {
   // be the same modal (Edit setup -> Invite tab), and collapsing them back
   // into one flag would silently re-bury this behind Edit setup again.
   const [friendsModalOpen, setFriendsModalOpen] = useState(false)
-  // The seat, shared between the form's dropdown and the lobby board.
-  const [lobbySlot, setLobbySlot] = useState(0)
+  /* The seat, shared between the form's dropdown, the lobby board and the
+     Draft Settings screen's own Draft order section.
+
+     Read off the engine rather than held here, and that is a fix rather than
+     a style preference. It was `useState(0)`, which made the seat the one
+     thing about a draft that was written down twice: DraftOrder.jsx has
+     always set it through engine.setMySlot(), which writes state.mySlot, and
+     beginDraft() then called startDraft({ mySlot: lobbySlot }) — so
+     startDraft's own `state.mySlot = opts.mySlot` overwrote the chosen seat
+     with this component's stale 0 on the way in. Pick seat 6 in Draft
+     Settings, press Start, land in seat 1. Reported off the phone, where the
+     settings screen is the only way to the seat at all; it was never
+     phone-specific, it was specific to choosing the seat on that screen,
+     which the desktop lobby's own dropdown happens to bypass.
+
+     state.mySlot was already the pre-commit seat as far as the engine is
+     concerned — draftOrder() reads it to decide which row says "You", which
+     is why the settings list highlighted the right chair while the draft
+     started in the wrong one. Two right answers, one of them not being asked.
+
+     setMySlot() calls render(), which fires "juke:header", which useJukeTick
+     above re-renders on — so this is live without a second copy to keep in
+     step. It also refuses a seat outside the league, which the useState
+     never did. */
+  const lobbySlot = engine ? engine.mySlot() : 0
+  const setLobbySlot = (seat) => { if (engine) engine.setMySlot(seat) }
   // Three screens, not two: Settings & Locker (league config, nothing
   // drafted yet, no board) -> choose a seat (the live page's own shell,
   // board in claimable mode) -> the live draft itself, gated by `started`
@@ -265,9 +289,18 @@ export default function DraftRoom() {
   //
   // The package's 500 is a MINIMUM and this does not contradict it. What it
   // forbids is going lower.
+  //
+  // 2400 now, on the same report and the same reasoning one step further:
+  // asked for slightly longer alongside a larger mark. It is one and a half
+  // turns of the 1.6s loop, and landing off a cycle boundary costs nothing
+  // here — this is a FLOOR, so the actual end is max(floor, ready) and ready
+  // is arbitrary, which means the layer already leaves mid-loop on any wait
+  // that outlasts the floor. Cycle alignment was never achievable and was
+  // never what 1600 bought; what it bought was dwell, and this buys more of
+  // it. On screen that is 2400 plus the 220ms fade against 1820 before.
   const [starting, setStarting] = useState(false)
   const startingSinceRef = useRef(0)
-  const START_TRANSITION_MIN_MS = 1600
+  const START_TRANSITION_MIN_MS = 2400
   // The layer stays mounted through its own 220ms fade-out, so the board is
   // not revealed by a hard cut. `leaving` is what separates "the draft is
   // ready" from "the loader has finished getting out of the way" — without it

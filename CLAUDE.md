@@ -3930,6 +3930,47 @@ sentence is "2.5 seconds, then the frame sits completely still until the app is
 ready", and at 2500 there is no *then*. A still frame is not waste here; it is
 the last beat, and it was the one beat that never played.
 
+**And 3100 from WHAT is the other half of that number, which took a second
+report to find.** It was 3100 from navigation start, and the reveal does not
+begin at navigation start: a CSS animation is play-pending until its first
+rendering opportunity, so the composition begins at the first painted frame —
+which is gated on every render-blocking stylesheet in `<head>`, including a
+cross-origin Google Fonts request the overlay cannot use. It has no text in
+it at all; there is no wordmark, deliberately.
+
+Measured on the built site against a stub for that request, at four
+latencies: **the reveal's own start tracks first-contentful-paint one for
+one** — 130 / 172 / 426 / 926ms at font latencies of 0 / 150 / 400 / 900ms —
+while the dismissal stayed pinned at 3100 whatever happened. So at a 900ms
+font fetch the reveal ran 926 → 3426 and the layer began fading at 3100: the
+eye flicker, the composition's last beat, cut off by 326ms. Past about
+1200ms of pre-paint delay it starts eating the teeth sweep. **On exactly the
+connections where the splash is doing the most work, it did the least of
+it** — and this file's own rule against cutting back below 2500 was being
+broken from a direction the number could not see.
+
+`main.jsx` measures the hold from `revealStart` now, read off the
+composition's own animations rather than from a clock, so there is no second
+guess at it and no constant to keep in step with `juke-mark.js`. After:
+the held beat comes out 603 / 615 / 611 / 614ms at those same four
+latencies. The cascade falls back to the paint entry and then to 0, which
+is exactly the old behaviour, and reduced motion lands on the paint entry
+because `variant="static"` has no animations to read.
+
+**Do not let anything else charge this hold to navigation start.** The two
+are the same number on a fast connection and only ever diverge where it
+matters.
+
+**`sonar.spec.mjs` had to stop asserting an absolute offset with it**, and
+that is the rule this file already states about the header's own padding:
+assert the relationship, never an offset. Both bounds were measured from an
+init script's own `t0`, which is a claim about how long the whole page takes
+to load and only incidentally about the overlay — so they would have failed
+for this fix as loudly as for a regression, and passed on a fast run while a
+slow one shipped truncated. They bound `removedAt - revealStart` now, with
+the absolute ceiling kept as a separate, much looser assertion because
+"relative to the reveal" says nothing if the reveal never starts.
+
 The element id is still `#boot-sonar` — `theme.js`'s comment, `main.jsx`'s
 teardown and `sonar.spec.mjs` all key off that literal string, and none of it
 had to change. Only what plays inside it did.
@@ -3942,6 +3983,91 @@ selector in this repository reaches them. They agree at 2500ms today. Moving
 one without re-cutting the other desynchronises two halves of one animation.
 The same fact makes `sonar.spec.mjs`'s 2400–3400ms bound a *published figure
 this repository matches* rather than one it can measure and re-derive.
+
+### Downloading is not executing, and the reveal only cares about the second
+
+The reveal was frozen mid-flight and it was `stats.js`. `requestIdleCallback`'s
+2000ms timeout fires at 2000ms on a page that never goes idle, and the reveal
+runs from its first painted frame to that frame + 2500ms — so
+`players.js`/`stats.js`/`draft-engine.js` landed squarely inside it. **769KB of
+`stats.js` is not something a compositor can absorb**, and the parts of the
+reveal that read AS the reveal are the worst possible ones to block: the teeth
+and the eyes are `fill` animations (`juke-mark.js`'s `form` variant), and
+`fill` is not a compositable property, so every frame of them needs the main
+thread `stats.js` is holding.
+
+Measured on the built site under CPU throttling, counting long tasks that
+overlap the reveal window:
+
+```
+                                  blocked      worst single block
+6x slowdown, as shipped      1989ms of 2500          975ms
+6x slowdown, stats.js gone    882ms of 2500          306ms
+6x slowdown, after the fix    361ms of 2500          122ms
+4x slowdown, after the fix    185ms of 2500           77ms
+1x,          after the fix      0ms of 2500            0ms
+```
+
+The 975ms block lands across the middle of the teeth sweep and the whole eye
+flicker. **That is the "not remotely as smooth as the design file" report, and
+the design file is of course smooth: nothing else is running underneath it
+there.**
+
+**The fix is to split the download from the execution, not to move the load.**
+`preloadDeferredData()` fetches all three at boot as `<link rel="preload"
+as="script">` — network, never the main thread, so it cannot disturb anything —
+and only the parse waits. Which makes this an improvement on a slow connection
+rather than a trade: before, the *download* did not start until the idle
+timeout fired at 2000ms.
+
+**The gate is the reveal ending, not the overlay leaving, and the difference is
+about 900ms of something that matters.** The overlay outlives the reveal by a
+600ms held frame plus a 260ms fade, and a busy main thread can disturb neither —
+the mark is dead still through the first and the second is an opacity
+transition the compositor owns. So holding through them buys no smoothness and
+costs real time, and **that time is not free**: `setupProblem()` reported an
+empty board as *"10 teams over 14 rounds is 140 picks, and the half PPR board
+only carries 0 players"*, so every millisecond the data is late is a
+millisecond the Lobby can show a refusal that is not true. `appbar.spec.mjs`
+and two in `pickcode.spec.mjs` caught the first version within one run by
+starting a draft on the frame the overlay lifted — which is a thing a person
+can do.
+
+**So `setupProblem()` says the board is loading now**, and that was always a
+latent bug rather than one this change introduced: the deferred data has never
+been synchronous, and on a slow connection it lands well after the Lobby is on
+screen. It is still a refusal, because a draft genuinely cannot start without a
+board; what changes is that the reason is true and clears itself on
+`juke:data-loaded`. **A message that names the reader's league, their format
+and a number is not a placeholder, however briefly it is up.**
+
+**Ask the animation, not a constant.** "When does the reveal end" is
+`max(startTime + endTime)` over the finite animations, which is derived rather
+than 2500 written down in a third place — `index.html`'s own `--total` comment
+already records what happens when those drift. Two traps in reading it:
+`startTime` is null while an animation is play-pending, so a probe taken before
+the first paint reports "not started" for every case and says nothing; and
+**`#boot-sonar`'s own `splash-boot-failsafe 600ms ease-in 8s` is finite**, with
+an `endTime` of 8600ms, so counting it put the answer out by six seconds and
+landed the board at 5406ms instead of 2850. It measured as perfectly smooth and
+shipped a late board — the half of this trade that is easy not to look at.
+Excluded by target rather than by name: the layer's own fade-out belongs to the
+teardown, everything inside it belongs to the picture.
+
+**And once the gate opens, load — do not go back through
+`requestIdleCallback`.** Its 2000ms timeout is a ceiling rather than a delay,
+but on a page that never goes idle it is reached, and stacked on top of a gate
+that has already chosen its moment it simply adds two seconds. The warm-load
+path still uses it, because there it is the only deferral there is.
+
+**One `?v=` stamp for all three, read by both the preload and the script.**
+Written down twice it is worse than a stale address: a preload whose URL
+differs by one character is not a warm cache, it is 636KB downloaded twice.
+Worth knowing while you are in there — **the nightly's `?v=` sed covers
+`web/index.html`, `404.html` and the how-it-works page, and not `app.js`**, so
+this stamp does not move when the pipeline rewrites `players.js`/`stats.js`.
+That is the "a rebuild nobody sees" failure this file already describes,
+pointed at the two generated files it is most about. Not fixed here.
 
 **`splash-boot.js` answers two questions before the first frame**, and is
 parser-blocking immediately after the overlay rather than in `<head>`, because
@@ -4010,6 +4136,31 @@ the fix: **2268ms on screen against roughly 720 before.**
 being sampled — the shortest hold that shows the composition entire, and it
 lands between the 2100 nobody complained about and the 500 that was reported.
 The package's 500 is a MINIMUM; what it forbids is going lower.
+
+**It is 2400 now, and the mark is 152/184px rather than 104/126**, on the same
+report and the same reasoning one step further: asked for a larger mark and
+slightly longer with it. 2400 is one and a half turns, and landing off a cycle
+boundary costs nothing — this is a FLOOR, so the real end is
+`max(floor, ready)` and ready is arbitrary, which means the layer already left
+mid-loop on any wait that outlasted 1600. Cycle alignment was never achievable
+and was never what 1600 bought; what it bought was dwell. Measured on screen:
+**2841ms on a phone and 2929 on a desktop, against 1820 before.** The design
+package's figures are a floor rather than a fixed size — what they protect is
+that the teeth and the eyes stay large enough to read — and the inline tier
+(40–56px beside a status line) is untouched, because the report was about the
+screen.
+
+**A caller that starts a draft and then reads the room is reading this
+loader**, and lengthening the floor is what proved nobody had noticed.
+`state.started` flips synchronously inside `engine.startDraft()` while this
+layer covers the room for its floor, so `deep-board.spec.mjs` — which waited a
+flat 2000ms and then asked whether the Players table carried its "Real ADP ends
+here" divider — reported the divider missing. The divider was fine; the table
+had not been drawn. At 3500ms it was there. `startSoloDraft()` waits for
+`[data-draft-loader]` to leave now, so the fix is in the helper rather than in
+that one spec: **the duration was never the thing any caller cared about**, and
+a number in a spec is a number somebody has to find again every time this floor
+moves.
 
 **Do not remount it while the layer is up.** The loop is seamless precisely
 because it starts mid-flight; remounting resets the sweep and reads as a
@@ -4828,6 +4979,54 @@ This is what makes the refusal in "The pool a league can hold is not the pool
 it can see" honest. That message ends *"Run fewer teams, or a shorter roster"*,
 and until this the second half of that sentence was advice the app would not
 let anybody take.
+
+### The seat was written down twice, and the copy that lost was the one asked
+
+Reported off a phone: set the draft position in Draft Settings, press Start,
+land in seat 1 — *"it seems to respect the other settings"*. It does; the seat
+was the one thing about a draft kept in two places.
+
+`DraftOrder.jsx` has always set it through `engine.setMySlot()`, which writes
+`state.mySlot`. `DraftRoom.jsx` held its own `lobbySlot`, a `useState(0)` fed
+by the desktop lobby's dropdown and by nothing else. And `beginDraft()` called
+`startDraft({ mySlot: lobbySlot })`, whose **first act is
+`state.mySlot = opts.mySlot`** — so the settings screen's choice was written,
+correctly displayed in that screen's own list (`draftOrder()` reads
+`state.mySlot` to decide which row says "You"), and overwritten on the way in.
+Two right answers, one of them not being asked.
+
+**`state.mySlot` was already the pre-commit seat** as far as the engine is
+concerned, which is exactly why the list highlighted the right chair while the
+draft started in the wrong one. `lobbySlot` is `engine.mySlot()` now and
+`setLobbySlot` is `engine.setMySlot()`; `setMySlot()` calls `render()`, which
+fires `juke:header`, which `useJukeTick` already re-renders on, so it is live
+without a second copy to keep in step — and it refuses a seat outside the
+league, which the `useState` never did.
+
+**Not phone-specific despite the report**, which is worth noticing before
+looking for a phone bug: it is specific to choosing the seat on *that screen*,
+which is simply the only route to it on a phone. The desktop lobby's own
+dropdown writes `lobbySlot` directly and never saw it.
+
+**And a seat only exists inside a league, so shrinking the league has to move
+anybody past the new edge.** Nothing did. `setMySlot()` refuses an
+out-of-range seat on the way IN, which made this look covered — but it is
+`teams` that moves underneath a seat already chosen, and no writer of it had
+anything to say about the seat. Take seat 10 of 12, drop to 8 teams, and
+`state.mySlot` stays 9: `onTheClock()` only ever returns 0..7, so `isMyTurn()`
+is never true and the draft runs to the end **without ever offering a pick**.
+It does not throw and nothing on screen says so — it looks like a draft that
+skips you. `clampSeat()` is called from both doors, `setLeague()` and
+`readSetup()`, because a clamp on one of them is a clamp nobody can rely on.
+
+`tests/draft-settings.spec.mjs` covers the seat on both shells and every other
+control on that screen. The seat assertions were confirmed red against the bug
+and report the reported symptom exactly — **expected 5, received 0**. The
+"every control survives" test passes either way and says so: those settings
+were never broken, and it is a regression guard rather than a bug catcher.
+It reads each value back **after** the draft has started, because reading it
+off `league` beforehand would only prove `Object.assign` works, which is not
+what failed.
 
 ## The phone draft room's own controls
 

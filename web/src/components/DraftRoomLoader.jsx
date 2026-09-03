@@ -28,13 +28,29 @@ import { useEffect, useState } from 'react'
  * that moves while the layer is up.
  */
 
-/* 126px desktop, 104px mobile, from the design package. Width only - the mark
-   keeps its own 564:352 ratio and setting a height squashes it. The inline
-   sizes are for the reuse case in item 8 of the package: any in-app wait
-   longer than ~400ms wants this at 40-56px beside a status line, rather than a
-   second spinner invented for the purpose. */
+/* Width only - the mark keeps its own 564:352 ratio and setting a height
+   squashes it.
+
+   The full-screen tier was the design package's own 104px mobile / 126px
+   desktop and is 152/184 now, on the owner's report that the transition is
+   too small to register. The package's figures are a floor rather than a
+   fixed size: what they are protecting is that the mark stays large enough
+   for the teeth and the eyes to read, and this moves in that direction.
+
+   Checked against the two things on this screen that could collide with it
+   rather than picked by eye. At 184px the mark is 115px tall (184 / 1.602),
+   so the mark, the 20px gap and the two text lines come to about 190px on a
+   viewport that is at least 568px tall even on the smallest phone still in
+   use - it is centred in a flex column with room to spare at every size. And
+   184 is under the 375px phone's own width by enough that the `w-` value is
+   never the thing constraining it.
+
+   The inline tier is untouched: item 8 of the package puts it at 40-56px
+   beside a status line for any in-app wait past ~400ms, where it is a glyph
+   next to text rather than the subject of the screen, and the report was
+   about the screen. */
 const SIZES = {
-  screen: 'w-[104px] sm:w-[126px]',
+  screen: 'w-[152px] sm:w-[184px]',
   inline: 'w-[40px] sm:w-[56px]',
 }
 
