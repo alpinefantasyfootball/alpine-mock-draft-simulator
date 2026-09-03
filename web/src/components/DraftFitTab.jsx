@@ -11,10 +11,10 @@
 // already shipped once.
 function FitRow({ label, value, tone, note }) {
   return (
-    <div className="rounded-lg border border-slate-rule bg-slate-sunk/50 px-3 py-2.5">
-      <p className="text-[10px] font-medium uppercase tracking-wide text-ink-muted">{label}</p>
-      <p className={'text-lg font-bold ' + (tone || 'text-white')}>{value}</p>
-      {note && <p className="mt-0.5 text-[11px] leading-snug text-ink-muted">{note}</p>}
+    <div className="rounded-lg border border-slate-rule bg-slate-sunk/50 px-3 py-2.5 lg:px-4 lg:py-4">
+      <p className="text-[10px] lg:text-xs font-medium uppercase tracking-wide text-ink-muted">{label}</p>
+      <p className={'text-lg lg:text-2xl font-bold ' + (tone || 'text-white')}>{value}</p>
+      {note && <p className="mt-0.5 lg:mt-1 text-[11px] lg:text-sm leading-snug text-ink-muted">{note}</p>}
     </div>
   )
 }
@@ -69,8 +69,8 @@ export default function DraftFitTab({ fit, player }) {
     : adp > nextOverall
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="grid grid-cols-2 gap-2">
+    <div className="flex flex-col gap-4 lg:gap-6">
+      <div className="grid grid-cols-2 gap-2 lg:gap-3">
         <FitRow
           label="Left in his tier"
           value={tierLeft}
@@ -100,7 +100,7 @@ export default function DraftFitTab({ fit, player }) {
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-2 gap-2 lg:gap-3">
         <FitRow
           label="Bye week"
           value={bye ? `Wk ${bye}` : '—'}
@@ -142,7 +142,7 @@ export default function DraftFitTab({ fit, player }) {
       </div>
 
       {survives !== null && (
-        <p className="rounded-lg border border-slate-rule bg-slate-sunk/40 px-3 py-2 text-[11px] leading-relaxed text-white/50">
+        <p className="rounded-lg border border-slate-rule bg-slate-sunk/40 px-3 py-2 lg:px-4 lg:py-3 text-[11px] lg:text-sm leading-relaxed text-white/50">
           His ADP is {adp.toFixed(1)} and your next pick is {nextOverall}.{' '}
           {survives
             ? 'On average he lasts that long — though ADP is an average, and no single draft looks like one.'

@@ -93,7 +93,7 @@ export default function PlayerProfileModal({
           type="button"
           onClick={() => setTab(t)}
           className={
-            'shrink-0 whitespace-nowrap border-b-2 px-3 py-2.5 text-center text-[11px] font-semibold transition-colors duration-150 ' +
+            'shrink-0 whitespace-nowrap border-b-2 px-3 py-2.5 text-center text-[11px] font-semibold transition-colors duration-150 lg:px-5 lg:py-3.5 lg:text-sm ' +
             (tab === t ? 'border-teal-400 text-teal-300' : 'border-transparent text-ink-muted hover:text-white/60')
           }
         >
@@ -204,11 +204,11 @@ export default function PlayerProfileModal({
               exit={{ y: 16, opacity: 0 }}
               transition={{ type: 'spring', stiffness: 340, damping: 34 }}
               onClick={(e) => e.stopPropagation()}
-              className="flex w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-rule bg-slate-panel shadow-[0_24px_60px_-12px_rgba(0,0,0,0.85)]"
+              className="flex w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-rule bg-slate-panel shadow-[0_24px_60px_-12px_rgba(0,0,0,0.85)] lg:max-w-3xl xl:max-w-4xl"
             >
-              <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-rule p-4 sm:p-5">
-                <div className="flex min-w-0 items-center gap-3">
-                  <div className="relative flex h-14 w-14 sm:h-16 sm:w-16 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-sunk text-sm font-bold text-ink-soft">
+              <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-rule p-4 sm:p-5 lg:p-7">
+                <div className="flex min-w-0 items-center gap-3 lg:gap-5">
+                  <div className="relative flex h-14 w-14 sm:h-16 sm:w-16 lg:h-24 lg:w-24 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-sunk text-sm lg:text-lg font-bold text-ink-soft">
                     {initialsFor(player)}
                     {photoFor(player) && (
                       <img
@@ -221,9 +221,9 @@ export default function PlayerProfileModal({
                     )}
                   </div>
                   <div className="min-w-0">
-                    <p className="truncate font-display text-lg sm:text-xl font-bold text-white">{player.name}</p>
-                    <p className="flex flex-wrap items-center gap-1.5 text-xs text-ink-muted">
-                      <span className={'rounded px-1.5 py-0.5 text-[10px] font-bold ' + (POS_BADGE[player.pos] || 'bg-white/10 text-white/50')}>
+                    <p className="truncate font-display text-lg sm:text-xl lg:text-3xl font-bold text-white">{player.name}</p>
+                    <p className="flex flex-wrap items-center gap-1.5 lg:gap-2 text-xs lg:text-sm text-ink-muted lg:mt-1.5">
+                      <span className={'rounded px-1.5 py-0.5 lg:px-2 lg:py-1 text-[10px] lg:text-xs font-bold ' + (POS_BADGE[player.pos] || 'bg-white/10 text-white/50')}>
                         {player.pos}
                       </span>
                       {player.team}
@@ -234,14 +234,14 @@ export default function PlayerProfileModal({
                           comment on why the hues don't collide with a
                           position badge sitting right beside it. */}
                       {inj && (
-                        <span className={'rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ' + inj.cls} title={inj.label}>
+                        <span className={'rounded px-1.5 py-0.5 lg:px-2 lg:py-1 text-[10px] lg:text-xs font-bold uppercase tracking-wide ' + inj.cls} title={inj.label}>
                           {player.inj}
                         </span>
                       )}
                     </p>
                   </div>
                 </div>
-                <div className="flex shrink-0 items-center gap-2">
+                <div className="flex shrink-0 items-center gap-2 lg:gap-3">
                   {engine && (
                     <button
                       type="button"
@@ -249,13 +249,13 @@ export default function PlayerProfileModal({
                       title={engine.watchlisted(player) ? 'Remove from watchlist' : 'Add to watchlist'}
                       aria-label={engine.watchlisted(player) ? 'Remove from watchlist' : 'Add to watchlist'}
                       className={
-                        'flex h-8 w-8 items-center justify-center rounded-full border transition-colors duration-150 ' +
+                        'flex h-8 w-8 lg:h-11 lg:w-11 items-center justify-center rounded-full border transition-colors duration-150 ' +
                         (engine.watchlisted(player)
                           ? 'border-amber-400/40 bg-amber-400/10 text-amber-300'
                           : 'border-slate-rule bg-slate-sunk/60 text-white/60 hover:border-slate-rule hover:text-white')
                       }
                     >
-                      <Bookmark className={'h-4 w-4 ' + (engine.watchlisted(player) ? 'fill-amber-300' : '')} />
+                      <Bookmark className={'h-4 w-4 lg:h-5 lg:w-5 ' + (engine.watchlisted(player) ? 'fill-amber-300' : '')} />
                     </button>
                   )}
                   <button
@@ -263,16 +263,16 @@ export default function PlayerProfileModal({
                     onClick={onClose}
                     title="Close"
                     aria-label="Close player profile"
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-rule bg-slate-sunk/60 text-white/60 transition-colors duration-150 hover:border-slate-rule hover:text-white"
+                    className="flex h-8 w-8 lg:h-11 lg:w-11 shrink-0 items-center justify-center rounded-full border border-slate-rule bg-slate-sunk/60 text-white/60 transition-colors duration-150 hover:border-slate-rule hover:text-white"
                   >
-                    <X className="h-4 w-4" />
+                    <X className="h-4 w-4 lg:h-5 lg:w-5" />
                   </button>
                 </div>
               </div>
 
               {tabStrip}
 
-              <div className="max-h-[65vh] flex-1 overflow-y-auto p-4 sm:p-5">
+              <div className="max-h-[65vh] lg:max-h-[75vh] flex-1 overflow-y-auto p-4 sm:p-5 lg:p-7">
                 {isDesktop && tabBody}
               </div>
             </motion.div>
