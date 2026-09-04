@@ -184,24 +184,48 @@ test("neither homepage contradicts the other about what Juke is", async ({ brows
    guesswork — c7f1c1b tracked down two of these against the live page
    after the daily scheduled run went red, and 20852fd's casing changes
    before it. Folding them in keeps that verification rather than
-   discarding it with the mechanism it happened to live in. */
+   discarding it with the mechanism it happened to live in.
+
+   Four lines were retired by design_handoff_v3_alive, not lost: HomeAlive
+   replaced Hero outright, so "Master the Draft. / Dominate the Season."
+   became "Know the move / before your league.", the hero's sub-copy became
+   the "Plug in your league" line, "Explore The Rooms" became a real nav
+   destination rather than a scroll link, and the footer line moved to
+   "FREE · NO ACCOUNT NEEDED · RUNS IN YOUR BROWSER". Each is REPLACED here
+   rather than deleted — a list that only ever shrinks stops being the
+   thing this test is for, which is that a page cannot quietly lose the
+   sentences it is built on. Everything below the rooms grid (TakeAPick,
+   ShowYourWorking, ClosingCta) is untouched and its copy still asserted.
+
+   The two lists still differ, and for a narrower reason than before. The
+   homepage is one responsive tree now rather than a phone launcher and a
+   desktop page, so every line in PHONE_REQUIRED is also on desktop; what
+   desktop still has that a phone does not is those three sections below,
+   which remain `hidden sm:block`. */
+
 const DESKTOP_REQUIRED = [
   "Agility Through Analytics",
-  "Master the Draft.",
-  "Dominate the Season.",
+  // HomeAlive's hero — what replaced Hero's own headline and sub-copy.
+  "Know the move",
+  "before your league.",
+  "Plug in your league from any major platform.",
+  "Keep your drafts on every device",
+  "FREE · NO ACCOUNT NEEDED · RUNS IN YOUR BROWSER",
+  // Still below the fold, still desktop-only, still asserted.
   "Enter the Draft Room",
-  "Explore The Rooms",
-  "Test your strategy in the Draft Room completely free. Waivers, trades and week-to-week tools are in build.",
-  "Free Draft Room • No Account Needed",
   "Open the Draft Room.",
   "No setup, no league import. Pick your scoring and start.",
 ];
 
 const PHONE_REQUIRED = [
   "Agility through analytics",
+  "Know the move",
   "Mock Draft",
+  "Connect",
+  "Or draft with friends",
+  "Keep your drafts on every device",
   "The Rooms",
-  "Draft games",
+  "FREE · NO ACCOUNT NEEDED · RUNS IN YOUR BROWSER",
 ];
 
 test("each homepage carries its own agreed copy", async ({ browser }) => {

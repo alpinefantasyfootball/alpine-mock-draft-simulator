@@ -31,7 +31,7 @@ import { useAccountUiReady } from '../hooks/useAccountUiReady.js'
    "delete the rest of the page", so the rest of the page stays until
    somebody says otherwise. */
 
-function Card({ gradient, eyebrow, eyebrowColor, title, sub, glyph, href }) {
+function Card({ gradient, eyebrow, eyebrowColor, title, sub, glyph, href, dataHeroCta }) {
   const style = gradient
     ? { background: 'linear-gradient(100deg,#44D4E2,#82A1F6)' }
     : { background: '#151920', border: '1px solid #252930' }
@@ -39,6 +39,7 @@ function Card({ gradient, eyebrow, eyebrowColor, title, sub, glyph, href }) {
   return (
     <a
       href={href}
+      data-hero-cta={dataHeroCta ? '' : undefined}
       className="flex min-h-[150px] flex-col justify-between rounded-[18px] p-4 transition-transform duration-150 hover:scale-[1.01] sm:min-h-[170px] sm:rounded-[20px] sm:p-[22px]"
       style={style}
     >
@@ -157,7 +158,16 @@ export default function HomeAlive() {
                   ~118 beside it. Without this it wrapped to two lines with
                   60px of the row left empty, which reads as a headline that
                   did not fit rather than as one that was allowed to break. */}
-              <span className="whitespace-nowrap font-display text-[13px] font-bold italic tracking-[0.12em] text-mint sm:text-[14px]">
+              {/* data-hero-eyebrow marks the first thing under the header,
+                  which is what phone.spec.mjs measures the gap to. An
+                  attribute rather than a text or element match, because
+                  that check has now been broken twice by the copy's casing
+                  and once by the element changing from a span to a p —
+                  none of which is what it is testing. */}
+              <span
+                data-hero-eyebrow
+                className="whitespace-nowrap font-display text-[13px] font-bold italic tracking-[0.12em] text-mint sm:text-[14px]"
+              >
                 <span aria-hidden="true">✨</span> AGILITY THROUGH ANALYTICS
               </span>
               {/* ShellHeader carries this above `sm`; here below it. See
@@ -177,8 +187,18 @@ export default function HomeAlive() {
             </p>
 
             <div className="mt-5 grid max-w-[560px] grid-cols-2 gap-2.5 sm:mt-7 sm:gap-3">
+              {/* data-hero-cta: sonar.spec.mjs hit-tests this to tell an
+                  overlay that has really gone from one that is merely
+                  transparent. It goes on the primary action, which on this
+                  page is the gradient card rather than a button — the
+                  marker follows the job, not the element. Losing it is
+                  what the mobile pass already recorded once: splitting a
+                  page orphans every attribute only one half of it
+                  carries, and the failure reads as a missing element
+                  rather than a missing marker. */}
               <Card
                 gradient
+                dataHeroCta
                 glyph="🏈"
                 eyebrow="PRACTICE"
                 eyebrowColor="#14343d"
