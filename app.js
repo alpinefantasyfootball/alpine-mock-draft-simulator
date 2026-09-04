@@ -618,7 +618,25 @@ const ROOMS = [
   //            not the README's #74E5CE: both breakpoints' markup says cyan
   //            (2dg/3dg), and the HTML is the spec where the two disagree.
   //   hook   — the one line a locked card shows a guest.
+  /* Retired, not deleted -- design_handoff_v3_alive draws four locked
+     rooms and the Draft Room, and the Prospect Room appears nowhere in
+     it: not in the README, not in a screenshot, and not in turn 1's
+     early explorations either, which draw only Draft/Waiver/Trade. Every
+     document before it says six rooms, so this is a change rather than a
+     correction, and the owner made it.
+
+     What it was for is partly here already: the Draft Room runs a
+     rookies-only draft today (league.playerPool, Draft Settings), which
+     is the drafting half of "scout the incoming class". The half that is
+     not here is the college-production-to-NFL translation this blurb
+     promises -- so if this comes back, that is what it owes.
+
+     `retired` is read by rooms() below and nowhere else. Deleting this
+     line is how it returns; everything that draws a room -- the lobby,
+     the homepage grid, the footer column -- follows automatically
+     because all three read the same bridge. */
   { name: "The Prospect Room", slug: "prospect", glyph: "🔭", accent: "#82A1F6",
+    retired: true,
     hook: "Preview: rookie board before the draft", live: false, season: "Pre-season",
     lead: "Scout the future.",
     blurb: "Analyze the college production and NFL translation of incoming rookies before they even hit your draft board." },
@@ -10841,7 +10859,11 @@ window.JukeEngine = {
   dataReady,
   board:        () => board,
   league:       () => league,
-  rooms:        () => ROOMS,
+  /* Retired rooms are filtered here rather than at each caller: the
+     lobby, the homepage grid and the footer column all read this one
+     function, so a room leaves the site in one place. ROOMS itself keeps
+     the entry -- see the note on it. */
+  rooms:        () => ROOMS.filter((r) => !r.retired),
   overallScore: overallScore,
   shotPicks:    shotPicks,
   fetchScores:  fetchScores,

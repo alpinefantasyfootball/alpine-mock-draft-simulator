@@ -39,13 +39,21 @@ for (const size of [{ w: 390, h: 844, label: "phone" }, { w: 1280, h: 900, label
       const page = await openApp(context, c.hash);
       await page.waitForTimeout(900);
 
-      /* Lower-cased on both sides. Every one of these headings is title
-         case in the source and uppercased in CSS, so innerText never
-         spells it the way the source does -- the same trap that has now
-         broken a hero-eyebrow check, a "Randomize" check and a /nan/i
-         sweep in this repo. */
-      const seen = (await page.evaluate(() => document.body.innerText)).toLowerCase();
-      expect(seen, `${c.hash} draws its own screen`).toContain(c.needs.toLowerCase());
+      /* Lower-cased AND whitespace-collapsed on both sides.
+
+         Lower-cased because every one of these headings is title case in
+         the source and uppercased in CSS, so innerText never spells it the
+         way the source does — the trap that has broken a hero-eyebrow
+         check, a "Randomize" check and a /nan/i sweep in this repo.
+
+         Collapsed because a heading is free to break where it likes: the
+         Rooms lobby's desktop H1 is two lines ("The" / "Rooms", the second
+         in mint) exactly as 3bg draws it, and innerText puts a newline
+         between them. That is a layout decision, not a change to what the
+         screen says, and this test is about the latter. */
+      const norm = (t) => t.toLowerCase().replace(/\s+/g, " ");
+      const seen = norm(await page.evaluate(() => document.body.innerText));
+      expect(seen, `${c.hash} draws its own screen`).toContain(norm(c.needs));
 
       // Nothing overflows the page sideways, at either width.
       const over = await page.evaluate(

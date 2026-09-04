@@ -108,10 +108,28 @@ function useDataFreshness() {
 // reused here rather than re-decided. Listing all six (not just the live
 // one) is the point of this pass: a reference footer whose own product-list
 // column names everything the company offers, not just what's shipped.
+/* Every room with a page is a link to it, live or locked.
+
+   This used to send anything not `live` to an early-access signup modal,
+   which was right while a locked room had nowhere to go. It now has
+   somewhere: design_handoff_v3_alive gives all four in-season rooms a real
+   page at #/rooms/<slug>, showing a blurred preview behind an unlock card.
+
+   Leaving the modal here meant the same room behaved differently depending
+   which link you pressed — the lobby card opened the room, the footer
+   opened a dialog — which is the handoff's own interaction rule broken in
+   the one place nobody looks: "Locked card tap (guest) -> same room,
+   showing the locked preview (not a modal)." A dialog answers a question
+   the reader did not ask and takes away the preview that is the pitch.
+
+   The modal path stays for a room with no `slug`, which is a room with no
+   page yet. There are none today; that is the branch that stops this
+   silently 404ing the day one is added. */
 function FooterRoomLink({ room, onSignup, className }) {
-  if (room.live && room.href) {
+  const href = room.href || (room.slug ? `#/rooms/${room.slug}` : null)
+  if (href) {
     return (
-      <a href={room.href} className={className}>
+      <a href={href} className={className}>
         {room.name}
       </a>
     )

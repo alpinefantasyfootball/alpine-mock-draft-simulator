@@ -252,7 +252,9 @@ export default function HomeAlive() {
               <span aria-hidden="true">🚪</span> THE ROOMS
             </span>
           </div>
-          <RoomsGridAlive />
+          {/* Five across on a desktop, not the lobby's three: 3ag/3au
+              draw this section as one `repeat(5,1fr)` strip. */}
+          <RoomsGridAlive columns="home" />
         </div>
 
         {/* Signed out only, and the reason is that it stops being true:

@@ -19,7 +19,7 @@ import DraftSettingsModal from './DraftSettingsModal.jsx'
 import DraftEntryScreen from './DraftEntryScreen.jsx'
 import DraftLobby from './DraftLobby.jsx'
 import DraftRoomLoader from './DraftRoomLoader.jsx'
-import LobbyBar from './LobbyBar.jsx'
+import ShellHeader from './shell/ShellHeader.jsx'
 import MobileAppTabBar from './MobileAppTabBar.jsx'
 import MobileDraftTabBar from './MobileDraftTabBar.jsx'
 import PickClockBand from './PickClockBand.jsx'
@@ -891,16 +891,29 @@ export default function DraftRoom() {
        z-40 would trap this whole overlay beneath it. */
     return (
       <div className="fixed inset-0 z-[60] flex flex-col bg-slate text-white">
-        {/* Not on the entry screen: it carries its own back chevron, its
-            own title and its own "Draft settings" button, so LobbyBar above
-            it is a second header with a second gear opening the identical
-            modal — the duplicate-affordance problem, stacked. It stays for
-            the dashboard, which has no header of its own at any width.
+        {/* ShellHeader, not LobbyBar, and only over the dashboard.
 
-            `!isPhone` used to be half this condition, because the entry
-            screen was phone-only. It is every width now (DraftRoomEntry),
-            so the question is only which of the two screens is showing. */}
-        {!!lockerView && <LobbyBar onOpenSettings={() => setSettingsOpen(true)} />}
+            The entry screen carries its own back chevron, title and "Draft
+            settings" button, so any header above it is a second one with a
+            second way into the identical modal — the duplicate-affordance
+            problem, stacked. The dashboard has no header of its own, so it
+            gets the site's.
+
+            It gets the SITE's now rather than LobbyBar's, which was the
+            last of the pre-handoff marketing header left anywhere: a
+            "How It Works / The Rooms" nav with a dropdown, on one screen,
+            disagreeing with the three tabs every other screen shows. One
+            shell, which is what this handoff is for.
+
+            What LobbyBar carried that this does not is the settings gear,
+            and it is not lost: NewMockPanel's own "Edit setup" opens the
+            same modal from inside the dashboard, and the entry screen one
+            press back has "Draft settings". A gear in a header is the
+            third way into a screen that already had two.
+
+            active="rooms" because the Draft Room is a room and this is
+            reached through #/rooms/draft. */}
+        {!!lockerView && <ShellHeader active="rooms" />}
 
         {settingsOpen && (
           <DraftSettingsModal

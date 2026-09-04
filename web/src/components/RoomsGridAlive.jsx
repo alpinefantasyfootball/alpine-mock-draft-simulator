@@ -29,7 +29,15 @@ function LeadCard({ room }) {
   return (
     <a
       href={room.href || (room.slug ? `#/rooms/${room.slug}` : undefined)}
-      className="col-span-full flex items-center gap-3.5 rounded-2xl border border-line-hairline p-4 transition-colors duration-150 hover:border-teal/40 sm:gap-4 sm:p-5"
+      className={
+        /* Full width on a phone, an ordinary cell on a desktop. Both are the
+           handoff's: every mobile screen gives the lead card
+           `grid-column:1/-1` (2ag/2au/2bg/2bu) and no desktop screen does
+           (3ag/3au/3bg/3bu). At two columns a wide lead is what makes the
+           open room read as the one you can actually use; at three or five
+           there is room to say that with the cyan wash alone. */
+        'col-span-2 flex items-center gap-3.5 rounded-2xl border border-line-hairline p-4 transition-colors duration-150 hover:border-teal/40 lg:col-span-1 lg:flex-col lg:items-start lg:justify-between lg:gap-4 lg:min-h-[150px] lg:p-[18px]'
+      }
       style={{ background: `linear-gradient(120deg, ${room.accent}1A, transparent 60%), #151920` }}
     >
       <span
@@ -39,16 +47,20 @@ function LeadCard({ room }) {
       >
         {room.glyph}
       </span>
-      <span className="min-w-0 flex-1">
+      <span className="min-w-0 flex-1 lg:flex-none">
         <span className="block font-mono text-[10px] tracking-[0.1em]" style={{ color: room.accent }}>
           FREE · {room.season.toUpperCase()}
         </span>
         <span className="mt-[3px] block font-display text-[22px] font-bold leading-[1.05] text-white">
           {room.name}
         </span>
-        <span className="mt-0.5 block truncate text-[13px] text-ink-muted">{room.lead}</span>
+        <span className="mt-0.5 block truncate text-[13px] text-ink-muted lg:mt-1">{room.lead}</span>
       </span>
-      <span className="shrink-0 text-ink-muted" aria-hidden="true">›</span>
+      {/* The chevron is the phone row's own affordance — a wide row with a
+          tile, a name and nothing at the end reads as unfinished. A card in
+          a grid does not need one, and none of the desktop screens draws
+          it. */}
+      <span className="shrink-0 text-ink-muted lg:hidden" aria-hidden="true">›</span>
     </a>
   )
 }
@@ -88,7 +100,18 @@ function LockedCard({ room, wide = false }) {
   )
 }
 
-export default function RoomsGridAlive() {
+/* `columns` is the one thing the two hosts disagree about, and they really
+   do: the homepage draws its rooms as a single five-across strip
+   (3ag/3au, `repeat(5,1fr)`) and the lobby as a three-column grid
+   (3bg/3bu, `repeat(3,1fr)`). Below `lg` both are two columns. A prop
+   rather than two components, because everything else about a card is
+   identical and a second copy would drift. */
+const COLUMNS = {
+  home: 'lg:grid-cols-5',
+  lobby: 'lg:grid-cols-3',
+}
+
+export default function RoomsGridAlive({ columns = 'lobby' }) {
   const rooms = useRooms()
   const lead = rooms.filter((r) => r.live)
   const locked = rooms.filter((r) => !r.live)
@@ -101,7 +124,7 @@ export default function RoomsGridAlive() {
   const oddOut = locked.length % 2 === 1
 
   return (
-    <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-3 lg:gap-4">
+    <div className={'grid grid-cols-2 gap-2.5 lg:gap-3 ' + (COLUMNS[columns] || COLUMNS.lobby)}>
       {lead.map((r) => <LeadCard key={r.name} room={r} />)}
       {locked.map((r, i) => (
         <LockedCard key={r.name} room={r} wide={oddOut && i === locked.length - 1} />

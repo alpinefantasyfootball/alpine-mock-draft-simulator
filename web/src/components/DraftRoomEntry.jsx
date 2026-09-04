@@ -84,7 +84,12 @@ const SPORTS = [
   { key: 'nfl', label: 'Football', emoji: '🏈', live: true },
   { key: 'nba', label: 'Basketball', emoji: '🏀', live: false },
   { key: 'mlb', label: 'Baseball', emoji: '⚾', live: false },
-  { key: 'epl', label: 'Soccer', emoji: '⚽', live: false },
+  /* Retired, not deleted, for the same reason the Prospect Room is:
+     design_handoff_v3_alive draws three sports on this screen and only
+     three, at both breakpoints and in both auth states (2cg/2cu/3cg/3cu
+     are Football, Basketball, Baseball). Soccer arrived with the mobile
+     pass. Drop `retired` to bring it back. */
+  { key: 'epl', label: 'Soccer', emoji: '⚽', live: false, retired: true },
 ]
 
 function StatusPill({ status }) {
@@ -177,7 +182,7 @@ export default function DraftRoomEntry({
 
         {/* The sports row. */}
         <div className="no-scrollbar -mx-4 mt-5 flex gap-2 overflow-x-auto px-4">
-          {SPORTS.map((s) => (
+          {SPORTS.filter((s) => !s.retired).map((s) => (
             <button
               key={s.key}
               type="button"
