@@ -116,7 +116,7 @@ the Stack section above, not a one-time migration hiccup.
 | `worker/store.js` | The D1 cache: Sleeper's pool and Tank01 headlines. A cache and never a source of truth, and a missing binding is a normal condition rather than a fault. |
 | `worker/migrations/` | D1 schema, applied with `wrangler d1 migrations apply`. The database is not to be shaped by hand — see the note on three variants of one schema. |
 | `web/index.html` | The real homepage entry Vite builds from. Loads the legacy files above as root-relative classic scripts, alongside Vite's own hashed module bundle for React. The Draft Room markup lives here too, hidden — see the Stack section. |
-| `web/src/components/phone/` | The phone-only screens, mounted below `sm` (`usePhoneWidth()`): the draft room, the homepage, the Mock Drafts Lobby, the floating nav pill. Each is a different screen from its desktop counterpart rather than a narrower one — see "The mobile pass" below for why that is a product decision and what it costs. |
+| `web/src/components/phone/` | The phone-only screens, mounted below `sm` (`usePhoneWidth()`): the draft room, the floating nav pill. Each is a different screen from its desktop counterpart rather than a narrower one — see "The mobile pass" below for why that is a product decision and what it costs. **Two have left**: the homepage (`HomeAlive.jsx`) and the Mock Drafts Lobby (`DraftRoomEntry.jsx`) are one responsive screen at every width now — see "Flow v3" below for why that handoff reverses the split for those two specifically and not for the draft room. |
 | `web/src/components/settings/` | The Draft Settings screen's own controls, the scoring-rule editor and the draft-order list. Split out of `DraftSettingsModal.jsx` when that file became the whole settings screen rather than a three-tab modal. |
 | `web/src/clerkConfig.js` | The publishable key (from `VITE_CLERK_PUBLISHABLE_KEY`, public by design) and the one appearance object every Clerk component is themed by. Two hand-tuned copies of "make Clerk look like Juke" would drift the first time either changed. |
 | `web/src/components/AuthBridge.jsx` | Writes `window.JukeAuth` and fires `juke:auth`, so `app.js` — a classic script, where Clerk's hooks cannot reach — can read who is signed in. `window.JukeEngine` pointing the other way. Renders nothing. |
@@ -947,9 +947,12 @@ it for three weeks.
 because there is one door in and several ways out — "Run another mock" goes
 through `restart()` → `goHome()` and always worked, which is exactly what
 made the bug look intermittent, while "Back to the locker" is a plain
-`<a href="#/drafts">` that changes the route and touches no state. Same
-reasoning as the retired `#/draft` redirect living at the router rather than
-at its callers.
+`<a href="#/rooms/draft">` that changes the route and touches no state.
+Same reasoning as the retired `#/draft` redirect living at the router rather
+than at its callers. (That href was `#/drafts` until Flow v3 split the Draft
+Room's entry from the drafts archive — see below. The archive has no Start
+button on it, so the locker link had to follow the entry or this exact flow
+would dead-end.)
 
 **Two more leaks sat on that same path, and neither is in the engine.**
 `DraftRoom.jsx` does not unmount between drafts — the Lobby is one of its own
@@ -5315,8 +5318,11 @@ twelve-cell tendencies grid, a recommendation engine, a heatmap and a history
 table. On a 390px phone all twelve cells stack into one column and the button
 the screen exists to offer ends up past the fourth chart.
 
-`MockDraftsPhone.jsx` is what `#/drafts` is below `sm`: start, resume, and
-what you have already run. **Nothing is lost.** "Your insights" mounts the
+`DraftRoomEntry.jsx` — `MockDraftsPhone.jsx` when this was written — is
+what `#/rooms/draft` is, and it is no longer below `sm` only: Flow v3 makes
+it the Draft Room's entry at every width, with the dashboard behind "Your
+insights" where a phone already had it. Start, resume, and what you have
+already run. **Nothing is lost.** "Your insights" mounts the
 identical `DraftLocker`, and a history row opens that component's own report
 path through a new `initialAnalyzeId` prop rather than a second entry point —
 the frozen-report-first path is the whole reason a reopened draft and the
@@ -5337,6 +5343,226 @@ changed between renders and React threw on the first press of the button that
 mounts it. It is keyed on `engine` rather than `[]` for a second reason:
 `analyze` is a const further down the same function, in its temporal dead
 zone on exactly the render that early return takes.
+
+## Flow v3: the rooms became places, and the shell became one shell
+
+`design_handoff_v3_alive` — 36 screens, nine of them × two auth states ×
+two breakpoints. The guest half is built; the connected half is not, and the
+reason is not effort.
+
+**Half of it needs data this project cannot get.** There is no league
+connect — no Sleeper/ESPN/Yahoo/CBS import, no roster, no matchup, no FAAB,
+no standings — so every number on a connected screen ("Claim Rico Dowdle",
+"+6.2", "$12", "WIN PROB 58%", "Dynasty Degens · Wk 3") comes from somewhere
+that does not exist. **All 18 guest screens do not**, and that includes the
+four in-season rooms, whose guest state is deliberately blurred sample
+content behind a lock card. So the split is not 50/50 by difficulty: the
+whole guest product ships without the integration, and the connected half
+waits for it rather than being faked.
+
+### The HTML is the spec, and its own README is not
+
+The handoff's README drifts from the markup in several places and says
+itself to "read exact values from the HTML". The differences worth knowing,
+because each one reads as plausible in the prose:
+
+- **Waiver's accent is `#00E5FF`, not `#74E5CE`.** Both breakpoints' markup
+  says cyan (2dg/3dg); only the README says mint.
+- **The guest homepage has no "Movers strip"**, which the README describes.
+  What 2ag actually has is hero → Practice/Connect cards → a draft-with-
+  friends row → an account card → the rooms grid → one footer line.
+- **Two unlock headlines were wrong in prose**: Trade is "Read your real
+  offers" and Strategy is "Plan your real week".
+- **The Prospect Room is not in the handoff at all.** Its lobby draws four
+  locked rooms; the app has advertised five since the homepage grid shipped.
+  Dropping a room from the site is a product decision and a bigger one than
+  drawing a fifth card, so all five render and the odd one spans its row.
+
+**And the mark is not the handoff's.** Its own `juke-mark-appbar.svg` is the
+full 564×352 shark sized into a 28×28 box — squashed, which this file
+already has a rule about — and it draws `JUKE` in Barlow Condensed where the
+repo's wordmark has been Archivo 900 since the shark landed. Changing the
+wordmark's face is a brand decision rather than a layout one, so
+`ShellHeader` uses `JukeLogo`. That is the README's own "substitute only
+where an existing repo component already expresses the same thing", used at
+the place it most obviously applies.
+
+**Tokens that already existed were not added again.** The handoff's border
+`#232A33` is `line.hairline`, its grounds are `surface.*`, its inks are
+`voidInk.*`, and its position tiles (WR `#BFD3F5`, TE `#F7D9A8`) are
+`POS_CHALK` — which its own README defers to ("per repo"). A second value one
+step off an existing one is the "a position reads a different colour
+depending which page you're on" drift `draftRoomPositions.js` was rewritten
+to end, arriving through a design file instead of through code. `flow.*` in
+`tailwind.config.js` holds only the ten this palette genuinely lacked.
+
+### The kickoff pill is real, or it is nothing
+
+`KICKOFF 3D 07:14` counts down to the next NFL kickoff. `gameFrom()` was
+throwing the ESPN event's own `date` away; it keeps it, and `nextKickoff()`
+returns the earliest game that has not started **off the same one-minute
+`sessionStorage` entry the score strip already fills** — no second request
+for a 220KB payload, and one parse rather than two.
+
+It answers null for an unreachable feed, a changed response shape, a board
+where everything has kicked off, and the six months of the year with nothing
+scheduled. **The pill draws nothing on null** — the score strip's own "it
+fails by disappearing" contract, applied to the one other surface that reads
+that feed. A countdown is read as a fact, so a fabricated one is worse than
+an absent one.
+
+Two homes, one component: `ShellHeader` renders it above `sm`, and each hero
+renders it below, because that is where the handoff puts it on a phone
+(2ag/2au against 3ag/3au).
+
+### Guest previews run on the live board
+
+The four locked rooms show real players at real positions, read off `board`,
+with only the league-shaped numbers invented — the FAAB, the fairness fill,
+the win probability, the deltas. A hardcoded roster is wrong the first
+morning the pipeline moves, and a preview naming a retired player is exactly
+the small wrongness a fantasy reader notices instantly. The hero says "A
+sample week" out loud, which is the honest half of the trade and is the
+handoff's own copy.
+
+**One number in there is not sample.** Strategy's "BYE ×3" counts how many of
+its own four players are actually on bye in the week the tile names, off
+`bye` from the pipeline, and the three week tiles are derived from that
+rather than fixed at 4/5/6. It is the one cell on that screen a reader could
+check against their own roster and find wrong.
+
+**League is sample end to end and that is honest rather than lazy.** A
+standings table is managers, records and points for; a player is a real thing
+the pipeline knows about and a manager called Sarah is not.
+
+**The blur is `aria-hidden` and `inert`.** Blurred content is unreadable by
+construction, so exposing it to a screen reader reads out a roster nobody can
+see, and leaving it focusable puts every sample row in the tab order in front
+of the two controls the screen exists for.
+
+### "Connecting is read-only" is a promise, so it was decided rather than copied
+
+The handoff draws that line on every desktop unlock card and simultaneously
+offers Strategy's "Apply both calls", which its own README describes as
+writing a lineup back to the platform. Both cannot be true. **Settled
+read-only**: Juke only ever reads a league, and Apply deep-links into the
+platform instead. So the line ships as written, at every width rather than
+the handoff's desktop-only — a claim about what happens to somebody's league
+data is worth two lines of 12px type on the screen most people will read it
+on — and it is the constraint the connect integration gets built under rather
+than a caption somebody can quietly contradict later.
+
+### One route became two, and the locker links had to follow
+
+The handoff splits what `#/drafts` used to be:
+
+- **`#/rooms/draft`** — the Draft Room's own entry. Start a mock, settings,
+  insights, recent. It is a room, so it sits under `#/rooms` with the other
+  five, and `DraftRoom.jsx`'s `draftsActive` branch claims it.
+- **`#/drafts`** — the archive of every draft you have run, which is what the
+  nav's Drafts tab means. `App` renders it, inside `#view-home`.
+
+`applyRoute()`'s `hideHome` moved with the first of those and **must not list
+the second**. Its reason is unchanged — a Lobby drawn out of
+`#draftroom-root` leaves the whole marketing page rendering behind it, adding
+its own height and a second scrollbar nobody can attribute to anything — but
+the archive is the opposite case: hiding `#view-home` for it would hide the
+screen itself.
+
+**Every "back to the locker" link moved to the entry, not the archive**, and
+that is load-bearing rather than tidiness. The archive has no Start button on
+it by design, so a finished draft sent there dead-ends the one flow
+`restart.spec.mjs` exists to walk: finish, go back, change the league, start
+another.
+
+**A row in the archive opens its report through `#/rooms/draft?report=<id>`.**
+The two screens are in different React trees and must not each hold their own
+idea of which report is open; the hash is the one channel both can see, which
+is the same answer `#/draft?room=ABC1` already gives for an invite.
+`DraftRoom` reads it on every `hashchange` rather than at mount — it does not
+unmount between routes, so arriving from the archive is a hashchange, and a
+stale id is the `view`/`soloAutopick` leak that file already documents.
+
+### The phone/desktop split is reversed for two screens and kept for the third
+
+The mobile pass made the homepage and the Lobby genuinely different screens
+per breakpoint, and argued it well. This handoff reverses both: 2ag and 3ag
+are one set of content in two layouts, and 3cg is the phone's own launcher at
+1280px with the dashboard behind "Your insights" — where a phone already had
+it. So `HomePhone` and the desktop marketing page collapse into `HomeAlive`,
+and `MockDraftsPhone` becomes `DraftRoomEntry` and leaves `phone/`, because
+that directory means "a different screen from its desktop counterpart".
+
+**The draft room itself is untouched and stays split.** Nothing in the 36
+screens draws a live board, a pick clock, a player pool or an insights report
+— Players/Board/Decide/Analysis, the phone draft tree and live rooms are all
+outside this handoff entirely.
+
+**Collapsing the homepage removed a cost rather than adding one.**
+`Homepage.jsx`'s own comment already recorded that both trees were prerendered
+and both MOUNTED on every device, because CSS-hidden is still mounted. One
+tree mounts once.
+
+**And everything below the rooms grid stays.** The handoff's Home ends there:
+no proof section, no closing CTA, no footer at all. `ShowYourWorking` is the
+section that makes this product's numbers inspectable, and the footer holds
+the only links to the privacy policy and terms. **A mock that stops after one
+screenful is not the same claim as "delete the rest of the page."**
+
+**Four components are orphaned rather than deleted** — `Header.jsx`,
+`Hero.jsx`, `RoomsGrid.jsx` and `phone/HomePhone.jsx`. Nothing imports them.
+They stay until this is confirmed live, which is the same rule the root
+`index.html` migration followed: prove the replacement works before deleting
+what it replaces, and check the running site rather than the build log.
+
+### What the suite got wrong, and what it got right
+
+**Three specs went red on the new homepage and none of them found a layout
+bug.** All three were looking for markers the replaced page carried and the
+new one did not: `sonar.spec.mjs` hit-tests `[data-hero-cta]` to tell an
+overlay that has really gone from one that is merely transparent, and
+`phone.spec.mjs` measures the gap from the header's bottom to
+`[data-hero-eyebrow]`. That is the failure the mobile pass already recorded
+once — **replacing a page orphans every attribute only the old one carried**
+— and it reads as a missing element rather than as a missing marker.
+
+**`parity.spec.mjs`'s copy lists were the old Hero's sentences.** Four are
+retired by design rather than lost, so each is **replaced** rather than
+deleted: a list that only ever shrinks stops being the thing that test is
+for, which is that a page cannot quietly lose the sentences it is built on.
+
+**The shared Start-button locator was still matching a label, and this is the
+fifth name that control has had.** `helpers.mjs` matched the exact string
+"Start mock draft" — DraftLocker's wording — and the entry screen reads "Start
+a mock draft". One word, five specs, and the failure surfaces at
+`waitForFunction(() => state.started)` fifteen seconds later rather than at
+the click, so **nothing in the output names the button at all**. Both real
+Start buttons have carried `data-start-draft` since the mobile pass; the
+helper had simply never adopted the rule this file already states.
+
+**`getByRole("button")` does not match `<button role="radio">`.** The Draft
+Settings screen's scoring options are exactly that, and an explicit role wins
+over the tag — so the locator matched none of them and read as a missing
+control. `journey.spec.mjs` asks for the radio.
+
+**And one control became necessary while staying hidden.** `DraftLocker`'s
+"Mock drafts" back button carried `lg:hidden`, on the reasoning — written into
+the component — that above `lg` the dashboard IS the screen and a back control
+on something you cannot go back from is the dead-control problem. True, and it
+stopped being true the moment the dashboard moved behind the entry's "Your
+insights" at every width: the desktop dashboard had no way out at all. **The
+dead-control rule inverted**, and the condition that answers "is there
+something behind this" was the prop all along.
+
+### Still open
+
+- **The connected half.** Fourteen screens, waiting on league connect.
+- **`LobbyBar` is the last of the old marketing header**, and it now shows on
+  exactly one screen — the insights dashboard, one press behind "Your
+  insights". `NavLinks`/`RoomsNavMenu` survive only through it.
+- **Waiver's desktop preview is a list where 3dg draws a table with a FAAB
+  budget rail beside it.** The other three rooms' desktop layouts are the
+  handoff's two columns; this one is the phone's, widened.
 
 ## Accounts
 
