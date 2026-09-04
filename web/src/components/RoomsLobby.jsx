@@ -3,6 +3,7 @@ import AppShell from './shell/AppShell.jsx'
 import RoomsGridAlive from './RoomsGridAlive.jsx'
 import ConnectLeagueCta from './shell/ConnectLeagueCta.jsx'
 import { useRooms } from '../hooks/useRooms.js'
+import { useLeague } from '../hooks/useLeague.js'
 import { useAccountUiReady } from '../hooks/useAccountUiReady.js'
 
 /* #/rooms — design_handoff_v3_alive screens 2bg/2bu (mobile) and 3bg/3bu
@@ -40,13 +41,26 @@ import { useAccountUiReady } from '../hooks/useAccountUiReady.js'
    is `live` on ROOMS, so the strip is real, and the timings arrive with
    the league rather than being guessed.
 
-   Signed in only, which is the handoff's own split: 3bu draws this and
-   3bg does not. Signed out the page is already making a bigger ask (make
-   an account) and a row of locked labels above the same locked cards is
-   the same fact twice. */
+   Connected only, and that is this file's own argument followed one step
+   further than it was. It already said a row of locked labels above the
+   same locked cards is "the same fact twice", and used that to keep the
+   strip off the signed-out screen -- then drew it for a signed-in reader,
+   who has no league either and therefore sees exactly the same
+   duplication. The handoff's split is signed-out against signed-in
+   because in the handoff being signed in MEANS having a league; here the
+   two came apart, and the half that matters is the league.
+
+   So the condition is the one that decides whether there is anything to
+   say: a connected league, which is what turns `WAIVER` into
+   `WAIVER · 14H`. It draws itself the day one is connected rather than
+   waiting for somebody to remember it. */
 function PhaseStrip() {
   const rooms = useRooms()
-  if (!rooms.length) return null
+  const { status } = useLeague()
+  // "loading" is not "none" -- see useLeague. Drawing on anything but a
+  // settled `connected` would flash the strip on every load for a reader
+  // whose league has not been read back yet.
+  if (status !== 'connected' || !rooms.length) return null
 
   return (
     <div className="mb-4 hidden gap-2 sm:flex">
@@ -154,16 +168,6 @@ function UnlockBar() {
   )
 }
 
-/* <SignedIn> throws without a ClerkProvider ancestor and main.jsx renders
-   none in a keyless build, so this answers "nothing" there rather than
-   taking the page down — the same guard every other account surface here
-   makes, wrapped once because two things on this screen need it. */
-function SignedInOnly({ children }) {
-  const ready = useAccountUiReady()
-  if (!ready) return null
-  return <SignedIn>{children}</SignedIn>
-}
-
 export default function RoomsLobby() {
   const rooms = useRooms()
   const open = rooms.filter((r) => r.live).length
@@ -227,9 +231,7 @@ export default function RoomsLobby() {
           </div>
         </div>
 
-        <SignedInOnly>
-          <PhaseStrip />
-        </SignedInOnly>
+        <PhaseStrip />
 
         <RoomsGridAlive columns="lobby" />
         <UnlockBar />
