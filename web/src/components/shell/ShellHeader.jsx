@@ -3,6 +3,7 @@ import JukeLogo from '../juke-logo/JukeLogo.jsx'
 import { useAccountUiReady } from '../../hooks/useAccountUiReady.js'
 import { CLERK_APPEARANCE } from '../../clerkConfig.js'
 import KickoffPill from './KickoffPill.jsx'
+import ConnectLeagueCta from './ConnectLeagueCta.jsx'
 
 /* The sitewide header, guest and connected — design_handoff_v3_alive's
    "Global rules", screens 2ag/2au (mobile) and 3ag/3au (desktop).
@@ -85,17 +86,24 @@ function GuestAuth() {
   )
 }
 
+/* The league switcher's slot, before there is a league to switch between.
+
+   The handoff draws a chip here reading "Dynasty Degens · Wk 3" with a
+   caret. There is no league, so the chip offers the thing that would put
+   one there — and it opens the same waitlist every other "connect" control
+   in the app opens, rather than linking to #/you, which is where this
+   pointed and which is a redirect standing in for an answer. */
 function ConnectChip() {
   return (
-    <a
-      href="#/you"
-      className="hidden items-center gap-2 rounded-full border border-flow-pillEdge px-3 py-[7px] text-[13px] font-semibold text-voidInk-primary transition-colors duration-150 hover:border-teal/50 sm:inline-flex"
-    >
-      <span className="grid h-[18px] w-[18px] place-items-center rounded font-display text-[11px] font-extrabold text-surface-page" style={{ background: '#00E5FF' }}>
+    <ConnectLeagueCta variant="chip" source="header-chip">
+      <span
+        className="grid h-[18px] w-[18px] place-items-center rounded font-display text-[11px] font-extrabold text-surface-page"
+        style={{ background: '#00E5FF' }}
+      >
         +
       </span>
       Connect a league
-    </a>
+    </ConnectLeagueCta>
   )
 }
 

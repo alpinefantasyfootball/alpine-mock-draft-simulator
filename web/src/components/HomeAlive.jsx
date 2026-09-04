@@ -1,4 +1,5 @@
-import { SignInButton, SignUpButton, SignedOut } from '@clerk/clerk-react'
+import { SignInButton, SignUpButton, SignedIn, SignedOut } from '@clerk/clerk-react'
+import ConnectLeagueCta from './shell/ConnectLeagueCta.jsx'
 import KickoffPill from './shell/KickoffPill.jsx'
 import RoomsGridAlive from './RoomsGridAlive.jsx'
 import { useAccountUiReady } from '../hooks/useAccountUiReady.js'
@@ -73,6 +74,62 @@ function Card({ gradient, eyebrow, eyebrowColor, title, sub, glyph, href, dataHe
   )
 }
 
+/* 3ag's three-up strip. These are the only three sentences on the page
+   that say what the product does rather than what it costs, and the last
+   is the same read-only promise the locked rooms make — which is exactly
+   the reassurance a "connect your league" ask needs, so both right-hand
+   cards carry it rather than only the guest one. Desktop only: 2ag has no
+   equivalent and a phone reaches the same claims by scrolling. */
+function TrustStrip() {
+  return (
+    <div className="mt-[22px] hidden grid-cols-3 gap-3.5 border-t border-line-hairline pt-[18px] sm:grid">
+      {[
+        ['One call per room', 'Draft, waivers, trades, lineups. No feeds.'],
+        ['Value, not vibes', 'Every move shows points over replacement.'],
+        ['Any platform', 'Read-only connect. We never touch your league.'],
+      ].map(([title, body]) => (
+        <span key={title}>
+          <span className="block text-[14px] font-semibold text-white">{title}</span>
+          <span className="mt-[3px] block text-[13px] leading-[1.4] text-ink-muted">{body}</span>
+        </span>
+      ))}
+    </div>
+  )
+}
+
+/* What 3au's "Your Next Move" card becomes when there is no league to read.
+
+   The handoff draws a decided move there — "Claim Rico Dowdle", +6.2 over
+   replacement, $12 of FAAB, confidence High — and every one of those
+   numbers comes from a league this app cannot see. Rather than invent them
+   or leave the slot empty, the card keeps its position and its job (the
+   one thing this screen is asking you to do next) and says the thing that
+   is actually true: the league is not connected, and connecting is the
+   move. It becomes the real card the day there is a league behind it.
+
+   The mocks already sync, which is why this replaces the account card
+   rather than sitting beside it — signed in, "keep your drafts on every
+   device" is a promise already kept. */
+function ConnectCard() {
+  return (
+    <div className="rounded-[18px] border border-line-hairline bg-[#151920] p-[18px] sm:rounded-[22px] sm:p-[26px]">
+      <span className="font-mono text-[11px] tracking-[0.14em] text-teal">YOUR NEXT MOVE</span>
+      <div className="mt-2 font-display text-[22px] font-bold text-white sm:mt-2.5 sm:text-[28px]">
+        Connect your league
+      </div>
+      <p className="mb-3.5 mt-1.5 text-[14px] leading-[1.5] text-voidInk-body sm:mb-[18px] sm:mt-2 sm:text-[15px]">
+        One connect opens the Waiver, Trade, Strategy and League Rooms — your claims, your offers
+        and your lineup, priced the way the Draft Room prices a pick.
+      </p>
+      <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+        <ConnectLeagueCta variant="gradient" source="home-next-move" />
+        <span className="text-[12px] text-ink-muted">Sleeper · ESPN · Yahoo · CBS</span>
+      </div>
+      <TrustStrip />
+    </div>
+  )
+}
+
 function AccountCard() {
   const ready = useAccountUiReady()
 
@@ -118,25 +175,7 @@ function AccountCard() {
         )}
       </div>
 
-      {/* 3ag's three-up strip, inside this card and under its own rule.
-          It was missing entirely, which is most of why the desktop
-          homepage did not match: these are the only three sentences on
-          the page that say what the product does rather than what it
-          costs, and the last of them is the read-only promise the locked
-          rooms make too. Desktop only — 2ag has no equivalent, and a
-          phone reaches the same claims by scrolling to the rooms. */}
-      <div className="mt-[22px] hidden grid-cols-3 gap-3.5 border-t border-line-hairline pt-[18px] sm:grid">
-        {[
-          ['One call per room', 'Draft, waivers, trades, lineups. No feeds.'],
-          ['Value, not vibes', 'Every move shows points over replacement.'],
-          ['Any platform', 'Read-only connect. We never touch your league.'],
-        ].map(([title, body]) => (
-          <span key={title}>
-            <span className="block text-[14px] font-semibold text-white">{title}</span>
-            <span className="mt-[3px] block text-[13px] leading-[1.4] text-ink-muted">{body}</span>
-          </span>
-        ))}
-      </div>
+      <TrustStrip />
     </div>
   )
 
@@ -188,7 +227,15 @@ export default function HomeAlive() {
       <div className="relative mx-auto max-w-[1280px]">
         <div className="lg:grid lg:grid-cols-[1.1fr_0.9fr] lg:items-start lg:gap-12">
           <div>
-            <div className="flex items-center justify-between gap-3">
+            {/* gap-2 below `sm`, not gap-3. Measured at 375px: the eyebrow
+                is 194 and the pill 136, which with a 12px gap comes to 342
+                in a 335px row — seven pixels over, clipped silently by this
+                block's own `overflow-hidden` and therefore invisible to the
+                page-level overflow sweep. The handoff's own row is drawn at
+                390px (350 usable), where it fits; 375 is a real device it
+                does not. Four pixels here and four off the pill's padding
+                is what buys it back. */}
+            <div className="flex items-center justify-between gap-2 sm:gap-3">
               {/* whitespace-nowrap because a flex item shrinks below its
                   own content by default, and this one has room: measured at
                   375px it wants 194px of a 335px row with the pill taking
@@ -276,7 +323,22 @@ export default function HomeAlive() {
           </div>
 
           <div className="mt-[18px] lg:mt-9">
-            <AccountCard />
+            {/* 3ag puts the account card here and 3au puts the decision
+                card. Same slot, same job — "the one thing to do next" —
+                and which one is true depends on whether there is an
+                account yet. */}
+            {!ready ? (
+              <AccountCard />
+            ) : (
+              <>
+                <SignedOut>
+                  <AccountCard />
+                </SignedOut>
+                <SignedIn>
+                  <ConnectCard />
+                </SignedIn>
+              </>
+            )}
           </div>
         </div>
 

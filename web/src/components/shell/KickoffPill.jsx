@@ -31,35 +31,40 @@ import { useEffect, useRef, useState } from 'react'
    disappearing" contract, applied to the one other surface reading that
    feed.
 
-   ---- Seconds, and why only inside a day ----
+   ---- Seconds above `sm`, the design's own form below it ----
 
-   Days out, the design's own value is `3D 07:14` and minutes are the right
-   granularity. Inside a day the pill ticks every second, which is when a
-   countdown is actually being watched — and `07:14:32` is the same
-   character count as `3D 07:14`, so the widest form never grows.
+   `3D 07:14` changes once a minute and reads as frozen, which is how it was
+   reported, so the seconds field is the fix. It does not fit on a phone.
 
-   That width is load-bearing rather than tidy. Below `sm` this sits on the
-   hero's eyebrow row, measured at 375px: the row is 335px, the eyebrow
-   takes 194, leaving 141 for the pill against the ~118 it wants. Adding a
-   seconds field to the days form takes it to ~139 — inside 141 by two
-   pixels, which is not a margin on a row that has already had to be fixed
-   for overflow once. */
+   Measured rather than estimated, and the estimate was wrong: below `sm`
+   this shares the hero's eyebrow row, which at 375px is 335px wide with 194
+   taken by the eyebrow. With seconds the pill measures 150, so the pair
+   comes to 344 in 335 — nine pixels over, with the eyebrow unwrapped and
+   the PAGE reporting no sideways overflow at all, because the hero's own
+   `overflow-hidden` was quietly clipping the end of the countdown. That is
+   the leak this project's truncation rule is about: an element that
+   overflows and can neither scroll nor ellipsise, hidden from a sweep by an
+   ancestor that swallows it.
+
+   So the two forms are rendered as two spans off one instant — no second
+   timer, no drift — and CSS picks. Above `sm` the pill lives in the header
+   with room to spare and carries seconds; below it, it is the design's own
+   `3D 07:14` in the layout that was drawn for it. */
 
 const PRIME_THROTTLE_MS = 30000
 
-function format(ms) {
+function parts(ms) {
   if (ms <= 0) return null
   const total = Math.floor(ms / 1000)
   const days = Math.floor(total / 86400)
-  const hours = Math.floor((total % 86400) / 3600)
-  const mins = Math.floor((total % 3600) / 60)
-  const secs = total % 60
   const p = (n) => String(n).padStart(2, '0')
-  return days > 0 ? `${days}D ${p(hours)}:${p(mins)}` : `${p(hours)}:${p(mins)}:${p(secs)}`
+  const hhmm = `${p(Math.floor((total % 86400) / 3600))}:${p(Math.floor((total % 3600) / 60))}`
+  const lead = days > 0 ? `${days}D ` : ''
+  return { compact: `${lead}${hhmm}`, full: `${lead}${hhmm}:${p(total % 60)}` }
 }
 
 export default function KickoffPill({ className = '' }) {
-  const [text, setText] = useState(null)
+  const [text, setText] = useState(null)   // { compact, full } | null
   const atRef = useRef(null)
   const primedAtRef = useRef(0)
 
@@ -98,7 +103,7 @@ export default function KickoffPill({ className = '' }) {
         refresh()
       }
       if (!alive) return
-      setText(atRef.current ? format(atRef.current - Date.now()) : null)
+      setText(atRef.current ? parts(atRef.current - Date.now()) : null)
     }
 
     tick()
@@ -115,11 +120,12 @@ export default function KickoffPill({ className = '' }) {
     <span
       className={
         'shrink-0 whitespace-nowrap rounded-full border border-flow-pillEdge bg-flow-pill ' +
-        'px-2.5 py-[5px] font-mono text-[11px] leading-none tracking-[0.1em] text-voidInk-primary ' +
-        'lg:px-3 lg:py-1.5 ' + className
+        'px-2 py-[5px] font-mono text-[11px] leading-none tracking-[0.1em] text-voidInk-primary ' +
+        'sm:px-2.5 lg:px-3 lg:py-1.5 ' + className
       }
     >
-      KICKOFF {text}
+      KICKOFF <span className="sm:hidden">{text.compact}</span>
+      <span className="hidden sm:inline">{text.full}</span>
     </span>
   )
 }
