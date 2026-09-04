@@ -160,10 +160,29 @@ export default function DraftRoomEntry({
               <ChevronLeft className="h-6 w-6 shrink-0" />
               <span className="hidden text-[17px] sm:inline">Rooms</span>
             </a>
-            <h1 className="font-display text-[38px] font-extrabold italic uppercase leading-[0.94] tracking-[-0.01em] text-white">
+            {/* 44 -> 64 at `sm`, which is RoomHero's own pair.
+
+                This screen is The Draft Room's entry -- a room, reached
+                from the rooms lobby by the same back chevron as the other
+                four -- and it was the one H1 in the app with no responsive
+                step at all: 38px flat. On a desktop that made the only
+                room anybody can actually use the QUIETEST title on the
+                site, below #/you's 44, while the four locked rooms beside
+                it carried 64. On a phone it was the loudest of the three
+                list screens. The ordering flipped between breakpoints,
+                which is the tell that it was not on the ladder at all.
+
+                Measured before changing it: the ladder is 30/44/54/64/72/
+                88 and 38 is on none of its rungs. */}
+            <h1 className="font-display text-[44px] font-extrabold italic uppercase leading-[0.94] tracking-[-0.01em] text-white sm:text-[64px]">
               Mock Drafts
             </h1>
-            <p className="mt-1.5 max-w-[24ch] text-[14px] leading-snug text-voidInk-body">
+            {/* 24ch was measured against a 38px title and holds the line
+                to two on a phone, which is right there. Under 64px it
+                orphans "teams" on a line of its own with most of a 1200px
+                column unused. RoomHero's own sub-copy runs to 62ch; this
+                one only needs enough to stop wrapping at all. */}
+            <p className="mt-1.5 max-w-[24ch] text-[14px] leading-snug text-voidInk-body sm:mt-2 sm:max-w-[40ch] sm:text-[16px]">
               Practice drafting your fantasy teams
             </p>
           </div>
