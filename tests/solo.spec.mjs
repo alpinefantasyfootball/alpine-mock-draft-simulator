@@ -187,25 +187,33 @@ for (const pos of ["ALL", "QB", "RB", "WR", "TE", "K", "DST"]) {
     const page = await openApp(context, "#/draft-room");
 
     await configure(page, { teams: 12 });
-    /* The eleventh seat, which is where the real report came from.
+    /* The eleventh seat, which is where the real report came from, set
+       through the engine exactly as configure() above sets the league.
 
-       It is the Lobby's own "Your seat" select now. There used to be a
-       claimable seat board one click past the Locker, and this reached it
-       by clicking "Start mock draft" and then a Claim chip — but that
-       button starts the draft outright today, so there is no screen left
-       in between and the chip filter matched nothing. `chips[10]` was
-       therefore undefined, and the failure read as "Cannot read
-       properties of undefined (reading 'click')" rather than as a screen
-       that no longer exists.
+       This has chased the control across two redesigns and should stop.
+       It was a claim chip on a seat board one click past the Locker; that
+       screen went when "Start mock draft" began starting the draft
+       outright, so the chip filter matched nothing and the failure read as
+       "Cannot read properties of undefined". It became the Lobby's own
+       "Your seat" <select> in NewMockPanel — and design_handoff_v3_alive
+       moved it again, because DraftRoomEntry is what #/draft-room's
+       pre-draft branch renders at every width now and the dashboard
+       carrying that select sits behind "Your insights". Same failure
+       shape: a locator waiting 30s for a control on a screen that is no
+       longer showing.
 
-       Selected by the row its own label names, not by index: NewMockPanel
-       renders a second, lg:hidden ChipSelect bound to this same value, so
-       "the seat control" is two controls and only one of them is a
-       <select>. The seat has to be set before the draft starts either
-       way — startDraft() takes it once, as lobbySlot. */
-    await page
-      .locator('#draftroom-root div:has(> span:text-is("Your seat")) > select')
-      .selectOption("11");
+       So it goes through the bridge. This file is engine-driven for setup
+       throughout — configure() is `setLeague`, finishDraft() drives
+       autoPickForMe/cpuChoice — and the seat is setup, not the thing under
+       test. journey.spec.mjs is the file that presses only what a person
+       can press, and it walks the real Draft Settings screen for this.
+
+       setMySlot is 0-based where the old <select> was 1-based: seat 11 is
+       index 10. It refuses a seat outside the league, so a wrong league
+       size fails here rather than silently drafting from seat 1. */
+    await page.evaluate(() => window.JukeEngine.setMySlot(10));
+    expect(await page.evaluate(() => state.mySlot), "the eleventh seat took")
+      .toBe(10);
     await startSoloDraft(page);
 
     // Set the panel's filter through the chip a person would press.

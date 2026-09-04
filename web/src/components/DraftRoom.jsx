@@ -19,7 +19,7 @@ import DraftSettingsModal from './DraftSettingsModal.jsx'
 import DraftEntryScreen from './DraftEntryScreen.jsx'
 import DraftLobby from './DraftLobby.jsx'
 import DraftRoomLoader from './DraftRoomLoader.jsx'
-import LobbyBar from './LobbyBar.jsx'
+import ShellHeader from './shell/ShellHeader.jsx'
 import MobileAppTabBar from './MobileAppTabBar.jsx'
 import MobileDraftTabBar from './MobileDraftTabBar.jsx'
 import PickClockBand from './PickClockBand.jsx'
@@ -891,16 +891,29 @@ export default function DraftRoom() {
        z-40 would trap this whole overlay beneath it. */
     return (
       <div className="fixed inset-0 z-[60] flex flex-col bg-slate text-white">
-        {/* Not on the entry screen: it carries its own back chevron, its
-            own title and its own "Draft settings" button, so LobbyBar above
-            it is a second header with a second gear opening the identical
-            modal — the duplicate-affordance problem, stacked. It stays for
-            the dashboard, which has no header of its own at any width.
+        {/* ShellHeader, not LobbyBar, and only over the dashboard.
 
-            `!isPhone` used to be half this condition, because the entry
-            screen was phone-only. It is every width now (DraftRoomEntry),
-            so the question is only which of the two screens is showing. */}
-        {!!lockerView && <LobbyBar onOpenSettings={() => setSettingsOpen(true)} />}
+            The entry screen carries its own back chevron, title and "Draft
+            settings" button, so any header above it is a second one with a
+            second way into the identical modal — the duplicate-affordance
+            problem, stacked. The dashboard has no header of its own, so it
+            gets the site's.
+
+            It gets the SITE's now rather than LobbyBar's, which was the
+            last of the pre-handoff marketing header left anywhere: a
+            "How It Works / The Rooms" nav with a dropdown, on one screen,
+            disagreeing with the three tabs every other screen shows. One
+            shell, which is what this handoff is for.
+
+            What LobbyBar carried that this does not is the settings gear,
+            and it is not lost: NewMockPanel's own "Edit setup" opens the
+            same modal from inside the dashboard, and the entry screen one
+            press back has "Draft settings". A gear in a header is the
+            third way into a screen that already had two.
+
+            active="rooms" because the Draft Room is a room and this is
+            reached through #/rooms/draft. */}
+        {!!lockerView && <ShellHeader active="rooms" />}
 
         {settingsOpen && (
           <DraftSettingsModal
@@ -988,8 +1001,31 @@ export default function DraftRoom() {
               initialAnalyzeId={typeof lockerView === 'string' && lockerView !== 'dashboard' ? lockerView : null}
               /* Every width now, for the same reason the branch above
                  stopped asking: the dashboard is reached FROM the entry
-                 screen on a desktop too, so it needs the way back. */
-              onBackToList={() => setLockerView(null)}
+                 screen on a desktop too, so it needs the way back.
+
+                 It clears the hash as well as the state, and that is not
+                 tidiness. #/rooms/draft?report=<id> exists so this screen
+                 and the archive cannot each hold their own idea of which
+                 report is open — and leaving the id in the address while
+                 the view has gone back to the entry is exactly that
+                 disagreement, with this component on the wrong side of it.
+                 Reloading would reopen a report the reader had closed.
+
+                 replaceState, not `location.hash = ...`: assigning the hash
+                 pushes a history entry, so Back would return to the report
+                 the reader just dismissed. It also fires no hashchange,
+                 which is right — the state is already set here, and the
+                 effect above would only set it to the same value again. */
+              onBackToList={() => {
+                setLockerView(null)
+                if (/[?&]report=/.test(window.location.hash)) {
+                  history.replaceState(
+                    null,
+                    '',
+                    window.location.pathname + window.location.search + '#/rooms/draft',
+                  )
+                }
+              }}
             />
           )}
         </div>
