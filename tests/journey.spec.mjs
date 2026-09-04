@@ -95,8 +95,14 @@ test("homepage to a finished draft, pressing only what a person can press",
     // every other spec; this file presses real controls throughout on
     // purpose (see the file's own header comment), so it repeats the
     // click here rather than delegating to that helper.
-    const enter = page.locator("#draftroom-root button").filter({ hasText: /^Start mock draft$/ });
-    await expect(enter, "the Locker asks for one thing").toBeVisible({ timeout: 30000 });
+    /* [data-start-draft], not the label. This control has now had five
+       names, and the one that broke this line is design_handoff_v3_alive
+       making DraftRoomEntry the Draft Room's entry at EVERY width — its
+       button reads "Start a mock draft", one word off DraftLocker's. The
+       attribute says what the control IS; CLAUDE.md already records the
+       rule and helpers.mjs now follows it too. */
+    const enter = page.locator("#draftroom-root [data-start-draft]").first();
+    await expect(enter, "the entry asks for one thing").toBeVisible({ timeout: 30000 });
     /* ---- 3. sit down, and change something, so the draft is actually mine
 
        Both on the Lobby, before starting, because that is where they live
@@ -111,21 +117,41 @@ test("homepage to a finished draft, pressing only what a person can press",
        set before it is pressed rather than after. Same collapse the seat
        chips in solo.spec.mjs ran into.
 
-       Still pressing only what a person can press, which is this file's own
-       rule: these are the real <select>s, driven by their labels rather than
-       by index, because NewMockPanel renders a second lg:hidden ChipSelect
-       bound to each of the same values. */
-    const lobbyRow = (label) =>
-      page.locator(`#draftroom-root div:has(> span:text-is("${label}")) > select`);
+       And they moved again, one screen deeper. The desktop Lobby used to be
+       DraftLocker, whose New mock card carries those two as inline
+       <select>s; the Draft Room's entry is DraftRoomEntry at every width
+       now, and it does what a phone always did — the settings live behind
+       its own "Draft settings" button, which opens the real Draft Settings
+       screen. So this presses that, sets both there, and saves, which is
+       the flow a person now actually walks. Same controls
+       draft-settings.spec.mjs drives, reached the same way.
 
-    // The seventh chair. The select is 1-based and mySlot is 0-based.
-    await lobbyRow("Your seat").selectOption("7");
-    await lobbyRow("Scoring").selectOption("ppr");
-    // setScoring writes straight through to engine.setLeague (NewMockPanel),
-    // so this is the same fact the assertion after the start re-checks —
-    // asserted here too, so a select that silently stopped being wired up
-    // fails on the control rather than on the draft that follows it.
+       Still pressing only what a person can press, which is this file's own
+       rule. */
+    await page.getByRole("button", { name: /draft settings/i }).first().click();
+    await expect(page.getByRole("heading", { name: "Draft Settings" })).toBeVisible({ timeout: 15000 });
+
+    // The seventh chair. The list is 0-based and so is mySlot.
+    const chairs = page.locator("ol li button");
+    await chairs.nth(6).scrollIntoViewIfNeeded();
+    await chairs.nth(6).click();
+
+    /* getByRole("radio"), not "button". The scoring control on that screen
+       is a <button role="radio"> per option, and an explicit role wins over
+       the tag — so getByRole("button") matches none of them, and the
+       failure reads as a missing control rather than as the wrong role.
+       The legacy #scoring <select> carries the same four values and is
+       display:none, so it is not a second candidate here. */
+    await page.getByRole("radio", { name: /Full PPR/ }).click();
+
+    /* Asserted here as well as after the start, so a control that silently
+       stopped being wired up fails on the control rather than on the draft
+       that follows it — the same reason the old inline selects were checked
+       in place. */
     await expect.poll(() => page.evaluate(() => JukeEngine.league().scoring)).toBe("ppr");
+    await expect.poll(() => page.evaluate(() => state.mySlot)).toBe(6);
+
+    await page.getByRole("button", { name: "Save" }).click();
 
     /* ---- 4. start ------------------------------------------------------ */
     await enter.click();

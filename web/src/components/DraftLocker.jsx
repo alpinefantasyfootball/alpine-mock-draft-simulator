@@ -341,15 +341,26 @@ export default function DraftLocker({ onStartNew, onRunAtSeat, problem, lobbySlo
     // the real ancestor scroller (DraftRoom.jsx's own overflow-y-auto) take
     // over, rather than being capped at 100% and clipping.
     <div className="mx-auto flex min-h-full max-w-[1600px] flex-col px-4 py-5 lg:px-8 lg:py-7">
-      {/* Only when somebody arrived here from a screen that is still
-          behind this one — the phone's Mock Drafts list. At every other
-          width and entry point this IS the screen, and a back control on
-          the thing you cannot go back from is the dead-control problem. */}
+      {/* Only when somebody arrived here from a screen that is still behind
+          this one, which is what `onBackToList` being passed at all means.
+
+          It used to carry `lg:hidden` as well, on the reasoning that at
+          every width but a phone's this IS the screen and a back control on
+          something you cannot go back from is the dead-control problem.
+          That was true and stopped being true: design_handoff_v3_alive's
+          screen c is the Draft Room's entry at EVERY width now
+          (DraftRoomEntry), and this dashboard sits behind its "Your
+          insights" button on a desktop exactly as it already did on a
+          phone. Hiding the way out above `lg` left the desktop dashboard
+          with no way back at all — the same dead-control rule, inverted:
+          the control became necessary and stayed hidden. The condition that
+          answers "is there something behind this" is the prop, and it
+          always was. */}
       {onBackToList && (
         <button
           type="button"
           onClick={onBackToList}
-          className="-ml-2 mb-2 flex items-center gap-1 self-start rounded-[10px] py-2 pl-2 pr-3 text-[14px] font-semibold text-white/70 active:bg-white/[0.05] lg:hidden"
+          className="-ml-2 mb-2 flex items-center gap-1 self-start rounded-[10px] py-2 pl-2 pr-3 text-[14px] font-semibold text-white/70 transition-colors hover:text-white active:bg-white/[0.05]"
         >
           <ChevronLeft className="h-5 w-5" />
           Mock drafts
