@@ -219,7 +219,7 @@ export default function YouScreen() {
                   {/* The same waitlist every other "connect" control opens,
                       rather than the #/rooms link this used to be — that was
                       a redirect standing in for an answer. */}
-                  <ConnectLeagueCta variant="row" source="you-add-league">
+                  <ConnectLeagueCta variant="row">
                     <span className="flex items-center gap-2.5">
                       <span className="text-teal" aria-hidden="true">✨</span>
                       Add a league from Sleeper, ESPN, Yahoo or CBS

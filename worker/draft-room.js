@@ -31,8 +31,15 @@ import Room from "../room.js";
 import {
   syncPlayerPool, cachedNews, storeNews, usableNews, storeSignup, touchUser, deleteUserData,
   getSavedDraft, putSavedDraft, deleteSavedDraft,
-  listDraftHistory, putHistoryEntry, deleteHistoryEntry
+  listDraftHistory, putHistoryEntry, deleteHistoryEntry,
+  listLeagues, putLeague, deleteLeague
 } from "./store.js";
+
+/* Sleeper, read-only. Kept out of store.js for the same reason auth.js is:
+   that file owns D1 and nothing else, this owns "what does Sleeper say"
+   and nothing else, and the two meet in a route handler rather than
+   reaching into each other. */
+import { lookupUser, leagueSnapshot, nflState, SNAPSHOT_TTL } from "./sleeper.js";
 
 /* Clerk session verification — see that file's own header for the shape.
    Kept separate from store.js on purpose: that file owns D1 and nothing
@@ -1071,6 +1078,179 @@ async function meDraftRoute(request, env) {
    change, but the server only ever needs the one entry that changed, and
    sending the other 199 back down every time would be all cost and no
    benefit. */
+/* ---------- Sleeper ----------
+
+   Two public reads and one account-scoped write, kept apart for the reason
+   the /news route's own comment gives about CORS: a header telling a
+   browser whether it may READ a response does nothing about the request
+   being made, so originAllowed() runs before anything is fetched rather
+   than being left to the browser to enforce.
+
+   Neither read caches an error. "This username does not exist" is a fact
+   worth keeping for a moment; "Sleeper was down when we asked" is not, and
+   caching it would pin a blip for the whole TTL — the same line
+   cachedNews() already draws between the two. */
+
+async function sleeperLookupRoute(request, env) {
+  if (!originAllowed(request)) {
+    return new Response(JSON.stringify({ error: "forbidden" }), {
+      status: 403, headers: { "content-type": "application/json" }
+    });
+  }
+
+  const headers = Object.assign({ "content-type": "application/json" }, corsFor(request));
+  const url = new URL(request.url);
+
+  /* Sleeper usernames are short. Bounded here rather than trusted, because
+     this value is interpolated into an upstream path — encodeURIComponent
+     in sleeper.js is what makes that safe, and this is what stops a caller
+     using us to send megabytes at somebody else's server. */
+  const username = (url.searchParams.get("username") || "").trim().slice(0, 32);
+  if (!username) {
+    return new Response(JSON.stringify({ error: "bad-request" }), { status: 400, headers });
+  }
+
+  /* The season Sleeper itself is in, not one derived from the clock.
+
+     A league list is per-season, and in January "this year" and "the
+     fantasy season" are different answers — asking for 2027 in the middle
+     of the 2026 playoffs returns an empty list and reads to the user as
+     "you have no leagues". Sleeper publishes which season it means, so that
+     is the one asked for, with the caller able to override for a manager
+     looking up an old league. */
+  const state = await nflState();
+  const season = (url.searchParams.get("season") || (state && state.season) || "").slice(0, 8);
+  if (!season) {
+    // Sleeper unreachable: say so rather than guessing a season and
+    // reporting its empty list as "no leagues found".
+    return new Response(JSON.stringify({ error: "upstream" }), { status: 503, headers });
+  }
+
+  const found = await lookupUser(username, season);
+  return new Response(JSON.stringify(Object.assign({ season }, found)), { headers });
+}
+
+async function sleeperSnapshotRoute(request, env) {
+  if (!originAllowed(request)) {
+    return new Response(JSON.stringify({ error: "forbidden" }), {
+      status: 403, headers: { "content-type": "application/json" }
+    });
+  }
+
+  const headers = Object.assign({ "content-type": "application/json" }, corsFor(request));
+  const url = new URL(request.url);
+  const leagueId = (url.searchParams.get("league") || "").trim().slice(0, 40);
+  if (!/^[0-9]{6,32}$/.test(leagueId)) {
+    return new Response(JSON.stringify({ error: "bad-request" }), { status: 400, headers });
+  }
+
+  /* Cached at the edge, on a key this route builds rather than the request
+     URL. caches.default keys on the whole URL and the real request carries
+     an Origin and could carry anything a client appends, which would give
+     one entry per way of asking instead of one per league — the same trap
+     newsCacheKey() exists for.
+
+     And a cached entry carries no CORS headers: which origin may read a
+     response is a per-request decision, so the body is what is kept and the
+     headers are put back per request. */
+  const cache = caches.default;
+  const key = new Request("https://juke.internal/sleeper/snapshot?league=" + leagueId, { method: "GET" });
+
+  const hit = await cache.match(key);
+  if (hit) {
+    return new Response(await hit.text(), { headers });
+  }
+
+  const snapshot = await leagueSnapshot(leagueId);
+  if (!snapshot) {
+    // Not cached: a league that did not answer once is not a league that
+    // does not exist, and pinning that for two minutes turns a blip into an
+    // outage.
+    return new Response(JSON.stringify({ error: "not-found" }), { status: 404, headers });
+  }
+
+  const body = JSON.stringify(snapshot);
+  await cache.put(key, new Response(body, {
+    headers: { "content-type": "application/json", "cache-control": "public, max-age=" + SNAPSHOT_TTL }
+  }));
+  return new Response(body, { headers });
+}
+
+/* The connection itself, which is the one part that needs an account.
+
+   That is the handoff's own rule — "Connect-league always routes through
+   account creation first" — and it is also the only way this can work:
+   there is nowhere else to put a connection that follows somebody to
+   another device. */
+async function meLeaguesRoute(request, env) {
+  const { user, error } = await requireUser(request, env);
+  if (error) return error;
+
+  const headers = Object.assign({ "content-type": "application/json" }, corsFor(request));
+
+  if (request.method === "GET") {
+    return new Response(JSON.stringify({ leagues: await listLeagues(env, user.id) }), { headers });
+  }
+
+  if (request.method === "DELETE") {
+    const url = new URL(request.url);
+    const provider = (url.searchParams.get("provider") || "sleeper").slice(0, 16);
+    const leagueId = (url.searchParams.get("league") || "").slice(0, 40);
+    if (!leagueId) {
+      return new Response(JSON.stringify({ error: "bad-request" }), { status: 400, headers });
+    }
+    const ok = await deleteLeague(env, user.id, provider, leagueId);
+    return new Response(JSON.stringify({ ok }), { headers });
+  }
+
+  const text = await request.text();
+  if (!text || text.length > 4096) {
+    return new Response(JSON.stringify({ error: "bad-request" }), { status: 400, headers });
+  }
+  let body;
+  try {
+    body = JSON.parse(text);
+  } catch (err) {
+    return new Response(JSON.stringify({ error: "bad-json" }), { status: 400, headers });
+  }
+
+  const leagueId = String((body && body.leagueId) || "").slice(0, 40);
+  if (!/^[0-9]{6,32}$/.test(leagueId)) {
+    return new Response(JSON.stringify({ error: "bad-request" }), { status: 400, headers });
+  }
+
+  /* The label is re-read from Sleeper rather than taken from the client.
+
+     What the browser posted is what its own picker was showing, which came
+     from us a moment ago — but trusting it would let a caller store any
+     string as a league name, and that string is then drawn in the header of
+     every page they load. Asking Sleeper again costs one cached call and
+     means the name in the chip is the league's own.
+
+     It also validates the id: a league that does not resolve cannot be
+     connected, which is a better failure than a chip pointing at nothing. */
+  const snapshot = await leagueSnapshot(leagueId);
+  if (!snapshot) {
+    return new Response(JSON.stringify({ ok: false, error: "not-found" }), { status: 404, headers });
+  }
+
+  const ownerId = String((body && body.ownerId) || "").slice(0, 40) || null;
+  const league = {
+    provider: "sleeper",
+    leagueId: snapshot.leagueId,
+    ownerId,
+    name: snapshot.name,
+    season: snapshot.season,
+    totalTeams: snapshot.totalTeams
+  };
+  const ok = await putLeague(env, user.id, league);
+
+  return new Response(
+    JSON.stringify(ok ? { ok: true, league } : { ok: false, error: "store-failed" }),
+    { headers }
+  );
+}
+
 async function meHistoryRoute(request, env) {
   const { user, error } = await requireUser(request, env);
   if (error) return error;
@@ -1203,6 +1383,43 @@ export default {
     /* Before the /me routes and outside their CORS handling entirely — a
        webhook has no preflight and no Origin. See the route's own note. */
     if (url.pathname === "/webhooks/clerk") return clerkWebhook(request, env);
+
+    /* Sleeper lookup and snapshot. Both are reads of public data and
+       neither is account-scoped, so they take originAllowed() and not
+       requireUser() — the same line /news draws. A signed-out visitor
+       cannot reach them from the app (nothing offers the control), and if
+       they could, they would learn what api.sleeper.app would have told
+       them directly. What requires an account is CONNECTING one, below. */
+    if (url.pathname === "/sleeper/lookup") {
+      if (request.method === "OPTIONS") {
+        return new Response(null, { headers: Object.assign({
+          "access-control-allow-methods": "GET",
+          "access-control-max-age": "86400"
+        }, corsFor(request)) });
+      }
+      return sleeperLookupRoute(request, env);
+    }
+
+    if (url.pathname === "/sleeper/snapshot") {
+      if (request.method === "OPTIONS") {
+        return new Response(null, { headers: Object.assign({
+          "access-control-allow-methods": "GET",
+          "access-control-max-age": "86400"
+        }, corsFor(request)) });
+      }
+      return sleeperSnapshotRoute(request, env);
+    }
+
+    if (url.pathname === "/me/leagues") {
+      if (request.method === "OPTIONS") {
+        return new Response(null, { headers: Object.assign({
+          "access-control-allow-methods": "GET, POST, DELETE",
+          "access-control-allow-headers": "authorization, content-type",
+          "access-control-max-age": "86400"
+        }, corsFor(request)) });
+      }
+      return meLeaguesRoute(request, env);
+    }
 
     if (url.pathname === "/me") {
       if (request.method === "OPTIONS") {

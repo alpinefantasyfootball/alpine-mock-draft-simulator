@@ -122,7 +122,7 @@ function ConnectCard() {
         and your lineup, priced the way the Draft Room prices a pick.
       </p>
       <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
-        <ConnectLeagueCta variant="gradient" source="home-next-move" />
+        <ConnectLeagueCta variant="gradient" />
         <span className="text-[12px] text-ink-muted">Sleeper · ESPN · Yahoo · CBS</span>
       </div>
       <TrustStrip />

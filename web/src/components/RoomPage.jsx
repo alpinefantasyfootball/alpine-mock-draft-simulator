@@ -6,6 +6,8 @@ import WaiverPreview from './rooms/WaiverPreview.jsx'
 import TradePreview from './rooms/TradePreview.jsx'
 import StrategyPreview from './rooms/StrategyPreview.jsx'
 import LeaguePreview from './rooms/LeaguePreview.jsx'
+import LeagueRoomLive from './rooms/LeagueRoomLive.jsx'
+import { useLeague } from '../hooks/useLeague.js'
 
 /* #/rooms/<slug> — one page for every room, guest state.
 
@@ -45,8 +47,16 @@ const PREVIEWS = {
   },
 }
 
+/* Which rooms have something real behind a connected league. One today;
+   this is the list the other three join as they are built, and keeping it
+   a map rather than an `if` is what makes adding one a single line. */
+const LIVE_ROOMS = {
+  league: LeagueRoomLive,
+}
+
 export default function RoomPage({ slug }) {
   const rooms = useRooms()
+  const { status, league } = useLeague()
   const room = rooms.find((r) => r.slug === slug)
 
   // The lobby only links slugs that exist, so this is a hand-typed or stale
@@ -72,6 +82,20 @@ export default function RoomPage({ slug }) {
   const preview = PREVIEWS[slug]
   const Body = preview && preview.Body
 
+  /* A connected league turns the lock off for the rooms that can use it.
+
+     Only League today: standings are a direct read of what Sleeper already
+     returns, where Waiver, Trade and Strategy each need Juke to have an
+     opinion that has not been designed yet. Those stay locked previews
+     with a connected league exactly as without one, which is honest — the
+     preview says "a sample week" and that is still what it is.
+
+     `status` is checked rather than `league`, because "we have not asked
+     yet" and "there is none" are different and only one of them should
+     draw a lock. Showing the locked preview during the first tick would
+     flash it at somebody who has connected. */
+  const live = status === 'connected' && league && LIVE_ROOMS[slug]
+
   return (
     <AppShell active="rooms">
       <RoomHero
@@ -82,9 +106,16 @@ export default function RoomPage({ slug }) {
       >
         {preview ? preview.sub : room.blurb}
       </RoomHero>
-      <LockedPreview headline={preview ? preview.headline : `See your real ${slug} room`}>
-        {Body ? <Body /> : null}
-      </LockedPreview>
+      {live ? (
+        (() => {
+          const Live = LIVE_ROOMS[slug]
+          return <Live league={league} />
+        })()
+      ) : (
+        <LockedPreview headline={preview ? preview.headline : `See your real ${slug} room`}>
+          {Body ? <Body /> : null}
+        </LockedPreview>
+      )}
     </AppShell>
   )
 }

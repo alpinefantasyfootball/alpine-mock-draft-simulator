@@ -107,7 +107,7 @@ function UnlockBar() {
         </span>
         <span className="mt-1 block text-[12px] text-ink-muted">Sleeper · ESPN · Yahoo · CBS</span>
       </span>
-      <ConnectLeagueCta variant="gradient" source="rooms-unlock-bar" />
+      <ConnectLeagueCta variant="gradient" />
     </>,
   )
 
