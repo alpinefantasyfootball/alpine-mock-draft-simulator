@@ -124,8 +124,15 @@ export default function KickoffPill({ className = '' }) {
         'sm:px-2.5 lg:px-3 lg:py-1.5 ' + className
       }
     >
-      KICKOFF <span className="sm:hidden">{text.compact}</span>
-      <span className="hidden sm:inline">{text.full}</span>
+      {/* "KICKOFF" lives INSIDE each variant rather than beside them, and
+          that is not cosmetic. ShellHeader passes `sm:inline-flex`, so up
+          there this pill is a flex container — and a flex container drops
+          the whitespace in an anonymous text item, which ate the space and
+          shipped "KICKOFF5D 10:04:59" to production. Interior text is never
+          trimmed, so the word is repeated once rather than the layout being
+          made to hold a space it is entitled to collapse. */}
+      <span className="sm:hidden">KICKOFF {text.compact}</span>
+      <span className="hidden sm:inline">KICKOFF {text.full}</span>
     </span>
   )
 }
