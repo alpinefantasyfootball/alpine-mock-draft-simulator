@@ -114,6 +114,30 @@ test("no field is under 16px, or iOS zooms in and stays there", async ({ browser
      in style.css applies to every field in the document by tag, Tailwind
      class or not, which is what makes the search field's 14px source
      (`text-sm`) beside it. */
+  /* Wait for the toggle before reaching for it.
+
+     The evaluate below is a single synchronous read, so it asks once and
+     throws "no icon-only search toggle on the Players panel" if the phone
+     draft room has not finished rendering its Players panel yet. That is
+     not a missing control, it is a race — and it read as one, failing a
+     full run and then passing 12/12 on a re-run of the same file.
+
+     Same defect as the two the config and helpers already grew waits for,
+     and the same rule this repo states about it: a one-shot
+     `page.evaluate(...).find(...)` is the wrong shape for anything that
+     renders asynchronously, because "not there yet" and "not there at all"
+     come back identically. Bounded, and NOT swallowed: if the toggle
+     genuinely never appears that is this test's subject and the timeout
+     should say so. */
+  await page.waitForFunction(() => {
+    const root = document.getElementById("draftroom-root");
+    const sheet = root && [...root.querySelectorAll("div")]
+      .find((d) => /fixed inset-x-0 bottom-0 z-30/.test(d.className));
+    const panel = sheet && sheet.lastElementChild;
+    return !!(panel && [...panel.querySelectorAll("button")]
+      .find((b) => b.textContent.trim() === "" && b.querySelector("svg")));
+  }, null, { timeout: 20000 });
+
   await page.evaluate(() => {
     const root = document.getElementById("draftroom-root");
     const sheet = [...root.querySelectorAll("div")]
