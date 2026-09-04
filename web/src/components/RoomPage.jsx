@@ -3,6 +3,9 @@ import RoomHero from './shell/RoomHero.jsx'
 import LockedPreview from './shell/LockedPreview.jsx'
 import { useRooms } from '../hooks/useRooms.js'
 import WaiverPreview from './rooms/WaiverPreview.jsx'
+import TradePreview from './rooms/TradePreview.jsx'
+import StrategyPreview from './rooms/StrategyPreview.jsx'
+import LeaguePreview from './rooms/LeaguePreview.jsx'
 
 /* #/rooms/<slug> — one page for every room, guest state.
 
@@ -21,6 +24,24 @@ const PREVIEWS = {
     sub: 'A sample week. Connect your league and these become your bench and your budget.',
     headline: 'See your real claims',
     Body: WaiverPreview,
+  },
+  trade: {
+    eyebrow: 'IN-SEASON · PREVIEW',
+    sub: 'Paste any offer, or let Juke read the ones in your league inbox.',
+    headline: 'Read your real offers',
+    Body: TradePreview,
+  },
+  strategy: {
+    eyebrow: 'IN-SEASON · PREVIEW',
+    sub: "Your week, planned: start/sit calls, matchup odds and what's coming.",
+    headline: 'Plan your real week',
+    Body: StrategyPreview,
+  },
+  league: {
+    eyebrow: 'IN-SEASON · PREVIEW',
+    sub: 'Standings, power ranks and what every manager is up to.',
+    headline: 'See your real league',
+    Body: LeaguePreview,
   },
 }
 
