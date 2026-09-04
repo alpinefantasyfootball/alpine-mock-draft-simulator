@@ -1001,8 +1001,31 @@ export default function DraftRoom() {
               initialAnalyzeId={typeof lockerView === 'string' && lockerView !== 'dashboard' ? lockerView : null}
               /* Every width now, for the same reason the branch above
                  stopped asking: the dashboard is reached FROM the entry
-                 screen on a desktop too, so it needs the way back. */
-              onBackToList={() => setLockerView(null)}
+                 screen on a desktop too, so it needs the way back.
+
+                 It clears the hash as well as the state, and that is not
+                 tidiness. #/rooms/draft?report=<id> exists so this screen
+                 and the archive cannot each hold their own idea of which
+                 report is open — and leaving the id in the address while
+                 the view has gone back to the entry is exactly that
+                 disagreement, with this component on the wrong side of it.
+                 Reloading would reopen a report the reader had closed.
+
+                 replaceState, not `location.hash = ...`: assigning the hash
+                 pushes a history entry, so Back would return to the report
+                 the reader just dismissed. It also fires no hashchange,
+                 which is right — the state is already set here, and the
+                 effect above would only set it to the same value again. */
+              onBackToList={() => {
+                setLockerView(null)
+                if (/[?&]report=/.test(window.location.hash)) {
+                  history.replaceState(
+                    null,
+                    '',
+                    window.location.pathname + window.location.search + '#/rooms/draft',
+                  )
+                }
+              }}
             />
           )}
         </div>
