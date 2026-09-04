@@ -56,7 +56,7 @@ export default function ClosingCta() {
             lifting off it the way it does against Hero's plain void
             ground. */}
         <a
-          href="#/drafts"
+          href="#/rooms/draft"
           data-hero-cta=""
           className="flex h-[54px] w-full shrink-0 items-center justify-center rounded-full text-base font-bold text-[#0B0D12]
                      transition-all duration-200 active:scale-[0.98] lg:h-auto lg:w-auto lg:px-8 lg:py-4"

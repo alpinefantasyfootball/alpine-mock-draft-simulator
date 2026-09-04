@@ -1,10 +1,33 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { BarChart3, ChevronLeft, ChevronRight, Lock, Play, Settings, Trash2, Users } from 'lucide-react'
-import { NAV_PILL_CLEARANCE } from './FloatingNavPill.jsx'
-import { POS_CHALK, CELL_INK } from '../draftRoomPositions.js'
+import { NAV_PILL_CLEARANCE } from './phone/FloatingNavPill.jsx'
+import { POS_CHALK, CELL_INK } from './draftRoomPositions.js'
 
-/* The Mock Drafts screen — what #/drafts is on a phone.
+/* The Draft Room's own entry — what #/rooms/draft is, at every width.
+
+   design_handoff_v3_alive's screen c (2cg/2cu mobile, 3cg/3cu desktop).
+   Most of this screen was already here: it was built from an earlier
+   iteration of the same design and already carried the hero, the board-
+   corner tiles, the sport pills, the gradient start CTA and the actions
+   under it. What changed is who gets it.
+
+   It was phone-only, and the desktop Lobby was DraftLocker's analytics
+   dashboard — a real product split, argued in this file's own comment and
+   correct at the time. The handoff reverses it: 3cg is this same launcher
+   at 1280px, and the dashboard is one press away behind "Your insights",
+   which is exactly where a phone already had it. So the split goes, the
+   component becomes responsive, and it moves out of phone/ because that
+   directory means "a different screen from its desktop counterpart" and
+   this is no longer one.
+
+   The desktop layout is the handoff's: the actions in the left column and
+   your mock drafts in a right rail, rather than the phone's one column
+   with the list under everything. Below `lg` nothing about it changes.
+
+   What follows is the original note, still true of the phone.
+
+   The Mock Drafts screen — what #/rooms/draft is on a phone.
 
    The desktop Lobby is a real analytics dashboard: three KPI tiles, a
    twelve-cell tendencies grid, a recommendation engine, a positional
@@ -73,7 +96,7 @@ function StatusPill({ status }) {
   )
 }
 
-export default function MockDraftsPhone({
+export default function DraftRoomEntry({
   engine, tick, problem, inProgress, onStartNew, onResume, onDiscard,
   onOpenSettings, onOpenAnalytics, onDraftWithFriends, onAnalyze, onDelete,
   onSignupSport, roomActive,
@@ -105,7 +128,7 @@ export default function MockDraftsPhone({
           change. What stands in its place is a real thing: the board's own
           position colours, arranged as the corner of a draft board. It is
           six divs, it costs nothing, and it cannot go stale. */}
-      <div className="relative overflow-hidden px-4 pb-5 pt-3">
+      <div className="relative mx-auto w-full max-w-[1280px] overflow-hidden px-4 pb-5 pt-3 lg:px-10 lg:pb-8 lg:pt-6">
         <div
           aria-hidden="true"
           className="pointer-events-none absolute -right-10 -top-6 h-[220px] w-[220px] opacity-[0.55]"
@@ -179,7 +202,17 @@ export default function MockDraftsPhone({
           reference screen's own shape, and it does a real job here: it is
           the seam between "what this screen is" and "your stuff," which is
           otherwise two lists of rows running together. */}
-      <div className="min-h-0 flex-1 rounded-t-[26px] bg-surface-card px-4 pb-6 pt-5" style={{ paddingBottom: NAV_PILL_CLEARANCE }}>
+      {/* The raised, rounded panel is the phone's seam between "what this
+          screen is" and "your stuff" — two lists of rows that would
+          otherwise run together in one column. At `lg` the two are side by
+          side and there is no seam to draw, so the panel flattens onto the
+          page ground the way the handoff's own desktop screen does. */}
+      <div
+        className="min-h-0 flex-1 rounded-t-[26px] bg-surface-card px-4 pb-6 pt-5 lg:rounded-none lg:bg-transparent lg:px-0 lg:pt-0"
+        style={{ paddingBottom: NAV_PILL_CLEARANCE }}
+      >
+      <div className="mx-auto w-full max-w-[1280px] lg:grid lg:grid-cols-[1.05fr_0.95fr] lg:items-start lg:gap-10 lg:px-10">
+      <div>
         {/* The start action, and the settings that decide what it starts.
             The gear is here rather than in a header bar because the two
             belong together: the line under the button IS the settings, so
@@ -269,7 +302,12 @@ export default function MockDraftsPhone({
           </p>
         )}
 
-        <p className="mb-3 mt-7 font-plex text-[11px] font-bold uppercase tracking-[0.11em] text-voidInk-muted">
+      </div>
+
+      <div>
+        {/* lg:mt-0 — the 28px that separates this from the actions above it
+            in one column is dead space beside them in two. */}
+        <p className="mb-3 mt-7 font-plex text-[11px] font-bold uppercase tracking-[0.11em] text-voidInk-muted lg:mt-0">
           Your mock drafts
         </p>
 
@@ -393,6 +431,8 @@ export default function MockDraftsPhone({
             ))}
           </ul>
         )}
+      </div>
+      </div>
       </div>
     </div>
   )

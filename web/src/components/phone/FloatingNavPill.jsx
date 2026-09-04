@@ -61,13 +61,28 @@ const BOARD_TAB = { key: 'draft', label: 'Board', icon: ListChecks, href: '#/dra
 const TABS = [
   { key: 'home', label: 'Home', icon: Home, href: '#/' },
   { key: 'lobby', label: 'Drafts', icon: CalendarClock, href: '#/drafts' },
-  { key: 'rooms', label: 'Rooms', icon: Compass, href: '#rooms' },
-  { key: 'you', label: 'You', icon: User },
+  // #/rooms, not #rooms: the anchor scrolled to a section of the
+  // homepage, and the rooms are a destination now (RoomsLobby.jsx). The
+  // two strings are one character apart and mean different things —
+  // useHashRoute's own note says why only the second is a route.
+  { key: 'rooms', label: 'Rooms', icon: Compass, href: '#/rooms' },
+  /* A real destination now (YouScreen.jsx), where this was the one tab
+     in the pill with no href -- it opened an action sheet, because a
+     phone had nowhere else that could reach sign-out. The sheet is
+     still built and still the only thing DraftRoom's own copy of this
+     pill can offer inside a live draft, so it stays; what changes is
+     that the tab goes to the screen when there is one to go to. */
+  { key: 'you', label: 'You', icon: User, href: '#/you' },
 ]
 
 function activeFromHash(hash) {
   if (hash.startsWith('#/draft-room')) return 'draft'
   if (hash.startsWith('#/drafts')) return 'lobby'
+  // Ordered after #/drafts deliberately: '#/drafts' and '#/rooms' do not
+  // collide, but a room page is '#/rooms/waiver' and has to light the
+  // same tab as the lobby it came from, which prefix-matching gives.
+  if (hash.startsWith('#/rooms')) return 'rooms'
+  if (hash.startsWith('#/you')) return 'you'
   if (hash === '' || hash === '#' || hash === '#/') return 'home'
   return null
 }
@@ -285,7 +300,7 @@ export default function FloatingNavPill() {
             const isActive = active === t.key
             const cls =
               'flex h-[58px] flex-1 flex-col items-center justify-center gap-[3px] rounded-full text-[10px] font-semibold transition-colors duration-150 ' +
-              (isActive ? 'text-teal-300' : 'text-[#7C8A99]')
+              (isActive ? 'text-mint' : 'text-ink-muted')
             const content = (
               <>
                 {/* The active tab gets a filled lozenge behind its glyph
@@ -295,7 +310,7 @@ export default function FloatingNavPill() {
                 <span
                   className={
                     'flex h-[26px] w-[42px] items-center justify-center rounded-full transition-colors duration-150 ' +
-                    (isActive ? 'bg-teal-500/15' : '')
+                    (isActive ? 'bg-flow-mintDark' : '')
                   }
                 >
                   <Icon className="h-[18px] w-[18px]" strokeWidth={isActive ? 2.3 : 1.8} />

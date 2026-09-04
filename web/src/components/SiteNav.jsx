@@ -57,8 +57,19 @@ import { useAccountUiReady } from '../hooks/useAccountUiReady.js'
 // that entry was actually doing inside the Lobby itself — see NavLinks'
 // comment.
 export const NAV_LINKS = [
-  { label: 'How It Works', href: '#proof' },
-  { label: 'The Rooms', href: '#rooms' },
+  /* The docs page, not the old #proof anchor. That anchor was
+     ShowYourWorking's own <section id="proof">, and the owner has taken
+     that section off the homepage -- so the link kept working in the sense
+     that nothing threw, and scrolled to nothing, which is the worse of the
+     two failures because it looks like the page is broken rather than the
+     link. The docs page is what "How it works" has always meant and is
+     where the footer's own Method column already sends people.
+
+     Reached only through LobbyBar now: this array's other consumer,
+     Header.jsx, is orphaned since design_handoff_v3_alive replaced it with
+     ShellHeader, which has its own three nav tabs and no How It Works. */
+  { label: 'How It Works', href: '/docs/draft-room-how-it-works.html' },
+  { label: 'The Rooms', href: '#/rooms' },
 ]
 
 // The shared renderer for NAV_LINKS — Header.jsx and LobbyBar.jsx both call

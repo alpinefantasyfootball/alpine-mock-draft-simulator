@@ -162,7 +162,7 @@ export default function DraftCockpitHeader({
       >
         <div className="flex min-w-0 items-center gap-3 lg:gap-[22px]">
         <a
-          href="#/drafts"
+          href="#/rooms/draft"
           aria-label="Back to your draft locker"
           title="Back to your draft locker"
           className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-slate-rule bg-slate-sunk/60 text-white/50 transition-colors duration-150 hover:border-slate-rule hover:text-white"
@@ -505,7 +505,7 @@ export default function DraftCockpitHeader({
       {!preDraft && (
         <header className="fixed inset-x-0 top-0 z-50 flex h-[46px] shrink-0 items-center gap-1 border-b border-white/[0.06] bg-slate-bar px-1.5 lg:hidden">
           <a
-            href="#/drafts"
+            href="#/rooms/draft"
             aria-label="Back to your draft locker"
             title="Back to your draft locker"
             className="flex h-11 w-11 shrink-0 items-center justify-center"
@@ -534,7 +534,7 @@ export default function DraftCockpitHeader({
               word rather than drawn as an arrow. */}
           {over ? (
             <a
-              href="#/drafts"
+              href="#/rooms/draft"
               title="Back to your draft locker"
               className="flex h-11 shrink-0 items-center rounded-full bg-white/5 px-3 text-[11px] font-semibold text-white/70"
             >

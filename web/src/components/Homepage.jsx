@@ -1,16 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import Header from './Header.jsx'
-import Hero from './Hero.jsx'
-import TakeAPick from './TakeAPick.jsx'
-import ShowYourWorking from './ShowYourWorking.jsx'
-import RoomsGrid from './RoomsGrid.jsx'
-import ClosingCta from './ClosingCta.jsx'
+import ShellHeader from './shell/ShellHeader.jsx'
+import HomeAlive from './HomeAlive.jsx'
 import JukeLogo from './juke-logo/JukeLogo.jsx'
 import ComingSoonModal from './ComingSoonModal.jsx'
 import EarlyAccessModal from './EarlyAccessModal.jsx'
 import { ROOM_SIGNUP_SOURCE, roomSignupCopy } from './icons.jsx'
 import { freshnessLine } from './dataFreshness.js'
-import HomePhone from './phone/HomePhone.jsx'
 
 // METHOD is Juke's own real content — three sections of one doc plus the
 // doc's own top, the same four destinations the footer has carried since
@@ -211,26 +206,41 @@ export default function Homepage() {
           nothing gets slower; it simply does not get faster. If it ever
           needs to, the fix is to prerender two documents, not to move this
           back to a hook. */}
-      <div className="sm:hidden">
-        <HomePhone />
-      </div>
+      {/* One tree at every width now — see HomeAlive.jsx. The two-tree
+          split this used to carry (a sm:hidden HomePhone and a hidden
+          sm:block desktop page) was the mobile pass's own product decision
+          and design_handoff_v3_alive reverses it for this screen: 2ag and
+          3ag are one set of content in two layouts, not two screens. That
+          also ends the cost the comment above describes, since there is no
+          longer a second tree mounting invisibly on every device. */}
+      <div className="min-h-screen overflow-x-hidden bg-surface-page font-body text-voidInk-primary">
+      <ShellHeader active="home" />
 
-      <div className="hidden min-h-screen overflow-x-hidden bg-surface-page font-body text-voidInk-primary sm:block">
-      <Header />
+      <main>
+        <HomeAlive />
 
-      {/* The fixed header is just its nav row now — the status strip that
-          used to sit under it (h-8 + 1px border) was removed as redundant.
-          pt-14/pt-16 matches Header.jsx's own h-14/h-16 exactly, which is
-          why this can be the Tailwind scale rather than an arbitrary value
-          with arithmetic in a comment: there's nothing left to add to it.
-          index.css's scroll-padding-top tracks the same two heights, plus
-          its own 8px of anchor-scroll slack — see the comment there. */}
-      <main className="pt-14 md:pt-16">
-        <Hero />
-        <TakeAPick />
-        <ShowYourWorking />
-        <RoomsGrid />
-        <ClosingCta />
+        {/* TakeAPick, ShowYourWorking and ClosingCta used to render here,
+            desktop-only, and the owner has taken them off the page. The
+            homepage is what design_handoff_v3_alive draws and then the
+            footer, which is the handoff's own shape plus the one thing it
+            omits (the footer holds the only links to the privacy policy and
+            terms, so it was never optional).
+
+            **Deprecated, not deleted.** All three components are still in
+            web/src/components, still complete, still importing cleanly —
+            they are simply not rendered, which is the same state Header,
+            Hero, RoomsGrid and phone/HomePhone are in after this handoff
+            replaced them. Bringing any of them back is re-adding an import
+            and a line here; there is nothing to reconstruct.
+
+            Worth knowing what leaves with them, because it is not only
+            layout. ShowYourWorking is this project's "Claim and proof"
+            section — three claims down the page with the thing each one
+            claims running beside it, on live board data — and it is the
+            only place the product's own numbers are shown being computed.
+            TakeAPick is the interactive third-round demo. CLAUDE.md has a
+            section on each; both are still accurate about the components,
+            which still exist. */}
       </main>
 
       {/* ---------- Footer, restructured after a real competitor's (Sleeper's)

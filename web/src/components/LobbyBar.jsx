@@ -56,7 +56,7 @@ export default function LobbyBar({ onOpenSettings }) {
   // explicit that #/drafts (the Lobby) is the identifier to match on, same
   // as RoomsNavMenu's live-room link uses room.href directly rather than a
   // name string.
-  const currentRoom = rooms.find((r) => r.href === '#/drafts')?.name
+  const currentRoom = rooms.find((r) => r.href === '#/rooms/draft')?.name
 
   return (
     // A Fragment, not a single <header> return — MobileNavSheet has to be a

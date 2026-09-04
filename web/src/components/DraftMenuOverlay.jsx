@@ -142,7 +142,7 @@ export default function DraftMenuOverlay({
       key: 'locker',
       label: 'Back to the locker',
       icon: LibraryBig,
-      onClick: () => { window.location.hash = '#/drafts' },
+      onClick: () => { window.location.hash = '#/rooms/draft' },
     },
     { key: 'settings', label: 'Draft settings', icon: Settings, onClick: onOpenSettings },
     {

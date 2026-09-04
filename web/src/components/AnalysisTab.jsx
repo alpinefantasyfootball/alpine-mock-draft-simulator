@@ -491,7 +491,7 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
               Run another mock
             </button>
             <a
-              href="#/drafts"
+              href="#/rooms/draft"
               className="flex h-[50px] w-full items-center justify-center rounded-full border border-white/15 text-[14px] font-semibold text-white/75 transition-colors duration-150 active:bg-white/[0.06]"
             >
               Back to the locker
@@ -711,7 +711,7 @@ export default function AnalysisTab({ engine, league, picks, mySlot, onClose }) 
               Run another mock
             </button>
             <a
-              href="#/drafts"
+              href="#/rooms/draft"
               className="rounded-full border border-white/15 px-4 py-2 text-xs font-semibold text-white/60 transition-colors duration-150 hover:border-teal-400/60 hover:text-teal-300"
             >
               Back to the locker

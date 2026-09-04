@@ -315,7 +315,21 @@ export async function startSoloDraft(page) {
   // draft outright, so it is the control that refuses an illegal league
   // (15 rounds against a 14-slot roster, say) and there is no second
   // button left to ask.
-  const startMock = page.locator('#draftroom-root button:text-is("Start mock draft")');
+  /* [data-start-draft], not the label, and the rename that forced it is
+     the fourth one this control has had. It was matched here as the exact
+     string "Start mock draft", which is DraftLocker's own wording -- and
+     design_handoff_v3_alive made DraftRoomEntry the Lobby at EVERY width,
+     whose button reads "Start a mock draft". One word, five specs, and the
+     failure surfaces at `waitForFunction(() => state.started)` fifteen
+     seconds later rather than at the click, so nothing in the output names
+     the button at all.
+
+     Both real Start buttons carry the attribute (DraftRoomEntry and
+     NewMockPanel), which is what CLAUDE.md's own rule already says to
+     anchor on: an attribute says what a control IS, a label says what it
+     currently reads. The `.first()` is because a room can have this
+     screen's Start and NewMockPanel's on the page together. */
+  const startMock = page.locator('#draftroom-root [data-start-draft]').first();
   if (await startMock.count()) {
     if (!(await startMock.isEnabled())) throw new Error("the Start button refused this league");
     await startMock.click();

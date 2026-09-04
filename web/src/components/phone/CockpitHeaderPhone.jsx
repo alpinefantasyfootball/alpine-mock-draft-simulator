@@ -70,13 +70,13 @@ export default function CockpitHeaderPhone({
   return (
     <header ref={ref} className="fixed inset-x-0 top-0 z-40 shrink-0 border-b border-white/[0.06] bg-slate-bar pt-[env(safe-area-inset-top)]">
       <div className="flex items-center px-2 pt-1.5">
-        {/* #/drafts, not a modal — the same "back to your draft locker"
+        {/* #/rooms/draft, not a modal — the same "back to your draft locker"
             destination DraftCockpitHeader's own chevron already uses.
             44px hit box around a visually smaller glyph, same trick that
             file's own header comment documents for every circular control
             below lg ("a 44px hit box around a visibly smaller pill"). */}
         <a
-          href="#/drafts"
+          href="#/rooms/draft"
           aria-label="Back to your draft locker"
           title="Back to your draft locker"
           className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] text-ink-muted"

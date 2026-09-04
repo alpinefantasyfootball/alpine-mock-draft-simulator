@@ -27,7 +27,7 @@ import { POS_LIST } from './draftRoomPositions.js'
 import { useMinWidth, usePhoneWidth } from '../hooks/useBreakpoint.js'
 import { useDraftNotifications } from '../hooks/useDraftNotifications.js'
 import DraftRoomPhone from './phone/DraftRoomPhone.jsx'
-import MockDraftsPhone from './phone/MockDraftsPhone.jsx'
+import DraftRoomEntry from './DraftRoomEntry.jsx'
 import EarlyAccessModal from './EarlyAccessModal.jsx'
 
 // The Board tab's own dock height per tray position — fixed pixels. This
@@ -162,7 +162,22 @@ export default function DraftRoom() {
   // — the live-draft-only effects below (autopick, etc.) all gate on
   // `active` meaning specifically "on the live draft route", and widening
   // it would let them fire while looking at the locker instead.
-  const draftsActive = useHashActive('#/drafts')
+  /* #/rooms/draft, not #/drafts, as of design_handoff_v3_alive.
+     The handoff splits what this route used to be into two screens: the
+     Draft Room's own entry -- start a mock, settings, insights, recent --
+     which is a room and lives under #/rooms with the other five, and a
+     separate archive of every draft you have run, which is what the nav's
+     Drafts tab means now and which App renders at #/drafts.
+
+     This branch is the first of those, so it moves to the room's address.
+     Nothing else about it changes: it is still the route that forces the
+     Lobby regardless of `enteredRoom`, which is the whole reason it exists
+     -- pressing "Back to the locker" on a finished draft and then Start
+     has to reach a clean choice rather than the board you just left. Every
+     "back to the locker" link moved with it for exactly that reason: the
+     archive has no Start button on it, by design, so sending a finished
+     draft there would end that flow. */
+  const draftsActive = useHashActive('#/rooms/draft')
 
   const [search, setSearch] = useState('')
   const [posFilter, setPosFilter] = useState('ALL')
@@ -199,6 +214,31 @@ export default function DraftRoom() {
      id meaning "and open this report". Desktop never reads it — the
      dashboard is unconditionally what #/drafts is there. */
   const [lockerView, setLockerView] = useState(null)
+  /* #/rooms/draft?report=<id> opens that entry's own frozen report.
+
+     The archive (#/drafts, DraftsScreen.jsx) is a different screen in a
+     different React tree, so a row there cannot set this state directly --
+     and the two must not each hold their own idea of "which report is
+     open". The hash is the one channel both can see, which is the same
+     answer #/draft?room=ABC1 already gives for an invite.
+
+     It reads on every hashchange rather than only at mount, because
+     DraftRoom does not unmount between routes: arriving from the archive
+     is a hashchange, not a mount, and a mount-only read would open the
+     screen with whatever report was last looked at. Cleared on any hash
+     without the param for the same reason -- a stale id here is the
+     `view`/`soloAutopick` leak this file already documents, one state
+     along. */
+  useEffect(() => {
+    const read = () => {
+      const q = window.location.hash.split('?')[1] || ''
+      const id = new URLSearchParams(q).get('report')
+      setLockerView(id || null)
+    }
+    window.addEventListener('hashchange', read)
+    read()
+    return () => window.removeEventListener('hashchange', read)
+  }, [])
   const sportsModalRef = useRef(null)
   /* Deleting a locker entry changes nothing the engine broadcasts — it is a
      localStorage rewrite — so there is no "juke:header" to ride and this
@@ -851,13 +891,16 @@ export default function DraftRoom() {
        z-40 would trap this whole overlay beneath it. */
     return (
       <div className="fixed inset-0 z-[60] flex flex-col bg-slate text-white">
-        {/* Not on the phone's Mock Drafts screen: that screen carries its
-            own back chevron, its own title and its own "Draft settings"
-            button, so LobbyBar above it is a second header with a second
-            gear opening the identical modal — the duplicate-affordance
-            problem, stacked. It stays for the dashboard, which has no
-            header of its own at any width. */}
-        {!(isPhone && !lockerView) && <LobbyBar onOpenSettings={() => setSettingsOpen(true)} />}
+        {/* Not on the entry screen: it carries its own back chevron, its
+            own title and its own "Draft settings" button, so LobbyBar above
+            it is a second header with a second gear opening the identical
+            modal — the duplicate-affordance problem, stacked. It stays for
+            the dashboard, which has no header of its own at any width.
+
+            `!isPhone` used to be half this condition, because the entry
+            screen was phone-only. It is every width now (DraftRoomEntry),
+            so the question is only which of the two screens is showing. */}
+        {!!lockerView && <LobbyBar onOpenSettings={() => setSettingsOpen(true)} />}
 
         {settingsOpen && (
           <DraftSettingsModal
@@ -891,16 +934,21 @@ export default function DraftRoom() {
             leave the desktop dashboard with padding for a bar that is
             `sm:hidden`. */}
         <div className="min-h-0 flex-1 overflow-y-auto">
-          {/* Two Lobbies, and which one a phone gets is a real product
-              split rather than a responsive layout. See MockDraftsPhone's
-              own file comment: the dashboard is twelve analytics cells and
-              a history table, which stacks into one very long column on a
-              390px screen with the button the whole screen exists to offer
-              somewhere past the fourth chart. Nothing is lost — "Your
-              insights" on that screen opens this exact component, and a
-              history row opens this exact component's own report path. */}
-          {isPhone && !lockerView ? (
-            <MockDraftsPhone
+          {/* Two Lobbies, and which one you get is no longer a question of
+             width. It was: the dashboard is twelve analytics cells and a
+             history table, which stacks into one very long column on a
+             390px screen with the button the whole screen exists to offer
+             somewhere past the fourth chart — so a phone got the launcher
+             and a desk got the dashboard, and that was right.
+
+             design_handoff_v3_alive's screen c is that same launcher at
+             1280px (3cg), with the dashboard behind "Your insights" where a
+             phone already had it. So the entry is what this route shows at
+             every width, and `lockerView` alone decides. Nothing is lost:
+             "Your insights" opens this exact component and a history row
+             opens its own report path, both unchanged. */}
+          {!lockerView ? (
+            <DraftRoomEntry
               engine={engine}
               tick={tick}
               problem={problem}
@@ -938,7 +986,10 @@ export default function DraftRoom() {
               onOpenSettings={() => setSettingsOpen(true)}
               onDraftWithFriends={handleDraftWithFriends}
               initialAnalyzeId={typeof lockerView === 'string' && lockerView !== 'dashboard' ? lockerView : null}
-              onBackToList={isPhone ? () => setLockerView(null) : undefined}
+              /* Every width now, for the same reason the branch above
+                 stopped asking: the dashboard is reached FROM the entry
+                 screen on a desktop too, so it needs the way back. */
+              onBackToList={() => setLockerView(null)}
             />
           )}
         </div>

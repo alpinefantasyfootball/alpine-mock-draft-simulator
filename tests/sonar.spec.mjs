@@ -128,9 +128,14 @@ for (const [label, opts] of [["a phone", PHONE], ["a desktop", DESKTOP]]) {
        working page in every other check — the content is all there underneath
        it — and only a hit test finds it. */
     const reachable = await page.evaluate(() => {
-      /* [data-hero-cta], not a text match. Three anchors on this page read
-         "Enter the Draft Room" — the hero's, the closing band's, and Header's
-         sticky bottom bar — and the sticky one is the first in document order.
+      /* [data-hero-cta], not a text match. Three anchors on this page used
+         to read "Enter the Draft Room" — the hero's, the closing band's and
+         Header's sticky bottom bar — and the sticky one was first in
+         document order. None of the three is on the page any more (Hero and
+         Header were replaced by HomeAlive/ShellHeader; ClosingCta was taken
+         off it), so the collision is gone and the reasoning is not: the
+         marker is what says which control is the page's primary action, and
+         that has now moved twice.
          It is also translated off-screen by `translate-y-full` while the hero
          CTA is visible, and a translated element still reports a non-zero box,
          so a height check does not exclude it. Hit-testing its centre asks
