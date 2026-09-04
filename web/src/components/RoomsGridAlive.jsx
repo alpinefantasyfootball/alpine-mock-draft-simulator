@@ -36,12 +36,12 @@ function LeadCard({ room }) {
            (3ag/3au/3bg/3bu). At two columns a wide lead is what makes the
            open room read as the one you can actually use; at three or five
            there is room to say that with the cyan wash alone. */
-        'col-span-2 flex items-center gap-3.5 rounded-2xl border border-line-hairline p-4 transition-colors duration-150 hover:border-teal/40 lg:col-span-1 lg:flex-col lg:items-start lg:justify-between lg:gap-4 lg:min-h-[150px] lg:p-[18px]'
+        'col-span-2 flex items-center gap-3.5 rounded-2xl border border-line-hairline p-4 transition-colors duration-150 hover:border-teal/40 sm:p-5 lg:col-span-1 lg:flex-col lg:items-start lg:justify-between lg:gap-0 lg:min-h-[150px]'
       }
       style={{ background: `linear-gradient(120deg, ${room.accent}1A, transparent 60%), #151920` }}
     >
       <span
-        className="grid h-11 w-11 shrink-0 place-items-center rounded-xl text-[18px]"
+        className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-[18px]"
         style={{ background: '#0f2e34', color: room.accent }}
         aria-hidden="true"
       >
@@ -54,7 +54,16 @@ function LeadCard({ room }) {
         <span className="mt-[3px] block font-display text-[22px] font-bold leading-[1.05] text-white">
           {room.name}
         </span>
-        <span className="mt-0.5 block truncate text-[13px] text-ink-muted lg:mt-1">{room.lead}</span>
+        {/* The same two-line box the locked cards give their hook, and
+            for the same reason: these blocks are bottom-anchored, so a card
+            whose sub-line wraps to two pushes its own title up relative to
+            one whose does not. Measured 3 Sep 2026 on the homepage's
+            five-across strip at 1440 -- 246px cells, three hooks wrapping
+            and two not, titles spread over 18px. `min-h` in em rather than
+            px because the size steps 12 -> 13 at `sm` and em follows it. */}
+        <span className="mt-0.5 block truncate text-[13px] leading-[1.35] text-ink-muted lg:mt-1 lg:line-clamp-2 lg:min-h-[2.7em] lg:whitespace-normal">
+          {room.lead}
+        </span>
       </span>
       {/* The chevron is the phone row's own affordance — a wide row with a
           tile, a name and nothing at the end reads as unfinished. A card in
@@ -74,14 +83,37 @@ function LockedCard({ room, wide = false }) {
       >
         {room.glyph}
       </span>
+      {/* Eyebrow, then title, then the hook -- the same three in the same
+          order as LeadCard, because the two sit in one row and every card
+          here anchors its text block to the BOTTOM (`justify-between` under
+          a fixed min-height). Bottom-anchored blocks whose contents run in
+          different orders land their titles at different heights: measured
+          3 Sep 2026 on #/rooms at 1440, "The Draft Room" sat 30px below
+          "Waiver Room" and "Trade Room" beside it. Nothing was wrong with
+          either card on its own.
+
+          Which means the margins and line-heights below have to match
+          LeadCard's too, and a change to one of them is a change to both. */}
       <span>
-        <span className="block font-display text-[20px] font-bold text-white sm:text-[22px]">
-          {room.name.replace(/^The /, '')}
-        </span>
-        <span className="mt-[3px] block font-mono text-[10px] tracking-[0.1em] text-ink-muted">
+        <span className="block font-mono text-[10px] tracking-[0.1em] text-ink-muted">
           <span aria-hidden="true">🔒</span> {room.season.toUpperCase()}
         </span>
-        <span className="mt-1.5 block text-[12px] leading-[1.35] text-ink-muted sm:text-[13px]">
+        <span className="mt-[3px] block font-display text-[20px] font-bold leading-[1.05] text-white sm:text-[22px]">
+          {room.name.replace(/^The /, '')}
+        </span>
+        {/* No `block` here: `line-clamp-*` works by setting
+            `display:-webkit-box`, and a `block` in the same layer wins and
+            silently leaves the clamp doing nothing -- confirmed on the
+            built page, where the computed style read
+            `-webkit-line-clamp: 2` beside `display: block` and the Waiver
+            hook ran to three lines anyway.
+
+            Three lines below `sm` and two above it, because that is what
+            the card is actually wide enough for: at 375px a 2-col cell
+            gives the hook ~144px and it wraps to three. The reserve is
+            what keeps every title in a row on one baseline; the clamp is
+            the guard for a hook longer than the reserve. */}
+        <span className="mt-0.5 text-[12px] leading-[1.35] line-clamp-3 min-h-[4.05em] text-ink-muted sm:text-[13px] sm:line-clamp-2 sm:min-h-[2.7em] lg:mt-1">
           {room.hook}
         </span>
       </span>

@@ -36,10 +36,15 @@ export default function RoomHero({
 }) {
   return (
     <div
-      className="border-b border-white/[0.05] px-5 pb-[18px] pt-[18px] sm:px-10 sm:pb-10 sm:pt-8"
+      className="border-b border-white/[0.05] pb-[18px] pt-[18px] sm:pb-10 sm:pt-8"
       style={{ background: `linear-gradient(180deg, ${accent}22, transparent 70%), #1E2733` }}
     >
-      <div className="mx-auto max-w-[1280px]">
+      {/* Padding inside the column, so the room title starts on the same
+          left margin as the header above it and as the room's own content
+          below. See HomeAlive.jsx for the measurement; this is the other
+          half of it. The gradient stays on the wrapper and stays full
+          bleed. */}
+      <div className="mx-auto max-w-[1280px] px-5 sm:px-10">
         <div className="flex items-start justify-between gap-3">
           <a
             href={backHref}

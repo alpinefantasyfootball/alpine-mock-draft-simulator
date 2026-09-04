@@ -213,7 +213,7 @@ export default function HomeAlive() {
   const deviceLine = ready ? <SignedOut>{deviceLineText}</SignedOut> : deviceLineText
 
   return (
-    <div className="relative overflow-hidden px-5 pb-6 pt-[22px] sm:px-10 sm:pb-14 sm:pt-10">
+    <div className="relative overflow-hidden pb-6 pt-[22px] sm:pb-14 sm:pt-10">
       {/* The watermark is the mark itself at 12%, not a background image:
           one file, already in web/public, already the one copy of the
           geometry every icon in the project is generated from. */}
@@ -221,10 +221,22 @@ export default function HomeAlive() {
         src="/juke-shark-mark.svg"
         alt=""
         aria-hidden="true"
-        className="pointer-events-none absolute -right-[70px] -top-[30px] w-[260px] object-contain opacity-[0.12] sm:-right-[120px] sm:-top-20 sm:w-[620px]"
+        className="pointer-events-none absolute -right-[90px] -top-[30px] w-[260px] object-contain opacity-[0.12] sm:-right-[160px] sm:-top-20 sm:w-[620px]"
       />
 
-      <div className="relative mx-auto max-w-[1280px]">
+      {/* px lives INSIDE the max-width, not on the full-bleed wrapper
+          above. Outside it the column comes out the full 1280 and starts
+          40px left of ShellHeader's own content, which is measurable
+          (measured 3 Sep 2026 at 1440: hero H1 at x=73 against a wordmark
+          at 113) and reads as the header being inset rather than the page
+          being wide. Every other screen — ShellHeader, RoomsLobby,
+          DraftsScreen, YouScreen — has always put it inside; this one and
+          RoomHero were the two that did not.
+
+          The wrapper stays full-bleed so the watermark still bleeds to the
+          viewport edge. Its own offsets carry the 20/40px the wrapper gave
+          up, so it lands exactly where it did. */}
+      <div className="relative mx-auto max-w-[1280px] px-5 sm:px-10">
         <div className="lg:grid lg:grid-cols-[1.1fr_0.9fr] lg:items-start lg:gap-12">
           <div>
             {/* gap-2 below `sm`, not gap-3. Measured at 375px: the eyebrow

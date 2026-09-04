@@ -160,8 +160,14 @@ export default function DraftsScreen() {
     <AppShell active="drafts">
       <div className="mx-auto max-w-[1280px] px-5 pt-[22px] sm:px-10 sm:pt-10">
         <div className="mb-3.5 flex flex-wrap items-center justify-between gap-3 sm:mb-6">
-          <div className="flex items-center gap-3">
-            <span className="text-[26px] sm:text-[30px]" aria-hidden="true">🗓</span>
+          {/* Glyph in a mono eyebrow rather than inline beside the
+              title -- see RoomsLobby.jsx for why all three of these
+              screens moved to RoomHero's shape. */}
+          <div>
+            <div className="mb-1.5 font-mono text-[11px] tracking-[0.1em] text-teal">
+              <span className="mr-1.5" aria-hidden="true">🗓</span>
+              {list.length} COMPLETED
+            </div>
             <h1 className="m-0 font-display text-[30px] font-extrabold uppercase italic text-white sm:text-[44px]">
               Your Drafts
             </h1>

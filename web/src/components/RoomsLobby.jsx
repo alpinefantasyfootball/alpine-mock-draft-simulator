@@ -165,18 +165,40 @@ function SignedInOnly({ children }) {
 }
 
 export default function RoomsLobby() {
+  const rooms = useRooms()
+  const open = rooms.filter((r) => r.live).length
+
   return (
     <AppShell active="rooms">
       <div className="mx-auto max-w-[1280px] px-5 pt-[22px] sm:px-10 sm:pt-10">
         <div className="mb-3.5 flex flex-col gap-4 sm:mb-7 sm:flex-row sm:items-end sm:justify-between sm:gap-6">
           <div>
-            <div className="flex items-center gap-3 sm:block">
-              <span className="text-[26px] sm:text-[34px]" aria-hidden="true">🚪</span>
-              <h1 className="m-0 font-display text-[30px] font-extrabold uppercase italic leading-[0.9] text-white sm:mt-1.5 sm:text-[64px]">
-                The<span className="sm:hidden"> Rooms</span>
-                <span className="hidden sm:block text-mint">Rooms</span>
-              </h1>
+            {/* The glyph rides in a mono eyebrow, which is the shape
+                RoomHero gives all five room pages -- `{glyph} {EYEBROW}`
+                above the H1. This screen used to be the only one whose
+                glyph MOVED between breakpoints: inline beside the title
+                below `sm`, stranded on its own line above a 64px two-line
+                H1 above it. Three placements across five screens, and this
+                was the odd one.
+
+                It also puts the H1 back on the page's own left margin.
+                Inline, the title started 42-53px inside it (measured 3 Sep
+                2026 at 1440 on #/drafts and #/you), so the heading did not
+                line up with the header, the sub-copy or the grid.
+
+                Counts rather than a fixed string, because a hardcoded
+                "SIX ROOMS" is wrong the morning a room ships and nothing
+                fails when it is. useRooms() fills on mount, so the numbers
+                arrive a tick after the glyph -- the row keeps its height
+                throughout, so nothing moves. */}
+            <div className="mb-1.5 font-mono text-[11px] tracking-[0.1em] text-teal">
+              <span className="mr-1.5" aria-hidden="true">🚪</span>
+              {rooms.length ? `${rooms.length} ROOMS · ${open} OPEN` : ''}
             </div>
+            <h1 className="m-0 font-display text-[30px] font-extrabold uppercase italic leading-[0.9] text-white sm:text-[64px]">
+              The<span className="sm:hidden"> Rooms</span>
+              <span className="hidden sm:block text-mint">Rooms</span>
+            </h1>
             <p className="mt-3 hidden text-[16px] text-voidInk-body sm:block">
               Draft Room is open to everyone. The rest unlock when you connect a league.
             </p>

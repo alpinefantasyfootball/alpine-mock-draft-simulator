@@ -5578,6 +5578,82 @@ insights" at every width: the desktop dashboard had no way out at all. **The
 dead-control rule inverted**, and the condition that answers "is there
 something behind this" was the prop all along.
 
+### One left margin, and one place the glyph goes
+
+A sweep of the five shell screens on 3 September 2026, at 1440, measuring
+the left edge of `ShellHeader`'s content against the left edge of each
+screen's own H1:
+
+```
+                header    H1    off by
+#/                 113     73      -40
+#/rooms/waiver     120     80      -40
+#/rooms            113    113        0
+#/drafts           120    162      +42
+#/you              120    173      +53
+```
+
+**One screen in five lined up**, and the two causes are unrelated.
+
+**The -40 is padding on the wrong side of the max-width.** `HomeAlive` and
+`RoomHero` put `px-5 sm:px-10` on their full-bleed wrapper and
+`mx-auto max-w-[1280px]` *inside* it, so the column comes out the full 1280
+and starts 40px left of the header. Every other screen — `ShellHeader`,
+`RoomsLobby`, `DraftsScreen`, `YouScreen` — has always had the padding
+inside the max-width, giving a 1200px column. Both orders look right in
+isolation and only disagree when you put one above the other, which is
+exactly what a fixed header does. **The padding goes inside**; the wrapper
+stays full-bleed so `HomeAlive`'s watermark still bleeds, with its own
+offsets carrying the 20/40px the wrapper gave up.
+
+**The +42/+53 is the glyph.** It had three placements across five screens:
+inside the mono eyebrow on the five room pages (`RoomHero`'s
+`{glyph} {EYEBROW}`), inline before the H1 on `#/drafts` and `#/you`, and —
+on `#/rooms` alone — inline below `sm` and stranded on its own line above a
+two-line 64px H1 above it. That last one was reported by the owner as the
+door emoji looking wrong, and it was: a naked 34px emoji in the slot five
+other screens fill with an eyebrow, on the only screen whose glyph moved
+between breakpoints.
+
+All three take `RoomHero`'s shape now, which settles both halves at once —
+one idiom, and every H1 back on the page's own margin. `#/rooms` derives
+its eyebrow (`{n} ROOMS · {open} OPEN`) rather than carrying a number that
+is wrong the morning a room ships; `useRooms()` fills on mount, so the
+counts arrive a tick after the glyph and the row keeps its height
+throughout.
+
+### A bottom-anchored card lands its title wherever its last line ends
+
+The room cards are `justify-between` under a fixed `min-height`, so the
+text block sits on the card's floor and everything above it is pushed up by
+whatever is below. Three separate things fell out of that, all measured on
+the same sweep and none of them visible as a fault in any single card:
+
+- **The lead card ordered eyebrow → title and the four locked cards ordered
+  title → eyebrow**, so on `#/rooms` "The Draft Room" sat **30px** below
+  "Waiver Room" and "Trade Room" beside it. Same order in both now.
+- **The sub-line's wrap count moved the title with it.** On the homepage's
+  five-across strip (246px cells) three hooks wrapped and two did not, and
+  the titles spread over **18px**. The reserve is a `min-h` in `em` so it
+  follows the 12 → 13px step, three lines below `sm` and two above it,
+  which is what the cell is actually wide enough for.
+- **`block` silently disabled `line-clamp`.** `line-clamp-*` works by
+  setting `display:-webkit-box`, and a `block` in the same layer wins —
+  computed style read `-webkit-line-clamp: 2` beside `display: block`, and
+  the Waiver hook ran to three lines anyway. It is not an error and the
+  clamp is simply inert. **Check the computed `display`, not the computed
+  `-webkit-line-clamp`.**
+
+Also in that row and from the same era: a 44px tile against four 40px ones,
+and 18px of padding against 20px. Both are one row, one card component, two
+sets of values.
+
+**The check is the relationship, never an offset** — the same rule this
+file already states about the padding that stands in for a fixed header's
+height. Header-left minus H1-left is 0 on all five routes and the title
+spread within a row is 0 on both grids, at 375 and 1440; a number here
+would be wrong the next time the max-width moves.
+
 ### Still open
 
 - **The connected half.** Fourteen screens, waiting on league connect.
