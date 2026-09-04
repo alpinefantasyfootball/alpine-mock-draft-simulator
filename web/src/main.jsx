@@ -283,7 +283,7 @@ if (boot) {
          mark is variant="static" and the finite layers are display:none — so
          that branch lands on the paint entry, which is the right answer there
          too and a better one than 0. */
-      const revealStart = (() => {
+      const readRevealStart = () => {
         let earliest = Infinity
         const scan = (root) => {
           if (!root || typeof root.getAnimations !== 'function') return
@@ -291,6 +291,24 @@ if (boot) {
           try { list = root.getAnimations({ subtree: true }) } catch (e) { return }
           for (const a of list) {
             if (a.startTime == null || !a.effect) continue
+            /* The overlay's own animation is its dismissal failsafe, not part
+               of the composition, and it is NOT excluded by the duration test
+               below: `splash-boot-failsafe 600ms ease-in 8s` has an
+               activeDuration of 600 — the eight seconds is delay — so it sails
+               through and, being on #boot-sonar itself, is the one animation
+               splash-boot.js's restart deliberately leaves alone.
+
+               Which made it pin this number. With the failsafe in the set, the
+               minimum stayed at the pre-restart value however far the rest of
+               the composition was moved, so the hold went on being measured
+               from a zero nothing was animating from any more: measured, the
+               layer left 247ms early on a restarted load. Silent, because the
+               reveal still looked right and only its tail was short.
+
+               Third time this animation has been counted as part of the
+               picture — see app.js's revealEndsAt() and splash-boot.js's own
+               scan, which both exclude it by target for the same reason. */
+            if (a.effect.target === boot) continue
             // Ambient only: the caustics, shafts and motes run `infinite` and
             // are still going when the layer leaves, so they say nothing about
             // where the finite composition has got to.
@@ -307,19 +325,9 @@ if (boot) {
         const fcp = performance.getEntriesByType('paint')
           .find((p) => p.name === 'first-contentful-paint')
         return fcp ? fcp.startTime : 0
-      })()
+      }
 
-      /* Capped so a pathologically slow first paint cannot hold the page
-         hostage, and 7000 rather than a round number because it is derived:
-         #boot-sonar carries `splash-boot-failsafe ... 8s`, which fades the
-         overlay on its own if this teardown never runs. A hold scheduled past
-         that would have the failsafe fading the layer out from under a reveal
-         this code still believes it is showing — two dismissals fighting, and
-         the visible one is the one nothing here can flush. 7000 leaves the
-         280ms removal and a margin inside it. Move both together. */
-      const leaveAt = Math.min(revealStart + MIN_VISIBLE_MS, 7000)
-
-      setTimeout(() => {
+      const dismiss = () => {
       const shown = getComputedStyle(boot).opacity
 
       boot.style.opacity = shown
@@ -335,7 +343,38 @@ if (boot) {
       // milliseconds. Both numbers moved together when the design package set
       // the dismissal at 260ms (it was 220/240); keep the gap if either does.
       setTimeout(() => boot.remove(), 280)
-      }, Math.max(0, leaveAt - performance.now()))
+      }
+
+      /* Re-read rather than schedule once, because the reveal's zero can MOVE
+         after this runs.
+
+         splash-boot.js restarts the composition at the first painted frame
+         when the browser has spent a meaningful part of it before presenting
+         anything — see its own note for the recording that made that
+         necessary. Rewinding sets each animation's startTime to that moment,
+         so a hold computed here beforehand would be short by exactly the
+         amount that was reclaimed, and the reveal would be cut off again at
+         the far end. Nothing about the ordering of the two files is worth
+         relying on: this asks the animations again on every tick, and a rewind
+         simply moves the target.
+
+         Capped at 120ms so a rewind is picked up within a frame or two rather
+         than at the end of a single long sleep.
+
+         The 7000 ceiling is derived rather than round: #boot-sonar carries
+         `splash-boot-failsafe ... 8s`, which fades the overlay on its own if
+         this teardown never runs. A hold scheduled past that would have the
+         failsafe fading the layer out from under a reveal this code still
+         believes it is showing — two dismissals fighting, and the visible one
+         is the one nothing here can flush. 7000 leaves the 280ms removal and a
+         margin inside it. Move both together. */
+      const tick = () => {
+        const leaveAt = Math.min(readRevealStart() + MIN_VISIBLE_MS, 7000)
+        const wait = leaveAt - performance.now()
+        if (wait <= 0) { dismiss(); return }
+        setTimeout(tick, Math.min(wait, 120))
+      }
+      tick()
     }),
   )
 }
