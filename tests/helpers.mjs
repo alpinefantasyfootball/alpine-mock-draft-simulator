@@ -331,6 +331,38 @@ export async function startSoloDraft(page) {
      screen's Start and NewMockPanel's on the page together. */
   const startMock = page.locator('#draftroom-root [data-start-draft]').first();
   if (await startMock.count()) {
+    /* Wait for the board before asking whether the button is enabled.
+
+       setupProblem() refuses a draft while the board is still loading, and
+       it is right to: players.js and stats.js are deferred, stats.js alone
+       is 769KB, and a draft genuinely cannot start without them. Locally
+       they are there almost immediately. Against production they are a real
+       download over a real network, so this raced them — and the throw
+       below reported "the Start button refused this league", which reads as
+       an illegal league configuration and is nothing of the kind.
+
+       It surfaced as a different test failing on each run, because whichever
+       one happened to lose the race is the one that reported: board-card and
+       record on one production run, grade and juke-score on the next, none
+       of them locally, ever. That is what made it look like flake instead of
+       one shared cause.
+
+       Waited on the button rather than on dataReady(), because the button is
+       what this function is about to press and the engine landing is only
+       one of the reasons it might be disabled. Bounded and then re-checked,
+       so a genuinely illegal league still falls through to the throw with
+       its own accurate message rather than being reported as a timeout. */
+    await startMock.waitFor({ state: "attached" });
+    await page
+      .waitForFunction(
+        () => {
+          const b = document.querySelector("#draftroom-root [data-start-draft]");
+          return !!b && !b.disabled;
+        },
+        null,
+        { timeout: 20000 },
+      )
+      .catch(() => {});
     if (!(await startMock.isEnabled())) throw new Error("the Start button refused this league");
     await startMock.click();
   }
