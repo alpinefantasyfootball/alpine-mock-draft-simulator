@@ -180,8 +180,15 @@ export default function YouScreen() {
   return (
     <AppShell active="you">
       <div className="mx-auto max-w-[1280px] px-5 pt-[22px] sm:px-10 sm:pt-10">
-        <div className="mb-3.5 flex items-center gap-3">
-          <span className="text-[26px] sm:text-[30px]" aria-hidden="true">👤</span>
+        {/* Glyph in a mono eyebrow rather than inline beside the title
+            -- see RoomsLobby.jsx. A fixed string here because this screen
+            has no count worth deriving; the room pages' eyebrows are
+            context, and "ACCOUNT" is this screen's. */}
+        <div className="mb-3.5">
+          <div className="mb-1.5 font-mono text-[11px] tracking-[0.1em] text-teal">
+            <span className="mr-1.5" aria-hidden="true">👤</span>
+            ACCOUNT
+          </div>
           <h1 className="m-0 font-display text-[30px] font-extrabold uppercase italic text-white sm:text-[44px]">
             You
           </h1>
