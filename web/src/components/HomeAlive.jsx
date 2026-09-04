@@ -16,20 +16,23 @@ import { useAccountUiReady } from '../hooks/useAccountUiReady.js'
    trees were prerendered and both MOUNTED on every device, because
    CSS-hidden is still mounted. One tree mounts once.
 
-   ---- What this replaces and what it does not ----
+   ---- What this replaces, and what is under it ----
 
    Replaces: Header (ShellHeader), Hero, RoomsGrid, and HomePhone's whole
-   top half. Everything below — TakeAPick, ShowYourWorking, ClosingCta and
-   the footer — is untouched and still renders under this.
+   top half.
 
-   That is deliberate and it is the conservative reading. The handoff's Home
-   ends at the rooms grid: no proof section, no closing CTA, and no footer
-   at all. Deleting ShowYourWorking would remove the one section that makes
-   this product's numbers inspectable, which is most of its pitch, and
-   deleting the footer would remove the only links to the privacy policy and
-   terms. A mock that stops after one screenful is not the same claim as
-   "delete the rest of the page", so the rest of the page stays until
-   somebody says otherwise. */
+   Under it is the footer and nothing else. TakeAPick, ShowYourWorking and
+   ClosingCta rendered here for one commit — kept on the reasoning that a
+   mock which stops after one screenful is not the same claim as "delete the
+   rest of the page" — and the owner has since taken all three off. So the
+   page is the handoff's own shape now, which ends at the rooms grid, plus
+   the footer, which was never optional: it holds the only links to the
+   privacy policy and terms.
+
+   All three components still exist unrendered in web/src/components (see
+   Homepage.jsx, where the removal is recorded). Nothing here needs to know
+   about them; this note exists because its previous version said they were
+   still under this and that stopped being true. */
 
 function Card({ gradient, eyebrow, eyebrowColor, title, sub, glyph, href, dataHeroCta }) {
   const style = gradient
