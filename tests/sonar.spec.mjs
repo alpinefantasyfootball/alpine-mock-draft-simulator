@@ -65,11 +65,9 @@ test.beforeEach(() => {
    the only way to catch a flash that resolves in 300ms. */
 const PROBE = () => {
   window.__sonar = { seen: false, maxOpacity: 0, removedAt: null, existed: false, revealStart: null };
-  /* performance.now() rather than a Date.now() delta, so every figure here is
-     on the same clock as the animations' own startTime and the two can be
-     subtracted. It was Date.now() minus a t0 taken in this init script, which
-     is within a few ms of the same thing and could not be compared to an
-     animation at all. */
+  /* performance.now() rather than a Date.now() delta, so removedAt is on the
+     same clock as the start-pass stamp splash-boot.js writes and the two can
+     be subtracted. */
   const tick = () => {
     const el = document.getElementById("boot-sonar");
     if (el) {
@@ -77,46 +75,23 @@ const PROBE = () => {
       const o = parseFloat(getComputedStyle(el).opacity) || 0;
       if (o > window.__sonar.maxOpacity) window.__sonar.maxOpacity = o;
       if (o > 0.02) window.__sonar.seen = true;
-      /* When the composition actually began, read off the composition. A CSS
-         animation is play-pending until its first rendering opportunity, so
-         this is the first painted frame of the reveal rather than the moment
-         the element was parsed — which is the whole point of recording it.
+      /* When the composition actually began — read off the element, which is
+         where splash-boot.js records it.
 
-         THE SET SCANNED HERE HAS TO BE THE SET main.jsx SCANS, and getting
-         that wrong made this test flake against production. It read the
-         mark's shadow root alone, while main.jsx takes the minimum across the
-         overlay's own light-DOM animations as well — the specks and the
-         droplet, which are the composition's first beat (0 -> 1.01s in the
-         design package's timing table) and start before the mark rises.
+         This used to scan the animations and take the earliest start time,
+         and got it wrong twice in two different ways: once by scanning a
+         different set from the one main.jsx scanned (the mark's shadow root
+         alone, against main.jsx's overlay-plus-shadow-root), and once by
+         counting #boot-sonar's own dismissal failsafe as part of the picture.
+         Both produced a plausible number that was not the one under test.
 
-         Two different zeroes, and the assertion below was derived for
-         main.jsx's. They normally coincide to the millisecond — measured
-         across four production loads, gap 0ms every time, held a steady
-         3399-3405 — but when the shadow root's styles resolve a frame or more
-         later than the overlay's inline <style>, they part, and `held`
-         measured from the later zero comes out short by exactly that gap. One
-         run in seven against jukeff.com reported 2973 against a floor of 3000
-         on a build that was behaving correctly.
-
-         The product is right and this was wrong: the composition does begin
-         with the specks, so charging the hold from them is correct. Scanning
-         the same set is what makes the two agree by construction rather than
-         by luck. */
+         There is nothing left to infer. Every finite layer now ships inert
+         and splash-boot.js starts them in one pass, stamping the moment it
+         does; that stamp IS the composition's zero, for this file and for
+         main.jsx alike. */
       if (window.__sonar.revealStart == null) {
-        let earliest = Infinity;
-        const scan = (root) => {
-          if (!root || typeof root.getAnimations !== "function") return;
-          for (const a of root.getAnimations({ subtree: true })) {
-            if (a.startTime == null || !a.effect) continue;
-            const d = a.effect.getComputedTiming().activeDuration;
-            if (!isFinite(d) || d > 60000) continue;   // ambient loops
-            if (a.startTime < earliest) earliest = a.startTime;
-          }
-        };
-        scan(el);
-        const mark = el.querySelector("juke-mark");
-        if (mark) scan(mark.shadowRoot);
-        if (earliest !== Infinity) window.__sonar.revealStart = earliest;
+        const stamped = el.getAttribute("data-splash-started-at");
+        if (stamped !== null) window.__sonar.revealStart = Number(stamped);
       }
     } else if (window.__sonar.existed && window.__sonar.removedAt == null) {
       window.__sonar.removedAt = performance.now();
@@ -216,62 +191,43 @@ test("the loader is shown on every load, and does not outstay its welcome", asyn
     `it reached full opacity (got ${sonar.maxOpacity}) on a warm local load`,
   ).toBeGreaterThan(0.9);
 
-  /* The floor is the overlay's own choreography rather than a chosen number.
-     Sonar's ring loop shipped this same shape of bound, and Breach II's after
-     it; Deepwater's own last arrival is the eye flicker, which finishes at
-     2500ms exactly — see main.jsx's comment for the full arrival table.
+  /* The bounds are the overlay's own choreography rather than chosen numbers,
+     and they are measured FROM THE START PASS rather than from navigation
+     start. Both halves of that matter.
 
-     What is different about this version, and worth knowing before moving
-     either number: the deciding element is inside <juke-mark>'s shadow root.
-     juke-mark.js ships unedited from the design package, so 2500 is a
-     published figure this repository matches rather than one it can measure
-     and re-derive. If it ever looks wrong, the thing to check is the design
-     package, not this bound.
+     The composition is 2700ms — the design package's figure, and the last
+     thing in it is the eye bloom settling at 2650 with a 50ms hold. main.jsx
+     then fades over 260ms and removes the element 280ms after beginning the
+     fade, so a healthy load has removedAt at startPass + 2980.
 
-     An earlier version of this held 900ms and asserted 800, back when the
-     mark alone decided it — which passed while the wordmark was still
-     animating and the third ring had never appeared at all. The floor still
-     sits past every element's arrival, so a regression that cuts the
-     composition short fails here rather than shipping a reveal nobody sees
-     complete.
+     The deciding elements are split across two files this repository does not
+     re-time by eye: the drop sequence is in index.html, the mark's rise, teeth
+     and eyes are inside <juke-mark>'s shadow root, and juke-mark.js ships
+     unedited. So 2700 is a published figure this repo matches rather than one
+     it can derive. If it ever looks wrong, check the design package first.
 
-     The hold is 3100, not the reveal's own 2500: the extra 600ms is a
-     deliberate beat on the finished, dead-still mark, added after the owner
-     reported off the deployed site that the splash "could last slightly
-     longer". See main.jsx for why dismissing on the reveal's last frame meant
-     the finished picture was never actually seen finished.
+     Relative, not absolute, and that is a fix rather than a tidy-up. These
+     used to be offsets from the init script's own t0 — a claim about how long
+     the whole page takes to load and only incidentally about the overlay. A
+     render-blocking cross-origin font request delays the first painted frame,
+     and the composition now starts at that frame rather than before it, so an
+     absolute bound would fail for the fix as loudly as for a regression and
+     pass on a fast run while a slow one shipped truncated.
 
-     MEASURED FROM THE REVEAL, NOT FROM NAVIGATION START, and that is a fix
-     rather than a tidy-up. Both bounds used to be absolute offsets from the
-     init script's own t0, which is a claim about how long the whole page
-     takes to load and only incidentally about the overlay. The hold in
-     main.jsx is charged to the reveal's real first frame now — because a
-     render-blocking cross-origin font request was delaying that frame and
-     the fixed 3100 was eating the composition's last beat to pay for it —
-     so an absolute bound here would fail for the fix as loudly as for a
-     regression, and pass on a fast run while a slow one shipped truncated.
-
-     The invariant is a relationship: the overlay stays for the whole
-     composition plus the held beat, however long the page took to start
-     painting. That is what these two bound, and they bound it identically at
-     every connection speed. Confirmed against font latencies of 0, 400, 900
-     and 1800ms: heldAfterReveal came out 603, 615, 611 and 614ms.
-
-     3000 rather than 3100 for the floor: removedAt is sampled on a 16ms tick,
-     so it carries a frame or two of slack in both directions and a bound
-     sitting exactly on the figure would flake. The ceiling is the real
-     assertion — 3100 hold plus a 260ms fade plus the 280ms removal beat is
-     ~3380, and 4200 leaves room for a slow CI frame without admitting the
-     4900ms hold this replaced.
+     2800 for the floor rather than 2980: removedAt is sampled on a 16ms tick
+     and the start pass waits two frames past first paint, so this carries a
+     few frames of slack in both directions and a bound sitting exactly on the
+     figure would flake. The ceiling is the real assertion — 3600 leaves room
+     for a slow CI frame without admitting a hold that has quietly grown.
 
      The absolute ceiling stays as a separate, much looser assertion, because
-     "relative to the reveal" stops meaning anything if the reveal itself
-     never starts: 8000 is #boot-sonar's own splash-boot-failsafe delay, past
-     which two dismissals are fighting each other. */
-  expect(sonar.revealStart, "the reveal's own start time is readable").not.toBeNull();
+     "relative to the start pass" stops meaning anything if the pass never
+     runs: 8000 is #boot-sonar's own splash-boot-failsafe delay, past which
+     two dismissals are fighting each other. */
+  expect(sonar.revealStart, "the start pass stamped when the composition began").not.toBeNull();
   const held = sonar.removedAt - sonar.revealStart;
-  expect(held, "it stays until the whole composition has arrived").toBeGreaterThan(3000);
-  expect(held, "and it is gone inside a reasonable window").toBeLessThan(4200);
+  expect(held, "it stays until the whole composition has arrived").toBeGreaterThan(2800);
+  expect(held, "and it is gone inside a reasonable window").toBeLessThan(3600);
   expect(sonar.removedAt, "and never past its own failsafe").toBeLessThan(8000);
 
   await context.close();

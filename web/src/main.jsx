@@ -189,143 +189,49 @@ const boot = document.getElementById('boot-sonar')
 if (boot) {
   requestAnimationFrame(() =>
     requestAnimationFrame(() => {
-      // Hold for MIN_VISIBLE_MS, then leave.
+      // Hold for MIN_VISIBLE_MS from the START PASS, then leave.
       //
-      // This used to say "from navigation start", and that was the bug — see
-      // revealStart below, which is what it is measured from now. What follows
-      // is why the number is 3100 rather than 2500; both halves matter and
-      // only one of them was ever right.
+      // splash-boot.js applies every finite layer's animation in one pass and
+      // stamps the element with data-splash-started-at when it does — see its
+      // own note. That stamp is the composition's zero, and it is a frame the
+      // viewer has actually seen rather than a style recalculation they have
+      // not.
       //
-      // Deepwater replaced Breach II's choreography wholesale, and shortened
-      // the hold from 4900ms to 2500. The composition's own timing marks,
-      // from the design package:
+      // This replaces reading the zero back off the animations themselves.
+      // That worked, but it was inferring a moment another file already knew
+      // exactly, and it kept picking up #boot-sonar's own dismissal failsafe
+      // as though it were part of the picture — an animation whose 600ms
+      // duration passes every filter because the eight seconds is delay. It
+      // cost a silent 247ms truncation once already.
       //
-      //   specks    speckIn   0            -> 0.66s
-      //   droplet   blobForm  0.46s        -> 1.01s
-      //   mark      fIn       0.66s        -> 1.24s
-      //   teeth     fTooth    0.90s        -> 2.07s
-      //   eyes      fEye/fBloom 1.10s      -> 2.50s
+      // 2700ms, from the design package: the reveal's own last frame is the
+      // eye bloom settling at 2650ms and it holds to 2700. The package is
+      // explicit that it "ends on a hold, so a slow boot just holds longer" —
+      // never cut it mid-reveal, and never extend it with a loop.
       //
-      // 2500 is when the REVEAL ends — the eye flicker's last frame. This hold
-      // is 3100, and the 600ms difference is the point rather than slack.
-      //
-      // It shipped at 2500 exactly, on the reasoning that nothing finite runs
-      // past 2.5s so every extra millisecond is a still frame the visitor
-      // waits through. Reported by the owner off the deployed site: the splash
-      // is "close but could last slightly longer". The reasoning was wrong in
-      // a specific way worth keeping. Dismissing at exactly 2500 means the
-      // fade begins on the same frame the flicker ends, so the finished mark
-      // is never actually SEEN finished — the design package's own sentence is
-      // "2.5 seconds, then the frame sits completely still until the app is
-      // ready", and at 2500 there is no "then". A still frame is not waste
-      // here; it is the last beat of the composition, and it was the one beat
-      // that never played.
-      //
-      // 600ms of dead-still mark, which is long enough to register as a held
-      // frame rather than a hitch before the fade. The reveal itself is
-      // untouched: 2500 is inside <juke-mark variant="form">'s shadow root,
-      // juke-mark.js ships unedited, and this number cannot and must not
-      // retime it. What moved is how long the finished picture stays up, which
-      // is this file's to decide and index.html's --total has no part in.
-      //
-      // Cutting BACK below 2500 is still wrong for the original reason: it
-      // truncates the eye flicker, and a mark still flickering when the layer
-      // fades has not ended at all.
-      //
-      // This whole hold replaces an early return that removed the element
-      // outright while it was still at opacity 0 — the branch a fast load
-      // always took, and the reason the loader was invisible to anyone on a
-      // quick connection.
-      //
-      // Reduced motion gets 600ms, the design package's own figure. There is
-      // no reveal to wait out in that branch — splash-boot.js has already
-      // swapped the mark to variant="static" and the CSS has dropped the
-      // specks and the droplet — so the whole of what is on screen is the
-      // finished frame, and 600ms is long enough to register it as a
-      // deliberate screen rather than a flash. The attribute is written by
-      // splash-boot.js rather than re-derived from matchMedia here, so the
-      // two files cannot disagree about what this particular load decided.
-      const MIN_VISIBLE_MS = boot.hasAttribute('data-splash-reduced') ? 600 : 3100
+      // Reduced motion gets 600ms, the package's own figure. There is no
+      // reveal to wait out in that branch: splash-boot.js has swapped the mark
+      // to variant="static" and never runs the start pass, so what is on
+      // screen is the finished frame from the moment it paints.
+      const MIN_VISIBLE_MS = boot.hasAttribute('data-splash-reduced') ? 600 : 2700
 
-      /* ...from when the reveal actually STARTED, which is not navigation
-         start, and charging it to navigation start is a real defect rather
-         than a rounding difference.
-
-         A CSS animation is play-pending until its first rendering
-         opportunity, so the composition does not begin at style resolution —
-         it begins at the first painted frame. And the first painted frame is
-         gated on every render-blocking stylesheet in <head>, which here
-         includes a cross-origin Google Fonts request the overlay cannot use
-         (it has no text in it at all — see the markup's own note on why there
-         is no wordmark).
-
-         Measured against a stub for that request at four latencies, on the
-         built site: the reveal's own start time tracks first-contentful-paint
-         one for one — 130ms / 172ms / 426ms / 926ms at font latencies of
-         0 / 150 / 400 / 900ms. The dismissal, meanwhile, was pinned at 3100ms
-         from navigation start whatever happened. So at a 900ms font fetch the
-         reveal runs 926 -> 3426 and the layer began fading at 3100: the eye
-         flicker, the composition's last beat, was cut off by 326ms — on
-         exactly the slow connections where the splash is doing the most work.
-         Past about 1200ms of pre-paint delay it starts eating the teeth
-         sweep, and past ~2500 there is nothing left to see but a fade.
-
-         That is this file's own rule about not cutting back below 2500,
-         broken from a direction the number could not see. It is fixed by
-         measuring the hold from the thing being held rather than from the
-         clock: the composition's real start is readable off its own
-         animations, so there is no second guess at it and no constant to keep
-         in step with juke-mark.js.
-
-         The cascade falls back rather than throwing: the animations, then the
-         paint entry, then navigation start, which is exactly today's
-         behaviour. Under reduced motion there are no animations to read — the
-         mark is variant="static" and the finite layers are display:none — so
-         that branch lands on the paint entry, which is the right answer there
-         too and a better one than 0. */
-      const readRevealStart = () => {
-        let earliest = Infinity
-        const scan = (root) => {
-          if (!root || typeof root.getAnimations !== 'function') return
-          let list
-          try { list = root.getAnimations({ subtree: true }) } catch (e) { return }
-          for (const a of list) {
-            if (a.startTime == null || !a.effect) continue
-            /* The overlay's own animation is its dismissal failsafe, not part
-               of the composition, and it is NOT excluded by the duration test
-               below: `splash-boot-failsafe 600ms ease-in 8s` has an
-               activeDuration of 600 — the eight seconds is delay — so it sails
-               through and, being on #boot-sonar itself, is the one animation
-               splash-boot.js's restart deliberately leaves alone.
-
-               Which made it pin this number. With the failsafe in the set, the
-               minimum stayed at the pre-restart value however far the rest of
-               the composition was moved, so the hold went on being measured
-               from a zero nothing was animating from any more: measured, the
-               layer left 247ms early on a restarted load. Silent, because the
-               reveal still looked right and only its tail was short.
-
-               Third time this animation has been counted as part of the
-               picture — see app.js's revealEndsAt() and splash-boot.js's own
-               scan, which both exclude it by target for the same reason. */
-            if (a.effect.target === boot) continue
-            // Ambient only: the caustics, shafts and motes run `infinite` and
-            // are still going when the layer leaves, so they say nothing about
-            // where the finite composition has got to.
-            let d
-            try { d = a.effect.getComputedTiming().activeDuration } catch (e) { continue }
-            if (!isFinite(d) || d > 60000) continue
-            if (a.startTime < earliest) earliest = a.startTime
-          }
+      /* When the composition began, or null while it has not. Reduced motion
+         never starts a pass, so that branch falls back to the paint entry —
+         which is the right zero for it, and a better one than navigation
+         start, because a 600ms hold measured from a clock the viewer cannot
+         see is a hold that can already be over when the frame arrives. */
+      const readStart = () => {
+        const stamped = boot.getAttribute('data-splash-started-at')
+        if (stamped !== null) {
+          const n = Number(stamped)
+          if (isFinite(n)) return n
         }
-        scan(boot)
-        const mark = boot.querySelector('juke-mark')
-        if (mark) scan(mark.shadowRoot)
-        if (earliest !== Infinity) return earliest
+        if (!boot.hasAttribute('data-splash-reduced')) return null
         const fcp = performance.getEntriesByType('paint')
           .find((p) => p.name === 'first-contentful-paint')
         return fcp ? fcp.startTime : 0
       }
+
 
       const dismiss = () => {
       const shown = getComputedStyle(boot).opacity
@@ -369,7 +275,19 @@ if (boot) {
          is the one nothing here can flush. 7000 leaves the 280ms removal and a
          margin inside it. Move both together. */
       const tick = () => {
-        const leaveAt = Math.min(readRevealStart() + MIN_VISIBLE_MS, 7000)
+        const startedAt = readStart()
+        /* Not started yet. Wait rather than guess — splash-boot.js holds the
+           pass until the mark is mounted AND a frame has been presented, and
+           dismissing against a zero that has not happened is exactly the
+           truncation this whole area keeps producing. Its own 4000ms deadline
+           guarantees this resolves, and the 7000 ceiling below catches the
+           case where that file never ran at all. */
+        if (startedAt === null) {
+          if (performance.now() > 7000) { dismiss(); return }
+          setTimeout(tick, 60)
+          return
+        }
+        const leaveAt = Math.min(startedAt + MIN_VISIBLE_MS, 7000)
         const wait = leaveAt - performance.now()
         if (wait <= 0) { dismiss(); return }
         setTimeout(tick, Math.min(wait, 120))
