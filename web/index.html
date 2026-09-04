@@ -158,10 +158,18 @@
        chat GIF search, so the name is not stale everywhere, only here.
 
        Breach is gone. It was a shark leaping through a waterline over 4000ms;
-       this is the design package's own cold launch — four specks falling
-       through deep water, gathering at centre, merging into a droplet, and
-       the droplet expanding into the mark. 2500ms, then the frame holds
-       dead still until the app is ready.
+       this is the design package's own cold launch — three drops falling
+       through deep water and landing at centre, an impact glow, two ripples
+       and four beads out of the splash, and the droplet expanding as the mark
+       grows up under it. 2700ms, then the frame holds dead still until the
+       app is ready.
+
+       Revised once, on the owner's report that the timing was still off. The
+       first cut had four specks converging on a droplet that simply became
+       the mark: no impact, no consequence, and a mark that rose from scale
+       .82 over 580ms, which is a fade more than a growth. This one lands
+       something, and the mark grows from .4 over 800ms out of the place it
+       landed — see the `form` variant in juke-mark.js, which moved with it.
 
        THE MARK IS NOT DRAWN HERE ANY MORE. <juke-mark variant="form"> is a
        custom element from /juke-mark.js, shipped unedited from the design
@@ -172,12 +180,21 @@
        up through.
 
        Which creates one rule worth stating plainly, because it is invisible
-       when it breaks. --total below retimes the WATER only. The mark's own
-       2.5s tail is a fixed fact inside juke-mark.js, so moving --total
-       without re-cutting that file desynchronises the two halves of one
-       animation. They agree today at 2500ms. If the reveal ever needs to be
-       a different length, that is a change to the design package, not a
-       change to this number.
+       when it breaks. THE COMPOSITION IS TIMED IN TWO FILES and neither may
+       be re-cut alone. The water and the drop sequence live here; the mark's
+       rise, its teeth and its eyes live in juke-mark.js's `form` variant,
+       inside a shadow root nothing here can reach. They agree today: the
+       drops land at ~620ms and the mark starts its rise at 660ms, out of the
+       droplet that starts at 620ms. Retime one and the mark arrives out of
+       nothing. If the reveal ever needs a different length, that is a change
+       to the design package rather than a number to nudge here.
+
+       There used to be a --total custom property here that claimed to retime
+       the water from one place. It was already dead when this was written —
+       nothing referenced var(--total), because every layer carries its own
+       literal duration, copied verbatim from the reference so the tuned set
+       stays tuned. A knob that turns nothing is worse than no knob, so it is
+       gone rather than kept for tidiness.
 
        Inline rather than in index.css, because Tailwind's stylesheet is a Vite
        artefact: a production build injects it as a <link>, but under `vite dev`
@@ -230,16 +247,6 @@
     html { background-color: #0a1119; }
 
     #boot-sonar {
-      /* One number retimes the water. Every finite delay below is a fraction
-         of it rather than a hard-coded millisecond count — the same "derived
-         delays, computed from --total" discipline the overlay this replaced
-         arrived at only after a sync-drift bug, kept because the reasoning
-         outlived the animation it was learned on.
-
-         See the block comment above for the one thing --total does NOT
-         retime: the mark itself. */
-      --total: 2500ms;
-
       position: fixed; inset: 0; z-index: 9999;
       display: grid; place-items: center;
       /* The layers below are absolutely positioned against this element and
@@ -252,7 +259,10 @@
       /* Package 01, item 2, verbatim. <html> carries the same colour (see
          index.css) so there is no white flash in the frames before this
          element exists. */
-      background: radial-gradient(120% 90% at 50% 14%, #12202e 0%, #0a1119 46%, #05080d 100%);
+      /* Portrait first, landscape overridden below — the reference splits the
+         ground by aspect ratio rather than by width, so a phone held sideways
+         gets the wide composition rather than the tall one. */
+      background: radial-gradient(120% 80% at 50% 18%, #12202e 0%, #0a1119 45%, #05080d 100%);
 
       /* Never reached on a healthy load: main.jsx removes the element within
          a frame or two of React's first paint. This is only for the load that
@@ -282,14 +292,43 @@
        The overlay is deep navy because the page underneath always is. If body
        ever becomes theme-aware, this is the block that has to follow it. */
 
+    /* The layer primitives, from the reference file. `.l` and `.shaft` carry
+       will-change:transform because they are the two that actually move every
+       frame for the whole life of the overlay.
+
+       NO filter:blur() and NO mix-blend-mode on any of these any more. The
+       version this replaces had both on the caustics and the shafts, and the
+       design package's own note is explicit that the softness belongs in the
+       gradient: "no blur or blend effects — keep these as plain shape layers
+       for performance". That is not a stylistic preference here. A blurred,
+       screen-blended full-viewport layer is a main-thread paint on every
+       frame, and this overlay's whole problem has been that the main thread
+       is busy exactly while it plays. */
+    #boot-sonar .l { position: absolute; inset: 0; pointer-events: none; will-change: transform; }
+    #boot-sonar .shaft { position: absolute; top: -25%; height: 150%; pointer-events: none; will-change: transform; }
+    #boot-sonar .mote { position: absolute; border-radius: 50%; pointer-events: none; }
+    #boot-sonar #vig { position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 0 120px 40px rgba(2,4,8,.85); }
+
     /* The mark's width is a percentage of the viewport, never a pixel size,
        which is what holds the composition from a phone to an ultrawide. 52%
-       and 32% are the design package's own two figures and the 640px hinge
-       is its own breakpoint. No height: <juke-mark> keeps its own 564:352
-       ratio and setting one would squash it. */
-    #boot-sonar .splash-mark { position: relative; width: 52%; }
-    @media (min-width: 640px) {
-      #boot-sonar .splash-mark { width: 32%; }
+       and 32% are the design package's own two figures.
+
+       BY ASPECT RATIO, not by width, which is what the reference does and is
+       a real difference from the 640px hinge this replaces: a phone held
+       sideways is 844px wide and was getting the tall composition's 52%.
+       The handoff prose says 640px and the reference file says aspect ratio;
+       the reference is the stated source of truth and is also the one that is
+       right about a landscape phone.
+
+       container-type: inline-size is load-bearing rather than decoration.
+       Every size in the drop sequence is in cqw — 2.6cqw is 2.6% of THE MARK,
+       at every viewport — so the drops, ripples and droplet scale with the
+       artwork instead of with the screen. Converting them to px is called out
+       in the handoff as the thing not to do. */
+    #boot-sonar #markwrap { position: relative; width: 52%; container-type: inline-size; }
+    @media (min-aspect-ratio: 1/1) {
+      #boot-sonar { background: radial-gradient(120% 90% at 50% 14%, #12202e 0%, #0a1119 46%, #05080d 100%); }
+      #boot-sonar #markwrap { width: 32%; }
     }
 
     /* ---- the water, verbatim from the design package ---- */
@@ -297,8 +336,20 @@
     @keyframes causticDrift { 0%,100% { transform: translate3d(-3%,0,0) scale(1.05) } 50% { transform: translate3d(4%,2%,0) scale(1.14) } }
     @keyframes causticDrift2 { 0%,100% { transform: translate3d(3%,1%,0) scale(1.12) } 50% { transform: translate3d(-4%,-2%,0) scale(1.02) } }
     @keyframes mote { 0% { transform: translate(0,0); opacity: 0 } 14% { opacity: .6 } 86% { opacity: .5 } 100% { transform: translate(16px,-130px); opacity: 0 } }
-    @keyframes speckIn { 0% { transform: translate(var(--sx), var(--sy)) scale(.55); opacity: 0 } 22% { opacity: 1 } 72% { opacity: 1 } 100% { transform: translate(0,0) scale(.9); opacity: 0 } }
-    @keyframes blobForm { 0% { transform: scale(.22); opacity: 0 } 26% { transform: scale(1); opacity: 1 } 58% { transform: scale(1.12); opacity: .95 } 100% { transform: scale(2.35); opacity: 0 } }
+
+    /* ---- the reveal, verbatim from the design package ----
+       Three drops fall under gravity and squash on impact, an impact glow and
+       two ripples spread from the point they land, four beads arc out of it,
+       and the droplet expands as the mark grows up underneath — the handoff's
+       own sentence is that the handoff should read as the droplet BECOMING
+       the mark. The four specks and single blob this replaces had no impact
+       and no consequence: things arrived at the centre and the mark appeared. */
+    @keyframes dropFall { 0% { transform: translate(var(--sx), var(--sy)) scale(.9,1.15); opacity: 0 } 10% { opacity: 1 } 90% { transform: translate(calc(var(--sx) * .05),-5px) scale(.78,1.5); opacity: 1 } 100% { transform: translate(0,0) scale(1.55,.5); opacity: 1 } }
+    @keyframes dropMerge { from { transform: scale(1.55,.5); opacity: 1 } to { transform: scale(.9,1.15); opacity: 0 } }
+    @keyframes ripple { 0% { transform: scale(.2); opacity: 0 } 6% { opacity: .75 } 100% { transform: scale(3.4); opacity: 0 } }
+    @keyframes splash { 0% { transform: translate(0,0) scale(1); opacity: 0 } 12% { opacity: 1 } 55% { transform: translate(calc(var(--sx) * .75),var(--sy)) scale(.8); opacity: .9 } 100% { transform: translate(var(--sx),calc(var(--sy) * -.35)) scale(.35); opacity: 0 } }
+    @keyframes impactGlow { 0% { transform: scale(.4); opacity: 0 } 30% { opacity: .55 } 100% { transform: scale(2.6); opacity: 0 } }
+    @keyframes blobForm { 0% { transform: scale(.3); opacity: 0 } 22% { transform: scale(1); opacity: 1 } 50% { transform: scale(1.25); opacity: .95 } 100% { transform: scale(2.6); opacity: 0 } }
 
     /* Reduced motion: the design package asks for the static mark on the same
        ground for a 600ms hold. splash-boot.js swaps the element to
@@ -316,7 +367,13 @@
        over the centre of the mark. */
     @media (prefers-reduced-motion: reduce) {
       #boot-sonar [data-water] { animation: none !important; }
-      #boot-sonar [data-anim] { display: none !important; }
+      /* [data-anim] needs no rule any more. Those layers ship at opacity:0
+         with no animation and only splash-boot.js's start pass gives them
+         one, and that pass returns early under reduced motion — so they are
+         invisible by construction rather than by a display:none override.
+         The rule that used to be here is gone rather than kept as belt and
+         braces: a second, silent way for a layer to be hidden is how the
+         next person spends an hour on a layer that is behaving correctly. */
       #boot-sonar { animation-delay: 3s; }
     }
   </style>
@@ -350,33 +407,70 @@
        twice now and for the same reason both times.
 
        The layers are the design package's own, in its own order: two caustic
-       layers, three light shafts, four motes, four specks, the droplet, the
-       mark, the vignette. Their inline styles are copied verbatim on purpose;
-       see the <style> block in <head> for why.
+       layers, three light shafts, four motes, then the mark wrapper - three
+       drops, the impact glow, two ripples, four splash beads, the droplet and
+       the mark - and the vignette. Their inline styles are copied verbatim on
+       purpose; see the <style> block in <head> for why.
 
-       Two attributes are additions rather than copies, and both exist so the
-       reduced-motion rule can select these elements at all - an inline style
-       is not a hook a stylesheet can reach. data-water is the ambient set
-       that keeps its opacity and loses its motion; data-anim is the finite
-       set that is removed outright. data-anim doubles as the design file's
-       own replay hook, which is where the name comes from. -->
+       data-anim is the design file's own attribute, not an addition: a finite
+       layer's timing lives THERE rather than in its `animation` property, and
+       splash-boot.js applies the lot in one pass. That is what lets the whole
+       composition share a zero, and lets that zero be a frame the viewer can
+       actually see.
+
+       data-water IS an addition, and the only one. The ambient layers carry
+       their animation inline and run from parse, so the reduced-motion rule
+       in <head> needs some hook to still them - an inline style is not
+       something a stylesheet can reach. -->
   <div id="boot-sonar" role="status" aria-label="Loading Juke">
-    <div data-water style="position:absolute;inset:0;pointer-events:none;background-image:radial-gradient(55% 34% at 28% 14%, rgba(140,190,255,.20), transparent 70%),radial-gradient(42% 26% at 68% 8%, rgba(180,215,255,.16), transparent 72%),radial-gradient(38% 22% at 46% 26%, rgba(120,170,240,.13), transparent 74%);filter:blur(16px);mix-blend-mode:screen;animation:causticDrift 17s ease-in-out infinite"></div>
-    <div data-water style="position:absolute;inset:0;pointer-events:none;background-image:radial-gradient(46% 30% at 74% 20%, rgba(150,200,255,.14), transparent 72%),radial-gradient(36% 20% at 18% 30%, rgba(190,220,255,.11), transparent 74%);filter:blur(22px);mix-blend-mode:screen;animation:causticDrift2 23s ease-in-out infinite"></div>
-    <div data-water style="position:absolute;top:-25%;left:12%;width:70px;height:150%;pointer-events:none;background:linear-gradient(to bottom, rgba(165,205,255,.16), rgba(165,205,255,0) 78%);filter:blur(16px);mix-blend-mode:screen;animation:shaftSway 14s ease-in-out infinite"></div>
-    <div data-water style="position:absolute;top:-25%;left:44%;width:104px;height:150%;pointer-events:none;background:linear-gradient(to bottom, rgba(150,195,255,.13), rgba(150,195,255,0) 72%);filter:blur(22px);mix-blend-mode:screen;animation:shaftSway 19s -6s ease-in-out infinite"></div>
-    <div data-water style="position:absolute;top:-25%;left:74%;width:56px;height:150%;pointer-events:none;background:linear-gradient(to bottom, rgba(190,220,255,.12), rgba(190,220,255,0) 70%);filter:blur(14px);mix-blend-mode:screen;animation:shaftSway 11s -3s ease-in-out infinite"></div>
-    <div data-water style="position:absolute;left:16%;top:64%;width:3px;height:3px;border-radius:50%;background:rgba(205,230,255,.75);animation:mote 15s -2s linear infinite"></div>
-    <div data-water style="position:absolute;left:33%;top:80%;width:2px;height:2px;border-radius:50%;background:rgba(205,230,255,.6);animation:mote 19s -7s linear infinite"></div>
-    <div data-water style="position:absolute;left:58%;top:72%;width:3px;height:3px;border-radius:50%;background:rgba(215,235,255,.5);animation:mote 22s -12s linear infinite"></div>
-    <div data-water style="position:absolute;left:78%;top:86%;width:2px;height:2px;border-radius:50%;background:rgba(205,230,255,.6);animation:mote 20s -9s linear infinite"></div>
-    <div data-anim style="position:absolute;left:50%;top:50%;width:8px;height:8px;margin:-4px 0 0 -4px;border-radius:50%;background:#EDF3FF;--sx:-5px;--sy:-160px;animation:speckIn .62s cubic-bezier(.4,.05,.35,1) both"></div>
-    <div data-anim style="position:absolute;left:50%;top:50%;width:6px;height:6px;margin:-3px 0 0 -3px;border-radius:50%;background:#EDF3FF;--sx:22px;--sy:-126px;animation:speckIn .56s .07s cubic-bezier(.4,.05,.35,1) both"></div>
-    <div data-anim style="position:absolute;left:50%;top:50%;width:5px;height:5px;margin:-2.5px 0 0 -2.5px;border-radius:50%;background:#DDE9FF;--sx:-26px;--sy:-104px;animation:speckIn .52s .12s cubic-bezier(.4,.05,.35,1) both"></div>
-    <div data-anim style="position:absolute;left:50%;top:50%;width:4px;height:4px;margin:-2px 0 0 -2px;border-radius:50%;background:#CFE2FF;--sx:12px;--sy:-80px;animation:speckIn .48s .18s cubic-bezier(.4,.05,.35,1) both"></div>
-    <div data-anim style="position:absolute;left:50%;top:50%;width:52px;height:50px;margin:-25px 0 0 -26px;border-radius:48% 48% 44% 44%;background:#EDF3FF;animation:blobForm .55s .46s cubic-bezier(.3,.6,.25,1) both"></div>
-    <div class="splash-mark"><juke-mark variant="form"></juke-mark></div>
-    <div style="position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 110px 34px rgba(2,4,8,.82)"></div>
+    <!-- Ambient water. These carry their animation inline and run from the
+         moment they are parsed, exactly as the design package has them: they
+         are not part of the 2700ms reveal and are meant to be mid-cycle on
+         frame 0. data-water is this project's own hook so the reduced-motion
+         rule can still them; an inline style is not something a stylesheet
+         can reach. -->
+    <div data-water class="l" style="background-image:radial-gradient(55% 34% at 28% 14%, rgba(140,190,255,.20), transparent 70%),radial-gradient(42% 26% at 68% 8%, rgba(180,215,255,.16), transparent 72%),radial-gradient(38% 22% at 46% 26%, rgba(120,170,240,.13), transparent 74%);animation:causticDrift 17s ease-in-out infinite"></div>
+    <div data-water class="l" style="background-image:radial-gradient(46% 30% at 74% 20%, rgba(150,200,255,.14), transparent 72%),radial-gradient(36% 20% at 18% 30%, rgba(190,220,255,.11), transparent 74%);animation:causticDrift2 23s ease-in-out infinite"></div>
+    <div data-water class="shaft" style="left:12%;width:14vmin;background:radial-gradient(50% 52% at 50% 26%, rgba(165,205,255,.16), rgba(165,205,255,0) 100%);animation:shaftSway 14s ease-in-out infinite"></div>
+    <div data-water class="shaft" style="left:44%;width:22vmin;background:radial-gradient(50% 52% at 50% 26%, rgba(150,195,255,.13), rgba(165,205,255,0) 100%);animation:shaftSway 19s -6s ease-in-out infinite"></div>
+    <div data-water class="shaft" style="left:74%;width:11vmin;background:radial-gradient(50% 52% at 50% 26%, rgba(190,220,255,.12), rgba(165,205,255,0) 100%);animation:shaftSway 11s -3s ease-in-out infinite"></div>
+    <div data-water class="mote" style="left:16%;top:64%;width:3px;height:3px;background:rgba(205,230,255,.75);animation:mote 15s -2s linear infinite"></div>
+    <div data-water class="mote" style="left:33%;top:80%;width:2px;height:2px;background:rgba(205,230,255,.6);animation:mote 19s -7s linear infinite"></div>
+    <div data-water class="mote" style="left:58%;top:72%;width:3px;height:3px;background:rgba(215,235,255,.5);animation:mote 22s -12s linear infinite"></div>
+    <div data-water class="mote" style="left:78%;top:86%;width:2px;height:2px;background:rgba(205,230,255,.6);animation:mote 20s -9s linear infinite"></div>
+
+    <!-- The reveal. EVERY ONE OF THESE STARTS AT opacity:0 WITH NO ANIMATION,
+         and carries its timing in data-anim instead. splash-boot.js applies
+         them all in one pass and calls mark.replay() at the same moment — see
+         its own note, and item 3 of the design package's handoff, which asks
+         for exactly this and says starting the layers before the mark is
+         mounted is the failure mode to avoid.
+
+         It is also what fixes the fault the owner reported twice: a CSS
+         animation begins at its first rendering opportunity, which on a real
+         machine can be a second or more before the browser presents anything,
+         and the opening beats were being spent unseen. Holding them until we
+         choose the moment is a better answer than the restart this replaces.
+
+         #markwrap is container-type:inline-size and every size here is cqw, so
+         the whole drop sequence scales with the mark rather than with the
+         viewport. Do not convert them to px — the package says so and the
+         reason is that a 2.6cqw drop is 2.6% of the mark at every size. -->
+    <div id="markwrap">
+      <div data-anim="dropFall .58s cubic-bezier(.5,0,.9,.55) both, dropMerge .22s .58s forwards" style="position:absolute;left:50%;top:50%;width:2.6cqw;height:2.6cqw;margin:-1.3cqw 0 0 -1.3cqw;border-radius:50% 50% 50% 50% / 40% 40% 60% 60%;background:#EDF3FF;opacity:0;--sx:0cqw;--sy:-46cqw"></div>
+      <div data-anim="dropFall .5s .1s cubic-bezier(.5,0,.9,.55) both, dropMerge .2s .6s forwards" style="position:absolute;left:50%;top:50%;width:1.5cqw;height:1.5cqw;margin:-.75cqw 0 0 -.75cqw;border-radius:50%;background:#DDE9FF;opacity:0;--sx:3.6cqw;--sy:-36cqw"></div>
+      <div data-anim="dropFall .42s .2s cubic-bezier(.5,0,.9,.55) both, dropMerge .2s .62s forwards" style="position:absolute;left:50%;top:50%;width:1.1cqw;height:1.1cqw;margin:-.55cqw 0 0 -.55cqw;border-radius:50%;background:#CFE2FF;opacity:0;--sx:-3cqw;--sy:-27cqw"></div>
+      <div data-anim="impactGlow .7s .56s ease-out both" style="position:absolute;left:50%;top:50%;width:20cqw;height:20cqw;margin:-10cqw 0 0 -10cqw;border-radius:50%;background:radial-gradient(circle, rgba(200,228,255,.9), rgba(200,228,255,0) 70%);opacity:0;pointer-events:none"></div>
+      <div data-anim="ripple .95s .58s cubic-bezier(.15,.6,.3,1) both" style="position:absolute;left:50%;top:50%;width:12cqw;height:12cqw;margin:-6cqw 0 0 -6cqw;border-radius:50%;border:.35cqw solid rgba(205,230,255,.85);opacity:0"></div>
+      <div data-anim="ripple .85s .76s cubic-bezier(.15,.6,.3,1) both" style="position:absolute;left:50%;top:50%;width:12cqw;height:12cqw;margin:-6cqw 0 0 -6cqw;border-radius:50%;border:.25cqw solid rgba(205,230,255,.5);opacity:0"></div>
+      <div data-anim="splash .55s .6s cubic-bezier(.3,.5,.6,1) both" style="position:absolute;left:50%;top:50%;width:.9cqw;height:.9cqw;margin:-.45cqw 0 0 -.45cqw;border-radius:50%;background:#EDF3FF;opacity:0;--sx:-8cqw;--sy:-9cqw"></div>
+      <div data-anim="splash .5s .61s cubic-bezier(.3,.5,.6,1) both" style="position:absolute;left:50%;top:50%;width:.75cqw;height:.75cqw;margin:-.375cqw 0 0 -.375cqw;border-radius:50%;background:#EDF3FF;opacity:0;--sx:7cqw;--sy:-10.5cqw"></div>
+      <div data-anim="splash .48s .6s cubic-bezier(.3,.5,.6,1) both" style="position:absolute;left:50%;top:50%;width:.6cqw;height:.6cqw;margin:-.3cqw 0 0 -.3cqw;border-radius:50%;background:#DDE9FF;opacity:0;--sx:-3.5cqw;--sy:-12cqw"></div>
+      <div data-anim="splash .52s .62s cubic-bezier(.3,.5,.6,1) both" style="position:absolute;left:50%;top:50%;width:.6cqw;height:.6cqw;margin:-.3cqw 0 0 -.3cqw;border-radius:50%;background:#DDE9FF;opacity:0;--sx:10cqw;--sy:-6.5cqw"></div>
+      <div data-anim="blobForm .7s .62s cubic-bezier(.3,.6,.25,1) both" style="position:absolute;left:50%;top:50%;width:10cqw;height:9.6cqw;margin:-4.8cqw 0 0 -5cqw;border-radius:48% 48% 44% 44%;background:#EDF3FF;opacity:0"></div>
+      <juke-mark variant="form"></juke-mark>
+    </div>
+    <div id="vig"></div>
   </div>
   <!-- Parser-blocking, and here rather than in <head> on purpose. Both
        questions this script answers - does the splash play at all, and does

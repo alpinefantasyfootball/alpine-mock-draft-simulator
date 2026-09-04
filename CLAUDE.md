@@ -3913,11 +3913,24 @@ bytes would be a false provenance claim, and an invalid one.
 
 ### Deepwater, the cold launch
 
-Four specks fall through deep water, gather at centre, merge into a droplet,
-and the droplet expands into the mark; teeth light left to right, the eyes
-flicker twice and hold. The reveal is 2500ms and the overlay holds **3100**,
-then the frame is dead still until the app is ready. It replaced Breach, a
-4000ms shark leaping through a waterline.
+Three drops fall through deep water and land at centre; an impact glow and two
+ripples spread from where they land, four beads arc out of the splash, and the
+droplet expands as the mark grows up underneath it. Teeth light left to right,
+the eyes flicker twice and hold. **The reveal is 2700ms and the overlay holds
+exactly that**, then the frame is dead still until the app is ready. It
+replaced Breach, a 4000ms shark leaping through a waterline.
+
+**Revised once, and the second cut is the one to read.** The first was four
+specks converging on a droplet that simply became the mark: no impact, no
+consequence, and a mark that rose from `scale(.82)` over 580ms, which reads as
+a fade rather than a growth. The owner reported it as still off after two
+rounds of timing fixes and a new package arrived. What changed is not a number
+but the mechanism — see below — and the mark's own rise moved with it, from
+`.4` over 800ms, so it visibly comes out of the place the drops landed.
+
+**Everything below about how the hold used to be measured is kept because the
+failures are instructive, and every one of them is now structurally
+impossible.**
 
 **The 600ms difference is the composition's last beat, not slack.** It shipped
 dismissing at exactly 2500 — the reveal's own length — on the reasoning that
@@ -3975,20 +3988,58 @@ The element id is still `#boot-sonar` — `theme.js`'s comment, `main.jsx`'s
 teardown and `sonar.spec.mjs` all key off that literal string, and none of it
 had to change. Only what plays inside it did.
 
-**`--total` retimes the water and cannot retime the mark**, and that is the one
-thing here that is invisible when it breaks. The specks, droplet, caustics,
-shafts and motes are CSS in `index.html` and derive from `--total`. The rise,
-the teeth and the eye flicker are inside `<juke-mark variant="form">`, where no
-selector in this repository reaches them. They agree at 2500ms today. Moving
-one without re-cutting the other desynchronises two halves of one animation.
-The same fact makes `sonar.spec.mjs`'s 2400–3400ms bound a *published figure
-this repository matches* rather than one it can measure and re-derive.
+### The layers do not start themselves any more
+
+This is the change that actually fixed it, and it came from the design package
+rather than from here. **Every finite layer in the overlay ships at
+`opacity: 0` with no `animation` at all**, carrying its timing in a `data-anim`
+attribute instead. `splash-boot.js` applies the lot in one pass and calls
+`mark.replay()` in the same breath, so the drops, the impact, the droplet and
+the mark's rise share one zero.
+
+**Which means the composition cannot begin before it can be seen.** Every
+earlier fix here was a correction applied after the fact — hold from the
+animation's own `startTime`, then restart the animations at first paint — and
+both were chasing a zero that CSS had already chosen. A layer that has not
+started costs nothing to hold; one that has is a visible jump to rewind.
+Measured across font latencies of 0 / 400 / 900 / 1800ms, the pass now lands
+38 / 57 / 54 / 48ms **after** first paint, and the hold comes out
+2999 / 2994 / 3001 / 2993ms every time.
+
+**And it took the freeze with it, which was not the point and is the larger
+win.** Waiting for a painted frame puts `app.js`'s parse and React's hydration
+*before* the reveal rather than inside it. Long tasks overlapping the reveal,
+at 6x CPU throttling: **1989ms of 2500 originally, 361ms after the restart fix,
+90ms now.** At 4x it is 50ms, and at 1x it is zero.
+
+**The reveal is timed in two files and neither may be re-cut alone.** The water
+and the drop sequence are CSS in `index.html`; the rise, the teeth and the eye
+flicker are inside `<juke-mark variant="form">`, where no selector in this
+repository reaches them. They agree today — the drops land at ~620ms, the
+droplet starts at 620 and the mark's rise at 660, so the mark comes out of the
+droplet. Re-time one and the mark arrives out of nothing.
+
+**There used to be a `--total` custom property claiming to retime the water
+from one place, and it was already dead.** Nothing referenced `var(--total)`:
+every layer carries its own literal duration, copied verbatim from the
+reference so the tuned set stays tuned. It is gone rather than kept for
+tidiness — a knob that turns nothing is worse than no knob.
+
+**`juke-mark.js` moved too, and the artwork did not.** `ART`, `EYE_BLOOM`,
+`RIM_D` and `TAIL` are byte-identical to the previous copy — checked, because
+`scripts/build_icons.mjs` derives every SVG and PNG from `ART` and a change
+there is an icon rebuild. What moved is the `form` variant's timing and
+`BASE_CSS`'s `transform-origin`, which is now an explicit `640px 386px` rather
+than `50% 50%`. That matters more than it looks: the rise starts at `scale(.4)`
+now, so an origin that resolved anywhere but the mark's true centre would grow
+it out of the wrong point.
 
 ### Downloading is not executing, and the reveal only cares about the second
 
 The reveal was frozen mid-flight and it was `stats.js`. `requestIdleCallback`'s
 2000ms timeout fires at 2000ms on a page that never goes idle, and the reveal
-runs from its first painted frame to that frame + 2500ms — so
+runs from its first painted frame to that frame + 2500ms (2700 since the
+revision) — so
 `players.js`/`stats.js`/`draft-engine.js` landed squarely inside it. **769KB of
 `stats.js` is not something a compositor can absorb**, and the parts of the
 reveal that read AS the reveal are the worst possible ones to block: the teeth
@@ -4129,12 +4180,22 @@ reduced-motion handling and its animations are in a shadow root, so
 `splash-boot.js` swaps the attribute to `variant="static"` and `main.jsx`
 shortens its hold to 600ms off an attribute that script sets — rather than a
 second `matchMedia` call that could disagree with the first. The water keeps its
-opacity and loses only its motion, so the frame is still the designed picture;
-the specks and droplet are removed outright, because both animate from opacity 0
-and holding either at its first frame paints a stray dot over the mark.
+opacity and loses only its motion, so the frame is still the designed picture.
 
-**`<html>` carries `#0a1119`.** The overlay's own background cannot cover a
-frame in which the overlay does not exist.
+**The drop sequence needs no rule at all now**, and the `display: none` that
+used to hide it is deleted rather than kept as belt and braces. Those layers
+ship at `opacity: 0` with no animation and only the start pass gives them one,
+and that pass returns early under reduced motion — so they are invisible by
+construction. A second, silent way for a layer to be hidden is how the next
+person spends an hour on a layer that is behaving correctly.
+
+**`<html>` carries `#0a1119`, inline in `web/index.html`.** The overlay's own
+background cannot cover a frame in which the overlay does not exist — and the
+declaration cannot live in `index.css`, which is an external file Vite `<link>`s
+and therefore cannot apply until it has been fetched. Measured from an iPhone
+recording at 50ms per frame: a pure white screen from 2200ms to 2350ms before
+the navy. Desktop never showed it, because Chrome keeps presenting the previous
+page; iOS Safari paints it.
 
 **There is no wordmark, and the argument for the old one survives its
 removal.** Breach carried `<b>Juke</b>` under the shark and this file argued for

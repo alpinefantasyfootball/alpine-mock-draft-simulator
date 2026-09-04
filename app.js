@@ -10641,49 +10641,28 @@ function scheduleDeferredData() {
 }
 
 /* When the cold-load composition finishes, in performance.now() terms, or
-   null while that cannot yet be known. A CSS animation is play-pending until
-   its first rendering opportunity, so this answers null until the reveal has
-   actually begun — which is the point: the reveal starts when the page can
-   first paint, not when this file parses. */
+   null while that cannot yet be known.
+
+   It is read off the element rather than derived from the animations now.
+   splash-boot.js applies every finite layer in one pass and stamps
+   data-splash-started-at at that moment, so the end is simply that plus the
+   reveal's own length — no scan, no filtering, and no way to accidentally
+   count #boot-sonar's own dismissal failsafe as part of the picture, which is
+   a mistake this file has already made once and paid six seconds for.
+
+   REVEAL_MS is the design package's 2700. It is written down here as well as
+   in main.jsx and that is a real duplication, mitigated rather than removed:
+   the two answer different questions (when may the parse resume, and when may
+   the layer leave) and neither is the other's source. If the package ever
+   re-times the reveal, both move. */
+const REVEAL_MS = 2700;
+
 function revealEndsAt(el) {
-  let latest = -Infinity;
-  const scan = function (root) {
-    if (!root || typeof root.getAnimations !== "function") return;
-    let list;
-    try { list = root.getAnimations({ subtree: true }); } catch (e) { return; }
-    list.forEach(function (a) {
-      if (a.startTime == null || !a.effect) return;
-      /* The overlay's own animation is its DISMISSAL, not part of the
-         composition, and counting it put this out by six seconds.
-         #boot-sonar carries `splash-boot-failsafe 600ms ease-in 8s` — a
-         perfectly finite animation with an endTime of 8600ms — so the
-         "when does the reveal finish" answer came back 8700 instead of 2650,
-         hit the ceiling below, and the board landed at 5406ms instead of
-         2850. It measured as smooth and shipped a late board, which is the
-         half of this trade that is easy not to look at.
-
-         Excluded by target rather than by name: the distinction is that the
-         layer's own fade-out belongs to the teardown and everything inside
-         it belongs to the picture. A keyframe name would be a second place
-         to keep index.html's CSS written down. */
-      if (a.effect.target === el) return;
-      let timing;
-      try { timing = a.effect.getComputedTiming(); } catch (e) { return; }
-      // Ambient only: the caustics, shafts and motes run `infinite` and are
-      // still going when the layer leaves, so they say nothing about where
-      // the finite composition has got to.
-      if (!isFinite(timing.endTime)) return;
-      const ends = a.startTime + timing.endTime;
-      if (ends > latest) latest = ends;
-    });
-  };
-  scan(el);
-  const mark = el.querySelector("juke-mark");
-  if (mark) scan(mark.shadowRoot);
-  return latest === -Infinity ? null : latest;
+  const stamped = el.getAttribute("data-splash-started-at");
+  if (stamped === null) return null;
+  const n = Number(stamped);
+  return isFinite(n) ? n + REVEAL_MS : null;
 }
-
-preloadDeferredData();
 
 (function loadAfterTheReveal() {
   const splash = document.getElementById("boot-sonar");
