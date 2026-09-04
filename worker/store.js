@@ -681,6 +681,13 @@ export async function deleteUserData(env, clerkId) {
     await env.DB.batch([
       env.DB.prepare("DELETE FROM draft_history WHERE clerk_id = ?").bind(clerkId),
       env.DB.prepare("DELETE FROM saved_drafts WHERE clerk_id = ?").bind(clerkId),
+      // Added with 0005_leagues.sql, and adding it here is the whole point
+      // of that table having a foreign key: a new child table that this
+      // batch does not know about is an account deletion that silently
+      // leaves something behind, and the thing left behind would be which
+      // league somebody plays in. Anything keyed by clerk_id belongs in
+      // this list the day its migration lands.
+      env.DB.prepare("DELETE FROM connected_leagues WHERE clerk_id = ?").bind(clerkId),
       env.DB.prepare("DELETE FROM users WHERE clerk_id = ?").bind(clerkId)
     ]);
     return true;
@@ -698,4 +705,107 @@ function chunk(list, size) {
   const out = [];
   for (let i = 0; i < list.length; i += size) out.push(list.slice(i, i + size));
   return out;
+}
+
+/* ---------- Connected leagues ----------
+
+   A league connection is identity, not content: which league, which member
+   of it this account is, and a small cache of the label so the header chip
+   can draw without a Sleeper round trip. The league's actual state —
+   rosters, records, points — is never stored. It is fetched and cached at
+   the edge by the snapshot route, because it changes on its own and a copy
+   here would be a second answer to "what is the score" that nothing
+   refreshes.
+
+   Same guards as every function above: a missing DB binding is a normal
+   condition, and a failure is a value rather than a throw. */
+
+export async function listLeagues(env, clerkId) {
+  if (!env.DB) return [];
+
+  try {
+    const res = await env.DB.prepare(
+      "SELECT provider, league_id, owner_id, name, season, total_teams, connected_at" +
+      " FROM connected_leagues WHERE clerk_id = ? ORDER BY connected_at DESC"
+    ).bind(clerkId).all();
+    return (res.results || []).map((r) => ({
+      provider: r.provider,
+      leagueId: r.league_id,
+      ownerId: r.owner_id,
+      name: r.name,
+      season: r.season,
+      totalTeams: r.total_teams,
+      connectedAt: r.connected_at,
+    }));
+  } catch (err) {
+    // A missing table reads exactly like an account with no leagues, which
+    // is why the write below is what tells the two apart — the same trap
+    // listDraftHistory() already documents for draft_history.
+    console.error("leagues read failed:", err && err.message);
+    return [];
+  }
+}
+
+/* Connect, or refresh what is already connected.
+
+   Batched with the users upsert for the reason upsertUser() explains at
+   length: connected_leagues.clerk_id carries a foreign key, that row is
+   only otherwise created by GET /me, and a write against a missing one
+   fails with SQLITE_CONSTRAINT_FOREIGNKEY — which is what silently broke
+   every saved draft for every account once already.
+
+   ON CONFLICT updates rather than errors, so pressing connect twice on a
+   league already connected refreshes its cached label instead of failing.
+   That is also how the snapshot route keeps the label current. */
+export async function putLeague(env, clerkId, league) {
+  if (!env.DB) return false;
+
+  const stamp = nowSeconds();
+  try {
+    await env.DB.batch([
+      upsertUser(env, clerkId, stamp),
+      env.DB.prepare(
+        "INSERT INTO connected_leagues" +
+        " (clerk_id, provider, league_id, owner_id, name, season, total_teams, connected_at, refreshed_at)" +
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)" +
+        " ON CONFLICT(clerk_id, provider, league_id) DO UPDATE SET" +
+        "   owner_id = excluded.owner_id," +
+        "   name = excluded.name," +
+        "   season = excluded.season," +
+        "   total_teams = excluded.total_teams," +
+        "   refreshed_at = excluded.refreshed_at"
+      ).bind(
+        clerkId,
+        league.provider,
+        league.leagueId,
+        league.ownerId || null,
+        league.name,
+        league.season,
+        league.totalTeams || null,
+        stamp,
+        stamp
+      ),
+    ]);
+    return true;
+  } catch (err) {
+    console.error("league write failed:", err && err.message);
+    return false;
+  }
+}
+
+export async function deleteLeague(env, clerkId, provider, leagueId) {
+  if (!env.DB) return false;
+
+  try {
+    await env.DB.prepare(
+      "DELETE FROM connected_leagues WHERE clerk_id = ? AND provider = ? AND league_id = ?"
+    ).bind(clerkId, provider, leagueId).run();
+    // Deleting nothing is a success: disconnecting a league that is
+    // already gone is the state the caller asked for, and Clerk's own
+    // webhook retries depend on the same idempotence.
+    return true;
+  } catch (err) {
+    console.error("league delete failed:", err && err.message);
+    return false;
+  }
 }

@@ -555,6 +555,123 @@
        for the answer and another for whether to believe it. */
 
 
+
+    /* ---- League connect (Sleeper) ----
+
+       Same contract as the account methods above: every one resolves,
+       none rejects, and the reason says which failure it was. Two of the
+       three need no token — looking a username up and reading a league are
+       public reads — and connecting one does, because a connection belongs
+       to an account and there is nowhere else to put it.
+
+       `reason` gains one value here that the draft/history methods have no
+       use for:
+
+         "not-found"   the worker reached Sleeper and Sleeper said no. For
+                       a lookup that is a username nobody has; for a
+                       connect it is a league id that does not resolve.
+                       Distinct from "offline" on purpose — one is worth
+                       retyping, the other is worth retrying, and a screen
+                       that cannot tell them apart says the wrong thing
+                       half the time. */
+
+    sleeperLookup: function (username, season) {
+      const name = String(username || "").trim();
+      if (!name) return Promise.resolve(syncResult(false, "bad-request", { user: null, leagues: [] }));
+      const http = WORKER.replace(/^ws/, "http");
+      const q = "?username=" + encodeURIComponent(name) + (season ? "&season=" + encodeURIComponent(season) : "");
+      return fetch(http + "/sleeper/lookup" + q)
+        .then(function (r) {
+          if (!r.ok) return syncResult(false, reasonForStatus(r.status), { user: null, leagues: [] });
+          return r.json()
+            .then(function (body) {
+              // A username nobody has comes back 200 with a null user —
+              // Sleeper answering "no" rather than failing. Reported as
+              // not-found so the screen can say "we could not find that
+              // username" instead of "something went wrong".
+              if (!body || !body.user) return syncResult(false, "not-found", { user: null, leagues: [] });
+              return syncResult(true, null, {
+                user: body.user,
+                leagues: Array.isArray(body.leagues) ? body.leagues : [],
+                season: body.season || null
+              });
+            })
+            .catch(() => syncResult(false, "bad-response", { user: null, leagues: [] }));
+        })
+        .catch(() => syncResult(false, "offline", { user: null, leagues: [] }));
+    },
+
+    // A league's current state — rosters, records, points. Cached at the
+    // edge for a couple of minutes, so calling this on every navigation is
+    // cheap and calling it in a loop is not a problem for Sleeper.
+    leagueSnapshot: function (leagueId) {
+      const id = String(leagueId || "");
+      if (!id) return Promise.resolve(syncResult(false, "bad-request", { snapshot: null }));
+      const http = WORKER.replace(/^ws/, "http");
+      return fetch(http + "/sleeper/snapshot?league=" + encodeURIComponent(id))
+        .then(function (r) {
+          if (r.status === 404) return syncResult(false, "not-found", { snapshot: null });
+          if (!r.ok) return syncResult(false, reasonForStatus(r.status), { snapshot: null });
+          return r.json()
+            .then((body) => syncResult(true, null, { snapshot: body || null }))
+            .catch(() => syncResult(false, "bad-response", { snapshot: null }));
+        })
+        .catch(() => syncResult(false, "offline", { snapshot: null }));
+    },
+
+    listLeagues: function (token) {
+      if (!token) return Promise.resolve(syncResult(false, "signed-out", { leagues: [] }));
+      const http = WORKER.replace(/^ws/, "http");
+      return fetch(http + "/me/leagues", { headers: { "authorization": "Bearer " + token } })
+        .then(function (r) {
+          if (!r.ok) return syncResult(false, reasonForStatus(r.status), { leagues: [] });
+          return r.json()
+            .then((body) => syncResult(true, null, {
+              leagues: (body && Array.isArray(body.leagues)) ? body.leagues : []
+            }))
+            .catch(() => syncResult(false, "bad-response", { leagues: [] }));
+        })
+        .catch(() => syncResult(false, "offline", { leagues: [] }));
+    },
+
+    connectLeague: function (token, leagueId, ownerId) {
+      if (!token) return Promise.resolve(syncResult(false, "signed-out", { league: null }));
+      const http = WORKER.replace(/^ws/, "http");
+      return fetch(http + "/me/leagues", {
+        method: "POST",
+        headers: { "content-type": "application/json", "authorization": "Bearer " + token },
+        body: JSON.stringify({ leagueId: String(leagueId || ""), ownerId: ownerId || null })
+      })
+        .then(function (r) {
+          if (r.status === 404) return syncResult(false, "not-found", { league: null });
+          if (!r.ok) return syncResult(false, reasonForStatus(r.status), { league: null });
+          return r.json()
+            .then((body) => (body && body.ok)
+              ? syncResult(true, null, { league: body.league || null })
+              : syncResult(false, "store-failed", { league: null }))
+            .catch(() => syncResult(false, "bad-response", { league: null }));
+        })
+        .catch(() => syncResult(false, "offline", { league: null }));
+    },
+
+    disconnectLeague: function (token, leagueId, provider) {
+      if (!token) return Promise.resolve(syncResult(false, "signed-out"));
+      const http = WORKER.replace(/^ws/, "http");
+      const q = "?league=" + encodeURIComponent(String(leagueId || "")) +
+                "&provider=" + encodeURIComponent(provider || "sleeper");
+      return fetch(http + "/me/leagues" + q, {
+        method: "DELETE",
+        headers: { "authorization": "Bearer " + token }
+      })
+        .then(function (r) {
+          if (!r.ok) return syncResult(false, reasonForStatus(r.status));
+          return r.json()
+            .then((body) => (body && body.ok) ? syncResult(true) : syncResult(false, "store-failed"))
+            .catch(() => syncResult(false, "bad-response"));
+        })
+        .catch(() => syncResult(false, "offline"));
+    },
+
     saveDraft: function (token, data) {
       if (!token) return Promise.resolve(syncResult(false, "signed-out"));
       const http = WORKER.replace(/^ws/, "http");

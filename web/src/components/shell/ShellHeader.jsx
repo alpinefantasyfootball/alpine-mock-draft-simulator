@@ -4,6 +4,7 @@ import { useAccountUiReady } from '../../hooks/useAccountUiReady.js'
 import { CLERK_APPEARANCE } from '../../clerkConfig.js'
 import KickoffPill from './KickoffPill.jsx'
 import ConnectLeagueCta from './ConnectLeagueCta.jsx'
+import { useLeague } from '../../hooks/useLeague.js'
 
 /* The sitewide header, guest and connected — design_handoff_v3_alive's
    "Global rules", screens 2ag/2au (mobile) and 3ag/3au (desktop).
@@ -86,16 +87,44 @@ function GuestAuth() {
   )
 }
 
-/* The league switcher's slot, before there is a league to switch between.
+/* The handoff's league chip — "Dynasty Degens · Wk 3" — and what stands in
+   its place before one is connected.
 
-   The handoff draws a chip here reading "Dynasty Degens · Wk 3" with a
-   caret. There is no league, so the chip offers the thing that would put
-   one there — and it opens the same waitlist every other "connect" control
-   in the app opens, rather than linking to #/you, which is where this
-   pointed and which is a redirect standing in for an answer. */
-function ConnectChip() {
+   Three states rather than two, which is why this reads `status` and not
+   just `league`: "loading" draws nothing at all, because a chip reading
+   "Connect a league" for one tick on every page load tells somebody who
+   HAS one that they have been disconnected. Nothing, then the truth,
+   beats the wrong thing followed by the right one.
+
+   No caret yet. The handoff draws one because it is a switcher, and there
+   is nothing to switch between until a second league can be connected —
+   an affordance for a menu that does not open is the dead control this
+   project keeps finding. It goes to the You screen, which is where
+   leagues are managed. */
+function LeagueChip() {
+  const { status, league } = useLeague()
+
+  if (status === 'loading') return null
+
+  if (status === 'connected' && league) {
+    return (
+      <a
+        href="#/you"
+        className="hidden items-center gap-2 rounded-full border border-flow-pillEdge px-3 py-[7px] text-[13px] font-semibold text-voidInk-primary transition-colors duration-150 hover:border-teal/50 sm:inline-flex"
+      >
+        <span
+          className="grid h-[18px] w-[18px] shrink-0 place-items-center rounded font-display text-[11px] font-extrabold text-surface-page"
+          style={{ background: '#00E5FF' }}
+        >
+          S
+        </span>
+        <span className="max-w-[22ch] truncate">{league.name}</span>
+      </a>
+    )
+  }
+
   return (
-    <ConnectLeagueCta variant="chip" source="header-chip">
+    <ConnectLeagueCta variant="chip">
       <span
         className="grid h-[18px] w-[18px] place-items-center rounded font-display text-[11px] font-extrabold text-surface-page"
         style={{ background: '#00E5FF' }}
@@ -152,7 +181,7 @@ export default function ShellHeader({ active = null }) {
                 <GuestAuth />
               </SignedOut>
               <SignedIn>
-                <ConnectChip />
+                <LeagueChip />
                 {/* Clerk's own avatar rather than the handoff's gradient
                     circle, and the reason is sign-out: UserButton's menu is
                     the only place Clerk offers it, and on a phone this and
