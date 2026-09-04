@@ -1,5 +1,6 @@
 import { SignInButton, SignUpButton, SignedIn, SignedOut, useClerk, useUser } from '@clerk/clerk-react'
 import AppShell from './shell/AppShell.jsx'
+import ConnectLeagueCta from './shell/ConnectLeagueCta.jsx'
 import { useAccountUiReady } from '../hooks/useAccountUiReady.js'
 import { useEngine, useJukeTick } from '../hooks/useJukeEngine.js'
 
@@ -208,16 +209,16 @@ export default function YouScreen() {
                       this screen a reader would act on — a fabricated
                       league is worse than an empty section, which at least
                       says truthfully that the next step is to add one. */}
-                  <a
-                    href="#/rooms"
-                    className="flex items-center justify-between gap-3 rounded-[14px] border border-dashed border-flow-pillEdge px-4 py-3 text-[14px] text-voidInk-primary transition-colors duration-150 hover:border-teal/50"
-                  >
+                  {/* The same waitlist every other "connect" control opens,
+                      rather than the #/rooms link this used to be — that was
+                      a redirect standing in for an answer. */}
+                  <ConnectLeagueCta variant="row" source="you-add-league">
                     <span className="flex items-center gap-2.5">
                       <span className="text-teal" aria-hidden="true">✨</span>
                       Add a league from Sleeper, ESPN, Yahoo or CBS
                     </span>
                     <span className="text-ink-muted" aria-hidden="true">›</span>
-                  </a>
+                  </ConnectLeagueCta>
                 </Section>
 
                 <Section title="SETTINGS">

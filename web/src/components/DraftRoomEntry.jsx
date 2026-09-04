@@ -142,12 +142,23 @@ export default function DraftRoomEntry({
 
         <div className="relative flex items-start">
           <div className="min-w-0 flex-1">
+            {/* #/rooms, and it says so above `sm`.
+
+                It pointed at #/ with an aria-label of "Back to home",
+                which was wrong twice: the Draft Room is reached from the
+                Rooms lobby, and 3cg/3cu draw this control as "< Rooms"
+                (2cg has the bare chevron, hence the label's breakpoint).
+                Home is already one tab away in the header; a back control
+                that skips the level it came from is not a back control.
+
+                Same shape RoomHero gives the other four rooms, so all five
+                now go back to the same place by the same affordance. */}
             <a
-              href="#/"
-              aria-label="Back to home"
-              className="-ml-2 mb-1 flex h-10 w-10 items-center justify-center rounded-[10px] text-voidInk-body"
+              href="#/rooms"
+              className="-ml-2 mb-1 inline-flex h-10 items-center gap-1.5 rounded-[10px] pr-2 text-voidInk-body transition-colors duration-150 hover:text-white"
             >
-              <ChevronLeft className="h-6 w-6" />
+              <ChevronLeft className="h-6 w-6 shrink-0" />
+              <span className="hidden text-[17px] sm:inline">Rooms</span>
             </a>
             <h1 className="font-display text-[38px] font-extrabold italic uppercase leading-[0.94] tracking-[-0.01em] text-white">
               Mock Drafts

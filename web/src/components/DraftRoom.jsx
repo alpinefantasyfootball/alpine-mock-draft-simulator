@@ -891,29 +891,33 @@ export default function DraftRoom() {
        z-40 would trap this whole overlay beneath it. */
     return (
       <div className="fixed inset-0 z-[60] flex flex-col bg-slate text-white">
-        {/* ShellHeader, not LobbyBar, and only over the dashboard.
+        {/* Both screens under this route get the site header, and the
+            version that gated it on `lockerView` was wrong.
 
-            The entry screen carries its own back chevron, title and "Draft
-            settings" button, so any header above it is a second one with a
-            second way into the identical modal — the duplicate-affordance
-            problem, stacked. The dashboard has no header of its own, so it
-            gets the site's.
+            The reasoning behind that gate was that the entry screen
+            carries its own back chevron and title, so a header above it
+            would be a second one. 3cg and 3cu say otherwise: they draw the
+            full JUKE / Home / Drafts / Rooms bar AND the "‹ Rooms" chevron
+            underneath it. They are not alternatives — the chevron goes
+            back one level, the header goes anywhere. Reported as "header
+            completely missing from the Draft Room page", which is exactly
+            what it was: this route hides #view-home, so with no header
+            rendered here there was none on the page at all.
 
-            It gets the SITE's now rather than LobbyBar's, which was the
-            last of the pre-handoff marketing header left anywhere: a
-            "How It Works / The Rooms" nav with a dropdown, on one screen,
-            disagreeing with the three tabs every other screen shows. One
-            shell, which is what this handoff is for.
+            It is ShellHeader rather than the LobbyBar that used to sit
+            here, which was the last of the pre-handoff marketing header
+            left anywhere: a "How It Works / The Rooms" nav with a
+            dropdown, on one screen, disagreeing with the three tabs every
+            other screen shows.
 
-            What LobbyBar carried that this does not is the settings gear,
-            and it is not lost: NewMockPanel's own "Edit setup" opens the
-            same modal from inside the dashboard, and the entry screen one
-            press back has "Draft settings". A gear in a header is the
-            third way into a screen that already had two.
+            What LobbyBar carried that this does not is the settings gear.
+            The entry screen's own "Draft settings" button is the way in
+            now, and it is the only one — the dashboard behind "Your
+            insights" is analytics and nothing else.
 
             active="rooms" because the Draft Room is a room and this is
             reached through #/rooms/draft. */}
-        {!!lockerView && <ShellHeader active="rooms" />}
+        <ShellHeader active="rooms" />
 
         {settingsOpen && (
           <DraftSettingsModal
@@ -990,14 +994,8 @@ export default function DraftRoom() {
                the launcher's own CTA from working, same rule LobbyBar used to
                enforce before this screen owned the action itself. */
             <DraftLocker
-              onStartNew={handleStartNew}
               onRunAtSeat={startAtSeat}
-              problem={problem}
-              lobbySlot={lobbySlot}
               roomActive={roomActive}
-              onSetLobbySlot={setLobbySlot}
-              onOpenSettings={() => setSettingsOpen(true)}
-              onDraftWithFriends={handleDraftWithFriends}
               initialAnalyzeId={typeof lockerView === 'string' && lockerView !== 'dashboard' ? lockerView : null}
               /* Every width now, for the same reason the branch above
                  stopped asking: the dashboard is reached FROM the entry

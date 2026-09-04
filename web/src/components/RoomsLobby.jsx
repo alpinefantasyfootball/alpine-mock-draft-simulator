@@ -1,6 +1,8 @@
-import { SignInButton, SignUpButton, SignedOut } from '@clerk/clerk-react'
+import { SignInButton, SignUpButton, SignedIn, SignedOut } from '@clerk/clerk-react'
 import AppShell from './shell/AppShell.jsx'
 import RoomsGridAlive from './RoomsGridAlive.jsx'
+import ConnectLeagueCta from './shell/ConnectLeagueCta.jsx'
+import { useRooms } from '../hooks/useRooms.js'
 import { useAccountUiReady } from '../hooks/useAccountUiReady.js'
 
 /* #/rooms — design_handoff_v3_alive screens 2bg/2bu (mobile) and 3bg/3bu
@@ -28,6 +30,47 @@ import { useAccountUiReady } from '../hooks/useAccountUiReady.js'
    That is two strings and one hidden span, which is copy rather than
    logic. What would be the "written down twice" failure is two components. */
 
+/* 3bu's phase strip: one cell per room across the top of the grid, the
+   room you are in now lit.
+
+   The handoff fills it with league timings — `WAIVER · 14H`, `TRADE · 2D`,
+   `LINEUP · SUN` — and every one of those is a deadline read off a
+   connected league. What survives without one is the part that is a fact
+   about the product rather than about your week: which room is open. That
+   is `live` on ROOMS, so the strip is real, and the timings arrive with
+   the league rather than being guessed.
+
+   Signed in only, which is the handoff's own split: 3bu draws this and
+   3bg does not. Signed out the page is already making a bigger ask (make
+   an account) and a row of locked labels above the same locked cards is
+   the same fact twice. */
+function PhaseStrip() {
+  const rooms = useRooms()
+  if (!rooms.length) return null
+
+  return (
+    <div className="mb-4 hidden gap-2 sm:flex">
+      {rooms.map((r) => {
+        const label = r.name.replace(/^The /, '').replace(/ Room$/, '').toUpperCase()
+        return (
+          <a
+            key={r.name}
+            href={r.href || `#/rooms/${r.slug}`}
+            className="flex-1 rounded-lg py-[9px] text-center font-mono text-[10px] tracking-[0.08em] transition-opacity duration-150 hover:opacity-90"
+            style={
+              r.live
+                ? { background: '#12302e', color: '#74E5CE' }
+                : { background: '#1A1F27', color: '#8A9BAA' }
+            }
+          >
+            {label} {r.live ? '✓' : '🔒'}
+          </a>
+        )
+      })}
+    </div>
+  )
+}
+
 function UnlockBar() {
   const ready = useAccountUiReady()
 
@@ -47,6 +90,25 @@ function UnlockBar() {
     >
       Log in
     </button>
+  )
+
+  const shell = (children) => (
+    <div className="mt-3.5 flex flex-col gap-3.5 rounded-2xl border border-line-hairline bg-[#151920] p-[18px] sm:flex-row sm:items-center sm:gap-4 sm:px-[22px]">
+      {children}
+    </div>
+  )
+
+  const signedInBar = shell(
+    <>
+      <span className="text-[26px]" role="img" aria-label="Locked">🔒</span>
+      <span className="flex-1">
+        <span className="block text-[16px] font-semibold text-white">
+          Unlock every room with your league
+        </span>
+        <span className="mt-1 block text-[12px] text-ink-muted">Sleeper · ESPN · Yahoo · CBS</span>
+      </span>
+      <ConnectLeagueCta variant="gradient" source="rooms-unlock-bar" />
+    </>,
   )
 
   const bar = (
@@ -74,13 +136,32 @@ function UnlockBar() {
     </div>
   )
 
-  /* Guest only, and the handoff is explicit about it: 2bg and 3bg draw this
-     bar and neither 2bu nor 3bu does. Somebody with a league connected has
-     nothing left to unlock, so the bar would be an ask with no answer —
-     the same rule the homepage's account card and "no account needed"
-     line already follow. */
+  /* The handoff draws this bar on 2bg/3bg and on neither connected screen,
+     because somebody with a league has nothing left to unlock. Nobody has
+     a league here yet, so the ask is still live for a signed-in reader —
+     what changes is what it asks for. Signed out that is an account and
+     then a connect; signed in the account is done and only the connect is
+     left, so the two buttons collapse to one.
+
+     It disappears on its own the day a league can be connected, which is
+     the same condition the handoff was drawing. */
   if (!ready) return bar
-  return <SignedOut>{bar}</SignedOut>
+  return (
+    <>
+      <SignedOut>{bar}</SignedOut>
+      <SignedIn>{signedInBar}</SignedIn>
+    </>
+  )
+}
+
+/* <SignedIn> throws without a ClerkProvider ancestor and main.jsx renders
+   none in a keyless build, so this answers "nothing" there rather than
+   taking the page down — the same guard every other account surface here
+   makes, wrapped once because two things on this screen need it. */
+function SignedInOnly({ children }) {
+  const ready = useAccountUiReady()
+  if (!ready) return null
+  return <SignedIn>{children}</SignedIn>
 }
 
 export default function RoomsLobby() {
@@ -123,6 +204,10 @@ export default function RoomsLobby() {
             </p>
           </div>
         </div>
+
+        <SignedInOnly>
+          <PhaseStrip />
+        </SignedInOnly>
 
         <RoomsGridAlive columns="lobby" />
         <UnlockBar />
