@@ -32,7 +32,16 @@ const CASES = [
   { hash: "#/you", needs: "You", tab: "You" },
 ];
 
-for (const size of [{ w: 390, h: 844, label: "phone" }, { w: 1280, h: 900, label: "desktop" }]) {
+/* 1440 rather than 1280 for the desktop pass, and the number is
+   load-bearing rather than taste. Every container here is
+   `max-w-[1280px] mx-auto`, so at a 1280 viewport — 1265 once the
+   scrollbar is off it — the max-width never binds, nothing is centred, and
+   every column runs edge to edge. The left-margin check below is then
+   measuring a degenerate layout: the two container orders it exists to
+   tell apart produce the identical edge there, and it passed against the
+   real bug for exactly that reason. 1440 is the narrowest round width at
+   which the centring is real. */
+for (const size of [{ w: 390, h: 844, label: "phone" }, { w: 1440, h: 900, label: "desktop" }]) {
   for (const c of CASES) {
     test(`${c.hash} renders on ${size.label}`, async ({ browser }) => {
       const context = await browser.newContext({ viewport: { width: size.w, height: size.h } });
@@ -60,6 +69,58 @@ for (const size of [{ w: 390, h: 844, label: "phone" }, { w: 1280, h: 900, label
         () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
       );
       expect(over, "no sideways page scroll").toBeLessThanOrEqual(0);
+
+      /* The screen's own title starts on the same left margin as the
+         header sitting above it.
+
+         Measured 3 Sep 2026 at 1440, this held on one route of five: the
+         homepage and the room pages started 40px LEFT of the wordmark
+         (padding on the full-bleed wrapper instead of inside the
+         max-width, so the column came out 1280 rather than 1200), and
+         #/drafts and #/you started 42-53px right of it (the glyph sitting
+         inline before the H1 rather than in an eyebrow above it). Nothing
+         overflowed, nothing threw, and every screen was correct on its
+         own -- the disagreement only exists between two of them.
+
+         The RELATIONSHIP, never an offset: 113 and 120 are both right
+         answers here depending on whether the page has a scrollbar, and a
+         literal would be wrong the next time max-w-[1280px] moves. Same
+         rule phone.spec.mjs already follows for the gap under the fixed
+         header. */
+      const edges = await page.evaluate(() => {
+        const vis = (e) => {
+          const r = e.getBoundingClientRect();
+          return r.width > 0 && r.height > 0;
+        };
+        const header = [...document.querySelectorAll("div")].find(
+          (e) =>
+            vis(e) &&
+            e.className.includes("max-w-[1280px]") &&
+            e.className.includes("items-center") &&
+            e.getBoundingClientRect().y < 90,
+        );
+        const h1 = [...document.querySelectorAll("#root h1")].filter(vis)[0];
+        if (!header || !h1) return null;
+        return {
+          header: Math.round(
+            header.getBoundingClientRect().x +
+              parseFloat(getComputedStyle(header).paddingLeft),
+          ),
+          h1: Math.round(h1.getBoundingClientRect().x),
+        };
+      });
+
+      /* Null on #/rooms/draft, which is DraftRoom's own Lobby rather than
+         an AppShell screen and draws neither of these. Skipped rather than
+         failed: this asserts a relationship between two things, and a
+         screen that has only one of them is not in breach of it. */
+      if (edges) {
+        expect(
+          edges.h1 - edges.header,
+          `${c.hash}: the title starts on the header's own left margin`,
+        ).toBe(0);
+      }
+
       await context.close();
     });
   }
