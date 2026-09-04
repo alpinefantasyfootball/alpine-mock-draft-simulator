@@ -200,6 +200,35 @@
        those are the parts a stylesheet can own without splitting a tuned
        set across two files. -->
   <style>
+    /* The flash-guard, and it has to be INLINE.
+
+       This moved here from index.css, where it was correct about everything
+       except the one thing that decides whether it works. Its comment there
+       read "it has to be here and not only on the overlay: this rule ships in
+       the stylesheet Vite <link>s from <head>, which is painted before <body>
+       is parsed" — true of where the rule sits in the document and false of
+       when it can be APPLIED, because that stylesheet is an external file and
+       has to be fetched first. Until it lands there is no author background on
+       <html> at all, and the browser paints its own.
+
+       Reported from an iPhone with a screen recording: sampled every 50ms, the
+       cold launch is a PURE WHITE SCREEN from 2200ms to 2350ms and only then
+       the navy ground. 150ms of white in the middle of a dark-brand launch,
+       immediately before the reveal.
+
+       Desktop never showed it, and that is the reason it survived rather than
+       a reason it was not there: Chrome keeps presenting the previous page
+       until the new document has something to show, so the white frame exists
+       and is simply never put on screen. iOS Safari paints it.
+
+       Inline in <head> is the only position that cannot be late — no fetch,
+       applied as the parser reads it. #0a1119 is the overlay gradient's
+       midpoint stop, so #boot-sonar arriving on top of it is not a visible
+       step; `body` keeps obsidian below, which is the page's real ground once
+       the overlay has gone. There is no second copy in index.css: that one was
+       moved, not duplicated. */
+    html { background-color: #0a1119; }
+
     #boot-sonar {
       /* One number retimes the water. Every finite delay below is a fraction
          of it rather than a hard-coded millisecond count — the same "derived
