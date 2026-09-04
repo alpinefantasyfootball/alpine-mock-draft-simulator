@@ -598,7 +598,28 @@ const ROOMS = [
   // `lead` is the short imperative line a card leads with ("Scout the
   // future.") — added for the homepage grid's card layout. `blurb` is the
   // longer description underneath it.
-  { name: "The Prospect Room", live: false, season: "Pre-season",
+  //
+  // `slug`, `glyph`, `accent` and `hook` arrived with design_handoff_v3_alive,
+  // which turns the rooms from a marketing grid into six real destinations
+  // (#/rooms/waiver). They are presentation, and they are here rather than in
+  // a map beside the React components for the reason this array's own comment
+  // already gives about the Draft Room's href: a room written down in two
+  // places drifts, and the thing that drifts silently is the one nobody
+  // renders twice on the same screen. A room with no `slug` has no page yet
+  // and its card does not link.
+  //
+  //   slug   — the #/rooms/<slug> segment
+  //   glyph  — the card and hero mark. Deliberately a character rather than
+  //            an icon import: it is read by the legacy homepage (no bundler)
+  //            and by React alike. Emoji where the design uses one, a plain
+  //            dingbat where it uses that (◎, ⇄) — those two are tinted by
+  //            `color` and an emoji cannot be.
+  //   accent — the room's own hue, from the handoff. Waiver is #00E5FF and
+  //            not the README's #74E5CE: both breakpoints' markup says cyan
+  //            (2dg/3dg), and the HTML is the spec where the two disagree.
+  //   hook   — the one line a locked card shows a guest.
+  { name: "The Prospect Room", slug: "prospect", glyph: "🔭", accent: "#82A1F6",
+    hook: "Preview: rookie board before the draft", live: false, season: "Pre-season",
     lead: "Scout the future.",
     blurb: "Analyze the college production and NFL translation of incoming rookies before they even hit your draft board." },
   // #/drafts (the Lobby/Locker), not #/draft-room (the live Cockpit
@@ -611,23 +632,28 @@ const ROOMS = [
   // board instead of the Lobby. #/drafts is `draftsActive` in that file,
   // which forces the Lobby regardless of `enteredRoom` — the one route
   // built for exactly this "start from a clean choice" entry.
-  { name: "The Draft Room", href: "#/drafts", live: true, season: "Pre-season",
+  { name: "The Draft Room", slug: "draft", glyph: "◎", accent: "#00E5FF",
+    hook: "Mock smarter.", href: "#/drafts", live: true, season: "Pre-season",
     lead: "Mock smarter.",
     blurb: "Run unlimited draft simulations against a board that automatically adjusts for ADP, tiers, and your custom scoring rules." },
 
-  { name: "The Waiver Room", live: false, season: "In-season",
+  { name: "The Waiver Room", slug: "waiver", glyph: "⚡", accent: "#00E5FF",
+    hook: "Preview: 4 claims worth making this week", live: false, season: "In-season",
     lead: "Win the wire.",
     blurb: "Connect your live league to simulate waiver claims and evaluate which free agents will actually impact your bottom line." },
-  { name: "The Trade Room", live: false, season: "In-season",
+  { name: "The Trade Room", slug: "trade", glyph: "⇄", accent: "#CDBDEF",
+    hook: "Preview: fair-value check on any offer", live: false, season: "In-season",
     // Homepage v4 pass 2's fix: a trade changes your roster, not your
     // remaining schedule — the old body's own claim, corrected.
     lead: "Price the deal.",
     blurb: "Both rosters valued against replacement, with the rest-of-season swing for each side shown before you send it." },
-  { name: "The Strategy Room", live: false, season: "In-season",
+  { name: "The Strategy Room", slug: "strategy", glyph: "🧭", accent: "#74E5CE",
+    hook: "Preview: start/sit by matchup", live: false, season: "In-season",
     lead: "Optimize every week.",
     blurb: "Set your lineup using predictive analytics, probabilistic matchup outcomes, and deep opponent analysis." },
 
-  { name: "The League Room", live: false, season: "Post-season",
+  { name: "The League Room", slug: "league", glyph: "🏟", accent: "#F7D9A8",
+    hook: "Preview: standings + power ranks", live: false, season: "Post-season",
     // Homepage v4 pass 2's fix: odds are not exact and this audience will
     // notice — "exact playoff odds" is gone regardless of which body ships.
     lead: "See the whole table.",
@@ -1022,8 +1048,41 @@ function gameFrom(event) {
     awayScore: away.score,
     homeScore: home.score,
     state: status.state,                       // "pre" | "in" | "post"
-    detail: status.shortDetail || ""
+    detail: status.shortDetail || "",
+    // The scoreboard's own ISO kickoff time, kept for nextKickoff() below.
+    // The strip itself never draws it — `detail` already says "Sun 1:00 PM"
+    // in the reader's own zone — but the header's kickoff pill needs a real
+    // instant to count down to, and this response is the only place in the
+    // project that has one. Reused rather than fetched a second time: it is
+    // ~220KB, it is already cached for a minute, and a second parse of the
+    // same payload is the "written down twice" rule with a network cost
+    // attached.
+    kickoff: (event && event.date) || null
   };
+}
+
+/* The next game that has not started, as an epoch millisecond, or null.
+
+   Null is the whole contract and there are four honest ways to reach it:
+   ESPN is unreachable, the response has changed shape, every game on the
+   board has already kicked off, or nothing is scheduled at all — which is
+   most of February to August. The score strip's own rule applies unchanged
+   (it "fails by disappearing"), so a caller draws nothing rather than a
+   placeholder: a countdown to a fabricated instant is worse than no
+   countdown, because a countdown is read as a fact.
+
+   A stale sessionStorage entry written before this field existed has no
+   `kickoff` at all, which is why the filter is on the parsed value rather
+   than on `state` alone. */
+function nextKickoff() {
+  const games = cachedScores();
+  if (!games) return null;
+  const now = Date.now();
+  const times = games
+    .filter(function (g) { return g.state === "pre" && g.kickoff; })
+    .map(function (g) { return Date.parse(g.kickoff); })
+    .filter(function (t) { return t > now; });
+  return times.length ? Math.min.apply(null, times) : null;
 }
 
 function cachedScores() {
@@ -10751,6 +10810,16 @@ applyRoute();
    rooms() return live references on purpose: call them fresh on each use
    rather than caching across a route change, the same way this file does. */
 window.JukeEngine = {
+  /* The next NFL kickoff, for the shell header's countdown pill. Answers
+     null whenever there is no honest answer — see nextKickoff() — and the
+     pill renders nothing on null rather than a dash or a zero. Reading it
+     twice does not fetch twice: it is served from the same one-minute
+     sessionStorage entry the score strip fills. */
+  nextKickoff,
+  // fetchScores() is the half that may go to the network. React calls it
+  // once on mount so nextKickoff() has something to read; the strip's own
+  // loadScores() is the DOM half and is not usable from here.
+  primeScores: function () { return fetchScores().catch(function () { return null; }); },
   // Whether draft-engine.js/players.js/stats.js have landed — see the
   // deferred-data boot above. React reads this rather than reaching for
   // DraftEngine/PLAYERS/STAT_KEYS directly, the same way it reads board()

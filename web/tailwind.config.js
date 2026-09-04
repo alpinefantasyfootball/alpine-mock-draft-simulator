@@ -69,6 +69,58 @@ export default {
           hairline: '#252930', // oklch(0.28 0.015 265)
           divider: '#1E2229', // oklch(0.24-0.26 0.015 265), midpoint 0.25
         },
+        // ---- Flow v3 "Alive" (design_handoff_v3_alive) ----
+        //
+        // The accents this handoff adds that no existing token covers. Every
+        // one of them is decorative or a state mark — none is a CTA colour,
+        // because the CTA in this handoff is a gradient (see `.cta-alive` in
+        // index.css) rather than a flat hue, and the one-primary-action rule
+        // this project has held since the rebrand is unchanged by it.
+        //
+        // Deliberately NOT added: the handoff's own near-duplicates of
+        // tokens that already exist. Its border #232A33 is `line.hairline`
+        // (#252930), its page/nav/card grounds are `surface.*`, its body and
+        // muted inks are `voidInk.*`, and its position tiles (WR #BFD3F5,
+        // TE #F7D9A8) are POS_CHALK — which the handoff's README itself
+        // defers to ("per repo"). A second value one step off an existing
+        // one is the "a position reads a different colour depending which
+        // page you're on" drift that draftRoomPositions.js was rewritten to
+        // end, arriving through a design file instead of through code.
+        flow: {
+          // The three accents with no home in the palette. Named by hue
+          // rather than by role because each one is a *room's* identity —
+          // Trade is lavender, League is gold — and a room is not a state.
+          blue: '#82A1F6',
+          lavender: '#CDBDEF',
+          gold: '#F7D9A8',
+          // Negative. Distinct from Tailwind's own rose-* family, which is
+          // a different hue; this is the handoff's value and it sits beside
+          // `mint` as its opposite (a bye week, a ▼ in the power column).
+          rose: '#F7A8A8',
+          // The lit half of the CTA gradient, and the only place this value
+          // appears alone: the avatar circle's own gradient start. It is a
+          // step off `teal` (#00E5FF) rather than a second teal — solving
+          // for a gradient that lands on `blue` above, not for a new brand
+          // colour, which is why it is in here and not in `teal.*`.
+          cyan: '#44D4E2',
+          // The mint lozenge under an active nav tab and the "N CLAIMS"
+          // badge. Opaque rather than `mint/15`: it sits on two different
+          // grounds (the nav pill's blurred rgba and a card's #151920) and
+          // an alpha tint reads as two different colours across them.
+          mintDark: '#12302e',
+          // The two raised surfaces above `surface.card`. `tile` is the
+          // 42px icon square on a room card and the metric block on the
+          // decision card; `hero` is the room hero's own ground, which the
+          // accent wash is laid over. They are one step apart and both are
+          // above anything in `surface.*`.
+          tile: '#1E2530',
+          hero: '#1E2733',
+          // The kickoff pill, which is its own surface/border pair and
+          // matches nothing else — a chrome element sitting in the header's
+          // own translucent ground, so it cannot borrow `surface.nav`.
+          pill: '#1A1F27',
+          pillEdge: '#2A3138',
+        },
         // Body text on the `surface.*`/void ground, raised from the old
         // `text-white/NN` opacity system (§9's own contrast audit already
         // found /25 through /45 failing 4.5:1 against these near-black
