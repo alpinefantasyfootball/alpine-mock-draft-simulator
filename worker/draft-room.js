@@ -39,7 +39,7 @@ import {
    that file owns D1 and nothing else, this owns "what does Sleeper say"
    and nothing else, and the two meet in a route handler rather than
    reaching into each other. */
-import { lookupUser, leagueSnapshot, nflState, SNAPSHOT_TTL } from "./sleeper.js";
+import { lookupUser, leagueSnapshot, nflState, SNAPSHOT_TTL, SLEEPER_API } from "./sleeper.js";
 
 /* Clerk session verification — see that file's own header for the shape.
    Kept separate from store.js on purpose: that file owns D1 and nothing
@@ -1118,7 +1118,9 @@ async function sleeperLookupRoute(request, env) {
      "you have no leagues". Sleeper publishes which season it means, so that
      is the one asked for, with the caller able to override for a manager
      looking up an old league. */
-  const state = await nflState();
+  // env.SLEEPER_BASE points the tests at a stub; unset in production.
+  const upstream = env.SLEEPER_BASE || SLEEPER_API;
+  const state = await nflState(upstream);
   const season = (url.searchParams.get("season") || (state && state.season) || "").slice(0, 8);
   if (!season) {
     // Sleeper unreachable: say so rather than guessing a season and
@@ -1126,7 +1128,7 @@ async function sleeperLookupRoute(request, env) {
     return new Response(JSON.stringify({ error: "upstream" }), { status: 503, headers });
   }
 
-  const found = await lookupUser(username, season);
+  const found = await lookupUser(username, season, upstream);
   return new Response(JSON.stringify(Object.assign({ season }, found)), { headers });
 }
 
@@ -1161,7 +1163,7 @@ async function sleeperSnapshotRoute(request, env) {
     return new Response(await hit.text(), { headers });
   }
 
-  const snapshot = await leagueSnapshot(leagueId);
+  const snapshot = await leagueSnapshot(leagueId, env.SLEEPER_BASE || SLEEPER_API);
   if (!snapshot) {
     // Not cached: a league that did not answer once is not a league that
     // does not exist, and pinning that for two minutes turns a blip into an
@@ -1229,7 +1231,7 @@ async function meLeaguesRoute(request, env) {
 
      It also validates the id: a league that does not resolve cannot be
      connected, which is a better failure than a chip pointing at nothing. */
-  const snapshot = await leagueSnapshot(leagueId);
+  const snapshot = await leagueSnapshot(leagueId, env.SLEEPER_BASE || SLEEPER_API);
   if (!snapshot) {
     return new Response(JSON.stringify({ ok: false, error: "not-found" }), { status: 404, headers });
   }

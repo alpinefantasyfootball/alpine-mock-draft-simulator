@@ -196,6 +196,16 @@ box is worse than no box.
 point it at a local stub so the whole path can be driven without a key or a
 network. Leave it unset in production.
 
+`SLEEPER_BASE` is the same knob for `sleeper.js`, and exists for the same
+reason. Verifying league connect against a real league proves the happy
+path and nothing else: a real league cannot be asked for a 500, a truncated
+body, a renamed field or forty-one rosters, and the league it was verified
+against is pre-draft today and will not be next month. `node
+worker/test-sleeper.mjs` drives the parse and the four-way join against a
+stub with no network and no wrangler at all — it imports the module
+directly and passes the base as an argument, so nothing has to be running.
+It is in CI. Leave `SLEEPER_BASE` unset in production.
+
 `/news` answers are cached at the edge for fifteen minutes (`NEWS_TTL`), keyed
 by player rather than by request URL, because the free tier is a thousand calls
 a month and a draft is the same dozen players opened repeatedly. Measured at 50

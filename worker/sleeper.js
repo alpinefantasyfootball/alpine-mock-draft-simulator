@@ -36,7 +36,21 @@
    identically at the boundary and tells them apart by the shape it got
    back, rather than by catching. */
 
-const BASE = "https://api.sleeper.app/v1";
+/* The real upstream, and the one knob that lets it be something else.
+
+   `SLEEPER_BASE` in the worker's env overrides it, exactly as
+   `TANK01_BASE` already does for the news route and for the same reason:
+   this file's real work is parsing and joining four responses, and none
+   of that can be exercised against a league that does not exist, a 500, a
+   truncated body or a renamed field while the host is a constant.
+
+   It is a parameter rather than a module-level `let` so a test can drive
+   two bases in one process without the second one inheriting the first —
+   and so nothing here holds state between requests, which a Worker is
+   entitled to reuse across them.
+
+   Leave it unset in production. */
+export const SLEEPER_API = "https://api.sleeper.app/v1";
 
 // Long enough that a page navigation is free, short enough that a waiver
 // claim shows up while somebody is still looking at the screen. The news
@@ -47,9 +61,11 @@ export const SNAPSHOT_TTL = 120;
 // response or somebody else's problem, not something to render.
 const MAX_ROSTERS = 32;
 
-async function getJson(path) {
+async function getJson(path, base) {
   try {
-    const res = await fetch(BASE + path, { headers: { accept: "application/json" } });
+    const res = await fetch((base || SLEEPER_API) + path, {
+      headers: { accept: "application/json" },
+    });
     // Sleeper answers 404 with an empty body for an unknown user, and
     // `null` (valid JSON) for an unknown league — both are "no", and
     // neither is an error worth logging.
@@ -68,8 +84,8 @@ async function getJson(path) {
    second one from the date would put the chip and the league's own
    matchups one apart in exactly the weeks that are ambiguous — the ones
    either side of a Tuesday rollover. */
-export function nflState() {
-  return getJson("/state/nfl");
+export function nflState(base) {
+  return getJson("/state/nfl", base);
 }
 
 /* A username to the leagues behind it, in one call from the page's side.
@@ -83,12 +99,13 @@ export function nflState() {
    exist, which is the same shape as a Sleeper outage on purpose: the
    screen says "we could not find that username" either way, and guessing
    which it was would be a worse message than the honest one. */
-export async function lookupUser(username, season) {
-  const user = await getJson("/user/" + encodeURIComponent(username));
+export async function lookupUser(username, season, base) {
+  const user = await getJson("/user/" + encodeURIComponent(username), base);
   if (!user || !user.user_id) return { user: null, leagues: [] };
 
   const raw = await getJson(
-    "/user/" + encodeURIComponent(user.user_id) + "/leagues/nfl/" + encodeURIComponent(season)
+    "/user/" + encodeURIComponent(user.user_id) + "/leagues/nfl/" + encodeURIComponent(season),
+    base
   );
   const leagues = Array.isArray(raw) ? raw : [];
 
@@ -120,13 +137,13 @@ export async function lookupUser(username, season) {
    then draws nothing rather than the page failing — but a league that does
    not answer at all is a league that is not there, and saying so is more
    useful than an empty table under its name. */
-export async function leagueSnapshot(leagueId) {
+export async function leagueSnapshot(leagueId, base) {
   const id = encodeURIComponent(leagueId);
   const [league, rosters, users, state] = await Promise.all([
-    getJson("/league/" + id),
-    getJson("/league/" + id + "/rosters"),
-    getJson("/league/" + id + "/users"),
-    nflState(),
+    getJson("/league/" + id, base),
+    getJson("/league/" + id + "/rosters", base),
+    getJson("/league/" + id + "/users", base),
+    nflState(base),
   ]);
 
   if (!league || !league.league_id) return null;
