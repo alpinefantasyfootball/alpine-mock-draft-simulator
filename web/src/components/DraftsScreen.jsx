@@ -1,0 +1,238 @@
+import { useMemo, useState } from 'react'
+import { SignUpButton, SignedOut } from '@clerk/clerk-react'
+import AppShell from './shell/AppShell.jsx'
+import { PosTile } from './rooms/sampleParts.jsx'
+import { useAccountUiReady } from '../hooks/useAccountUiReady.js'
+import { useEngine, useJukeTick } from '../hooks/useJukeEngine.js'
+
+/* #/drafts — design_handoff_v3_alive 2fg/2fu (mobile) and 3fg/3fu (desktop).
+
+   The archive: every mock you have run, with filter pills over it. It is a
+   different screen from the Draft Room's own entry (#/rooms/draft), which
+   is where you start one — the handoff draws both and this build keeps them
+   apart. What that costs is that this screen has no Start button on it, by
+   design, which is why every "back to the locker" link in the app points at
+   the entry rather than here: finishing a draft and wanting another is the
+   flow that would otherwise dead-end.
+
+   ---- Everything on it is real, and that is the whole point ----
+
+   `historyList()` is the same summary the desktop Locker table and the
+   phone Mock Drafts screen both read — one list, three renderings. Nothing
+   here is sample content, so this screen was buildable the day accounts
+   shipped.
+
+   It reads the engine tick because `historySummary()` resolves a stored
+   player NAME against the live board to get the position and the tile
+   colour, and the board is empty until players.js lands. Read once on
+   mount, every row comes back with a null position and draws a grey tile
+   where its colour belongs — the names are right, because those are
+   stored, and only the resolved fields are missing. Exactly the failure
+   MockDraftsPhone's own comment records.
+
+   ---- The filter pills ----
+
+   The handoff's are All / {league} / Practice, and the middle one needs a
+   connected league. Until there is one there are two real axes in the data:
+   scoring format, which every entry carries, and nothing else. So the pills
+   are All plus one per format actually present — derived from the list
+   rather than a fixed three, so a locker holding only half-PPR drafts does
+   not offer two pills that filter to nothing. A control that cannot change
+   what is on screen is the dead-control failure this project keeps finding.
+   The {league} pill arrives with league connect. */
+
+function relativeAge(at) {
+  if (!at) return ''
+  const mins = Math.max(0, Math.round((Date.now() - at) / 60000))
+  if (mins < 60) return `${mins}m`
+  const hours = Math.round(mins / 60)
+  if (hours < 24) return `${hours}h`
+  return `${Math.round(hours / 24)}d`
+}
+
+function Row({ entry, onOpen, onDelete }) {
+  return (
+    <div className="flex items-center gap-3.5 border-b border-line-hairline py-3.5">
+      <button
+        type="button"
+        onClick={onOpen}
+        className="flex min-w-0 flex-1 items-center gap-3.5 text-left"
+      >
+        {/* A stored draft whose round-one pick no longer resolves against
+            today's board has no position — DST's neutral fill stands in
+            rather than a guessed colour, which is the same call
+            historySummary() itself makes by answering null. */}
+        <PosTile pos={entry.round1PickPos || 'DST'} size={44} />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[15px] font-semibold text-white">
+            {entry.leagueType}
+          </span>
+          <span className="mt-0.5 block truncate text-[12px] text-ink-muted">
+            Seat {entry.seat}
+            {entry.round1Pick ? ` · ${entry.round1Pick}` : ''}
+            {entry.grade ? ` · ${entry.grade}` : ''}
+          </span>
+        </span>
+        <span className="shrink-0 text-right">
+          <span className="block font-mono text-[10px] tracking-[0.1em] text-flow-blue">
+            COMPLETE
+          </span>
+          <span className="block text-[12px] text-ink-muted">
+            {relativeAge(entry.completedAt)}
+          </span>
+        </span>
+      </button>
+      <button
+        type="button"
+        onClick={onDelete}
+        aria-label={`Delete ${entry.leagueType}`}
+        className="shrink-0 px-1 text-ink-muted transition-colors duration-150 hover:text-flow-rose"
+      >
+        <span aria-hidden="true">🗑</span>
+      </button>
+    </div>
+  )
+}
+
+function DeviceNote() {
+  const ready = useAccountUiReady()
+
+  /* Signed out only. "Saved on this device only" is a true and useful
+     warning to somebody with no account and a lie to somebody whose drafts
+     are already syncing — the same rule the homepage's own "no account
+     needed" line follows. */
+  const note = (
+    <div className="mb-3.5 flex items-center justify-between gap-3 rounded-[14px] border border-dashed border-flow-pillEdge px-4 py-3 text-[13px] text-voidInk-body">
+      <span>Saved on this device only</span>
+      {ready ? (
+        <SignUpButton mode="modal">
+          <button type="button" className="font-semibold text-mint">
+            Sign up to sync
+          </button>
+        </SignUpButton>
+      ) : (
+        <span className="font-semibold text-mint">Sign up to sync</span>
+      )}
+    </div>
+  )
+
+  if (!ready) return note
+  return <SignedOut>{note}</SignedOut>
+}
+
+export default function DraftsScreen() {
+  const engine = useEngine()
+  const tick = useJukeTick(engine)
+  const [filter, setFilter] = useState('ALL')
+  // Deleting an entry is a localStorage rewrite and broadcasts nothing, so
+  // there is no "juke:header" to ride — the same local bump the Locker's own
+  // delete already uses.
+  const [bump, setBump] = useState(0)
+
+  const list = useMemo(() => {
+    if (!engine || !engine.historyList) return []
+    try {
+      return engine.historyList() || []
+    } catch {
+      return []
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [engine, tick, bump])
+
+  const formats = useMemo(() => {
+    const seen = []
+    list.forEach((e) => {
+      if (e.scoring && seen.indexOf(e.scoring) < 0) seen.push(e.scoring)
+    })
+    return seen
+  }, [list])
+
+  const shown = filter === 'ALL' ? list : list.filter((e) => e.scoring === filter)
+
+  const label = (key) => {
+    const match = list.find((e) => e.scoring === key)
+    // The formatted name off the entry itself rather than a second lookup
+    // table of scoring keys, which is the league shape written down twice.
+    return match ? match.leagueType.replace(/^\d+-Team\s+/, '') : key
+  }
+
+  return (
+    <AppShell active="drafts">
+      <div className="mx-auto max-w-[1280px] px-5 pt-[22px] sm:px-10 sm:pt-10">
+        <div className="mb-3.5 flex flex-wrap items-center justify-between gap-3 sm:mb-6">
+          <div className="flex items-center gap-3">
+            <span className="text-[26px] sm:text-[30px]" aria-hidden="true">🗓</span>
+            <h1 className="m-0 font-display text-[30px] font-extrabold uppercase italic text-white sm:text-[44px]">
+              Your Drafts
+            </h1>
+          </div>
+
+          {formats.length > 1 ? (
+            <div className="flex gap-2">
+              {['ALL'].concat(formats).map((key) => {
+                const on = filter === key
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setFilter(key)}
+                    aria-pressed={on}
+                    className={
+                      'rounded-full border px-3.5 py-[7px] text-[13px] font-semibold transition-colors duration-150 ' +
+                      (on
+                        ? 'border-mint bg-flow-mintDark text-mint'
+                        : 'border-line-hairline text-voidInk-body hover:text-white')
+                    }
+                  >
+                    {key === 'ALL' ? 'All' : label(key)}
+                  </button>
+                )
+              })}
+            </div>
+          ) : null}
+        </div>
+
+        <div className="sm:max-w-[860px]">
+          <DeviceNote />
+
+          {shown.length ? (
+            shown.map((e) => (
+              <Row
+                key={e.id}
+                entry={e}
+                onOpen={() => {
+                  /* The entry's own frozen report, through the same path
+                     the Locker uses. Not a re-grade: a reopened draft and
+                     the grade it was recorded with must not disagree. */
+                  location.hash = `#/rooms/draft?report=${encodeURIComponent(e.id)}`
+                }}
+                onDelete={() => {
+                  if (engine && engine.deleteHistoryDraft) engine.deleteHistoryDraft(e.id)
+                  setBump((n) => n + 1)
+                }}
+              />
+            ))
+          ) : (
+            <div className="rounded-[18px] border border-line-hairline bg-[#151920] p-6 text-center">
+              <div className="font-display text-[22px] font-bold text-white">
+                {list.length ? 'Nothing in that format yet' : 'No drafts yet'}
+              </div>
+              <p className="mx-auto mt-1.5 max-w-[40ch] text-[14px] leading-[1.5] text-voidInk-body">
+                {list.length
+                  ? 'Every draft you run is kept here. Try another filter.'
+                  : 'Run a mock and it lands here — the board, your roster and the grade it earned.'}
+              </p>
+              <a
+                href="#/rooms/draft"
+                className="mt-4 inline-flex rounded-full px-5 py-3 text-[14px] font-bold text-surface-page transition-transform duration-150 hover:scale-[1.02]"
+                style={{ background: 'linear-gradient(100deg,#44D4E2,#82A1F6)' }}
+              >
+                Start a mock draft
+              </a>
+            </div>
+          )}
+        </div>
+      </div>
+    </AppShell>
+  )
+}

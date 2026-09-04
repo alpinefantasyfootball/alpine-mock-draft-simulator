@@ -93,11 +93,16 @@ async function homeAt(browser, contextOpts) {
   const rooms = await page.evaluate(() =>
     (window.JukeEngine && window.JukeEngine.rooms ? window.JukeEngine.rooms() : [])
       .map((r) => ({ name: r.name, live: !!r.live })));
-  // A way in, by destination rather than by label. #/drafts is the Lobby,
-  // which is where every "enter the Draft Room" control on this page points
-  // — see ROOMS in app.js for why it is not #/draft-room.
+  /* A way in, by destination rather than by label. #/rooms/draft is the
+     Draft Room's own entry, which is where every "start a mock" control on
+     this page points — see ROOMS in app.js for why it is not #/draft-room,
+     and DraftRoom.jsx's own draftsActive for why it moved off #/drafts
+     (that address is the drafts ARCHIVE now, which has no Start on it).
+
+     Matched by prefix rather than exactly, because the archive's own rows
+     append a ?report= id to the same route. */
   const waysIn = await page.evaluate(() =>
-    [...document.querySelectorAll('#view-home a[href="#/drafts"]')]
+    [...document.querySelectorAll('#view-home a[href^="#/rooms/draft"]')]
       .filter((a) => a.getBoundingClientRect().height > 0).length);
   await context.close();
   return { text, rooms, waysIn, joined: text.join(" · ") };

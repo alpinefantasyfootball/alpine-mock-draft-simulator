@@ -61,14 +61,13 @@ export default function RoomPage({ slug }) {
   }
   if (!room) return null
 
-  // The Draft Room is open and is not a preview — it is the Lobby, which
-  // already has a screen. One destination, reached from the lobby card too.
-  if (room.live && room.href) {
-    if (typeof window !== 'undefined') {
-      location.replace(location.pathname + location.search + room.href)
-    }
-    return null
-  }
+  /* The Draft Room is open and is not a preview. DraftRoom.jsx owns this
+     exact route (its `draftsActive` branch) and renders into
+     #draftroom-root, while applyRoute() hides #view-home — which is where
+     this component lives — so there is nothing to draw and nowhere to draw
+     it. Null rather than a redirect: redirecting would bounce a reader off
+     the address the room genuinely lives at. */
+  if (room.live) return null
 
   const preview = PREVIEWS[slug]
   const Body = preview && preview.Body

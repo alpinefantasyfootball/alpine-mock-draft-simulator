@@ -169,7 +169,7 @@ export default function YouScreen() {
 
   const settings = (
     <Section title="SETTINGS">
-      <Row glyph="⚙" label="Default draft settings" href="#/drafts" />
+      <Row glyph="⚙" label="Default draft settings" href="#/rooms/draft" />
       <Row glyph="❔" label="How it works" href="/docs/draft-room-how-it-works.html" />
       <Row glyph="📄" label="Privacy" href="/docs/privacy.html" />
       <Row glyph="📄" label="Terms" href="/docs/terms.html" />
@@ -221,7 +221,7 @@ export default function YouScreen() {
                 </Section>
 
                 <Section title="SETTINGS">
-                  <Row glyph="⚙" label="Default draft settings" href="#/drafts" />
+                  <Row glyph="⚙" label="Default draft settings" href="#/rooms/draft" />
                   <Row glyph="❔" label="How it works" href="/docs/draft-room-how-it-works.html" />
                   <Row glyph="📄" label="Privacy" href="/docs/privacy.html" />
                   <Row glyph="📄" label="Terms" href="/docs/terms.html" />

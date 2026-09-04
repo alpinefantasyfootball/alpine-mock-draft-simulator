@@ -633,7 +633,7 @@ const ROOMS = [
   // which forces the Lobby regardless of `enteredRoom` — the one route
   // built for exactly this "start from a clean choice" entry.
   { name: "The Draft Room", slug: "draft", glyph: "◎", accent: "#00E5FF",
-    hook: "Mock smarter.", href: "#/drafts", live: true, season: "Pre-season",
+    hook: "Mock smarter.", href: "#/rooms/draft", live: true, season: "Pre-season",
     lead: "Mock smarter.",
     blurb: "Run unlimited draft simulations against a board that automatically adjusts for ADP, tiers, and your custom scoring rules." },
 
@@ -812,7 +812,20 @@ function onDraftRoomRoute() {
    this one. */
 function syncHomeVisibility() {
   const legacyPath = location.hash.replace(/^#\/?/, "").split("?")[0];
-  const hideHome = onDraftRoomRoute() || legacyPath === "drafts";
+  /* "rooms/draft", not "drafts", as of design_handoff_v3_alive.
+
+     The reason this clause exists is unchanged: whichever route renders
+     the Lobby out of #draftroom-root has the same view-home problem
+     #/draft-room has -- the whole marketing page goes on rendering behind
+     it, in normal flow, adding its own height and a second scrollbar
+     nobody can attribute to anything. What moved is which route that is.
+     DraftRoom.jsx's own entry branch is #/rooms/draft now (the Draft Room
+     is a room, and it sits under #/rooms with the other five).
+
+     #/drafts is the opposite case and must NOT be listed here: it is the
+     drafts archive, and App renders it INSIDE #view-home. Hiding view-home
+     for it would hide the screen itself. */
+  const hideHome = onDraftRoomRoute() || legacyPath === "rooms/draft";
   shellbar.hidden = hideHome;
   $("view-home").hidden = hideHome;
 }

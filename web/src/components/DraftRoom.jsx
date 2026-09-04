@@ -162,7 +162,22 @@ export default function DraftRoom() {
   // — the live-draft-only effects below (autopick, etc.) all gate on
   // `active` meaning specifically "on the live draft route", and widening
   // it would let them fire while looking at the locker instead.
-  const draftsActive = useHashActive('#/drafts')
+  /* #/rooms/draft, not #/drafts, as of design_handoff_v3_alive.
+     The handoff splits what this route used to be into two screens: the
+     Draft Room's own entry -- start a mock, settings, insights, recent --
+     which is a room and lives under #/rooms with the other five, and a
+     separate archive of every draft you have run, which is what the nav's
+     Drafts tab means now and which App renders at #/drafts.
+
+     This branch is the first of those, so it moves to the room's address.
+     Nothing else about it changes: it is still the route that forces the
+     Lobby regardless of `enteredRoom`, which is the whole reason it exists
+     -- pressing "Back to the locker" on a finished draft and then Start
+     has to reach a clean choice rather than the board you just left. Every
+     "back to the locker" link moved with it for exactly that reason: the
+     archive has no Start button on it, by design, so sending a finished
+     draft there would end that flow. */
+  const draftsActive = useHashActive('#/rooms/draft')
 
   const [search, setSearch] = useState('')
   const [posFilter, setPosFilter] = useState('ALL')
@@ -199,6 +214,31 @@ export default function DraftRoom() {
      id meaning "and open this report". Desktop never reads it — the
      dashboard is unconditionally what #/drafts is there. */
   const [lockerView, setLockerView] = useState(null)
+  /* #/rooms/draft?report=<id> opens that entry's own frozen report.
+
+     The archive (#/drafts, DraftsScreen.jsx) is a different screen in a
+     different React tree, so a row there cannot set this state directly --
+     and the two must not each hold their own idea of "which report is
+     open". The hash is the one channel both can see, which is the same
+     answer #/draft?room=ABC1 already gives for an invite.
+
+     It reads on every hashchange rather than only at mount, because
+     DraftRoom does not unmount between routes: arriving from the archive
+     is a hashchange, not a mount, and a mount-only read would open the
+     screen with whatever report was last looked at. Cleared on any hash
+     without the param for the same reason -- a stale id here is the
+     `view`/`soloAutopick` leak this file already documents, one state
+     along. */
+  useEffect(() => {
+    const read = () => {
+      const q = window.location.hash.split('?')[1] || ''
+      const id = new URLSearchParams(q).get('report')
+      setLockerView(id || null)
+    }
+    window.addEventListener('hashchange', read)
+    read()
+    return () => window.removeEventListener('hashchange', read)
+  }, [])
   const sportsModalRef = useRef(null)
   /* Deleting a locker entry changes nothing the engine broadcasts — it is a
      localStorage rewrite — so there is no "juke:header" to ride and this

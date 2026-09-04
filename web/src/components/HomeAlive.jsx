@@ -204,7 +204,7 @@ export default function HomeAlive() {
                 eyebrowColor="#14343d"
                 title="Mock Draft"
                 sub="Free · no account"
-                href="#/drafts"
+                href="#/rooms/draft"
               />
               {/* Connect goes to the rooms rather than straight at a
                   sign-up modal. There is no connect flow yet, and the
@@ -223,7 +223,7 @@ export default function HomeAlive() {
             </div>
 
             <a
-              href="#/drafts"
+              href="#/rooms/draft"
               className="mt-2.5 flex max-w-[560px] items-center justify-between gap-3 rounded-[14px] border border-dashed border-flow-pillEdge px-4 py-3 text-[14px] text-voidInk-primary transition-colors duration-150 hover:border-teal/50 sm:px-[18px] sm:py-3.5"
             >
               <span className="flex items-center gap-2.5">

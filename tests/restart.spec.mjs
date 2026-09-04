@@ -83,11 +83,19 @@ test("a second mock started from the locker is a fresh draft, not the last one's
     const firstDraft = await page.evaluate(() => state.picks.length);
     expect(firstDraft).toBeGreaterThan(0);
 
-    /* "Back to the locker" is a plain <a href="#/drafts">: it changes the
-       route and touches no draft state. That is the whole point — the app
-       must not depend on the way out having cleaned up. */
+    /* "Back to the locker" is a plain <a href="#/rooms/draft">: it changes
+       the route and touches no draft state. That is the whole point — the
+       app must not depend on the way out having cleaned up.
+
+       #/rooms/draft, not #/drafts, since design_handoff_v3_alive. The
+       handoff splits what one route used to be: the Draft Room's own entry
+       (start a mock, settings, insights, recent), which is a room and sits
+       under #/rooms with the other five, and a separate archive at #/drafts
+       that the nav's Drafts tab means. The locker is the first of those --
+       the archive has no Start button on it by design, so sending a
+       finished draft there would end exactly the flow this test walks. */
     await page.locator('#draftroom-root a:text-is("Back to the locker")').click();
-    await page.waitForFunction(() => location.hash.startsWith("#/drafts"), null, { timeout: 10000 });
+    await page.waitForFunction(() => location.hash.startsWith("#/rooms/draft"), null, { timeout: 10000 });
 
     // Change the league, exactly as the New Mock card does.
     await page.evaluate(() => window.JukeEngine.setLeague({ teams: 12, scoring: "ppr" }));
@@ -164,7 +172,7 @@ test("autopilot does not carry from one draft into the next", async ({ browser }
 
   await finishDraft(page);
   await page.locator('#draftroom-root a:text-is("Back to the locker")').click();
-  await page.waitForFunction(() => location.hash.startsWith("#/drafts"), null, { timeout: 10000 });
+  await page.waitForFunction(() => location.hash.startsWith("#/rooms/draft"), null, { timeout: 10000 });
 
   await startSoloDraft(page);
   await waitForRoom(page);

@@ -13,11 +13,11 @@ import FloatingNavPill, { NAV_PILL_CLEARANCE } from '../phone/FloatingNavPill.js
    here instead.
 
    It deliberately does NOT become the mount point for the two that already
-   exist. DraftRoom renders the pill on #/drafts, and #/drafts hides
-   #view-home — which is where this component lives — so hoisting the nav
-   here would take it off the Lobby entirely. Two mount points that both
-   work beat one that is right for the screens it can reach and wrong for
-   the one it cannot.
+   exist. DraftRoom renders the pill on #/rooms/draft (its own Lobby route)
+   and on #/draft-room, and applyRoute() hides #view-home for both — which
+   is where this component lives — so hoisting the nav here would take it
+   off the Lobby entirely. Two mount points that both work beat one that is
+   right for the screens it can reach and wrong for the one it cannot.
 
    `pad` is opt-out for a screen that manages its own bottom clearance
    (a room page pads below the locked preview, not around it). */
