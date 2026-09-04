@@ -7,14 +7,33 @@ import EarlyAccessModal from './EarlyAccessModal.jsx'
 import { ROOM_SIGNUP_SOURCE, roomSignupCopy } from './icons.jsx'
 import { freshnessLine } from './dataFreshness.js'
 
-// METHOD is Juke's own real content — three sections of one doc plus the
-// doc's own top, the same four destinations the footer has carried since
-// before this pass.
+/* METHOD is Juke's own real content: the how-it-works doc, plus the
+   sections of it worth naming on their own.
+
+   Every one of these lands on the same document, so what a label owes the
+   reader is the SECTION it actually reaches. "How scoring works" was here
+   and owed that twice over. It read as a near-twin of "How it works" one
+   line above it — reported exactly that way — and it pointed at #s03,
+   which is "The league, and everything that follows from it": teams,
+   rounds, lineup, bench, with scoring one item in a list of settings.
+   Somebody clicking it to learn how points are calculated got a summary of
+   league defaults. Dropped rather than renamed, because the section is
+   reachable by scrolling from the top link and the settings themselves
+   live on the setup screen.
+
+   "The draft grade" is #s06, which had no link to it at all — a whole
+   section, on one of the app's headline features, that the footer never
+   named.
+
+   The top-level link stays and is not redundant with a nav item:
+   ShellHeader went to three tabs and its own comment records How It Works
+   moving here, and SiteNav is the retired header that survives on one
+   screen. This is the only place it appears. */
 const METHOD_LINKS = [
   { label: 'How it works', href: '/docs/draft-room-how-it-works.html' },
-  { label: 'How scoring works', href: '/docs/draft-room-how-it-works.html#s03' },
-  { label: 'VORP explained', href: '/docs/draft-room-how-it-works.html#s07' },
   { label: 'Data sources', href: '/docs/draft-room-how-it-works.html#s02' },
+  { label: 'The draft grade', href: '/docs/draft-room-how-it-works.html#s06' },
+  { label: 'VORP explained', href: '/docs/draft-room-how-it-works.html#s07' },
 ]
 
 // Phase 0 of accounts turned Contact and Support into a real destination —
@@ -153,7 +172,7 @@ function FooterColumn({ title, children }) {
 // The brand stack — logo, then socials, in that order — is identical on
 // both breakpoints, so it gets its own component rather than being written
 // out twice.
-function FooterBrandStack({ onSocialClick }) {
+function FooterBrandStack({ onSocialClick, linkClass }) {
   return (
     <div className="flex flex-col items-start gap-5">
       {/* §11's footer repeat of the slogan — wrapped with the logo in its
@@ -181,6 +200,29 @@ function FooterBrandStack({ onSocialClick }) {
           </button>
         ))}
       </div>
+
+      {/* The one place the address appears, and it sits here because this
+          is already the "reach us" cluster — the socials are the other way
+          to do the same thing, and the two belong together rather than one
+          being furniture and the other a column heading.
+
+          It was under BOTH "Company" and "Legal" before, on the reasoning
+          that Company is who to write to and Legal is who to write to about
+          this page. Those two headings sit side by side about 150px apart
+          in one row, so the same glance takes in both, and the argument
+          would equally have justified a third copy under Method. Printing a
+          plaintext address twice on a public page also doubles what a
+          scraper collects for no extra reach.
+
+          Shown rather than labelled "Contact", which is unchanged and
+          deliberate: a bare mailto: does nothing visible on a machine with
+          no mail client, and that was reported as "nothing happens when I
+          click on either link in the footer". Somebody with a mail client
+          still gets a compose window; everybody else can read it and copy
+          it, which is what they were trying to do. */}
+      <a href={`mailto:${CONTACT_EMAIL}`} className={linkClass} title={`Email ${CONTACT_EMAIL}`}>
+        {CONTACT_EMAIL}
+      </a>
     </div>
   )
 }
@@ -264,22 +306,29 @@ export default function Homepage() {
       {/* ---------- Footer, restructured after a real competitor's (Sleeper's)
           own footer ---------- Logo, then socials, stacked top-left;
           everything else in equal-width columns to the right —
-          Rooms/Method/Company/Legal here, standing in for Sleeper's own
-          Available-on/Company/Resources/Play columns. Rooms and Method are
-          Juke's real content; Company now holds one real destination
-          (Contact, a mailto:) rather than the reference footer's four —
-          About Us and Careers never had anywhere to point and are gone
-          rather than left opening a "nothing here yet" dialog. Support in
-          Legal is a mailto: too, the same address as Contact — one real way
-          to reach a person beats two ways to open the same dead end.
+          Rooms/Method/Legal.
+
+          Three columns, not the reference footer's four. That shape was
+          taken from Sleeper's (Available-on/Company/Resources/Play) and it
+          works there because all four hold a set. Ours held two real ones
+          and then a "Company" column whose entire contents was one email
+          address, with the same address repeated under Legal beside two
+          documents. A heading promises a set; one item under it is what
+          made the footer read as unfinished, rather than anything about the
+          address itself. About Us and Careers had gone earlier for having
+          nowhere to point, which is what left it at one.
+
+          So Company goes, Legal is two legal documents again, and the
+          address appears once — in the brand stack, next to the socials,
+          which is where the other way of reaching a person already was.
           gap-x-10/gap-y-12 on both breakpoints is the one spacing scale for
           the whole footer, rather than a different hand-picked value per
           section, which is what "evenly spaced" actually means here: every
           gap between every pair of sections is the same number, not just
           visually close. */}
       <footer className="mt-[72px] border-t border-line-hairline bg-surface-nav">
-        <div className="mx-auto flex max-w-[1200px] flex-col gap-12 px-10 py-14 lg:grid lg:grid-cols-5 lg:gap-x-10 lg:gap-y-12">
-          <FooterBrandStack onSocialClick={openSocial} />
+        <div className="mx-auto flex max-w-[1200px] flex-col gap-12 px-10 py-14 lg:grid lg:grid-cols-4 lg:gap-x-10 lg:gap-y-12">
+          <FooterBrandStack onSocialClick={openSocial} linkClass={roomLinkClass} />
 
           <FooterColumn title="The Rooms">
             {rooms.map((room) => (
@@ -295,49 +344,12 @@ export default function Homepage() {
             ))}
           </FooterColumn>
 
-          {/* The address itself, not the word "Contact".
-
-              A mailto: does nothing visible unless the machine has a
-              registered mail handler, and on Windows with Chrome and
-              webmail it usually does not — the click is simply swallowed.
-              Behind a label the address is never shown either, so a reader
-              is left with a link that does nothing and no way to find out
-              what it would have done. That is the dead-control rule this
-              project already holds, arrived at through the one affordance
-              on the page for reaching a person. Reported exactly that way:
-              "nothing happens when I click on either link in the footer."
-
-              Showing the address fixes both halves at once. Somebody with a
-              mail client still gets their compose window; everybody else can
-              read it and copy it, which is what they were trying to do. */}
-          <FooterColumn title="Company">
-            <a
-              href={`mailto:${CONTACT_EMAIL}`}
-              className={roomLinkClass}
-              title={`Email ${CONTACT_EMAIL}`}
-            >
-              {CONTACT_EMAIL}
-            </a>
-          </FooterColumn>
-
           <FooterColumn title="Legal">
             {LEGAL_LINKS.map((link) => (
               <a key={link.label} href={link.href} className={roomLinkClass}>
                 {link.label}
               </a>
             ))}
-            {/* Same address, same reason it is shown rather than labelled.
-                Two columns naming one address is deliberate: Company is
-                "who to write to" and Legal is "who to write to about this
-                page", and a reader looking under one heading should not
-                have to think to look under the other. */}
-            <a
-              href={`mailto:${CONTACT_EMAIL}`}
-              className={roomLinkClass}
-              title={`Email ${CONTACT_EMAIL}`}
-            >
-              {CONTACT_EMAIL}
-            </a>
           </FooterColumn>
         </div>
 
