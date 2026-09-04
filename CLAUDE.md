@@ -5503,11 +5503,35 @@ outside this handoff entirely.
 and both MOUNTED on every device, because CSS-hidden is still mounted. One
 tree mounts once.
 
-**And everything below the rooms grid stays.** The handoff's Home ends there:
-no proof section, no closing CTA, no footer at all. `ShowYourWorking` is the
-section that makes this product's numbers inspectable, and the footer holds
-the only links to the privacy policy and terms. **A mock that stops after one
-screenful is not the same claim as "delete the rest of the page."**
+**Everything below the rooms grid was kept and then taken off.** The
+handoff's Home ends at the rooms grid: no proof section, no closing CTA, no
+footer at all. `TakeAPick`, `ShowYourWorking` and `ClosingCta` were kept
+under it on the reasoning that a mock which stops after one screenful is not
+the same claim as "delete the rest of the page" — and the owner has since
+removed all three. The homepage is the handoff's own shape now, plus the
+footer, which was never optional: it holds the only links to the privacy
+policy and terms.
+
+**Deprecated, not deleted.** All three components are complete and still in
+`web/src/components`; they are simply not rendered, which is the same state
+`Header`, `Hero`, `RoomsGrid` and `phone/HomePhone` are in. Bringing one back
+is an import and a line in `Homepage.jsx`.
+
+**What left with them is not only layout.** `ShowYourWorking` is the "Claim
+and proof" section this file documents at length — three claims down the
+page with the thing each one claims running beside it, on live board data —
+and it was the only place the product's own numbers were shown being
+computed. That section is still accurate about the component, which still
+exists; it is no longer accurate about the homepage.
+
+**And it left a dead anchor behind, which is the part worth checking for
+next time.** `NAV_LINKS`' "How It Works" pointed at `#proof`, which was
+`ShowYourWorking`'s own `<section id="proof">`. Removing a section does not
+break a link to it — the link goes on working and scrolls to nothing, which
+reads as a broken page rather than a broken link. It points at the docs page
+now, which is what it always meant and where the footer's Method column
+already sent people. **Grep for the id before removing the section that
+carries it.**
 
 **Four components are orphaned rather than deleted** — `Header.jsx`,
 `Hero.jsx`, `RoomsGrid.jsx` and `phone/HomePhone.jsx`. Nothing imports them.

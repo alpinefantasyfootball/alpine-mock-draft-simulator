@@ -1,9 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import ShellHeader from './shell/ShellHeader.jsx'
 import HomeAlive from './HomeAlive.jsx'
-import TakeAPick from './TakeAPick.jsx'
-import ShowYourWorking from './ShowYourWorking.jsx'
-import ClosingCta from './ClosingCta.jsx'
 import JukeLogo from './juke-logo/JukeLogo.jsx'
 import ComingSoonModal from './ComingSoonModal.jsx'
 import EarlyAccessModal from './EarlyAccessModal.jsx'
@@ -222,22 +219,28 @@ export default function Homepage() {
       <main>
         <HomeAlive />
 
-        {/* Everything the handoff's Home does not draw, kept. Its own page
-            ends at the rooms grid — no proof section, no closing CTA and no
-            footer — and a mock that stops after one screenful is not the
-            same claim as "delete the rest of the page". ShowYourWorking in
-            particular is the section that makes this product's numbers
-            inspectable, which is most of the pitch, and the footer holds
-            the only links to the privacy policy and terms.
+        {/* TakeAPick, ShowYourWorking and ClosingCta used to render here,
+            desktop-only, and the owner has taken them off the page. The
+            homepage is what design_handoff_v3_alive draws and then the
+            footer, which is the handoff's own shape plus the one thing it
+            omits (the footer holds the only links to the privacy policy and
+            terms, so it was never optional).
 
-            Desktop-only, exactly as they were before this change: none of
-            the three has ever had a phone layout, and giving them one is a
-            separate piece of work from replacing the hero. */}
-        <div className="hidden sm:block">
-          <TakeAPick />
-          <ShowYourWorking />
-          <ClosingCta />
-        </div>
+            **Deprecated, not deleted.** All three components are still in
+            web/src/components, still complete, still importing cleanly —
+            they are simply not rendered, which is the same state Header,
+            Hero, RoomsGrid and phone/HomePhone are in after this handoff
+            replaced them. Bringing any of them back is re-adding an import
+            and a line here; there is nothing to reconstruct.
+
+            Worth knowing what leaves with them, because it is not only
+            layout. ShowYourWorking is this project's "Claim and proof"
+            section — three claims down the page with the thing each one
+            claims running beside it, on live board data — and it is the
+            only place the product's own numbers are shown being computed.
+            TakeAPick is the interactive third-round demo. CLAUDE.md has a
+            section on each; both are still accurate about the components,
+            which still exist. */}
       </main>
 
       {/* ---------- Footer, restructured after a real competitor's (Sleeper's)

@@ -216,10 +216,19 @@ const DESKTOP_REQUIRED = [
   "Plug in your league from any major platform.",
   "Keep your drafts on every device",
   "FREE · NO ACCOUNT NEEDED · RUNS IN YOUR BROWSER",
-  // Still below the fold, still desktop-only, still asserted.
-  "Enter the Draft Room",
-  "Open the Draft Room.",
-  "No setup, no league import. Pick your scoring and start.",
+  /* Three lines used to sit here -- "Enter the Draft Room", "Open the
+     Draft Room." and "No setup, no league import. Pick your scoring and
+     start." -- all of them ClosingCta's. The owner has taken TakeAPick,
+     ShowYourWorking and ClosingCta off the homepage, so they are gone
+     from the page rather than lost from it.
+
+     Removed rather than replaced, which is the opposite of what the note
+     above says was done for the Hero's four. The difference is that those
+     four were REPLACED by other copy doing the same job, and these three
+     are not: nothing on the page says them any more, because that part of
+     the page is not there. All three components still exist unrendered in
+     web/src/components -- so if any comes back, its copy comes back here
+     with it. */
 ];
 
 const PHONE_REQUIRED = [
