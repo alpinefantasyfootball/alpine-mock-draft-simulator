@@ -66,7 +66,13 @@ const TABS = [
   // two strings are one character apart and mean different things —
   // useHashRoute's own note says why only the second is a route.
   { key: 'rooms', label: 'Rooms', icon: Compass, href: '#/rooms' },
-  { key: 'you', label: 'You', icon: User },
+  /* A real destination now (YouScreen.jsx), where this was the one tab
+     in the pill with no href -- it opened an action sheet, because a
+     phone had nowhere else that could reach sign-out. The sheet is
+     still built and still the only thing DraftRoom's own copy of this
+     pill can offer inside a live draft, so it stays; what changes is
+     that the tab goes to the screen when there is one to go to. */
+  { key: 'you', label: 'You', icon: User, href: '#/you' },
 ]
 
 function activeFromHash(hash) {

@@ -1,6 +1,7 @@
 import Homepage from './components/Homepage.jsx'
 import RoomsLobby from './components/RoomsLobby.jsx'
 import RoomPage from './components/RoomPage.jsx'
+import YouScreen from './components/YouScreen.jsx'
 import { useHashRoute } from './hooks/useHashRoute.js'
 
 /* The one tree #root renders, and the only place the routes React owns are
@@ -16,5 +17,6 @@ export default function App() {
 
   if (view === 'rooms') return <RoomsLobby />
   if (view === 'room') return <RoomPage slug={slug} />
+  if (view === 'you') return <YouScreen />
   return <Homepage />
 }
