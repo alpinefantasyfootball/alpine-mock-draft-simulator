@@ -67,28 +67,32 @@ const MIN_MOCKS_FOR_ANALYTICS = 5
 // and the heatmap's 3-column span (13 cell-units of content into 12 cells)
 // and had to invent a fourth row to make the arithmetic work. It didn't
 // need to: the spec was describing a visual proportion, not a grid mechanic.
-function AnalyticsGrid({ engine, league, stats, problem, lobbySlot, roomActive, onSetLobbySlot, onStartNew, onRunAtSeat, onOpenSettings, onDraftWithFriends }) {
+/* This screen is what "Your insights" opens, and it is analytics only.
+
+   It used to lead with NewMockPanel — a whole second draft launcher, with
+   its own Teams/Scoring/Rounds/Seat selects, its own "Start mock draft"
+   and its own "Edit setup". That was right when this WAS the Draft Room's
+   Lobby at desktop width. It is not any more: design_handoff_v3_alive puts
+   the launcher on DraftRoomEntry at every width, and this sits one press
+   behind that screen's "Your insights" button. Offering the setup again,
+   underneath the screen you just left to look at your numbers, is the
+   duplicate-affordance problem — reported exactly that way.
+
+   So the launcher is gone from here and the analytics take the full width.
+   Starting a draft is the entry screen's job, and its "Draft settings"
+   button is now the single way into the settings modal from this route.
+
+   NewMockPanel itself is untouched and still in web/src/components,
+   unrendered — the same state Header, Hero, LobbyBar and the rest of the
+   pre-handoff surfaces are in. */
+function AnalyticsGrid({ engine, league, stats, roomActive, onRunAtSeat }) {
   const totalMocks = stats.total || 0
   const thin = totalMocks < MIN_MOCKS_FOR_ANALYTICS
 
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-      <div className="sm:col-span-2 lg:col-span-1 lg:col-start-1 lg:row-start-1">
-        <NewMockPanel
-          engine={engine}
-          league={league}
-          problem={problem}
-          lobbySlot={lobbySlot}
-          roomActive={roomActive}
-          onSetLobbySlot={onSetLobbySlot}
-          onStartNew={onStartNew}
-          onOpenSettings={onOpenSettings}
-          onDraftWithFriends={onDraftWithFriends}
-        />
-      </div>
-
       {thin ? (
-        <div className="sm:col-span-2 lg:col-span-3 lg:col-start-2 lg:row-start-1 lg:row-span-3 flex min-h-[420px] flex-col items-center justify-center rounded-xl border border-dashed border-white/[0.14] bg-slate-panel/40 p-10 text-center">
+        <div className="sm:col-span-2 lg:col-span-4 lg:col-start-1 lg:row-start-1 flex min-h-[420px] flex-col items-center justify-center rounded-xl border border-dashed border-white/[0.14] bg-slate-panel/40 p-10 text-center">
           <p className="max-w-[360px] text-sm text-white/60">
             Run {MIN_MOCKS_FOR_ANALYTICS - totalMocks} more mock{MIN_MOCKS_FOR_ANALYTICS - totalMocks === 1 ? '' : 's'} and
             Juke will start showing your tendencies, your projected win rate, and where each draft left value on the board.
@@ -120,7 +124,11 @@ function AnalyticsGrid({ engine, league, stats, problem, lobbySlot, roomActive, 
         </div>
       ) : (
         <>
-          <div className="sm:col-span-2 lg:col-start-2 lg:col-span-2 lg:row-start-1">
+          {/* col-start-1/span-3, where this used to be col-start-2/span-2:
+              the launcher held column one of row one and no longer does, so
+              closing the row up is what stops an empty cell opening beside
+              it. */}
+          <div className="sm:col-span-2 lg:col-start-1 lg:col-span-3 lg:row-start-1">
             <RecommendationEngine engine={engine} league={league} stats={stats} roomActive={roomActive} onRunAtSeat={onRunAtSeat} />
           </div>
           <div className="lg:col-start-4 lg:row-start-1">
@@ -159,7 +167,13 @@ function AnalyticsGrid({ engine, league, stats, problem, lobbySlot, roomActive, 
 // child here is presentational — this component owns the one thing that
 // has to live above all of them, which is knowing whether an in-progress
 // draft or history entry changed and needs a re-render.
-export default function DraftLocker({ onStartNew, onRunAtSeat, problem, lobbySlot, roomActive, onSetLobbySlot, onOpenSettings, onDraftWithFriends, initialAnalyzeId, onBackToList }) {
+/* Five props left with the launcher: onStartNew, problem, lobbySlot,
+   onSetLobbySlot, onOpenSettings and onDraftWithFriends were all
+   NewMockPanel's, and nothing else here read one. Dropped rather than
+   left in the signature, because an unused prop is a promise this
+   screen no longer keeps -- the next reader would look for the setup
+   form it implies. */
+export default function DraftLocker({ onRunAtSeat, roomActive, initialAnalyzeId, onBackToList }) {
   const engine = useEngine()
   useJukeTick(engine)
   // clearSave()/deleteHistoryDraft() are plain localStorage writes with no
@@ -368,7 +382,12 @@ export default function DraftLocker({ onStartNew, onRunAtSeat, problem, lobbySlo
       )}
       <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="font-display text-[32px] font-bold text-white">Draft Lobby</h1>
+          {/* "Your Insights", not "Draft Lobby". This screen stopped being
+              a lobby when the launcher left it: it is what the entry's
+              "Your insights" button opens, and a heading naming the button
+              that opened it is how a reader knows they are where they
+              meant to go. */}
+          <h1 className="font-display text-[32px] font-bold text-white">Your Insights</h1>
           {/* Mobile: one honest sentence with the real count in it, instead
               of the desktop stat block to the right — that block doesn't
               fit this row below lg, and "N mocks run" is the one fact it
@@ -377,7 +396,8 @@ export default function DraftLocker({ onStartNew, onRunAtSeat, problem, lobbySlo
             {mocksRunSentence}
           </p>
           <p className="mt-1 hidden text-sm text-white/50 lg:block">
-            Set up a mock, pick up where you left off, or see what's already in the locker.
+            How you draft, across every mock you have run — tendencies, projected win rate, and
+            where each draft left value on the board.
           </p>
         </div>
         {/* The three header KPIs: mocks run, mean projected win % (with its
@@ -456,21 +476,17 @@ export default function DraftLocker({ onStartNew, onRunAtSeat, problem, lobbySlo
           )}
         </div>
 
-        {/* AnalyticsGrid always renders New Mock Draft, thin sample or not —
-            see its own file comment on why that panel can't live behind the
-            same gate as the eight chart cards beside it. */}
+        {/* Analytics only — the launcher that used to lead this grid is
+            gone; see AnalyticsGrid's own comment. `roomActive`/`onRunAtSeat`
+            stay because RecommendationEngine still offers "run this one",
+            which is a recommendation acting on itself rather than a second
+            setup form. */}
         <AnalyticsGrid
           engine={engine}
           league={league}
           stats={stats}
-          problem={problem}
-          lobbySlot={lobbySlot}
           roomActive={roomActive}
-          onSetLobbySlot={onSetLobbySlot}
-          onStartNew={onStartNew}
           onRunAtSeat={onRunAtSeat}
-          onOpenSettings={onOpenSettings}
-          onDraftWithFriends={onDraftWithFriends}
         />
       </div>
 

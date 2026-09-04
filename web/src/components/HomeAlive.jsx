@@ -117,6 +117,26 @@ function AccountCard() {
           </>
         )}
       </div>
+
+      {/* 3ag's three-up strip, inside this card and under its own rule.
+          It was missing entirely, which is most of why the desktop
+          homepage did not match: these are the only three sentences on
+          the page that say what the product does rather than what it
+          costs, and the last of them is the read-only promise the locked
+          rooms make too. Desktop only — 2ag has no equivalent, and a
+          phone reaches the same claims by scrolling to the rooms. */}
+      <div className="mt-[22px] hidden grid-cols-3 gap-3.5 border-t border-line-hairline pt-[18px] sm:grid">
+        {[
+          ['One call per room', 'Draft, waivers, trades, lineups. No feeds.'],
+          ['Value, not vibes', 'Every move shows points over replacement.'],
+          ['Any platform', 'Read-only connect. We never touch your league.'],
+        ].map(([title, body]) => (
+          <span key={title}>
+            <span className="block text-[14px] font-semibold text-white">{title}</span>
+            <span className="mt-[3px] block text-[13px] leading-[1.4] text-ink-muted">{body}</span>
+          </span>
+        ))}
+      </div>
     </div>
   )
 
@@ -138,6 +158,20 @@ export default function HomeAlive() {
      line unconditionally, which is correct for it — nobody can be signed in
      there. Same shape as AccountCard above. */
   const ready = useAccountUiReady()
+
+  /* Signed out only, and the reason is that it stops being true: "no
+     account needed" is a promise to somebody deciding whether to make one,
+     and it reads as a shrug to somebody who already has. Built here rather
+     than inline because it sits inside the rooms header row below, and
+     <SignedOut> throws without a ClerkProvider ancestor — main.jsx renders
+     none in a keyless build, where showing it unconditionally is correct
+     since nobody can be signed in there. */
+  const deviceLineText = (
+    <span className="font-mono text-[10px] tracking-[0.14em] text-voidInk-muted">
+      FREE · NO ACCOUNT NEEDED · RUNS IN YOUR BROWSER
+    </span>
+  )
+  const deviceLine = ready ? <SignedOut>{deviceLineText}</SignedOut> : deviceLineText
 
   return (
     <div className="relative overflow-hidden px-5 pb-6 pt-[22px] sm:px-10 sm:pb-14 sm:pt-10">
@@ -206,7 +240,7 @@ export default function HomeAlive() {
                 eyebrow="PRACTICE"
                 eyebrowColor="#14343d"
                 title="Mock Draft"
-                sub="Free · no account"
+                sub="Free · no account needed"
                 href="#/rooms/draft"
               />
               {/* Connect goes to the rooms rather than straight at a
@@ -246,28 +280,22 @@ export default function HomeAlive() {
           </div>
         </div>
 
-        <div className="mt-[26px] sm:mt-10">
-          <div className="mb-3 flex items-baseline justify-between">
+        <div className="mt-[26px] sm:mt-12">
+          {/* The device line sits on this row, right-aligned against the
+              section label — 3ag puts it there, not at the foot of the
+              page where this build had it. `justify-between` with a
+              baseline alignment is the handoff's own rule. */}
+          <div className="mb-3 flex items-baseline justify-between gap-3 sm:mb-3.5">
             <span className="font-mono text-[11px] tracking-[0.14em] text-voidInk-primary">
               <span aria-hidden="true">🚪</span> THE ROOMS
             </span>
+            {deviceLine}
           </div>
           {/* Five across on a desktop, not the lobby's three: 3ag/3au
               draw this section as one `repeat(5,1fr)` strip. */}
           <RoomsGridAlive columns="home" />
         </div>
 
-        {/* Signed out only, and the reason is that it stops being true:
-            "no account needed" is a promise to somebody deciding whether to
-            make one, and it reads as a shrug to somebody who already has. */}
-        {(() => {
-          const line = (
-            <p className="mt-[22px] text-center font-mono text-[10px] tracking-[0.14em] text-voidInk-muted">
-              FREE · NO ACCOUNT NEEDED · RUNS IN YOUR BROWSER
-            </p>
-          )
-          return ready ? <SignedOut>{line}</SignedOut> : line
-        })()}
       </div>
     </div>
   )
