@@ -1,5 +1,3 @@
-import { useLeagueSnapshot } from '../../hooks/useLeague.js'
-
 /* The League Room, on a connected league's real standings.
 
    ---- Why this is the room that went first ----
@@ -38,8 +36,13 @@ function ordered(teams) {
   return [...teams].sort((a, b) => (b.wins - a.wins) || (b.pointsFor - a.pointsFor))
 }
 
-export default function LeagueRoomLive({ league }) {
-  const { snapshot, status, reason } = useLeagueSnapshot(league && league.leagueId)
+/* The snapshot arrives as a prop rather than being fetched here.
+
+   RoomPage owns it because the hero it draws above this needs the week,
+   and lifting it there is also what keeps the page to ONE call for the
+   league instead of two — this component asking for the same id the hero
+   already asked for. Presentational from here down. */
+export default function LeagueRoomLive({ league, snapshot, status, reason }) {
 
   if (status === 'loading') {
     return (
