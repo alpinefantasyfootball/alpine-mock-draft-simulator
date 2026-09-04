@@ -24,6 +24,21 @@ import { useAccountUiReady } from '../../hooks/useAccountUiReady.js'
    than a fixed height, so a room whose sample content is longer than the
    viewport does not scroll a reader past the unlock card into more blur.
 
+   ---- The read-only line is a promise, so it had to be decided ----
+
+   The handoff draws it on every desktop locked card ("Connecting is
+   read-only. Juke never edits your league.") and its own Strategy Room
+   simultaneously offers "Apply both calls", which the README describes as
+   writing the lineup back to the connected platform. Both cannot be true.
+   Settled read-only: Juke only ever reads a league, and Strategy's Apply
+   deep-links into the platform rather than writing. So the line ships as
+   written, and it is the constraint the connect integration is built
+   under rather than a caption somebody can quietly contradict later.
+
+   It shows at every width, where the handoff shows it on desktop only.
+   A claim about what happens to somebody's league data is worth two lines
+   of 12px type on the screen most people will actually read it on.
+
    ---- The CTA copy is fixed by the handoff and it matters ----
 
    "Sign up & connect", never "Connect with Sleeper". Every connect route
@@ -79,6 +94,9 @@ export default function LockedPreview({
           <div className="mt-2 font-display text-[22px] font-bold text-white sm:text-[26px]">
             {headline}
           </div>
+          <p className="mx-auto mt-1.5 max-w-[38ch] text-[13px] leading-[1.4] text-voidInk-body">
+            Connecting is read-only. Juke never edits your league.
+          </p>
           <span className="mt-1 block text-[12px] text-ink-muted sm:text-[13px]">{platforms}</span>
           {/* Not 50/50. "Sign up & connect" is four words against "Log in"'s
               two, so equal columns wrap the primary control on a 375px
