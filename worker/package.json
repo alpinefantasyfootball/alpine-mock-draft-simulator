@@ -4,6 +4,12 @@
   "version": "0.0.0",
   "description": "The Cloudflare Worker behind an invite link, the two proxied routes, Clerk session verification and Clerk's account-deletion webhook. wrangler bundles this itself on dev/deploy; this file exists so it has real dependencies to bundle.",
   "type": "module",
+  "scripts": {
+    "migrate": "npx --yes wrangler@4 d1 migrations apply juke_db --remote",
+    "migrate:local": "npx --yes wrangler@4 d1 migrations apply juke_db --local",
+    "predeploy": "npm run migrate",
+    "deploy": "npx --yes wrangler@4 deploy"
+  },
   "dependencies": {
     "@clerk/backend": "^3.16.13",
     "standardwebhooks": "^1.1.1"

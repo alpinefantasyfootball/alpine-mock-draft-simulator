@@ -112,7 +112,7 @@ the Stack section above, not a one-time migration hiccup.
 | `draft-engine.js` | The rules of a snake draft — turn order, legality, the CPU wobble. No DOM, no globals, no dependencies, so a server can run the identical file. |
 | `room.js` | One shared draft: seats, picks, the clock. Pure, and time is always passed in rather than read. Loaded by the worker only; the page consumes the view it sends. Not copied into `web/dist/` — nothing client-side ever references it. |
 | `live.js` | The client end of a room: one socket, the invite code, and the messages. Knows nothing about the board or how anything is drawn. |
-| `worker/` | The Cloudflare Durable Object behind an invite link, plus the two proxied routes whose keys may not be in the page (`/giphy`, `/news`) and its `wrangler.toml`. Deployed to `juke-draft-room.jukeff.workers.dev`; **a change here needs `wrangler deploy`** — the site deploys itself from git and the worker does not. See `worker/README.md`. |
+| `worker/` | The Cloudflare Durable Object behind an invite link, plus the two proxied routes whose keys may not be in the page (`/giphy`, `/news`) and its `wrangler.toml`. Deployed to `juke-draft-room.jukeff.workers.dev`; **a change here needs `npm --prefix worker run deploy`** — which migrates first, and the site deploys itself from git while the worker does not. See `worker/README.md`. |
 | `worker/store.js` | The D1 cache: Sleeper's pool and Tank01 headlines. A cache and never a source of truth, and a missing binding is a normal condition rather than a fault. |
 | `worker/migrations/` | D1 schema, applied with `wrangler d1 migrations apply`. The database is not to be shaped by hand — see the note on three variants of one schema. |
 | `web/index.html` | The real homepage entry Vite builds from. Loads the legacy files above as root-relative classic scripts, alongside Vite's own hashed module bundle for React. The Draft Room markup lives here too, hidden — see the Stack section. |
@@ -6874,6 +6874,30 @@ unguarded.
 **And a schema check belongs in CI precisely because it is about deploying.**
 This one was in CI and passed — because it only tested reads. A guard that
 covers half a hazard reports green on the other half.
+
+### The deploy and the migration are one command now
+
+The outage above happened because two commands that must not separate could
+be run separately, and were. `worker/package.json` carries scripts for it:
+
+```bash
+npm --prefix worker run deploy      # migrate, then deploy
+```
+
+`predeploy` runs `migrate` and npm halts the chain when it fails — verified
+in both directions rather than assumed: the hook fires in order
+(`predeploy` → `migrate` → `deploy`), and with a deliberately failing
+migration `wrangler deploy` never runs at all.
+
+**It is a shorter safe path, not a locked door.** `npx wrangler deploy` by
+hand still skips the hook and npm cannot stop it. Said plainly in
+`worker/README.md` for the reason this project keeps relearning: a guard
+people believe in and that does not fire is worse than no guard.
+
+**The order is right because every migration here is additive.** New code
+needs columns the old schema lacks, so the database leads. A destructive
+migration — dropping a column running code still reads — needs the opposite
+order and does not belong in this script.
 
 ### Every hardcoded platform name became a bug the day ESPN shipped
 
