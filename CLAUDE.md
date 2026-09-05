@@ -5851,6 +5851,60 @@ height. Header-left minus H1-left is 0 on all five routes and the title
 spread within a row is 0 on both grids, at 375 and 1440; a number here
 would be wrong the next time the max-width moves.
 
+### The locker grew forever, on both screens the route split created
+
+Reported off the deployed site: the mock-drafts list "can't continue to grow
+vertically. If someone runs a hundred, we shouldn't show every single one."
+`HISTORY_LIMIT` is 200, and both screens rendered every entry — so the page
+grew by one row-height per finished draft, without limit, and neither had
+anything on it to say the list had an end.
+
+**It is one defect in two places, and fixing only the reported one moves it
+one route over.** The split above puts starting a draft at `#/rooms/draft`
+and the record of them at `#/drafts`, so the obvious repair for the entry is
+to show a few and link to the archive — which lands the reader on the other
+uncapped list. Both were changed together.
+
+The two want different answers, because the route split already decided what
+each screen is for:
+
+- **`#/rooms/draft` is a launcher**, so the list there is context for the
+  Start button rather than the record. `RECENT_SHOWN = 5`, then "See all N
+  drafts" into the archive. The total is in that link on purpose: five rows
+  and a bare "See all" read as five drafts.
+- **`#/drafts` is the archive**, so nothing may be unreachable from it. It
+  pages instead — 20, then "Show N more" — with `LockerTable`'s own footer
+  shape ("Showing 20 of 47" beside the button) rather than a second one
+  invented here. The button's number is what the press actually does, so
+  the last one reads "Show 7 more" rather than promising twenty.
+
+**`LockerTable` already paged and nothing had noticed.** It has had a
+`visibleCount` and a "Load 20 more" since the Locker redesign, whose own
+comment cites a manager who has run "hundreds of mocks" — so the pattern,
+the reasoning and the constant were all already in the repository, and the
+two screens built later simply never adopted them. The check worth running
+on any new list is whether an existing one already solved it.
+
+**One cut, not one per breakpoint.** The desktop rail is taller than five
+rows fill, and eight would fit it — but "See all N drafts" counts the whole
+locker either way, so a breakpoint-dependent cut makes that sentence true at
+one width and wrong at the other, and adds a second number to keep in step
+with the first. Measured at 1440 with 47 seeded: five rows plus the link
+ends the right rail at 752 against the left column's 845, which is a gap
+small enough to cost nothing.
+
+**Verified by seeding the locker rather than by reading the diff**, which is
+the only way this one is checkable — 47 entries into `juke.draft-history.v1`,
+then driven in a real browser at 390 and 1440. The entry renders 5 rows and
+"See all 47 drafts"; the archive renders 20, then 40 on one press with the
+button reading "Show 7 more", then 47 with the button gone. Every one of
+those was a number the unfixed code got wrong.
+
+**`DraftLocker` and `YouScreen` read the same list and needed nothing.** The
+first hands it straight to `LockerTable`, which pages; the second takes only
+`.length`. `PracticeScenarios` aggregates. Those four call sites are the
+whole set — `grep historyList()` before assuming a fifth.
+
 ### Still open
 
 - **The connected half.** Fourteen screens, waiting on league connect.
