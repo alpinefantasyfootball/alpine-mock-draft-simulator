@@ -52,6 +52,15 @@ jobs:
       - name: Source-id crosswalk
         run: python scripts/test_crosswalk.py
 
+      # The one check that is about DEPLOYING rather than about behaviour:
+      # the worker ships separately from the site, so it meets databases
+      # that are one or two migrations behind it. listLeagues() has a
+      # fallback ladder for exactly that, and the ladder was silently
+      # broken by the change that trusted it. sqlite3 is what D1 is, so
+      # this needs no account and no network.
+      - name: Schema fallback ladder
+        run: python scripts/test_schema_ladder.py
+
       # sleeper.js is a plain module and its real work is turning four
       # upstream responses into one object, so this drives it against a
       # local stub with no network and no wrangler -- which is the only way

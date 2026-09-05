@@ -322,13 +322,32 @@ ROUTES = healthy();
 }
 
 {
-  // Same for the league id, which reaches four paths rather than one.
+  /* Same for the league id, which reaches several paths rather than one.
+
+     Asserted as "no raw traversal reaches upstream" rather than as a count
+     of encoded paths. The count version pinned this to however many calls
+     leagueSnapshot() happened to make, and went red the day a fifth was
+     added for the draft time — reporting an encoding failure when the
+     encoding was perfect. The property is what matters and it does not
+     move when a call is added: whatever this asks for, none of it may be
+     the id spliced in raw. */
   ROUTES = healthy();
   ASKED = [];
   await leagueSnapshot("a/../state/nfl", BASE);
   ok(
-    "a path-shaped league id is encoded on every one of its four calls",
-    ASKED.filter((p) => p.includes("a%2F..%2Fstate%2Fnfl")).length === 3,
+    "a path-shaped league id never reaches upstream unencoded",
+    /* Every /league/ path must CARRY the encoded id. Not "no path contains
+       a/../", which was tried and is vacuous: the URL constructor resolves
+       the traversal before the path is ever recorded, so a raw splice comes
+       out as `/v1/league/state/nfl/drafts` — carrying neither the traversal
+       nor the encoding, and passing any check that looks for the former.
+
+       Stated over the whole /league/ family rather than as a count, so a
+       sixth upstream call is covered the day it is added rather than
+       breaking this the way the fifth one did. */
+    ASKED.filter((p) => p.startsWith("/v1/league/")).length >= 4 &&
+      ASKED.filter((p) => p.startsWith("/v1/league/"))
+           .every((p) => p.includes("a%2F..%2Fstate%2Fnfl")),
     ASKED,
   );
 }

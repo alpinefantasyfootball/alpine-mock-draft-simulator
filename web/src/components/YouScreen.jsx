@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { SignInButton, SignUpButton, SignedIn, SignedOut, useClerk, useUser } from '@clerk/clerk-react'
 import AppShell from './shell/AppShell.jsx'
 import ConnectLeagueCta from './shell/ConnectLeagueCta.jsx'
+import DraftCountdown from './shell/DraftCountdown.jsx'
 import { useLeague } from '../hooks/useLeague.js'
 import { LINE as PLATFORM_LINE, LIVE_NAMES as PLATFORM_NAMES, platformFor } from './shell/leaguePlatforms.js'
 import { useAccountUiReady } from '../hooks/useAccountUiReady.js'
@@ -264,6 +265,11 @@ function ConnectedLeagues() {
                 {lg.totalTeams ? ` · ${lg.totalTeams} teams` : ''}
                 {' · read-only'}
               </span>
+              {/* Its own line rather than appended to the one above: that
+                  line truncates, and a countdown is the thing on this row
+                  most likely to be the reason somebody opened the screen.
+                  Renders nothing at all when there is no draft to count. */}
+              <DraftCountdown league={lg} className="mt-1" />
             </span>
 
             {armed ? (

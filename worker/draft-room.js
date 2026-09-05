@@ -32,7 +32,8 @@ import {
   syncPlayerPool, cachedNews, storeNews, usableNews, storeSignup, touchUser, deleteUserData,
   getSavedDraft, putSavedDraft, deleteSavedDraft,
   listDraftHistory, putHistoryEntry, deleteHistoryEntry,
-  listLeagues, putLeague, deleteLeague, selectLeague, resolveSleeperIds
+  listLeagues, putLeague, deleteLeague, selectLeague, resolveSleeperIds,
+  refreshLeagueCache
 } from "./store.js";
 
 /* Sleeper, read-only. Kept out of store.js for the same reason auth.js is:
@@ -1302,20 +1303,90 @@ async function espnSnapshotRoute(request, env, ctx) {
   return new Response(body, { headers });
 }
 
+/* An hour. Long enough that an open tab is not a poller, short enough that
+   a draft moved this morning is right by this afternoon. A draft time moves
+   rarely and a league name almost never; what this is really bounding is how
+   wrong a countdown may be, and an hour of that on a multi-day countdown is
+   invisible. */
+const LEAGUE_CACHE_TTL = 3600;
+
+function staleLeague(league) {
+  /* A league that has drafted has nothing left to refresh: the roster is
+     what changes now and that is the snapshot's job, not this cache's. */
+  if (league.draftStatus === "complete") return false;
+  const seen = Number(league.refreshedAt || league.connectedAt || 0);
+  return !seen || (nowSeconds() - seen) > LEAGUE_CACHE_TTL;
+}
+
+/* Re-read one league from its own platform and update the cached label.
+
+   Dispatches on provider the same way the connect route does. Answers
+   quietly on every failure — this runs after the response has gone, so
+   there is nobody left to tell, and an unreachable platform is a stale
+   label rather than a fault. */
+async function refreshActiveLeague(env, clerkId, league) {
+  try {
+    if (league.provider === "espn") {
+      const state = await nflState(env.SLEEPER_BASE || SLEEPER_API);
+      const season = String(league.season || (state && state.season) || "");
+      if (!season) return;
+      const found = await espnLookupLeague(league.leagueId, season, env.ESPN_BASE || ESPN_API);
+      if (!found.league) return;
+      await refreshLeagueCache(env, clerkId, Object.assign({}, found.league, {
+        provider: "espn",
+        leagueId: league.leagueId
+      }));
+      return;
+    }
+
+    const snapshot = await leagueSnapshot(league.leagueId, env.SLEEPER_BASE || SLEEPER_API);
+    if (!snapshot) return;
+    await refreshLeagueCache(env, clerkId, Object.assign({}, snapshot, {
+      provider: "sleeper",
+      leagueId: league.leagueId
+    }));
+  } catch (err) {
+    console.error("active league refresh failed:", err && err.message);
+  }
+}
+
 /* The connection itself, which is the one part that needs an account.
 
    That is the handoff's own rule — "Connect-league always routes through
    account creation first" — and it is also the only way this can work:
    there is nowhere else to put a connection that follows somebody to
    another device. */
-async function meLeaguesRoute(request, env) {
+async function meLeaguesRoute(request, env, ctx) {
   const { user, error } = await requireUser(request, env);
   if (error) return error;
 
   const headers = Object.assign({ "content-type": "application/json" }, corsFor(request));
 
   if (request.method === "GET") {
-    return new Response(JSON.stringify({ leagues: await listLeagues(env, user.id) }), { headers });
+    const leagues = await listLeagues(env, user.id);
+
+    /* Keep the active league's cached label honest, off the response path.
+
+       0005 said this happened and it did not — see refreshLeagueCache().
+       It matters more now than it did for a name: a rescheduled draft
+       counts down to the wrong instant with complete confidence, which is
+       worse than a stale league name because it looks like information.
+
+       Only the ACTIVE league, and only when the cache is older than
+       LEAGUE_CACHE_TTL, so this is at most one upstream fetch an hour for
+       somebody with the app open — not one per connected league per page
+       load, which is what put the draft time in this table rather than
+       behind a snapshot in the first place.
+
+       The League Room does not depend on this: it draws from a live
+       snapshot. What this keeps current is the You screen and the header
+       switcher, which read the cache. */
+    const active = leagues[0];
+    if (active && staleLeague(active)) {
+      after(ctx, refreshActiveLeague(env, user.id, active));
+    }
+
+    return new Response(JSON.stringify({ leagues }), { headers });
   }
 
   /* PATCH — switch which connected league is the active one.
@@ -1673,7 +1744,7 @@ export default {
           "access-control-max-age": "86400"
         }, corsFor(request)) });
       }
-      return meLeaguesRoute(request, env);
+      return meLeaguesRoute(request, env, ctx);
     }
 
     if (url.pathname === "/me") {

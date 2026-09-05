@@ -6728,6 +6728,150 @@ property of the API and become a promise somebody has to keep. The public-
 league requirement is a real limit, it is stated on the platform row, and it
 is the honest version.
 
+## The draft countdown, and the instant that outlives its draft
+
+Reported 5 September 2026: a connected league before its draft is ten teams
+with empty rosters and no record, and nothing on any screen said when that
+changes. Both platforms publish the draft time and neither was being read.
+
+**Sleeper costs one extra call and ESPN costs none.**
+`/league/<id>/drafts` joins `leagueSnapshot()`'s existing `Promise.all` —
+deliberately not `/draft/<draft_id>`, which is the more obvious endpoint and
+would have to wait for the league response to learn the id, turning a free
+parallel fetch into a serial one. ESPN's `draftSettings.date` and
+`draftDetail` already ride on the `mSettings` view both callers ask for.
+
+### Reading the instant before the status counts down to a draft that has run
+
+**Both platforms keep the scheduled time after the draft is over.** Sleeper
+leaves `start_time` on a completed draft and ESPN leaves
+`draftSettings.date` behind `drafted: true`. So a countdown built on the
+instant alone counts confidently down to a draft that happened last month —
+and confidently is the worst way for a number on this site to be wrong.
+
+`draftPhase()` reads the status first for that reason, and
+`worker/test-countdown.mjs` pins it from both directions: a completed draft
+with a past time, and one with a *future* time. Confirmed red by reordering
+the two checks.
+
+**Five states, not two, and "late" is the one that earns its place.** A
+scheduled time that has gone by with no draft behind it is extremely common
+— leagues start late, or nobody moved a placeholder — and both obvious
+handlings misrepresent it. Counting to a negative is absurd; rendering
+nothing says the league has no draft. Saying the time has passed is the only
+honest answer and the only one the reader can act on.
+
+**`none` and `complete` render nothing at all**, which is the score strip's
+"it fails by disappearing" contract. The countdown exists to explain an
+empty roster; once the draft has run, the roster is its own explanation and
+a permanent "drafted" row is furniture on every screen for a season.
+
+### One vocabulary for two providers, decided in the adapter
+
+`'pre_draft' | 'drafting' | 'complete'` — Sleeper's own strings, passed
+through, with `espn.js` mapping its two booleans onto them. So the component
+is provider-blind and Yahoo means teaching its adapter three words rather
+than teaching the UI a fourth vocabulary. `draftPhase()` still counts down
+for an *unrecognised* status with a future time, so a new provider degrades
+to working rather than to silence.
+
+### `0005` claimed a refresh it never had, and the countdown is what forced it
+
+That migration's comment read "it is refreshed whenever a snapshot is
+fetched". **Nothing ever called `putLeague()` from a snapshot route**, so
+`refreshed_at` only moved when somebody re-connected a league they were
+already connected to — a league renamed on Sleeper kept its old name in
+Juke's header indefinitely.
+
+Survivable for a name and not for a draft time: a rescheduled draft counts
+down to the wrong instant with complete confidence. `refreshLeagueCache()`
+is the real thing, called from `GET /me/leagues` off the response path, for
+**the active league only** and at most hourly. Not `putLeague()` — that
+upserts, and an INSERT here would silently re-create a row for a league the
+reader disconnected in another tab moments ago.
+
+The League Room does not depend on that cache at all: it draws `draftAt`
+off its own live snapshot, so it is never stale. What the cache serves is
+the You screen and the switcher, which list every league and would
+otherwise need one upstream call each per render — which is the whole
+reason the time is a column rather than a snapshot field.
+
+### Seconds in both forms here, unlike the kickoff pill
+
+`KickoffPill` drops seconds below `sm` for a measured reason: it shares the
+hero's eyebrow row at 375px and the pair overflowed by nine pixels. Neither
+countdown surface has that constraint — both are full-width blocks with the
+countdown on its own line — and the League Room's banner sits on screen for
+as long as somebody is looking at their league. `3D 06:21` changes once a
+minute and reads as frozen, which is what that pill was reported for. A
+countdown that never visibly moves is not a live one.
+
+The formatter moved to `web/src/lib/countdown.js` when the second countdown
+arrived. Two would have drifted the first time one of them decided days
+should read `4d`.
+
+### A second platform makes every hardcoded platform name a bug
+
+Found by looking at the screen rather than by anything failing:
+`LeagueRoomLive` said **"Read from Sleeper"** under an ESPN league, and an
+unreachable ESPN reported that *Sleeper* had not answered. Four strings,
+every one correct when written, every one wrong the day ESPN shipped — the
+stale-copy failure this file already has a rule about, arriving through a
+feature rather than through prose.
+
+They read `platformFor(league.provider).name` now. **This is the check to
+run on the next provider**: grep the app for the name of the one that came
+before it.
+
+### A fallback that shares a fragment with what it falls back from is not one
+
+`listLeagues()` tries progressively older queries because the worker ships
+separately from the site and meets databases a migration or two behind it.
+Adding 0008's draft columns to a SELECT fragment **shared by both attempts**
+made both of them name `draft_at` — so against a database without 0008 both
+threw and the function answered `[]`. A signed-in manager told they have no
+leagues at all, which is the precise failure the fallback existed to
+prevent, reintroduced by the change that trusted it.
+
+It is a ladder of three complete queries now, newest first, each naming its
+own columns. `scripts/test_schema_ladder.py` reads the real SQL out of
+`store.js` — a copy in the test would pass while the shipped query was
+broken — applies the migrations to sqlite one at a time, and asserts that at
+every level some rung answers *and* that it is the newest one that could.
+Confirmed red by putting the shared column back.
+
+**The general form is worth more than this instance:** a fallback is only a
+fallback if it can fail independently of the thing it is behind. Check that
+the older path does not import, extend, or interpolate the newer one.
+
+### Every hardcoded platform name became a bug the day ESPN shipped
+
+Found by looking at the League Room rather than by anything failing.
+`LeagueRoomLive` said **"Read from Sleeper"** under an ESPN league, and an
+unreachable ESPN reported that *Sleeper* had not answered — four strings,
+each correct when written. They read `platformFor(provider).name` now.
+
+**This is the check to run on the third provider**: grep the app for the
+name of the second one.
+
+### And a count-based assertion breaks when a call is added
+
+`test-sleeper.mjs` asserted a path-shaped league id was encoded "on every
+one of its four calls" by counting three encoded paths. The draft fetch made
+it five, so it went red reporting an encoding failure on encoding that was
+perfect.
+
+**The obvious repair is vacuous and was shipped for one run.** Asserting "no
+path contains `a/../`" cannot fail: the URL constructor resolves the
+traversal before the path is recorded, so a raw splice comes out as
+`/v1/league/state/nfl/drafts`, carrying neither the traversal nor the
+encoding. It passed against a deliberately unencoded call.
+
+What works is stating the property over the family: every `/league/` path
+must CARRY the encoded id. That covers a sixth call the day it is added, and
+it was confirmed red against a raw splice — which the version it replaced
+was not.
+
 ## Copy goes stale the day a feature ships, and nothing fails when it does
 
 A content audit on 2 September 2026 found the same defect in eight places,

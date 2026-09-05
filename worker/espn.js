@@ -152,6 +152,37 @@ function ownerNames(league) {
   return by;
 }
 
+/* When the draft is, and whether it has happened.
+
+   Free: `draftSettings.date` rides on the `mSettings` view both callers
+   already ask for, and `draftDetail` on the league root. No extra request.
+
+   ---- The status is derived, and it has to be ----
+
+   ESPN has no "pre_draft"/"drafting"/"complete" field. It has two booleans,
+   and they answer a different question from Sleeper's one string, so the
+   mapping is written down here once rather than being re-derived by each
+   screen that wants to know whether to draw a countdown.
+
+   ---- A date with `drafted: true` behind it still points at the past ----
+
+   ESPN keeps the scheduled date after the draft has run, so a countdown
+   built on the date alone counts to a draft that already happened. That is
+   the same trap Sleeper's `start_time` has on a completed draft, which is
+   why both providers report a status beside the instant and nothing draws
+   one without the other. */
+function draftInfo(league) {
+  const settings = (league.settings || {}).draftSettings || {};
+  const detail = league.draftDetail || {};
+  const at = Number(settings.date) || null;
+
+  const status = detail.inProgress ? "drafting"
+               : detail.drafted ? "complete"
+               : "pre_draft";
+
+  return { at, status };
+}
+
 /* The league itself, for the connect flow's "which league" step.
 
    ESPN resolves one league per id, so this answers one rather than a list —
@@ -180,6 +211,7 @@ export async function lookupLeague(leagueId, season, base) {
   const settings = league.settings || {};
   const owners = ownerNames(league);
   const teams = (Array.isArray(league.teams) ? league.teams : []).slice(0, MAX_TEAMS);
+  const draft = draftInfo(league);
 
   return {
     reason: null,
@@ -189,6 +221,8 @@ export async function lookupLeague(leagueId, season, base) {
       name: String(settings.name || "Untitled league").slice(0, 80),
       season: String(league.seasonId || season),
       totalTeams: Number(settings.size) || teams.length,
+      draftAt: draft.at,
+      draftStatus: draft.status,
       // Which team is the reader's. There is no account here to infer it
       // from, so the dialog has to ask — see this file's header.
       teams: teams.map((t) => ({
@@ -375,6 +409,7 @@ export async function leagueSnapshot(leagueId, season, base, resolve) {
      drawing nothing — the same rule the pipeline follows about a 0 from an
      API meaning missing. */
   const week = Number(league.scoringPeriodId) || null;
+  const snapDraft = draftInfo(league);
 
   return {
     reason: null,
@@ -384,6 +419,8 @@ export async function leagueSnapshot(leagueId, season, base, resolve) {
       name: String(settings.name || "Untitled league").slice(0, 80),
       season: String(league.seasonId || season),
       totalTeams: Number(settings.size) || teams.length,
+      draftAt: snapDraft.at,
+      draftStatus: snapDraft.status,
       week: week && week > 0 ? week : null,
       seasonType: null,
       /* ESPN's acquisition budget is FAAB where the league uses it, and 0

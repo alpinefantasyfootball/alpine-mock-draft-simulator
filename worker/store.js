@@ -862,13 +862,51 @@ export async function resolveSleeperIds(env, wanted) {
 
    The order of the two matters: the new query is tried first, so an
    applied migration never pays for the old one. */
-const LEAGUE_COLS =
-  "SELECT provider, league_id, owner_id, name, season, total_teams, connected_at";
+/* The read, as a ladder of progressively older schemas.
+
+   ---- Why this is a ladder and not two attempts ----
+
+   It was two: the 0006 ordering, falling back to 0005's. Adding 0008's
+   draft columns to the shared SELECT broke it silently, because BOTH
+   attempts then named `draft_at` — so against a database without 0008 they
+   both threw and this answered `[]`, which reads as an account with no
+   leagues at all. That is the exact failure the fallback was written to
+   prevent, reintroduced by the change that trusted it.
+
+   The lesson is the shape rather than the bug: **a fallback that shares a
+   fragment with the thing it is falling back from is not a fallback.** Each
+   rung here names its own columns, so a new one is a new entry and cannot
+   quietly break the older ones.
+
+   ---- Why any of this exists ----
+
+   The site deploys itself from git and the worker does not, so worker code
+   is at some point live against a database that has not had the latest
+   migration applied. Every rung is one failed statement and a correct,
+   slightly older answer; the alternative is a signed-in manager being told
+   they have no leagues.
+
+   Ordered newest first, so an up-to-date database never pays for the
+   history. */
+const LEAGUE_READS = [
+  // 0008: draft time. 0006: which league is active.
+  "SELECT provider, league_id, owner_id, name, season, total_teams, connected_at," +
+  " refreshed_at, draft_at, draft_status FROM connected_leagues WHERE clerk_id = ?" +
+  " ORDER BY COALESCE(selected_at, connected_at) DESC, connected_at DESC",
+
+  // 0006 without 0008.
+  "SELECT provider, league_id, owner_id, name, season, total_teams, connected_at," +
+  " refreshed_at FROM connected_leagues WHERE clerk_id = ?" +
+  " ORDER BY COALESCE(selected_at, connected_at) DESC, connected_at DESC",
+
+  // 0005 alone, which is where this started.
+  "SELECT provider, league_id, owner_id, name, season, total_teams, connected_at" +
+  " FROM connected_leagues WHERE clerk_id = ? ORDER BY connected_at DESC",
+];
 
 export async function listLeagues(env, clerkId) {
   if (!env.DB) return [];
 
-  const read = (sql) => env.DB.prepare(sql).bind(clerkId).all();
   const shape = (res) => (res.results || []).map((r) => ({
     provider: r.provider,
     leagueId: r.league_id,
@@ -877,31 +915,33 @@ export async function listLeagues(env, clerkId) {
     season: r.season,
     totalTeams: r.total_teams,
     connectedAt: r.connected_at,
+    // Epoch seconds, and the one field here nothing draws: it is what the
+    // route reads to decide whether this cache is worth re-reading. Absent
+    // on the oldest rung, where staleLeague() falls back to connectedAt.
+    refreshedAt: r.refreshed_at,
+    // Milliseconds, as both platforms send it and as a browser counts down
+    // from. The one timestamp in this table that is not epoch seconds, and
+    // it says so here because the column name cannot.
+    draftAt: r.draft_at === undefined ? null : r.draft_at,
+    draftStatus: r.draft_status === undefined ? null : r.draft_status,
   }));
 
-  try {
-    return shape(await read(
-      LEAGUE_COLS + " FROM connected_leagues WHERE clerk_id = ?" +
-      " ORDER BY COALESCE(selected_at, connected_at) DESC, connected_at DESC"
-    ));
-  } catch (err) {
-    /* Either the table is missing — an account with no leagues, which is
-       what the second attempt concludes too — or the column is, which is
-       an unmigrated 0006 and the one case the retry exists for. */
-    console.error("leagues read failed, retrying pre-0006:", err && err.message);
+  let last = null;
+  for (let i = 0; i < LEAGUE_READS.length; i++) {
+    try {
+      return shape(await env.DB.prepare(LEAGUE_READS[i]).bind(clerkId).all());
+    } catch (err) {
+      last = err;
+      /* A missing column means an unapplied migration and the next rung is
+         the right answer. A missing TABLE means an account with no leagues,
+         which every rung will conclude equally — so this costs two extra
+         failed statements in that case and nothing else. */
+    }
   }
 
-  try {
-    return shape(await read(
-      LEAGUE_COLS + " FROM connected_leagues WHERE clerk_id = ? ORDER BY connected_at DESC"
-    ));
-  } catch (err) {
-    // A missing table reads exactly like an account with no leagues, which
-    // is why the write below is what tells the two apart — the same trap
-    // listDraftHistory() already documents for draft_history.
-    console.error("leagues read failed:", err && err.message);
-    return [];
-  }
+  // Nothing worked: no table, or a database that is not this one.
+  console.error("leagues read failed:", last && last.message);
+  return [];
 }
 
 /* Connect, or refresh what is already connected.
@@ -924,14 +964,17 @@ export async function putLeague(env, clerkId, league) {
       upsertUser(env, clerkId, stamp),
       env.DB.prepare(
         "INSERT INTO connected_leagues" +
-        " (clerk_id, provider, league_id, owner_id, name, season, total_teams, connected_at, refreshed_at)" +
-        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)" +
+        " (clerk_id, provider, league_id, owner_id, name, season, total_teams," +
+        "  connected_at, refreshed_at, draft_at, draft_status)" +
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)" +
         " ON CONFLICT(clerk_id, provider, league_id) DO UPDATE SET" +
         "   owner_id = excluded.owner_id," +
         "   name = excluded.name," +
         "   season = excluded.season," +
         "   total_teams = excluded.total_teams," +
-        "   refreshed_at = excluded.refreshed_at"
+        "   refreshed_at = excluded.refreshed_at," +
+        "   draft_at = excluded.draft_at," +
+        "   draft_status = excluded.draft_status"
       ).bind(
         clerkId,
         league.provider,
@@ -941,7 +984,9 @@ export async function putLeague(env, clerkId, league) {
         league.season,
         league.totalTeams || null,
         stamp,
-        stamp
+        stamp,
+        league.draftAt || null,
+        league.draftStatus || null
       ),
     ]);
     return true;
@@ -987,6 +1032,60 @@ export async function selectLeague(env, clerkId, provider, leagueId) {
     // An unmigrated 0006, or no such table. Both are "the switch did not
     // persist", and listLeagues() is what keeps the app coherent either way.
     console.error("league select failed:", err && err.message);
+    return false;
+  }
+}
+
+/* Refresh the cached label from a snapshot that has just been taken.
+
+   ---- 0005 said this happened and it did not ----
+
+   That migration's own comment reads "it is here so the header's league chip
+   can draw without a round trip ... and it is refreshed whenever a snapshot
+   is fetched". Nothing ever called putLeague() from a snapshot route, so
+   `refreshed_at` only moved when somebody re-connected a league they were
+   already connected to. A league renamed on Sleeper kept its old name in
+   Juke's header for ever.
+
+   It is true now, and the draft countdown is what forced it: a draft time
+   that never refreshes is worse than a name that never refreshes, because a
+   rescheduled draft counts down to the wrong instant with complete
+   confidence.
+
+   ---- Why this is not putLeague() ----
+
+   putLeague() upserts, which is right for connecting and wrong here: a
+   snapshot is fetched for the ACTIVE league, and an INSERT would silently
+   re-create a row for a league the reader disconnected in another tab
+   moments ago. This only ever updates a row that already exists, and
+   touches no key.
+
+   Never on the response path — the caller passes it to after(ctx, …) — and
+   it answers false rather than throwing, because a stale label is not a
+   reason to fail a snapshot the reader is waiting for. */
+export async function refreshLeagueCache(env, clerkId, league) {
+  if (!env.DB || !league) return false;
+
+  try {
+    const res = await env.DB.prepare(
+      "UPDATE connected_leagues SET" +
+      "   name = ?, season = ?, total_teams = ?," +
+      "   draft_at = ?, draft_status = ?, refreshed_at = ?" +
+      " WHERE clerk_id = ? AND provider = ? AND league_id = ?"
+    ).bind(
+      league.name,
+      league.season,
+      league.totalTeams || null,
+      league.draftAt || null,
+      league.draftStatus || null,
+      nowSeconds(),
+      clerkId,
+      league.provider,
+      league.leagueId
+    ).run();
+    return Boolean(res.meta && res.meta.changes);
+  } catch (err) {
+    console.error("league cache refresh failed:", err && err.message);
     return false;
   }
 }
