@@ -1,5 +1,6 @@
 import { SignInButton, SignUpButton } from '@clerk/clerk-react'
 import { useAccountUiReady } from '../../hooks/useAccountUiReady.js'
+import { LINE as PLATFORM_LINE } from './leaguePlatforms.js'
 
 /* A guest's view of an in-season room: real sample content, blurred, under
    an unlock card. design_handoff_v3_alive's "Guest rooms are locked
@@ -46,11 +47,19 @@ import { useAccountUiReady } from '../../hooks/useAccountUiReady.js'
    underneath as a list — the handoff's own global rule, and the reason is
    that platform-exclusive language on the button promises a flow this
    product does not have (there is no per-platform entry point; there is one
-   sign-up and then a chooser). */
+   sign-up and then a chooser).
+
+   **The chooser that sentence describes did not exist until 5 September
+   2026**, which is what made the list under the button a claim rather than
+   a roadmap: four platforms named, one built, and the dialog opening
+   straight onto a Sleeper username. It exists now (ConnectLeagueModal's
+   first step) and the list is the shared line, which says which of the
+   four is live. Both halves had to move — a chooser alone would still have
+   been captioned with four working integrations. */
 
 export default function LockedPreview({
   headline,
-  platforms = 'Sleeper · ESPN · Yahoo · CBS',
+  platforms = PLATFORM_LINE,
   children,
 }) {
   const ready = useAccountUiReady()

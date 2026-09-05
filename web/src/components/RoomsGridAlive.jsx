@@ -1,4 +1,6 @@
 import { useRooms } from '../hooks/useRooms.js'
+import { useLeague } from '../hooks/useLeague.js'
+import { LIVE_WHEN_CONNECTED } from './RoomPage.jsx'
 
 /* The room cards, written once for the two screens that draw them: the
    Rooms lobby (#/rooms) and the homepage's own THE ROOMS section. The
@@ -164,8 +166,18 @@ const GRID = {
 
 export default function RoomsGridAlive({ columns = 'lobby' }) {
   const rooms = useRooms()
-  const lead = rooms.filter((r) => r.live)
-  const locked = rooms.filter((r) => !r.live)
+  /* Which rooms this reader can walk into, which is not the same question
+     as which rooms are built. `live` is the second one, and it was the
+     only one until a league could be connected: League Room renders real
+     standings for a connected reader (RoomPage's LIVE_ROOMS) and drew a
+     padlock here regardless, so the lobby said locked about a room that
+     opens. LIVE_WHEN_CONNECTED is that map's own key list rather than a
+     second copy of it. */
+  const { status } = useLeague()
+  const opensForMe = (r) =>
+    r.live || (status === 'connected' && LIVE_WHEN_CONNECTED.includes(r.slug))
+  const lead = rooms.filter(opensForMe)
+  const locked = rooms.filter((r) => !opensForMe(r))
   const grid = GRID[columns] || GRID.lobby
 
   /* How many cards land in the desktop grid's final row, and what those

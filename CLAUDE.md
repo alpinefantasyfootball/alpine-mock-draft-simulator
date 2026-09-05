@@ -119,6 +119,7 @@ the Stack section above, not a one-time migration hiccup.
 | `web/src/components/phone/` | The phone-only screens, mounted below `sm` (`usePhoneWidth()`): the draft room, the floating nav pill. Each is a different screen from its desktop counterpart rather than a narrower one — see "The mobile pass" below for why that is a product decision and what it costs. **Two have left**: the homepage (`HomeAlive.jsx`) and the Mock Drafts Lobby (`DraftRoomEntry.jsx`) are one responsive screen at every width now — see "Flow v3" below for why that handoff reverses the split for those two specifically and not for the draft room. |
 | `web/src/components/settings/` | The Draft Settings screen's own controls, the scoring-rule editor and the draft-order list. Split out of `DraftSettingsModal.jsx` when that file became the whole settings screen rather than a three-tab modal. |
 | `web/src/components/PracticeScenarios.jsx` | The Mock Drafts lobby's "Practice a scenario" grid — four preset drafts that launch with their settings already chosen. Draws only; `practiceScenarios.js` beside it decides which four, and `engine.startScenario()` is what turns a card into a draft. |
+| `web/src/components/shell/leaguePlatforms.js` | Which platforms Juke can read a league from, and which it cannot yet. The one list — it was prose in seven places, and prose cannot be wrong in a way anything notices. |
 | `web/src/clerkConfig.js` | The publishable key (from `VITE_CLERK_PUBLISHABLE_KEY`, public by design) and the one appearance object every Clerk component is themed by. Two hand-tuned copies of "make Clerk look like Juke" would drift the first time either changed. |
 | `web/src/components/AuthBridge.jsx` | Writes `window.JukeAuth` and fires `juke:auth`, so `app.js` — a classic script, where Clerk's hooks cannot reach — can read who is signed in. `window.JukeEngine` pointing the other way. Renders nothing. |
 | `web/src/hooks/useAccountUiReady.js` | "Is it safe to render Clerk's components yet": a key exists *and* we are past the first client pass. Both halves fail silently on their own — see the Accounts section. |
@@ -6282,6 +6283,112 @@ claims: the signed-in path cannot be exercised on a preview, so the gap the
 `verifyToken` bug lived in is still open and the only real check remains a
 merge to production. Setting the same variable for Preview is a dashboard
 change nobody has made, not a code change.
+
+## Connecting a league, and the three ways the site did not say so
+
+Reported 5 September 2026, from the deployed site, as one complaint with
+three defects in it: *"I clicked Connect from the homepage and it asked for
+my Sleeper username. There's a disconnect between what we're saying we can
+connect to and what our pop-up is asking for. It only asks for Sleeper.
+There's no prompt to pick which league provider... Even after entering my
+Sleeper username and getting a confirmation that it connected successfully,
+the Connect messaging is still there throughout the website."*
+
+Every one of them renders, contrasts and throws nothing, which is why none
+of them was caught by anything this project runs.
+
+### The site claimed four platforms and implemented one
+
+`Sleeper · ESPN · Yahoo · CBS` was written out in **seven** places — under
+every connect control on the site — as a list of equals. One is built. And
+the connect dialog opened directly onto "Your Sleeper username", so the
+reader was told the product reads their ESPN league and then asked for a
+credential from somewhere else.
+
+**`web/src/components/shell/leaguePlatforms.js` is the one list now**, and
+the dialog has a platform step in front of the username: all four listed,
+three visibly locked, one line saying which is which. That is the shape this
+project already uses twice — `DRAFT_TYPES` lists auction and marks it
+unavailable, the Draft Room's sport chips list Basketball and Baseball behind
+a lock — and the reason is the same. A row showing one platform where the
+category has four tells a visitor the product has not thought past one; an
+undifferentiated list of four claims they all work.
+
+**The step is not skipped when only one platform is live.** It is one press,
+and what it buys is that nobody is ever asked for a Sleeper username without
+having said "Sleeper" first.
+
+**`LockedPreview.jsx` had already written down the fix it was missing.** Its
+own comment explained that the button says "Sign up & connect" rather than
+"Connect with Sleeper" because "there is no per-platform entry point; there
+is one sign-up and then a chooser". There was no chooser. A comment
+describing a control that does not exist is the same failure as a control
+that does nothing, one layer up.
+
+### Connecting told nobody
+
+`ConnectLeagueModal` wrote the league to the worker, said "Connected" in its
+own dialog, and every other surface on the page went on asking for a league
+it already had — until a reload. Two causes, and the second is the
+interesting one:
+
+- **`onConnected` was the only channel**, and three of the four
+  `ConnectLeagueCta` call sites do not pass one.
+- **`useLeague()` was per-component state.** Every caller fetched its own
+  copy and kept it to itself, so even the header chip — which reads the
+  league correctly — was holding an answer fetched before the connect
+  happened, with no way to hear that it had. Four surfaces on one screen
+  also meant four `GET /me/leagues` per page load for one fact about one
+  account.
+
+The answer lives in one module-level store now, and `noteLeagueConnected()`
+is what the connect flow calls the instant the worker confirms — the same
+shape as `juke:header`, one level up: **the thing that changed the state is
+what announces it, rather than every reader polling for it.**
+
+**One path in that hook used to be terminal, and it is fixed with it.** If
+`window.Live` had not landed when the first read ran, it stayed `loading`
+for ever — nothing re-ran when the deferred script arrived. It listens for
+`juke:data-loaded` now, alongside `juke:auth` and `juke:league`.
+
+### `live` on a room is not "you can open it"
+
+The last of it, found by looking at the screen after the copy was fixed. A
+room's `live` flag means *built for everybody*, and the Rooms lobby drew a
+padlock from it in three places: the phase strip, the card grid, and the
+`N OPEN` count. Those were the same question until a league could be
+connected — and `RoomPage` renders the **League Room live for a connected
+reader** (`LIVE_ROOMS`), so the lobby was saying locked about a room that
+opens.
+
+`LIVE_WHEN_CONNECTED` is exported from `RoomPage.jsx` rather than restated,
+because a second hand-written list of which rooms a league opens is the
+written-down-twice failure with a padlock on it — and it fails silently: the
+lobby says locked, the room opens.
+
+**The copy under it moved too, and it was a promise rather than a
+description.** "The rest unlock when you connect a league" is true to a
+guest and false to somebody holding one — connecting opens League and leaves
+Waiver, Trade and Strategy exactly as they were, because those three need
+Juke to have an opinion that has not been built yet. Both lines say so now.
+
+### What could not be tested, and why it is written down instead
+
+`tests/league-connect.spec.mjs` covers everything downstream of a connection
+that a keyless build can observe, stubbing `window.JukeAuth` and
+`window.Live.listLeagues` — three of its four tests were confirmed red
+against the code as it stood, with the fourth (the guest state) green
+throughout, which is what stops "hide it from everybody" passing the suite.
+
+**The dialog itself is not covered.** Every `ConnectLeagueCta` sits inside
+Clerk's `<SignedIn>`, and a test build has no publishable key, so those four
+surfaces render their signed-out fallbacks and the dialog never mounts.
+Driving it would mean signing in to a real Clerk instance. The platform step
+was verified by hand against the built site instead — and the way that was
+done is worth keeping: a one-line temporary edit rendering `LeagueChip` in
+`ShellHeader`'s keyless branch, which puts the whole flow on screen without a
+key, then reverted. **This is the widest gap in the account surface's test
+coverage and it is the same one `verifyToken` lived in.**
 
 ## Copy goes stale the day a feature ships, and nothing fails when it does
 

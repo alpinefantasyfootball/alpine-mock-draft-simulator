@@ -3,6 +3,7 @@ import { SignUpButton } from '@clerk/clerk-react'
 import ConnectLeagueModal from './ConnectLeagueModal.jsx'
 import { useAccountUiReady } from '../../hooks/useAccountUiReady.js'
 import { useSignedIn } from '../../hooks/useAuthState.js'
+import { noteLeagueConnected } from '../../hooks/useLeague.js'
 
 /* "Connect a league", everywhere it is offered — and it now connects one.
 
@@ -26,7 +27,21 @@ import { useSignedIn } from '../../hooks/useAuthState.js'
 
    Each instance owns its own <dialog>, which is cheap and is what lets a
    caller drop this in without plumbing. `variant` covers the four shapes
-   the design draws. */
+   the design draws.
+
+   ---- Connecting is announced, not just reported to the caller ----
+
+   `onConnected` was the only channel, and three of the four call sites do
+   not pass one — so connecting a league updated the dialog that did it and
+   nothing else on the page. Reported as "even after getting a confirmation
+   that it connected successfully, the Connect messaging is still there
+   throughout the website", which is precisely what it did.
+
+   noteLeagueConnected() settles the shared league state that useLeague()
+   reads, so every surface repaints on the same tick the worker confirms —
+   the header's chip, the homepage card, the Rooms unlock bar and the You
+   screen's section, none of which knows this component exists. `onConnected`
+   still fires for a caller that wants to do something extra. */
 
 const VARIANTS = {
   gradient:
@@ -68,10 +83,15 @@ export default function ConnectLeagueCta({
     return <SignUpButton mode="modal">{trigger(undefined)}</SignUpButton>
   }
 
+  const connected = (league) => {
+    noteLeagueConnected(league)
+    if (onConnected) onConnected(league)
+  }
+
   return (
     <>
       {trigger(() => ref.current?.open())}
-      <ConnectLeagueModal ref={ref} onConnected={onConnected} />
+      <ConnectLeagueModal ref={ref} onConnected={connected} />
     </>
   )
 }

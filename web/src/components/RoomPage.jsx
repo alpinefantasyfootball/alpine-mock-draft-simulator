@@ -54,6 +54,19 @@ const LIVE_ROOMS = {
   league: LeagueRoomLive,
 }
 
+/* The same list, as slugs, for anything that needs to know WHICH rooms a
+   connected league opens without needing the component that draws them.
+
+   Exported rather than restated: the Rooms lobby draws a padlock on every
+   room whose `live` flag is false, and `live` means "this room is built
+   for everyone" — not "you can open it". Those were the same question
+   until Sleeper connect shipped, and now they are not: League is live for
+   a connected reader and locked for everybody else. A second hand-written
+   list of which rooms that covers is the written-down-twice failure with a
+   padlock on it, and it fails silently — the lobby says locked, the room
+   opens. */
+export const LIVE_WHEN_CONNECTED = Object.keys(LIVE_ROOMS)
+
 export default function RoomPage({ slug }) {
   const rooms = useRooms()
   const { status, league } = useLeague()
