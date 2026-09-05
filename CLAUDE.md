@@ -5316,6 +5316,81 @@ same measurement `HomePhone` already records for it), and it is a different
 kind of action from those two anyway — they change what the button above
 starts, this starts something else.
 
+### The ceiling moves, and nothing re-clamped the sheet to it
+
+Reported by a beta tester on an iPhone SE: mid-draft, auto-pick switched on
+from the Queue tab, and then no way to swipe the sheet back down — the
+auto-pick ribbon was sitting on the handle they would have swiped.
+
+**`maxHeight` was only ever honoured at mount and at a snap change, never
+when it MOVED.** `BottomSheet`'s one effect watches `snapIndex`, and turning
+auto-pick on does not change the snap — it grows the header by
+`AUTOPICK_RIBBON_H`, which drops the sheet's ceiling by 38. The motion value
+kept the height it already had, so the sheet stayed taller than the room now
+left and the header — `z-40`, over the sheet's `z-30` — covered the
+difference. Which is the exact failure that prop's own comment describes,
+arriving from the one direction it did not cover.
+
+**Two things move that ceiling and only one of them was auto-pick.**
+`DraftRoomPhone` also read the viewport height once at mount
+(`useState(() => window.innerHeight)`), and a phone browser's URL bar shows
+and hides as you scroll, and rotating changes it outright. So a height
+captured at mount can overstate the room by 60-90px within seconds of the
+draft starting, with nobody touching auto-pick at all.
+
+Measured against the real board, ribbon off then on:
+
+```
+                                 sheet   ceiling   header covers
+375x553  SE 2/3, Safari chrome     447       439         8px
+320x568  SE 1st gen                462       454         8px
+375x667  SE 2/3, no browser UI     470       553           0
+390x664  iPhone 13                 470       550           0
+375x667 -> 553 mid-draft           447       439        31px
+```
+
+**The sheet's height never changed when the ribbon appeared** — 447 stayed
+447 — which is the whole bug in one number.
+
+**8px is the entire handle.** The pip is 5px with a 9px margin above it, so
+an 8px bite takes the margin and leaves the pip 3px clear of a ribbon
+carrying a "Turn off" button: a downward swipe starts on the ribbon rather
+than on the sheet. The 31px row is the viewport case and buries the handle
+outright, which is the "completely covered" in the report.
+
+**The suite could never have caught it, and the last row is why.**
+`phone.spec.mjs` profiles exactly one device — iPhone 13 — where a 664px
+viewport minus a 114px header-with-ribbon leaves 80px of slack. Confirmed
+rather than assumed: with the bug restored, that profile still passes.
+**A single device profile is a sample, not a phone**, and this class of
+defect only exists at the short end of the range.
+
+`tests/sheet-reachable.spec.mjs` takes the sizes as its fixture and asserts
+the relationship — the header's bottom edge is never below the sheet's top
+edge — plus a hit-test of the handle's own centre, because a sheet can be
+1px legal and still hand the touch to the ribbon. Both fixes were confirmed
+red independently: without the re-clamp the two SE rows fail at 8px, and
+without the live viewport only the shrink test fails, at 31.
+
+**Re-settling rather than clamping `height` directly is what makes it
+symmetric**: turning auto-pick off hands the room back and the sheet grows
+into it again, instead of staying short for the rest of the draft. It is
+skipped mid-drag — `handleDrag` already clamps to the live ceiling every
+frame, so a gesture is honouring it anyway.
+
+**`window.innerHeight`, deliberately, and not `visualViewport.height`.**
+visualViewport is the one that tracks the on-screen keyboard, and the Chat
+tab has a composer — using it would shrink the sheet every time somebody
+typed. `position: fixed` is laid out against the layout viewport, which is
+what `innerHeight` reports and what the URL bar and rotation actually move.
+Measure a fixed element's ceiling against the viewport it is positioned in.
+
+**And the gesture is the assertion, not a tap.** The first version cycled
+snaps with a synthetic 2px tap and failed on all three sizes including the
+control — the app was fine and the tap was not registering. What was
+reported was a swipe, so the test swipes: 150px, past `DRAG_STEP`, and
+asserts the sheet reaches its collapsed snap.
+
 ## The gear menu, and notifications that do something
 
 The kebab dropdown is a bottom **action sheet** below `sm` and the anchored
