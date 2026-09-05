@@ -1,7 +1,28 @@
 import { forwardRef, useImperativeHandle, useRef, useState } from 'react'
-import { X, Check } from 'lucide-react'
+import { X, Check, Lock } from 'lucide-react'
+import { PLATFORMS } from './leaguePlatforms.js'
 
-/* Connect a Sleeper league: username, then which league, then done.
+/* Connect a league: which platform, then a username, then which league.
+
+   ---- The platform step exists because the site claims four ----
+
+   It did not, and that was the bug: every connect control on the site is
+   captioned with four platforms, and pressing one opened a dialog headed
+   "Your Sleeper username" with nothing in between. Reported as a
+   disconnect between what we say we connect to and what the pop-up asks
+   for, and it is exactly that — the reader is told the product reads their
+   ESPN league and then asked for a credential from somewhere else.
+
+   So the platform is chosen, all four are listed, and the three that are
+   not built are visibly locked rather than absent. See leaguePlatforms.js
+   for why they are listed at all.
+
+   **The step is not skipped when only one platform is live.** It is one
+   press, and what it buys is that nobody is ever asked for a Sleeper
+   username without having said "Sleeper" first — which is the whole
+   complaint. It also stops being a step nobody notices the day a second
+   platform ships, rather than being a screen somebody has to remember to
+   add back.
 
    ---- Why a username and not a login ----
 
@@ -36,8 +57,9 @@ import { X, Check } from 'lucide-react'
 const ConnectLeagueModal = forwardRef(function ConnectLeagueModal({ onConnected }, ref) {
   const dialogRef = useRef(null)
   const [username, setUsername] = useState('')
-  // idle | looking | picking | connecting | done | not-found | error
-  const [status, setStatus] = useState('idle')
+  // platform | idle | looking | picking | connecting | done | not-found | error
+  const [status, setStatus] = useState('platform')
+  const [platform, setPlatform] = useState(null)
   const [leagues, setLeagues] = useState([])
   const [sleeperUser, setSleeperUser] = useState(null)
   const [chosen, setChosen] = useState(null)
@@ -48,7 +70,12 @@ const ConnectLeagueModal = forwardRef(function ConnectLeagueModal({ onConnected 
       setLeagues([])
       setSleeperUser(null)
       setChosen(null)
-      setStatus('idle')
+      setPlatform(null)
+      // Always the first step, never the one it was left on: this dialog
+      // is one element reused for every open, which is the same reason
+      // openSheet() clears the player sheet's team colour rather than
+      // merely setting it.
+      setStatus('platform')
       dialogRef.current?.showModal()
     },
   }))
@@ -115,9 +142,11 @@ const ConnectLeagueModal = forwardRef(function ConnectLeagueModal({ onConnected 
           <div>
             <span className={label}>CONNECT A LEAGUE</span>
             <h3 className="mt-1.5 font-display text-[24px] font-bold text-white">
-              {status === 'picking' || status === 'connecting' || status === 'done'
-                ? 'Which league?'
-                : 'Your Sleeper username'}
+              {status === 'platform'
+                ? 'Where is your league?'
+                : status === 'picking' || status === 'connecting' || status === 'done'
+                  ? 'Which league?'
+                  : `Your ${platform ? platform.name : 'Sleeper'} username`}
             </h3>
           </div>
           <button
@@ -130,7 +159,55 @@ const ConnectLeagueModal = forwardRef(function ConnectLeagueModal({ onConnected 
           </button>
         </div>
 
-        {status === 'done' ? (
+        {status === 'platform' ? (
+          <>
+            <p className="mt-2 text-[14px] leading-[1.5] text-voidInk-body">
+              Juke reads your league to price waivers, trades and your lineup. It never writes to
+              it.
+            </p>
+
+            <ul className="mt-4 flex flex-col gap-2">
+              {PLATFORMS.map((p) => (
+                <li key={p.key}>
+                  <button
+                    type="button"
+                    disabled={!p.live}
+                    onClick={() => { setPlatform(p); setStatus('idle') }}
+                    className={
+                      'flex w-full items-center justify-between gap-3 rounded-xl border px-4 py-3 text-left transition-colors duration-150 ' +
+                      (p.live
+                        ? 'border-line-hairline hover:border-teal/60'
+                        : 'cursor-default border-line-hairline/60 opacity-45')
+                    }
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate text-[15px] font-semibold text-white">
+                        {p.name}
+                      </span>
+                      {p.note ? (
+                        <span className="mt-0.5 block text-[12px] text-ink-muted">{p.note}</span>
+                      ) : null}
+                    </span>
+                    {p.live ? (
+                      <span className="shrink-0 text-[18px] text-ink-muted" aria-hidden="true">›</span>
+                    ) : (
+                      <Lock className="h-4 w-4 shrink-0 text-ink-muted" aria-hidden="true" />
+                    )}
+                  </button>
+                </li>
+              ))}
+            </ul>
+
+            {/* Said once, plainly, rather than left for somebody to infer
+                from three dimmed rows. The locked platforms carry no
+                "soon" badge of their own for the reason the sport chips
+                do not either: a lock says "not this one" and a badge says
+                "we have committed to a date". */}
+            <p className="mt-3.5 text-[13px] leading-[1.4] text-voidInk-body">
+              Sleeper is the one Juke reads today. The others are not connected yet.
+            </p>
+          </>
+        ) : status === 'done' ? (
           <p className="mt-4 flex items-center gap-2 text-[15px] text-mint">
             <Check className="h-5 w-5 shrink-0" />
             Connected {chosen ? chosen.name : 'your league'}.
@@ -193,7 +270,20 @@ const ConnectLeagueModal = forwardRef(function ConnectLeagueModal({ onConnected 
           </>
         ) : (
           <form onSubmit={lookup}>
-            <p className="mt-2 text-[14px] leading-[1.5] text-voidInk-body">
+            {/* A way back to the platform list. A three-step flow whose
+                first step cannot be returned to is a flow that punishes a
+                misclick with a close-and-reopen — and this one's first
+                step is a choice between four things, which is exactly
+                where a misclick happens. */}
+            <button
+              type="button"
+              onClick={() => { setPlatform(null); setUsername(''); setStatus('platform') }}
+              className="-ml-1 mt-1 inline-flex items-center gap-1 rounded px-1 py-0.5 text-[13px] text-ink-muted transition-colors hover:text-white"
+            >
+              <span aria-hidden="true">‹</span> Not {platform ? platform.name : 'Sleeper'}?
+            </button>
+
+            <p className="mt-1.5 text-[14px] leading-[1.5] text-voidInk-body">
               We read your leagues from Sleeper. No password, and nothing is ever written back —
               Sleeper&apos;s public API has no way to change your league even if we wanted to.
             </p>

@@ -38,11 +38,15 @@ import { useLeague } from '../../hooks/useLeague.js'
    breakpoint here would be a second answer to the same question.
 
    **The connected chip says what is true.** The design draws a league
-   switcher — a platform badge, "Dynasty Degens · Wk 3", a caret. There is
-   no league connect in this project yet: no Sleeper/ESPN/Yahoo/CBS import,
-   no roster, no week. So a signed-in user with no league gets the chip
-   slot as the connect CTA it is really offering, and the switcher arrives
-   with the integration rather than as a chip full of invented content. */
+   switcher — a platform badge, "Dynasty Degens · Wk 3", a caret. Sleeper
+   connect is real now, so the badge and the name are drawn from the
+   connected league; the week and the caret are not, because nothing here
+   knows a week and there is nothing to switch between until a second
+   league can be connected. A signed-in user with no league gets the chip
+   slot as the connect CTA it is really offering.
+
+   This paragraph used to begin "there is no league connect in this project
+   yet", which stopped being true and stayed on the page. */
 
 const TABS = [
   { key: 'home', label: 'Home', href: '#/' },

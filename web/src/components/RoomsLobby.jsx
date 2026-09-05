@@ -2,6 +2,8 @@ import { SignInButton, SignUpButton, SignedIn, SignedOut } from '@clerk/clerk-re
 import AppShell from './shell/AppShell.jsx'
 import RoomsGridAlive from './RoomsGridAlive.jsx'
 import ConnectLeagueCta from './shell/ConnectLeagueCta.jsx'
+import { LINE as PLATFORM_LINE } from './shell/leaguePlatforms.js'
+import { LIVE_WHEN_CONNECTED } from './RoomPage.jsx'
 import { useRooms } from '../hooks/useRooms.js'
 import { useLeague } from '../hooks/useLeague.js'
 import { useAccountUiReady } from '../hooks/useAccountUiReady.js'
@@ -66,18 +68,25 @@ function PhaseStrip() {
     <div className="mb-4 hidden gap-2 sm:flex">
       {rooms.map((r) => {
         const label = r.name.replace(/^The /, '').replace(/ Room$/, '').toUpperCase()
+        /* `live` is "built for everybody"; open is "you can walk in". They
+           were the same question until a league could be connected, and a
+           padlock on a room RoomPage will render live is the connection
+           failing to show — the same complaint this whole change is about,
+           in an emoji. LIVE_WHEN_CONNECTED is RoomPage's own list; the one
+           thing this must not do is keep a second copy of it. */
+        const open = r.live || (status === 'connected' && LIVE_WHEN_CONNECTED.includes(r.slug))
         return (
           <a
             key={r.name}
             href={r.href || `#/rooms/${r.slug}`}
             className="flex-1 rounded-lg py-[9px] text-center font-mono text-[10px] tracking-[0.08em] transition-opacity duration-150 hover:opacity-90"
             style={
-              r.live
+              open
                 ? { background: '#12302e', color: '#74E5CE' }
                 : { background: '#1A1F27', color: '#8A9BAA' }
             }
           >
-            {label} {r.live ? '✓' : '🔒'}
+            {label} {open ? '✓' : '🔒'}
           </a>
         )
       })}
@@ -85,8 +94,58 @@ function PhaseStrip() {
   )
 }
 
+/* The two lines that promise what connecting buys, and what they say once
+   it has been bought.
+
+   Both read "the rest unlock when you connect a league", which is a
+   promise to a guest and a falsehood to somebody holding one — connecting
+   opens the League Room and leaves Waiver, Trade and Strategy exactly as
+   they were, because those three need Juke to have an opinion that has not
+   been built yet. Saying so is the honest version and it is also the more
+   useful one: it names where to go next.
+
+   `status` rather than `league`, and "loading" keeps the guest line, for
+   useLeague's own reason — the wrong line once beats the wrong line
+   followed by the right one. */
+function SubCopy() {
+  const { status } = useLeague()
+  return (
+    <p className="mt-3 hidden text-[16px] text-voidInk-body sm:block">
+      {status === 'connected'
+        ? 'Draft Room and League Room are open. Waiver, Trade and Strategy open as they are built.'
+        : 'Draft Room is open to everyone. The rest unlock when you connect a league.'}
+    </p>
+  )
+}
+
+function Blurb() {
+  const { status } = useLeague()
+  const connected = status === 'connected'
+  return (
+    <p className="m-0 flex-1 rounded-[14px_14px_14px_4px] border border-flow-pillEdge bg-flow-pill px-3.5 py-[11px] text-[14px] leading-[1.45] text-voidInk-primary sm:max-w-[520px] sm:rounded-[16px_16px_16px_4px] sm:px-[18px] sm:py-3.5 sm:text-[15px]">
+      {connected ? (
+        'Your league is in. League Room reads it now — the other three still show a sample week until they are built.'
+      ) : (
+        <>
+          <span className="sm:hidden">
+            Draft Room is open. The rest unlock when you connect a league — peek inside any of
+            them.
+          </span>
+          <span className="hidden sm:inline">
+            Peek inside any locked room — you will see a sample week so you know what you are
+            getting.
+          </span>
+        </>
+      )}
+    </p>
+  )
+}
+
 function UnlockBar() {
   const ready = useAccountUiReady()
+  /* Whether there is anything left to unlock. See the note above the
+     return for why this arrived late and what it corrects. */
+  const { status: leagueStatus } = useLeague()
 
   const signup = (
     <button
@@ -119,7 +178,7 @@ function UnlockBar() {
         <span className="block text-[16px] font-semibold text-white">
           Unlock every room with your league
         </span>
-        <span className="mt-1 block text-[12px] text-ink-muted">Sleeper · ESPN · Yahoo · CBS</span>
+        <span className="mt-1 block text-[12px] text-ink-muted">{PLATFORM_LINE}</span>
       </span>
       <ConnectLeagueCta variant="gradient" />
     </>,
@@ -132,7 +191,7 @@ function UnlockBar() {
         <span className="block text-[16px] font-semibold text-white">
           Unlock every room with your league
         </span>
-        <span className="mt-1 block text-[12px] text-ink-muted">Sleeper · ESPN · Yahoo · CBS</span>
+        <span className="mt-1 block text-[12px] text-ink-muted">{PLATFORM_LINE}</span>
       </span>
       <span className="flex gap-2">
         {ready ? (
@@ -150,15 +209,25 @@ function UnlockBar() {
     </div>
   )
 
-  /* The handoff draws this bar on 2bg/3bg and on neither connected screen,
-     because somebody with a league has nothing left to unlock. Nobody has
-     a league here yet, so the ask is still live for a signed-in reader —
-     what changes is what it asks for. Signed out that is an account and
-     then a connect; signed in the account is done and only the connect is
-     left, so the two buttons collapse to one.
+  /* The handoff draws this bar on 2bg/3bg and on neither CONNECTED screen,
+     because somebody with a league has nothing left to unlock — and that
+     state is reachable now rather than hypothetical, so it is drawn.
 
-     It disappears on its own the day a league can be connected, which is
-     the same condition the handoff was drawing. */
+     This comment used to end "it disappears on its own the day a league
+     can be connected". That day arrived and it did not disappear: nothing
+     in this file read the league, so a manager who had just connected one
+     was still being told to unlock every room with it. Corrected in place
+     rather than left standing, which is the rule this project keeps for a
+     note whose premise has moved.
+
+     `status` rather than `league`, for useLeague's own reason: hiding the
+     bar for a tick and then showing it is worse than showing it once, so
+     "loading" keeps the ask.
+
+     Signed out the ask is an account and then a connect; signed in the
+     account is done and only the connect is left, so the two buttons
+     collapse to one. */
+  if (leagueStatus === 'connected') return null
   if (!ready) return bar
   return (
     <>
@@ -170,7 +239,13 @@ function UnlockBar() {
 
 export default function RoomsLobby() {
   const rooms = useRooms()
-  const open = rooms.filter((r) => r.live).length
+  /* "1 OPEN" counts what this reader can walk into, not what is built —
+     the same distinction the grid and the phase strip now make, and the
+     eyebrow was the third place saying the old answer. */
+  const { status } = useLeague()
+  const open = rooms.filter(
+    (r) => r.live || (status === 'connected' && LIVE_WHEN_CONNECTED.includes(r.slug)),
+  ).length
 
   return (
     <AppShell active="rooms">
@@ -203,9 +278,7 @@ export default function RoomsLobby() {
               The<span className="sm:hidden"> Rooms</span>
               <span className="hidden sm:block text-mint">Rooms</span>
             </h1>
-            <p className="mt-3 hidden text-[16px] text-voidInk-body sm:block">
-              Draft Room is open to everyone. The rest unlock when you connect a league.
-            </p>
+            <SubCopy />
           </div>
 
           {/* The shark says what the screen is for. A speech bubble rather
@@ -218,16 +291,7 @@ export default function RoomsLobby() {
               alt=""
               className="h-14 w-14 shrink-0 object-contain sm:h-[72px] sm:w-[72px]"
             />
-            <p className="m-0 flex-1 rounded-[14px_14px_14px_4px] border border-flow-pillEdge bg-flow-pill px-3.5 py-[11px] text-[14px] leading-[1.45] text-voidInk-primary sm:max-w-[520px] sm:rounded-[16px_16px_16px_4px] sm:px-[18px] sm:py-3.5 sm:text-[15px]">
-              <span className="sm:hidden">
-                Draft Room is open. The rest unlock when you connect a league — peek inside any of
-                them.
-              </span>
-              <span className="hidden sm:inline">
-                Peek inside any locked room — you will see a sample week so you know what you are
-                getting.
-              </span>
-            </p>
+            <Blurb />
           </div>
         </div>
 

@@ -1,6 +1,8 @@
 import { SignInButton, SignUpButton, SignedIn, SignedOut, useClerk, useUser } from '@clerk/clerk-react'
 import AppShell from './shell/AppShell.jsx'
 import ConnectLeagueCta from './shell/ConnectLeagueCta.jsx'
+import { useLeague } from '../hooks/useLeague.js'
+import { LINE as PLATFORM_LINE } from './shell/leaguePlatforms.js'
 import { useAccountUiReady } from '../hooks/useAccountUiReady.js'
 import { useEngine, useJukeTick } from '../hooks/useJukeEngine.js'
 
@@ -101,7 +103,7 @@ function GuestCard() {
         You&apos;re drafting as a guest
       </div>
       <p className="mb-3.5 mt-1.5 text-[14px] leading-[1.5] text-voidInk-body">
-        An account keeps your mocks and lets you connect a league from Sleeper, ESPN, Yahoo or CBS.
+        An account keeps your mocks and lets you connect a league. Sleeper today, more to come.
       </p>
       <div className="flex gap-2">
         {ready ? (
@@ -165,6 +167,71 @@ function SignOutRow() {
   return <Row glyph="↩" label="Log out" value=" " onClick={() => clerk.signOut()} />
 }
 
+/* The one section on this screen that is about a league rather than an
+   account.
+
+   It drew an "Add a league" row unconditionally, with a comment explaining
+   that there was nothing connected to show above it. That stopped being
+   true the day Sleeper connect shipped and the row went on asking anyway —
+   a section headed CONNECTED LEAGUES that never listed one, on the screen
+   whose whole job is to show what this account holds.
+
+   The handoff's own card here is "Dynasty Degens · synced 6 min ago", and
+   the "synced" half is still not ours to draw: nothing records when the
+   league was last read. Season and team count are real and come back with
+   the league itself, so those are what the row says.
+
+   Still one league. listLeagues() returns an array and useLeague() takes
+   the first, so a second connect replaces rather than adds — which is why
+   the ask below is only offered when there is nothing connected, rather
+   than sitting under the row promising an addition that would quietly be a
+   replacement. */
+function ConnectedLeagues() {
+  const { status, league } = useLeague()
+
+  // Nothing at all until the answer is in: an "add a league" row that is
+  // replaced by a league a beat later reads as the connection having only
+  // just happened.
+  if (status === 'loading') return null
+
+  if (status === 'connected' && league) {
+    return (
+      <div className="flex w-full items-center gap-3 rounded-[14px] border border-line-hairline px-4 py-3 text-left">
+        <span
+          className="grid h-8 w-8 shrink-0 place-items-center rounded-lg font-display text-[13px] font-extrabold text-surface-page"
+          style={{ background: '#00E5FF' }}
+        >
+          S
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[14px] font-semibold text-voidInk-primary">
+            {league.name}
+          </span>
+          <span className="mt-0.5 block truncate text-[12px] text-ink-muted">
+            Sleeper
+            {league.season ? ` · ${league.season}` : ''}
+            {league.totalTeams ? ` · ${league.totalTeams} teams` : ''}
+            {' · read-only'}
+          </span>
+        </span>
+        <a href="#/rooms/league" className="shrink-0 text-[13px] font-semibold text-teal">
+          Open
+        </a>
+      </div>
+    )
+  }
+
+  return (
+    <ConnectLeagueCta variant="row">
+      <span className="flex items-center gap-2.5">
+        <span className="text-teal" aria-hidden="true">✨</span>
+        Add a league &mdash; {PLATFORM_LINE}
+      </span>
+      <span className="text-ink-muted" aria-hidden="true">›</span>
+    </ConnectLeagueCta>
+  )
+}
+
 export default function YouScreen() {
   const ready = useAccountUiReady()
 
@@ -210,22 +277,7 @@ export default function YouScreen() {
                 <Identity />
 
                 <Section title="CONNECTED LEAGUES">
-                  {/* No card above this row, because there is nothing
-                      connected. The handoff draws a "Dynasty Degens ·
-                      synced 6 min ago" card here and it is the one thing on
-                      this screen a reader would act on — a fabricated
-                      league is worse than an empty section, which at least
-                      says truthfully that the next step is to add one. */}
-                  {/* The same waitlist every other "connect" control opens,
-                      rather than the #/rooms link this used to be — that was
-                      a redirect standing in for an answer. */}
-                  <ConnectLeagueCta variant="row">
-                    <span className="flex items-center gap-2.5">
-                      <span className="text-teal" aria-hidden="true">✨</span>
-                      Add a league from Sleeper, ESPN, Yahoo or CBS
-                    </span>
-                    <span className="text-ink-muted" aria-hidden="true">›</span>
-                  </ConnectLeagueCta>
+                  <ConnectedLeagues />
                 </Section>
 
                 <Section title="SETTINGS">

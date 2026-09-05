@@ -3,6 +3,8 @@ import ConnectLeagueCta from './shell/ConnectLeagueCta.jsx'
 import KickoffPill from './shell/KickoffPill.jsx'
 import RoomsGridAlive from './RoomsGridAlive.jsx'
 import { useAccountUiReady } from '../hooks/useAccountUiReady.js'
+import { useLeague } from '../hooks/useLeague.js'
+import { LINE as PLATFORM_LINE } from './shell/leaguePlatforms.js'
 
 /* The homepage above the fold — design_handoff_v3_alive 2ag/3ag.
 
@@ -109,8 +111,55 @@ function TrustStrip() {
 
    The mocks already sync, which is why this replaces the account card
    rather than sitting beside it — signed in, "keep your drafts on every
-   device" is a promise already kept. */
+   device" is a promise already kept.
+
+   ---- And it stops asking once there is one ----
+
+   The card went on saying "Connect your league" to somebody who had just
+   connected one, because nothing here read the league. It does now, and
+   `status` is checked rather than `league` for the reason useLeague's own
+   comment gives: "we have not asked yet" and "there is none" are different
+   questions, and only one of them should draw an ask. Drawing the connect
+   card during the first tick would flash it at a reader who has a league
+   — the same wrong-then-right the header's chip already avoids. */
 function ConnectCard() {
+  const { status, league } = useLeague()
+
+  // Neither card until the answer is in. This one occupies the slot the
+  // handoff gives to a decided move, so a wrong guess here is the loudest
+  // thing on the screen for as long as it is up.
+  if (status === 'loading') return null
+
+  if (status === 'connected' && league) {
+    return (
+      <div className="rounded-[18px] border border-line-hairline bg-[#151920] p-[18px] sm:rounded-[22px] sm:p-[26px]">
+        <span className="font-mono text-[11px] tracking-[0.14em] text-teal">YOUR LEAGUE</span>
+        <div className="mt-2 truncate font-display text-[22px] font-bold text-white sm:mt-2.5 sm:text-[28px]">
+          {league.name}
+        </div>
+        <p className="mb-3.5 mt-1.5 text-[14px] leading-[1.5] text-voidInk-body sm:mb-[18px] sm:mt-2 sm:text-[15px]">
+          {league.season ? `${league.season} · ` : ''}
+          {league.totalTeams ? `${league.totalTeams} teams · ` : ''}
+          read-only. The League Room reads it today; Waiver, Trade and Strategy open as they are
+          built.
+        </p>
+        <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+          <a
+            href="#/rooms/league"
+            className="inline-flex items-center justify-center whitespace-nowrap rounded-full px-5 py-3 text-[14px] font-bold text-surface-page transition-transform duration-150 hover:scale-[1.02]"
+            style={{ background: 'linear-gradient(100deg,#44D4E2,#82A1F6)' }}
+          >
+            Open the League Room
+          </a>
+          <a href="#/you" className="text-[12px] text-ink-muted underline-offset-2 hover:underline">
+            Manage
+          </a>
+        </div>
+        <TrustStrip />
+      </div>
+    )
+  }
+
   return (
     <div className="rounded-[18px] border border-line-hairline bg-[#151920] p-[18px] sm:rounded-[22px] sm:p-[26px]">
       <span className="font-mono text-[11px] tracking-[0.14em] text-teal">YOUR NEXT MOVE</span>
@@ -123,7 +172,7 @@ function ConnectCard() {
       </p>
       <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
         <ConnectLeagueCta variant="gradient" />
-        <span className="text-[12px] text-ink-muted">Sleeper · ESPN · Yahoo · CBS</span>
+        <span className="text-[12px] text-ink-muted">{PLATFORM_LINE}</span>
       </div>
       <TrustStrip />
     </div>
@@ -158,7 +207,7 @@ function AccountCard() {
         Keep your drafts on every device
       </div>
       <p className="mb-3.5 mt-1.5 text-[14px] leading-[1.5] text-voidInk-body sm:mb-[18px] sm:mt-2 sm:text-[15px]">
-        An account saves your mocks and unlocks league connect from Sleeper, ESPN, Yahoo or CBS.
+        An account saves your mocks and unlocks league connect — Sleeper today, more to come.
         Mocks still run fine without one.
       </p>
       <div className="flex gap-2 sm:gap-2.5">
@@ -197,6 +246,12 @@ export default function HomeAlive() {
      line unconditionally, which is correct for it — nobody can be signed in
      there. Same shape as AccountCard above. */
   const ready = useAccountUiReady()
+
+  /* The hero's second card names the connected league rather than going on
+     advertising a connect. One read, shared with every other useLeague()
+     on the page — see that hook's own note on why it is one request and
+     one answer now rather than one per component. */
+  const { status: leagueStatus, league: connectedLeague } = useLeague()
 
   /* Signed out only, and the reason is that it stops being true: "no
      account needed" is a promise to somebody deciding whether to make one,
@@ -328,18 +383,25 @@ export default function HomeAlive() {
                 href="#/rooms/draft"
               />
               {/* Connect goes to the rooms rather than straight at a
-                  sign-up modal. There is no connect flow yet, and the
-                  handoff's own global rule is that every connect route
-                  goes through account creation first — so the honest
-                  destination today is the place that shows what connecting
-                  buys, which is the locked previews. */}
+                  sign-up modal: the handoff's own global rule is that
+                  every connect route goes through account creation first,
+                  so the honest destination for somebody without a league
+                  is the place that shows what connecting buys.
+
+                  Once there IS one it goes to the room that can use it and
+                  says which league, rather than continuing to advertise a
+                  connect that has already happened. `sub` was a bare list
+                  of four platforms and is the shared line now — three of
+                  those four are not built, and a caption that reads as
+                  four working integrations is what this whole change is
+                  about. */}
               <Card
                 glyph="🚪"
-                eyebrow="BRING YOUR LEAGUE"
+                eyebrow={leagueStatus === 'connected' && connectedLeague ? 'YOUR LEAGUE' : 'BRING YOUR LEAGUE'}
                 eyebrowColor="#00E5FF"
-                title="Connect"
-                sub="Sleeper · ESPN · Yahoo · CBS"
-                href="#/rooms"
+                title={leagueStatus === 'connected' && connectedLeague ? connectedLeague.name : 'Connect'}
+                sub={leagueStatus === 'connected' && connectedLeague ? 'Connected · read-only' : PLATFORM_LINE}
+                href={leagueStatus === 'connected' && connectedLeague ? '#/rooms/league' : '#/rooms'}
               />
             </div>
 
