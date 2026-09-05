@@ -6575,6 +6575,40 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   bundle for the change before believing a red run: the built JS names what
   it contains, exactly as the deployed stylesheet does.
 
+- **And the mirror of that: do not rebuild INTO `web/dist` while a run is
+  using it.** The suite serves that directory, so `npm run build` mid-run
+  replaces the content-hashed bundle with a new name and deletes the old,
+  and `copy-legacy-assets` rewrites `app.js` underneath whatever page is
+  fetching it. Any test that loads a page in that window gets a file that
+  is missing or half-written.
+
+  Measured 4 September 2026, on a 151-test run that reported **3 failed,
+  148 passed**. One was a genuinely stale assertion. The other two were
+  both this, and neither looked like it:
+
+  - `grade.spec.mjs`'s "the app's own advice beats a deliberately unbuilt
+    roster" — a statistical test with aggregate thresholds, so a red reads
+    as "the advice got worse". It was `openApp()` timing out at
+    `waitForFunction(() => typeof state === "object" …)`: **`app.js` never
+    defined its globals**, because it was being rewritten as the page asked
+    for it.
+  - `phone.spec.mjs`'s bottom-sheet test — `readHeight()` returned null,
+    which reads as "the sheet is not rendering". React had not mounted,
+    because the bundle it named had just been deleted.
+
+  Both passed on a re-run with nothing changed. The grade one was then
+  baselined in both directions on an idle machine — `main`'s `app.js`
+  passed, the branch's `app.js` passed — which is what says the run was the
+  problem rather than the change. **A red on a statistical test is the one
+  most worth baselining before believing**, because it is the one whose
+  failure message is most easily read as a real result.
+
+  This is the same shape as everything else in this section: a real,
+  reproducible symptom whose cause was the harness. What makes it worth its
+  own entry is that the harness was disturbed by *this* session rather than
+  by a leftover process — so the usual check ("what is holding the port,
+  what is it serving") comes back perfectly healthy.
+
 - Room over sockets: `cd worker && wrangler dev --port 8787 --local`, then
   `node worker/test-sockets.mjs` in another terminal. Seventy-six assertions
   against the real Durable Object runtime, no Cloudflare account needed.

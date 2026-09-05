@@ -44,7 +44,7 @@ import { POS_CHALK } from './draftRoomPositions.js'
    `style={{ color }}` rather than as a Tailwind class: the eyebrow's colour
    is per card and `text-[${hex}]` is exactly the JIT trap
    draftRoomPositions.js documents at length. */
-export const ACCENT = {
+const ACCENT = {
   mint: '#74E5CE',
   blue: '#82A1F6',
   pink: POS_CHALK.QB,
@@ -99,7 +99,7 @@ function sublineFrom(config, parts) {
    adding a flag that turns on something already on would be a control that
    does nothing. What the card actually offers a first-timer is the smallest,
    most standard league Juke runs. */
-export const GUEST_SCENARIOS = [
+const GUEST_SCENARIOS = [
   {
     id: 'guest.standard12',
     eyebrow: 'Most popular',
@@ -135,7 +135,7 @@ export const GUEST_SCENARIOS = [
 ]
 
 // Three graded mocks, the handoff's own floor for deriving anything.
-export const DERIVED_MIN_MOCKS = 3
+const DERIVED_MIN_MOCKS = 3
 
 /* A seat you have not drafted from, in the league you actually run.
 
