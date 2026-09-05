@@ -6823,6 +6823,55 @@ They read `platformFor(league.provider).name` now. **This is the check to
 run on the next provider**: grep the app for the name of the one that came
 before it.
 
+### A fallback that shares a fragment with what it falls back from is not one
+
+`listLeagues()` tries progressively older queries because the worker ships
+separately from the site and meets databases a migration or two behind it.
+Adding 0008's draft columns to a SELECT fragment **shared by both attempts**
+made both of them name `draft_at` — so against a database without 0008 both
+threw and the function answered `[]`. A signed-in manager told they have no
+leagues at all, which is the precise failure the fallback existed to
+prevent, reintroduced by the change that trusted it.
+
+It is a ladder of three complete queries now, newest first, each naming its
+own columns. `scripts/test_schema_ladder.py` reads the real SQL out of
+`store.js` — a copy in the test would pass while the shipped query was
+broken — applies the migrations to sqlite one at a time, and asserts that at
+every level some rung answers *and* that it is the newest one that could.
+Confirmed red by putting the shared column back.
+
+**The general form is worth more than this instance:** a fallback is only a
+fallback if it can fail independently of the thing it is behind. Check that
+the older path does not import, extend, or interpolate the newer one.
+
+### Every hardcoded platform name became a bug the day ESPN shipped
+
+Found by looking at the League Room rather than by anything failing.
+`LeagueRoomLive` said **"Read from Sleeper"** under an ESPN league, and an
+unreachable ESPN reported that *Sleeper* had not answered — four strings,
+each correct when written. They read `platformFor(provider).name` now.
+
+**This is the check to run on the third provider**: grep the app for the
+name of the second one.
+
+### And a count-based assertion breaks when a call is added
+
+`test-sleeper.mjs` asserted a path-shaped league id was encoded "on every
+one of its four calls" by counting three encoded paths. The draft fetch made
+it five, so it went red reporting an encoding failure on encoding that was
+perfect.
+
+**The obvious repair is vacuous and was shipped for one run.** Asserting "no
+path contains `a/../`" cannot fail: the URL constructor resolves the
+traversal before the path is recorded, so a raw splice comes out as
+`/v1/league/state/nfl/drafts`, carrying neither the traversal nor the
+encoding. It passed against a deliberately unencoded call.
+
+What works is stating the property over the family: every `/league/` path
+must CARRY the encoded id. That covers a sixth call the day it is added, and
+it was confirmed red against a raw splice — which the version it replaced
+was not.
+
 ## Copy goes stale the day a feature ships, and nothing fails when it does
 
 A content audit on 2 September 2026 found the same defect in eight places,

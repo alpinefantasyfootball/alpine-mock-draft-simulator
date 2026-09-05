@@ -862,14 +862,51 @@ export async function resolveSleeperIds(env, wanted) {
 
    The order of the two matters: the new query is tried first, so an
    applied migration never pays for the old one. */
-const LEAGUE_COLS =
+/* The read, as a ladder of progressively older schemas.
+
+   ---- Why this is a ladder and not two attempts ----
+
+   It was two: the 0006 ordering, falling back to 0005's. Adding 0008's
+   draft columns to the shared SELECT broke it silently, because BOTH
+   attempts then named `draft_at` — so against a database without 0008 they
+   both threw and this answered `[]`, which reads as an account with no
+   leagues at all. That is the exact failure the fallback was written to
+   prevent, reintroduced by the change that trusted it.
+
+   The lesson is the shape rather than the bug: **a fallback that shares a
+   fragment with the thing it is falling back from is not a fallback.** Each
+   rung here names its own columns, so a new one is a new entry and cannot
+   quietly break the older ones.
+
+   ---- Why any of this exists ----
+
+   The site deploys itself from git and the worker does not, so worker code
+   is at some point live against a database that has not had the latest
+   migration applied. Every rung is one failed statement and a correct,
+   slightly older answer; the alternative is a signed-in manager being told
+   they have no leagues.
+
+   Ordered newest first, so an up-to-date database never pays for the
+   history. */
+const LEAGUE_READS = [
+  // 0008: draft time. 0006: which league is active.
   "SELECT provider, league_id, owner_id, name, season, total_teams, connected_at," +
-  " refreshed_at, draft_at, draft_status";
+  " refreshed_at, draft_at, draft_status FROM connected_leagues WHERE clerk_id = ?" +
+  " ORDER BY COALESCE(selected_at, connected_at) DESC, connected_at DESC",
+
+  // 0006 without 0008.
+  "SELECT provider, league_id, owner_id, name, season, total_teams, connected_at," +
+  " refreshed_at FROM connected_leagues WHERE clerk_id = ?" +
+  " ORDER BY COALESCE(selected_at, connected_at) DESC, connected_at DESC",
+
+  // 0005 alone, which is where this started.
+  "SELECT provider, league_id, owner_id, name, season, total_teams, connected_at" +
+  " FROM connected_leagues WHERE clerk_id = ? ORDER BY connected_at DESC",
+];
 
 export async function listLeagues(env, clerkId) {
   if (!env.DB) return [];
 
-  const read = (sql) => env.DB.prepare(sql).bind(clerkId).all();
   const shape = (res) => (res.results || []).map((r) => ({
     provider: r.provider,
     leagueId: r.league_id,
@@ -879,38 +916,32 @@ export async function listLeagues(env, clerkId) {
     totalTeams: r.total_teams,
     connectedAt: r.connected_at,
     // Epoch seconds, and the one field here nothing draws: it is what the
-    // route reads to decide whether this cache is worth re-reading.
+    // route reads to decide whether this cache is worth re-reading. Absent
+    // on the oldest rung, where staleLeague() falls back to connectedAt.
     refreshedAt: r.refreshed_at,
     // Milliseconds, as both platforms send it and as a browser counts down
     // from. The one timestamp in this table that is not epoch seconds, and
     // it says so here because the column name cannot.
-    draftAt: r.draft_at,
-    draftStatus: r.draft_status,
+    draftAt: r.draft_at === undefined ? null : r.draft_at,
+    draftStatus: r.draft_status === undefined ? null : r.draft_status,
   }));
 
-  try {
-    return shape(await read(
-      LEAGUE_COLS + " FROM connected_leagues WHERE clerk_id = ?" +
-      " ORDER BY COALESCE(selected_at, connected_at) DESC, connected_at DESC"
-    ));
-  } catch (err) {
-    /* Either the table is missing — an account with no leagues, which is
-       what the second attempt concludes too — or the column is, which is
-       an unmigrated 0006 and the one case the retry exists for. */
-    console.error("leagues read failed, retrying pre-0006:", err && err.message);
+  let last = null;
+  for (let i = 0; i < LEAGUE_READS.length; i++) {
+    try {
+      return shape(await env.DB.prepare(LEAGUE_READS[i]).bind(clerkId).all());
+    } catch (err) {
+      last = err;
+      /* A missing column means an unapplied migration and the next rung is
+         the right answer. A missing TABLE means an account with no leagues,
+         which every rung will conclude equally — so this costs two extra
+         failed statements in that case and nothing else. */
+    }
   }
 
-  try {
-    return shape(await read(
-      LEAGUE_COLS + " FROM connected_leagues WHERE clerk_id = ? ORDER BY connected_at DESC"
-    ));
-  } catch (err) {
-    // A missing table reads exactly like an account with no leagues, which
-    // is why the write below is what tells the two apart — the same trap
-    // listDraftHistory() already documents for draft_history.
-    console.error("leagues read failed:", err && err.message);
-    return [];
-  }
+  // Nothing worked: no table, or a database that is not this one.
+  console.error("leagues read failed:", last && last.message);
+  return [];
 }
 
 /* Connect, or refresh what is already connected.
