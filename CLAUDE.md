@@ -7469,6 +7469,58 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   the same treatment. A grade that rewards a worse roster is worse than no
   grade, and it will not show up in a spread or a reconciliation.
 
+### A refusal that returns a boolean nobody reads
+
+Eight tests across `phone.spec.mjs` and `lobby.spec.mjs` were driving a
+screen that had never been reached, and every one of them reported a
+missing element rather than the reason.
+
+**`JukeEngine.startDraft()` and `JukeEngine.createRoom()` both open with a
+refusal.** `startDraft()` is `if (setupProblem()) return false`, and
+`createRoom()` is `if (setupProblem()) return null` — and `setupProblem()`
+answers *"the board is loading"* until `players.js` and `stats.js` land,
+which are deferred behind the cold-load reveal. **No caller in the suite
+read either return value.** So on any run where the deferred data is slow,
+the draft never started, the room was never created, and the test went on
+to assert against the Lobby.
+
+**It does not fail there. It asserts against the wrong screen**, which is
+the silent direction — the same shape as the entry screen's own
+`historySummary()` reading a board that has not arrived, one layer up in
+the harness instead of in the app.
+
+**Two independent holes, and the flat wait was only the second.** These
+sites also read the room the instant `state.started` flipped, which is
+synchronous inside `startDraft()` while `DraftRoomLoader` holds a
+full-viewport layer over the room for a floor of its own. That floor has
+been 400ms, then 2100, then 500, and is 2400 today; the waits were 700.
+`helpers.mjs`'s `startSoloDraft()` had already learned this and waits on
+`[data-draft-loader]` leaving — the seven bridge call sites simply never
+adopted it.
+
+Both are conditions, so both are waited on as conditions:
+`startPhoneDraft()` in `phone.spec.mjs` waits for `dataReady()`, **asserts
+the boolean**, then waits for the loader; `createRoom()` in `helpers.mjs`
+grew the same board wait, which fixes every caller at once rather than the
+one test that surfaced it.
+
+**Measured**: `phone.spec.mjs` went from 7 failing of 12 to 12 passing, and
+none of the seven was an app bug.
+
+**`lobby.spec.mjs` carried two hand-rolled copies of `createRoom()`**, and a
+local copy is a copy that never learns. Both are the shared helper now —
+the argument `helpers.mjs` already makes about `startSoloDraft()`'s seven
+near-identical predecessors, arriving a second time at a different function.
+
+**What makes this reproducible here rather than intermittent** is a sandbox
+where a render-blocking Google Fonts `<link>` resets through the proxy, so
+the reveal — and therefore the deferred data behind it — is late on every
+load. That is the same proxied-sandbox note this file already records
+against `sonar.spec.mjs`, and it is worth keeping for the reverse reason:
+it turns a rare race into a permanent one, which is the cheapest way to
+find a race there is. **A flaky wait is a bug that has not been measured
+under a slow enough load.**
+
 ### The suite goes stale, and it fails exactly like a broken app
 
 Measured 27 August 2026: **nine tests across seven spec files failing against
