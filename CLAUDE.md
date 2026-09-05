@@ -6844,6 +6844,37 @@ Confirmed red by putting the shared column back.
 fallback if it can fail independently of the thing it is behind. Check that
 the older path does not import, extend, or interpolate the newer one.
 
+### And then the WRITE had no ladder at all, which was an outage
+
+The paragraph above was written, tested and committed one commit before a
+worker carrying 0008's columns went live against a database that had not had
+0008 applied. `listLeagues()` degraded perfectly. `putLeague()`'s INSERT
+named `draft_at`, threw, and **every connect failed — Sleeper as well as
+ESPN.** Reported as "I did a hard reload and I couldn't successfully connect
+my ESPN league", which is what an outage looks like from outside.
+
+The commit message for the read ladder said a worker deployed ahead of its
+migration now "degrades to countdown-less rather than to no leagues". That
+sentence was true of the read and false of the write, and **nothing had
+looked at the write.** Half a system was verified and the conclusion was
+stated about the whole of it — the failure this file records over and over,
+arriving this time as production rather than as a wrong measurement.
+
+Both writes ladder now (`putLeague()` and `refreshLeagueCache()`), and
+`scripts/test_schema_ladder.py` exercises writes at every schema level
+rather than only reads. Confirmed red by deleting the 0005 write rung, which
+reproduces the outage exactly: *"0008 missing -> a connect succeeds (rung
+None)"*.
+
+**The rule that generalises: when a migration adds a column, grep for every
+statement that names it, not just the one you were editing.** The read was
+the one being worked on; the write was three functions away and shipped
+unguarded.
+
+**And a schema check belongs in CI precisely because it is about deploying.**
+This one was in CI and passed — because it only tested reads. A guard that
+covers half a hazard reports green on the other half.
+
 ### Every hardcoded platform name became a bug the day ESPN shipped
 
 Found by looking at the League Room rather than by anything failing.

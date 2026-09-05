@@ -955,45 +955,103 @@ export async function listLeagues(env, clerkId) {
    ON CONFLICT updates rather than errors, so pressing connect twice on a
    league already connected refreshes its cached label instead of failing.
    That is also how the snapshot route keeps the label current. */
+/* Connect, or refresh what is already connected.
+
+   Batched with the users upsert for the reason upsertUser() explains at
+   length: connected_leagues.clerk_id carries a foreign key, that row is
+   only otherwise created by GET /me, and a write against a missing one
+   fails with SQLITE_CONSTRAINT_FOREIGNKEY — which is what silently broke
+   every saved draft for every account once already.
+
+   ON CONFLICT updates rather than errors, so pressing connect twice on a
+   league already connected refreshes its cached label instead of failing.
+
+   ---- The write needs the same ladder the read has, and it did not ----
+
+   listLeagues() degrades across schema versions because the worker ships
+   separately from the site. This did not, and the consequence was measured
+   in production rather than reasoned about: the worker carrying 0008's
+   columns went live against a database that had not had 0008 applied, this
+   INSERT threw, and **every connect failed** — Sleeper as well as ESPN,
+   reported as "I couldn't successfully connect my ESPN league".
+
+   The read ladder had been built and tested one commit earlier, with a note
+   claiming a worker deployed ahead of its migration now "degrades to
+   countdown-less rather than to no leagues". True of the read. False of the
+   write, which nothing had looked at. **Half a system verified and the
+   conclusion stated about the whole of it** — which is the failure this
+   project keeps recording, arriving here as an outage.
+
+   So writes ladder too, newest first. */
+const LEAGUE_WRITES = [
+  // 0008: the draft time.
+  {
+    sql:
+      "INSERT INTO connected_leagues" +
+      " (clerk_id, provider, league_id, owner_id, name, season, total_teams," +
+      "  connected_at, refreshed_at, draft_at, draft_status)" +
+      " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)" +
+      " ON CONFLICT(clerk_id, provider, league_id) DO UPDATE SET" +
+      "   owner_id = excluded.owner_id," +
+      "   name = excluded.name," +
+      "   season = excluded.season," +
+      "   total_teams = excluded.total_teams," +
+      "   refreshed_at = excluded.refreshed_at," +
+      "   draft_at = excluded.draft_at," +
+      "   draft_status = excluded.draft_status",
+    args: (l, stamp) => [stamp, stamp, l.draftAt || null, l.draftStatus || null],
+  },
+  // 0005 alone. A connection without its draft time is a working connection.
+  {
+    sql:
+      "INSERT INTO connected_leagues" +
+      " (clerk_id, provider, league_id, owner_id, name, season, total_teams," +
+      "  connected_at, refreshed_at)" +
+      " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)" +
+      " ON CONFLICT(clerk_id, provider, league_id) DO UPDATE SET" +
+      "   owner_id = excluded.owner_id," +
+      "   name = excluded.name," +
+      "   season = excluded.season," +
+      "   total_teams = excluded.total_teams," +
+      "   refreshed_at = excluded.refreshed_at",
+    args: (l, stamp) => [stamp, stamp],
+  },
+];
+
 export async function putLeague(env, clerkId, league) {
   if (!env.DB) return false;
 
   const stamp = nowSeconds();
-  try {
-    await env.DB.batch([
-      upsertUser(env, clerkId, stamp),
-      env.DB.prepare(
-        "INSERT INTO connected_leagues" +
-        " (clerk_id, provider, league_id, owner_id, name, season, total_teams," +
-        "  connected_at, refreshed_at, draft_at, draft_status)" +
-        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)" +
-        " ON CONFLICT(clerk_id, provider, league_id) DO UPDATE SET" +
-        "   owner_id = excluded.owner_id," +
-        "   name = excluded.name," +
-        "   season = excluded.season," +
-        "   total_teams = excluded.total_teams," +
-        "   refreshed_at = excluded.refreshed_at," +
-        "   draft_at = excluded.draft_at," +
-        "   draft_status = excluded.draft_status"
-      ).bind(
-        clerkId,
-        league.provider,
-        league.leagueId,
-        league.ownerId || null,
-        league.name,
-        league.season,
-        league.totalTeams || null,
-        stamp,
-        stamp,
-        league.draftAt || null,
-        league.draftStatus || null
-      ),
-    ]);
-    return true;
-  } catch (err) {
-    console.error("league write failed:", err && err.message);
-    return false;
+  const head = [
+    clerkId,
+    league.provider,
+    league.leagueId,
+    league.ownerId || null,
+    league.name,
+    league.season,
+    league.totalTeams || null,
+  ];
+
+  let last = null;
+  for (let i = 0; i < LEAGUE_WRITES.length; i++) {
+    const rung = LEAGUE_WRITES[i];
+    try {
+      await env.DB.batch([
+        upsertUser(env, clerkId, stamp),
+        env.DB.prepare(rung.sql).bind(...head, ...rung.args(league, stamp)),
+      ]);
+      return true;
+    } catch (err) {
+      last = err;
+      /* A missing column is an unapplied migration and the next rung is the
+         answer. Anything else — a foreign key, a missing table — will fail
+         on every rung alike, so this costs one extra statement and then
+         reports honestly. */
+    }
   }
+
+  console.error("league write failed:", last && last.message);
+  return false;
 }
 
 /* Make one of this account's leagues the active one.
@@ -1085,8 +1143,30 @@ export async function refreshLeagueCache(env, clerkId, league) {
     ).run();
     return Boolean(res.meta && res.meta.changes);
   } catch (err) {
-    console.error("league cache refresh failed:", err && err.message);
-    return false;
+    /* The 0005 rung. Failing here is harmless in a way failing in
+       putLeague() is not — a stale label is what this function exists to
+       fix rather than something it breaks — but it ladders anyway, so that
+       "every write to this table ladders" has no exception somebody has to
+       remember when they add 0009. */
+    try {
+      const res = await env.DB.prepare(
+        "UPDATE connected_leagues SET" +
+        "   name = ?, season = ?, total_teams = ?, refreshed_at = ?" +
+        " WHERE clerk_id = ? AND provider = ? AND league_id = ?"
+      ).bind(
+        league.name,
+        league.season,
+        league.totalTeams || null,
+        nowSeconds(),
+        clerkId,
+        league.provider,
+        league.leagueId
+      ).run();
+      return Boolean(res.meta && res.meta.changes);
+    } catch (inner) {
+      console.error("league cache refresh failed:", inner && inner.message);
+      return false;
+    }
   }
 }
 

@@ -33,8 +33,21 @@ for chunk in re.findall(r'((?:\s*"[^"]*"\s*\+?)+),', block + ','):
     if sql.strip().upper().startswith('SELECT'):
         reads.append(sql)
 
-print('rungs found in store.js:', len(reads))
-assert len(reads) == 3, reads
+print('read rungs found in store.js:', len(reads))
+assert len(reads) >= 1, reads
+
+# The WRITE ladder, extracted the same way and for a sharper reason: this is
+# the half that was never tested, and skipping it is what took production
+# down. The read ladder was built, tested and written up one commit before a
+# worker carrying 0008's columns met a database without them -- at which
+# point putLeague()'s INSERT threw and every connect failed, Sleeper as well
+# as ESPN. The read degraded perfectly the whole time.
+wblock = src[src.index('const LEAGUE_WRITES = ['):src.index('];', src.index('const LEAGUE_WRITES = ['))]
+writes = []
+for chunk in re.findall(r'sql:((?:\s*"[^"]*"\s*\+?)+),', wblock + ','):
+    writes.append(''.join(re.findall(r'"([^"]*)"', chunk)))
+print('write rungs found in store.js:', len(writes))
+assert len(writes) >= 1, writes
 
 MIGRATIONS = ['0005_leagues.sql', '0006_active_league.sql', '0008_draft_time.sql']
 
@@ -75,6 +88,32 @@ for level, label in [(3, 'fully migrated'), (2, '0008 missing'), (1, '0005 only'
     # The newest rung that CAN work is the one that should win.
     expected = {3: 0, 2: 1, 1: 2}[level]
     check('%-16s -> and it is the newest usable one (%d)' % (label, expected), winner == expected)
+
+# Every write rung, against every schema level. A connect that fails is not
+# a degraded feature -- it is the feature.
+for level, label in [(3, 'fully migrated'), (2, '0008 missing'), (1, '0005 only')]:
+    db = db_at(level)
+    db.execute("DELETE FROM connected_leagues")
+    winner = None
+    for i, sql in enumerate(writes):
+        # The head args every rung shares, then that rung's own tail. Counted
+        # from the statement rather than restated, so a rung that changes its
+        # column list cannot quietly pass here.
+        n = sql.count('?')
+        args = ['u1', 'espn', '65142363', None, 'D-Town Boogie', '2026', 10]
+        args += [100, 100, 1788919200000, 'pre_draft'][:n - len(args)]
+        try:
+            db.execute(sql, args)
+            winner = i
+            break
+        except sqlite3.OperationalError:
+            continue
+    check('%-16s -> a connect succeeds (rung %s)' % (label, winner), winner is not None)
+    expected = {3: 0, 2: 1, 1: 1}[level]
+    check('%-16s -> on the newest usable write rung (%d)' % (label, expected), winner == expected)
+    if winner is not None:
+        got = db.execute("SELECT name FROM connected_leagues WHERE clerk_id='u1'").fetchall()
+        check('%-16s -> and the row is really there' % label, got == [('D-Town Boogie',)])
 
 # No table at all is an account with no leagues, not a crash.
 db = db_at(0)
