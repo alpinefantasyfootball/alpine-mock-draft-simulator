@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { BarChart3, ChevronLeft, ChevronRight, Lock, Play, Settings, Trash2, Users } from 'lucide-react'
 import { NAV_PILL_CLEARANCE } from './phone/FloatingNavPill.jsx'
+import PracticeScenarios from './PracticeScenarios.jsx'
 import { POS_CHALK, CELL_INK } from './draftRoomPositions.js'
 
 /* The Draft Room's own entry — what #/rooms/draft is, at every width.
@@ -104,7 +105,7 @@ function StatusPill({ status }) {
 export default function DraftRoomEntry({
   engine, tick, problem, inProgress, onStartNew, onResume, onDiscard,
   onOpenSettings, onOpenAnalytics, onDraftWithFriends, onAnalyze, onDelete,
-  onSignupSport, roomActive,
+  onSignupSport, onLaunchScenario, roomActive,
 }) {
   const [history, setHistory] = useState([])
   const [confirmDelete, setConfirmDelete] = useState(null)
@@ -174,7 +175,7 @@ export default function DraftRoomEntry({
 
                 Measured before changing it: the ladder is 30/44/54/64/72/
                 88 and 38 is on none of its rungs. */}
-            <h1 className="font-display text-[44px] font-extrabold italic uppercase leading-[0.94] tracking-[-0.01em] text-white sm:text-[64px]">
+            <h1 className="font-display text-[44px] font-extrabold italic uppercase leading-[0.94] tracking-normal text-white sm:text-[64px]">
               Mock Drafts
             </h1>
             {/* 24ch was measured against a 38px title and holds the line
@@ -336,6 +337,24 @@ export default function DraftRoomEntry({
             {problem}
           </p>
         )}
+
+        {/* ---- Practice a scenario ----
+
+            design_handoff_practice_scenarios, option 1c: four preset drafts
+            that launch with their settings already chosen. It goes here,
+            directly under "Draft with friends", because that is where the
+            handoff puts it and because that is where the column runs out —
+            at 1280px this screen was four controls and then roughly 500px
+            of nothing, with the mock-drafts list sitting in the other
+            column.
+
+            Deliberately below the actions rather than above them. This is
+            depth for somebody who has already decided to draft; the Start
+            button above it is still the thing the screen exists to offer,
+            and four cards in front of it would be four ways to bury one
+            primary action. Same reasoning the player sheet's own tab strip
+            follows on a phone. */}
+        <PracticeScenarios engine={engine} tick={tick} onLaunch={onLaunchScenario} />
 
       </div>
 

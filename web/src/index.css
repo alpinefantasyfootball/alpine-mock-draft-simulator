@@ -3,14 +3,16 @@
 @tailwind utilities;
 
 /* Self-hosted, homepage v4 pass 1. Archivo and IBM Plex Mono used to load
-   from Google Fonts, bundled into the same CSS2 request as Barlow
-   Condensed and Inter (index.html's font <link>) — a third-party origin
+   from Google Fonts, bundled into the same CSS2 request as the display
+   face and Inter (index.html's font <link>) — a third-party origin
    round trip for two faces this page controls the only two uses of that
    actually matter for load time: the JUKE wordmark and the mono/tabular
-   text the status strip and share card use. Barlow Condensed and Inter
+   text the status strip and share card use. The display face and Inter
    stay on Google Fonts, untouched — font-display/font-body
    (tailwind.config.js) are shared with the Draft Room, which this pass
-   does not touch. See index.html for the matching <link rel="preload">
+   does not touch. (That face is Gabarito as of 4 September 2026; it is
+   named in exactly two places, tailwind.config.js and style.css, and
+   this comment is deliberately not a third.) See index.html for the matching <link rel="preload">
    on the two above-the-fold files (the wordmark's Archivo weight and the
    header ticker's IBM Plex Mono 500).
 

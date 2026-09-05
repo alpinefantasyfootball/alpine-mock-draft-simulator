@@ -47,9 +47,9 @@ export default function Hero() {
               badge elsewhere on the page, so it read as a status
               indicator ("this is live/on") rather than a tagline. Now a
               typographic slogan: a short rule, then the words in
-              Barlow Condensed (the handoff's own allowance — "if
-              production already ships a condensed italic display face,
-              keep it") rather than a pill. No pill, no dot, and margin-
+              font-display (the handoff's own allowance — "if production
+              already ships an italic display face, keep it") rather than
+              a pill. No pill, no dot, and margin-
               bottom on this element (not margin-top on the h1 below it)
               is what now owns the gap between the two. */}
           <div className="flex items-center gap-[14px] mb-[22px]">
@@ -60,7 +60,7 @@ export default function Hero() {
             </span>
           </div>
 
-          {/* One headline at every width, in font-display (Barlow Condensed).
+          {/* One headline at every width, in font-display.
               The phone used to get its own 39px Archivo 900 sentence; the
               revised handoff retires it for the reason its own note gives —
               Archivo is the wordmark's face, and every section header on

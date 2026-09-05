@@ -100,9 +100,40 @@ test("the nightly still restamps the page the deferred data reads from", async (
     if (!/\\$/.test(lines[i].trim())) break;
   }
 
+  /* The list may be a shell variable rather than filenames inline — it became
+     one when docs/privacy.html and docs/terms.html joined and the command
+     outgrew a readable single line. Resolve the variable rather than asserting
+     a shape: this test is about WHICH files get restamped, and it should not
+     go red because the same list moved one line up. It did exactly that once,
+     which is the tell — a stale test fails by not finding something, and what
+     it could not find here was a filename still very much in the list. */
+  const varRef = targets.match(/\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?\s*$/);
+  if (varRef) {
+    const assign = lines.find((l) => new RegExp("^\\s*" + varRef[1] + "=").test(l));
+    expect(assign, `the sed's ${varRef[1]} is assigned in the same step`).toBeTruthy();
+    targets = assign;
+  }
+
   expect(targets, "and web/index.html is still one of the files it rewrites")
     .toContain("web/index.html");
-  // And app.js deliberately is NOT — see this file's own header for why
-  // adding it is a no-op that would also conflict with every branch daily.
-  expect(targets, "app.js is deliberately not in that list").not.toMatch(/(^|[\s/])app\.js/);
+
+  /* The two legal pages are in that list as of 4 September 2026 and had been
+     missing from it since they were written — so style.css, theme.js and
+     back-to-top.js sat frozen at an August stamp on both while the rest of
+     the site moved. Asserted rather than trusted, because nothing a browser
+     can check would notice them dropping out again: the pages render, they
+     just render an old stylesheet. */
+  expect(targets, "docs/privacy.html is restamped too").toContain("docs/privacy.html");
+  expect(targets, "docs/terms.html is restamped too").toContain("docs/terms.html");
+
+  /* And app.js deliberately is NOT — see this file's own header for why
+     adding it is a no-op that would also conflict with every branch daily.
+
+     The quote is in that character class because the list is now inside one:
+     `STAMPED="app.js web/index.html ..."` puts a `"` immediately before the
+     first filename, so a class of whitespace-or-slash alone stopped matching
+     it. Checked by mutation rather than by reading — the first version of
+     this line survived app.js being added to the list, which is a guard
+     passing while the thing it guards is broken. */
+  expect(targets, "app.js is deliberately not in that list").not.toMatch(/(^|[\s/"'])app\.js/);
 });

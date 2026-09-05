@@ -247,13 +247,38 @@ export default function HomeAlive() {
                 390px (350 usable), where it fits; 375 is a real device it
                 does not. Four pixels here and four off the pill's padding
                 is what buys it back. */}
-            <div className="flex items-center justify-between gap-2 sm:gap-3">
-              {/* whitespace-nowrap because a flex item shrinks below its
-                  own content by default, and this one has room: measured at
-                  375px it wants 194px of a 335px row with the pill taking
-                  ~118 beside it. Without this it wrapped to two lines with
-                  60px of the row left empty, which reads as a headline that
-                  did not fit rather than as one that was allowed to break. */}
+            {/* flex-wrap, and it is a safety net rather than a layout.
+
+                At today's copy and today's countdown this is one row, which
+                is what the design draws. What wrap buys is the failure mode
+                when it is not: the hero has `overflow-hidden`, so a row that
+                is too wide is CLIPPED and reports no page overflow at all —
+                KickoffPill's own note below already records that exact trap,
+                found the first time this row ran out of room. Wrapping is
+                the repair the truncation rule actually asks for: an element
+                that overflows must be able to scroll, ellipsise, or break.
+
+                The countdown is not a fixed width — `4D 20:57` becomes
+                `10D 23:59` twice a season — so a row tuned to the pill in
+                front of you is a row that clips itself in six days. */}
+            <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-2 sm:gap-x-3">
+              {/* whitespace-nowrap because a flex item shrinks below its own
+                  content by default, and this one has room.
+
+                  The size step below `sm` is the display face's, and the
+                  numbers moved with it. Barlow Condensed set this at 194px
+                  of a 335px row with the pill taking ~132 beside it — nine
+                  pixels of slack, which is what the note under KickoffPill
+                  is about. Gabarito is a third wider (see CLAUDE.md's own
+                  measurement) and put the identical string at **243px**, so
+                  the pill went off the right edge of a 375px phone and the
+                  hero quietly clipped it.
+
+                  11px at 0.07em brings it to 191 and the row fits again. It
+                  is a real step down from the design's 13, and it is the
+                  cheaper of the two honest answers: the other is to give the
+                  pill its own line, which costs 28px of vertical above the
+                  headline on the one screen where that is most expensive. */}
               {/* data-hero-eyebrow marks the first thing under the header,
                   which is what phone.spec.mjs measures the gap to. An
                   attribute rather than a text or element match, because
@@ -262,7 +287,7 @@ export default function HomeAlive() {
                   none of which is what it is testing. */}
               <span
                 data-hero-eyebrow
-                className="whitespace-nowrap font-display text-[13px] font-bold italic tracking-[0.12em] text-mint sm:text-[14px]"
+                className="whitespace-nowrap font-display text-[11px] font-bold italic tracking-[0.07em] text-mint sm:text-[14px] sm:tracking-[0.12em]"
               >
                 <span aria-hidden="true">✨</span> AGILITY THROUGH ANALYTICS
               </span>

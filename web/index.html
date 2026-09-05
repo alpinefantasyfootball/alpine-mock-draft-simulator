@@ -40,7 +40,7 @@
        project's own source tree, where this file does not live. Root-
        relative is also just correct at runtime regardless of the build: it
        resolves the same way whether you are at "/" or "/#/draft". -->
-  <script src="/theme.js?v=202609041439"></script>
+  <script src="/theme.js?v=202609050305"></script>
 
   <!-- The cold-load overlay's two scripts, both blocking and both before
        first paint, for two different reasons.
@@ -62,30 +62,36 @@
        LEGACY_FILES nor stamped by hand — Vite copies public/ verbatim and
        the nightly's global ?v= sed in this file stamps it along with
        everything else. -->
-  <script src="/juke-mark.js?v=202609041439"></script>
+  <script src="/juke-mark.js?v=202609050305"></script>
 
   <!-- Homepage v4 pass 1: Archivo and IBM Plex Mono moved off Google Fonts
        entirely — self-hosted from /fonts/, @font-face declared in
-       web/src/index.css. Barlow Condensed and Inter stay here: they are
-       font-display/font-body (tailwind.config.js), shared with the whole
-       Draft Room, which this pass does not touch. Two families instead of
-       four on this one request now, and the two preconnects below still
-       earn their keep for it.
+       web/src/index.css. The display face and Inter stay here: they are
+       font-display (tailwind.config.js, and --font-display in style.css)
+       and the legacy pages' --font-body, shared with the whole Draft Room.
+       The two preconnects below earn their keep for this one request.
 
        Homepage cosmetic revision (design_handoff_homepage_cosmetic) §3
        added Hanken Grotesk and Montserrat to this same request —
-       voidBody/voidNumeral (tailwind.config.js), homepage-only. And it
-       widened Barlow Condensed's own weight list: every font-display
-       heading on this page (and several in the Draft Room) has always
-       been styled `italic`, but only upright 600/700 were ever actually
-       requested — so every one of them has been rendering a
-       browser-synthesized oblique this whole time, not Barlow Condensed's
-       real italic. `ital,wght@0,600;0,700;1,700;1,800` adds true italic at
-       the two weights actually used (700/800), without dropping the
-       existing upright 600/700 that everything else on the page reads. -->
+       voidBody/voidNumeral (tailwind.config.js), homepage-only.
+
+       The display face is Gabarito as of 4 September 2026, and it does not
+       ship an italic — the axis simply does not exist on it, at any
+       weight. That is not the regression it looks like next to the note
+       this comment used to carry. Barlow Condensed's ital list was added
+       because every font-display heading is styled `italic` and only
+       upright weights were being requested, so all of them were rendering
+       a browser-synthesized oblique. Gabarito puts every one of them back
+       on that synthesized oblique — which is what the headings looked like
+       for most of this project's life, and what they look like now — so
+       asking for `ital` here would be requesting a file Google does not
+       serve and getting the identical result one round trip later.
+
+       500 through 900 because font-display is used at semibold, bold,
+       extrabold and (the grade glyph) black. -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,600;0,700;1,700;1,800&family=Hanken+Grotesk:wght@400;500;600;700&family=Montserrat:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Gabarito:wght@500;600;700;800;900&family=Hanken+Grotesk:wght@400;500;600;700&family=Montserrat:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <!-- The two self-hosted faces actually on screen before anything else
        loads: the JUKE wordmark in the nav (Archivo, every weight in one
        variable file) and the header ticker's "N players" badge (IBM Plex
@@ -100,7 +106,7 @@
        a cache entry without crossorigin matching on both. -->
   <link rel="preload" as="font" type="font/woff2" href="/fonts/archivo-variable-latin.woff2" crossorigin>
   <link rel="preload" as="font" type="font/woff2" href="/fonts/ibm-plex-mono-500-latin.woff2" crossorigin>
-  <!-- ?v=202609041439 on every local file below, and it has to be bumped on any deploy
+  <!-- ?v=202609050305 on every local file below, and it has to be bumped on any deploy
        that changes one of them.
 
        Without a version in the address a returning visitor runs today's HTML
@@ -115,7 +121,7 @@
        keep this convention. The React homepage bundle is Vite's own
        content-hashed output, injected automatically, which makes this exact
        bug structurally impossible for that half of the page. -->
-  <link rel="stylesheet" href="/style.css?v=202609041439">
+  <link rel="stylesheet" href="/style.css?v=202609050305">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <link rel="manifest" href="/manifest.json">
   <link rel="apple-touch-icon" href="/juke-icon-tile-180.png">
@@ -481,7 +487,7 @@
        the flash both branches exist to prevent. A parser-blocking script
        immediately after the markup is the only position where the element is
        real and nothing has painted. -->
-  <script src="/splash-boot.js?v=202609041439"></script>
+  <script src="/splash-boot.js?v=202609050305"></script>
 
   <!-- The shield <symbol> that used to live here is gone. It was 2.7KB of
        traced path data on every page load, cloned by <use> into the two
@@ -1003,7 +1009,7 @@
     <form method="dialog"><button class="primary">Got it</button></form>
   </dialog>
 
-  <!-- Every one of these carries the same ?v=202609041439 as the stylesheet. See the note
+  <!-- Every one of these carries the same ?v=202609050305 as the stylesheet. See the note
        beside it in <head>: bump them together or don't bump them at all.
        Root-relative for the same reason theme.js and style.css are above.
 
@@ -1034,10 +1040,10 @@
        real data, deferred-load or not. -->
   <!-- The socket to a shared room. Loaded always, connected never unless a
        manager asks for it: a solo draft touches nothing. -->
-  <script src="/live.js?v=202609041439"></script>
+  <script src="/live.js?v=202609050305"></script>
   <!-- Before app.js, which calls backToTop() on the last line of its setup. -->
-  <script src="/back-to-top.js?v=202609041439"></script>
-  <script src="/app.js?v=202609041439"></script>
+  <script src="/back-to-top.js?v=202609050305"></script>
+  <script src="/app.js?v=202609050305"></script>
 
   <!-- The React homepage. A module script, so it runs after the classic
        scripts above regardless of source order — modules always behave as
