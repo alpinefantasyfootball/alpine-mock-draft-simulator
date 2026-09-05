@@ -125,6 +125,40 @@ export async function lookupUser(username, season, base) {
   };
 }
 
+/* Which of a league's drafts is THE draft.
+
+   Almost always one. A dynasty league accumulates them — one per season —
+   so the season is what picks, and the newest is the fallback for a league
+   whose drafts do not carry one. Ordered by start time rather than by array
+   position, because the endpoint does not promise an order.
+
+   Answers nulls rather than throwing for a league with no draft scheduled,
+   which is an ordinary state and not an error: a Sleeper league exists
+   before anybody sets a time.
+
+   `status` is Sleeper's own — "pre_draft", "drafting", "complete" — passed
+   through rather than translated, so the two providers are mapped to one
+   vocabulary in exactly one place (draftPhase(), below) instead of each
+   inventing its own.
+
+   **A time with no draft behind it is not a time.** `start_time` is present
+   on a completed draft too, pointing at when it happened, so anything
+   drawing a countdown has to read the status as well or it will count down
+   to a draft that finished last month. */
+function pickDraft(drafts, season) {
+  const list = Array.isArray(drafts) ? drafts.filter(Boolean) : [];
+  if (!list.length) return { at: null, status: null };
+
+  const forSeason = list.filter((d) => String(d.season || "") === String(season || ""));
+  const pool = forSeason.length ? forSeason : list;
+  const best = pool.slice().sort((a, b) => Number(b.start_time || 0) - Number(a.start_time || 0))[0];
+
+  return {
+    at: Number(best.start_time) || null,
+    status: best.status ? String(best.status) : null,
+  };
+}
+
 /* Everything a connected league's screens need, in one object.
 
    Four upstream calls in parallel rather than in sequence: they do not
@@ -139,11 +173,20 @@ export async function lookupUser(username, season, base) {
    useful than an empty table under its name. */
 export async function leagueSnapshot(leagueId, base) {
   const id = encodeURIComponent(leagueId);
-  const [league, rosters, users, state] = await Promise.all([
+  const [league, rosters, users, state, drafts] = await Promise.all([
     getJson("/league/" + id, base),
     getJson("/league/" + id + "/rosters", base),
     getJson("/league/" + id + "/users", base),
     nflState(base),
+    /* When the draft is, which is the one thing a connected league can say
+       before it has any rosters to show.
+
+       `/league/<id>/drafts` rather than `/draft/<draft_id>`, even though the
+       league object carries `draft_id` and the single-draft call is the more
+       obvious one: `draft_id` only arrives with the league response, so
+       asking for the draft would have to wait for it. This depends on
+       nothing, so it joins the batch above and costs no latency at all. */
+    getJson("/league/" + id + "/drafts", base),
   ]);
 
   if (!league || !league.league_id) return null;
@@ -183,9 +226,18 @@ export async function leagueSnapshot(leagueId, base) {
     };
   });
 
+  const draft = pickDraft(drafts, league.season);
+
   return {
     leagueId: String(league.league_id),
     name: String(league.name || "Untitled league"),
+    /* Epoch MILLISECONDS, which is what Sleeper sends and what a browser
+       counts down from. Every D1 timestamp in this project is seconds and
+       the route converts once on the way in, the same way meHistoryRoute()
+       already does for completedAt rather than asking store.js to guess
+       which unit a caller meant. */
+    draftAt: draft.at,
+    draftStatus: draft.status,
     season: String(league.season || ""),
     totalTeams: Number(league.total_rosters) || teams.length,
     week: state && Number(state.week) ? Number(state.week) : null,

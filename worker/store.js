@@ -863,7 +863,8 @@ export async function resolveSleeperIds(env, wanted) {
    The order of the two matters: the new query is tried first, so an
    applied migration never pays for the old one. */
 const LEAGUE_COLS =
-  "SELECT provider, league_id, owner_id, name, season, total_teams, connected_at";
+  "SELECT provider, league_id, owner_id, name, season, total_teams, connected_at," +
+  " refreshed_at, draft_at, draft_status";
 
 export async function listLeagues(env, clerkId) {
   if (!env.DB) return [];
@@ -877,6 +878,14 @@ export async function listLeagues(env, clerkId) {
     season: r.season,
     totalTeams: r.total_teams,
     connectedAt: r.connected_at,
+    // Epoch seconds, and the one field here nothing draws: it is what the
+    // route reads to decide whether this cache is worth re-reading.
+    refreshedAt: r.refreshed_at,
+    // Milliseconds, as both platforms send it and as a browser counts down
+    // from. The one timestamp in this table that is not epoch seconds, and
+    // it says so here because the column name cannot.
+    draftAt: r.draft_at,
+    draftStatus: r.draft_status,
   }));
 
   try {
@@ -924,14 +933,17 @@ export async function putLeague(env, clerkId, league) {
       upsertUser(env, clerkId, stamp),
       env.DB.prepare(
         "INSERT INTO connected_leagues" +
-        " (clerk_id, provider, league_id, owner_id, name, season, total_teams, connected_at, refreshed_at)" +
-        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)" +
+        " (clerk_id, provider, league_id, owner_id, name, season, total_teams," +
+        "  connected_at, refreshed_at, draft_at, draft_status)" +
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)" +
         " ON CONFLICT(clerk_id, provider, league_id) DO UPDATE SET" +
         "   owner_id = excluded.owner_id," +
         "   name = excluded.name," +
         "   season = excluded.season," +
         "   total_teams = excluded.total_teams," +
-        "   refreshed_at = excluded.refreshed_at"
+        "   refreshed_at = excluded.refreshed_at," +
+        "   draft_at = excluded.draft_at," +
+        "   draft_status = excluded.draft_status"
       ).bind(
         clerkId,
         league.provider,
@@ -941,7 +953,9 @@ export async function putLeague(env, clerkId, league) {
         league.season,
         league.totalTeams || null,
         stamp,
-        stamp
+        stamp,
+        league.draftAt || null,
+        league.draftStatus || null
       ),
     ]);
     return true;
@@ -987,6 +1001,60 @@ export async function selectLeague(env, clerkId, provider, leagueId) {
     // An unmigrated 0006, or no such table. Both are "the switch did not
     // persist", and listLeagues() is what keeps the app coherent either way.
     console.error("league select failed:", err && err.message);
+    return false;
+  }
+}
+
+/* Refresh the cached label from a snapshot that has just been taken.
+
+   ---- 0005 said this happened and it did not ----
+
+   That migration's own comment reads "it is here so the header's league chip
+   can draw without a round trip ... and it is refreshed whenever a snapshot
+   is fetched". Nothing ever called putLeague() from a snapshot route, so
+   `refreshed_at` only moved when somebody re-connected a league they were
+   already connected to. A league renamed on Sleeper kept its old name in
+   Juke's header for ever.
+
+   It is true now, and the draft countdown is what forced it: a draft time
+   that never refreshes is worse than a name that never refreshes, because a
+   rescheduled draft counts down to the wrong instant with complete
+   confidence.
+
+   ---- Why this is not putLeague() ----
+
+   putLeague() upserts, which is right for connecting and wrong here: a
+   snapshot is fetched for the ACTIVE league, and an INSERT would silently
+   re-create a row for a league the reader disconnected in another tab
+   moments ago. This only ever updates a row that already exists, and
+   touches no key.
+
+   Never on the response path — the caller passes it to after(ctx, …) — and
+   it answers false rather than throwing, because a stale label is not a
+   reason to fail a snapshot the reader is waiting for. */
+export async function refreshLeagueCache(env, clerkId, league) {
+  if (!env.DB || !league) return false;
+
+  try {
+    const res = await env.DB.prepare(
+      "UPDATE connected_leagues SET" +
+      "   name = ?, season = ?, total_teams = ?," +
+      "   draft_at = ?, draft_status = ?, refreshed_at = ?" +
+      " WHERE clerk_id = ? AND provider = ? AND league_id = ?"
+    ).bind(
+      league.name,
+      league.season,
+      league.totalTeams || null,
+      league.draftAt || null,
+      league.draftStatus || null,
+      nowSeconds(),
+      clerkId,
+      league.provider,
+      league.leagueId
+    ).run();
+    return Boolean(res.meta && res.meta.changes);
+  } catch (err) {
+    console.error("league cache refresh failed:", err && err.message);
     return false;
   }
 }

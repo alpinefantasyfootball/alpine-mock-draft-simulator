@@ -3,6 +3,7 @@ import { Check, ChevronDown, Plus } from 'lucide-react'
 import { useLeague, noteLeagueConnected } from '../../hooks/useLeague.js'
 import { platformFor } from './leaguePlatforms.js'
 import ConnectLeagueModal from './ConnectLeagueModal.jsx'
+import DraftCountdown from './DraftCountdown.jsx'
 
 /* The header's connected-league control: which one you are looking at, and
    how to look at another.
@@ -147,6 +148,11 @@ export default function LeagueSwitcher() {
                     {lg.season ? ' · ' + lg.season : ''}
                     {lg.totalTeams ? ' · ' + lg.totalTeams + ' TEAMS' : ''}
                   </span>
+                  {/* The menu is where both leagues are visible at once,
+                      which makes it the one place two draft times can be
+                      compared. Its own line, because the one above already
+                      truncates in a 300px panel. */}
+                  <DraftCountdown league={lg} variant="chip" className="mt-1" />
                 </span>
                 {on ? <Check className="h-4 w-4 shrink-0 text-teal" aria-hidden="true" /> : null}
               </button>

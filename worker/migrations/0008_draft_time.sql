@@ -1,0 +1,38 @@
+-- 0008_draft_time.sql — when each connected league drafts.
+--
+-- Reported: a connected league's rosters are empty until it drafts, and
+-- nothing on any screen said when that was. Both platforms publish it and
+-- neither was being read.
+--
+-- ---- Why it is cached here and not fetched per screen ----
+--
+-- The surfaces that want a countdown are the ones that list EVERY connected
+-- league: the You screen's section and the header switcher's menu. Reading
+-- the draft time from a snapshot would put one upstream round trip per
+-- connected league behind every one of those renders, to draw a number that
+-- moves once a season.
+--
+-- So it joins the name/season/size cache 0005 already keeps for exactly this
+-- reason, and listLeagues() carries it to every reader for free.
+--
+-- ---- Both columns, because an instant alone is a trap ----
+--
+-- Sleeper keeps `start_time` on a completed draft and ESPN keeps
+-- `draftSettings.date` after `drafted` flips true, so a countdown built on
+-- the instant alone counts down to a draft that already happened. The status
+-- is what stops that, and it is stored beside the instant rather than
+-- inferred from it — "the date has passed" is not the same fact as "the
+-- draft has run", and a draft that starts late is the case that tells them
+-- apart.
+--
+-- One vocabulary for two providers: 'pre_draft' | 'drafting' | 'complete',
+-- Sleeper's own strings, with espn.js mapping its two booleans onto them.
+-- Nullable, because a league with no draft scheduled is an ordinary state.
+--
+-- ---- This is a cache and never a source of truth ----
+--
+-- Same rule 0005 states about the name and the size. Nothing branches on
+-- these values; they draw a countdown. The league itself is asked when
+-- anything matters.
+ALTER TABLE connected_leagues ADD COLUMN draft_at INTEGER;
+ALTER TABLE connected_leagues ADD COLUMN draft_status TEXT;

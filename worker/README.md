@@ -79,7 +79,8 @@ what it tells you.
 | `auth.js` | `verifiedUser()`: is this `Authorization: Bearer` header a session Clerk actually issued. The one place the worker decides who is asking. |
 | `espn.js` | ESPN, read-only. The second provider, and the only one whose rosters need translating — see the ESPN section. |
 | `names.js` | One normaliser, shared by the pool sync and the ESPN crosswalk. Its twin is `build_players.py`'s, and `scripts/test_engine.py` asserts they agree. |
-| `migrations/` | The SQL. `0001_init.sql` creates `players`, `player_news` and `news_lookups`; `0002_signup.sql` the waitlist; `0003_accounts.sql` and `0004_drafts.sql` the account, its saved draft and its locker; `0005_leagues.sql` a connected league, `0006_active_league.sql` which of several is showing, and `0007_player_name_key.sql` the key the ESPN crosswalk joins on. |
+| `test-countdown.mjs` | The draft countdown's arithmetic, offline. Guards the one mistake that matters: both platforms keep the scheduled time after the draft has run. |
+| `migrations/` | The SQL. `0001_init.sql` creates `players`, `player_news` and `news_lookups`; `0002_signup.sql` the waitlist; `0003_accounts.sql` and `0004_drafts.sql` the account, its saved draft and its locker; `0005_leagues.sql` a connected league, `0006_active_league.sql` which of several is showing, `0007_player_name_key.sql` the key the ESPN crosswalk joins on, and `0008_draft_time.sql` when each league drafts. |
 | `wrangler.toml` | Bindings, the DO migration and the cron. One class, `DraftRoom`; one database, `juke_db`. |
 | `../room.js` | Who is sitting where, what has been picked, how long is left. Pure. |
 | `../draft-engine.js` | The rules of a snake draft. Pure. |
@@ -453,6 +454,29 @@ one indexed lookup rather than a fold over 4,388 rows per snapshot.
 asserts it against `build_players.py`'s own on sixteen real spellings. A
 drift there does not throw — it stops matching, which reads as a short
 roster.
+
+### The draft time
+
+Both providers report `draftAt` (epoch **milliseconds**, as both platforms
+send it and as a browser counts down from — the one timestamp in this worker
+that is not epoch seconds) and `draftStatus`, on their snapshot and on the
+connect-time lookup. `0008` caches both on `connected_leagues` so the You
+screen and the header switcher can list every league's countdown without one
+upstream call each.
+
+**Read the status before the instant.** Sleeper keeps `start_time` on a
+completed draft and ESPN keeps `draftSettings.date` behind `drafted: true`,
+so an instant alone counts down to a draft that has already happened.
+
+**`refreshLeagueCache()` is the refresh `0005` always claimed and never
+had.** Called from `GET /me/leagues` via `after(ctx, …)`, for the active
+league only, at most hourly (`LEAGUE_CACHE_TTL`). It only ever UPDATEs —
+`putLeague()` upserts, and an INSERT here would resurrect a league the
+reader disconnected in another tab.
+
+```bash
+node worker/test-countdown.mjs
+```
 
 ### The pool sync is armed now, and this is what pays for it
 

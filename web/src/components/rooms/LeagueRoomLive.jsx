@@ -1,3 +1,6 @@
+import { platformFor } from '../shell/leaguePlatforms.js'
+import DraftCountdown from '../shell/DraftCountdown.jsx'
+import { draftPhase } from '../../lib/countdown.js'
 /* The League Room, on a connected league's real standings.
 
    ---- Why this is the room that went first ----
@@ -42,7 +45,44 @@ function ordered(teams) {
    and lifting it there is also what keeps the page to ONE call for the
    league instead of two — this component asking for the same id the hero
    already asked for. Presentational from here down. */
+/* The draft's date and time, in the reader's own timezone.
+
+   `toLocaleString` with no locale argument, which is the browser's — a
+   draft at 00:30 UTC is the evening before on the US east coast, and
+   printing UTC to somebody who is going to be sitting at that draft is a
+   number they have to convert in their head. The timeZoneName is included
+   for the same reason: it says which clock this is, so a manager travelling
+   is not misled by a time that quietly followed them.
+
+   Fails to the raw ISO string rather than throwing. Intl options are not
+   uniformly supported, and a badly formatted date beside a working
+   countdown is a far smaller problem than a room that will not render. */
+function draftWhen(ms) {
+  try {
+    return new Date(ms).toLocaleString(undefined, {
+      weekday: 'short', month: 'short', day: 'numeric',
+      hour: 'numeric', minute: '2-digit', timeZoneName: 'short',
+    })
+  } catch (err) {
+    return new Date(ms).toISOString().slice(0, 16).replace('T', ' ') + ' UTC'
+  }
+}
+
 export default function LeagueRoomLive({ league, snapshot, status, reason }) {
+  /* Which platform this league came from, by name.
+
+     Four strings on this screen said "Sleeper" outright, and every one of
+     them was correct until ESPN shipped — at which point an ESPN league's
+     own room told its owner it was read from Sleeper, and an unreachable
+     ESPN reported that Sleeper had not answered. Found by looking at the
+     screen rather than by anything failing, which is the only way this
+     class of wrongness is ever found.
+
+     platformFor() rather than a ternary on `provider`, because that is the
+     one list, and a third platform should be a row in it rather than an
+     edit here. `private` joins the failure branches with it: it cannot
+     happen on Sleeper and is the most likely failure on ESPN. */
+  const platform = platformFor(league && league.provider).name
 
   if (status === 'loading') {
     return (
@@ -61,12 +101,18 @@ export default function LeagueRoomLive({ league, snapshot, status, reason }) {
       <div className="mx-auto max-w-[1280px] px-5 py-10 sm:px-10">
         <div className="rounded-2xl border border-line-hairline bg-[#151920] p-6">
           <div className="font-display text-[20px] font-bold text-white">
-            {reason === 'not-found' ? 'That league is no longer readable' : 'Could not reach Sleeper'}
+            {reason === 'not-found'
+              ? 'That league is no longer readable'
+              : reason === 'private'
+                ? 'That league is not public any more'
+                : `Could not reach ${platform}`}
           </div>
           <p className="mt-1.5 max-w-[52ch] text-[14px] leading-[1.5] text-voidInk-body">
             {reason === 'not-found'
-              ? 'Sleeper does not return this league any more. It may have been deleted, or the season rolled over — reconnect it from the You screen.'
-              : 'Your standings are on Sleeper and it did not answer. Nothing is wrong with your league; try again in a moment.'}
+              ? `${platform} does not return this league any more. It may have been deleted, or the season rolled over — reconnect it from the You screen.`
+              : reason === 'private'
+                ? 'ESPN will only let Juke read a public league. Open League Settings in ESPN and set visibility to public.'
+                : `Your standings are on ${platform} and it did not answer. Nothing is wrong with your league; try again in a moment.`}
           </p>
         </div>
       </div>
@@ -76,8 +122,42 @@ export default function LeagueRoomLive({ league, snapshot, status, reason }) {
   const table = ordered(snapshot.teams)
   const mine = league.ownerId || null
 
+  /* Read off the SNAPSHOT, not the connected-league cache.
+
+     Both carry it, and they can disagree by up to an hour — the cache is
+     refreshed on a TTL so the You screen and the switcher can draw without
+     a round trip. This screen has just fetched the league itself, so it
+     holds the newer answer and there is no reason to draw the older one. */
+  const draft = draftPhase(snapshot.draftAt, snapshot.draftStatus)
+
+  /* Why every row reads 0-0.
+
+     This is the whole reason the countdown was built: a connected league
+     before its draft is ten teams with empty rosters and no record, and
+     without a word of explanation that reads as Juke having failed to read
+     the league rather than as a league that has not started. Reported
+     exactly that way.
+
+     Not drawn once the draft is complete — by then the table is the
+     explanation — nor when there is no draft scheduled, where the honest
+     answer is that we do not know and a banner saying so is noise on every
+     load. */
+  const banner = draft.phase === 'soon' || draft.phase === 'drafting' || draft.phase === 'late'
+
   return (
     <div className="mx-auto max-w-[1280px] px-5 pb-10 pt-2 sm:px-10 sm:pt-4">
+      {banner ? (
+        <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-[14px] border border-line-hairline bg-[#151920] px-4 py-3">
+          <DraftCountdown league={snapshot} variant="chip" />
+          <span className="text-[13px] leading-[1.45] text-voidInk-body">
+            {draft.phase === 'drafting'
+              ? 'Your draft is running now — rosters fill here as picks land.'
+              : draft.phase === 'late'
+                ? 'The scheduled draft time has passed. Rosters appear here once it runs.'
+                : 'Rosters are empty until your league drafts. Everything else here is live.'}
+          </span>
+        </div>
+      ) : null}
       <div className="lg:grid lg:grid-cols-[1.4fr_0.6fr] lg:items-start lg:gap-4">
         <div className="overflow-hidden rounded-[18px] border border-line-hairline bg-[#151920] px-4 pb-1 pt-1.5">
           {table.map((t, i) => {
@@ -158,12 +238,21 @@ export default function LeagueRoomLive({ league, snapshot, status, reason }) {
                 <dd className="text-voidInk-primary">{snapshot.playoffTeams}</dd>
               </div>
             ) : null}
+            {/* The date itself, which the countdown above deliberately does
+                not say: "3D 04:12:09" answers how long and never when, and
+                the when is what somebody puts in a calendar. */}
+            {snapshot.draftAt && snapshot.draftStatus !== 'complete' ? (
+              <div className="flex justify-between gap-3">
+                <dt className="text-ink-muted">Draft</dt>
+                <dd className="text-right text-voidInk-primary">{draftWhen(snapshot.draftAt)}</dd>
+              </div>
+            ) : null}
           </dl>
           {/* Read-only is the promise the connect flow made; repeating it
               on the one screen that shows real league data is where it is
               worth the two lines. */}
           <p className="mt-3.5 border-t border-line-hairline pt-3 text-[12px] leading-[1.45] text-ink-muted">
-            Read from Sleeper. Juke never writes to your league.
+            Read from {platform}. Juke never writes to your league.
           </p>
         </div>
       </div>

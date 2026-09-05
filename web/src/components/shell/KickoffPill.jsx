@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { countdownParts } from '../../lib/countdown.js'
 
 /* The header's kickoff countdown — `KICKOFF 3D 07:14`.
 
@@ -60,15 +61,10 @@ import { useEffect, useRef, useState } from 'react'
 
 const PRIME_THROTTLE_MS = 30000
 
-function parts(ms) {
-  if (ms <= 0) return null
-  const total = Math.floor(ms / 1000)
-  const days = Math.floor(total / 86400)
-  const p = (n) => String(n).padStart(2, '0')
-  const hhmm = `${p(Math.floor((total % 86400) / 3600))}:${p(Math.floor((total % 3600) / 60))}`
-  const lead = days > 0 ? `${days}D ` : ''
-  return { compact: `${lead}${hhmm}`, full: `${lead}${hhmm}:${p(total % 60)}` }
-}
+/* The formatter moved to lib/countdown.js when the draft countdown arrived,
+   so the two say "4D 06:14" the same way. Everything above about WHEN this
+   counts is still this file's; only the string-building left. */
+const parts = countdownParts
 
 export default function KickoffPill({ className = '' }) {
   const [text, setText] = useState(null)   // { compact, full } | null
