@@ -6,7 +6,8 @@ object, and that object is the only thing that decides what happened.
 
 **This is deployed**, to `juke-draft-room.jukeff.workers.dev`, and `live.js`
 points at it by name. So a change to `draft-room.js` or to `../room.js` is not
-live until `wrangler deploy` has run, and a client that expects it will fail
+live until a deploy has run (`npm --prefix worker run deploy`, which
+migrates first — see **Deploying**), and a client that expects it will fail
 against the old one — check both sides ship together.
 
 **The site still does not need it.** A solo mock draft opens from `file://`
@@ -134,9 +135,35 @@ what `new_sqlite_classes` in the migration buys, and it is why the binding is
 declared that way rather than as `new_classes`.
 
 ```bash
-wrangler deploy
+npm --prefix worker run deploy
 JUKE_WORKER="wss://juke-draft-room.jukeff.workers.dev" node worker/test-sockets.mjs
 ```
+
+**`npm run deploy`, not `wrangler deploy`.** The npm script carries a
+`predeploy` hook that applies pending D1 migrations first and aborts the
+deploy if they fail — and it exists because skipping that step took the
+connect flow down in production: a worker carrying `0008`'s columns went live
+against a database without them, `putLeague()`'s INSERT threw, and every
+connect failed. Writes ladder across schema versions now, so that exact
+outage cannot repeat, but the ordering is still the thing that keeps a
+deploy honest.
+
+**Running `wrangler deploy` by hand skips the hook entirely**, and npm cannot
+prevent that. This is a shorter safe path rather than a locked door — which
+is worth stating plainly, because a guard people believe in and that does not
+fire is worse than no guard.
+
+**Migrations run BEFORE the deploy because every migration here is
+additive** — new code needs columns the old schema lacks, so the database
+must lead. A destructive migration (dropping a column code still reads) needs
+the opposite order: deploy first, then migrate, by hand. Do not reach for
+`npm run deploy` for one of those without thinking it through.
+
+| script | does |
+|---|---|
+| `npm --prefix worker run deploy` | migrate, then deploy. The one to use. |
+| `npm --prefix worker run migrate` | apply pending migrations to **production**. |
+| `npm --prefix worker run migrate:local` | the same against the local sqlite. |
 
 The same thirty assertions run against production by setting `JUKE_WORKER`.
 
