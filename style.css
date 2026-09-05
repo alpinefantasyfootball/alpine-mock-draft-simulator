@@ -31,10 +31,9 @@
    ========================================================== */
 
 :root {
-  /* Display. Condensed, because a scoreboard, a jersey nameplate
-     and a broadcast lower-third are all condensed caps, and that
-     is the cheapest way for an interface to read as sport
-     without loading a photograph of one.
+  /* Display. Gabarito as of 4 September 2026, and the argument
+     that put Barlow Condensed here does not survive it intact,
+     so it is corrected rather than left standing.
 
      It replaced Poppins, which was not a bad face — it was
      Sleeper's. Measured off the running sites in August 2026,
@@ -42,8 +41,40 @@
      most needs to be told apart from, and three of the seven
      platforms surveyed were on Poppins. Type is the fastest
      identity signal there is, because it is read before
-     anything is consciously looked at. */
-  --font-display: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
+     anything is consciously looked at. That half still holds,
+     and Gabarito is no more Sleeper's face than Barlow was.
+
+     What does NOT survive is "condensed, because a scoreboard
+     and a jersey nameplate are condensed caps". Gabarito is a
+     rounded geometric, and measured in the browser against
+     Barlow Condensed at 800 weight and the same pixel size (4
+     September 2026): **cap height 96%, x-height 94%, width
+     133%.** So it is very slightly shorter and a THIRD wider —
+     the exact opposite trade to the Poppins swap, which came out
+     taller and narrower and therefore needed no re-measuring
+     anywhere.
+
+     Every heading on the site now wants a third more horizontal
+     room than it did, and every fixed-width box holding display
+     type had to be re-checked rather than assumed. `.pick-no` is
+     the one that failed and carries its own note. `.hero h1`
+     already steps down under 620px and still fits. The React
+     side is fluid at every H1, which is why nothing there
+     needed a number changed — but the next fixed width added
+     under font-display does need this paragraph read first.
+
+     No "Arial Narrow" fallback any more: it was there so a
+     Barlow Condensed that failed to load landed on something of
+     roughly the same width. A narrow fallback under a face that
+     is not narrow would reflow every heading on the one load it
+     is supposed to rescue.
+
+     Gabarito ships NO italic, at any weight. Every `italic`
+     font-display heading is therefore a browser-synthesized
+     oblique — which is what they were for most of this project's
+     life anyway (see web/index.html's own note, where the ital
+     weights were added to stop exactly that). */
+  --font-display: Gabarito, system-ui, sans-serif;
 
   /* Body stays a neutral grotesque and stays Inter, deliberately.
      It is the one face here that is infrastructure rather than
@@ -942,7 +973,7 @@ body {
 
 .setup h2 {
   margin: 0 0 20px; font-family: var(--font-display);
-  font-size: var(--fs-xl); font-weight: 700; letter-spacing: -0.02em;
+  font-size: var(--fs-xl); font-weight: 700; letter-spacing: 0;
 }
 
 .field { margin-bottom: 20px; }
@@ -1192,7 +1223,7 @@ tr.conflict .nm { color: var(--t-bad-fg); }
   border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
   font-family: var(--font-display); font-weight: 700; font-size: var(--fs-base);
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
 }
 
 .avatar.QB  { background: var(--qb-bg);  color: var(--qb-fg); }
@@ -1288,7 +1319,7 @@ tr.conflict .nm { color: var(--t-bad-fg); }
 
 .sug-name {
   font-family: var(--font-display);
-  font-size: var(--fs-base); font-weight: 600; letter-spacing: -0.01em;
+  font-size: var(--fs-base); font-weight: 600; letter-spacing: 0;
   line-height: 1.2;
 }
 
@@ -1740,7 +1771,14 @@ tr.drafted .ovr { color: var(--ink-light); }
 }
 
 .pick-card.mine { border-color: var(--mine); background: var(--row-mine); }
-.pick-no { flex: none; width: 38px; font-family: var(--font-display); font-weight: 700; font-size: var(--fs-sm); color: var(--ink-mid); }
+/* 44px, not 38: this is a fixed column carrying a pick code, and the
+   widest one a default league produces is "14.01" — five glyphs plus a
+   full stop. 38px was measured against a condensed face; Gabarito sets
+   about a fifth wider, so the number that fitted with room to spare no
+   longer does. A fixed width with text that outgrows it is the one thing
+   the truncation rule has no answer for: it can neither scroll nor
+   ellipsise. */
+.pick-no { flex: none; width: 44px; font-family: var(--font-display); font-weight: 700; font-size: var(--fs-sm); color: var(--ink-mid); }
 .pick-team { font-size: var(--fs-xs); color: var(--ink-light); margin-bottom: 2px; }
 .pick-name { font-weight: 600; font-size: var(--fs-sm); line-height: 1.2; }
 .pick-meta { display: flex; align-items: center; gap: 6px; margin-top: 3px; font-size: var(--fs-xs); color: var(--ink-mid); }
@@ -1758,7 +1796,7 @@ tr.drafted .ovr { color: var(--ink-light); }
   background: rgba(255,255,255,.13);
   display: flex; align-items: center; justify-content: center;
   font-family: var(--font-display); font-weight: 700; font-size: var(--fs-2xl);
-  letter-spacing: -0.03em;
+  letter-spacing: -0.005em;
 }
 
 .grade-hero h3 { margin: 0 0 3px; font-family: var(--font-display); font-size: var(--fs-lg); font-weight: 700; }
@@ -1881,7 +1919,7 @@ tr.drafted .ovr { color: var(--ink-light); }
   width: 62px; height: 62px; font-size: var(--fs-lg);
   box-shadow: 0 0 0 3px var(--team);
 }
-.sheet-head h3 { margin: 0; font-family: var(--font-display); font-size: var(--fs-lg); font-weight: 700; letter-spacing: -.02em; }
+.sheet-head h3 { margin: 0; font-family: var(--font-display); font-size: var(--fs-lg); font-weight: 700; letter-spacing: 0; }
 .sheet-head .sub { display: flex; align-items: center; gap: 7px; margin-top: 4px; font-size: var(--fs-sm); color: rgba(255,255,255,.80); }
 .sheet-head .facts { margin-top: 5px; font-size: var(--fs-xs); color: rgba(255,255,255,.62); font-variant-numeric: tabular-nums; }
 
@@ -2286,7 +2324,7 @@ tr.drafted .ovr { color: var(--ink-light); }
    wordmark. One colour, one lockup. */
 .wordmark {
   font-family: var(--font-display); font-weight: 700; font-size: var(--fs-lg);
-  letter-spacing: -0.01em; color: var(--mark-ink); line-height: 1;
+  letter-spacing: 0; color: var(--mark-ink); line-height: 1;
 }
 
 .navbtn, .navlink {
@@ -2331,7 +2369,7 @@ tr.drafted .ovr { color: var(--ink-light); }
 .rooms-head {
   margin: 0 0 4px;
   font-family: var(--font-display); font-size: var(--fs-xl); font-weight: 700;
-  letter-spacing: -.02em; color: var(--ink);
+  letter-spacing: 0; color: var(--ink);
 }
 
 .rooms-sub { margin: 0 0 18px; font-size: var(--fs-sm); color: var(--ink-mid); }
@@ -2905,7 +2943,7 @@ a.room.live:hover {
 
 .hero h1 {
   margin: 0 0 16px; font-family: var(--font-display);
-  font-size: var(--fs-3xl); font-weight: 700; letter-spacing: -0.03em; line-height: 1.12;
+  font-size: var(--fs-3xl); font-weight: 700; letter-spacing: -0.005em; line-height: 1.12;
 }
 
 .hero-sub { margin: 0 0 26px; font-size: var(--fs-lg); line-height: 1.65; color: var(--ink-mid); }

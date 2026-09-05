@@ -1,25 +1,39 @@
 import { useEffect, useRef, useState } from 'react'
-import Header from './Header.jsx'
-import Hero from './Hero.jsx'
-import TakeAPick from './TakeAPick.jsx'
-import ShowYourWorking from './ShowYourWorking.jsx'
-import RoomsGrid from './RoomsGrid.jsx'
-import ClosingCta from './ClosingCta.jsx'
+import ShellHeader from './shell/ShellHeader.jsx'
+import HomeAlive from './HomeAlive.jsx'
 import JukeLogo from './juke-logo/JukeLogo.jsx'
 import ComingSoonModal from './ComingSoonModal.jsx'
 import EarlyAccessModal from './EarlyAccessModal.jsx'
 import { ROOM_SIGNUP_SOURCE, roomSignupCopy } from './icons.jsx'
 import { freshnessLine } from './dataFreshness.js'
-import HomePhone from './phone/HomePhone.jsx'
 
-// METHOD is Juke's own real content — three sections of one doc plus the
-// doc's own top, the same four destinations the footer has carried since
-// before this pass.
+/* METHOD is Juke's own real content: the how-it-works doc, plus the
+   sections of it worth naming on their own.
+
+   Every one of these lands on the same document, so what a label owes the
+   reader is the SECTION it actually reaches. "How scoring works" was here
+   and owed that twice over. It read as a near-twin of "How it works" one
+   line above it — reported exactly that way — and it pointed at #s03,
+   which is "The league, and everything that follows from it": teams,
+   rounds, lineup, bench, with scoring one item in a list of settings.
+   Somebody clicking it to learn how points are calculated got a summary of
+   league defaults. Dropped rather than renamed, because the section is
+   reachable by scrolling from the top link and the settings themselves
+   live on the setup screen.
+
+   "The draft grade" is #s06, which had no link to it at all — a whole
+   section, on one of the app's headline features, that the footer never
+   named.
+
+   The top-level link stays and is not redundant with a nav item:
+   ShellHeader went to three tabs and its own comment records How It Works
+   moving here, and SiteNav is the retired header that survives on one
+   screen. This is the only place it appears. */
 const METHOD_LINKS = [
   { label: 'How it works', href: '/docs/draft-room-how-it-works.html' },
-  { label: 'How scoring works', href: '/docs/draft-room-how-it-works.html#s03' },
-  { label: 'VORP explained', href: '/docs/draft-room-how-it-works.html#s07' },
   { label: 'Data sources', href: '/docs/draft-room-how-it-works.html#s02' },
+  { label: 'The draft grade', href: '/docs/draft-room-how-it-works.html#s06' },
+  { label: 'VORP explained', href: '/docs/draft-room-how-it-works.html#s07' },
 ]
 
 // Phase 0 of accounts turned Contact and Support into a real destination —
@@ -113,10 +127,28 @@ function useDataFreshness() {
 // reused here rather than re-decided. Listing all six (not just the live
 // one) is the point of this pass: a reference footer whose own product-list
 // column names everything the company offers, not just what's shipped.
+/* Every room with a page is a link to it, live or locked.
+
+   This used to send anything not `live` to an early-access signup modal,
+   which was right while a locked room had nowhere to go. It now has
+   somewhere: design_handoff_v3_alive gives all four in-season rooms a real
+   page at #/rooms/<slug>, showing a blurred preview behind an unlock card.
+
+   Leaving the modal here meant the same room behaved differently depending
+   which link you pressed — the lobby card opened the room, the footer
+   opened a dialog — which is the handoff's own interaction rule broken in
+   the one place nobody looks: "Locked card tap (guest) -> same room,
+   showing the locked preview (not a modal)." A dialog answers a question
+   the reader did not ask and takes away the preview that is the pitch.
+
+   The modal path stays for a room with no `slug`, which is a room with no
+   page yet. There are none today; that is the branch that stops this
+   silently 404ing the day one is added. */
 function FooterRoomLink({ room, onSignup, className }) {
-  if (room.live && room.href) {
+  const href = room.href || (room.slug ? `#/rooms/${room.slug}` : null)
+  if (href) {
     return (
-      <a href={room.href} className={className}>
+      <a href={href} className={className}>
         {room.name}
       </a>
     )
@@ -140,7 +172,7 @@ function FooterColumn({ title, children }) {
 // The brand stack — logo, then socials, in that order — is identical on
 // both breakpoints, so it gets its own component rather than being written
 // out twice.
-function FooterBrandStack({ onSocialClick }) {
+function FooterBrandStack({ onSocialClick, linkClass }) {
   return (
     <div className="flex flex-col items-start gap-5">
       {/* §11's footer repeat of the slogan — wrapped with the logo in its
@@ -168,6 +200,29 @@ function FooterBrandStack({ onSocialClick }) {
           </button>
         ))}
       </div>
+
+      {/* The one place the address appears, and it sits here because this
+          is already the "reach us" cluster — the socials are the other way
+          to do the same thing, and the two belong together rather than one
+          being furniture and the other a column heading.
+
+          It was under BOTH "Company" and "Legal" before, on the reasoning
+          that Company is who to write to and Legal is who to write to about
+          this page. Those two headings sit side by side about 150px apart
+          in one row, so the same glance takes in both, and the argument
+          would equally have justified a third copy under Method. Printing a
+          plaintext address twice on a public page also doubles what a
+          scraper collects for no extra reach.
+
+          Shown rather than labelled "Contact", which is unchanged and
+          deliberate: a bare mailto: does nothing visible on a machine with
+          no mail client, and that was reported as "nothing happens when I
+          click on either link in the footer". Somebody with a mail client
+          still gets a compose window; everybody else can read it and copy
+          it, which is what they were trying to do. */}
+      <a href={`mailto:${CONTACT_EMAIL}`} className={linkClass} title={`Email ${CONTACT_EMAIL}`}>
+        {CONTACT_EMAIL}
+      </a>
     </div>
   )
 }
@@ -211,47 +266,69 @@ export default function Homepage() {
           nothing gets slower; it simply does not get faster. If it ever
           needs to, the fix is to prerender two documents, not to move this
           back to a hook. */}
-      <div className="sm:hidden">
-        <HomePhone />
-      </div>
+      {/* One tree at every width now — see HomeAlive.jsx. The two-tree
+          split this used to carry (a sm:hidden HomePhone and a hidden
+          sm:block desktop page) was the mobile pass's own product decision
+          and design_handoff_v3_alive reverses it for this screen: 2ag and
+          3ag are one set of content in two layouts, not two screens. That
+          also ends the cost the comment above describes, since there is no
+          longer a second tree mounting invisibly on every device. */}
+      <div className="min-h-screen overflow-x-hidden bg-surface-page font-body text-voidInk-primary">
+      <ShellHeader active="home" />
 
-      <div className="hidden min-h-screen overflow-x-hidden bg-surface-page font-body text-voidInk-primary sm:block">
-      <Header />
+      <main>
+        <HomeAlive />
 
-      {/* The fixed header is just its nav row now — the status strip that
-          used to sit under it (h-8 + 1px border) was removed as redundant.
-          pt-14/pt-16 matches Header.jsx's own h-14/h-16 exactly, which is
-          why this can be the Tailwind scale rather than an arbitrary value
-          with arithmetic in a comment: there's nothing left to add to it.
-          index.css's scroll-padding-top tracks the same two heights, plus
-          its own 8px of anchor-scroll slack — see the comment there. */}
-      <main className="pt-14 md:pt-16">
-        <Hero />
-        <TakeAPick />
-        <ShowYourWorking />
-        <RoomsGrid />
-        <ClosingCta />
+        {/* TakeAPick, ShowYourWorking and ClosingCta used to render here,
+            desktop-only, and the owner has taken them off the page. The
+            homepage is what design_handoff_v3_alive draws and then the
+            footer, which is the handoff's own shape plus the one thing it
+            omits (the footer holds the only links to the privacy policy and
+            terms, so it was never optional).
+
+            **Deprecated, not deleted.** All three components are still in
+            web/src/components, still complete, still importing cleanly —
+            they are simply not rendered, which is the same state Header,
+            Hero, RoomsGrid and phone/HomePhone are in after this handoff
+            replaced them. Bringing any of them back is re-adding an import
+            and a line here; there is nothing to reconstruct.
+
+            Worth knowing what leaves with them, because it is not only
+            layout. ShowYourWorking is this project's "Claim and proof"
+            section — three claims down the page with the thing each one
+            claims running beside it, on live board data — and it is the
+            only place the product's own numbers are shown being computed.
+            TakeAPick is the interactive third-round demo. CLAUDE.md has a
+            section on each; both are still accurate about the components,
+            which still exist. */}
       </main>
 
       {/* ---------- Footer, restructured after a real competitor's (Sleeper's)
           own footer ---------- Logo, then socials, stacked top-left;
           everything else in equal-width columns to the right —
-          Rooms/Method/Company/Legal here, standing in for Sleeper's own
-          Available-on/Company/Resources/Play columns. Rooms and Method are
-          Juke's real content; Company now holds one real destination
-          (Contact, a mailto:) rather than the reference footer's four —
-          About Us and Careers never had anywhere to point and are gone
-          rather than left opening a "nothing here yet" dialog. Support in
-          Legal is a mailto: too, the same address as Contact — one real way
-          to reach a person beats two ways to open the same dead end.
+          Rooms/Method/Legal.
+
+          Three columns, not the reference footer's four. That shape was
+          taken from Sleeper's (Available-on/Company/Resources/Play) and it
+          works there because all four hold a set. Ours held two real ones
+          and then a "Company" column whose entire contents was one email
+          address, with the same address repeated under Legal beside two
+          documents. A heading promises a set; one item under it is what
+          made the footer read as unfinished, rather than anything about the
+          address itself. About Us and Careers had gone earlier for having
+          nowhere to point, which is what left it at one.
+
+          So Company goes, Legal is two legal documents again, and the
+          address appears once — in the brand stack, next to the socials,
+          which is where the other way of reaching a person already was.
           gap-x-10/gap-y-12 on both breakpoints is the one spacing scale for
           the whole footer, rather than a different hand-picked value per
           section, which is what "evenly spaced" actually means here: every
           gap between every pair of sections is the same number, not just
           visually close. */}
       <footer className="mt-[72px] border-t border-line-hairline bg-surface-nav">
-        <div className="mx-auto flex max-w-[1200px] flex-col gap-12 px-10 py-14 lg:grid lg:grid-cols-5 lg:gap-x-10 lg:gap-y-12">
-          <FooterBrandStack onSocialClick={openSocial} />
+        <div className="mx-auto flex max-w-[1200px] flex-col gap-12 px-10 py-14 lg:grid lg:grid-cols-4 lg:gap-x-10 lg:gap-y-12">
+          <FooterBrandStack onSocialClick={openSocial} linkClass={roomLinkClass} />
 
           <FooterColumn title="The Rooms">
             {rooms.map((room) => (
@@ -267,21 +344,12 @@ export default function Homepage() {
             ))}
           </FooterColumn>
 
-          <FooterColumn title="Company">
-            <a href={`mailto:${CONTACT_EMAIL}`} className={roomLinkClass}>
-              Contact
-            </a>
-          </FooterColumn>
-
           <FooterColumn title="Legal">
             {LEGAL_LINKS.map((link) => (
               <a key={link.label} href={link.href} className={roomLinkClass}>
                 {link.label}
               </a>
             ))}
-            <a href={`mailto:${CONTACT_EMAIL}`} className={roomLinkClass}>
-              Support
-            </a>
           </FooterColumn>
         </div>
 

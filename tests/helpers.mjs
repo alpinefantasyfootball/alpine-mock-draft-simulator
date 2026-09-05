@@ -141,7 +141,7 @@ export function clickHidden(page, id) {
   return page.evaluate((id) => document.getElementById(id).click(), id);
 }
 
-export async function openApp(context, path = "#/draft-room") {
+export async function openApp(context, path = "#/draft-room", opts = {}) {
   const page = await context.newPage();
   await page.addInitScript(instrumentation);
   await page.goto(`${SITE}/index.html${path}`);
@@ -153,28 +153,77 @@ export async function openApp(context, path = "#/draft-room") {
   await page.waitForFunction(
     () => typeof state === "object" && typeof Live === "object" && typeof suggestions === "function");
 
-  /* Then wait for the cold-load overlay to leave.
+  /* Then wait for the cold-load overlay to leave, because a person has to.
 
-     #boot-sonar is fixed at z-index 9999 over the whole page, and since it
-     started being held for a minimum of 900ms rather than removed as soon as
-     React paints, it genuinely covers the page for about a second after load.
-     Every test that clicks or hit-tests immediately was racing it — phone
-     .spec.mjs's "nothing is sitting on top of the Start button" caught it
-     first, reporting the overlay's own wordmark as the thing covering the
-     button, which was true and not the bug that test exists to find.
+     #boot-sonar is fixed at z-index 9999 over the whole page and it takes
+     input: `elementFromPoint` at the Start button's centre returns the
+     overlay's own artwork, and `page.mouse.down()` on the bottom sheet's drag
+     handle is swallowed outright. Handled here rather than per-test because it
+     is not one test's problem — it is a property of every page load, and
+     waiting for it is what makes a test's timing match a user's.
 
-     Handled here rather than per-test because it is not one test's problem:
-     it is a property of every page load, and a person cannot click through the
-     overlay either. Waiting for it is what makes a test's timing match a
-     user's.
+     **The predicate this replaces had stopped waiting for anything, and the
+     reason is a reversal in the product rather than a mistake in the test.**
+     It read `!document.documentElement.hasAttribute("data-standalone") ||
+     !document.getElementById("boot-sonar")`, which was exactly right while the
+     overlay was scoped to the installed app's cold launch: index.html hid it
+     outright everywhere else, theme.js stamped `data-standalone` only under
+     `matchMedia('(display-mode: standalone)')`, and a plain
+     `browser.newContext()` never reports standalone — so the left side was
+     true on the first tick and there was genuinely nothing to wait for.
 
-     Tolerant of the overlay not existing at all — 404.html and the docs pages
-     have no loader — and of it never leaving, which is the failure sonar
-     .spec.mjs owns; a hard wait here would turn that into a timeout in every
-     other file instead. */
-  await page
-    .waitForFunction(() => !document.getElementById("boot-sonar"), null, { timeout: 12000 })
-    .catch(() => {});
+     The owner then reversed that scoping (see index.html's own note: "an
+     overlay restricted to installed users is an overlay almost nobody sees at
+     all"). Breach plays on every cold load now, theme.js no longer stamps the
+     attribute, and main.jsx's teardown runs unconditionally. Which left the
+     left-hand side of that `||` permanently true against an overlay that had
+     just stopped being inert: the predicate resolved on the first raf tick and
+     openApp() handed back a page with five seconds of animation still over it.
+
+     It surfaced as two phone.spec.mjs failures that read like app bugs —
+     "nothing is sitting on top of the Start button" reporting the overlay's
+     own artwork as the thing covering the button, and the bottom sheet
+     refusing to grow on a tap — and both were the page being handed over too
+     early. Measured on the Breach build: the button hit-tested as covered at
+     600ms through 5000ms and was clickable from 6000ms.
+
+     Deepwater moved that window forward by more than half. The overlay holds
+     3100ms and is gone by ~3380 (3100 + a 260ms fade + the 280ms removal
+     beat), which is the 3000-4200ms window sonar.spec.mjs asserts. It held
+     2500 when it shipped; the extra 600ms is a beat on the finished mark,
+     added after the owner watched the deployed site — see main.jsx.
+     That is worth roughly three seconds on each of the ninety-six openApp()
+     calls in this suite — several minutes of wall clock, and the largest
+     single saving in it. Nothing about this wait had to change to collect it,
+     which is the argument for having written it as a wait on the overlay's
+     actual absence rather than on a duration.
+
+     The ceiling is 6000ms, real headroom over that documented window rather
+     than a hopeful number. If the overlay outstays it the element is removed
+     rather than the wait failing: an overlay that never leaves is one bug and
+     it is sonar.spec.mjs's to report, and a hard wait here would turn it into
+     ninety-six timeouts in every other file instead — the same tolerance the
+     predicate this replaces was written with.
+
+     Tolerant of the overlay not existing at all, and that is now the common
+     case rather than an edge one: splash-boot.js gates the splash to one play
+     per session, so the second and later navigations inside a single browser
+     context find no overlay and this resolves on the first tick. A spec that
+     needs to watch it play needs a fresh context, which is what
+     loadWithProbe() in sonar.spec.mjs does.
+
+     `keepBootOverlay` is for sonar.spec.mjs alone, which measures the
+     overlay's whole life from an init script and needs it left exactly as the
+     app plays it. Tolerant of the overlay not existing at all, too: 404.html
+     and the docs pages have no loader. */
+  if (!opts.keepBootOverlay) {
+    await page
+      .waitForFunction(() => !document.getElementById("boot-sonar"), null, { timeout: 6000 })
+      .catch(() => page.evaluate(() => {
+        const el = document.getElementById("boot-sonar");
+        if (el) el.remove();
+      }).catch(() => {}));
+  }
 
   await page.evaluate(() => window.__watchSends());
   return page;
@@ -266,8 +315,54 @@ export async function startSoloDraft(page) {
   // draft outright, so it is the control that refuses an illegal league
   // (15 rounds against a 14-slot roster, say) and there is no second
   // button left to ask.
-  const startMock = page.locator('#draftroom-root button:text-is("Start mock draft")');
+  /* [data-start-draft], not the label, and the rename that forced it is
+     the fourth one this control has had. It was matched here as the exact
+     string "Start mock draft", which is DraftLocker's own wording -- and
+     design_handoff_v3_alive made DraftRoomEntry the Lobby at EVERY width,
+     whose button reads "Start a mock draft". One word, five specs, and the
+     failure surfaces at `waitForFunction(() => state.started)` fifteen
+     seconds later rather than at the click, so nothing in the output names
+     the button at all.
+
+     Both real Start buttons carry the attribute (DraftRoomEntry and
+     NewMockPanel), which is what CLAUDE.md's own rule already says to
+     anchor on: an attribute says what a control IS, a label says what it
+     currently reads. The `.first()` is because a room can have this
+     screen's Start and NewMockPanel's on the page together. */
+  const startMock = page.locator('#draftroom-root [data-start-draft]').first();
   if (await startMock.count()) {
+    /* Wait for the board before asking whether the button is enabled.
+
+       setupProblem() refuses a draft while the board is still loading, and
+       it is right to: players.js and stats.js are deferred, stats.js alone
+       is 769KB, and a draft genuinely cannot start without them. Locally
+       they are there almost immediately. Against production they are a real
+       download over a real network, so this raced them — and the throw
+       below reported "the Start button refused this league", which reads as
+       an illegal league configuration and is nothing of the kind.
+
+       It surfaced as a different test failing on each run, because whichever
+       one happened to lose the race is the one that reported: board-card and
+       record on one production run, grade and juke-score on the next, none
+       of them locally, ever. That is what made it look like flake instead of
+       one shared cause.
+
+       Waited on the button rather than on dataReady(), because the button is
+       what this function is about to press and the engine landing is only
+       one of the reasons it might be disabled. Bounded and then re-checked,
+       so a genuinely illegal league still falls through to the throw with
+       its own accurate message rather than being reported as a timeout. */
+    await startMock.waitFor({ state: "attached" });
+    await page
+      .waitForFunction(
+        () => {
+          const b = document.querySelector("#draftroom-root [data-start-draft]");
+          return !!b && !b.disabled;
+        },
+        null,
+        { timeout: 20000 },
+      )
+      .catch(() => {});
     if (!(await startMock.isEnabled())) throw new Error("the Start button refused this league");
     await startMock.click();
   }
@@ -290,6 +385,30 @@ export async function startSoloDraft(page) {
     await startBtn.click();
   }
   await page.waitForFunction(() => state.started, null, { timeout: 15000 });
+
+  /* And then wait for the room to actually be on screen, which is a
+     different fact from the draft having started.
+
+     state.started flips synchronously inside engine.startDraft(), while
+     DraftRoom.jsx holds a full-viewport DraftRoomLoader over the room for a
+     floor of its own before rendering anything. So a caller that starts a
+     draft and then reads #draftroom-root is reading the loader — "Entering
+     draft roomSeating 12 teams" — not the room.
+
+     deep-board.spec.mjs found this the moment that floor moved from 1600ms
+     to 2400: it waited a flat 2000ms after starting and asked whether the
+     Players table carried its "Real ADP ends here" divider. The divider was
+     fine; the table simply had not been drawn yet, and the test reported it
+     as missing. At 3500ms it was there.
+
+     Waiting for the loader to leave rather than for a duration is the same
+     rule phone.spec.mjs already follows — and the reason it belongs here
+     rather than in that one spec is that the duration was never the thing
+     any caller cared about. A number in a spec is a number that has to be
+     found and changed every time this floor moves; this does not. */
+  await page
+    .waitForFunction(() => !document.querySelector("[data-draft-loader]"), null, { timeout: 20000 })
+    .catch(() => {});
 }
 
 export function roomView(page) {

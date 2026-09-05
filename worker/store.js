@@ -1,29 +1,33 @@
 /* ==========================================================
-   Juke — the cache database
+   Juke — the cache database, and now one real table
 
-   D1, bound as `DB`. Two things live in it: Sleeper's player pool,
-   refreshed on a cron, and Tank01 headlines, written as a
-   side-effect of serving them.
+   D1, bound as `DB`. Sleeper's player pool and Tank01 headlines live here,
+   refreshed on a cron and as a side-effect of serving them respectively —
+   and, since real accounts, one row per signed-in person (see "Accounts"
+   below).
 
-   Three rules hold everywhere in this file.
+   Two rules hold everywhere in this file.
 
    **A missing binding is a normal condition, not a fault.** `wrangler dev`
    with no database_id, a keyless local run, the tests that drive the news
    path against a stub — none of those have a database and all of them must
    keep working exactly as they did. Every function here answers "no" to an
    absent `env.DB` rather than throwing, so nothing above it needs to know
-   whether the cache exists.
+   whether the database exists.
 
    **Nothing here ever throws.** The news route's contract is that it fails by
    disappearing — the same contract the score strip has. A rejected promise on
    this path is an unhandled rejection on a page that is otherwise fine, so
    every call is wrapped and the failure is a return value.
 
-   **This is a cache and never a source of truth.** players.js and stats.js are
-   the board, generated nightly, and a room pins the version it started on
-   because the CPU wobble reads a player's position in that array. A board
-   built from here instead would be the league shape written down twice, in
-   the one place where two clients disagreeing forks a live draft.
+   **A third rule — "this is a cache and never a source of truth" — used to
+   hold everywhere in this file and no longer does.** It is still exactly
+   true of the player pool (players.js/stats.js are the board, generated
+   nightly, and a room pins the version it started on) and of the headline
+   cache. It was never true of `signups`, a real list with nothing upstream
+   to be a cache of, and `users` (below) is the same shape: Clerk is the
+   source of truth for identity, but the row itself — that this person has
+   an account at all, in this database — belongs to Juke and nowhere else.
    ========================================================== */
 
 /* SQLite has no date type, so every timestamp in this database is epoch
@@ -447,6 +451,253 @@ export async function storeSignup(env, email, source) {
 }
 
 /* ----------------------------------------------------------
+   Accounts
+   ---------------------------------------------------------- */
+
+/* Record that a verified Clerk user was seen, and return whether the row
+   is new. auth.js decides *who* this is (Clerk's own signature check);
+   this function only ever runs after that has already succeeded, so
+   `clerkId` here is trusted the same way a room's own `member` id is
+   trusted once a socket has been accepted — verification is somebody
+   else's job and already done by the time this is called.
+
+   One statement, not a SELECT-then-INSERT: two round trips racing each
+   other on somebody's first request is exactly the kind of thing this
+   project's CLAUDE.md keeps finding as a bug once two clients (or two
+   in-flight requests from one impatient tab) disagree about which one
+   created the row. `ON CONFLICT DO UPDATE` makes it one statement and one
+   answer regardless of how many requests get here first — `created_at` is
+   `excluded.created_at` only when the row does not yet exist, because a
+   real INSERT can't happen twice; every later call is only ever a
+   `last_seen_at` bump. */
+export async function touchUser(env, clerkId) {
+  if (!env.DB) return false;
+
+  try {
+    const stamp = nowSeconds();
+    await env.DB.prepare(
+      "INSERT INTO users (clerk_id, created_at, last_seen_at) VALUES (?, ?, ?)" +
+      " ON CONFLICT(clerk_id) DO UPDATE SET last_seen_at = excluded.last_seen_at"
+    ).bind(clerkId, stamp, stamp).run();
+    return true;
+  } catch (err) {
+    console.error("user touch failed:", err && err.message);
+    return false;
+  }
+}
+
+/* ----------------------------------------------------------
+   Saved drafts and history
+
+   app.js already owns two localStorage keys and a versioned shape for
+   each — SAVE_KEY (one in-progress draft) and HISTORY_KEY (an array of
+   finished ones). Every function below stores or returns that exact JSON
+   whole, in a `data` column, rather than decomposing it into columns of
+   our own — see migrations/0004_drafts.sql's own comment for why. This
+   file's job stops at "whose row is this and when did it change"; what
+   the JSON inside means is entirely app.js's business, on both ends.
+   ---------------------------------------------------------- */
+
+/* The one in-progress draft a signed-in person has, already parsed, or
+   null. Deliberately not `{ data, updatedAt }`: saveDraft() already writes
+   its own `savedAt` (ms, Date.now()) inside the blob, so a second,
+   server-timestamped `updatedAt` alongside it would be the same fact
+   twice, in two different units, under two different names — exactly the
+   trap this project's CLAUDE.md keeps finding bugs from. Whatever
+   compares "is the server's copy newer than mine" reads `data.savedAt`
+   on both sides. `updated_at` still exists as a real column, for D1's own
+   bookkeeping — it is just never handed back out. */
+export async function getSavedDraft(env, clerkId) {
+  if (!env.DB) return null;
+
+  try {
+    const row = await env.DB.prepare(
+      "SELECT data FROM saved_drafts WHERE clerk_id = ?"
+    ).bind(clerkId).first();
+    return row ? JSON.parse(row.data) : null;
+  } catch (err) {
+    console.error("saved-draft read failed:", err && err.message);
+    return null;
+  }
+}
+
+/* The `users` row every write below depends on, created on the way past.
+
+   `saved_drafts.clerk_id` and `draft_history.clerk_id` both carry
+   `REFERENCES users(clerk_id)`, and D1 enforces foreign keys — verified,
+   not assumed: an insert against a clerk_id with no users row fails with
+   `FOREIGN KEY constraint failed: SQLITE_CONSTRAINT_FOREIGNKEY`.
+
+   That row was only ever created by touchUser(), and touchUser() is only
+   called from `GET /me` — which nothing on the client has ever called.
+   So every save and every history entry, for every account, failed the
+   moment it reached D1: reads answered 200 (an empty account and a
+   missing row look identical), writes came back `{ok:false}`, and because
+   every layer here answers a failure with a falsy value the page could
+   only say "could not reach your account". Reported from a real signed-in
+   locker showing eight mocks it could not upload.
+
+   Batched with the write rather than run before it: one round trip, and
+   the two either both land or neither does, which is what the foreign key
+   is asking for. ON CONFLICT DO UPDATE keeps it a touch rather than an
+   error on the ordinary case where the row is already there — the same
+   statement touchUser() runs, deliberately identical so the two cannot
+   drift about what a user row is. */
+function upsertUser(env, clerkId, stamp) {
+  return env.DB.prepare(
+    "INSERT INTO users (clerk_id, created_at, last_seen_at) VALUES (?, ?, ?)" +
+    " ON CONFLICT(clerk_id) DO UPDATE SET last_seen_at = excluded.last_seen_at"
+  ).bind(clerkId, stamp, stamp);
+}
+
+/* Replace the one saved draft, whole — the same "there is only ever one"
+   contract saveDraft() already enforces client-side by writing to a
+   single localStorage key rather than appending to a list. `dataText` is
+   the already-serialised JSON string the route handler validated, not
+   re-serialised here, so this function never has an opinion about what is
+   inside it. */
+export async function putSavedDraft(env, clerkId, dataText) {
+  if (!env.DB) return false;
+
+  try {
+    const stamp = nowSeconds();
+    await env.DB.batch([
+      upsertUser(env, clerkId, stamp),
+      env.DB.prepare(
+        "INSERT INTO saved_drafts (clerk_id, data, updated_at) VALUES (?, ?, ?)" +
+        " ON CONFLICT(clerk_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at"
+      ).bind(clerkId, dataText, stamp)
+    ]);
+    return true;
+  } catch (err) {
+    console.error("saved-draft write failed:", err && err.message);
+    return false;
+  }
+}
+
+export async function deleteSavedDraft(env, clerkId) {
+  if (!env.DB) return false;
+
+  try {
+    await env.DB.prepare("DELETE FROM saved_drafts WHERE clerk_id = ?").bind(clerkId).run();
+    return true;
+  } catch (err) {
+    console.error("saved-draft delete failed:", err && err.message);
+    return false;
+  }
+}
+
+/* Every finished draft a signed-in person has, newest first — the same
+   order readHistory() already returns, so the route handler can hand the
+   array straight to the client with no re-sort. Each element is the
+   parsed entry exactly as recordHistory() built it (id, completedAt and
+   all), for the same reason getSavedDraft() stops at one blob rather than
+   a `{ data, updatedAt }` wrapper — the id and timestamp the client wants
+   are already inside it. */
+export async function listDraftHistory(env, clerkId) {
+  if (!env.DB) return [];
+
+  try {
+    const rows = await env.DB.prepare(
+      "SELECT data FROM draft_history WHERE clerk_id = ? ORDER BY completed_at DESC"
+    ).bind(clerkId).all();
+    return (rows.results || []).map((row) => JSON.parse(row.data));
+  } catch (err) {
+    console.error("history read failed:", err && err.message);
+    return [];
+  }
+}
+
+/* One entry, added or replaced whole by its own id — recordHistory()
+   mints that id client-side and it never changes, so this is always an
+   insert in practice; ON CONFLICT DO UPDATE exists for the same reason
+   touchUser()'s does, a retried request landing twice rather than a real
+   edit. */
+export async function putHistoryEntry(env, clerkId, id, dataText, completedAt) {
+  if (!env.DB) return false;
+
+  try {
+    const stamp = nowSeconds();
+    await env.DB.batch([
+      upsertUser(env, clerkId, stamp),
+      env.DB.prepare(
+        "INSERT INTO draft_history (id, clerk_id, data, completed_at, updated_at)" +
+        " VALUES (?, ?, ?, ?, ?)" +
+        " ON CONFLICT(id) DO UPDATE SET data = excluded.data," +
+        "   completed_at = excluded.completed_at, updated_at = excluded.updated_at"
+      ).bind(id, clerkId, dataText, completedAt, stamp)
+    ]);
+    return true;
+  } catch (err) {
+    console.error("history write failed:", err && err.message);
+    return false;
+  }
+}
+
+/* Scoped to the caller's own id in the WHERE clause, not just the entry
+   id — the same reason a room checks that a message came from a seat it
+   actually seated, rather than trusting a client-supplied id alone. A
+   DELETE that matched zero rows because the id belonged to someone else
+   is indistinguishable here from one that matched zero because the entry
+   never existed, which is the point: neither leaks whether the id was
+   real. */
+export async function deleteHistoryEntry(env, clerkId, id) {
+  if (!env.DB) return false;
+
+  try {
+    await env.DB.prepare(
+      "DELETE FROM draft_history WHERE clerk_id = ? AND id = ?"
+    ).bind(clerkId, id).run();
+    return true;
+  } catch (err) {
+    console.error("history delete failed:", err && err.message);
+    return false;
+  }
+}
+
+/* Everything Juke holds for one person, removed.
+
+   Clerk owns the account and deletes it on its own; this is the half Juke
+   owns, and until now there was no half. The privacy policy said so out
+   loud rather than promising otherwise — "deleting a Clerk account does
+   not currently delete the drafts Juke stored against it" — which was
+   honest and is not a resting place: somebody exercising a deletion right
+   should not have to also send an email.
+
+   Children before the parent. `saved_drafts` and `draft_history` both
+   carry `REFERENCES users(clerk_id)`, and D1 enforces it, so removing the
+   users row first fails the constraint — the mirror image of the bug that
+   made these writes fail in the first place, from the other end. One
+   batch, so a half-deleted account is not a state that can exist.
+
+   Idempotent by construction: DELETE of nothing is success, which matters
+   because a webhook retries, and Clerk retries a delivery it did not hear
+   back from. Deleting an account twice has to be as fine as deleting it
+   once. */
+export async function deleteUserData(env, clerkId) {
+  if (!env.DB) return false;
+
+  try {
+    await env.DB.batch([
+      env.DB.prepare("DELETE FROM draft_history WHERE clerk_id = ?").bind(clerkId),
+      env.DB.prepare("DELETE FROM saved_drafts WHERE clerk_id = ?").bind(clerkId),
+      // Added with 0005_leagues.sql, and adding it here is the whole point
+      // of that table having a foreign key: a new child table that this
+      // batch does not know about is an account deletion that silently
+      // leaves something behind, and the thing left behind would be which
+      // league somebody plays in. Anything keyed by clerk_id belongs in
+      // this list the day its migration lands.
+      env.DB.prepare("DELETE FROM connected_leagues WHERE clerk_id = ?").bind(clerkId),
+      env.DB.prepare("DELETE FROM users WHERE clerk_id = ?").bind(clerkId)
+    ]);
+    return true;
+  } catch (err) {
+    console.error("account delete failed:", err && err.message);
+    return false;
+  }
+}
+
+/* ----------------------------------------------------------
    Small things
    ---------------------------------------------------------- */
 
@@ -454,4 +705,107 @@ function chunk(list, size) {
   const out = [];
   for (let i = 0; i < list.length; i += size) out.push(list.slice(i, i + size));
   return out;
+}
+
+/* ---------- Connected leagues ----------
+
+   A league connection is identity, not content: which league, which member
+   of it this account is, and a small cache of the label so the header chip
+   can draw without a Sleeper round trip. The league's actual state —
+   rosters, records, points — is never stored. It is fetched and cached at
+   the edge by the snapshot route, because it changes on its own and a copy
+   here would be a second answer to "what is the score" that nothing
+   refreshes.
+
+   Same guards as every function above: a missing DB binding is a normal
+   condition, and a failure is a value rather than a throw. */
+
+export async function listLeagues(env, clerkId) {
+  if (!env.DB) return [];
+
+  try {
+    const res = await env.DB.prepare(
+      "SELECT provider, league_id, owner_id, name, season, total_teams, connected_at" +
+      " FROM connected_leagues WHERE clerk_id = ? ORDER BY connected_at DESC"
+    ).bind(clerkId).all();
+    return (res.results || []).map((r) => ({
+      provider: r.provider,
+      leagueId: r.league_id,
+      ownerId: r.owner_id,
+      name: r.name,
+      season: r.season,
+      totalTeams: r.total_teams,
+      connectedAt: r.connected_at,
+    }));
+  } catch (err) {
+    // A missing table reads exactly like an account with no leagues, which
+    // is why the write below is what tells the two apart — the same trap
+    // listDraftHistory() already documents for draft_history.
+    console.error("leagues read failed:", err && err.message);
+    return [];
+  }
+}
+
+/* Connect, or refresh what is already connected.
+
+   Batched with the users upsert for the reason upsertUser() explains at
+   length: connected_leagues.clerk_id carries a foreign key, that row is
+   only otherwise created by GET /me, and a write against a missing one
+   fails with SQLITE_CONSTRAINT_FOREIGNKEY — which is what silently broke
+   every saved draft for every account once already.
+
+   ON CONFLICT updates rather than errors, so pressing connect twice on a
+   league already connected refreshes its cached label instead of failing.
+   That is also how the snapshot route keeps the label current. */
+export async function putLeague(env, clerkId, league) {
+  if (!env.DB) return false;
+
+  const stamp = nowSeconds();
+  try {
+    await env.DB.batch([
+      upsertUser(env, clerkId, stamp),
+      env.DB.prepare(
+        "INSERT INTO connected_leagues" +
+        " (clerk_id, provider, league_id, owner_id, name, season, total_teams, connected_at, refreshed_at)" +
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)" +
+        " ON CONFLICT(clerk_id, provider, league_id) DO UPDATE SET" +
+        "   owner_id = excluded.owner_id," +
+        "   name = excluded.name," +
+        "   season = excluded.season," +
+        "   total_teams = excluded.total_teams," +
+        "   refreshed_at = excluded.refreshed_at"
+      ).bind(
+        clerkId,
+        league.provider,
+        league.leagueId,
+        league.ownerId || null,
+        league.name,
+        league.season,
+        league.totalTeams || null,
+        stamp,
+        stamp
+      ),
+    ]);
+    return true;
+  } catch (err) {
+    console.error("league write failed:", err && err.message);
+    return false;
+  }
+}
+
+export async function deleteLeague(env, clerkId, provider, leagueId) {
+  if (!env.DB) return false;
+
+  try {
+    await env.DB.prepare(
+      "DELETE FROM connected_leagues WHERE clerk_id = ? AND provider = ? AND league_id = ?"
+    ).bind(clerkId, provider, leagueId).run();
+    // Deleting nothing is a success: disconnecting a league that is
+    // already gone is the state the caller asked for, and Clerk's own
+    // webhook retries depend on the same idempotence.
+    return true;
+  } catch (err) {
+    console.error("league delete failed:", err && err.message);
+    return false;
+  }
 }

@@ -64,8 +64,10 @@ test.beforeEach(() => {
    with addInitScript so it is in place ahead of the inline <style>, which is
    the only way to catch a flash that resolves in 300ms. */
 const PROBE = () => {
-  window.__sonar = { seen: false, maxOpacity: 0, removedAt: null, existed: false };
-  const t0 = Date.now();
+  window.__sonar = { seen: false, maxOpacity: 0, removedAt: null, existed: false, revealStart: null };
+  /* performance.now() rather than a Date.now() delta, so removedAt is on the
+     same clock as the start-pass stamp splash-boot.js writes and the two can
+     be subtracted. */
   const tick = () => {
     const el = document.getElementById("boot-sonar");
     if (el) {
@@ -73,10 +75,28 @@ const PROBE = () => {
       const o = parseFloat(getComputedStyle(el).opacity) || 0;
       if (o > window.__sonar.maxOpacity) window.__sonar.maxOpacity = o;
       if (o > 0.02) window.__sonar.seen = true;
+      /* When the composition actually began — read off the element, which is
+         where splash-boot.js records it.
+
+         This used to scan the animations and take the earliest start time,
+         and got it wrong twice in two different ways: once by scanning a
+         different set from the one main.jsx scanned (the mark's shadow root
+         alone, against main.jsx's overlay-plus-shadow-root), and once by
+         counting #boot-sonar's own dismissal failsafe as part of the picture.
+         Both produced a plausible number that was not the one under test.
+
+         There is nothing left to infer. Every finite layer now ships inert
+         and splash-boot.js starts them in one pass, stamping the moment it
+         does; that stamp IS the composition's zero, for this file and for
+         main.jsx alike. */
+      if (window.__sonar.revealStart == null) {
+        const stamped = el.getAttribute("data-splash-started-at");
+        if (stamped !== null) window.__sonar.revealStart = Number(stamped);
+      }
     } else if (window.__sonar.existed && window.__sonar.removedAt == null) {
-      window.__sonar.removedAt = Date.now() - t0;
+      window.__sonar.removedAt = performance.now();
     }
-    if (Date.now() - t0 < 6000) setTimeout(tick, 16);
+    if (performance.now() < 9000) setTimeout(tick, 16);
   };
   tick();
 };
@@ -84,14 +104,18 @@ const PROBE = () => {
 async function loadWithProbe(browser, opts, path = "#/") {
   const context = await browser.newContext(opts);
   await context.addInitScript(PROBE);
-  const page = await openApp(context, path);
+  /* `keepBootOverlay` because this file is the one that measures the overlay
+     itself: openApp() otherwise waits it out (and removes it if it outstays
+     its window), which is right for every other spec and would erase exactly
+     what PROBE is here to record. */
+  const page = await openApp(context, path, { keepBootOverlay: true });
   return { context, page };
 }
 
 for (const [label, opts] of [["a phone", PHONE], ["a desktop", DESKTOP]]) {
   test(`the cold-load overlay comes down on ${label}, and leaves nothing over the page`, async ({ browser }) => {
     const { context, page } = await loadWithProbe(browser, opts);
-    await page.waitForTimeout(5800);
+    await page.waitForTimeout(4600);
 
     const sonar = await page.evaluate(() => window.__sonar);
     expect(sonar.existed, "the overlay is in the served markup").toBe(true);
@@ -104,9 +128,14 @@ for (const [label, opts] of [["a phone", PHONE], ["a desktop", DESKTOP]]) {
        working page in every other check — the content is all there underneath
        it — and only a hit test finds it. */
     const reachable = await page.evaluate(() => {
-      /* [data-hero-cta], not a text match. Three anchors on this page read
-         "Enter the Draft Room" — the hero's, the closing band's, and Header's
-         sticky bottom bar — and the sticky one is the first in document order.
+      /* [data-hero-cta], not a text match. Three anchors on this page used
+         to read "Enter the Draft Room" — the hero's, the closing band's and
+         Header's sticky bottom bar — and the sticky one was first in
+         document order. None of the three is on the page any more (Hero and
+         Header were replaced by HomeAlive/ShellHeader; ClosingCta was taken
+         off it), so the collision is gone and the reasoning is not: the
+         marker is what says which control is the page's primary action, and
+         that has now moved twice.
          It is also translated off-screen by `translate-y-full` while the hero
          CTA is visible, and a translated element still reports a non-zero box,
          so a height check does not exclude it. Hit-testing its centre asks
@@ -146,8 +175,11 @@ for (const [label, opts] of [["a phone", PHONE], ["a desktop", DESKTOP]]) {
    Fast 4G (first visible 947ms) or slower ever did.
 
    The owner overruled that deliberately. The delay is gone and main.jsx holds
-   the overlay for MIN_VISIBLE_MS (4900) measured from navigation start, so it
-   is seen every time and always for long enough to finish its own animation.
+   the overlay for MIN_VISIBLE_MS (3100) measured from the reveal's own first
+   painted frame, so it is seen every time and always for long enough to
+   finish its own animation — on a slow connection as well as a fast one,
+   which the earlier "measured from navigation start" version could not
+   promise. See main.jsx's revealStart.
 
    Two bounds, not one. A floor, because the whole point is that it is actually
    seen. And a ceiling, because this now costs every visit about a second before
@@ -155,7 +187,7 @@ for (const [label, opts] of [["a phone", PHONE], ["a desktop", DESKTOP]]) {
    thing to catch is that price quietly growing. */
 test("the loader is shown on every load, and does not outstay its welcome", async ({ browser }) => {
   const { context, page } = await loadWithProbe(browser, DESKTOP);
-  await page.waitForTimeout(6000);
+  await page.waitForTimeout(4600);
   const sonar = await page.evaluate(() => window.__sonar);
 
   expect(sonar.existed, "the overlay is in the served markup").toBe(true);
@@ -164,20 +196,44 @@ test("the loader is shown on every load, and does not outstay its welcome", asyn
     `it reached full opacity (got ${sonar.maxOpacity}) on a warm local load`,
   ).toBeGreaterThan(0.9);
 
-  /* The floor is the overlay's own choreography rather than a chosen number.
-     Sonar's ring loop shipped this same shape of bound; Breach II's own last
-     arrival is the closing ripple, which is visually settled at opacity 0 by
-     about 4680ms — a .55 * 4000ms delay (see index.html's --ripple) plus the
-     62% point of its own --total-length run, where breachRipple's keyframe
-     already holds opacity at 0 — see main.jsx's own comment for the rest of
-     the arrival table. An earlier version of this held 900ms and asserted
-     800, back when the mark alone decided it — which passed while the
-     wordmark was still animating and the third ring had never appeared at
-     all. The floor sits past every element's arrival now, Breach's included,
-     so a regression that cuts the composition short fails here rather than
-     shipping a loader nobody sees complete. */
-  expect(sonar.removedAt, "it stays until the whole composition has arrived").toBeGreaterThan(4800);
-  expect(sonar.removedAt, "and it is gone inside a reasonable window").toBeLessThan(5800);
+  /* The bounds are the overlay's own choreography rather than chosen numbers,
+     and they are measured FROM THE START PASS rather than from navigation
+     start. Both halves of that matter.
+
+     The composition is 2700ms — the design package's figure, and the last
+     thing in it is the eye bloom settling at 2650 with a 50ms hold. main.jsx
+     then fades over 260ms and removes the element 280ms after beginning the
+     fade, so a healthy load has removedAt at startPass + 2980.
+
+     The deciding elements are split across two files this repository does not
+     re-time by eye: the drop sequence is in index.html, the mark's rise, teeth
+     and eyes are inside <juke-mark>'s shadow root, and juke-mark.js ships
+     unedited. So 2700 is a published figure this repo matches rather than one
+     it can derive. If it ever looks wrong, check the design package first.
+
+     Relative, not absolute, and that is a fix rather than a tidy-up. These
+     used to be offsets from the init script's own t0 — a claim about how long
+     the whole page takes to load and only incidentally about the overlay. A
+     render-blocking cross-origin font request delays the first painted frame,
+     and the composition now starts at that frame rather than before it, so an
+     absolute bound would fail for the fix as loudly as for a regression and
+     pass on a fast run while a slow one shipped truncated.
+
+     2800 for the floor rather than 2980: removedAt is sampled on a 16ms tick
+     and the start pass waits two frames past first paint, so this carries a
+     few frames of slack in both directions and a bound sitting exactly on the
+     figure would flake. The ceiling is the real assertion — 3600 leaves room
+     for a slow CI frame without admitting a hold that has quietly grown.
+
+     The absolute ceiling stays as a separate, much looser assertion, because
+     "relative to the start pass" stops meaning anything if the pass never
+     runs: 8000 is #boot-sonar's own splash-boot-failsafe delay, past which
+     two dismissals are fighting each other. */
+  expect(sonar.revealStart, "the start pass stamped when the composition began").not.toBeNull();
+  const held = sonar.removedAt - sonar.revealStart;
+  expect(held, "it stays until the whole composition has arrived").toBeGreaterThan(2800);
+  expect(held, "and it is gone inside a reasonable window").toBeLessThan(3600);
+  expect(sonar.removedAt, "and never past its own failsafe").toBeLessThan(8000);
 
   await context.close();
 });

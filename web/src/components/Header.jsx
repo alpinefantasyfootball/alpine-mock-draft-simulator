@@ -183,47 +183,34 @@ export default function Header() {
           />
         </nav>
 
-        {/* "Get early access" stays a text link at every width — the same
-            one-tap-not-two reasoning this used to carry for "Log in" alone,
-            now that there's only the one account control to show. The
-            hamburger sheet's own copy of AccountButtons (MobileNavSheet.jsx)
-            opens the identical modal, so a visitor who opens the sheet
-            instead sees the same offer rather than a different one.
+        {/* One AccountButtons at every width, and the hamburger only below md.
 
-            whitespace-nowrap: this label is more than twice as long as "Log
-            in" was, sharing this row with the hamburger at 390px — measured
-            comfortable at that width, but a button's default white-space
-            lets it wrap onto a second line rather than overflow, and a
-            wrapped label here would sit at a different height from the
-            44px hamburger beside it. Nothing this codebase's own truncation
-            rule prefers over the alternative: this text is never cut off,
-            it just refuses to stack. */}
-        <div className="ml-auto flex shrink-0 items-center gap-1 md:hidden">
-          <button
-            type="button"
-            onClick={() =>
-              modalRef.current?.open(
-                "Accounts aren't live yet. Leave an email and we'll tell you the day your " +
-                  'locker follows you between devices.',
-                'header'
-              )
-            }
-            className="inline-flex h-11 items-center justify-center whitespace-nowrap rounded-full px-3 text-sm text-white/60 transition-colors hover:text-white"
-          >
-            Get early access
-          </button>
+            This slot used to hold a "Get early access" button below md whose
+            modal said "Accounts aren't live yet. Leave an email and we'll
+            tell you the day your locker follows you between devices." Both
+            halves of that are now false: accounts are live and the locker
+            already follows you. It was offering to notify somebody about a
+            thing they could do by pressing the control it replaced — the
+            same stale sentence the phone nav's You tab and the Locker's own
+            sign-up button have each already been fixed for, surviving in the
+            640-767px band where neither of those renders.
+
+            Replacing it with the real thing rather than adding a second copy:
+            the md+ row below was an identical AccountButtons, so folding the
+            two into one removes a duplicate instead of introducing one. That
+            matters here beyond tidiness — CSS-hidden is still mounted, and
+            two AccountButtons means two <UserButton> avatars for one signed-in
+            person, one of them invisible. */}
+        <div className="ml-auto flex shrink-0 items-center gap-1 md:gap-2">
+          <AccountButtons variant="ghost" />
           <button
             type="button"
             onClick={() => setNavOpen(true)}
             aria-label="Open menu"
-            className="flex h-11 w-11 items-center justify-center rounded-full text-white/70 transition-colors hover:text-white"
+            className="flex h-11 w-11 items-center justify-center rounded-full text-white/70 transition-colors hover:text-white md:hidden"
           >
             <Menu className="h-5 w-5" />
           </button>
-        </div>
-
-        <div className="ml-auto hidden shrink-0 items-center gap-2 md:flex">
-          <AccountButtons modalRef={modalRef} variant="ghost" />
         </div>
       </div>
 

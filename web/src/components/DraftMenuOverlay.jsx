@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { Bell, Check, Copy, Flag, Pause, Play, Settings, Trash2, Volume2, VolumeX } from 'lucide-react'
+import { Bell, Check, Copy, Flag, LibraryBig, Pause, Play, Settings, Trash2, Volume2, VolumeX } from 'lucide-react'
 import { useMinWidth } from '../hooks/useBreakpoint.js'
 
 /* The draft menu, behind the header's gear.
@@ -125,6 +125,24 @@ export default function DraftMenuOverlay({
         return `Draft the remaining ${left} pick${left === 1 ? '' : 's'} automatically and end this draft?`
       })(),
       onClick: onEndDraft,
+    },
+    /* The way out that is not the header's X and not a link inside the
+       report. It is the same #/drafts destination both of those use, and
+       it is here because neither of them reads as one when a draft has
+       just finished: the header control is an unlabelled chevron, and
+       "Back to the locker" sits at the bottom of the Insights report,
+       which is the screen somebody is trying to leave. Reported as
+       "I need a way back to the locker beyond the report itself."
+
+       It leaves rather than ends — the draft is saved either way, and a
+       finished one is already in the locker — so unlike "End draft" above
+       it needs no confirm and is offered in a room too, where it is what
+       the departure item below already means for the room's own seat. */
+    {
+      key: 'locker',
+      label: 'Back to the locker',
+      icon: LibraryBig,
+      onClick: () => { window.location.hash = '#/rooms/draft' },
     },
     { key: 'settings', label: 'Draft settings', icon: Settings, onClick: onOpenSettings },
     {

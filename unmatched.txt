@@ -1,5 +1,5 @@
 FFC rows that did not join to a Sleeper player
-Generated 2026-09-01 11:04 UTC
+Generated 2026-09-04 14:39 UTC
 Across every scoring format, each name listed once.
 Add an entry to MANUAL_MATCHES in build_players.py to fix one.
 
@@ -16,44 +16,44 @@ picking one would serve somebody else's news under this name.
 Seahawks | DEF | SEA | no Tank01 id
 Broncos | DEF | DEN | no Tank01 id
 Texans | DEF | HOU | no Tank01 id
-Vikings | DEF | MIN | no Tank01 id
 Rams | DEF | LAR | no Tank01 id
-Lions | DEF | DET | no Tank01 id
+Vikings | DEF | MIN | no Tank01 id
 Patriots | DEF | NE | no Tank01 id
 Eagles | DEF | PHI | no Tank01 id
+Lions | DEF | DET | no Tank01 id
 Steelers | DEF | PIT | no Tank01 id
 Chargers | DEF | LAC | no Tank01 id
-49ers | DEF | SF | no Tank01 id
-Jets | DEF | NYJ | no Tank01 id
 Jaguars | DEF | JAX | no Tank01 id
+Jets | DEF | NYJ | no Tank01 id
 Ravens | DEF | BAL | no Tank01 id
+49ers | DEF | SF | no Tank01 id
 Packers | DEF | GB | no Tank01 id
+Bills | DEF | BUF | no Tank01 id
 Falcons | DEF | ATL | no Tank01 id
 Browns | DEF | CLE | no Tank01 id
-Bills | DEF | BUF | no Tank01 id
 Cowboys | DEF | DAL | no Tank01 id
 Giants | DEF | NYG | no Tank01 id
-Saints | DEF | NO | no Tank01 id
 Buccaneers | DEF | TB | no Tank01 id
 Bears | DEF | CHI | no Tank01 id
+Chiefs | DEF | KC | no Tank01 id
 Titans | DEF | TEN | no Tank01 id
 Bengals | DEF | CIN | no Tank01 id
+Saints | DEF | NO | no Tank01 id
 Alex Kessman | K | CAR | no Tank01 id
-Chiefs | DEF | KC | no Tank01 id
 Colts | DEF | IND | no Tank01 id
+Commanders | DEF | WAS | no Tank01 id
 Cardinals | DEF | ARI | no Tank01 id
 Raiders | DEF | LV | no Tank01 id
-Commanders | DEF | WAS | no Tank01 id
 Panthers | DEF | CAR | no Tank01 id
 Dolphins | DEF | MIA | no Tank01 id
 Ben Roethlisberger | QB | PIT | no Tank01 id
 Eric Ebron | TE | PIT | no Tank01 id
 Wendell Smallwood | RB | WAS | no Tank01 id
 Michael Warren | RB | DET | no Tank01 id
-DeaMonte Trayanum | RB | NYJ | no Tank01 id
 Tavien Feaster | RB | ARI | no Tank01 id
 Bronson Kaufusi | TE | GB | no Tank01 id
 Clayton Thorson | QB | NYG | no Tank01 id
+DeaMonte Trayanum | RB | NYJ | no Tank01 id
 Jack Doyle | TE | IND | no Tank01 id
 
 
@@ -223,48 +223,48 @@ every season we store. Sleeper stays authoritative: this changes no
 stored number and never should. It is here so that when the two
 start disagreeing, somebody finds out from this file.
 
-447 of 486 players joined to an nflverse record.
+445 of 484 players joined to an nflverse record.
 
 No nflverse record for:
 Seahawks | DEF | SEA | no nflverse id
 Broncos | DEF | DEN | no nflverse id
 Texans | DEF | HOU | no nflverse id
-Vikings | DEF | MIN | no nflverse id
 Rams | DEF | LAR | no nflverse id
-Lions | DEF | DET | no nflverse id
+Vikings | DEF | MIN | no nflverse id
 Patriots | DEF | NE | no nflverse id
 Eagles | DEF | PHI | no nflverse id
+Lions | DEF | DET | no nflverse id
 Steelers | DEF | PIT | no nflverse id
 Chargers | DEF | LAC | no nflverse id
-49ers | DEF | SF | no nflverse id
-Jets | DEF | NYJ | no nflverse id
 Jaguars | DEF | JAX | no nflverse id
+Jets | DEF | NYJ | no nflverse id
 Ravens | DEF | BAL | no nflverse id
+49ers | DEF | SF | no nflverse id
 Packers | DEF | GB | no nflverse id
+Bills | DEF | BUF | no nflverse id
 Falcons | DEF | ATL | no nflverse id
 Browns | DEF | CLE | no nflverse id
-Bills | DEF | BUF | no nflverse id
 Cowboys | DEF | DAL | no nflverse id
 Giants | DEF | NYG | no nflverse id
-Saints | DEF | NO | no nflverse id
 Buccaneers | DEF | TB | no nflverse id
 Bears | DEF | CHI | no nflverse id
+Chiefs | DEF | KC | no nflverse id
 Titans | DEF | TEN | no nflverse id
 Bengals | DEF | CIN | no nflverse id
-Chiefs | DEF | KC | no nflverse id
+Saints | DEF | NO | no nflverse id
 Colts | DEF | IND | no nflverse id
+Commanders | DEF | WAS | no nflverse id
 Cardinals | DEF | ARI | no nflverse id
 Raiders | DEF | LV | no nflverse id
-Commanders | DEF | WAS | no nflverse id
 Panthers | DEF | CAR | no nflverse id
 Dolphins | DEF | MIA | no nflverse id
-Garrett Greene | QB | TB | no nflverse id
-Drew Ogletree | TE | IND | no nflverse id
 Michael Warren | RB | DET | no nflverse id
-Max Bredeson | TE | MIN | no nflverse id
+Garrett Greene | QB | TB | no nflverse id
+Dominic Richardson | RB | NYJ | no nflverse id
+Michael Woods | WR | DEN | no nflverse id
+Mitch Van Vooren | WR | DAL | no nflverse id
 DeaMonte Trayanum | RB | NYJ | no nflverse id
-Jackson Meeks | TE | DET | no nflverse id
-Riley Nowakowski | TE | PIT | no nflverse id
+Matt Hibner | TE | BAL | no nflverse id
 
 Two differences are known, applied rather than reported, and
 must not be `fixed' by taking their column:
@@ -284,43 +284,43 @@ single kick, and the made-total always agrees. A league paying extra
 for 60+ is slightly under-paying on those seasons. (Same date.)
 
 season    compared  disagree    rate
-2018           473        72   15.2%
-2019           622        53    8.5%
-2020           783        15    1.9%
-2021           959        14    1.5%
-2022          1233        39    3.2%
-2023          1553        11    0.7%
+2018           490        76   15.5%
+2019           627        54    8.6%
+2020           780        15    1.9%
+2021           981        14    1.4%
+2022          1236        39    3.2%
+2023          1560        11    0.7%
 2024          1949         7    0.4%
-2025          2326         5    0.2%
+2025          2335         5    0.2%
 
 stat  compared   agree   agree%
-cfd       918     854    93.0%
-ct        720     720   100.0%
-cy        985     981    99.6%
+cfd       911     848    93.1%
+ct        713     713   100.0%
+cy        972     968    99.6%
 f19        17      17   100.0%
-f29       130     127    97.7%
-f39       132     132   100.0%
-f49       131     130    99.2%
-f59       126     118    93.7%
+f29       132     129    97.7%
+f39       134     134   100.0%
+f49       133     132    99.2%
+f59       129     121    93.8%
 f60        18      10    55.6%
-fg        132     131    99.2%
-fgx       128     128   100.0%
-pa        294     290    98.6%
-pc        259     256    98.8%
-pfd       239     205    85.8%
-pi        209     209   100.0%
-pt        224     223    99.6%
-py        259     256    98.8%
-ra        821     816    99.4%
-rc        981     979    99.8%
-rfd       685     631    92.1%
-rt        457     457   100.0%
-ry        807     800    99.1%
-tg       1002     989    98.7%
-xp        132     131    99.2%
-xpx        92      92   100.0%
+fg        134     133    99.3%
+fgx       131     131   100.0%
+pa        305     301    98.7%
+pc        270     267    98.9%
+pfd       251     214    85.3%
+pi        219     219   100.0%
+pt        234     233    99.6%
+py        270     267    98.9%
+ra        830     825    99.4%
+rc        969     967    99.8%
+rfd       686     629    91.7%
+rt        468     468   100.0%
+ry        816     809    99.1%
+tg        987     974    98.7%
+xp        134     133    99.3%
+xpx        95      95   100.0%
 
-216 disagreements beyond 0.5, largest first:
+221 disagreements beyond 0.5, largest first:
   2022 | py   | Joe Burrow | ours 4527 | theirs 4475
   2018 | pfd  | Patrick Mahomes | ours 235 | theirs 187
   2022 | py   | Josh Allen | ours 4316 | theirs 4283
@@ -334,6 +334,7 @@ xpx        92      92   100.0%
   2018 | pfd  | Aaron Rodgers | ours 200 | theirs 175
   2018 | pfd  | Dak Prescott | ours 184 | theirs 162
   2018 | pfd  | Matthew Stafford | ours 197 | theirs 177
+  2018 | pfd  | Jameis Winston | ours 152 | theirs 133
   2022 | ry   | James Cook | ours 525 | theirs 507
   2018 | pfd  | Sam Darnold | ours 130 | theirs 113
   2022 | ry   | Josh Allen | ours 776 | theirs 762
@@ -345,6 +346,7 @@ xpx        92      92   100.0%
   2018 | rfd  | Derrick Henry | ours 51 | theirs 39
   2018 | rfd  | Saquon Barkley | ours 50 | theirs 39
   2019 | pfd  | Lamar Jackson | ours 136 | theirs 125
+  2019 | pfd  | Jameis Winston | ours 221 | theirs 210
   2018 | pfd  | Marcus Mariota | ours 121 | theirs 110
   2018 | pfd  | Josh Allen | ours 89 | theirs 78
   2019 | pfd  | Jared Goff | ours 207 | theirs 198
@@ -379,9 +381,7 @@ xpx        92      92   100.0%
   2018 | cfd  | George Kittle | ours 60 | theirs 55
   2018 | cfd  | Christian McCaffrey | ours 40 | theirs 35
   2022 | ry   | Najee Harris | ours 1038 | theirs 1034
-  2019 | rfd  | Saquon Barkley | ours 43 | theirs 39
-  2019 | pfd  | Josh Allen | ours 130 | theirs 126
-  ... and 156 more, not listed
+  ... and 161 more, not listed
 
 
 
@@ -401,9 +401,9 @@ season    fgm  in bands   short      fgmiss  in bands   short
 2020      263       263    0.0%          37        20   45.9%
 2021      332       332    0.0%          47        29   38.3%
 2022      416       416    0.0%          67        46   31.3%
-2023      533       533    0.0%          73        37   49.3%
-2024      594       594    0.0%          95        95    0.0%
-2025      771       771    0.0%         124       124    0.0%
+2023      554       554    0.0%          77        40   48.1%
+2024      618       618    0.0%         105       105    0.0%
+2025      782       782    0.0%         128       128    0.0%
 
 Bands are complete from 2024 on and lossy before it,
 and the two halves are lossy to very different degrees in this pool.

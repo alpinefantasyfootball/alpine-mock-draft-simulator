@@ -17,16 +17,16 @@ export default function GameLogsTab({ engine, player }) {
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3 lg:gap-4">
       {log.years.length > 1 && (
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-1.5 lg:gap-2">
           {log.years.map((y) => (
             <button
               key={y}
               type="button"
               onClick={() => setPickedYear(y)}
               className={
-                'rounded-full px-2.5 py-1 text-xs font-semibold transition-colors duration-150 ' +
+                'rounded-full px-2.5 py-1 text-xs lg:px-3.5 lg:py-1.5 lg:text-sm font-semibold transition-colors duration-150 ' +
                 (y === log.year ? 'bg-teal-500 text-obsidian' : 'bg-slate-sunk/60 text-white/50 hover:text-white/80')
               }
             >
@@ -36,16 +36,16 @@ export default function GameLogsTab({ engine, player }) {
         </div>
       )}
 
-      <p className="text-xs text-ink-muted">
+      <p className="text-xs lg:text-sm text-ink-muted">
         {log.year} week by week &middot; {log.perGameAvg} per game played
       </p>
 
       <div className="overflow-x-auto rounded-lg border border-slate-rule">
-        <table className="w-full min-w-max bg-slate-panel text-xs">
+        <table className="w-full min-w-max bg-slate-panel text-xs lg:text-sm">
           <thead>
             <tr className="border-b border-slate-rule bg-slate-sunk/60">
               {log.head.map((h) => (
-                <th key={h} className="whitespace-nowrap px-2 py-1.5 text-left font-semibold text-ink-muted">{h}</th>
+                <th key={h} className="whitespace-nowrap px-2 py-1.5 lg:px-3 lg:py-2.5 text-left font-semibold text-ink-muted">{h}</th>
               ))}
             </tr>
           </thead>
@@ -56,7 +56,7 @@ export default function GameLogsTab({ engine, player }) {
                   <td
                     key={j}
                     className={
-                      'whitespace-nowrap px-2 py-1.5 ' +
+                      'whitespace-nowrap px-2 py-1.5 lg:px-3 lg:py-2.5 ' +
                       (j === 1 && row.tone === 'hi' ? 'font-semibold text-teal-300'
                         : j === 1 && row.tone === 'lo' ? 'text-rose-300'
                           : 'text-white/70')

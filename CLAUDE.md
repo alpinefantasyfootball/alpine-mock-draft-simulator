@@ -116,8 +116,15 @@ the Stack section above, not a one-time migration hiccup.
 | `worker/store.js` | The D1 cache: Sleeper's pool and Tank01 headlines. A cache and never a source of truth, and a missing binding is a normal condition rather than a fault. |
 | `worker/migrations/` | D1 schema, applied with `wrangler d1 migrations apply`. The database is not to be shaped by hand — see the note on three variants of one schema. |
 | `web/index.html` | The real homepage entry Vite builds from. Loads the legacy files above as root-relative classic scripts, alongside Vite's own hashed module bundle for React. The Draft Room markup lives here too, hidden — see the Stack section. |
-| `web/src/components/phone/` | The phone-only screens, mounted below `sm` (`usePhoneWidth()`): the draft room, the homepage, the Mock Drafts Lobby, the floating nav pill. Each is a different screen from its desktop counterpart rather than a narrower one — see "The mobile pass" below for why that is a product decision and what it costs. |
+| `web/src/components/phone/` | The phone-only screens, mounted below `sm` (`usePhoneWidth()`): the draft room, the floating nav pill. Each is a different screen from its desktop counterpart rather than a narrower one — see "The mobile pass" below for why that is a product decision and what it costs. **Two have left**: the homepage (`HomeAlive.jsx`) and the Mock Drafts Lobby (`DraftRoomEntry.jsx`) are one responsive screen at every width now — see "Flow v3" below for why that handoff reverses the split for those two specifically and not for the draft room. |
 | `web/src/components/settings/` | The Draft Settings screen's own controls, the scoring-rule editor and the draft-order list. Split out of `DraftSettingsModal.jsx` when that file became the whole settings screen rather than a three-tab modal. |
+| `web/src/components/PracticeScenarios.jsx` | The Mock Drafts lobby's "Practice a scenario" grid — four preset drafts that launch with their settings already chosen. Draws only; `practiceScenarios.js` beside it decides which four, and `engine.startScenario()` is what turns a card into a draft. |
+| `web/src/clerkConfig.js` | The publishable key (from `VITE_CLERK_PUBLISHABLE_KEY`, public by design) and the one appearance object every Clerk component is themed by. Two hand-tuned copies of "make Clerk look like Juke" would drift the first time either changed. |
+| `web/src/components/AuthBridge.jsx` | Writes `window.JukeAuth` and fires `juke:auth`, so `app.js` — a classic script, where Clerk's hooks cannot reach — can read who is signed in. `window.JukeEngine` pointing the other way. Renders nothing. |
+| `web/src/hooks/useAccountUiReady.js` | "Is it safe to render Clerk's components yet": a key exists *and* we are past the first client pass. Both halves fail silently on their own — see the Accounts section. |
+| `web/.env.example` | The local-dev template. Keeps a `pk_test_` key on purpose: production's `pk_live_` belongs in the Pages dashboard, and a developer running `vite dev` against the production Clerk instance would be polluting the real user list. |
+| `worker/auth.js` | `verifiedUser()` — the one place the worker decides who is asking. Answers null for a missing, malformed, expired or forged token alike, and for no key configured at all. Read its comment before touching it: the public `verifyToken` export does not have the return shape its own internals document. |
+| `worker/test-auth.mjs` | Every way of being signed out, against a real `wrangler dev`. Cannot cover the signed-in path — that needs a token Clerk actually signed — which is precisely the gap the `verifyToken` bug lived in. |
 | `web/src/` | The React homepage: `Homepage.jsx` composes `Header`, `Hero`, `ScoresStrip`, `ShowYourWorking`, `RoomsGrid`, `ClosingCta`. Every one of them reads real data through `window.JukeEngine` (or `window.DraftEngine` directly, for `pickCode()`) rather than inventing sample content — the header ticker used to be six fabricated stats and is now five real ones read off the live board. |
 | `web/vite.config.js` | The Vite build config, plus a dev-server middleware that serves the same `LEGACY_FILES`/`LEGACY_DIRS` list `copy-legacy-assets.mjs` uses, from the true repo root, so `window.JukeEngine` carries real data under `vite dev` too — not just after a full build. |
 | `web/scripts/copy-legacy-assets.mjs` | Copies the legacy files into `web/dist/` after `vite build`, chained as this package's `build` script. Fails loudly (`process.exit(1)`) and lists exactly what's missing rather than shipping a partial site quietly. |
@@ -131,8 +138,13 @@ the Stack section above, not a one-time migration hiccup.
 | `scripts/build_players.py` | The pipeline that writes the two generated files. |
 | `.github/workflows/update-players.yml` | Runs the pipeline daily at 11:00 UTC, and bumps `?v=` in `web/index.html` (not the root `index.html`) alongside `404.html` and the how-it-works doc. |
 | `og-image.png` | 1200x630 link-preview card. **A designed asset now, not a generated one** — it arrived with the shark handoff. `scripts/build_og.html` still draws a plainer fallback from the same mark; running it replaces the designed card with a generated one. The copy that is actually served is `web/public/og-image.png`; see the note on the repo root below. |
-| `favicon.ico`, `favicon-16.png`, `favicon-32.png` | The root favicons, named by `404.html` and all three `docs/` pages. The PNGs are rendered exports; the `.ico` is assembled from them by `scripts/build_favicon_ico.py`. Duplicated into `web/public/`, which is the copy a browser reaches. |
-| `scripts/build_favicon_ico.py` | Wraps `favicon-{16,32,48}.png` in an `.ico` container, payloads unmodified. Stdlib only, no encoder, and it re-traces nothing — if the mark changes, re-render the PNGs and run it again. |
+| `favicon.ico`, `juke-icon-tile-{16,32}.png` | The root favicons, named by `404.html` and all three `docs/` pages. **GENERATED** — the PNGs by `scripts/build_icons.mjs`, the `.ico` assembled from them by `scripts/build_favicon_ico.py`. Duplicated into `web/public/`, which is the copy a browser reaches. The old `favicon-{16,32,48}.png` are gone: the icon is the head crop now, not the full mark. |
+| `scripts/build_favicon_ico.py` | Wraps `juke-icon-tile-{16,32,48}.png` in an `.ico` container, payloads unmodified. Stdlib only, no encoder, and it re-traces nothing — if the mark changes, run `build_icons.mjs` and then this. |
+| `web/public/juke-mark.js` | **VENDOR — ship as-is, do not edit.** Design package 01/03's `<juke-mark>` custom element: the shark and every animation, in a shadow root, no dependencies. Twelve variants; the app uses `form` (cold launch), `loader` (in-app waits) and `static` (reduced motion). It is also the ONE copy of the mark's geometry — `build_icons.mjs` derives every SVG and PNG from its `ART`. |
+| `web/public/splash-boot.js` | The two decisions the cold-load splash makes before its first frame: whether it plays at all this session, and whether it plays animated. Parser-blocking, immediately after `#boot-sonar` — in `<head>` the element it asks about does not exist yet. |
+| `web/public/juke-shark-mark.svg`, `juke-icon-tile.svg`, `juke-favicon.svg` | **GENERATED** by `scripts/build_icons.mjs` from `juke-mark.js`. The full mark (564x352) is the logo; the tile is a 380x380 head crop on navy for the browser icon; the favicon variant is the same crop with no tile. Never hand-edit — see "One mark, two crops" below. |
+| `scripts/build_icons.mjs` | Writes the three SVGs above from `juke-mark.js`, then every PNG from them, verifying each by re-reading its signature and IHDR. The one generator; do not add a second. |
+| `web/src/components/DraftRoomLoader.jsx` | Design package 03's in-app wait: the mark holds still, teeth sweep, eyes flicker, 1.6s loop. Full-screen for the Lobby → Draft Room transition, and inline at 40–56px for any other wait past ~400ms. Not the splash — see the note on why. |
 | `unmatched.txt` | **GENERATED.** Five sections: FFC rows that failed to join, players with no id at another source, **Sleeper stats we are not storing** (read this before adding a feed), Sleeper against nflverse, and the missed-field-goal reconciliation. |
 | `data/baselines/2026/preseason/` | **FROZEN, not generated.** The one-shot 2026 preseason projections/VORP/tiers/ADP snapshot, hashed in `manifest.json`. Never regenerated, never hand-edited — see the Data section below and the directory's own README.md. |
 | `scripts/freeze_baseline.mjs` | Wrote the frozen baseline above, once. Drives the real app in a headless browser rather than reimplementing scoring/VORP/tiers in Python — see its own header comment. Refuses to run again if a baseline already exists. |
@@ -796,10 +808,20 @@ error twelve samples buy.
 
 `PAR_SEEDS` is hard-coded and never `state.seed`, for the reason par exists at
 all: it has to be a property of the board, the same for every client in a room
-and the same tomorrow. Twelve puts the standard error of a chair's par at
-18.9/√12 = 5.5, well inside `MIN_SPAN.startersVsPar`; twenty-four would buy 3.9
-for twice the work. **The whole thing costs 30ms cold and 0ms warm**, measured,
-so the cache carries it comfortably.
+and the same tomorrow.
+
+**Twelve was derived against a wobble that has since changed, and the
+arithmetic had to be redone even though the answer did not move.** Under the old
+flat ±3 a chair's par moved with a standard deviation of 18.9 points, so twelve
+put the standard error at 18.9/√12 = 5.5. Scaling the wobble by each player's
+real ADP standard deviation roughly doubled the average board offset: measured
+30 August 2026 the per-chair par sd is **28.4**, so the standard error at twelve
+is **8.2** — still well inside `MIN_SPAN.startersVsPar` (20), on a margin of
+2.4× where it used to be 3.4×. Twenty-four would buy 5.8 for twice the work.
+**The whole thing costs 42ms cold and 0ms warm**, measured, so the cache carries
+it comfortably. Re-measure both if the wobble is ever scaled again; this is the
+"a justification can be sound and still be about something else" rule pointed at
+its own section.
 
 `bestAvailable()` grew `jitterOf` for this rather than the par run writing to
 `board[].jitter` and restoring it. That save-and-restore is exactly the shape
@@ -926,9 +948,12 @@ it for three weeks.
 because there is one door in and several ways out — "Run another mock" goes
 through `restart()` → `goHome()` and always worked, which is exactly what
 made the bug look intermittent, while "Back to the locker" is a plain
-`<a href="#/drafts">` that changes the route and touches no state. Same
-reasoning as the retired `#/draft` redirect living at the router rather than
-at its callers.
+`<a href="#/rooms/draft">` that changes the route and touches no state.
+Same reasoning as the retired `#/draft` redirect living at the router rather
+than at its callers. (That href was `#/drafts` until Flow v3 split the Draft
+Room's entry from the drafts archive — see below. The archive has no Start
+button on it, so the locker link had to follow the entry or this exact flow
+would dead-end.)
 
 **Two more leaks sat on that same path, and neither is in the engine.**
 `DraftRoom.jsx` does not unmount between drafts — the Lobby is one of its own
@@ -963,7 +988,8 @@ also suppressing the report entirely, and that would pass every assertion in
 the first test.
 
 **And the first version of that spec passed against the bug.** Pressing Start
-raises DraftRoom's `starting` loader for SonarLoader's full 2100ms ring, so an
+raises DraftRoom's `starting` loader — SonarLoader's full 2100ms ring at the
+time, `DraftRoomLoader`'s 500ms floor plus a 220ms fade now — so an
 assertion made straight after the click finds no report because nothing at all
 is rendered yet. `phone.spec.mjs` already waits this out by waiting for the
 room's own nav to exist rather than for a duration; do that, or the check is
@@ -1029,16 +1055,19 @@ inverted arithmetic reads as correct until somebody knows enough football to
 notice the answer is absurd.
 
 **Kickers and defenses are excluded from draft value and from both
-callouts.** `cpuScore()` refuses a kicker before the last two rounds and a
-defense before the last three, and the suggestions never offer one earlier —
-so the app picks the timing, not the manager. Their ADP comes from drafts
-that run more rounds than most leagues here, which routinely puts a kicker's
-board rank past the last pick that exists, so taking one at all reads as
-early. Measured over a ten-team, fourteen-round draft, the mean gap ran
-WR +6, RB −2, QB −9, DST −12, TE −22, **K −35**, and every one of the ten
-kickers scored as a reach with none neutral. Grading somebody for obeying a
-rule the app enforces is not a judgement about drafting. Dropping them moved
-no team more than two places, because every team drafts the same forced pair.
+callouts, and only one of the two original reasons still holds.** This used
+to lead with "the app picks the timing, not the manager" — true while
+`needFromCount()` refused a kicker before the last two rounds and a defense
+before the last three, and false since those gates came out (see "Kickers and
+defenses are priced, not scheduled"). The exclusion survives on the argument
+that was always the stronger one. Their ADP comes from drafts that run more
+rounds than most leagues here, which routinely puts a kicker's board rank past
+the last pick that exists, so taking one at all reads as early. Measured over a
+ten-team, fourteen-round draft, the mean gap ran WR +6, RB −2, QB −9, DST −12,
+TE −22, **K −35**, and every one of the ten kickers scored as a reach with none
+neutral. That measurement is about the board's depth against the league's
+length, so removing the timing rule does not touch it. Dropping them moved no
+team more than two places, because every team drafts the same forced pair.
 
 **Roster construction measures cover, and it has to be graded rather than a
 threshold.** The old test was "fewer than starters + FLEX + 1 at the
@@ -1307,6 +1336,203 @@ written down twice" exists to prevent. When something here needs to know what
 a league permits, check whether the engine or the CPU already answers it
 before writing a second answer.
 
+## The pool a league can hold is not the pool it can see
+
+Reported 30 August 2026: `cpuChoice()` drafts players its own `needFromCount()`
+has already refused. Measured in a real browser against the half-PPR board of
+that morning, at 16 teams over 14 rounds: 224 picks, 232 players, **eight left
+at the end** — and in the last ten picks the board holds nothing but
+quarterbacks, kickers and defenses, every seat already holding one of each.
+
+**That shape stopped reproducing the next day, and the bug did not go away with
+it.** The deep bench landed on `main` on 31 August, the pool went 232 to 480,
+and 16-team capacity went 214 to 334 — so the example this section was written
+around is now comfortably legal and wastes nothing. Everything below is
+re-measured against the 480-player board of 1 September; the shapes moved, the
+argument did not. **A measurement is true of the board it was taken on**, and
+this project regenerates the board nightly. `cpuChoice()` has no notion of
+illegal, only of expensive, so it takes the least-bad 999. Nine of the sixteen
+seats finished with two quarterbacks and one or two with two defenses, on every
+seed tried — roster spots the format can never start, which roster construction
+then docks nine points a head for.
+
+**The bug is not in `cpuChoice()`, and the report's own first instinct — prefer
+an unrefused player, and failing that the least-full position — was built,
+measured and thrown away.** See below. What is wrong is one line further back:
+`setupProblem()` was validating against `poolSize()`, and **a board is not
+inventory.**
+
+### `poolSize()` counts rows; `absorbableSize()` counts picks the league can use
+
+A 22-team room may hold twenty-two quarterbacks — one a team, unless the format
+opened a second seat — and the half-PPR board carries fifty-six; sixty-six tight
+ends against ninety-two; twenty-two kickers against thirty-three. Those spare
+thirty-four, twenty-six and eleven are on the board and undraftable by anybody,
+so counting them as picks the league has room for is the same class of error as
+`posRank` standing in for value: a right number answering the wrong question.
+
+Measured on the 1 September 480-player half-PPR board:
+
+```
+                 picks   poolSize()   absorbableSize()   verdict
+16 teams / 14r    224       480             334           allowed, no waste
+24 teams / 17r    408       480             411           allowed, 19 wasted
+22 teams / 19r    418       480             399           refused
+24 teams / 20r    480       480             411           refused
+```
+
+The last row is the one to remember: **the deepest league the setup screen
+offers is a dead heat on `poolSize()` — 480 picks against 480 players — and 69
+picks past what the room can actually hold.**
+
+`absorbableSize()` is `Σ min(pool at that position, holdCap(pos) × teams)`, and
+`holdCap()` is *literally* the count above which `needFromCount()` refuses — so
+this is the board filtered through the same rule the draft runs on, not a second
+opinion about what a roster may contain. The shortfall column is not an estimate:
+it is exactly the number of picks a completed draft spends on somebody nobody
+can start, confirmed pick by pick.
+
+**Three copies of one league rule became one, because the check needed it.**
+`league.starters.QB + league.superflex` — the expression whose drift caused the
+superflex grading bug — was written out by hand in `needFromCount()`,
+`analyseTeam()`'s construction charge and `buildText()`'s caption at once.
+`startableCap(pos)` is the single copy now and answers **Infinity** where the
+question does not arise, so the two grade call sites walk every position rather
+than carrying their own list of which three can overflow. `holdCap()` is
+`Math.min(maxAt, startableCap)` and is what `needFromCount()` refuses above.
+Verified byte-identical across **328,536** `(have, pos, round)` combinations
+over 324 league shapes, and the grade's charge and captions against real
+finished rosters at 10 teams, 12 teams and superflex.
+
+### Tried and rejected: tiering `cpuChoice()`'s fallback
+
+The obvious fix, and the one the report led with: prefer any player
+`needFromCount()` does not refuse; only when none exists fall through to a
+refused one, and there prefer a position the roster is not already full at — a
+spare running back is a bench body, a spare defense is a wasted spot. It was
+prototyped in the browser against the real board and run both ways from the
+same seed, which is the only thing that settles this.
+
+**It moves nothing where it was measured, and the reason is a conservation
+law.** The room must absorb `picks − absorbableSize()` players it cannot use,
+whoever takes them. Measured 30 August 2026 against the 232-player board, on
+shapes the guard now refuses outright — so these are all cases where that
+difference is positive:
+
+```
+                    spare unstartable spots   mean build
+16 teams / 14r          10  ->  10            82.5 -> 82.5
+14 teams / 16r          16  ->  16            78.8 -> 78.8
+12 teams / 19r          26  ->  26            71.1 -> 71.1
+10 teams / 14r (default) 0  ->   0            90.8 -> 90.8, trajectory identical
+```
+
+At 14/16 and 12/19 it does change *which* player is taken — a seat takes its
+first kicker four rounds early rather than a second defense — and the waste
+simply lands on whoever picks the kicker later. At the reported 16/14 it changes
+nothing at all: every remaining player is refused for every seat, so there is no
+choice left to make well.
+
+**The first half of it is unreachable too.** A refusal is a 999 multiplier
+against a legal 0.80–1.45, so a refused player can only win on
+`(adp + jitter) × 999`, which needs `adp + jitter ≤ 0` — reachable in the
+arithmetic (Jahmyr Gibbs measures −1.37 on some seeds) and not in a draft,
+because a player with ADP under 3 is gone in round one, when nothing is capped.
+It is a latent sign inversion worth knowing about and not a bug anyone can hit.
+
+And with the refusal in place it is dead code: across all 33
+(scoring × team count) combinations at their **tightest legal bench**, driven to
+completion on pinned seeds, `cpuChoice()` takes a refused player **zero** times.
+`tests/pool-capacity.spec.mjs` asserts exactly that, so if it ever stops being
+true the tiering can come back with a measurement behind it.
+
+### What the refusal costs, and the answer about 24 teams
+
+Shapes move from allowed to refused and **none moves the other way** —
+`absorbableSize() ≤ poolSize()` always, which is its own assertion in the spec,
+because a check that loosened here would be the opposite of the fix and would
+show up nowhere else.
+
+What it costs, measured 1 September against the 480-player board, as the longest
+roster each team count may still run:
+
+```
+teams      4   6   8  10  12  14  16  18  20  22  24
+was       24  24  24  24  24  24  24  24  24  21  20
+now       22  22  22  22  22  21  20  20  19  18  17
+```
+
+Two to five rounds off the very deepest rosters, and **nothing a person meets in
+an ordinary league**: the default ten- and twelve-team shapes run to 22 rounds
+before the guard has anything to say, against the 14 they actually use. A single
+seat can legally hold 22 players under the default lineup (1 QB, 8 RB, 8 WR,
+3 TE, 1 K, 1 DST), so a 23- or 24-round draft is impossible at *any* team count
+and the aggregate check catches it — `absorbableSize()` can never exceed
+`teams × 22`.
+
+**So `TEAM_COUNTS` should keep going to 24, and the round count is what has to
+give.** 24 teams is genuinely runnable at seventeen rounds. The entry is not
+dead; it is constrained, and the refusal now names the real ceiling instead of a
+pool count that overstated it — most sharply at 24 × 20, where `poolSize()` saw
+480 picks against 480 players and called it fine.
+
+### The guard is a necessary condition, not a sufficient one
+
+`absorbableSize()` is an *aggregate* ceiling: it says how many players the room
+could hold if every pick went to a seat that could still use one. A snake draft
+is greedy and does not achieve that ceiling — it strands the scarce positions
+late, and a seat whose remaining legal positions have run dry takes somebody it
+can never start.
+
+Measured across all 44 shapes the screen offers, each at the largest bench
+`setupProblem()` still allows — the tightest corner there is:
+
+```
+every draft completes                     44 of 44
+seats short a mandatory K or DST           0
+shapes wasting a pick on the unstartable  16 of 44
+worst waste in one draft                  19 picks
+any waste below 18 teams                   0
+```
+
+So the guard closes the gross case and leaves a bounded residue at the deep end.
+The split worth holding on to is between **the thing that breaks a roster and
+the thing that wastes a bench spot on it**: nobody is ever left without the
+kicker or defense their format starts, and no league anybody actually plays
+wastes a pick at all.
+
+`tests/pool-capacity.spec.mjs` asserts exactly that split — the first three
+exactly, the last as a bound with headroom — rather than asserting zero waste
+everywhere, which is a property this guard was never able to give and which
+would have stood red.
+
+**This residue is not the conservation law below, and the two must not be
+confused.** "Tried and rejected: tiering `cpuChoice()`'s fallback" settles the
+case where `picks > absorbableSize()`: there the room *must* absorb
+`picks − absorbableSize()` unusable players whoever takes them, so reordering
+the fallback moves the waste around and never removes it. Every shape in the
+table above is one the guard **allows**, which means `picks ≤ absorbableSize()`
+and the conservation law says the forced waste is zero. It is not zero, so what
+is left is a greedy snake failing to reach a feasible assignment that demonstrably
+exists — 380 picks against 387 capacity still landing 15 on the unstartable.
+
+That is a real, open problem and a different one from the rejected experiment.
+It lives in `cpuChoice()`, the one function every client and the worker must
+agree on, so it is a separate change with a worker deploy attached rather than a
+tightening of this guard — and anybody picking it up should read the section
+below first and note that its conclusion does not cover this case.
+
+**And the draft it would have run does finish**, which is exactly what made this
+hard to see. It finishes with roster spots nobody chose to waste, and a grade
+that docks them for it.
+
+**The message ends "Run fewer teams, or a shorter roster", and the second half
+of that sentence did not work.** Every stepper in the settings screen's Roster
+section refused the draft on the first press, because `setLeague()` moved
+`rounds` with the roster only for a scoring preset. That is written up under
+"The Draft Settings screen" — a refusal is only as good as the way out it
+names, so the two changes ship together and one test covers the path.
+
 ## The Juke score
 
 Projected points above a replacement starter at that position, as a share of
@@ -1559,6 +1785,140 @@ is removed. `openSheet()` removes rather than blanks.
 three pixels out of the *inside* — `clientWidth` drops to 56 and the headshot
 is inset and shrunk. A test asserting the outer rect passes either way and
 proves nothing, which is what the first version of it did.
+
+## Kickers and defenses are priced, not scheduled
+
+`needFromCount()` refused a kicker before `rounds - 1` and a defense before
+`rounds - 2`. Both are gone. The two positions are now gated player by player
+by what they cost against the rest of the board, which is how every other
+position has always been gated, plus a per-seat appetite and a closing safety
+net.
+
+**The gate's real cost was that a calendar rule has no variance in it.**
+Measured 1 September 2026 against the real 480-player board, driving the app's
+own `cpuChoice()` in a browser — 60 drafts with the gate, 120 without. Every ADP
+and `sd` quoted in this section is off that morning's board and moves every
+night; the shapes are what do not:
+
+```
+                        gate             after           reference
+first D/ST           111-112         72-89 (avg 81)   FFC DST1 ADP 81.6
+first K              121-123        103-128 (avg 114)  FFC K1 ADP 125.8
+rounds with a DST        2-3              4-7          Sleeper 2026: 2-7
+rounds with a K            2              2-4          Sleeper 2026: 2-5
+K+DST in the last round 8-10 of 20    8-10 of 20       Sleeper 2026: 7-10 of 20
+seats short a K or DST  0 of 600      0 of 1200        must stay 0
+```
+
+**A one-pick spread across sixty drafts is the indictment**, and the first row
+is the whole of it: every room the app had ever run took its first defense on
+the same pick of the same round, thirty picks after the market says it goes.
+
+**This table was first written against the 232-player board of 30 August and
+two of its rows were wrong within a day**, which is worth keeping as a warning
+rather than quietly correcting. On that board the gate produced *all ten*
+defenses in round 12, *all ten* kickers in round 13, and **nothing at all** in
+the final round. The deep-bench work landed on `main` the next day, the pool
+went 232 to 480, and with more skill players still worth taking in round 12 the
+gated draft started spilling into 13 and 14 on its own. So "not one of either in
+the final round" — a line that read as the most damning fact in the whole
+section — became false without anybody touching the gate. **A measurement is
+true of the board it was taken on, and this project regenerates the board
+nightly.** The rows that survived are the ones about variance.
+
+**The board's own data already disagreed with the CPU.** Seattle Defense carries
+an FFC ADP of 81.6 — round nine of a ten-team draft — while the CPU refused to
+look at a defense until round twelve. A rule contradicted by the data file
+sitting next to it is not a modelling choice.
+
+**`sd` was on every row of `players.js` all along and `applyJitter()` threw it
+away.** FFC publishes the real standard deviation of each player's draft
+position and the wobble was a flat ±3 for everybody. Jahmyr Gibbs' sd is 0.7 and
+Jason Myers' is 23.3 — so the top of the board is now nearly settled, as it is in
+life, and the deep bench scatters. A deep-bench row carries `sd: 0`, having no
+real ADP sample to take a deviation from, and 0 is falsy, so `p.sd || 6` catches
+it — the "treat 0 from a feed as missing" rule doing its job on 247 of 480 rows. It is most of the realism, from data already
+in the repository, for the cost of reading a field. It also made drafts *more*
+different from each other, not less: 102 to 122 of 140 picks differ between
+seeds, against the 60 to 73 CLAUDE.md records under the flat wobble.
+
+**A seat's appetite is what breaks the wall, and it has to be per seat.**
+`KD_ARCHETYPES` gives each chair one of three opinions per position — reaches,
+normal, waits it out — drawn deterministically from `DraftEngine.seatRoll(slot,
+seed, salt)`. Ten managers do not all decide they need a defense on the same
+pick, and a single shared opinion is a wall however it is priced. The salt
+separates the two questions: unsalted, every seat that reaches for a defense
+reaches for a kicker too.
+
+**`seatRoll`'s slot multiplier is doing real work.** It is odd and coprime with
+the modulus, so consecutive chairs land an irrational-looking step apart and ten
+seats come out spread across 0..1 rather than clumped. A plain random draw would
+occasionally hand a whole room the same archetype, which is the failure being
+fixed.
+
+**Last call is the one thing the gate did buy and the one thing that may not be
+given up.** When a seat's remaining picks equal what it still owes at K and DST,
+the multiplier drops to `KD_LAST_CALL` and it fills. Zero rosters short across
+2500 seats, and `tests/kd-timing.spec.mjs` asserts that one exactly while every
+other bound in it is a loose tolerance.
+
+### `spread()`'s multipliers may not agree modulo the modulus
+
+The triangular draw is two uniforms summed. The first pair tried was
+`7919`/`5081`, and it produced a textbook triangle: mean 0.000, sd 0.408, three
+quarters of the mass inside the middle half — every property the function is
+supposed to have, on the only check anybody thinks to run.
+
+It was still wrong. 919 + 81 is exactly 1000, so x and y step in opposite
+directions by the same amount and their sum only moves when one of them wraps.
+**Consecutive board positions came back correlated at 0.57**: the board shifted
+in blocks of a dozen players rather than neighbours swapping, which is the
+entire point of a wobble. Visible on the live board as the first seven players
+all wobbling −0.2 to −0.6 and the next three all +0.7 to +0.9.
+
+`3571` puts that correlation at **0.014** with the marginal shape unchanged.
+**Measure the correlation along the board, not just the distribution** —
+`scripts/test_engine.py` now asserts both, and only the second one fails.
+
+### What the gate was silently holding up
+
+Removing it invalidated the *justification* for four other things, and only one
+of them actually had to change:
+
+- **`FORCED_LATE` / `freelyChosen()` — kept, reasoning rewritten.** See the
+  draft-grade section above.
+- **`bestUpgrade()`'s pool — had to change.** It excluded K and DST outright,
+  because an empty mandatory slot costs 14 points of build and any rostered
+  kicker fills it, so the simulation would recommend one in round 2. The gate
+  was the containment and the blanket exclusion was shorthand for it. It is
+  `kdInPlay()` now — would a CPU in this chair currently be choosing between a
+  defense and the best skill player left — which is the same price test the CPU
+  itself applies and needs no new threshold.
+- **`COUNTED_POSITIONS` — DST earned a column, K did not.** See above.
+- **`bestLeft()` — kept.** Deprioritising these two in a last-resort fallback is
+  still right; it has no roster and no round to reason with.
+
+**And `draftFit().legalFromRound` with it.** It fed a banner on the player sheet
+reading "the app doesn't take a K before round 13". Left in place,
+`earliestRoundFor()` would have returned 1 for every position and the banner
+would simply never have fired — a field nothing can draw, and an invitation to
+put the sentence back without the reasoning that took it out. Both are deleted,
+along with the banner in `DraftFitTab.jsx`.
+
+**Eight assertions across three spec files described the gate rather than the
+product, and none of them could fail while it stood.** Five in `solo.spec.mjs`,
+two in `autopick-adp.spec.mjs` and one in `journey.spec.mjs` — "no kicker before
+round 13", `earlyKicker === 0`, and the rest — were restating `needFromCount()`
+back to itself, which is a tautology wearing a test's clothes. **The eighth was
+written after this change was already made**, in `main`'s deep-board test ("no
+kicker before round 19" at twenty rounds), which is the thing to expect when a
+rule is removed on a branch: the rest of the world goes on writing assertions
+about it until the branch lands. Every one is
+re-aimed at what the new rule actually promises: every seat finishes with
+exactly the kicker and defense the format starts, which is the promise the gate
+was really protecting and the only one worth asserting exactly. (An eighth,
+`grade.spec.mjs`'s seat-bias test, went red for a different reason — see "A
+one-draft correlation is not a bound".)
 
 ## The suggestions
 
@@ -2376,10 +2736,10 @@ overwrites them. Change `build_players.py` instead.
 
 **Nothing about the league shape may be written down twice.** `app.js` has
 one `league` object and everything else derives from it — replacement level,
-roster limits, the starting lineup, the round a kicker becomes legal, even
-the prose in the method notes. The old code spelled "ten teams" out in a
-dozen places and carried a hand-picked replacement level that was only
-correct for one of them.
+roster limits, the starting lineup, the last call that makes a seat fill its
+mandatory slots, even the prose in the method notes. The old code spelled
+"ten teams" out in a dozen places and carried a hand-picked replacement level
+that was only correct for one of them.
 
 **FFC's `teams=` parameter does nothing.** It is echoed back in the response
 meta, so it looks like it worked, but 8, 10, 12 and 14 all return the same
@@ -2428,6 +2788,39 @@ Any new entry added to the bridge that touches `DraftEngine`, `PLAYERS` or
 check `dataReady()` first — `ScoringDemoCard.jsx` and `TakeAPick.jsx` do
 check it, and were fine; the bug was in the two bridge functions that had no
 guard of their own to fall back on.
+
+**And a guarded wrapper is only as safe as what its caller does with the
+answer.** `headerInfo()` was the third instance of this, found 1 September 2026,
+and it is the one where every guard involved was already correct. `pickInfo()`
+returns null while the engine is missing, exactly as designed. `headerInfo()`
+dereferenced `.slot` off it.
+
+Nothing above caught it first, and that is the part worth keeping: `draftOver()`
+answers **false** without the engine and `isMyTurn()` answers **false**, so both
+of the guarded branches above politely decline and execution falls through to
+the single line that is not guarded. Three wrappers behaving exactly as
+documented, composing into a TypeError.
+
+`state.started` is true inside that window on the path this section already
+names: `adoptRoom()`, off the room's own "state" broadcast, before the idle
+callback loads the engine. And `renderHeader()` is called from `render()`, so it
+was never one wrong string in a header — it took every panel with it, which is
+the same blast radius `applyJitter()` had from the same door.
+
+The fix is one early return at the top of `headerInfo()` rather than a check
+around that one expression, so the next line added below inherits it.
+`tests/header-boot.spec.mjs` holds it open by aborting the request for
+`draft-engine.js`, which covers the worse case as well: a deferred script that
+fails on a bad connection and never arrives. **It asserts both directions** — a
+guard that returned the resting header whether or not the engine had landed
+would fix the crash and leave every real draft with a blank header, which is a
+worse bug wearing a styling problem's clothes.
+
+**So the rule is not "guard the wrapper", it is "a null-returning wrapper needs
+a caller that reads null".** Grep for a `.` immediately after one of them before
+trusting the guard at the top of this file — `pickInfo()` and `onTheClock()` are
+the two that return null, and `inProgressSummary()` is the one that already
+guards itself.
 
 **Bump `?v=` in `index.html` on every deploy that changes a file it loads.**
 Everything the page asks for is cached, so without a version in the address a
@@ -3304,15 +3697,19 @@ applies to whichever hue is holding the job this month.
 two places before this change touched the legacy stylesheet at all: it is
 the lightest stop of the draft room header's own my-turn gradient
 (`web/src/components/AppHeader.jsx`, from the header redesign) and it is
-the accent in the newer J-monogram app icons (`web/public/juke-favicon.svg`,
-`juke-app-icon-*.png`, `juke-app-icon-gradient.svg` — paired there with a
-purple `#7B1FA2` this rule does not otherwise use). Retargeting `--orange`
+the accent in the J-monogram app icons that shipped at the time
+(`web/public/juke-favicon.svg`, `juke-app-icon-*.png`,
+`juke-app-icon-gradient.svg` — paired there with a purple `#7B1FA2` this rule
+does not otherwise use; every one of those files is deleted now, replaced by
+design package 02's icon tile, and the observation about where teal was already
+load-bearing is what survives them). Retargeting `--orange`
 to that same value connects a colour three parts of the app already agreed
 on, rather than choosing a fourth nobody had measured.
 
 **One thing this pass could not reach, and it stayed unreached for two more
-brand generations.** `favicon.ico`, `favicon-16.png` and `favicon-32.png` at
-the repo root are rendered PNG/ICO, not CSS-driven elements, so they went on
+brand generations.** The root favicons — `favicon.ico` and, at the time,
+`favicon-16.png` and `favicon-32.png` — are rendered PNG/ICO, not CSS-driven
+elements, so they went on
 showing the shield's swoosh in the original orange while the app showed first
 a goalpost and then a shark. `404.html` and all three `docs/` pages link them
 directly. That is the general lesson rather than a footnote about orange: **a
@@ -3322,6 +3719,13 @@ and looks. The shark swap is what finally replaced them, and the sentence
 "no tool here rasterises an icon" was true and beside the point — the `.ico`
 never needed rasterising, only a container, which `scripts/build_favicon_ico.py`
 now writes in forty lines of stdlib around the PNGs' own bytes.
+
+**And it is finally closed, three generations after it opened.** Design package
+02 made the SVGs themselves a build product of `juke-mark.js` — see "One mark,
+two crops" — so `scripts/build_icons.mjs` now regenerates every raster in the
+set from the one copy of the geometry, and the two PNGs named above are deleted
+rather than stale. A raster export is still invisible to every pass this project
+runs; the repair was to stop having any raster that is not generated.
 
 **The first attempt at `--teal-cta` repeated the exact mistake this section
 just finished describing, aimed at a new colour.** It measured `--teal`
@@ -3374,6 +3778,76 @@ be grafting a Tailwind-side idiom onto a codebase that has never used one
 for a button, which is a bigger and different change than "match the
 button that does the same job" asks for.
 
+### The display face is Gabarito now, and it is a third wider
+
+Barlow Condensed retired 4 September 2026, the same way orange did: an
+owner's preference outranking an argument that was correct on the day it was
+made. Half of that argument survives and half does not, so it is corrected in
+place at `--font-display` rather than left standing.
+
+**What survives is why the face moved off Poppins at all** — Poppins was
+Sleeper's, type is the fastest identity signal there is, and Gabarito is no
+more Sleeper's face than Barlow was. **What does not survive is "condensed,
+because a scoreboard and a jersey nameplate are condensed caps."** Gabarito is
+a rounded geometric. Measured in the browser at 800 weight and the same pixel
+size, against Barlow Condensed actually loaded rather than a fallback:
+
+```
+cap height   96%      x-height   94%      width   133%
+```
+
+Slightly shorter and **a third wider** — the exact opposite trade to the
+Poppins swap, which came out *taller and narrower* and therefore needed no
+re-measuring anywhere. Every heading on the site now wants a third more
+horizontal room than it did.
+
+**So every fixed-width box holding display type has to be re-checked, and one
+failed.** `.pick-no` is a 38px column carrying a pick code, and the widest a
+default league produces is `14.01`; 38 was measured against the narrow face.
+It is 44 now. `.hero h1` already steps down under 620px and still fits. The
+React side is fluid at every H1, which is why nothing there needed a number —
+but the next fixed width added under `font-display` needs this paragraph read
+first.
+
+**The tracking came off with it.** Seven negative `letter-spacing` values in
+`style.css`, every one on a `var(--font-display)` rule, were cut for a
+condensed face: `-0.03em` is now `-0.005em` and `-0.02em`/`-0.01em` are `0`.
+Two Tailwind call sites moved with them (`tracking-[-0.01em]` →
+`tracking-normal` on the two H1s that carried it); the other three negative
+`tracking-[...]` values in `web/src` are on `font-body` and were left alone.
+
+**"Arial Narrow" is gone from the stack and that is not tidying.** It was
+there so a Barlow Condensed that failed to load landed on something of
+roughly the same width. A narrow fallback under a face that is not narrow
+reflows every heading on the one load the fallback exists for.
+
+**Gabarito ships no italic, at any weight**, and roughly a dozen font-display
+headings across the app are styled `italic` — so every one of them is a
+browser-synthesized oblique now. That reads worse than it is: `web/index.html`
+had only just added `ital,wght@0,600;0,700;1,700;1,800` to *stop* exactly
+that, and before then every one of those headings had been synthesized for
+the whole life of the project. Asking Google for an `ital` axis Gabarito does
+not have would fetch nothing and change nothing. Checked on screen at 375px
+and 1440px before accepting it.
+
+**The face is named in exactly two places and must stay that way** —
+`--font-display` in `style.css` and `fontFamily.display` in
+`tailwind.config.js`. Two copies of "what the display face is" fail silently:
+the legacy pages and the React app simply render in different fonts and
+nothing errors. Every comment that named the old face by name was rewritten
+with it, because "a comment naming a face is the same drift as a rule naming
+one" and there were seven of them.
+
+**And the two legal pages were never being stamped.** `docs/privacy.html` and
+`docs/terms.html` load `style.css`, `theme.js` and `back-to-top.js` by a `?v=`
+address, and the nightly's sed list has always been `web/index.html`,
+`404.html` and the how-it-works page — so those three assets sat frozen at
+`202608222306` on those two pages while the rest of the site moved. A
+returning visitor got August's stylesheet under HTML that had changed under
+it. Found by this swap, where those pages would have requested Gabarito and
+styled it with a `--font-display` that still said Barlow. Both are in the sed
+list now.
+
 ## The shark
 
 The goalpost monogram is gone. The mark is a shark, and **no colour token
@@ -3409,15 +3883,37 @@ two-value mark. It is 28 now, which is the smallest width that keeps the face.
 A handoff saying "no call site needs editing" is a claim about the *signature*,
 not about the values already being passed through it.
 
-**A variant per ground, not one file you recolour.** In the supplied artwork
-the eyes, teeth and jaw were filled with the canvas colour, so the mark only
-worked on one background. Every file declares its negative value explicitly,
-which is why `juke-mark-light.svg` and `juke-mark-fg.svg` exist as files rather
-than as a `fill` override. **That is what makes an `<img>` mark theme-blind**:
-the inline SVG it replaced on `404.html` took `var(--mark-ink)` and
-`var(--teal)` and reversed itself, and an `<img>` cannot. That page carries two
-of them and swaps on `:root[data-theme="light"]`; the `docs/` headers carry one,
-because `.appbar` is navy under both themes.
+**A variant per ground, not one file you recolour — and design package 02
+retired the rule by removing the thing it was written about.** This section is
+corrected in place rather than left standing, the same way the rebrand's orange
+paragraphs were.
+
+The rule was right. In the artwork it was written about, the eyes, teeth and jaw
+were filled with the CANVAS colour, so the mark was a cut-out and only worked on
+the one background it was cut for. Every file declared its negative value
+explicitly, which is why `juke-mark-light.svg`, `juke-mark-void.svg`,
+`juke-mark-appbar.svg` and `juke-mark-app.svg` existed as files rather than as a
+`fill` override.
+
+**Package 02's mark is not a cut-out, and that was measured rather than taken on
+trust.** The old `/juke-mark.svg` fills 16 paths with `#0B0E14` — obsidian, the
+page itself. The new `/juke-shark-mark.svg` fills 11 with `#1A222D`, a slate
+that is not any ground in this app. The negatives are the shark rather than a
+hole shaped like one, so one file reads on navy and on white alike and there is
+nothing left for a per-ground cut to compensate for. `JukeLogo.jsx`'s five-entry
+`SURFACE` map is one `MARK` constant now; the four extra files are deleted.
+
+**`surface` and `onLight` stay in the signature**, because every call site
+passes them and a prop that vanishes is a silent change at a dozen sites — and
+`onLight` still does one real job, suppressing the detail variant, whose shading
+is tuned for a dark ground and is genuinely wrong on white.
+
+**What did NOT change is why an `<img>` mark is theme-blind**: the inline SVG it
+replaced on `404.html` took `var(--mark-ink)` and `var(--teal)` and reversed
+itself, and an `<img>` cannot. That is still true and is still the reason a
+theme-aware mark has to be inline or masked. It simply stopped mattering for the
+grounds this app has, which is why `404.html` now carries one `<img>` where it
+used to carry two and swap them on `:root[data-theme="light"]`.
 
 **The mark may now stand alone, and that is the one rule that changed.** The
 goalpost read as a plain U without its wordmark, so mark-only was restricted to
@@ -3442,6 +3938,427 @@ markup carrying `hidden shrink-0 sm:block` a few lines below — the arithmetic
 had been wrong since that class went on. A handoff's paths are read off the
 repository at some moment and go stale like anything else; check what actually
 renders before measuring it.
+
+## One mark, two crops, and the water it arrives through
+
+Three design packages, landed together, and they share one file. `<juke-mark>`
+(`web/public/juke-mark.js`) is a dependency-free custom element carrying the
+shark and twelve animation variants in a shadow root. **It ships unedited** —
+the package says so and this file repeats it, because the consequences of
+forgetting are spread across the three sections below.
+
+Three variants are in use. `form` is the cold launch: a one-shot reveal with a
+beginning and an end. `loader` is the in-app wait: a 1.6s loop with neither.
+`static` is what reduced motion gets. **Do not use `form` for a wait** — an
+animation that finishes and then sits there reads as a hung screen rather than
+a busy one, which is the distinction the packages draw and the reason there are
+two.
+
+### The geometry is written down once, and everything else is derived
+
+`juke-mark.js`'s `ART` is the only copy of the mark's paths in this repository.
+`scripts/build_icons.mjs` reads it and writes `juke-shark-mark.svg` (the logo,
+564x352), `juke-icon-tile.svg` (the browser icon: a 380x380 head crop on a navy
+`#141C27` tile at 22% radius) and `juke-favicon.svg` (that crop with no tile),
+then renders every PNG from those.
+
+**The packages supply those SVGs as files and they are deliberately not copied
+in.** Package 02's own stated intent is that "the logo in your nav and the mark
+in the cold launch are the same object". Copied, that is a sentence somebody
+maintains across three files and it is false the first time one of them moves.
+Derived, it cannot be false. Checked before relying on it: the package's
+`juke-icon-tile.svg` is byte-identical to `ART` on every path, transform and
+fill, and differs only in viewBox, the tile rect and the bloom opacity — which
+are exactly the three parameters the generator takes.
+
+**Two crops, because one asset at two sizes does not work.** At 16px the full
+mark's fins swallow the head and it reads as a smudge. The `.ico` is assembled
+from the TILE at 16/32/48, not the mark; `build_favicon_ico.py` says so.
+
+**There is one generator.** The first version of this work added a second
+script beside `build_icons.mjs` before noticing it already existed and wrote to
+the same directory — the written-down-twice failure, in the tooling this time.
+Its `JOBS` table takes an explicit height now, because the mark is 1.60:1 and
+the old one-`px`-for-both signature would have letterboxed it silently.
+
+**The packages' SVGs carry a C2PA provenance manifest and it is not
+reproduced.** It is a signature over their bytes; re-emitting it over generated
+bytes would be a false provenance claim, and an invalid one.
+
+### Deepwater, the cold launch
+
+Three drops fall through deep water and land at centre; an impact glow and two
+ripples spread from where they land, four beads arc out of the splash, and the
+droplet expands as the mark grows up underneath it. Teeth light left to right,
+the eyes flicker twice and hold. **The reveal is 2700ms and the overlay holds
+exactly that**, then the frame is dead still until the app is ready. It
+replaced Breach, a 4000ms shark leaping through a waterline.
+
+**Revised once, and the second cut is the one to read.** The first was four
+specks converging on a droplet that simply became the mark: no impact, no
+consequence, and a mark that rose from `scale(.82)` over 580ms, which reads as
+a fade rather than a growth. The owner reported it as still off after two
+rounds of timing fixes and a new package arrived. What changed is not a number
+but the mechanism — see below — and the mark's own rise moved with it, from
+`.4` over 800ms, so it visibly comes out of the place the drops landed.
+
+**Everything below about how the hold used to be measured is kept because the
+failures are instructive, and every one of them is now structurally
+impossible.**
+
+**The 600ms difference is the composition's last beat, not slack.** It shipped
+dismissing at exactly 2500 — the reveal's own length — on the reasoning that
+nothing finite runs past 2.5s, so every extra millisecond is a still frame the
+visitor waits through. The owner watched the deployed site and reported it
+"close but could last slightly longer", and the reasoning was wrong in a
+nameable way: at 2500 the fade begins on the same frame the flicker ends, so
+the finished mark is never actually SEEN finished. The design package's own
+sentence is "2.5 seconds, then the frame sits completely still until the app is
+ready", and at 2500 there is no *then*. A still frame is not waste here; it is
+the last beat, and it was the one beat that never played.
+
+**And 3100 from WHAT is the other half of that number, which took a second
+report to find.** It was 3100 from navigation start, and the reveal does not
+begin at navigation start: a CSS animation is play-pending until its first
+rendering opportunity, so the composition begins at the first painted frame —
+which is gated on every render-blocking stylesheet in `<head>`, including a
+cross-origin Google Fonts request the overlay cannot use. It has no text in
+it at all; there is no wordmark, deliberately.
+
+Measured on the built site against a stub for that request, at four
+latencies: **the reveal's own start tracks first-contentful-paint one for
+one** — 130 / 172 / 426 / 926ms at font latencies of 0 / 150 / 400 / 900ms —
+while the dismissal stayed pinned at 3100 whatever happened. So at a 900ms
+font fetch the reveal ran 926 → 3426 and the layer began fading at 3100: the
+eye flicker, the composition's last beat, cut off by 326ms. Past about
+1200ms of pre-paint delay it starts eating the teeth sweep. **On exactly the
+connections where the splash is doing the most work, it did the least of
+it** — and this file's own rule against cutting back below 2500 was being
+broken from a direction the number could not see.
+
+`main.jsx` measures the hold from `revealStart` now, read off the
+composition's own animations rather than from a clock, so there is no second
+guess at it and no constant to keep in step with `juke-mark.js`. After:
+the held beat comes out 603 / 615 / 611 / 614ms at those same four
+latencies. The cascade falls back to the paint entry and then to 0, which
+is exactly the old behaviour, and reduced motion lands on the paint entry
+because `variant="static"` has no animations to read.
+
+**Do not let anything else charge this hold to navigation start.** The two
+are the same number on a fast connection and only ever diverge where it
+matters.
+
+**`sonar.spec.mjs` had to stop asserting an absolute offset with it**, and
+that is the rule this file already states about the header's own padding:
+assert the relationship, never an offset. Both bounds were measured from an
+init script's own `t0`, which is a claim about how long the whole page takes
+to load and only incidentally about the overlay — so they would have failed
+for this fix as loudly as for a regression, and passed on a fast run while a
+slow one shipped truncated. They bound `removedAt - revealStart` now, with
+the absolute ceiling kept as a separate, much looser assertion because
+"relative to the reveal" says nothing if the reveal never starts.
+
+The element id is still `#boot-sonar` — `theme.js`'s comment, `main.jsx`'s
+teardown and `sonar.spec.mjs` all key off that literal string, and none of it
+had to change. Only what plays inside it did.
+
+### The layers do not start themselves any more
+
+This is the change that actually fixed it, and it came from the design package
+rather than from here. **Every finite layer in the overlay ships at
+`opacity: 0` with no `animation` at all**, carrying its timing in a `data-anim`
+attribute instead. `splash-boot.js` applies the lot in one pass and calls
+`mark.replay()` in the same breath, so the drops, the impact, the droplet and
+the mark's rise share one zero.
+
+**Which means the composition cannot begin before it can be seen.** Every
+earlier fix here was a correction applied after the fact — hold from the
+animation's own `startTime`, then restart the animations at first paint — and
+both were chasing a zero that CSS had already chosen. A layer that has not
+started costs nothing to hold; one that has is a visible jump to rewind.
+Measured across font latencies of 0 / 400 / 900 / 1800ms, the pass now lands
+38 / 57 / 54 / 48ms **after** first paint, and the hold comes out
+2999 / 2994 / 3001 / 2993ms every time.
+
+**And it took the freeze with it, which was not the point and is the larger
+win.** Waiting for a painted frame puts `app.js`'s parse and React's hydration
+*before* the reveal rather than inside it. Long tasks overlapping the reveal,
+at 6x CPU throttling: **1989ms of 2500 originally, 361ms after the restart fix,
+90ms now.** At 4x it is 50ms, and at 1x it is zero.
+
+**The reveal is timed in two files and neither may be re-cut alone.** The water
+and the drop sequence are CSS in `index.html`; the rise, the teeth and the eye
+flicker are inside `<juke-mark variant="form">`, where no selector in this
+repository reaches them. They agree today — the drops land at ~620ms, the
+droplet starts at 620 and the mark's rise at 660, so the mark comes out of the
+droplet. Re-time one and the mark arrives out of nothing.
+
+**There used to be a `--total` custom property claiming to retime the water
+from one place, and it was already dead.** Nothing referenced `var(--total)`:
+every layer carries its own literal duration, copied verbatim from the
+reference so the tuned set stays tuned. It is gone rather than kept for
+tidiness — a knob that turns nothing is worse than no knob.
+
+**`juke-mark.js` moved too, and the artwork did not.** `ART`, `EYE_BLOOM`,
+`RIM_D` and `TAIL` are byte-identical to the previous copy — checked, because
+`scripts/build_icons.mjs` derives every SVG and PNG from `ART` and a change
+there is an icon rebuild. What moved is the `form` variant's timing and
+`BASE_CSS`'s `transform-origin`, which is now an explicit `640px 386px` rather
+than `50% 50%`. That matters more than it looks: the rise starts at `scale(.4)`
+now, so an origin that resolved anywhere but the mark's true centre would grow
+it out of the wrong point.
+
+### Downloading is not executing, and the reveal only cares about the second
+
+The reveal was frozen mid-flight and it was `stats.js`. `requestIdleCallback`'s
+2000ms timeout fires at 2000ms on a page that never goes idle, and the reveal
+runs from its first painted frame to that frame + 2500ms (2700 since the
+revision) — so
+`players.js`/`stats.js`/`draft-engine.js` landed squarely inside it. **769KB of
+`stats.js` is not something a compositor can absorb**, and the parts of the
+reveal that read AS the reveal are the worst possible ones to block: the teeth
+and the eyes are `fill` animations (`juke-mark.js`'s `form` variant), and
+`fill` is not a compositable property, so every frame of them needs the main
+thread `stats.js` is holding.
+
+Measured on the built site under CPU throttling, counting long tasks that
+overlap the reveal window:
+
+```
+                                  blocked      worst single block
+6x slowdown, as shipped      1989ms of 2500          975ms
+6x slowdown, stats.js gone    882ms of 2500          306ms
+6x slowdown, after the fix    361ms of 2500          122ms
+4x slowdown, after the fix    185ms of 2500           77ms
+1x,          after the fix      0ms of 2500            0ms
+```
+
+The 975ms block lands across the middle of the teeth sweep and the whole eye
+flicker. **That is the "not remotely as smooth as the design file" report, and
+the design file is of course smooth: nothing else is running underneath it
+there.**
+
+**The fix is to split the download from the execution, not to move the load.**
+`preloadDeferredData()` fetches all three at boot as `<link rel="preload"
+as="script">` — network, never the main thread, so it cannot disturb anything —
+and only the parse waits. Which makes this an improvement on a slow connection
+rather than a trade: before, the *download* did not start until the idle
+timeout fired at 2000ms.
+
+**The gate is the reveal ending, not the overlay leaving, and the difference is
+about 900ms of something that matters.** The overlay outlives the reveal by a
+600ms held frame plus a 260ms fade, and a busy main thread can disturb neither —
+the mark is dead still through the first and the second is an opacity
+transition the compositor owns. So holding through them buys no smoothness and
+costs real time, and **that time is not free**: `setupProblem()` reported an
+empty board as *"10 teams over 14 rounds is 140 picks, and the half PPR board
+only carries 0 players"*, so every millisecond the data is late is a
+millisecond the Lobby can show a refusal that is not true. `appbar.spec.mjs`
+and two in `pickcode.spec.mjs` caught the first version within one run by
+starting a draft on the frame the overlay lifted — which is a thing a person
+can do.
+
+**So `setupProblem()` says the board is loading now**, and that was always a
+latent bug rather than one this change introduced: the deferred data has never
+been synchronous, and on a slow connection it lands well after the Lobby is on
+screen. It is still a refusal, because a draft genuinely cannot start without a
+board; what changes is that the reason is true and clears itself on
+`juke:data-loaded`. **A message that names the reader's league, their format
+and a number is not a placeholder, however briefly it is up.**
+
+**Ask the animation, not a constant.** "When does the reveal end" is
+`max(startTime + endTime)` over the finite animations, which is derived rather
+than 2500 written down in a third place — `index.html`'s own `--total` comment
+already records what happens when those drift. Two traps in reading it:
+`startTime` is null while an animation is play-pending, so a probe taken before
+the first paint reports "not started" for every case and says nothing; and
+**`#boot-sonar`'s own `splash-boot-failsafe 600ms ease-in 8s` is finite**, with
+an `endTime` of 8600ms, so counting it put the answer out by six seconds and
+landed the board at 5406ms instead of 2850. It measured as perfectly smooth and
+shipped a late board — the half of this trade that is easy not to look at.
+Excluded by target rather than by name: the layer's own fade-out belongs to the
+teardown, everything inside it belongs to the picture.
+
+**And once the gate opens, load — do not go back through
+`requestIdleCallback`.** Its 2000ms timeout is a ceiling rather than a delay,
+but on a page that never goes idle it is reached, and stacked on top of a gate
+that has already chosen its moment it simply adds two seconds. The warm-load
+path still uses it, because there it is the only deferral there is.
+
+**One `?v=` stamp for all three, read by both the preload and the script.**
+Written down twice it is worse than a stale address: a preload whose URL
+differs by one character is not a warm cache, it is 636KB downloaded twice.
+
+### The stamp on the deferred data is read, not written down
+
+`app.js` used to carry its own literal copy of the version stamp, and **the
+nightly's `?v=` sed covers `web/index.html`, `404.html` and the how-it-works
+page — not `app.js`**. So the pipeline rewrote `players.js` and `stats.js`
+every morning and left them at an address that never changed: new data behind
+a cached URL, which is this file's own "a rebuild nobody sees" failure landing
+on the two generated files it is most about. The two stamps had already
+drifted a fortnight apart — `202608231526` against `202609031105` — by the
+time anybody compared them.
+
+**Adding `app.js` to that sed is not the fix, and it is worth knowing why
+because it is the obvious move and it fails twice.** It would match nothing:
+once the stamp became a named constant there was no literal `?v=<stamp>` left
+in the file for the pattern to find, so the run would be a silent no-op
+wearing a fix's clothes — the exact shape this file warns about elsewhere.
+And if it were made to match, it would rewrite the project's largest and
+most-edited source file every night: `git log app.js` becomes a wall of stamp
+bumps, and **every open branch touching `app.js` conflicts with the nightly
+daily**. This file already records that pain for `index.html` and the docs
+page, where it is two small files and still costs a merge on a pull request
+that was open for one hour.
+
+So the second copy is removed rather than kept in step. `DEFERRED_V` reads
+the stamp off `app.js`'s own `<script>` tag — `document.currentScript.src`,
+parsed with `URL` — so there is one stamp on the page, in `index.html`, and
+nothing left to drift from. **`document.currentScript` is only the element
+during a classic script's own synchronous execution**, which is where that
+line runs; read it later from a handler and it is null, which is why it is an
+IIFE at the point of declaration rather than a lookup inside `deferredSrc()`.
+
+`tests/asset-stamp.spec.mjs` pins the **relationship** rather than a number —
+whatever `index.html` stamps `app.js` with is what the three deferred files
+are requested with — because a literal would be wrong within a day, which is
+the same reason every measured figure in this file carries a date. It also
+asserts each file is fetched under exactly one stamp, which is the
+two-constants failure above. Confirmed red against the bug, reporting the real
+drift: expected `202609031105`, received `202608231526`.
+
+**And it guards the workflow from both sides**, because the browser cannot
+see that half: dropping `web/index.html` from the sed list would leave every
+other assertion passing on a stamp that had quietly stopped moving, and adding
+`app.js` to it is the naive fix above. Both were confirmed red.
+
+**`splash-boot.js` answers two questions before the first frame**, and is
+parser-blocking immediately after the overlay rather than in `<head>`, because
+both questions are about an element that does not exist yet up there.
+Deferring either to `DOMContentLoaded` would paint the thing it exists to
+suppress.
+
+**The same-session gate is a reversal of a decision recorded in this file, and
+the code says so at the point of reversal.** The owner has removed a skip-gate
+from this overlay twice — a 300ms delay that meant nobody on a fast connection
+ever saw it, and an installed-app-only scoping that meant almost nobody saw it
+at all. Both hid the splash from someone who had never seen it. This one hides
+it from someone who watched it a moment ago and pressed reload; the first visit
+of every session still plays in full, on every device and connection speed.
+That is the property those two reversals were protecting, and it is the test to
+apply if a third gate is ever proposed.
+
+**Reduced motion needs a script, not a media query.** `juke-mark.js` carries no
+reduced-motion handling and its animations are in a shadow root, so
+`splash-boot.js` swaps the attribute to `variant="static"` and `main.jsx`
+shortens its hold to 600ms off an attribute that script sets — rather than a
+second `matchMedia` call that could disagree with the first. The water keeps its
+opacity and loses only its motion, so the frame is still the designed picture.
+
+**The drop sequence needs no rule at all now**, and the `display: none` that
+used to hide it is deleted rather than kept as belt and braces. Those layers
+ship at `opacity: 0` with no animation and only the start pass gives them one,
+and that pass returns early under reduced motion — so they are invisible by
+construction. A second, silent way for a layer to be hidden is how the next
+person spends an hour on a layer that is behaving correctly.
+
+**`<html>` carries `#0a1119`, inline in `web/index.html`.** The overlay's own
+background cannot cover a frame in which the overlay does not exist — and the
+declaration cannot live in `index.css`, which is an external file Vite `<link>`s
+and therefore cannot apply until it has been fetched. Measured from an iPhone
+recording at 50ms per frame: a pure white screen from 2200ms to 2350ms before
+the navy. Desktop never showed it, because Chrome keeps presenting the previous
+page; iOS Safari paints it.
+
+**There is no wordmark, and the argument for the old one survives its
+removal.** Breach carried `<b>Juke</b>` under the shark and this file argued for
+it: a visitor arriving from a pasted link needs to know whose product this is.
+What made that true was that the goalpost monogram read as a plain U on its own.
+A shark silhouette does not. Do not add a tagline either — that has now been
+decided three times.
+
+### The draft room loader
+
+`DraftRoomLoader.jsx` replaced SonarLoader at the one call site that was a
+full-screen wait. SonarLoader is untouched and still correct everywhere else.
+
+**The floor is 1600ms — one full turn of the loop — and it shipped at 500,
+which was wrong on the real screen.** Reported by the owner off the deployed
+site: "way too short and you almost can't make out what's on the screen before
+you get sent into the draft room."
+
+The argument that produced 500 is worth keeping for the way it failed. 400ms
+had failed historically because SonarLoader's ring is a sweep with a beginning:
+`dataReady()` is usually already true here, so the screen was gone before one
+cycle completed and it read as a flash. 2100 was `RING_MS` exactly — one full
+sweep — so the thing always finished what it started. `DraftRoomLoader` has no
+sweep to complete: its teeth run on negative delays stepped 55ms apart, so it
+is mid-loop on its first painted frame and there is no cycle boundary to land
+on. Every sentence of that is true, and it does look the same held for 500ms as
+for 5000.
+
+**And it answers the wrong question.** "Does it look stuttery" and "can a person
+see it" are different quantities, and only the first one is about the
+animation. Dwell is about the reader. At a 500ms floor the layer is up for 500
+plus a 220ms fade-out, and the first 160 of that is still fading IN — about a
+third of a second at full opacity, for a screen carrying a mark, a heading and
+a sub-line. No property of the loop's seamlessness changes that. Measured after
+the fix: **2268ms on screen against roughly 720 before.**
+
+1600 is one complete cycle, so the whole gesture plays through rather than
+being sampled — the shortest hold that shows the composition entire, and it
+lands between the 2100 nobody complained about and the 500 that was reported.
+The package's 500 is a MINIMUM; what it forbids is going lower.
+
+**It is 2400 now, and the mark is 152/184px rather than 104/126**, on the same
+report and the same reasoning one step further: asked for a larger mark and
+slightly longer with it. 2400 is one and a half turns, and landing off a cycle
+boundary costs nothing — this is a FLOOR, so the real end is
+`max(floor, ready)` and ready is arbitrary, which means the layer already left
+mid-loop on any wait that outlasted 1600. Cycle alignment was never achievable
+and was never what 1600 bought; what it bought was dwell. Measured on screen:
+**2841ms on a phone and 2929 on a desktop, against 1820 before.** The design
+package's figures are a floor rather than a fixed size — what they protect is
+that the teeth and the eyes stay large enough to read — and the inline tier
+(40–56px beside a status line) is untouched, because the report was about the
+screen.
+
+**A caller that starts a draft and then reads the room is reading this
+loader**, and lengthening the floor is what proved nobody had noticed.
+`state.started` flips synchronously inside `engine.startDraft()` while this
+layer covers the room for its floor, so `deep-board.spec.mjs` — which waited a
+flat 2000ms and then asked whether the Players table carried its "Real ADP ends
+here" divider — reported the divider missing. The divider was fine; the table
+had not been drawn. At 3500ms it was there. `startSoloDraft()` waits for
+`[data-draft-loader]` to leave now, so the fix is in the helper rather than in
+that one spec: **the duration was never the thing any caller cared about**, and
+a number in a spec is a number somebody has to find again every time this floor
+moves.
+
+**Do not remount it while the layer is up.** The loop is seamless precisely
+because it starts mid-flight; remounting resets the sweep and reads as a
+stutter.
+
+**It grew a ceiling it never had.** The readiness poll is an rAF loop on a
+condition a wedged engine never satisfies, so before this there was no exit at
+all — a permanent full-viewport layer at z-index 60 with no way out but a
+reload. 15s, and it says so on screen.
+
+**Both new flags are cleared in `armFreshDraft()`**, for that function's
+existing reason: `DraftRoom` does not unmount between drafts, so a stuck
+`startTimedOut` would open the next draft on the timeout message and a stuck
+`leaving` would start it already faded out. Same shape as the
+`view`/`soloAutopick` leaks it was written for.
+
+### What the suite got back
+
+`openApp()` waits on the overlay's absence, so shortening the overlay shortened
+the wait with no edit: its ceiling went 8000ms to 6000ms and over a second came
+off each of 96 calls. The session gate means most of those calls now find
+no overlay at all. A spec that needs to watch the splash play needs a fresh
+browser context — `loadWithProbe()` in `sonar.spec.mjs` already made one, which
+is why it kept working without being told the gate existed.
 
 ## The draft room header
 
@@ -3749,11 +4666,15 @@ the defect is in what is *absent*, and absence renders, contrasts and passes.
 **Your own turn draws both rings, nested.** It is the one cell on the board
 where the two facts coincide, and letting either win throws the other away.
 
-**What each team holds is on the board, and which positions get counted is
-derived.** `FORCED_LATE` already names the two the app schedules itself, so
-`COUNTED_POSITIONS` is `POSITIONS` minus those — listing QB, RB, WR and TE
-would be the league shape written down a second time. Counting a kicker is
-eight columns of "0" until the closing rounds and eight of "1" after them.
+**What each team holds is on the board, and `COUNTED_POSITIONS` is everything
+but the kicker.** It was `POSITIONS` minus `FORCED_LATE`, on the grounds that
+counting either of those two was eight columns of "0" until the closing rounds
+and eight of "1" after them. That is now true of one of them and not the other:
+with the round gates gone, defenses land across four to seven distinct rounds
+from about round 8, and kickers across two to four, effectively all in the last
+two (measured 1 September 2026 over 120 drafts). So DST earns a column and K does not. Listing QB, RB, WR and TE would still
+be the league shape written down a second time, which is why the constant names
+the one position it excludes rather than the four it keeps.
 
 **Each count carries its own ground, and that is the whole reason it is a chip
 rather than coloured text.** White on a position solid is the contract those
@@ -3796,6 +4717,27 @@ the analytics Lobby and the anchored kebab dropdown are all untouched above
 dashboard is a button press away from the phone's Mock Drafts screen, and it
 is the *same component*, not a cut-down copy.
 
+### A phone component that memoizes over `board` never updates
+
+`board` is mutated in place — a pick sets `p.drafted` on an existing object
+and nothing ever replaces the array — which this file already records as the
+reason `board` is useless as a memo key, in `DraftRoom.jsx`'s own note beside
+`useJukeTick`. `PlayersTabPhone` memoized its rows on `[board, ...filters]`
+anyway, so **the phone player pool was computed once and frozen**: a drafted
+player stayed in the list and the "N AVAILABLE" count never left its opening
+number. Reported from a real mobile draft.
+
+The desktop pool has never shown it, because `availablePlayers` has had
+`tick` first in its key all along — which is exactly what made it easy to
+write the phone one the other way and not notice. **`tick` is the only value
+in a phone component's dependency list that does any work when a pick lands**,
+and it has to be threaded down as a prop, because the phone tree is props all
+the way from `DraftRoom.jsx` and nothing below re-reads the engine.
+
+Worth checking the same way anywhere else: a list that is right on the first
+render and never wrong-looking afterwards is what this failure looks like.
+Draft a player and read the count, rather than reading the filter.
+
 ### The homepage is chosen by CSS, and that is a hydration decision
 
 `scripts/prerender.mjs` writes real server-rendered markup into `#root` and
@@ -3814,9 +4756,70 @@ work today's homepage already did on a phone, so nothing got slower; it
 simply did not get faster. If it ever needs to, the fix is to prerender two
 documents, not to move this back to a hook.
 
-**The Draft Room does not have this problem and uses a hook.** `DraftRoom` is
-its own React root, mounted into `#draftroom-root`, which the prerender never
-touches — so `usePhoneWidth()` is free there and always was.
+**The Draft Room does not have this problem and uses a hook**, and the reason
+it does not has changed underneath that sentence. It used to be that
+`DraftRoom` was its own React root: the prerender never touched
+`#draftroom-root`, so nothing in it was ever hydrated. It is a `createPortal`
+inside the one root now — Clerk allows exactly one `<ClerkProvider>` per page,
+which forced all three mount points into a single tree (`main.jsx`) — and a
+portal *is* hydrated, which is how it caught the problem this section says it
+does not have. See below. `usePhoneWidth()` is free there either way, but now
+because `DeferredPortals` mounts it after hydration rather than because it
+lives outside the root.
+
+### A portal is hydrated too, and failing it throws away the whole prerender
+
+Found 2 September 2026 by chasing two React errors that had been on every load
+of the site for as long as accounts have existed: **#418** (hydration failed)
+and **#423** (recovering by switching the root to client rendering).
+
+**React hydrates a portal's children against whatever is already sitting in
+the container `createPortal()` names.** It does not treat a portal as a fresh
+mount just because that container is outside the hydrating root.
+`scripts/prerender.mjs` fills `#root` and only `#root` — `entry-server.jsx`
+exports `App` and nothing else — so `#appbar-root` and `#draftroom-root` are
+empty in the served HTML while the client tree renders `AppHeader` and
+`DraftRoom` into them. React looked for that markup, found none, and failed:
+
+```
+Warning: Expected server HTML to contain a matching <div> in <div>.
+    at div
+    at AppHeader
+Hydration failed because the initial UI does not match what was rendered
+on the server.
+```
+
+**A hydration failure is not scoped to the subtree that caused it.** React
+discards the server markup for the *whole root* and rebuilds all of it on the
+client. So the prerender — whose entire job is to put hero pixels on screen
+before `main.jsx` has parsed — was being thrown away on every single load, by
+two components that draw nothing until `window.JukeEngine` exists. **It cost
+nothing visible, which is exactly why it survived:** the page still rendered,
+just the slow way, and a console nobody had open said so.
+
+`DeferredPortals` renders `null` on the first pass, so the hydration render
+matches the server exactly, then mounts both portals from an effect as the
+plain client renders they always were. Teaching the prerender to fill all
+three containers is the other fix and buys nothing here.
+
+**`main.jsx` used to say portals "change nothing about hydration", and that is
+the sentence to learn from.** It is true about *which container the nodes land
+in* and false about *whether they are hydrated* — two different questions, and
+only the first is obvious from reading `createPortal()`. The comment is
+corrected in place rather than left standing.
+
+**The minified codes name no component, so do not try to reason from them.**
+`#418`/`#423` are just numbers; one temporary build with
+`define: { 'process.env.NODE_ENV': '"development"' }` and `build.minify:
+false` printed `at AppHeader` on the first run. **And baseline before
+attributing**: the first suspect here was `FloatingNavPill` seeding `active`
+from `location.hash` behind a `typeof window === 'undefined'` guard — which
+reads as SSR safety and is precisely what makes the two sides disagree. That
+was a real latent divergence and is fixed (the mount effect already called
+`onHash()`, so the initializer was redundant), and fixing it changed the error
+count by **zero**. Confident, plausible, and not the cause.
+
+Measured on a production build, 2 errors to 0, at 390px and 1280px.
 
 ### The floating nav pill, and the clearance that came with it
 
@@ -4107,19 +5110,149 @@ every setting is a settings screen with worse formatting; a summary listing
 none of the unusual ones lets somebody sit in a linear rookies-only draft
 under a header reading "10 teams · 14 rounds · Half PPR".
 
+**And the Roster section was one too, found the same way `Draft order` was.**
+Every stepper in it writes `bench` / `flex` / `superflex` / `starters` through
+`setLeague()`, and `setLeague()` moved `rounds` with them **only for a scoring
+preset** — so one press of the bench stepper produced *"13 roster spots, but
+the draft runs 14 rounds"*, and there is no rounds control on that screen to
+answer it with. The only way back was to undo the press. Confirmed on the
+deployed site, not inferred: `setLeague({ bench: 4 })` there leaves
+`rounds` at 14 and `setupProblem()` refusing.
+
+**Both this file and the component's own comment credited that derivation to a
+`setLineup()` that has never existed.** Not renamed, not moved — `grep -n
+"setLineup" app.js` has always come back empty. Two comments describing a
+function nobody wrote, and the control they describe silently refusing every
+press, which is the dead-control failure this project has now shipped three
+times.
+
+It is `ROSTER_KEYS` in `setLeague()` now: any patch touching a key the roster
+is made of re-derives `league.rounds = rosterSize()`, and a scoring preset that
+moves the lineup counts as one even though nothing in the patch says so —
+`superflex` is set by the preset, not by the caller.
+
+**The second half is the mirror, and it is the same trap one level down.**
+`readSetup()` reads all nine of these off the hidden legacy `<select>`s on the
+next `refreshSetup()` — which `goHome()` calls — and `setLeague()` mirrored
+only `teams` and `scoring` back to them. So a bench trimmed in the settings
+screen was reverted by the next trip home, silently, because nothing on that
+screen reads the legacy controls. `mirrorToLegacy()` writes all nine, and it
+writes them **from `league` rather than from the patch**: a scoring preset
+moves `superflex` without `superflex` ever appearing in the patch, and `rounds`
+is derived rather than handed in, so reading the object everything already
+agrees is the source of truth removes both special cases.
+
+**A `<select>` silently refuses a value that is not one of its options.**
+`.value` stays where it was and `readSetup()` then reads the old number back —
+a mirror that fails without saying so. `#benchCount` ran 0–12 and `#roundCount`
+8–20 while the React stepper goes to 15 bench, which is a 24-round roster, so
+the ranges had to be widened to match the control that writes to them. There is
+no UI cost: the legacy screen is unreachable by mouse.
+
+This is what makes the refusal in "The pool a league can hold is not the pool
+it can see" honest. That message ends *"Run fewer teams, or a shorter roster"*,
+and until this the second half of that sentence was advice the app would not
+let anybody take.
+
+### The seat was written down twice, and the copy that lost was the one asked
+
+Reported off a phone: set the draft position in Draft Settings, press Start,
+land in seat 1 — *"it seems to respect the other settings"*. It does; the seat
+was the one thing about a draft kept in two places.
+
+`DraftOrder.jsx` has always set it through `engine.setMySlot()`, which writes
+`state.mySlot`. `DraftRoom.jsx` held its own `lobbySlot`, a `useState(0)` fed
+by the desktop lobby's dropdown and by nothing else. And `beginDraft()` called
+`startDraft({ mySlot: lobbySlot })`, whose **first act is
+`state.mySlot = opts.mySlot`** — so the settings screen's choice was written,
+correctly displayed in that screen's own list (`draftOrder()` reads
+`state.mySlot` to decide which row says "You"), and overwritten on the way in.
+Two right answers, one of them not being asked.
+
+**`state.mySlot` was already the pre-commit seat** as far as the engine is
+concerned, which is exactly why the list highlighted the right chair while the
+draft started in the wrong one. `lobbySlot` is `engine.mySlot()` now and
+`setLobbySlot` is `engine.setMySlot()`; `setMySlot()` calls `render()`, which
+fires `juke:header`, which `useJukeTick` already re-renders on, so it is live
+without a second copy to keep in step — and it refuses a seat outside the
+league, which the `useState` never did.
+
+**Not phone-specific despite the report**, which is worth noticing before
+looking for a phone bug: it is specific to choosing the seat on *that screen*,
+which is simply the only route to it on a phone. The desktop lobby's own
+dropdown writes `lobbySlot` directly and never saw it.
+
+**And a seat only exists inside a league, so shrinking the league has to move
+anybody past the new edge.** Nothing did. `setMySlot()` refuses an
+out-of-range seat on the way IN, which made this look covered — but it is
+`teams` that moves underneath a seat already chosen, and no writer of it had
+anything to say about the seat. Take seat 10 of 12, drop to 8 teams, and
+`state.mySlot` stays 9: `onTheClock()` only ever returns 0..7, so `isMyTurn()`
+is never true and the draft runs to the end **without ever offering a pick**.
+It does not throw and nothing on screen says so — it looks like a draft that
+skips you. `clampSeat()` is called from both doors, `setLeague()` and
+`readSetup()`, because a clamp on one of them is a clamp nobody can rely on.
+
+`tests/draft-settings.spec.mjs` covers the seat on both shells and every other
+control on that screen. The seat assertions were confirmed red against the bug
+and report the reported symptom exactly — **expected 5, received 0**. The
+"every control survives" test passes either way and says so: those settings
+were never broken, and it is a regression guard rather than a bug catcher.
+It reads each value back **after** the draft has started, because reading it
+off `league` beforehand would only prove `Object.assign` works, which is not
+what failed.
+
 ## The phone draft room's own controls
 
-**A crosshair, not an auto-follow.** The board is a real scroller in both axes
-and nothing ever pulled it back to the live pick. It centres the current cell
-in the board's own scroller — `getBoundingClientRect()` differenced against
-the scroller's, never `offsetTop`, and it returns early when already within
-4px, both of which are hard-won rules this file already records for the
-legacy board. It is a **counter** prop rather than a boolean, because
-pressing it twice in a row has to scroll twice.
+**The board follows the live pick, and the crosshair is how you get back.**
+It centres the current cell in the board's own scroller —
+`getBoundingClientRect()` differenced against the scroller's, never
+`offsetTop`, and it returns early when already within 4px, both of which are
+hard-won rules this file already records for the legacy board. The crosshair
+is a **counter** prop rather than a boolean, because pressing it twice in a
+row has to scroll twice.
 
-Deliberately not an automatic follow: that is a bug this project has already
+**This section used to say "a crosshair, NOT an auto-follow", and that was
+half a lesson applied as a whole one.** The reasoning was sound and it is
+still in this file elsewhere: unconditional following is a bug this project
 shipped and removed once, where a reader was pulled back to the live pick two
 or three times a second for as long as they kept trying to look elsewhere.
+What that fix actually did was not stop following — it was `boardFollow`,
+*follow until a person scrolls*. A board that never follows was reported
+straight back, from a phone draft with auto-pick on: the draft happened
+entirely off-screen and watching it meant dragging the grid down a round at a
+time. **When you inherit a rule that removed something, check whether it
+removed the thing or only the unconditional version of it.**
+
+So `followLive` follows, releases on a real gesture, and re-arms on the
+crosshair — and on the desktop board, which has no crosshair, on scrolling
+the live cell back into view. Three things about the gesture list:
+
+- **`scroll` may not be one of the events that releases it.** A smooth
+  programmatic scroll fires a stream of them, so a board that disengaged on
+  `scroll` would disengage on its own animation and follow exactly one pick.
+- **`pointerdown` may not be either**, which is where this differs from the
+  legacy board. Every cell on this grid is clickable, so a pointerdown
+  listener treats reading a player as "I want to look elsewhere".
+  `touchmove` is the touch gesture that actually means scrolling; a tap never
+  fires it.
+- **`scroll` IS what re-arms it**, and that asymmetry is the point: an event
+  that only ever turns following back on cannot feed back into the animation
+  that fired it.
+
+**And the board's own box is not the part of it you can see.** The phone
+board is `fixed ... bottom: 0` with the draft sheet drawn over its lower
+half, so centring in the scroller's height put the live pick *behind the
+sheet* — measured at 375x812 with the sheet at its default snap, the
+crosshair landed the cell at y=444 against a sheet whose top edge is y=342.
+The scroll was arithmetically perfect and the pick was invisible, which reads
+as "it did not scroll at all" and is exactly how it was reported.
+`centreOnLive()` takes a `bottomInset` and centres in the visible band;
+`DraftRoomPhone` derives it from `SHEET_SNAPS[sheetSnap]` rather than
+measuring the sheet, so the board never waits a frame for a layout read and
+never chases a drag in progress. **A correct scroll to a covered place is
+indistinguishable from no scroll at all** — check where the thing landed on
+screen, not what the scroller's numbers say.
 
 **The auto-pick ribbon lives inside the header**, drawn only when auto-pick is
 on. Everything on that screen is `fixed` and stacked by hand — the board is
@@ -4166,11 +5299,39 @@ starting a fresh one from zero.
 started" cannot read `snapIndex` off the prop the handler closed over; it is
 a ref, for the same reason the settings modal's seat swap already uses one.
 
+**"Draft with friends" has to be ON the launcher, and it was not.**
+`HomePhone`'s own "Or draft with friends — same board, real managers" row
+links to `#/drafts`, which on a phone IS `MockDraftsPhone` — so the one
+advertised route to multiplayer landed on a screen with no multiplayer on
+it. Everything behind it already worked at 375px: the same
+`DraftWithFriendsModal` and `RoomPanel` the desktop Lobby opens, which
+`DraftRoom.jsx` already renders for both Lobby branches. **It was the
+control that was missing, not the feature** — which is the harder kind to
+notice, because every check anybody runs on the thing itself passes.
+
+Its own full-width row rather than a third button beside "Draft settings"
+and "Your insights": the string does not fit a third of a 390px row (the
+same measurement `HomePhone` already records for it), and it is a different
+kind of action from those two anyway — they change what the button above
+starts, this starts something else.
+
 ## The gear menu, and notifications that do something
 
 The kebab dropdown is a bottom **action sheet** below `sm` and the anchored
 dropdown above it, from one array of items — a phone-specific copy of the
 list is the thing that ends up missing an item after the next change.
+
+**"Back to the locker" is a menu item, and it exists because two real
+routes out were both unreadable.** When a draft finishes, the labelled way
+back was the link at the bottom of the Insights report — which is the screen
+somebody is trying to leave — and the header's own route was an unlabelled
+chevron. Reported as needing a way back that is not the report. The menu is
+where somebody looks for "things I can do to this draft", the same argument
+that brought Pause back below, and the mobile header's Auto toggle — a
+permanently disabled control at 40% opacity once the draft is over, in the
+widest slot on a 46px bar — becomes a labelled Locker link instead. **A dead
+control on the screen where a reader has finished is the worst place to
+spend the space that the exit needed.**
 
 **Pause is back, which reverses a decision recorded here.** It was cut with
 Undo and "Auto-draft the rest" by a product review that found all three
@@ -4228,8 +5389,11 @@ twelve-cell tendencies grid, a recommendation engine, a heatmap and a history
 table. On a 390px phone all twelve cells stack into one column and the button
 the screen exists to offer ends up past the fourth chart.
 
-`MockDraftsPhone.jsx` is what `#/drafts` is below `sm`: start, resume, and
-what you have already run. **Nothing is lost.** "Your insights" mounts the
+`DraftRoomEntry.jsx` — `MockDraftsPhone.jsx` when this was written — is
+what `#/rooms/draft` is, and it is no longer below `sm` only: Flow v3 makes
+it the Draft Room's entry at every width, with the dashboard behind "Your
+insights" where a phone already had it. Start, resume, and what you have
+already run. **Nothing is lost.** "Your insights" mounts the
 identical `DraftLocker`, and a history row opens that component's own report
 path through a new `initialAnalyzeId` prop rather than a second entry point —
 the frozen-report-first path is the whole reason a reopened draft and the
@@ -4250,6 +5414,923 @@ changed between renders and React threw on the first press of the button that
 mounts it. It is keyed on `engine` rather than `[]` for a second reason:
 `analyze` is a const further down the same function, in its temporal dead
 zone on exactly the render that early return takes.
+
+## Practice a scenario
+
+`design_handoff_practice_scenarios` (option 1c) — the 2x2 grid of preset
+drafts under "Draft with friends" on the Mock Drafts lobby. It fills the
+region that screen ran out of content for: at 1280px it was four controls and
+then roughly 500px of nothing, with the drafts list in the other column.
+
+**The whole module is one sentence: pressing a card starts a real mock under
+that card's settings.** `engine.startScenario()` is the one function that does
+it, and it is `startFromHistoryLeague()`'s sibling on purpose — apply the
+config to the ONE real `league` through `setLeague()`, then call the ordinary
+`startDraft()`. A scenario room is not a mode; it is a mock draft that arrived
+with its settings already chosen.
+
+### The handoff asked for a one-off override and it cannot be one here
+
+Requirement 3 is that a scenario "must NOT overwrite the user's saved default
+Draft settings". That is written for an app where draft settings are a saved
+per-user record. In Juke they are `league`, which IS the shape of the draft
+while it runs and which nothing persists between sessions — every reload
+starts at the ten-team default, so there is no saved default to protect.
+
+**Restoring the league after launching would break the draft it just
+started.** `resumeDraft()` refuses any save whose `settingsFingerprint()`
+disagrees with the live league, by design, because resuming into different
+settings would corrupt the board. So a scenario draft left half-finished would
+come back unresumable, with an alert naming settings the manager never chose.
+The settings become the league, exactly as a history preset's already do, and
+the launcher's own line under the Start button says what they now are.
+
+The one place a snapshot IS taken is the **refusal** path, where there is no
+draft for a restore to disagree with: `startScenario()` applies the config,
+asks `setupProblem()`, and puts every value back if the answer is no.
+`startDraft()` checks that too — but only after the league has been rewritten,
+which would leave a manager on the lobby with settings they did not choose and
+a Start button that will not press.
+
+### Two things the handoff specifies that the engine cannot do
+
+Both are called out rather than quietly built, because a card that states a
+rule the draft does not apply is the dead-control failure in its worst form —
+the reader would believe it.
+
+- **`rules.noQbBeforeRound`** ("Late-round QB · No QB before Rd 8", the
+  signed-in "Your weak spot" card). There is no scenario constraint in
+  `draft-engine.js`, `engine.draftPlayer()` has no refusal for one, and
+  `autoPickForMe()` would take the very player the card forbade. Enforcing it
+  is a real feature across the Players tab, the Decide screen, the phone tree
+  and the queue — not a lobby module. So that card names the weakness and
+  prints the measurement behind it (`historyStats().weakestSpot`, the same
+  number the Locker's own Weakest Spot card shows) and launches a real draft
+  under the manager's own settings.
+- **`guidedTips`** ("tips on every pick"). There is nothing to switch on:
+  `JukeValueAssistant` renders a real recommendation above the player list on
+  every turn of every draft, unconditionally. The claim on the card is true
+  without a flag, and a flag that turns on something already on is a control
+  that does nothing.
+
+### rounds is a roster, not a number
+
+`league.rounds` is derived from `rosterSize()` whenever the roster moves,
+because a round count that disagrees with the roster is what `setupProblem()`
+refuses. So a scenario asking for 15 rounds is asking for a bench one deeper,
+and `startScenario()` solves for the bench **through `rosterSize()` itself**
+rather than restating "starters + flex + superflex" a second time.
+
+A config may legitimately carry no round count at all — the signed-in "New
+format" card omits it, because `superflex` is a scoring preset that adds a
+starting slot and therefore a round, and only `setLeague()` knows that. The
+subline drops an absent fact rather than printing it; the first version
+interpolated it unguarded and put **"undefined rounds"** on a live card.
+
+### Which four cards, and the floor under the derived set
+
+`web/src/components/practiceScenarios.js` decides and
+`PracticeScenarios.jsx` draws — the same split `oneThatGotAway()` already has
+with the dashboard that prints it. Guest gets four curated presets. Signed in
+with three or more graded mocks gets four built from real history: a seat
+never drafted from, the weakest starting spot, the connected league's own team
+count (or a scoring format the history has never run, when nothing is
+connected), and a 30-second clock on the usual settings. Under three mocks it
+is the guest set with the signed-in footer, which is the handoff's own
+fallback and right for the obvious reason: a card reading "your weak spot" off
+two drafts is a claim two drafts cannot support.
+
+**`state.scenario` is an id and nothing else.** The settings a card chose are
+already in `league`; a second copy on `state` would be the written-down-twice
+failure with a draft's shape in it. It is saved with the draft, restored on
+resume, and recorded on the history entry — which is the whole reason it
+exists, because "you have never tried this" is unanswerable unless finishing a
+scenario writes down which one it was. `startDraft()` clears it on the way in,
+beside `state.picks`, for that clear's own reason: one door in, several ways
+out, and a tag surviving into the next draft would label a draft no card
+started.
+
+**The accent colours are the repo's tokens, not the handoff's hexes.** Its
+teal/blue/pink/amber are each within a step of `mint`, `flow.blue`,
+`POS_CHALK.QB` and `flow.gold`, and its README says in the same breath to
+match the lobby's own chip palette. A second value one step off an existing
+one is how a colour ends up meaning two things on two screens.
+
+### Editing a league after a finished draft recorded it twice
+
+Found by the launcher and not caused by it. `draftOver()` is
+`picks.length >= teams * rounds`, so editing the league moves the finish line
+under a draft that is already over: step the team count from 10 to 12 and it
+goes false, step it back and it goes true — a rising edge, which
+`checkDraftFinished()` reads as "the draft just ended" and records a **second**
+history entry for the draft that finished minutes ago.
+
+**The duplicate is worse than a duplicate.** `recordHistory()` stamps
+`teams: league.teams`, so the copy claims a team count that draft never ran
+at, and the Locker then shows a twelve-team mock nobody drafted.
+
+Reachable from the Draft Settings screen since that screen could change a team
+count — finish a mock, "Back to the locker" (which leaves `state.started`
+true), open Draft settings, step teams. The launcher only surfaced it because
+its refusal path calls `setLeague()` twice by design. `setLeague()` now calls
+`noteDraftPhase()` before its `render()`, which is what `resumeDraft()` and
+`openHistoryDraft()` already do for the same reason in the same order: a
+change that re-establishes what "over" means has to re-seed the edge.
+
+`tests/practice-scenarios.spec.mjs` covers all of it, and the two bug-fix
+tests were confirmed red with each fix removed and the other four still green.
+
+## Flow v3: the rooms became places, and the shell became one shell
+
+`design_handoff_v3_alive` — 36 screens, nine of them × two auth states ×
+two breakpoints. The guest half is built; the connected half is not, and the
+reason is not effort.
+
+**Half of it needs data this project cannot get.** There is no league
+connect — no Sleeper/ESPN/Yahoo/CBS import, no roster, no matchup, no FAAB,
+no standings — so every number on a connected screen ("Claim Rico Dowdle",
+"+6.2", "$12", "WIN PROB 58%", "Dynasty Degens · Wk 3") comes from somewhere
+that does not exist. **All 18 guest screens do not**, and that includes the
+four in-season rooms, whose guest state is deliberately blurred sample
+content behind a lock card. So the split is not 50/50 by difficulty: the
+whole guest product ships without the integration, and the connected half
+waits for it rather than being faked.
+
+### The HTML is the spec, and its own README is not
+
+The handoff's README drifts from the markup in several places and says
+itself to "read exact values from the HTML". The differences worth knowing,
+because each one reads as plausible in the prose:
+
+- **Waiver's accent is `#00E5FF`, not `#74E5CE`.** Both breakpoints' markup
+  says cyan (2dg/3dg); only the README says mint.
+- **The guest homepage has no "Movers strip"**, which the README describes.
+  What 2ag actually has is hero → Practice/Connect cards → a draft-with-
+  friends row → an account card → the rooms grid → one footer line.
+- **Two unlock headlines were wrong in prose**: Trade is "Read your real
+  offers" and Strategy is "Plan your real week".
+- **The Prospect Room is not in the handoff at all.** Its lobby draws four
+  locked rooms; the app has advertised five since the homepage grid shipped.
+  Dropping a room from the site is a product decision and a bigger one than
+  drawing a fifth card, so all five render and the odd one spans its row.
+
+**And the mark is not the handoff's.** Its own `juke-mark-appbar.svg` is the
+full 564×352 shark sized into a 28×28 box — squashed, which this file
+already has a rule about — and it draws `JUKE` in Barlow Condensed where the
+repo's wordmark has been Archivo 900 since the shark landed. Changing the
+wordmark's face is a brand decision rather than a layout one, so
+`ShellHeader` uses `JukeLogo`. That is the README's own "substitute only
+where an existing repo component already expresses the same thing", used at
+the place it most obviously applies.
+
+**Tokens that already existed were not added again.** The handoff's border
+`#232A33` is `line.hairline`, its grounds are `surface.*`, its inks are
+`voidInk.*`, and its position tiles (WR `#BFD3F5`, TE `#F7D9A8`) are
+`POS_CHALK` — which its own README defers to ("per repo"). A second value one
+step off an existing one is the "a position reads a different colour
+depending which page you're on" drift `draftRoomPositions.js` was rewritten
+to end, arriving through a design file instead of through code. `flow.*` in
+`tailwind.config.js` holds only the ten this palette genuinely lacked.
+
+### The kickoff pill is real, or it is nothing
+
+`KICKOFF 3D 07:14` counts down to the next NFL kickoff. `gameFrom()` was
+throwing the ESPN event's own `date` away; it keeps it, and `nextKickoff()`
+returns the earliest game that has not started **off the same one-minute
+`sessionStorage` entry the score strip already fills** — no second request
+for a 220KB payload, and one parse rather than two.
+
+It answers null for an unreachable feed, a changed response shape, a board
+where everything has kicked off, and the six months of the year with nothing
+scheduled. **The pill draws nothing on null** — the score strip's own "it
+fails by disappearing" contract, applied to the one other surface that reads
+that feed. A countdown is read as a fact, so a fabricated one is worse than
+an absent one.
+
+Two homes, one component: `ShellHeader` renders it above `sm`, and each hero
+renders it below, because that is where the handoff puts it on a phone
+(2ag/2au against 3ag/3au).
+
+### Guest previews run on the live board
+
+The four locked rooms show real players at real positions, read off `board`,
+with only the league-shaped numbers invented — the FAAB, the fairness fill,
+the win probability, the deltas. A hardcoded roster is wrong the first
+morning the pipeline moves, and a preview naming a retired player is exactly
+the small wrongness a fantasy reader notices instantly. The hero says "A
+sample week" out loud, which is the honest half of the trade and is the
+handoff's own copy.
+
+**One number in there is not sample.** Strategy's "BYE ×3" counts how many of
+its own four players are actually on bye in the week the tile names, off
+`bye` from the pipeline, and the three week tiles are derived from that
+rather than fixed at 4/5/6. It is the one cell on that screen a reader could
+check against their own roster and find wrong.
+
+**League is sample end to end and that is honest rather than lazy.** A
+standings table is managers, records and points for; a player is a real thing
+the pipeline knows about and a manager called Sarah is not.
+
+**The blur is `aria-hidden` and `inert`.** Blurred content is unreadable by
+construction, so exposing it to a screen reader reads out a roster nobody can
+see, and leaving it focusable puts every sample row in the tab order in front
+of the two controls the screen exists for.
+
+### "Connecting is read-only" is a promise, so it was decided rather than copied
+
+The handoff draws that line on every desktop unlock card and simultaneously
+offers Strategy's "Apply both calls", which its own README describes as
+writing a lineup back to the platform. Both cannot be true. **Settled
+read-only**: Juke only ever reads a league, and Apply deep-links into the
+platform instead. So the line ships as written, at every width rather than
+the handoff's desktop-only — a claim about what happens to somebody's league
+data is worth two lines of 12px type on the screen most people will read it
+on — and it is the constraint the connect integration gets built under rather
+than a caption somebody can quietly contradict later.
+
+### One route became two, and the locker links had to follow
+
+The handoff splits what `#/drafts` used to be:
+
+- **`#/rooms/draft`** — the Draft Room's own entry. Start a mock, settings,
+  insights, recent. It is a room, so it sits under `#/rooms` with the other
+  five, and `DraftRoom.jsx`'s `draftsActive` branch claims it.
+- **`#/drafts`** — the archive of every draft you have run, which is what the
+  nav's Drafts tab means. `App` renders it, inside `#view-home`.
+
+`applyRoute()`'s `hideHome` moved with the first of those and **must not list
+the second**. Its reason is unchanged — a Lobby drawn out of
+`#draftroom-root` leaves the whole marketing page rendering behind it, adding
+its own height and a second scrollbar nobody can attribute to anything — but
+the archive is the opposite case: hiding `#view-home` for it would hide the
+screen itself.
+
+**Every "back to the locker" link moved to the entry, not the archive**, and
+that is load-bearing rather than tidiness. The archive has no Start button on
+it by design, so a finished draft sent there dead-ends the one flow
+`restart.spec.mjs` exists to walk: finish, go back, change the league, start
+another.
+
+**A row in the archive opens its report through `#/rooms/draft?report=<id>`.**
+The two screens are in different React trees and must not each hold their own
+idea of which report is open; the hash is the one channel both can see, which
+is the same answer `#/draft?room=ABC1` already gives for an invite.
+`DraftRoom` reads it on every `hashchange` rather than at mount — it does not
+unmount between routes, so arriving from the archive is a hashchange, and a
+stale id is the `view`/`soloAutopick` leak that file already documents.
+
+### The phone/desktop split is reversed for two screens and kept for the third
+
+The mobile pass made the homepage and the Lobby genuinely different screens
+per breakpoint, and argued it well. This handoff reverses both: 2ag and 3ag
+are one set of content in two layouts, and 3cg is the phone's own launcher at
+1280px with the dashboard behind "Your insights" — where a phone already had
+it. So `HomePhone` and the desktop marketing page collapse into `HomeAlive`,
+and `MockDraftsPhone` becomes `DraftRoomEntry` and leaves `phone/`, because
+that directory means "a different screen from its desktop counterpart".
+
+**The draft room itself is untouched and stays split.** Nothing in the 36
+screens draws a live board, a pick clock, a player pool or an insights report
+— Players/Board/Decide/Analysis, the phone draft tree and live rooms are all
+outside this handoff entirely.
+
+**Collapsing the homepage removed a cost rather than adding one.**
+`Homepage.jsx`'s own comment already recorded that both trees were prerendered
+and both MOUNTED on every device, because CSS-hidden is still mounted. One
+tree mounts once.
+
+**Everything below the rooms grid was kept and then taken off.** The
+handoff's Home ends at the rooms grid: no proof section, no closing CTA, no
+footer at all. `TakeAPick`, `ShowYourWorking` and `ClosingCta` were kept
+under it on the reasoning that a mock which stops after one screenful is not
+the same claim as "delete the rest of the page" — and the owner has since
+removed all three. The homepage is the handoff's own shape now, plus the
+footer, which was never optional: it holds the only links to the privacy
+policy and terms.
+
+**Deprecated, not deleted.** All three components are complete and still in
+`web/src/components`; they are simply not rendered, which is the same state
+`Header`, `Hero`, `RoomsGrid` and `phone/HomePhone` are in. Bringing one back
+is an import and a line in `Homepage.jsx`.
+
+**What left with them is not only layout.** `ShowYourWorking` is the "Claim
+and proof" section this file documents at length — three claims down the
+page with the thing each one claims running beside it, on live board data —
+and it was the only place the product's own numbers were shown being
+computed. That section is still accurate about the component, which still
+exists; it is no longer accurate about the homepage.
+
+**And it left a dead anchor behind, which is the part worth checking for
+next time.** `NAV_LINKS`' "How It Works" pointed at `#proof`, which was
+`ShowYourWorking`'s own `<section id="proof">`. Removing a section does not
+break a link to it — the link goes on working and scrolls to nothing, which
+reads as a broken page rather than a broken link. It points at the docs page
+now, which is what it always meant and where the footer's Method column
+already sent people. **Grep for the id before removing the section that
+carries it.**
+
+**Four components are orphaned rather than deleted** — `Header.jsx`,
+`Hero.jsx`, `RoomsGrid.jsx` and `phone/HomePhone.jsx`. Nothing imports them.
+They stay until this is confirmed live, which is the same rule the root
+`index.html` migration followed: prove the replacement works before deleting
+what it replaces, and check the running site rather than the build log.
+
+### What the suite got wrong, and what it got right
+
+**Three specs went red on the new homepage and none of them found a layout
+bug.** All three were looking for markers the replaced page carried and the
+new one did not: `sonar.spec.mjs` hit-tests `[data-hero-cta]` to tell an
+overlay that has really gone from one that is merely transparent, and
+`phone.spec.mjs` measures the gap from the header's bottom to
+`[data-hero-eyebrow]`. That is the failure the mobile pass already recorded
+once — **replacing a page orphans every attribute only the old one carried**
+— and it reads as a missing element rather than as a missing marker.
+
+**`parity.spec.mjs`'s copy lists were the old Hero's sentences.** Four are
+retired by design rather than lost, so each is **replaced** rather than
+deleted: a list that only ever shrinks stops being the thing that test is
+for, which is that a page cannot quietly lose the sentences it is built on.
+
+**The shared Start-button locator was still matching a label, and this is the
+fifth name that control has had.** `helpers.mjs` matched the exact string
+"Start mock draft" — DraftLocker's wording — and the entry screen reads "Start
+a mock draft". One word, five specs, and the failure surfaces at
+`waitForFunction(() => state.started)` fifteen seconds later rather than at
+the click, so **nothing in the output names the button at all**. Both real
+Start buttons have carried `data-start-draft` since the mobile pass; the
+helper had simply never adopted the rule this file already states.
+
+**`getByRole("button")` does not match `<button role="radio">`.** The Draft
+Settings screen's scoring options are exactly that, and an explicit role wins
+over the tag — so the locator matched none of them and read as a missing
+control. `journey.spec.mjs` asks for the radio.
+
+**And one control became necessary while staying hidden.** `DraftLocker`'s
+"Mock drafts" back button carried `lg:hidden`, on the reasoning — written into
+the component — that above `lg` the dashboard IS the screen and a back control
+on something you cannot go back from is the dead-control problem. True, and it
+stopped being true the moment the dashboard moved behind the entry's "Your
+insights" at every width: the desktop dashboard had no way out at all. **The
+dead-control rule inverted**, and the condition that answers "is there
+something behind this" was the prop all along.
+
+### One left margin, and one place the glyph goes
+
+A sweep of the five shell screens on 3 September 2026, at 1440, measuring
+the left edge of `ShellHeader`'s content against the left edge of each
+screen's own H1:
+
+```
+                header    H1    off by
+#/                 113     73      -40
+#/rooms/waiver     120     80      -40
+#/rooms            113    113        0
+#/drafts           120    162      +42
+#/you              120    173      +53
+```
+
+**One screen in five lined up**, and the two causes are unrelated.
+
+**The -40 is padding on the wrong side of the max-width.** `HomeAlive` and
+`RoomHero` put `px-5 sm:px-10` on their full-bleed wrapper and
+`mx-auto max-w-[1280px]` *inside* it, so the column comes out the full 1280
+and starts 40px left of the header. Every other screen — `ShellHeader`,
+`RoomsLobby`, `DraftsScreen`, `YouScreen` — has always had the padding
+inside the max-width, giving a 1200px column. Both orders look right in
+isolation and only disagree when you put one above the other, which is
+exactly what a fixed header does. **The padding goes inside**; the wrapper
+stays full-bleed so `HomeAlive`'s watermark still bleeds, with its own
+offsets carrying the 20/40px the wrapper gave up.
+
+**The +42/+53 is the glyph.** It had three placements across five screens:
+inside the mono eyebrow on the five room pages (`RoomHero`'s
+`{glyph} {EYEBROW}`), inline before the H1 on `#/drafts` and `#/you`, and —
+on `#/rooms` alone — inline below `sm` and stranded on its own line above a
+two-line 64px H1 above it. That last one was reported by the owner as the
+door emoji looking wrong, and it was: a naked 34px emoji in the slot five
+other screens fill with an eyebrow, on the only screen whose glyph moved
+between breakpoints.
+
+All three take `RoomHero`'s shape now, which settles both halves at once —
+one idiom, and every H1 back on the page's own margin. `#/rooms` derives
+its eyebrow (`{n} ROOMS · {open} OPEN`) rather than carrying a number that
+is wrong the morning a room ships; `useRooms()` fills on mount, so the
+counts arrive a tick after the glyph and the row keeps its height
+throughout.
+
+### A bottom-anchored card lands its title wherever its last line ends
+
+The room cards are `justify-between` under a fixed `min-height`, so the
+text block sits on the card's floor and everything above it is pushed up by
+whatever is below. Three separate things fell out of that, all measured on
+the same sweep and none of them visible as a fault in any single card:
+
+- **The lead card ordered eyebrow → title and the four locked cards ordered
+  title → eyebrow**, so on `#/rooms` "The Draft Room" sat **30px** below
+  "Waiver Room" and "Trade Room" beside it. Same order in both now.
+- **The sub-line's wrap count moved the title with it.** On the homepage's
+  five-across strip (246px cells) three hooks wrapped and two did not, and
+  the titles spread over **18px**. The reserve is a `min-h` in `em` so it
+  follows the 12 → 13px step, three lines below `sm` and two above it,
+  which is what the cell is actually wide enough for.
+- **`block` silently disabled `line-clamp`.** `line-clamp-*` works by
+  setting `display:-webkit-box`, and a `block` in the same layer wins —
+  computed style read `-webkit-line-clamp: 2` beside `display: block`, and
+  the Waiver hook ran to three lines anyway. It is not an error and the
+  clamp is simply inert. **Check the computed `display`, not the computed
+  `-webkit-line-clamp`.**
+
+Also in that row and from the same era: a 44px tile against four 40px ones,
+and 18px of padding against 20px. Both are one row, one card component, two
+sets of values.
+
+**The check is the relationship, never an offset** — the same rule this
+file already states about the padding that stands in for a fixed header's
+height. Header-left minus H1-left is 0 on all five routes and the title
+spread within a row is 0 on both grids, at 375 and 1440; a number here
+would be wrong the next time the max-width moves.
+
+### Still open
+
+- **The connected half.** Fourteen screens, waiting on league connect.
+- **`LobbyBar` is the last of the old marketing header**, and it now shows on
+  exactly one screen — the insights dashboard, one press behind "Your
+  insights". `NavLinks`/`RoomsNavMenu` survive only through it.
+- **Waiver's desktop preview is a list where 3dg draws a table with a FAAB
+  budget rail beside it.** The other three rooms' desktop layouts are the
+  handoff's two columns; this one is the phone's, widened.
+
+## Accounts
+
+**Clerk owns identity; Juke owns what identity is for.** Signup, login,
+password and OAuth, email verification, sessions and their refresh all happen
+on the client, inside Clerk's own components (`web/src/clerkConfig.js`,
+`SiteNav.jsx`'s `AccountButtons`). Nothing in this repository stores a
+password, mints a session, or sends a verification email, and nothing should.
+What Juke stores is the small set of things that have to belong to somebody:
+one in-progress draft and a locker of finished ones.
+
+**The `users` table is an id and two timestamps, deliberately.** No email, no
+display name. The client already has both, verified, from its own session the
+moment anybody is signed in (`useUser()`), so a second copy cached worker-side
+would be the "two sources of truth for one fact" failure this file keeps
+finding elsewhere. The moment a feature genuinely needs Juke's own copy — a
+locker that must render without asking Clerk again — is the moment to add the
+columns and the fetch that fills them, and not before.
+
+**Solo drafting still needs no account, and that is a product rule rather than
+a stage we are at.** `saveDraft()`, `recordHistory()` and every localStorage
+path run identically signed out; section 11e of `app.js` is what happens *in
+addition*. The phone homepage says so in the footer ("FREE · NO ACCOUNT ·
+RUNS IN YOUR BROWSER") and the account card above it is written to match — see
+"The phone account card" below.
+
+### One `<ClerkProvider>` per page, which is why three roots became one
+
+`@clerk/clerk-react` hard-limits to exactly one provider per page — a
+module-level singleton with `maxCount = 1`, verified directly against the
+installed package's `useMaxAllowedInstancesGuard`, not assumed. The app had
+three independent `createRoot()` calls (`#root`, `#appbar-root`,
+`#draftroom-root`), each of which would have needed its own provider for
+`AccountButtons` to have context wherever it landed. Three of them threw, and
+the throw took React's whole boot down before anything painted.
+
+So there is one root now, at `#root`, and `AppHeader`/`DraftRoom` reach their
+own DOM nodes through `createPortal()` instead. A portal changes *where* a
+subtree paints, never which tree or which context it belongs to. **It does not
+change whether that subtree is hydrated, which is a separate question and cost
+a real bug** — see "A portal is hydrated too" above.
+
+### `window.JukeAuth` is `window.JukeEngine` pointing the other way
+
+Clerk's hooks only work inside a React component and `app.js` is a classic
+script, so `AuthBridge.jsx` writes `{ isSignedIn, userId, getToken }` onto
+`window.JukeAuth` and fires a plain `juke:auth` event — the same shape
+`headerInfo()` already uses with `juke:header`, and the mirror image of the
+bridge React reads real board data through.
+
+`getToken` is reassigned on every render rather than captured once: it is a new
+function each time Clerk's SDK hands it back, and calling the latest one is
+what keeps a caller from holding a stale closure across a token refresh.
+
+**And it is read defensively on the `app.js` side**, because a bridge global is
+only as safe as its own guard — the rule this file already states about
+`window.JukeEngine`, arriving from the opposite direction.
+
+### Rendering Clerk's components at all needs two questions answered
+
+`useAccountUiReady()` (`web/src/hooks/`) answers both, and each fails silently
+on its own:
+
+- **Is there a key.** With none, `main.jsx` renders no provider at all, and
+  every Clerk component — `<SignedIn>`, `<SignInButton>`, `<UserButton>` —
+  throws without one above it. A fresh clone or a CI build would crash the
+  page rather than simply not offering accounts.
+- **Has it mounted.** The prerender cannot render `<SignedIn>`/`<SignedOut>`
+  (no provider, no `window`), so a first client pass that does is a hydration
+  mismatch against the server's markup.
+
+Nothing in that hook calls into Clerk, deliberately: a hook that called
+`useAuth()` would itself throw in the no-key case, and hooks cannot be called
+conditionally to dodge it. **What each caller does with `false` differs**, and
+that is why it returns a boolean rather than rendering anything: the nav row
+still draws its inert triggers (a row with a hole in it reads as broken), the
+phone's account card draws nothing (a card whose whole purpose is two buttons
+has nothing to say without them), and the phone's "You" tab draws normally but
+does nothing when tapped (it is always on screen, so anything that looks
+different for one tick is a flicker).
+
+### `verifyToken`'s public export is not the union its own internals document
+
+**This rejected every valid login from the day accounts shipped until 1
+September 2026**, and it looked exactly like an expired-token refusal from the
+outside.
+
+`@clerk/backend`'s internal `src/tokens/verify.ts` really does return
+`{ data } | { errors }`, and `worker/auth.js` was written against that. But the
+package root — what `import { verifyToken } from "@clerk/backend"` actually
+resolves to — exports `withLegacyReturn(verifyToken)`, which **returns the JWT
+payload directly on success** (`sub` at the top level, no `.data` wrapper) and
+**throws `errors[0]` on failure**. `dist/index.d.ts` says so in its own
+declared return type: `Promise<JwtPayload>`, not a union.
+
+So `const { data, errors } = await verifyToken(...)` destructured a payload
+that has neither field. Both came back `undefined`, and `errors || !data ||
+!data.sub` read that as a refusal — on the success path, every time.
+
+**The diagnostic that should have caught it read as innocent.** `wrangler
+tail` printed `verifyToken refused: []` on every attempt, and an empty errors
+array is not Clerk reporting zero problems: it is this code finding no error to
+report because there wasn't one. Worse, the log line could not distinguish
+"`errors` was undefined" from "`errors` was an empty array" — `(errors || [])`
+prints `[]` either way — so the one field that would have named the bug was
+being collapsed before it was printed. **A log line that cannot separate two
+causes is not evidence for either of them.**
+
+The refusals arrive in the `catch` now, which is where the throw-based contract
+actually puts them.
+
+### Two keys, two homes, and neither is where you would first look
+
+| | Publishable (`pk_…`) | Secret (`sk_…`) |
+|---|---|---|
+| Public? | Yes, by design — Clerk embeds it in client bundles | No |
+| Read by | `web/src/clerkConfig.js`, in the browser | `worker/auth.js`, in the worker |
+| Set where | Cloudflare **Pages** project `juke` → Settings → Variables, **Production** environment | `wrangler secret put CLERK_SECRET_KEY`, on the **`juke-draft-room` Worker** |
+| Named | `VITE_CLERK_PUBLISHABLE_KEY` | `CLERK_SECRET_KEY` |
+| Takes effect | On the next **build** | On the next request |
+
+Four ways to get this wrong, all of which have happened:
+
+- **Any prefix but `VITE_`.** Vite only exposes `VITE_`-prefixed variables to
+  client code, so a `NEXT_PUBLIC_…` name (this is not Next.js) is never
+  inlined and the app sees nothing.
+- **The Preview environment instead of Production.** `jukeff.com` serves
+  Production; Preview is for branch builds and never touches it.
+- **`CLERK_SECRET_KEY` on the Pages project.** It does nothing there. The
+  worker is a separate deployment with its own secret store, and a key sitting
+  in the Pages settings looks exactly as configured as one that works.
+- **Expecting a saved variable to change anything on its own.** Vite bakes the
+  publishable key in at build time, so it needs a fresh deployment; saving it
+  does not create one.
+
+**And the worker still does not deploy itself.** The site rebuilds from `main`
+on every push and the worker only ships on `wrangler deploy -c
+worker/wrangler.toml` — so an auth fix can be merged, live in git, and doing
+nothing at all. Same gap this file already records for D1, and the same
+instruction: ask the thing itself, not the response.
+
+### A production instance is a different instance, with its own domain
+
+The "Development mode" badge under Clerk's own UI means the publishable key is
+a `pk_test_` one. It is not a setting; it goes away by moving to a production
+instance, which has its own keys, its own user list, and — the part that has
+teeth — **its own verified domain**.
+
+Measured through the migration on 1–2 September 2026:
+
+- The dev instance is `hopeful-termite-4236.clerk.accounts.dev`, verified and
+  covered by the CSP's existing `*.clerk.accounts.dev` wildcard.
+- The production instance is `jukeff.com`, whose Frontend API is
+  **`clerk.jukeff.com`** — a CNAME to `frontend-api.clerk.services`, alongside
+  `accounts` for the account portal and three more for email. Cloudflare's
+  Domain Connect flow adds all five; the manual list is the same records typed
+  by hand.
+- **Until that domain verifies, a `pk_live_` key makes the sign-in control
+  disappear entirely.** `<SignedIn>`/`<SignedOut>` render nothing until Clerk
+  finishes loading, and it can never finish against a Frontend API that does
+  not resolve yet — so the header renders no button at all rather than a broken
+  one. Reported as "log in completely disappeared", and it was neither the
+  code nor the key: it was DNS.
+- **`clerk.jukeff.com` is not covered by `*.clerk.accounts.dev`** and needed
+  its own `script-src`/`connect-src` entry in `_headers`. Without it the SDK is
+  blocked by the CSP the same silent way Turnstile was, which looks identical
+  to the DNS failure above.
+
+**Do not decode the Frontend API host out of the publishable key by eye.** The
+segment after `pk_live_` is base64 of `<host>$`, and reading it off a
+screenshot produced `clurk.juseff.com` — close enough to look right and wrong
+enough to put a useless entry in the CSP. Clerk's own Domains page states the
+hostname; the CNAME's `Name` column is the answer.
+
+**A social provider enabled without credentials fails at Google, not at
+Clerk.** Production instances need your own OAuth client; with Google switched
+on and none configured, Clerk builds a consent URL with no `client_id` and
+Google answers `Error 400: invalid_request`. The sign-in button looks fine
+until it is pressed. Either configure it in Google Cloud Console or switch the
+provider off — an offered control that cannot work is the dead-control problem
+in somebody else's UI.
+
+### What the worker stores, and what it refuses to know
+
+`GET /me` verifies, records the visit (`touchUser()`, off the response path
+via `after(ctx, …)` — asking "am I signed in" must not fail on a D1 hiccup),
+and answers `{ signedIn }`. **`/me` answers `signedIn: false` where
+`/me/draft` and `/me/history` answer 401**, and the split is deliberate: "am I
+logged in" is a question with two fine answers, while a route that can lose or
+leak somebody's draft needs the harder line.
+
+Both storage tables keep the client's JSON **whole, in a `data` column**,
+rather than decomposed into columns of their own. `app.js` already carries its
+own backward-compatibility rules for both shapes; a second server-side schema
+would either duplicate every one of them or drift from them. `completed_at` is
+the one field pulled out and duplicated as a real column, for `ORDER BY` and
+nothing else — and it is converted from `recordHistory()`'s milliseconds to
+this project's epoch-seconds convention at the route, once, rather than asking
+`store.js` to guess which unit a caller meant.
+
+History is written **one entry at a time**, never in bulk: `writeHistory()`
+rewrites the whole array locally on every change, but only one entry has ever
+actually changed, and sending the other 199 back every time is all cost.
+
+**Ids are minted client-side and reused**, not re-issued by the database, so an
+entry has one id its whole life rather than a local one and a server one that
+can disagree.
+
+### Merging is a decision, and it is made in one place
+
+`reconcileWithServer()` compares what the browser has against what the account
+has, rather than assuming the server should win:
+
+- **The saved draft is last-write-wins by `savedAt`**, because there is only
+  ever one. Assuming the server wins would let a phone that has been offline
+  all week nuke a laptop's draft from an hour ago.
+- **History is a union by id**, because every entry is a frozen record of a
+  draft that already finished — two entries with the same id are identical, so
+  there is nothing to pick between, and whichever side is missing one gets it.
+
+Everything else is fire-and-forget: `localStorage` is already written by the
+time any of it runs, so a slow or failed request must never hold up the thing
+that actually keeps a draft from being lost.
+
+**It used to run once per sign-in, and that is the cadence of the device that
+just finished the draft rather than the one waiting for it.** A laptop left
+open reconciled at nine in the morning and never again, so a mock finished on
+a phone at two could not reach it without a manual reload — which is exactly
+how it was reported. It reconciles on `visibilitychange`, on `online`, and on
+arriving at `#/drafts`, debounced by `RECONCILE_MIN_MS` with an in-flight flag
+so two triggers cannot race into a double merge. **Coming back to a tab is the
+strongest evidence there is that now is the moment** — the same signal
+`live.js` already uses to decide a dropped socket is worth reopening — and the
+locker route is there because the one person those two events cannot help is
+somebody sitting on the very screen this feature is for, in a tab that never
+goes away.
+
+**The merge notifies rather than re-renders, and the difference is not
+stylistic.** Every React surface reading the locker re-reads on `juke:header`
+and nothing else, so a merge landing after mount was invisible until a reload.
+The obvious repair is `render()` — and `render()` ends in `saveDraft()`, which
+writes `SAVE_KEY` and pushes it up, so **a pull would answer with a write of
+whatever this tab happened to hold**, which is the one thing the function
+deciding which device's draft survives must not do. It dispatches the event
+directly, and unconditionally rather than leaning on `noteSyncResult()`'s own
+change-only dispatch: the second successful sync of a session is exactly when
+a second device's draft arrives.
+
+### Every failure in this path is falsy, which is right and was invisible
+
+`Live`'s methods resolve to `false`/`null`/`[]` on a missing token and on a
+network failure alike; `store.js` answers `false` for a missing D1 binding, a
+missing table and a failed write. Each is correct on its own — a draft must
+never be held up by a sync, and "not signed in" and "cannot reach the worker"
+have to be handled identically by a caller.
+
+End to end it meant **no surface on either device could tell "synced" from
+"signed in and silently writing to nowhere"**, which is the same shape as this
+file's own "ask the database, not the response" and is how a worker that is
+merged-but-not-deployed, or a D1 that never had `0004_drafts.sql` applied,
+looks from the page: exactly like one that is working. `syncStatus()` keeps the
+answer — "off", "ok", "error" — and the Locker's storage strip says which.
+**A page that claims a backup it does not have is worse than one that claims
+nothing.**
+
+That strip is also what was telling signed-in people to sign up: one
+unconditional sentence, written before accounts synced anything, still
+promising an account under rows that were already in one. Reported with a
+screenshot of exactly that.
+
+### "Is anybody signed in" is not `useAuth()`'s question to answer here
+
+`useAccountUiReady()` above answers *may I render Clerk's components*.
+`useSignedIn()` (`web/src/hooks/useAuthState.js`) answers *is somebody signed
+in*, and it deliberately does not reach for Clerk either — for the same reason,
+one step further on. `useAuth()` throws without a provider ancestor, `main.jsx`
+renders no provider at all in a keyless build, and a hook cannot be called
+conditionally to dodge that. So it reads `window.JukeAuth` and the `juke:auth`
+event instead: both are simply absent in a keyless build, which reads as signed
+out, which is what it is. **Two hooks, two questions, and neither one may be
+the other's shortcut.**
+
+### The phone account card, and the tab that had gone stale
+
+Accounts shipped to **desktop only**, and not by decision — every
+`AccountButtons` call site (`Header`, `LobbyBar`, `MobileNavSheet`) sits inside
+`Homepage.jsx`'s `hidden sm:block` half, so below 640px the phone tree rendered
+instead and offered no way to sign up or log in at all. That is the
+breakpoint-split hazard this file already records for `data-hero-cta` —
+"splitting a page by breakpoint orphans every attribute only one half of it
+carries" — reached with a whole feature rather than a test marker. **Grep the
+phone tree, not just the shared components, when a feature is meant to be
+everywhere.**
+
+`HomePhone`'s account card is a card in the content flow rather than two more
+controls in the top bar, and that is a measurement: the wordmark, Play, Log in
+and Sign up come to about **370px of content on a 390px screen**, and overflow
+outright at 360. Dropping Play to make room is backwards on a page whose own
+footer promises no account is needed — Play is what a signed-out visitor came
+for. So the card leads with what an account *buys* (the cross-device sync that
+already exists) rather than with a Sign Up button, which on that page would
+read as a gate.
+
+The nav pill's **"You" tab** opened the waitlist modal on a line that had gone
+false — *"The You room is in build. Leave an email and we'll tell you when it
+opens."* It is Clerk's sign-in trigger signed out, and an action sheet signed
+in. **A sheet rather than `<UserButton/>` for a reason worth keeping**: that
+component renders its own avatar-sized button, which inside a 58px tab would
+leave the "You" label beside it inert — and more importantly its menu is the
+only place Clerk offers sign-out by default, and it renders nowhere a phone can
+reach. Without an explicit row, anybody who signed in on a phone could never
+sign out anywhere in the app.
+
+`isLoaded` gets its own branch rather than folding into "signed out": Clerk
+answers `isSignedIn: undefined` until it resolves, and treating that as signed
+out hands a signed-in person a sign-in modal for the account they are already
+in.
+
+**Log in and Sign up are two buttons again.** They were collapsed into one
+"Log in" trigger on the reasoning that Clerk's modal carries a Sign up toggle
+inside it — but that reasoning was really about the *previous* pair being two
+fake buttons opening the same "not live yet" modal, and it cost a click for
+exactly the visitor the control most wants to convert. Sign up is the loud
+pill, Log in is plain text beside it: two equally loud controls in one row is
+the same "one primary action" rule the legacy stylesheet's teal buttons
+already answer to.
+
+### Deleting an account deletes what Juke holds, and that is a webhook
+
+Clerk owns the account and deletes it on its own. The half Juke owns did
+not exist: `saved_drafts` and `draft_history` rows outlived the account
+they belonged to, and the privacy policy said so out loud rather than
+promising otherwise — which was honest and is not a resting place, since
+somebody exercising a deletion right should not also have to send an email.
+
+`POST /webhooks/clerk` closes it. Three things about that route are not
+like the others here:
+
+- **`originAllowed()` may not be applied to it.** Clerk posts from its own
+  servers with no Origin header, so the check that protects every other
+  route would reject every real delivery. The signature replaces it and is
+  the stronger claim anyway: an allowed Origin says the request came from
+  our page; a valid signature says it came from Clerk.
+- **A missing secret refuses with a 500 rather than shrugging.** Everywhere
+  else an unconfigured binding answers "no" quietly and the product carries
+  on. Here that is wrong twice: honouring an unverified delete lets anybody
+  delete anybody's drafts, and a 200 that did nothing would tell Clerk the
+  delivery succeeded, so it would never retry and the deletion would be lost
+  in silence.
+- **It is idempotent because retries are the normal path.** Clerk redelivers
+  anything it did not hear back from. `deleteUserData()` is DELETE-only, and
+  a delete of nothing is a success.
+
+**Children before the parent, or the foreign key refuses** — the same
+constraint that made every write fail, from the other end. One batch, so a
+half-deleted account is not a state that can exist.
+
+**The verifier is `standardwebhooks`, and it is declared rather than
+inherited.** It arrives as a transitive dependency of `@clerk/backend`,
+which is not a thing to rely on; `worker/package.json` names it directly.
+It is pure JavaScript — no `node:crypto` — which is why it runs in the
+Workers runtime at all, and that was checked before it was chosen rather
+than after it failed at the edge.
+
+**The accept path cannot be tested offline**, the same gap the signed-in
+path has and for the same reason: nothing here can produce a signature the
+worker will accept without knowing its secret. `test-auth.mjs` covers every
+way of *not* being Clerk, which is the half that matters most — a false
+accept is somebody else's drafts gone — and the accept path is verified by
+hand against `wrangler dev` with a secret in `worker/.dev.vars`. See
+`worker/README.md`, including the trap that cost twenty minutes: `wrangler
+dev` reads `.dev.vars` at boot and hot-reloads code without re-reading it,
+so a server started before the file existed serves the new route with no
+secret for ever.
+
+### What can be tested offline, and what cannot
+
+`node worker/test-auth.mjs`, against a running `wrangler dev --local`, covers
+**every way of being signed out** — no Origin, a wrong Origin, no token, a
+malformed token, a well-formed but unsigned one — and asserts that none of them
+ever produces anything but a clean refusal.
+
+**It cannot cover the signed-in path, and neither can anything else here**: that
+needs a token actually signed by Clerk, which nothing offline can produce. The
+`verifyToken` bug above lived in exactly that gap. It is verified by hand,
+against a real deploy, with a real sign-in — and the cheapest honest check is
+the network tab: `/me/draft` and `/me/history` returning **200** while signed
+in means the worker's verification genuinely works, where a page that merely
+*looks* signed in proves only that Clerk's client half does.
+
+**A 200 proves the token, and it does not prove the table.** `listDraftHistory()`
+catches a missing `draft_history` and answers `[]`, so a D1 that never had
+`0004_drafts.sql` applied returns a perfectly healthy `200 {"entries":[]}` to
+every read — indistinguishable from an account with nothing in it. The write is
+what separates them: finishing a mock while signed in posts to `/me/history`,
+and the body is `{"ok":true}` against a real table and `{"ok":false}` against a
+missing one, both under a 200. **Read the body, not the status** — the same
+"ask the database, not the response" rule this file already states, one level
+in. The Locker's own storage strip is now the version of that check a person
+can run: it says "could not reach your account" on exactly this.
+
+**`PREVIEW_ORIGIN_RE`** allows any `https://<hash>.juke-1mw.pages.dev` through
+`originAllowed()`, because every branch push gets its own preview address and
+that is where this is meant to be tested before a merge. Without it every
+authenticated route 403s on a preview with nothing on screen to say why.
+
+**The worker's half of that is done and the page's half is not, so a preview
+has no accounts on it at all.** Measured 2 September 2026 against the preview
+for PR #126: `window.Clerk` is undefined, `window.JukeAuth` is never written,
+and the built bundle contains no `pk_` key — while production's own bundle
+carries `pk_live_…` a few bytes from the same place.
+`VITE_CLERK_PUBLISHABLE_KEY` is set for the **Production** environment in the
+Pages project and not for **Preview**, and Vite bakes it in at build time, so
+a preview build genuinely has none.
+
+Everything degrades exactly as designed — `useAccountUiReady()` answers false,
+`AccountButtons` renders its inert triggers, the Locker's strip falls back to
+the early-access form — which is why nobody noticed: **the preview looks fine,
+it simply is not the product.** What it costs is the one thing the note above
+claims: the signed-in path cannot be exercised on a preview, so the gap the
+`verifyToken` bug lived in is still open and the only real check remains a
+merge to production. Setting the same variable for Preview is a dashboard
+change nobody has made, not a code change.
+
+## Copy goes stale the day a feature ships, and nothing fails when it does
+
+A content audit on 2 September 2026 found the same defect in eight places,
+and every one of them was written true. Accounts shipped; nothing that
+described their absence was rewritten, because nothing breaks when prose
+stops being accurate. **The privacy policy opened with "Juke has no
+accounts, no sign-up and nowhere to enter a password, an email address or a
+card number"** on a site with all four.
+
+The full list, because the shape is more useful than any one of them: the
+privacy policy's intro, its "no form anywhere asks for an email" (the
+early-access capture has always asked), its "Juke's own code sets no
+cookies" (Clerk's do, once you sign in), its "nothing about your draft is
+sent to a server at all" (true only signed out), and its "there's no
+sign-up to ask at" about a child's age; the terms' "there's no account to
+cancel or delete"; the how-it-works page's "stored in your own browser and
+nowhere else"; and a header button offering to email you *when accounts
+arrive*.
+
+**None of it was reachable by any check this project runs.** It renders, it
+contrasts, it does not overflow, no console error, no failing assertion —
+the dead-control failure this file already records, applied to sentences
+rather than to buttons. The only thing that finds it is reading the page
+against what the code now does.
+
+**So the rule is a release rule rather than a testing one.** A feature that
+changes what the product *is* — not what it looks like — has a copy pass in
+its own definition of done, and the places to check are the ones that
+describe the product rather than the feature: the two legal pages, the
+how-it-works doc, the homepage's own pitch, and every "coming soon" modal.
+Grep for the thing you just built (`no account`, `sign-up`, `cookie`) and
+read what comes back.
+
+**Two smaller instances of the same thing, worth keeping because they are
+not prose.** The 404 page's own "Open the Draft Room" pointed at `#/draft`,
+the retired route — it *worked*, by landing on the compatibility redirect
+written for old bookmarks, which is exactly why nobody noticed. And all
+three `docs/` pages said "Back to the Draft Room" over a link to the
+marketing homepage. **A link that works is not the same as a link that goes
+where it says**, and neither costs anything to be wrong.
+
+**And one that was a number in a false sentence.** The phone draft header
+had two states, "your pick" and "somebody else's", and none for "the draft
+is over" — so it ran a live countdown on a finished board. `headerInfo()`
+had answered `over` all along and the desktop header read it. A component
+drawing its own version of a fact the bridge already computes is the
+"written down twice" rule, and the second copy is always the one that
+misses a case.
 
 ## Security
 
@@ -4494,6 +6575,40 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   bundle for the change before believing a red run: the built JS names what
   it contains, exactly as the deployed stylesheet does.
 
+- **And the mirror of that: do not rebuild INTO `web/dist` while a run is
+  using it.** The suite serves that directory, so `npm run build` mid-run
+  replaces the content-hashed bundle with a new name and deletes the old,
+  and `copy-legacy-assets` rewrites `app.js` underneath whatever page is
+  fetching it. Any test that loads a page in that window gets a file that
+  is missing or half-written.
+
+  Measured 4 September 2026, on a 151-test run that reported **3 failed,
+  148 passed**. One was a genuinely stale assertion. The other two were
+  both this, and neither looked like it:
+
+  - `grade.spec.mjs`'s "the app's own advice beats a deliberately unbuilt
+    roster" — a statistical test with aggregate thresholds, so a red reads
+    as "the advice got worse". It was `openApp()` timing out at
+    `waitForFunction(() => typeof state === "object" …)`: **`app.js` never
+    defined its globals**, because it was being rewritten as the page asked
+    for it.
+  - `phone.spec.mjs`'s bottom-sheet test — `readHeight()` returned null,
+    which reads as "the sheet is not rendering". React had not mounted,
+    because the bundle it named had just been deleted.
+
+  Both passed on a re-run with nothing changed. The grade one was then
+  baselined in both directions on an idle machine — `main`'s `app.js`
+  passed, the branch's `app.js` passed — which is what says the run was the
+  problem rather than the change. **A red on a statistical test is the one
+  most worth baselining before believing**, because it is the one whose
+  failure message is most easily read as a real result.
+
+  This is the same shape as everything else in this section: a real,
+  reproducible symptom whose cause was the harness. What makes it worth its
+  own entry is that the harness was disturbed by *this* session rather than
+  by a leftover process — so the usual check ("what is holding the port,
+  what is it serving") comes back perfectly healthy.
+
 - Room over sockets: `cd worker && wrangler dev --port 8787 --local`, then
   `node worker/test-sockets.mjs` in another terminal. Seventy-six assertions
   against the real Durable Object runtime, no Cloudflare account needed.
@@ -4585,6 +6700,28 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   machinery exists and simply was not used. Stage explicit paths, never the
   tree, and restart any dev server after another session touches config.
 
+  **A worktree does not separate the test ports, and that is the one thing it
+  cannot fix.** `playwright.config.mjs` pins 8765 and 8787 deliberately —
+  `live.js` decides where the room is from the address bar, so the worker has to
+  be on that port — which means two sessions running the suite at once are
+  fighting over one pair of ports whatever directory they are in. Measured 30
+  August 2026: a full run went 42 tests in and then failed 25 with
+  `net::ERR_CONNECTION_REFUSED`, because a second session's servers came up on
+  8765 at 23:04 and took the port out from under it.
+
+  **The tell is a byte count, not an error.** `reuseExistingServer` is true, so
+  the surviving server is *adopted* rather than refused, and the suite goes on
+  running against whatever it serves. Here it was a different checkout: 511,837
+  bytes of `app.js` against 508,633 in this one's `web/dist`, and the feature
+  under test absent from it. Ask what is actually being served before believing
+  a red run — `curl -s "http://localhost:8765/app.js?cb=1" | grep -c <a symbol
+  your change adds>` settles it in one line, and it is the same `?cb=`
+  instruction this file already gives about deploys, pointed at localhost.
+
+  So check the ports before starting a long run, and treat a cascade of
+  connection failures partway through as the other session arriving rather than
+  as anything about the app.
+
 - **A long-lived `vite dev` does not reload `tailwind.config.js`, and the way
   it fails looks like a design regression rather than a stale server.**
 
@@ -4620,11 +6757,56 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   the repository, because design tokens are exactly what the *other* session
   edits while yours has a server up — so restart the preview after any change
   to `tailwind.config.js`, whoever made it.
+- **`preview_start` serves the repo root, not your worktree, and says nothing
+  about it.** This is the seventh time in this file that the tooling has worn a
+  bug's clothes, and it is the most expensive one yet: it produced eight
+  consecutive measurements of a bundle that was not under test, and a confident,
+  fully-evidenced, completely wrong diagnosis.
+
+  `.claude/launch.json`'s `web-dist` entry is `py -m http.server 8766
+  --directory web/dist`, and that relative path resolves against the repository
+  root even when the session is inside `.claude/worktrees/<name>`. So a
+  worktree builds its own `web/dist`, starts the preview, and is served the
+  *other* checkout's build. Nothing errors. The page renders. Every number you
+  take off it is about somebody else's code.
+
+  What it produced: a loader whose 1600ms floor appeared not to apply, then a
+  floor raised to 5000ms that appeared not to apply either, then a
+  `console.log` in the effect that never fired, then a `window` probe showing
+  the effect body running **zero** times — each result more alarming than the
+  last, and all eight of them read off `assets/index-Wmn5_klo.js` while the
+  worktree had built `index-BAYdEqfC.js`. Against the real bundle the effect
+  runs 289 times and the floor works exactly as written.
+
+  **The check is one line and this file already prescribes it** — it is the
+  same `?cb=` instruction the deploy notes give, pointed at localhost:
+
+  ```bash
+  curl -s "http://localhost:8766/?cb=1" | grep -o 'assets/index-[A-Za-z0-9_-]*\.js'
+  ```
+
+  Compare that against `ls web/dist/assets/index-*.js`. If they differ you are
+  measuring another checkout. **Ask before the first measurement, not after the
+  eighth**, and be especially suspicious when a result is surprising rather than
+  reassured by a plausible story that explains it — a confident explanation of a
+  phantom is exactly what this failure mode generates.
+
+  **Playwright is the way to measure from a worktree**, because its `webServer`
+  command runs with the test's own cwd and therefore builds and serves the
+  worktree. That is why the full suite has always been correct from a worktree
+  while `preview_start` is not. Put the measurement in a temporary spec under
+  `tests/` rather than a standalone node script pointed at a preview port.
+
+  And a temporary spec that measures anything should assert what it is looking
+  at before it looks: fetch the served HTML, pull the bundle name out of it, and
+  print whether that bundle contains a symbol the change introduces.
+
 - **A proxied sandbox makes a render-blocking `<link>` look like a broken
-  loader.** `sonar.spec.mjs` holds `#boot-sonar` to leaving between 4800ms and
-  5800ms of navigation start, and it came back `removedAt: null` — the overlay
+  loader.** `sonar.spec.mjs` held `#boot-sonar` to leaving between 4800ms and
+  5800ms of navigation start (2400–3400 since Deepwater; the diagnosis below is
+  about the proxy either way), and it came back `removedAt: null` — the overlay
   still on screen nine seconds in, on a build whose teardown had not been
-  touched. Nothing was wrong with it. `web/index.html` links Barlow Condensed
+  touched. Nothing was wrong with it. `web/index.html` links the display face
   from `fonts.googleapis.com`, that link is render-blocking, and in a container
   where outbound HTTPS goes through an agent proxy whose CA the browser does
   not trust, the TLS handshake hangs and resets — twice, six seconds each. So
@@ -4826,8 +7008,8 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   bump, v6 moved the credentials, v7 blocked fork checkouts for
   `pull_request_target` and `workflow_run`, which this repository does not use.
 
-- **End to end: `npm install` once, then `npx playwright test`.** 105 tests
-  across twenty-two spec files, and it starts the static server and
+- **End to end: `npm install` once, then `npx playwright test`.** 108 tests
+  across twenty-four spec files, and it starts the static server and
   `wrangler dev` itself when it is pointed at localhost.
 
   Measured 27 August 2026 against production: **89 passed, 1 skipped, 0
@@ -4866,10 +7048,11 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   leaving and rejoining, the phone layout, what the player sheet says about
   the Juke score, that every club's colour is drawn where no text can land on
   it, that a news payload cannot put script in the page, that the positions we
-  refuse to rank are refused consistently, and — since the design pass — that
-  the door is door-shaped rather than book-shaped, that a board cell is a
-  card, what the draft header says, and that a claim on the landing page
-  carries its proof.
+  refuse to rank are refused consistently, that no league the setup screen
+  allows can force a seat onto a player the app's own rules refuse, and —
+  since the design pass — that the door is door-shaped rather than
+  book-shaped, that a board cell is a card, what the draft header says, and
+  that a claim on the landing page carries its proof.
 
   **The static server is `py` on Windows and `python3` everywhere else**, picked
   in `playwright.config.mjs` from `process.platform`. It was `py` outright,
@@ -4946,10 +7129,14 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   harness stalling, not the app.
 
 - Before claiming a change works, run a full simulated draft and confirm
-  140 picks, no duplicate players, 14 per team, no kicker before round 13.
-  Then run one at a different shape — 12 teams, 15 rounds, full PPR, **bench
-  6** — and confirm 180 picks, 15 per team, one QB each and no kicker before
-  round 14.
+  140 picks, no duplicate players, 14 per team, and every seat holding exactly
+  the kicker and defense the format starts. Then run one at a different shape —
+  12 teams, 15 rounds, full PPR, **bench 6** — and confirm 180 picks, 15 per
+  team, one QB each and the same K/DST check.
+
+  That check used to be "no kicker before round 13", which was the round gate
+  and could not fail while the gate existed. The gate is gone; what it was
+  really protecting is the roster, and that is what to assert.
 
   The bench matters and this file used to leave it out. The default lineup is
   eight starters plus a FLEX plus five bench, which is fourteen roster spots,
@@ -5111,6 +7298,79 @@ running app before it is believed**, which is the same instruction the
 `?cb=` note gives about deployment and the `LOCAL_WORKER` skip gives about
 news.
 
+### A wait that short-circuits stops waiting, and the product is what moved
+
+`openApp()` waited for the cold-load overlay to leave before handing a page
+back. The predicate was:
+
+```js
+!document.documentElement.hasAttribute("data-standalone") || !document.getElementById("boot-sonar")
+```
+
+which was exactly right when it was written. Breach — the overlay before
+Deepwater — was scoped to the installed
+app's cold launch, `index.html` hid it everywhere else with
+`html:not([data-standalone]) #boot-sonar { display: none }`, `theme.js` stamped
+that attribute only under `matchMedia('(display-mode: standalone)')`, and a
+plain `browser.newContext()` never reports standalone. So the left side was true
+on the first tick and there was genuinely nothing to wait for — the short-circuit
+was the fix for a predicate that used to time out a full 12 seconds on every
+call.
+
+**Then the owner reversed the scoping**, because an overlay only installed users
+see is an overlay almost nobody sees. Breach plays on every cold load now,
+`theme.js` no longer stamps the attribute, and `main.jsx`'s teardown runs
+unconditionally. Every one of those three changes is right. Together they left
+the left-hand side of that `||` permanently true against an overlay that had
+just stopped being inert, so `openApp()` resolved on the first frame and handed
+back a page with five seconds of animation still over it.
+
+**It surfaced as two app bugs and was neither.** `phone.spec.mjs`'s "nothing is
+sitting on top of the Start button" reported the overlay's own artwork as the
+thing covering the button — true, and not the bug that test exists to find — and
+"the bottom sheet cycles through its three snap heights" failed because
+`page.mouse.down()` on the drag handle was being swallowed. Measured on the real
+build: the button hit-tested as covered from 600ms through 5000ms and was
+clickable from 6000ms, which was the same 4800–5800ms window `sonar.spec.mjs`
+asserted the removal in at the time. Both windows moved with Deepwater — see
+below — and the lesson did not. The two specs had been contradicting each other, and the
+one asserting the overlay *stays* was the one telling the truth.
+
+**The shape to remember is that nothing broke — a condition retired.** A guard
+written as "A or B" degrades silently the day A becomes permanently true, and it
+degrades into *always passing*, which is the direction no test catches. The tell
+here was two failures in one file that both described input going somewhere
+unexpected rather than a value being wrong, which is the sixth time in this file
+that the tooling has worn a bug's clothes.
+
+`openApp()` waits on the overlay's actual absence now, ceiling 5000ms, and
+removes the element if it outstays that rather than failing — an overlay that
+never leaves is one bug and it is `sonar.spec.mjs`'s to report, where a hard wait
+here would turn it into ninety-six timeouts spread across every other file.
+`sonar.spec.mjs` passes `{ keepBootOverlay: true }`, because it measures the
+overlay's whole life from an init script and is the one caller that needs it
+played exactly as shipped.
+
+**It cost the suite real time and Deepwater gave most of it back.** Breach held
+4900ms and this wait was ceilinged at 8000; Deepwater holds 2500 and is gone by
+about 2780, so the ceiling is 5000. That is roughly two seconds off each of 96
+`openApp()` calls — minutes of wall clock, and the largest single saving in the
+suite. **Nothing about this wait had to change to collect it**, which is the
+argument for having written it against the overlay's actual absence rather than
+against a duration: the number it waits for moved by half and the code did not
+move at all.
+
+What is left of the cost is still worth paying, for the same reason as before: a
+person waits too. The overlay is not decoration the tests may skip, it is the
+first two and a half seconds of using the product.
+
+**And the common case is now no overlay at all.** `splash-boot.js` gates the
+splash to one play per session, so the second and later navigations inside a
+single browser context find nothing to wait for and this resolves on the first
+tick. A spec that needs to watch it play needs a fresh context — which is what
+`loadWithProbe()` in `sonar.spec.mjs` does, and why it kept working without
+being told about the gate.
+
 ### A standing red that was not the pass that found it
 
 `autopick-adp.spec.mjs`'s "the autopicked seat's draft value is not a
@@ -5199,6 +7459,97 @@ the header's real height now. **Assert the relationship, never an absolute
 offset** — the same rule this file already states about the padding that
 stands in for a fixed header's height, learned again on the number underneath
 it.
+
+### A one-draft correlation is not a bound, and a bigger wobble found out
+
+`grade.spec.mjs`'s "the chair a manager drafts from does not decide their grade"
+ran one draft, correlated chair against finishing rank across ten seats, and
+asserted the result stayed under 0.35. It went red at **0.370** when the board
+wobble started using each player's real ADP standard deviation.
+
+**Nothing about the seat bias got worse — it got better.** Measured per chair
+over twenty seeds, |chair vs mean rank| went **0.289 before to 0.185 after**.
+What changed is that the wobble roughly doubled, which is realistic and makes
+any *single* draft noisier: across sixteen seeds the one-draft figure crossed
+0.35 on **3 of 16** after and **1 of 16** before. The test had a standard error
+near 0.38 on a bound of 0.35 — the estimator was noisier than the effect it was
+bounding, and it had been passing on the luck of one hard-coded seed.
+
+**The fix is not a looser number on the same estimate.** It is to measure the
+mean by chair, which is how the par work in this file was actually done ("mean
+`startersVsPar` by chair over ten mocks") and how the test was implemented
+nowhere. Averaged over six seeds the figure came out 0.057, 0.195, 0.254 and
+0.272 across four independent sets, so **0.40 is a bound with margin rather than
+a threshold sitting inside its own noise**.
+
+**Averaging made the test stronger in both directions**, which is the tell that
+it was the right change rather than a way to get to green. Draft luck cancels
+and the structural seat effect is all that survives, so the premise assertion —
+raw starter strength is still seat-driven — went from about 0.5 to **0.78–0.85**
+and its bound could be raised from 0.4 to 0.5. And against the bug it exists for
+(scaling `starters` instead of `startersVsPar`) it now reads **0.838 against a
+0.40 bound**, where the one-draft version read 0.50 against 0.35.
+
+**A sweep over seeds has two traps and this one had both.** `PAR_CACHE` is keyed
+without the seed, so a sweep that does not clear it grades every seed against
+the first one's par; and `startDraft()` does not clear `state.picks`, so a loop
+that forgets measures one draft six times at a variance of exactly zero. Both
+are reset by hand inside the evaluate.
+
+### A precondition sampled across three round trips is not sampled at once
+
+`room.spec.mjs`'s "a dropped socket comes back on its own, and the chair comes
+with it" was red on the nightly `browser-tests.yml` run for five nights
+running (1-3 September), never on a PR - `tests.yml` does not run this file at
+all, and the nightly is the only thing that ever drives it against a real
+worker. It read:
+
+```js
+await guest.waitForFunction(() => !Live.active(), null, { timeout: 10000 });
+expect(await guest.evaluate(() => !!Live.room()), "still in the room").toBe(true);
+expect(await guest.evaluate(() => Live.active()), "but the socket is down").toBe(false);
+```
+
+Three separate hops to the browser, and the thing being asserted absent -
+`Live.active()` - is exactly the fact `live.js` is built to make stop being
+true as fast as it possibly can: an immediate reconnect attempt (`RETRY_MS[0]`
+is 1000ms) plus `visibilitychange`/`online`/`pageshow` listeners. The wait
+correctly caught the socket down. The two `evaluate()` calls after it were two
+more chances for the reconnect to land before the second one asked again, and
+against the real worker - not the local `wrangler dev` this file otherwise
+runs against - it sometimes did.
+
+**Reproduced locally rather than assumed**, because a test that only fails
+against infrastructure the local run doesn't use is exactly the kind of thing
+worth confirming before touching: a 2000ms delay inserted between the wait and
+the reads reproduced the identical failure (`Expected: false, Received: true`)
+on a local `wrangler dev` too, which is proof the mechanism is the gap and not
+some property of the real worker specifically.
+
+**The fix samples both facts in the same browser-side turn the wait itself
+resolves in**, rather than reducing the gap:
+
+```js
+const downState = await guest
+  .waitForFunction(() => (Live.active() ? null : { inRoom: !!Live.room(), active: Live.active() }),
+    null, { timeout: 10000 })
+  .then((h) => h.jsonValue());
+expect(downState.inRoom, "still in the room").toBe(true);
+expect(downState.active, "but the socket is down").toBe(false);
+```
+
+JS is single-threaded, so the predicate's read of `Live.active()` and its
+construction of the returned object happen in the same synchronous tick -
+there is no window between "observed down" and "recorded down" for a
+reconnect to land in, which is a property of *when* the read happens rather
+than a smaller chance of losing the race. Confirmed against the bug the same
+way it was found: the 2000ms delay put back, on the fixed shape, and it still
+passes, because there is no later read left for a delay to land in front of.
+
+Five repeats plus the delay-reproduction, all green. **Nightly-only red is
+still red** - a failure nobody sees because it never touches a PR is exactly
+the "reported a plausible wrong cause" trap this file's testing section
+already warns about in other shapes, just with a longer fuse.
 
 ### `actionTimeout` was unset, and that is why a stale locator cost six minutes
 
@@ -5567,9 +7918,9 @@ has already half-found.
 cap is not one rule: `maxAt()` for the skill positions, the starting
 requirement for a kicker or a defense, `starters.QB + superflex` for a
 quarterback. Writing that down a second time is precisely how the superflex bug
-happened. The last round is passed in so the K and DST *timing* gates do not
-fire — this is a question about a roster, not about when a kicker becomes
-legal.
+happened. The round argument no longer changes the answer — the K and DST
+timing gates it used to step around are gone, and every remaining 999 comes
+from a cap that has nothing to do with the calendar.
 
 And when a test asks "was it my turn", **read it before the test stuffs the
 roster, not after.** Pushing picks straight into `state.picks` to reach a cap

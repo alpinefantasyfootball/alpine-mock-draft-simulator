@@ -17,9 +17,38 @@
 # and `X-Content-Type-Options` come from the HSTS dialog under SSL/TLS, not from
 # the Transform Rule, and setting them here as well would send each one twice.
 # They stay where they are.
+#
+# Clerk needs six allowances, added when real accounts landed. Its SDK loads
+# its own script from the frontend API host encoded in the publishable key
+# (script-src) and makes its own XHR/fetch calls to that same host
+# (connect-src) — the dev instance lives under *.clerk.accounts.dev (kept as
+# a host wildcard the same way *.giphy.com already is below, so local dev
+# and any future dev-instance subdomain keep working with no edit here).
+# Production moved to a verified custom domain on 1 Sep 2026 — clerk.jukeff.com,
+# the exact host named in the CNAME record Clerk's own Domains page issued
+# (`clerk` -> frontend-api.clerk.services), not decoded out of the
+# publishable key by hand; that is one CNAME under jukeff.com, not a
+# subdomain of clerk.accounts.dev, so it needed its own entry rather than
+# matching the existing wildcard. img-src is Clerk's own avatar CDN
+# (img.clerk.com), for <UserButton/>'s profile picture. frame-src is for
+# Cloudflare Turnstile, which Clerk's sign-up flow embeds as a bot check;
+# without it the widget is silently blocked by `default-src 'self'` the same
+# way the script itself was before this line existed, which is exactly the
+# bug that sent someone here in the first place: a click that does nothing
+# and no visible error unless the console is open.
+#
+# Two more found only once a real draft actually ran through Clerk end to
+# end, both blocked by `default-src 'self'` the same silent way:
+# **worker-src `blob:`** — Clerk spins up a Web Worker from a `blob:` URL
+# (its own bundled script, not a third-party host), and with no worker-src
+# declared the browser falls back to script-src, which does not list
+# `blob:` as a scheme. **connect-src `clerk-telemetry.com`** — Clerk's own
+# usage telemetry, no different in kind from the beacon host already
+# allowed above; blocking it buys nothing (it carries no script to run) and
+# costs a permanently red console entry on every page load.
 
 /*
   X-Frame-Options: DENY
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
-  Content-Security-Policy: default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' https://sleepercdn.com https://*.giphy.com; connect-src 'self' https://juke-draft-room.jukeff.workers.dev wss://juke-draft-room.jukeff.workers.dev https://site.api.espn.com; manifest-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://static.cloudflareinsights.com https://*.clerk.accounts.dev https://clerk.jukeff.com https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' https://sleepercdn.com https://*.giphy.com https://img.clerk.com; connect-src 'self' https://juke-draft-room.jukeff.workers.dev wss://juke-draft-room.jukeff.workers.dev https://site.api.espn.com https://*.clerk.accounts.dev https://clerk.jukeff.com https://clerk-telemetry.com; worker-src 'self' blob:; frame-src https://challenges.cloudflare.com; manifest-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'

@@ -62,7 +62,7 @@ function useReportHeight(onHeight) {
 
 export default function CockpitHeaderPhone({
   code, myTurn, urgent, timeLeft, clockLength, onOpenMenu, onFindLive,
-  autopick, onToggleAutopick, onHeight,
+  autopick, onToggleAutopick, onHeight, over,
 }) {
   const pct = clockLength ? Math.max(0, Math.min(100, (timeLeft / clockLength) * 100)) : 0
   const ref = useReportHeight(onHeight)
@@ -70,13 +70,13 @@ export default function CockpitHeaderPhone({
   return (
     <header ref={ref} className="fixed inset-x-0 top-0 z-40 shrink-0 border-b border-white/[0.06] bg-slate-bar pt-[env(safe-area-inset-top)]">
       <div className="flex items-center px-2 pt-1.5">
-        {/* #/drafts, not a modal — the same "back to your draft locker"
+        {/* #/rooms/draft, not a modal — the same "back to your draft locker"
             destination DraftCockpitHeader's own chevron already uses.
             44px hit box around a visually smaller glyph, same trick that
             file's own header comment documents for every circular control
             below lg ("a 44px hit box around a visibly smaller pill"). */}
         <a
-          href="#/drafts"
+          href="#/rooms/draft"
           aria-label="Back to your draft locker"
           title="Back to your draft locker"
           className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] text-ink-muted"
@@ -85,34 +85,64 @@ export default function CockpitHeaderPhone({
         </a>
 
         <div className="flex min-w-0 flex-1 flex-col items-center gap-[3px]">
-          <span className={'font-plex text-[10px] font-bold uppercase tracking-[0.12em] ' + (myTurn ? 'text-teal-300' : 'text-ink-muted')}>
-            {myTurn ? 'YOUR PICK' : 'ON THE CLOCK'}
+          {/* A finished draft has no clock, and this used to run one anyway.
+
+              The three states below were "your pick" and "somebody else's",
+              with no case for "nobody's, it is over" — so closing the
+              Insights report on a phone landed on the board under a header
+              reading ON THE CLOCK / 0:55 for a draft with all 140 picks in
+              it. headerInfo() has answered `over` and "Draft complete" for
+              this all along; the desktop header reads it and this one drew
+              its own clock instead. Reported as part of a content audit, and
+              it is the same class as the rest of that audit rather than a
+              layout bug: a true number in a sentence that is false. */}
+          <span
+            className={
+              'font-plex text-[10px] font-bold uppercase tracking-[0.12em] ' +
+              (over ? 'text-teal-300' : myTurn ? 'text-teal-300' : 'text-ink-muted')
+            }
+          >
+            {over ? 'DRAFT COMPLETE' : myTurn ? 'YOUR PICK' : 'ON THE CLOCK'}
           </span>
-          <div className="flex items-baseline gap-2">
-            <span
-              className={
-                'font-display text-[30px] font-bold leading-none tabular-nums ' +
-                (urgent ? 'text-rose-300' : 'text-ink')
-              }
-            >
-              {clockLength > 0 ? formatClock(timeLeft) : '—:—'}
-            </span>
-            {code && <span className="font-plex text-[11px] text-ink-muted">{code}</span>}
-          </div>
+          {/* Over, the clock is dropped rather than frozen or dashed out:
+              a 30px number is the loudest thing on this bar, and there is
+              no number a finished draft wants there. The room code stays if
+              there is one — that is still true, and still worth having. */}
+          {!over && (
+            <div className="flex items-baseline gap-2">
+              <span
+                className={
+                  'font-display text-[30px] font-bold leading-none tabular-nums ' +
+                  (urgent ? 'text-rose-300' : 'text-ink')
+                }
+              >
+                {clockLength > 0 ? formatClock(timeLeft) : '—:—'}
+              </span>
+              {code && <span className="font-plex text-[11px] text-ink-muted">{code}</span>}
+            </div>
+          )}
+          {over && code && <span className="font-plex text-[11px] text-ink-muted">{code}</span>}
         </div>
 
         {/* Jump to the live pick. The board is a real scroller in both axes
             — a 14-round, 10-team board is several screens tall and wider
-            than a phone — and nothing has ever pulled it back to the
-            current pick, so scrolling up to check round one was a one-way
-            trip you undid by hand.
+            than a phone — so scrolling up to check round one used to be a
+            one-way trip you undid by hand.
 
-            Deliberately a button and NOT an automatic follow. Auto-scroll
-            on every render is a bug this project has already shipped and
-            removed once on the legacy board: it pulled a reader back to the
-            live pick two or three times a second for as long as they kept
-            trying to look somewhere else. An explicit control cannot do
-            that, and it is what the reference app offers too. */}
+            This comment used to say the button was deliberately NOT an
+            automatic follow, on the grounds that auto-scroll on every
+            render is a bug this project shipped and removed once on the
+            legacy board. Half of that is still true and it is the wrong
+            half: what the legacy board removed was *unconditional*
+            following, and what it replaced it with was `boardFollow` —
+            follow until a person scrolls, then stop. A board that never
+            follows at all was reported straight back, from a real phone
+            draft with auto-pick on, as a draft happening off-screen.
+
+            So the board follows (DraftBoardGrid's `followLive`) and this
+            button is what re-arms it after a person has scrolled away. It
+            is still the only control here, and it still cannot yank
+            anybody anywhere: it only ever fires on a press. */}
         <button
           type="button"
           onClick={onFindLive}

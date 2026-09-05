@@ -217,6 +217,51 @@
     return (n / 1000) * 6 - 3;
   }
 
+  /* A flat 0..1 roll for one seat, from the same arithmetic and for the same
+     reason as jitter() above: every client and the server have to draw the
+     same number for the same chair in the same draft. `salt` separates two
+     questions asked of one seat - the CPU asks it twice, once about kickers
+     and once about defenses, and an unsalted roll would make every seat that
+     reaches early for a defense reach early for a kicker too.
+
+     The slot term is what makes this useful rather than merely random. Its
+     multiplier is odd and coprime with the modulus, so consecutive seats land
+     an irrational-looking step apart and ten chairs come out spread across
+     0..1 rather than clumped - which is the property the caller actually
+     wants, since a room where all ten seats happened to draw "waits it out"
+     is exactly the wall this is here to break up. */
+  function seatRoll(slot, seed, salt) {
+    return (((slot + 1) * 2654435761 + seed * 40503 + salt * 2246822519) % 100000) / 100000;
+  }
+
+  /* A triangular -1..+1 draw, so a caller can scale it by a player's own
+     published ADP standard deviation instead of by one number for everybody.
+
+     Triangular rather than flat because a flat draw says every offset in the
+     range is equally likely, which is not what a draft looks like: most
+     players go near their ADP and the tails are the exception. Two uniforms
+     summed is the cheapest shape that says so, and it stays pure integer
+     arithmetic, which is the whole constraint on this section.
+
+     **The two multipliers may not agree modulo the modulus, and checking the
+     marginal shape does not catch it.** 7919 and 5081 were tried first: the
+     histogram comes out a textbook triangle, mean 0.000, sd 0.408, three
+     quarters of the mass inside the middle half - every property this function
+     is supposed to have. And the board still moved wrong, because 919 + 81 is
+     exactly 1000, so x and y step in opposite directions by the same amount and
+     their sum only changes when one of them wraps. Consecutive board positions
+     came back at lag-1 correlation **0.57**: a dozen players at a time sharing
+     one offset, so the board shifted in blocks instead of neighbours swapping,
+     which is the entire point of a wobble. Visible on the live board as the
+     first seven players all wobbling -0.2 to -0.6 and the next three all +0.7
+     to +0.9. 3571 puts that correlation at **0.014** with the marginal shape
+     unchanged. Measure the correlation along the board, not just the shape. */
+  function spread(boardPosition, seed) {
+    const x = (boardPosition * 7919 + seed * 104729 + 15485863) % 1000;
+    const y = (boardPosition * 3571 + seed * 92003  + 32452843) % 1000;
+    return (x / 1000) + (y / 1000) - 1;
+  }
+
   return {
     totalPicks: totalPicks,
     // Exported so a caller can ask which way a round runs without
@@ -235,6 +280,8 @@
     picksUntil: picksUntil,
     rejectPick: rejectPick,
     jitter: jitter,
+    seatRoll: seatRoll,
+    spread: spread,
     REJECT: REJECT
   };
 });

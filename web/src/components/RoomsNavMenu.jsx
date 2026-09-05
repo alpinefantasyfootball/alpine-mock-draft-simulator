@@ -19,10 +19,13 @@ import { ROOM_ICON_BY_NAME, ROOM_TIER, ROOM_SIGNUP_SOURCE, roomSignupCopy, TierB
 // to catch, just for room phases instead of scoring.
 //
 // modalRef is the EarlyAccessModal instance the calling header already owns
-// (Header.jsx and LobbyBar.jsx both build one for the account button) —
-// reused here for a non-live room's own signup rather than mounting a
-// second <dialog>, the same modalRef-as-prop pattern AccountButtons already
-// uses. ROOM_SIGNUP_SOURCE/roomSignupCopy (icons.jsx) are the same lookup
+// (Header.jsx and LobbyBar.jsx each build one) — reused here for a non-live
+// room's own signup rather than mounting a second <dialog>.
+//
+// That parenthesis used to read "both build one for the account button",
+// which stopped being why either of them has one: Header's account control
+// is Clerk's now, and the modal it kept is for the rooms below. The
+// EarlyAccessModal is a rooms-and-sports thing, not an accounts thing. ROOM_SIGNUP_SOURCE/roomSignupCopy (icons.jsx) are the same lookup
 // RoomsGrid.jsx's roadmap list and Homepage.jsx's footer room links use, so
 // all three surfaces tag the identical five rooms with the identical source
 // string rather than each inventing its own.

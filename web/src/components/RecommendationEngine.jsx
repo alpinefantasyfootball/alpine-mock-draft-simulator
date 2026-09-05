@@ -1,19 +1,11 @@
 import AnalyticsCard from './AnalyticsCard.jsx'
 import { describeRecommendation, runRecommendation } from './recommendation.js'
 
-// Vivid, not muted — the one place in this grid that deliberately steps
-// outside Juke's usual restrained teal/purple pairing, because a chart
-// comparing formats needs each series to read apart at a glance. Chosen
-// close to the brand's existing teal/purple hue family (cyan and magenta
-// sit either side of it on the wheel) rather than an arbitrary rainbow, so
-// this still reads as the same app. Never reused for anything that names a
-// POSITION — draftRoomPositions.js owns that vocabulary everywhere else
-// (POS_CHALK for a mark, POS_BADGE for a chip, POS_SOLID under white
-// text) and this file
-// must not compete with it (see draftRoomPositions.js's own file comment on
-// exactly that failure mode).
-const FORMAT_COLORS = ['#22D3EE', '#E879F9', '#FBBF24']
-const HIGHLIGHT_COLOR = '#FB7185'
+// Steel / oxblood / graphite — cool, low-chroma series that hold up against the
+// slate ground. Still deliberately outside the position vocabulary
+// (draftRoomPositions.js), same rule the previous cyan/magenta set followed.
+const FORMAT_COLORS = ['#8AA6BE', '#BE6153', '#9AA8B4']
+const HIGHLIGHT_COLOR = '#D9A03C'
 // gradeScore's own real range (see analyseDraft() in app.js) — not the
 // mockup's 0-1000 axis, which doesn't correspond to any number this app
 // actually computes.

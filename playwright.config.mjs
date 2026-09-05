@@ -98,8 +98,62 @@ export default defineConfig({
        did. */
     launchOptions: {
       args: ["--disable-application-cache", "--disk-cache-size=1"]
-    },
-    extraHTTPHeaders: { "Cache-Control": "no-cache" }
+    }
+
+    /* There used to be `extraHTTPHeaders: { "Cache-Control": "no-cache" }`
+       here, and it silently made every account surface invisible to this
+       suite.
+
+       extraHTTPHeaders applies to EVERY request the page makes, including
+       cross-origin ones. A `Cache-Control` request header is not on the
+       CORS safelist, so adding it turns an ordinary script or fetch into a
+       preflighted request — and clerk.jukeff.com does not allow that header
+       in Access-Control-Allow-Headers, so the preflight fails and the
+       request is blocked.
+
+       Measured against production, inside the runner, one context each way:
+
+         with the header     clerk requests responseStatus 0, 0, 0, 0
+                             the account card NEVER renders (45s)
+         without it          200, 200, 200
+                             the account card renders in 38ms
+
+       Nothing errored. `window.Clerk` simply stayed undefined, and every
+       surface behind `<SignedOut>` — the homepage's account card, its trust
+       strip, the header's Log in and Sign up — rendered as nothing, because
+       that is exactly what <SignedOut> does before Clerk resolves. So the
+       suite was not testing a signed-out homepage; it was testing a
+       homepage with no account layer at all, and parity.spec.mjs failing
+       intermittently on "Keep your drafts on every device" was the only
+       visible symptom of it.
+
+       It only ever bit against production, which is the one place a real
+       publishable key exists: locally there is no key, useAccountUiReady()
+       is false, and every one of those surfaces renders its inert fallback
+       unconditionally. The environment where accounts are real is the only
+       one that could show this, and it is the environment the nightly runs
+       in.
+
+       Removing it does not reopen the staleness this block is otherwise
+       about, and that was measured rather than assumed. Loading the page
+       and reloading it, with only the launch args:
+
+         first    index-*.js  transfer 227177  body 816032
+                  app.js?v=   transfer 192616  body 563103
+         reload   both        transfer 300     body 0
+
+       A 300-byte transfer with a zero-byte body is a 304 — the browser
+       asked and the origin said unchanged. Cloudflare Pages sends
+       `public, max-age=0, must-revalidate` on everything, so every asset
+       is revalidated on every load whatever this config does, and a
+       changed body comes back 200 with the new content. The header was
+       belt over an origin that already braces.
+
+       So the guarantee moves from "never read the cache" to "always ask
+       the origin", which is what the incident in this comment actually
+       needed: you cannot be served a body the origin has replaced. The
+       launch args stay because they are a browser setting rather than a
+       header on the wire, and nothing cross-origin can object to them. */
   },
 
   /* Both are waited on by `port` rather than by `url`, which matters for the

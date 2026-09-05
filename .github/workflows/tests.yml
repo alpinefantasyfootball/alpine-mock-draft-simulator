@@ -1,7 +1,8 @@
 name: Tests
 
-# The two suites that are cheap enough to run on every change: standard-library
-# Python, no network, no pip install, a few seconds each.
+# The suites that are cheap enough to run on every change: standard-library
+# Python and one plain-node module test, no network, no pip install, no
+# wrangler, a few seconds each.
 #
 # The Playwright suite is deliberately NOT here. It is forty-seven tests, about
 # fifteen minutes, and it needs a wrangler dev running a Durable Object beside
@@ -50,3 +51,12 @@ jobs:
 
       - name: Source-id crosswalk
         run: python scripts/test_crosswalk.py
+
+      # sleeper.js is a plain module and its real work is turning four
+      # upstream responses into one object, so this drives it against a
+      # local stub with no network and no wrangler -- which is the only way
+      # to ask it for a 500, a truncated body or forty-one rosters. It
+      # belongs here for the same reason the two above do: seconds, and no
+      # moving parts to be flaky.
+      - name: Sleeper parse and join
+        run: node worker/test-sleeper.mjs

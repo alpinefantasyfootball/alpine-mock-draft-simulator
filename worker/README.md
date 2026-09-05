@@ -13,13 +13,71 @@ against the old one — check both sides ship together.
 with no backend at all and never opens a socket, and that is deliberate — see
 the multi-user section of `CLAUDE.md`.
 
+## The account-deletion webhook
+
+`POST /webhooks/clerk`, verified against `CLERK_WEBHOOK_SECRET`, deletes
+everything Juke holds for an account when Clerk says it is gone.
+
+Set it up once, in the Clerk dashboard under **Webhooks**:
+
+1. Endpoint `https://juke-draft-room.jukeff.workers.dev/webhooks/clerk`
+2. Subscribe to **`user.deleted`** (anything else is acknowledged and ignored)
+3. Copy the signing secret and give it to the worker:
+
+```bash
+wrangler secret put CLERK_WEBHOOK_SECRET -c worker/wrangler.toml
+```
+
+**Until that secret exists the route refuses with a 500 rather than
+answering 200.** Everywhere else here an unconfigured binding answers "no"
+quietly and the product carries on; that contract is exactly wrong for
+this one. Honouring an unverified delete would let anybody delete anybody's
+drafts, and a cheerful 200 that did nothing would tell Clerk the delivery
+succeeded, so it would never retry and the deletion would be lost in
+silence. A 500 says nothing happened, and Clerk redelivers once the secret
+is there.
+
+**The signature replaces the Origin check rather than joining it.** Clerk
+posts from its own servers with no Origin header, so `originAllowed()` —
+which every other route here applies — would reject every real delivery.
+The signature is the stronger claim anyway: an allowed Origin says the
+request came from our page, a valid signature says it came from Clerk.
+
+### Verifying it by hand
+
+`worker/test-auth.mjs` covers every way of *not* being Clerk, which is the
+half that matters most — a false accept is somebody else's drafts gone. The
+accept path needs a request signed with the worker's own secret, which
+nothing in the repository can know, so it is checked locally:
+
+```bash
+# worker/.dev.vars (gitignored)
+CLERK_WEBHOOK_SECRET=whsec_<any base64 you like>
+```
+
+Start `wrangler dev --local`, sign a `user.deleted` body with the same
+secret using `standardwebhooks`, and post it. Measured this way: unsigned,
+forged and tampered bodies all 400; a `user.created` is a 200 that ignores
+it; a valid `user.deleted` is a 200 that leaves `users`, `saved_drafts` and
+`draft_history` all at zero rows; and a repeat delivery of the same event
+is another clean 200, which is what Clerk's retries need.
+
+**One trap, and it cost twenty minutes.** `wrangler dev` reads `.dev.vars`
+at boot and hot-reloads code without re-reading it, so a dev server started
+before the file existed serves the new route with no secret and answers
+`not-configured` for ever. Two of them were listening on 8787 at once, the
+older one from hours earlier. Same lesson this repository already records
+about stale dev servers: check what is holding the port before believing
+what it tells you.
+
 ## What is where
 
 | File | Role |
 |---|---|
 | `draft-room.js` | The Durable Object. Sockets, storage, the alarm — and nothing else. |
-| `store.js` | The D1 cache: the player pool and the headlines. Every function answers "no" to a missing binding rather than throwing. |
-| `migrations/` | The SQL. `0001_init.sql` creates `players`, `player_news` and `news_lookups`. |
+| `store.js` | The D1 cache: the player pool and the headlines. Every function answers "no" to a missing binding rather than throwing. Also the account-owned rows — `touchUser()`, the saved draft, the locker — which are not a cache and are the one thing in here that cannot be rebuilt from a feed. |
+| `auth.js` | `verifiedUser()`: is this `Authorization: Bearer` header a session Clerk actually issued. The one place the worker decides who is asking. |
+| `migrations/` | The SQL. `0001_init.sql` creates `players`, `player_news` and `news_lookups`; `0002_signup.sql` the waitlist; `0003_accounts.sql` and `0004_drafts.sql` the account, its saved draft and its locker. |
 | `wrangler.toml` | Bindings, the DO migration and the cron. One class, `DraftRoom`; one database, `juke_db`. |
 | `../room.js` | Who is sitting where, what has been picked, how long is left. Pure. |
 | `../draft-engine.js` | The rules of a snake draft. Pure. |
@@ -56,6 +114,13 @@ Thirty assertions over real sockets: two managers joining, seats, host-only
 start, wrong-seat refusal, chat, a reconnect mid-draft, a stale build being
 turned away — and the one that matters, two submits of the same player on
 one turn producing exactly one pick.
+
+```bash
+node worker/test-auth.mjs
+```
+
+Eight assertions over `/me` — every way of being signed out, none of them a
+500. See **Accounts** below for what it cannot cover and why.
 
 `wrangler deploy --dry-run --outdir=<dir>` compiles without an account and is
 the quickest check that the bundle is still valid.
@@ -131,6 +196,16 @@ box is worse than no box.
 point it at a local stub so the whole path can be driven without a key or a
 network. Leave it unset in production.
 
+`SLEEPER_BASE` is the same knob for `sleeper.js`, and exists for the same
+reason. Verifying league connect against a real league proves the happy
+path and nothing else: a real league cannot be asked for a 500, a truncated
+body, a renamed field or forty-one rosters, and the league it was verified
+against is pre-draft today and will not be next month. `node
+worker/test-sleeper.mjs` drives the parse and the four-way join against a
+stub with no network and no wrangler at all — it imports the module
+directly and passes the base as an argument, so nothing has to be running.
+It is in CI. Leave `SLEEPER_BASE` unset in production.
+
 `/news` answers are cached at the edge for fifteen minutes (`NEWS_TTL`), keyed
 by player rather than by request URL, because the free tier is a thousand calls
 a month and a draft is the same dozen players opened repeatedly. Measured at 50
@@ -149,6 +224,78 @@ swapping provider is a change to `fetchUpstreamNews()` and nothing else, and
 it keeps the number of fields the page has to escape down to what it draws.
 **`source` is never dropped** — we link and attribute rather than republish,
 and an unattributed headline is the version of this that is not allowed.
+
+## Accounts
+
+Clerk (`web/src/clerkConfig.js`) owns login, signup and sessions entirely on
+the client. This worker's whole job is `auth.js`'s `verifiedUser()`: given a
+request, decide whether `Authorization: Bearer <token>` is a session Clerk
+actually issued, and answer null rather than throwing if it is missing,
+malformed, expired or simply absent — no key configured included, same
+"answer no to a missing binding" contract `store.js` already uses for D1.
+
+**`GET /me`** is the simplest route built on it: verify, record that this
+person was seen (`touchUser()` in `store.js`), answer `{ signedIn }`.
+
+**`/me/draft` and `/me/history`** are what actually save and read anything,
+and they shipped — both go through `requireUser()`, which calls the same
+`verifiedUser()` rather than re-deriving "who is this" a second time.
+
+They answer **401** where `/me` answers `signedIn: false`, and the split is
+deliberate: `/me` exists so a caller can ask "am I logged in" without it
+being an error either way, while a route that can lose or leak somebody's
+draft draws the harder line.
+
+Both store the client's JSON **whole**, in a `data` column, rather than
+decomposed into columns here — `app.js` already carries its own
+backward-compatibility rules for both shapes, and a second server-side schema
+would either duplicate every one of them or drift from them. `completed_at`
+is the one field pulled out as a real column, for `ORDER BY` and nothing
+else, converted from `recordHistory()`'s milliseconds to this project's
+epoch-seconds convention at the route rather than leaving `store.js` to guess
+the unit. History is written one entry at a time, never in bulk: only one
+entry has ever actually changed, and sending the other 199 back every time is
+all cost.
+
+`wrangler secret put CLERK_SECRET_KEY` in production, same shape as
+`GIPHY_KEY`/`TANK01_KEY`; locally it goes in `.dev.vars` (see above). **It
+belongs on this worker and nowhere else** — a `CLERK_SECRET_KEY` set on the
+Pages project does nothing at all, and looks exactly as configured as one
+that works. Production uses an `sk_live_` key from Clerk's production
+instance, which is a different instance from the development one with its own
+keys and its own user list.
+
+**Read `auth.js`'s comment before changing how the token is checked.** The
+`verifyToken` exported from `@clerk/backend`'s package root is
+`withLegacyReturn(verifyToken)` — it returns the JWT payload directly on
+success and **throws** on failure, which is not the `{ data } | { errors }`
+union the package's own internal `src/tokens/verify.ts` documents. Written
+against that union, this file rejected every valid session from the day
+accounts shipped until 1 September 2026, and logged `verifyToken refused: []`
+while doing it — an empty errors array being this code finding nothing to
+report rather than Clerk reporting no problem.
+
+**The `users` table has no email or name column, on purpose.** The client
+already has both, verified, straight from its own Clerk session the moment
+someone is signed in — fetching and caching a second copy worker-side would
+be exactly the "two sources of truth for one fact" this project keeps
+finding bugs from elsewhere. If a feature ever needs Juke's own copy, that
+is the moment to add the columns and the fetch that fills them.
+
+**`PREVIEW_ORIGIN_RE`** allows any `https://<hash>.juke-1mw.pages.dev`
+origin through `originAllowed()`, alongside the fixed `ALLOWED` list and the
+localhost regex. Every branch push gets its own preview build at a fresh
+address, which is where this feature is actually tested from before a merge
+— without this, every authenticated route 403s on a preview deploy with
+nothing in the browser to say why beyond the network tab.
+
+`node worker/test-auth.mjs` (against a `wrangler dev --local` already
+running) covers every way of being signed out — no Origin, a wrong Origin,
+no token, a malformed token, a well-formed-but-unsigned one — and asserts
+none of them ever produce anything but a clean `signedIn: false`. It cannot
+cover the signed-in path: that needs a token actually signed by Clerk, which
+nothing offline can produce. That half is verified by hand, against a real
+deploy, with a real sign-in.
 
 ## Chat media (voice and photos)
 
@@ -311,6 +458,7 @@ A local key goes in `worker/.dev.vars`, which is gitignored:
 ```
 TANK01_KEY = "…"
 GIPHY_KEY = "…"
+CLERK_SECRET_KEY = "…"
 ```
 
 **`--var` on the command line works and a stale `workerd` will make you think
@@ -322,10 +470,23 @@ binding is missing.
 
 ## Not done yet
 
-- `chooseFor()` returns `null`. The CPU's real opinion needs the board, which
-  is a megabyte of generated data the worker does not have. It will either be
-  handed it at deploy time or ask the first connected client for it.
-- No client. `app.js` does not know rooms exist yet.
-- Chat is relayed but not stored, so a late joiner sees an empty room.
-- GIPHY is not wired. The key must live here, not in the page — a key in
-  client-side JavaScript is public.
+Every item this list used to carry has since shipped, and the list stood
+unchanged long enough to describe a worker that no longer existed — a
+`chooseFor()` that is not in this file any more, an `app.js` that "does not
+know rooms exist yet", unstored chat, an unwired GIPHY. Checked before
+rewriting rather than assumed: `hostPick()` in `room.js` is the answer to the
+first (the host's browser is the CPU, because the board is a megabyte the
+worker does not have), and the other three are plainly in the code.
+
+What is actually open:
+
+- **The signed-in path has no automated coverage anywhere.**
+  `test-auth.mjs` proves every way of being *signed out* is refused cleanly,
+  and nothing offline can produce a token Clerk would sign. That gap is
+  exactly where the `verifyToken` bug above lived for as long as it did.
+- **Room creation is unlimited.** Actions within a room are rate limited
+  (forty per socket per ten seconds); creating rooms is not, and that belongs
+  on the edge rather than in the room.
+
+A roadmap for the product rather than this worker — the five rooms that are
+not built, auction drafts — lives in the repository's own `CLAUDE.md`.

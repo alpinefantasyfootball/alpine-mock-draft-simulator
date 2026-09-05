@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
+import { SignedOut, SignInButton, SignUpButton } from '@clerk/clerk-react'
 import { ChevronRight, Lock, Play, Sparkles } from 'lucide-react'
 import JukeLogo from '../juke-logo/JukeLogo.jsx'
 import EarlyAccessModal from '../EarlyAccessModal.jsx'
 import FloatingNavPill, { NAV_PILL_CLEARANCE } from './FloatingNavPill.jsx'
 import { ROOM_ICON_BY_NAME, ROOM_SIGNUP_SOURCE, roomSignupCopy } from '../icons.jsx'
+import { useAccountUiReady } from '../../hooks/useAccountUiReady.js'
 import { useRooms } from '../../hooks/useRooms.js'
 import { freshnessLine } from '../dataFreshness.js'
 import { POS_CHALK, CELL_INK } from '../draftRoomPositions.js'
@@ -196,6 +198,7 @@ export default function HomePhone() {
   const modalRef = useRef(null)
   const inProgress = useInProgress(engine, tick)
   const [freshness, setFreshness] = useState(null)
+  const accountUiReady = useAccountUiReady()
 
   useEffect(() => {
     setFreshness(freshnessLine())
@@ -254,7 +257,7 @@ export default function HomePhone() {
             <Sparkles className="h-3.5 w-3.5 not-italic" aria-hidden="true" />
             Agility through analytics
           </p>
-          <h1 className="mt-2 font-display text-[42px] font-extrabold italic uppercase leading-[0.92] tracking-[-0.01em]">
+          <h1 className="mt-2 font-display text-[42px] font-extrabold italic uppercase leading-[0.92] tracking-normal">
             <span className="text-white">Start a</span>
             <br />
             <span className="text-mint">mock draft.</span>
@@ -329,6 +332,77 @@ export default function HomePhone() {
           </div>
         </div>
 
+        {/* Accounts, on a phone. Until this card existed there was no way
+            to sign up or log in below `sm` at all: every AccountButtons
+            call site (Header, LobbyBar, MobileNavSheet) sits inside
+            Homepage.jsx's `hidden sm:block` half, so the whole feature
+            shipped to desktop only. That is the breakpoint-split hazard
+            CLAUDE.md already names for data-hero-cta — "splitting a page by
+            breakpoint orphans every attribute only one half of it carries"
+            — reached with a feature instead of a test marker.
+
+            A card in the flow rather than two more controls in the top bar,
+            and that is a measurement rather than a preference: the bar
+            holds the wordmark and Play, and logo + Play + Log in + Sign up
+            comes to ~370px of content on a 390px screen — no slack at all,
+            and an overflow outright at 360. Dropping Play to make room was
+            the other option and it is backwards for this product: Play is
+            what a signed-out visitor is here for, which is the same thing
+            the "FREE · NO ACCOUNT NEEDED" line below promises.
+
+            Which is also why the copy leads with what an account is *for*
+            rather than with "Sign up". This page tells you two screens
+            further down that no account is needed, and that is true — a
+            solo mock still runs without one. An account buys exactly what
+            app.js's cross-device sync does (SAVE_KEY and the locker
+            mirrored to /me/draft and /me/history), so the card says that
+            and nothing more. A bare Sign Up button here would read as a
+            gate on a page whose whole pitch is that there isn't one.
+
+            Signed in it disappears entirely — the FloatingNavPill's own
+            "You" tab is where a signed-in person's account lives, so a card
+            still selling the account to somebody who has one would be the
+            dead-control problem in a new place. */}
+        {accountUiReady && (
+          <SignedOut>
+            <div className="mt-7 rounded-[18px] border border-line-hairline bg-surface-card px-3.5 py-4">
+              <p className="font-plex text-[10px] font-bold uppercase tracking-[0.1em] text-teal-300">
+                Optional
+              </p>
+              <p className="mt-1 font-display text-[19px] font-bold leading-tight text-white">
+                Keep your drafts on every device
+              </p>
+              <p className="mt-1 text-[13px] leading-snug text-voidInk-body">
+                An account saves the draft you have going and every report in your
+                locker, so they follow you from your phone to your desk. Mocks still
+                run fine without one.
+              </p>
+              {/* h-11 is §9's tap-target floor, the same 44px the nav pill's
+                  own rows keep — and unlike the desktop nav there is width
+                  to spare here, so both buttons take an equal half rather
+                  than sizing to their labels. Sign up stays the loud one. */}
+              <div className="mt-3.5 flex gap-2.5">
+                <SignUpButton mode="modal">
+                  <button
+                    type="button"
+                    className="inline-flex h-11 flex-1 items-center justify-center rounded-full bg-gradient-to-r from-[#22d3ee] to-[#a78bfa] text-[15px] font-bold text-white transition-transform duration-150 active:scale-[0.97]"
+                  >
+                    Sign up
+                  </button>
+                </SignUpButton>
+                <SignInButton mode="modal">
+                  <button
+                    type="button"
+                    className="inline-flex h-11 flex-1 items-center justify-center rounded-full border border-line-hairline text-[15px] font-semibold text-voidInk-body transition-colors duration-150 active:border-white/30"
+                  >
+                    Log in
+                  </button>
+                </SignInButton>
+              </div>
+            </div>
+          </SignedOut>
+        )}
+
         <div className="mt-7" id="rooms">
           <SectionTitle emoji="🚪">The Rooms</SectionTitle>
 
@@ -343,8 +417,17 @@ export default function HomePhone() {
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-1.5">
                   <span className="h-[6px] w-[6px] rounded-full bg-teal-400" aria-hidden="true" />
+                  {/* "Free Access", not "Live" — the same label the desktop
+                      RoomsGrid and the Rooms dropdown carry for this same
+                      room, and for the same reason: every other room now
+                      wears a Juke Pro / All-Access tag, so what distinguishes
+                      this one is not that it works but that it costs
+                      nothing. This row was the last place still saying
+                      "Live", which is exactly the drift the shared
+                      ROOM_TIER data was introduced to stop, surviving in the
+                      half of the homepage that data never reached. */}
                   <span className="font-plex text-[10px] font-bold uppercase tracking-[0.1em] text-teal-300">
-                    Live · {liveRoom.season}
+                    Free Access · {liveRoom.season}
                   </span>
                 </span>
                 <span className="mt-0.5 block truncate font-display text-[21px] font-bold text-white">{liveRoom.name}</span>
@@ -404,9 +487,24 @@ export default function HomePhone() {
             Needed") and it is one of the two things a visitor most wants to
             know — a launcher that omits it is not being concise, it is
             leaving out a reason to press the button. The browser half is
-            Juke's own, and true: a solo mock sends nothing anywhere. */}
+            Juke's own, and true: a solo mock, signed out, sends nothing
+            anywhere.
+
+            "NO ACCOUNT NEEDED", not "NO ACCOUNT" — which is what this said
+            until accounts shipped, and which stopped being true while
+            sitting three cards below one offering to make you one. The
+            promise a visitor cares about is that nothing is being asked of
+            them, and that is still exactly true; the flat version now reads
+            as a claim about the product that the same screen contradicts. */}
+        {/* Each claim is its own nowrap span so the line breaks BETWEEN
+            them rather than through one. At 375px the three no longer fit
+            on one line ("NO ACCOUNT" became "NO ACCOUNT NEEDED"), and the
+            default break put "RUNS IN YOUR / BROWSER" across two lines,
+            which reads as a typo rather than as a list. */}
         <p className="mt-1.5 text-center font-plex text-[11px] tracking-[0.08em] text-voidInk-muted">
-          FREE &middot; NO ACCOUNT &middot; RUNS IN YOUR BROWSER
+          <span className="whitespace-nowrap">FREE</span>{' '}&middot;{' '}
+          <span className="whitespace-nowrap">NO ACCOUNT NEEDED</span>{' '}&middot;{' '}
+          <span className="whitespace-nowrap">RUNS IN YOUR BROWSER</span>
         </p>
         <div className="mt-4 flex justify-center gap-4">
           <a href="/docs/draft-room-how-it-works.html" className="text-[12px] text-voidInk-body underline-offset-2 hover:underline">How it works</a>

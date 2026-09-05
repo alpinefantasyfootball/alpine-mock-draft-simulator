@@ -317,6 +317,31 @@
   root.addEventListener("online", awake);
   root.addEventListener("pageshow", awake);
 
+  /* One shape for every sync method, so a caller never has to remember
+     which of them says what. Extra fields are merged in rather than
+     replacing the envelope — see loadDraft/loadHistory.
+
+     Module scope rather than a method on the returned object, and that is
+     not style: `live` in this file is the internal state object a few
+     hundred lines up, not the API being returned, so `live.syncResult()`
+     would be undefined at the moment any of these actually failed — which
+     is to say only ever in production, on the path that exists to explain
+     failures. Written the wrong way first and caught by reading it back. */
+  function syncResult(ok, reason, extra) {
+    const out = { ok: !!ok, reason: ok ? null : (reason || "offline") };
+    if (extra) for (const k in extra) out[k] = extra[k];
+    return out;
+  }
+
+  /* HTTP status to reason, in one place. Every one of these routes answers
+     with the same refusals, so a fifth would otherwise have to be added in
+     six methods. */
+  function reasonForStatus(status) {
+    if (status === 401) return "unauthorized";
+    if (status === 403) return "forbidden";
+    return "offline";
+  }
+
   return root.Live = {
     WORKER: WORKER,
     configured: configured,
@@ -478,6 +503,269 @@
       })
         .then((r) => r.json())
         .catch(() => ({ ok: false }));
+    },
+
+    /* A signed-in account's own saved draft and locker history, through
+       the worker's /me/draft and /me/history routes. Same reasoning as
+       news()/signup() above — this is the file that knows where the
+       worker is — and the same "nothing to do with being in a room": a
+       solo draft is exactly what these exist for, and the worker's own
+       origin check (originAllowed()) treats a plain page load identically
+       whether or not anyone happens to be in a room right now.
+
+       `token` is a Clerk session token, gotten by the caller from
+       window.JukeAuth.getToken() — this file has no Clerk of its own and
+       no opinion about who is signed in, only how to ask the worker once
+       somebody hands it a token.
+
+       ---- Every method resolves; none of them rejects ----
+
+       That part is unchanged and is the point: a caller that is not signed
+       in and a caller that could not reach the worker need to be handled
+       identically, which they cannot be if only one of them throws, and a
+       draft must never be held up by a sync.
+
+       ---- What changed: they say WHY ----
+
+       They used to resolve to a bare falsy answer — false, null, [] — and
+       that collapsed every distinct failure into one. It cost a real bug:
+       a foreign key was failing every account write while the read beside
+       it answered 200, and from the page the symptom was identical to a
+       missing CLERK_SECRET_KEY and to an unapplied migration. Three
+       different causes, three different fixes, one indistinguishable
+       "could not reach your account", and it took a hand-written console
+       probe to tell them apart.
+
+       So each one resolves to `{ ok, reason, ... }`. `reason` is null when
+       ok, and otherwise one of:
+
+         "signed-out"    no token was handed in; nothing was attempted
+         "offline"       the request never completed — no network, worker
+                         down, DNS, a blocked origin at the browser
+         "unauthorized"  401: the worker would not accept the token. A
+                         missing CLERK_SECRET_KEY on the worker looks
+                         exactly like this, and so does an expired session
+         "forbidden"     403: originAllowed() refused the caller's Origin
+         "store-failed"  200, and the worker could not write it — a missing
+                         table, a constraint, D1 itself being unwell
+         "bad-response"  a 2xx that was not the JSON this expects
+
+       The data still comes back beside it (`data` for a draft, `entries`
+       for history) rather than in place of it, so a caller reads one field
+       for the answer and another for whether to believe it. */
+
+
+
+    /* ---- League connect (Sleeper) ----
+
+       Same contract as the account methods above: every one resolves,
+       none rejects, and the reason says which failure it was. Two of the
+       three need no token — looking a username up and reading a league are
+       public reads — and connecting one does, because a connection belongs
+       to an account and there is nowhere else to put it.
+
+       `reason` gains one value here that the draft/history methods have no
+       use for:
+
+         "not-found"   the worker reached Sleeper and Sleeper said no. For
+                       a lookup that is a username nobody has; for a
+                       connect it is a league id that does not resolve.
+                       Distinct from "offline" on purpose — one is worth
+                       retyping, the other is worth retrying, and a screen
+                       that cannot tell them apart says the wrong thing
+                       half the time. */
+
+    sleeperLookup: function (username, season) {
+      const name = String(username || "").trim();
+      if (!name) return Promise.resolve(syncResult(false, "bad-request", { user: null, leagues: [] }));
+      const http = WORKER.replace(/^ws/, "http");
+      const q = "?username=" + encodeURIComponent(name) + (season ? "&season=" + encodeURIComponent(season) : "");
+      return fetch(http + "/sleeper/lookup" + q)
+        .then(function (r) {
+          if (!r.ok) return syncResult(false, reasonForStatus(r.status), { user: null, leagues: [] });
+          return r.json()
+            .then(function (body) {
+              // A username nobody has comes back 200 with a null user —
+              // Sleeper answering "no" rather than failing. Reported as
+              // not-found so the screen can say "we could not find that
+              // username" instead of "something went wrong".
+              if (!body || !body.user) return syncResult(false, "not-found", { user: null, leagues: [] });
+              return syncResult(true, null, {
+                user: body.user,
+                leagues: Array.isArray(body.leagues) ? body.leagues : [],
+                season: body.season || null
+              });
+            })
+            .catch(() => syncResult(false, "bad-response", { user: null, leagues: [] }));
+        })
+        .catch(() => syncResult(false, "offline", { user: null, leagues: [] }));
+    },
+
+    // A league's current state — rosters, records, points. Cached at the
+    // edge for a couple of minutes, so calling this on every navigation is
+    // cheap and calling it in a loop is not a problem for Sleeper.
+    leagueSnapshot: function (leagueId) {
+      const id = String(leagueId || "");
+      if (!id) return Promise.resolve(syncResult(false, "bad-request", { snapshot: null }));
+      const http = WORKER.replace(/^ws/, "http");
+      return fetch(http + "/sleeper/snapshot?league=" + encodeURIComponent(id))
+        .then(function (r) {
+          if (r.status === 404) return syncResult(false, "not-found", { snapshot: null });
+          if (!r.ok) return syncResult(false, reasonForStatus(r.status), { snapshot: null });
+          return r.json()
+            .then((body) => syncResult(true, null, { snapshot: body || null }))
+            .catch(() => syncResult(false, "bad-response", { snapshot: null }));
+        })
+        .catch(() => syncResult(false, "offline", { snapshot: null }));
+    },
+
+    listLeagues: function (token) {
+      if (!token) return Promise.resolve(syncResult(false, "signed-out", { leagues: [] }));
+      const http = WORKER.replace(/^ws/, "http");
+      return fetch(http + "/me/leagues", { headers: { "authorization": "Bearer " + token } })
+        .then(function (r) {
+          if (!r.ok) return syncResult(false, reasonForStatus(r.status), { leagues: [] });
+          return r.json()
+            .then((body) => syncResult(true, null, {
+              leagues: (body && Array.isArray(body.leagues)) ? body.leagues : []
+            }))
+            .catch(() => syncResult(false, "bad-response", { leagues: [] }));
+        })
+        .catch(() => syncResult(false, "offline", { leagues: [] }));
+    },
+
+    connectLeague: function (token, leagueId, ownerId) {
+      if (!token) return Promise.resolve(syncResult(false, "signed-out", { league: null }));
+      const http = WORKER.replace(/^ws/, "http");
+      return fetch(http + "/me/leagues", {
+        method: "POST",
+        headers: { "content-type": "application/json", "authorization": "Bearer " + token },
+        body: JSON.stringify({ leagueId: String(leagueId || ""), ownerId: ownerId || null })
+      })
+        .then(function (r) {
+          if (r.status === 404) return syncResult(false, "not-found", { league: null });
+          if (!r.ok) return syncResult(false, reasonForStatus(r.status), { league: null });
+          return r.json()
+            .then((body) => (body && body.ok)
+              ? syncResult(true, null, { league: body.league || null })
+              : syncResult(false, "store-failed", { league: null }))
+            .catch(() => syncResult(false, "bad-response", { league: null }));
+        })
+        .catch(() => syncResult(false, "offline", { league: null }));
+    },
+
+    disconnectLeague: function (token, leagueId, provider) {
+      if (!token) return Promise.resolve(syncResult(false, "signed-out"));
+      const http = WORKER.replace(/^ws/, "http");
+      const q = "?league=" + encodeURIComponent(String(leagueId || "")) +
+                "&provider=" + encodeURIComponent(provider || "sleeper");
+      return fetch(http + "/me/leagues" + q, {
+        method: "DELETE",
+        headers: { "authorization": "Bearer " + token }
+      })
+        .then(function (r) {
+          if (!r.ok) return syncResult(false, reasonForStatus(r.status));
+          return r.json()
+            .then((body) => (body && body.ok) ? syncResult(true) : syncResult(false, "store-failed"))
+            .catch(() => syncResult(false, "bad-response"));
+        })
+        .catch(() => syncResult(false, "offline"));
+    },
+
+    saveDraft: function (token, data) {
+      if (!token) return Promise.resolve(syncResult(false, "signed-out"));
+      const http = WORKER.replace(/^ws/, "http");
+      return fetch(http + "/me/draft", {
+        method: "POST",
+        headers: { "content-type": "application/json", "authorization": "Bearer " + token },
+        body: JSON.stringify(data)
+      })
+        .then(function (r) {
+          if (!r.ok) return syncResult(false, reasonForStatus(r.status));
+          return r.json()
+            .then((body) => (body && body.ok) ? syncResult(true) : syncResult(false, "store-failed"))
+            .catch(() => syncResult(false, "bad-response"));
+        })
+        .catch(() => syncResult(false, "offline"));
+    },
+
+    loadDraft: function (token) {
+      if (!token) return Promise.resolve(syncResult(false, "signed-out", { data: null }));
+      const http = WORKER.replace(/^ws/, "http");
+      return fetch(http + "/me/draft", { headers: { "authorization": "Bearer " + token } })
+        .then(function (r) {
+          if (!r.ok) return syncResult(false, reasonForStatus(r.status), { data: null });
+          return r.json()
+            .then((body) => syncResult(true, null, { data: (body && body.data) || null }))
+            .catch(() => syncResult(false, "bad-response", { data: null }));
+        })
+        .catch(() => syncResult(false, "offline", { data: null }));
+    },
+
+    clearDraft: function (token) {
+      if (!token) return Promise.resolve(syncResult(false, "signed-out"));
+      const http = WORKER.replace(/^ws/, "http");
+      return fetch(http + "/me/draft", {
+        method: "DELETE",
+        headers: { "authorization": "Bearer " + token }
+      })
+        .then(function (r) {
+          if (!r.ok) return syncResult(false, reasonForStatus(r.status));
+          return r.json()
+            .then((body) => (body && body.ok) ? syncResult(true) : syncResult(false, "store-failed"))
+            .catch(() => syncResult(false, "bad-response"));
+        })
+        .catch(() => syncResult(false, "offline"));
+    },
+
+    loadHistory: function (token) {
+      if (!token) return Promise.resolve(syncResult(false, "signed-out", { entries: [] }));
+      const http = WORKER.replace(/^ws/, "http");
+      return fetch(http + "/me/history", { headers: { "authorization": "Bearer " + token } })
+        .then(function (r) {
+          if (!r.ok) return syncResult(false, reasonForStatus(r.status), { entries: [] });
+          return r.json()
+            .then((body) => syncResult(true, null, {
+              entries: (body && Array.isArray(body.entries)) ? body.entries : []
+            }))
+            .catch(() => syncResult(false, "bad-response", { entries: [] }));
+        })
+        .catch(() => syncResult(false, "offline", { entries: [] }));
+    },
+
+    // One entry, added or replaced — see worker/README.md on why there is
+    // no bulk write: the server only ever needs the one that changed.
+    saveHistoryEntry: function (token, entry) {
+      if (!token) return Promise.resolve(syncResult(false, "signed-out"));
+      const http = WORKER.replace(/^ws/, "http");
+      return fetch(http + "/me/history", {
+        method: "POST",
+        headers: { "content-type": "application/json", "authorization": "Bearer " + token },
+        body: JSON.stringify(entry)
+      })
+        .then(function (r) {
+          if (!r.ok) return syncResult(false, reasonForStatus(r.status));
+          return r.json()
+            .then((body) => (body && body.ok) ? syncResult(true) : syncResult(false, "store-failed"))
+            .catch(() => syncResult(false, "bad-response"));
+        })
+        .catch(() => syncResult(false, "offline"));
+    },
+
+    deleteHistoryEntry: function (token, id) {
+      if (!token) return Promise.resolve(syncResult(false, "signed-out"));
+      const http = WORKER.replace(/^ws/, "http");
+      return fetch(http + "/me/history?id=" + encodeURIComponent(id), {
+        method: "DELETE",
+        headers: { "authorization": "Bearer " + token }
+      })
+        .then(function (r) {
+          if (!r.ok) return syncResult(false, reasonForStatus(r.status));
+          return r.json()
+            .then((body) => (body && body.ok) ? syncResult(true) : syncResult(false, "store-failed"))
+            .catch(() => syncResult(false, "bad-response"));
+        })
+        .catch(() => syncResult(false, "offline"));
     }
   };
 })(window);

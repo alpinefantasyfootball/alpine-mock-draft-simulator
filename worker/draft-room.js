@@ -28,7 +28,36 @@ import Room from "../room.js";
 /* The D1 cache. Every function in there answers "no" to a missing binding
    rather than throwing, so this file works unchanged with no database — which
    is what keeps `wrangler dev --local` and the keyless news test running. */
-import { syncPlayerPool, cachedNews, storeNews, usableNews, storeSignup } from "./store.js";
+import {
+  syncPlayerPool, cachedNews, storeNews, usableNews, storeSignup, touchUser, deleteUserData,
+  getSavedDraft, putSavedDraft, deleteSavedDraft,
+  listDraftHistory, putHistoryEntry, deleteHistoryEntry,
+  listLeagues, putLeague, deleteLeague
+} from "./store.js";
+
+/* Sleeper, read-only. Kept out of store.js for the same reason auth.js is:
+   that file owns D1 and nothing else, this owns "what does Sleeper say"
+   and nothing else, and the two meet in a route handler rather than
+   reaching into each other. */
+import { lookupUser, leagueSnapshot, nflState, SNAPSHOT_TTL, SLEEPER_API } from "./sleeper.js";
+
+/* Clerk session verification — see that file's own header for the shape.
+   Kept separate from store.js on purpose: that file owns D1 and nothing
+   else, this owns "who sent this request" and nothing else, and the two
+   meet only in the route handler below, the same way the room's own rules
+   (draft-engine.js) and its storage (this file) meet in DraftRoom rather
+   than either one reaching into the other. */
+import { verifiedUser } from "./auth.js";
+/* Clerk signs its webhooks to the Standard Webhooks spec, and this is the
+   library it uses itself — it arrives as a transitive dependency of
+   @clerk/backend, and worker/package.json names it directly anyway so it
+   cannot vanish under us when that package reorganises its own deps.
+
+   Pure JavaScript (@stablelib/base64 and fast-sha256, with its own
+   constant-time compare), which is why it runs here at all: the Workers
+   runtime has no node:crypto, and a verifier that reached for one would
+   fail at the edge rather than in a test. Checked before it was chosen. */
+import { Webhook } from "standardwebhooks";
 
 /* How long after the last socket closes before the room is forgotten. Long
    enough that a phone locking, a tunnel, or closing a laptop for lunch does
@@ -423,10 +452,19 @@ const ALLOWED = [
    nobody: `curl -H "Origin: https://evil.example"` came back with a full set
    of results and a little more of the GIPHY quota spent. The check below is
    the one that refuses. */
+/* Every branch push gets its own preview build at a fresh <hash>.juke-1mw
+   .pages.dev address — there is no fixed list of those the way ALLOWED
+   above is a fixed list of the real domains, so this is a pattern rather
+   than an entry. Scoped to this project's own pages.dev subdomain
+   specifically, not *.pages.dev generally, which would accept a request
+   from anyone else's Pages project too. */
+const PREVIEW_ORIGIN_RE = /^https:\/\/[a-z0-9-]+\.juke-1mw\.pages\.dev$/;
+
 function originAllowed(request) {
   const origin = request.headers.get("Origin") || "";
   return ALLOWED.indexOf(origin) >= 0 ||
-         /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin);
+         /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin) ||
+         PREVIEW_ORIGIN_RE.test(origin);
 }
 
 /* Where a voice or photo message's URL is allowed to point.
@@ -937,9 +975,486 @@ async function captureSignup(request, env) {
                       { headers });
 }
 
+/* GET /me — who does the worker think is asking, if anyone.
+
+   The first authenticated route, and deliberately the simplest possible
+   one: verify, record that this person was seen, answer. /me/draft and
+   /me/history below are what actually save or read anything; both call
+   verifiedUser() the same way this does rather than re-deriving "who is
+   this" a second time.
+
+   `signedIn: false` is the answer for a missing token, an expired one, a
+   forged one and no CLERK_SECRET_KEY configured at all — four different
+   situations, one response shape, because a caller only ever needs to
+   know whether to treat this visitor as logged in, never why not. */
+async function meRoute(request, env, ctx) {
+  const cors = corsFor(request);
+  const headers = Object.assign({ "content-type": "application/json" }, cors);
+
+  if (!originAllowed(request)) {
+    return new Response(JSON.stringify({ error: "forbidden" }),
+                        { status: 403, headers: { "content-type": "application/json" } });
+  }
+
+  const user = await verifiedUser(request, env);
+  if (!user) return new Response(JSON.stringify({ signedIn: false }), { headers });
+
+  // Off the response path, same as storeNews() above: a caller asking "am
+  // I signed in" is not waiting on a write succeeding, and a D1 hiccup
+  // must not turn a real yes into an error.
+  after(ctx, touchUser(env, user.id));
+
+  return new Response(JSON.stringify({ signedIn: true, userId: user.id }), { headers });
+}
+
+/* Both routes below share one shape: refuse the origin, verify the token,
+   401 if either fails — and only past that point do they touch D1. A 401
+   here (not the `signedIn: false` /me answers with) is deliberate: /me
+   exists precisely so a caller can ask "am I logged in" without it being
+   an error either way, but a save or a read *needs* somebody signed in to
+   mean anything, so the two routes that can actually lose or leak a
+   draft draw the harder line. */
+async function requireUser(request, env) {
+  if (!originAllowed(request)) {
+    return { error: new Response(JSON.stringify({ error: "forbidden" }),
+                        { status: 403, headers: { "content-type": "application/json" } }) };
+  }
+  const user = await verifiedUser(request, env);
+  if (!user) {
+    return { error: new Response(JSON.stringify({ error: "unauthorized" }),
+                        { status: 401, headers: Object.assign({ "content-type": "application/json" }, corsFor(request)) }) };
+  }
+  return { user };
+}
+
+// A real save is a couple of hundred names, a league config and two short
+// lists (queue, watchlist) — nowhere near this. Sized to reject abuse, the
+// same reasoning MEDIA_KINDS' byte caps use, not to constrain a real one.
+const DRAFT_BODY_MAX = 200 * 1024;
+// History entries additionally carry a frozen Insights report
+// (recordHistory()'s own comment), which is bigger but still text — a
+// season of them is nowhere near this either.
+const HISTORY_BODY_MAX = 400 * 1024;
+
+/* GET/POST/DELETE /me/draft — the one in-progress draft a signed-in
+   person has, mirroring SAVE_KEY exactly. The body of a POST is stored
+   whole and unopened: see store.js's own note on why this route has no
+   opinion about what is inside it, only whose it is. */
+async function meDraftRoute(request, env) {
+  const { user, error } = await requireUser(request, env);
+  if (error) return error;
+
+  const headers = Object.assign({ "content-type": "application/json" }, corsFor(request));
+
+  if (request.method === "GET") {
+    return new Response(JSON.stringify({ data: await getSavedDraft(env, user.id) }), { headers });
+  }
+
+  if (request.method === "DELETE") {
+    const ok = await deleteSavedDraft(env, user.id);
+    return new Response(JSON.stringify({ ok }), { headers });
+  }
+
+  const text = await request.text();
+  if (!text || text.length > DRAFT_BODY_MAX) {
+    return new Response(JSON.stringify({ error: "bad-request" }), { status: 400, headers });
+  }
+  try {
+    const parsed = JSON.parse(text);
+    if (!parsed || typeof parsed !== "object") throw new Error("not an object");
+  } catch (err) {
+    return new Response(JSON.stringify({ error: "bad-json" }), { status: 400, headers });
+  }
+
+  const ok = await putSavedDraft(env, user.id, text);
+  return new Response(JSON.stringify(ok ? { ok: true } : { ok: false, error: "store-failed" }), { headers });
+}
+
+/* GET/POST/DELETE /me/history — finished drafts, mirroring HISTORY_KEY.
+   GET returns every entry; POST adds or replaces exactly one (the id
+   already lives inside the body, minted client-side by recordHistory());
+   DELETE removes one by `?id=`. There is no bulk write here on purpose —
+   HISTORY_KEY's own writeHistory() rewrites the whole array on every
+   change, but the server only ever needs the one entry that changed, and
+   sending the other 199 back down every time would be all cost and no
+   benefit. */
+/* ---------- Sleeper ----------
+
+   Two public reads and one account-scoped write, kept apart for the reason
+   the /news route's own comment gives about CORS: a header telling a
+   browser whether it may READ a response does nothing about the request
+   being made, so originAllowed() runs before anything is fetched rather
+   than being left to the browser to enforce.
+
+   Neither read caches an error. "This username does not exist" is a fact
+   worth keeping for a moment; "Sleeper was down when we asked" is not, and
+   caching it would pin a blip for the whole TTL — the same line
+   cachedNews() already draws between the two. */
+
+async function sleeperLookupRoute(request, env) {
+  if (!originAllowed(request)) {
+    return new Response(JSON.stringify({ error: "forbidden" }), {
+      status: 403, headers: { "content-type": "application/json" }
+    });
+  }
+
+  const headers = Object.assign({ "content-type": "application/json" }, corsFor(request));
+  const url = new URL(request.url);
+
+  /* Sleeper usernames are short. Bounded here rather than trusted, because
+     this value is interpolated into an upstream path — encodeURIComponent
+     in sleeper.js is what makes that safe, and this is what stops a caller
+     using us to send megabytes at somebody else's server. */
+  const username = (url.searchParams.get("username") || "").trim().slice(0, 32);
+  if (!username) {
+    return new Response(JSON.stringify({ error: "bad-request" }), { status: 400, headers });
+  }
+
+  /* The season Sleeper itself is in, not one derived from the clock.
+
+     A league list is per-season, and in January "this year" and "the
+     fantasy season" are different answers — asking for 2027 in the middle
+     of the 2026 playoffs returns an empty list and reads to the user as
+     "you have no leagues". Sleeper publishes which season it means, so that
+     is the one asked for, with the caller able to override for a manager
+     looking up an old league. */
+  // env.SLEEPER_BASE points the tests at a stub; unset in production.
+  const upstream = env.SLEEPER_BASE || SLEEPER_API;
+  const state = await nflState(upstream);
+  const season = (url.searchParams.get("season") || (state && state.season) || "").slice(0, 8);
+  if (!season) {
+    // Sleeper unreachable: say so rather than guessing a season and
+    // reporting its empty list as "no leagues found".
+    return new Response(JSON.stringify({ error: "upstream" }), { status: 503, headers });
+  }
+
+  const found = await lookupUser(username, season, upstream);
+  return new Response(JSON.stringify(Object.assign({ season }, found)), { headers });
+}
+
+async function sleeperSnapshotRoute(request, env) {
+  if (!originAllowed(request)) {
+    return new Response(JSON.stringify({ error: "forbidden" }), {
+      status: 403, headers: { "content-type": "application/json" }
+    });
+  }
+
+  const headers = Object.assign({ "content-type": "application/json" }, corsFor(request));
+  const url = new URL(request.url);
+  const leagueId = (url.searchParams.get("league") || "").trim().slice(0, 40);
+  if (!/^[0-9]{6,32}$/.test(leagueId)) {
+    return new Response(JSON.stringify({ error: "bad-request" }), { status: 400, headers });
+  }
+
+  /* Cached at the edge, on a key this route builds rather than the request
+     URL. caches.default keys on the whole URL and the real request carries
+     an Origin and could carry anything a client appends, which would give
+     one entry per way of asking instead of one per league — the same trap
+     newsCacheKey() exists for.
+
+     And a cached entry carries no CORS headers: which origin may read a
+     response is a per-request decision, so the body is what is kept and the
+     headers are put back per request. */
+  const cache = caches.default;
+  const key = new Request("https://juke.internal/sleeper/snapshot?league=" + leagueId, { method: "GET" });
+
+  const hit = await cache.match(key);
+  if (hit) {
+    return new Response(await hit.text(), { headers });
+  }
+
+  const snapshot = await leagueSnapshot(leagueId, env.SLEEPER_BASE || SLEEPER_API);
+  if (!snapshot) {
+    // Not cached: a league that did not answer once is not a league that
+    // does not exist, and pinning that for two minutes turns a blip into an
+    // outage.
+    return new Response(JSON.stringify({ error: "not-found" }), { status: 404, headers });
+  }
+
+  const body = JSON.stringify(snapshot);
+  await cache.put(key, new Response(body, {
+    headers: { "content-type": "application/json", "cache-control": "public, max-age=" + SNAPSHOT_TTL }
+  }));
+  return new Response(body, { headers });
+}
+
+/* The connection itself, which is the one part that needs an account.
+
+   That is the handoff's own rule — "Connect-league always routes through
+   account creation first" — and it is also the only way this can work:
+   there is nowhere else to put a connection that follows somebody to
+   another device. */
+async function meLeaguesRoute(request, env) {
+  const { user, error } = await requireUser(request, env);
+  if (error) return error;
+
+  const headers = Object.assign({ "content-type": "application/json" }, corsFor(request));
+
+  if (request.method === "GET") {
+    return new Response(JSON.stringify({ leagues: await listLeagues(env, user.id) }), { headers });
+  }
+
+  if (request.method === "DELETE") {
+    const url = new URL(request.url);
+    const provider = (url.searchParams.get("provider") || "sleeper").slice(0, 16);
+    const leagueId = (url.searchParams.get("league") || "").slice(0, 40);
+    if (!leagueId) {
+      return new Response(JSON.stringify({ error: "bad-request" }), { status: 400, headers });
+    }
+    const ok = await deleteLeague(env, user.id, provider, leagueId);
+    return new Response(JSON.stringify({ ok }), { headers });
+  }
+
+  const text = await request.text();
+  if (!text || text.length > 4096) {
+    return new Response(JSON.stringify({ error: "bad-request" }), { status: 400, headers });
+  }
+  let body;
+  try {
+    body = JSON.parse(text);
+  } catch (err) {
+    return new Response(JSON.stringify({ error: "bad-json" }), { status: 400, headers });
+  }
+
+  const leagueId = String((body && body.leagueId) || "").slice(0, 40);
+  if (!/^[0-9]{6,32}$/.test(leagueId)) {
+    return new Response(JSON.stringify({ error: "bad-request" }), { status: 400, headers });
+  }
+
+  /* The label is re-read from Sleeper rather than taken from the client.
+
+     What the browser posted is what its own picker was showing, which came
+     from us a moment ago — but trusting it would let a caller store any
+     string as a league name, and that string is then drawn in the header of
+     every page they load. Asking Sleeper again costs one cached call and
+     means the name in the chip is the league's own.
+
+     It also validates the id: a league that does not resolve cannot be
+     connected, which is a better failure than a chip pointing at nothing. */
+  const snapshot = await leagueSnapshot(leagueId, env.SLEEPER_BASE || SLEEPER_API);
+  if (!snapshot) {
+    return new Response(JSON.stringify({ ok: false, error: "not-found" }), { status: 404, headers });
+  }
+
+  const ownerId = String((body && body.ownerId) || "").slice(0, 40) || null;
+  const league = {
+    provider: "sleeper",
+    leagueId: snapshot.leagueId,
+    ownerId,
+    name: snapshot.name,
+    season: snapshot.season,
+    totalTeams: snapshot.totalTeams
+  };
+  const ok = await putLeague(env, user.id, league);
+
+  return new Response(
+    JSON.stringify(ok ? { ok: true, league } : { ok: false, error: "store-failed" }),
+    { headers }
+  );
+}
+
+async function meHistoryRoute(request, env) {
+  const { user, error } = await requireUser(request, env);
+  if (error) return error;
+
+  const headers = Object.assign({ "content-type": "application/json" }, corsFor(request));
+
+  if (request.method === "GET") {
+    return new Response(JSON.stringify({ entries: await listDraftHistory(env, user.id) }), { headers });
+  }
+
+  if (request.method === "DELETE") {
+    const id = (new URL(request.url).searchParams.get("id") || "").slice(0, 64);
+    if (!id) return new Response(JSON.stringify({ error: "bad-request" }), { status: 400, headers });
+    const ok = await deleteHistoryEntry(env, user.id, id);
+    return new Response(JSON.stringify({ ok }), { headers });
+  }
+
+  const text = await request.text();
+  if (!text || text.length > HISTORY_BODY_MAX) {
+    return new Response(JSON.stringify({ error: "bad-request" }), { status: 400, headers });
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch (err) {
+    return new Response(JSON.stringify({ error: "bad-json" }), { status: 400, headers });
+  }
+  const id = String((parsed && parsed.id) || "").slice(0, 64);
+  // completedAt is milliseconds (Date.now(), recordHistory()'s own
+  // field) and every D1 timestamp in this project is epoch seconds
+  // (nowSeconds()) — converted once, here, rather than asking store.js
+  // to know which unit a caller meant.
+  const completedAtMs = Number((parsed && parsed.completedAt) || 0);
+  if (!id || !completedAtMs) {
+    return new Response(JSON.stringify({ error: "bad-request" }), { status: 400, headers });
+  }
+
+  const ok = await putHistoryEntry(env, user.id, id, text, Math.floor(completedAtMs / 1000));
+  return new Response(JSON.stringify(ok ? { ok: true } : { ok: false, error: "store-failed" }), { headers });
+}
+
+/* POST /webhooks/clerk — Clerk telling us an account is gone.
+
+   Clerk owns the account; this is the half Juke owns. Without it, deleting
+   a Clerk account left the drafts stored against it behind for ever, which
+   the privacy policy said out loud rather than pretending otherwise.
+
+   ---- Three things about this route are not like the others ----
+
+   **originAllowed() must not be applied to it.** Every other route here
+   refuses a caller whose Origin is not ours, which is right for a browser
+   and wrong for a server: Clerk posts from its own infrastructure and
+   sends no Origin header at all, so the check that protects the rest of
+   the worker would reject every real delivery and accept nothing else.
+   What replaces it is the signature, which is a stronger claim anyway —
+   an allowed Origin is a request that came from our page, a valid
+   signature is a request that came from Clerk.
+
+   **A missing secret is a refusal, not a shrug.** Everywhere else in this
+   worker an unconfigured binding answers "no" quietly and the product
+   carries on — the D1 cache, GIPHY, Tank01. That contract is exactly wrong
+   here, twice over: honouring an unverified delete would let anybody
+   delete anybody's drafts, and answering 200 without acting would tell
+   Clerk the delivery succeeded so it would never retry, losing the
+   deletion silently. A 500 is the honest answer: nothing was done, say so,
+   and Clerk redelivers once the secret exists.
+
+   **It is idempotent on purpose.** Clerk retries anything it does not hear
+   back from, so the same deletion can arrive twice; deleteUserData() is
+   DELETE-only and a delete of nothing is a success.
+
+   Events other than user.deleted are acknowledged and ignored. Clerk sends
+   whatever the endpoint is subscribed to, and a 200 for "understood, not
+   for me" keeps a misconfigured subscription from turning into an endless
+   retry loop against a route that will never care. */
+async function clerkWebhook(request, env) {
+  const json = { "content-type": "application/json" };
+
+  if (request.method !== "POST") {
+    return new Response(JSON.stringify({ error: "method" }), { status: 405, headers: json });
+  }
+
+  if (!env.CLERK_WEBHOOK_SECRET) {
+    console.error("clerk webhook: no CLERK_WEBHOOK_SECRET configured, refusing");
+    return new Response(JSON.stringify({ error: "not-configured" }), { status: 500, headers: json });
+  }
+
+  // The raw text, not a re-serialised object: the signature is over the
+  // exact bytes Clerk sent, and JSON.parse(...)+JSON.stringify(...) is not
+  // guaranteed to reproduce them.
+  const body = await request.text();
+  let event;
+  try {
+    event = new Webhook(env.CLERK_WEBHOOK_SECRET).verify(body, {
+      "webhook-id": request.headers.get("svix-id") || request.headers.get("webhook-id") || "",
+      "webhook-timestamp": request.headers.get("svix-timestamp") || request.headers.get("webhook-timestamp") || "",
+      "webhook-signature": request.headers.get("svix-signature") || request.headers.get("webhook-signature") || ""
+    });
+  } catch (err) {
+    // Deliberately terse to the caller and specific in the log. An
+    // unverified request is told nothing about why, and we are told
+    // everything — the same split the room's own refusals already keep.
+    console.error("clerk webhook: signature rejected:", err && err.message);
+    return new Response(JSON.stringify({ error: "bad-signature" }), { status: 400, headers: json });
+  }
+
+  if (!event || event.type !== "user.deleted") {
+    return new Response(JSON.stringify({ ok: true, ignored: (event && event.type) || null }), { headers: json });
+  }
+
+  const clerkId = event.data && event.data.id;
+  if (!clerkId) {
+    console.error("clerk webhook: user.deleted with no id");
+    return new Response(JSON.stringify({ error: "bad-request" }), { status: 400, headers: json });
+  }
+
+  const ok = await deleteUserData(env, clerkId);
+  if (!ok) {
+    // 500 so Clerk retries. A deletion that failed and reported success is
+    // the one outcome this route must never produce.
+    return new Response(JSON.stringify({ ok: false, error: "store-failed" }), { status: 500, headers: json });
+  }
+  return new Response(JSON.stringify({ ok: true }), { headers: json });
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+
+    /* Before the /me routes and outside their CORS handling entirely — a
+       webhook has no preflight and no Origin. See the route's own note. */
+    if (url.pathname === "/webhooks/clerk") return clerkWebhook(request, env);
+
+    /* Sleeper lookup and snapshot. Both are reads of public data and
+       neither is account-scoped, so they take originAllowed() and not
+       requireUser() — the same line /news draws. A signed-out visitor
+       cannot reach them from the app (nothing offers the control), and if
+       they could, they would learn what api.sleeper.app would have told
+       them directly. What requires an account is CONNECTING one, below. */
+    if (url.pathname === "/sleeper/lookup") {
+      if (request.method === "OPTIONS") {
+        return new Response(null, { headers: Object.assign({
+          "access-control-allow-methods": "GET",
+          "access-control-max-age": "86400"
+        }, corsFor(request)) });
+      }
+      return sleeperLookupRoute(request, env);
+    }
+
+    if (url.pathname === "/sleeper/snapshot") {
+      if (request.method === "OPTIONS") {
+        return new Response(null, { headers: Object.assign({
+          "access-control-allow-methods": "GET",
+          "access-control-max-age": "86400"
+        }, corsFor(request)) });
+      }
+      return sleeperSnapshotRoute(request, env);
+    }
+
+    if (url.pathname === "/me/leagues") {
+      if (request.method === "OPTIONS") {
+        return new Response(null, { headers: Object.assign({
+          "access-control-allow-methods": "GET, POST, DELETE",
+          "access-control-allow-headers": "authorization, content-type",
+          "access-control-max-age": "86400"
+        }, corsFor(request)) });
+      }
+      return meLeaguesRoute(request, env);
+    }
+
+    if (url.pathname === "/me") {
+      if (request.method === "OPTIONS") {
+        return new Response(null, { headers: Object.assign({
+          "access-control-allow-methods": "GET",
+          "access-control-allow-headers": "authorization",
+          "access-control-max-age": "86400"
+        }, corsFor(request)) });
+      }
+      return meRoute(request, env, ctx);
+    }
+
+    if (url.pathname === "/me/draft") {
+      if (request.method === "OPTIONS") {
+        return new Response(null, { headers: Object.assign({
+          "access-control-allow-methods": "GET, POST, DELETE",
+          "access-control-allow-headers": "authorization, content-type",
+          "access-control-max-age": "86400"
+        }, corsFor(request)) });
+      }
+      return meDraftRoute(request, env);
+    }
+
+    if (url.pathname === "/me/history") {
+      if (request.method === "OPTIONS") {
+        return new Response(null, { headers: Object.assign({
+          "access-control-allow-methods": "GET, POST, DELETE",
+          "access-control-allow-headers": "authorization, content-type",
+          "access-control-max-age": "86400"
+        }, corsFor(request)) });
+      }
+      return meHistoryRoute(request, env);
+    }
 
     if (url.pathname === "/news") {
       if (request.method === "OPTIONS") {

@@ -159,10 +159,26 @@ test("a dropped socket comes back on its own, and the chair comes with it", asyn
      now" is Live.active(), and the start button once asked the wrong one -
      which is how a dropped socket started a *solo* draft on the host's phone
      while everybody else waited. When chat lands, its disabled state belongs
-     back here beside this. */
-  await guest.waitForFunction(() => !Live.active(), null, { timeout: 10000 });
-  expect(await guest.evaluate(() => !!Live.room()), "still in the room").toBe(true);
-  expect(await guest.evaluate(() => Live.active()), "but the socket is down").toBe(false);
+     back here beside this.
+
+     Both facts are read in ONE round trip, at the instant the wait resolves,
+     rather than as two separate expect(await guest.evaluate(...)) calls. That
+     used to be two more trips across the Playwright/browser boundary after
+     the wait already caught "down" - and live.js is built to reconnect as
+     fast as it possibly can (immediate retry, plus visibilitychange/online/
+     pageshow), so against the real worker the gap between "down" and "back
+     up" is sometimes shorter than two extra round trips. The failure this
+     produced was not a flake in the ordinary sense: Live.room() still read
+     true and Live.active() had already flipped back to true by the second
+     evaluate(), because the very thing being asserted absent had, correctly,
+     already stopped being absent. Sampling a transient state across multiple
+     hops to the browser is the bug; the fix is to sample it once. */
+  const downState = await guest
+    .waitForFunction(() => (Live.active() ? null : { inRoom: !!Live.room(), active: Live.active() }),
+      null, { timeout: 10000 })
+    .then((h) => h.jsonValue());
+  expect(downState.inRoom, "still in the room").toBe(true);
+  expect(downState.active, "but the socket is down").toBe(false);
 
   await guest.waitForFunction(() => Live.status() === "open", null, { timeout: 30000 });
 

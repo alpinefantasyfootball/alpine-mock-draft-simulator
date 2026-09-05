@@ -11,10 +11,10 @@
 // already shipped once.
 function FitRow({ label, value, tone, note }) {
   return (
-    <div className="rounded-lg border border-slate-rule bg-slate-sunk/50 px-3 py-2.5">
-      <p className="text-[10px] font-medium uppercase tracking-wide text-ink-muted">{label}</p>
-      <p className={'text-lg font-bold ' + (tone || 'text-white')}>{value}</p>
-      {note && <p className="mt-0.5 text-[11px] leading-snug text-ink-muted">{note}</p>}
+    <div className="rounded-lg border border-slate-rule bg-slate-sunk/50 px-3 py-2.5 lg:px-4 lg:py-4">
+      <p className="text-[10px] lg:text-xs font-medium uppercase tracking-wide text-ink-muted">{label}</p>
+      <p className={'text-lg lg:text-2xl font-bold ' + (tone || 'text-white')}>{value}</p>
+      {note && <p className="mt-0.5 lg:mt-1 text-[11px] lg:text-sm leading-snug text-ink-muted">{note}</p>}
     </div>
   )
 }
@@ -34,13 +34,13 @@ export default function DraftFitTab({ fit, player }) {
   }
 
   const { tierLeft, posLeft, picksAway, nextOverall, adp, have, atCap,
-          startsNow, byeClash, bye, market, unranked, legalFromRound, round } = fit
+          startsNow, byeClash, bye, market, unranked } = fit
 
-  // The app schedules kickers and defenses itself — it refuses one before the
-  // closing rounds and never suggests one earlier. So "should I take him now"
-  // has an answer here that has nothing to do with the player, and saying it
-  // is the difference between advice and a shrug.
-  const tooEarly = legalFromRound !== null && round !== null && round < legalFromRound
+  /* There was a banner here saying the app would not take a kicker or a
+     defense before a named round. It came off with the round gates in app.js
+     that made it true: a seat picks its own moment for both positions now, so
+     `legalFromRound` no longer exists to read and the sentence it wrote was
+     the opposite of what the engine does. */
 
   // A gap of one is a spot, not spots. Small, and it is the sort of thing
   // that makes generated copy read as generated.
@@ -69,16 +69,8 @@ export default function DraftFitTab({ fit, player }) {
     : adp > nextOverall
 
   return (
-    <div className="flex flex-col gap-4">
-      {tooEarly && (
-        <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] leading-relaxed text-amber-200/90">
-          It's round {round}. The app doesn't take a {player.pos} before round{' '}
-          {legalFromRound}, and won't suggest one until then — those points are
-          still there in the closing rounds, and the roster spot isn't.
-        </p>
-      )}
-
-      <div className="grid grid-cols-2 gap-2">
+    <div className="flex flex-col gap-4 lg:gap-6">
+      <div className="grid grid-cols-2 gap-2 lg:gap-3">
         <FitRow
           label="Left in his tier"
           value={tierLeft}
@@ -108,7 +100,7 @@ export default function DraftFitTab({ fit, player }) {
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-2 gap-2 lg:gap-3">
         <FitRow
           label="Bye week"
           value={bye ? `Wk ${bye}` : '—'}
@@ -150,7 +142,7 @@ export default function DraftFitTab({ fit, player }) {
       </div>
 
       {survives !== null && (
-        <p className="rounded-lg border border-slate-rule bg-slate-sunk/40 px-3 py-2 text-[11px] leading-relaxed text-white/50">
+        <p className="rounded-lg border border-slate-rule bg-slate-sunk/40 px-3 py-2 lg:px-4 lg:py-3 text-[11px] lg:text-sm leading-relaxed text-white/50">
           His ADP is {adp.toFixed(1)} and your next pick is {nextOverall}.{' '}
           {survives
             ? 'On average he lasts that long — though ADP is an average, and no single draft looks like one.'

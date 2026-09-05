@@ -40,30 +40,58 @@
        project's own source tree, where this file does not live. Root-
        relative is also just correct at runtime regardless of the build: it
        resolves the same way whether you are at "/" or "/#/draft". -->
-  <script src="/theme.js?v=202609011104"></script>
+  <script src="/theme.js?v=202609050305"></script>
+
+  <!-- The cold-load overlay's two scripts, both blocking and both before
+       first paint, for two different reasons.
+
+       juke-mark.js defines <juke-mark>, which the overlay markup in <body>
+       uses. It is a custom element rather than a module — a plain classic
+       <script src> is what the design package asks for and what upgrades the
+       element without a tick of unstyled nothing. Deferring it would leave
+       an unknown element with no shadow root sitting in the middle of the
+       splash for as long as the module graph took, which is precisely the
+       gap the splash exists to cover.
+
+       Its companion, splash-boot.js, is NOT here — it is immediately after
+       the overlay markup in <body>, because both of the questions it answers
+       are about that element and in <head> the element does not exist yet.
+       See its own comment there.
+
+       It is in web/public/ rather than the repo root, so it is neither in
+       LEGACY_FILES nor stamped by hand — Vite copies public/ verbatim and
+       the nightly's global ?v= sed in this file stamps it along with
+       everything else. -->
+  <script src="/juke-mark.js?v=202609050305"></script>
 
   <!-- Homepage v4 pass 1: Archivo and IBM Plex Mono moved off Google Fonts
        entirely — self-hosted from /fonts/, @font-face declared in
-       web/src/index.css. Barlow Condensed and Inter stay here: they are
-       font-display/font-body (tailwind.config.js), shared with the whole
-       Draft Room, which this pass does not touch. Two families instead of
-       four on this one request now, and the two preconnects below still
-       earn their keep for it.
+       web/src/index.css. The display face and Inter stay here: they are
+       font-display (tailwind.config.js, and --font-display in style.css)
+       and the legacy pages' --font-body, shared with the whole Draft Room.
+       The two preconnects below earn their keep for this one request.
 
        Homepage cosmetic revision (design_handoff_homepage_cosmetic) §3
        added Hanken Grotesk and Montserrat to this same request —
-       voidBody/voidNumeral (tailwind.config.js), homepage-only. And it
-       widened Barlow Condensed's own weight list: every font-display
-       heading on this page (and several in the Draft Room) has always
-       been styled `italic`, but only upright 600/700 were ever actually
-       requested — so every one of them has been rendering a
-       browser-synthesized oblique this whole time, not Barlow Condensed's
-       real italic. `ital,wght@0,600;0,700;1,700;1,800` adds true italic at
-       the two weights actually used (700/800), without dropping the
-       existing upright 600/700 that everything else on the page reads. -->
+       voidBody/voidNumeral (tailwind.config.js), homepage-only.
+
+       The display face is Gabarito as of 4 September 2026, and it does not
+       ship an italic — the axis simply does not exist on it, at any
+       weight. That is not the regression it looks like next to the note
+       this comment used to carry. Barlow Condensed's ital list was added
+       because every font-display heading is styled `italic` and only
+       upright weights were being requested, so all of them were rendering
+       a browser-synthesized oblique. Gabarito puts every one of them back
+       on that synthesized oblique — which is what the headings looked like
+       for most of this project's life, and what they look like now — so
+       asking for `ital` here would be requesting a file Google does not
+       serve and getting the identical result one round trip later.
+
+       500 through 900 because font-display is used at semibold, bold,
+       extrabold and (the grade glyph) black. -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,600;0,700;1,700;1,800&family=Hanken+Grotesk:wght@400;500;600;700&family=Montserrat:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Gabarito:wght@500;600;700;800;900&family=Hanken+Grotesk:wght@400;500;600;700&family=Montserrat:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <!-- The two self-hosted faces actually on screen before anything else
        loads: the JUKE wordmark in the nav (Archivo, every weight in one
        variable file) and the header ticker's "N players" badge (IBM Plex
@@ -78,7 +106,7 @@
        a cache entry without crossorigin matching on both. -->
   <link rel="preload" as="font" type="font/woff2" href="/fonts/archivo-variable-latin.woff2" crossorigin>
   <link rel="preload" as="font" type="font/woff2" href="/fonts/ibm-plex-mono-500-latin.woff2" crossorigin>
-  <!-- ?v=202609011104 on every local file below, and it has to be bumped on any deploy
+  <!-- ?v=202609050305 on every local file below, and it has to be bumped on any deploy
        that changes one of them.
 
        Without a version in the address a returning visitor runs today's HTML
@@ -93,10 +121,10 @@
        keep this convention. The React homepage bundle is Vite's own
        content-hashed output, injected automatically, which makes this exact
        bug structurally impossible for that half of the page. -->
-  <link rel="stylesheet" href="/style.css?v=202609011104">
+  <link rel="stylesheet" href="/style.css?v=202609050305">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <link rel="manifest" href="/manifest.json">
-  <link rel="apple-touch-icon" href="/juke-app-icon-180.png">
+  <link rel="apple-touch-icon" href="/juke-icon-tile-180.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Juke">
@@ -108,47 +136,71 @@
        Unstamped, like every other file under web/public: these are Vite
        assets rather than legacy no-build files, so the ?v= convention above
        does not reach them. -->
-  <link rel="icon" href="/juke-favicon.svg" type="image/svg+xml">
-  <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png">
-  <link rel="icon" href="/favicon-16.png" sizes="16x16" type="image/png">
+  <!-- Design package 02. The head crop, not the full mark: at 16px the full
+       mark's fins swallow the head and it reads as a smudge, which is why the
+       package ships two crops rather than one asset at two sizes.
+
+       Order is the package's own and it matters. A browser takes the LAST
+       icon it understands, so the SVG leads and the rasters follow as the
+       fallback for anything that cannot render it; favicon.ico is last and
+       exists for the clients that ask for /favicon.ico by path and ignore
+       these tags entirely. -->
+  <link rel="icon" href="/juke-icon-tile.svg" type="image/svg+xml">
+  <link rel="icon" href="/juke-icon-tile-32.png" sizes="32x32" type="image/png">
+  <link rel="icon" href="/juke-icon-tile-16.png" sizes="16x16" type="image/png">
   <link rel="icon" href="/favicon.ico" sizes="any">
 
-  <!-- ================== Breach, the cold-load overlay ==================
+  <!-- ================ Deepwater, the cold-load overlay ================
        These style the #boot-sonar element, which is the first child of <body>.
        See the comment there for why the loader is markup rather than a
-       component. The element id stayed "boot-sonar" through this pass on
-       purpose — theme.js's comment, main.jsx's teardown and tests/sonar.spec.mjs
-       all key off that exact id, and none of that had to change; only what
-       plays inside it did. "Sonar" — the ring-and-mark treatment — is still
-       exactly what SonarLoader.jsx shows everywhere else in the app (the
-       Lobby → Draft Room transition, share buttons, the chat GIF search).
-       This overlay alone moved to "Breach": the shark leaps through a
-       waterline instead of the mark fading up inside a ring sweep. Sonar's
-       own keyframes (sonar-ring, sonar-label, sonar-fade) are still used
-       below — for the idle fallback and the wordmark — so the duplication
-       note two paragraphs down still applies to those three.
+       component.
 
-       It plays on every cold load now, browser tab or installed app alike —
-       reversed from Homepage v4 pass 0, which scoped this overlay to the
-       installed app's cold launch only and hid it outright everywhere else
-       via a data-standalone attribute theme.js stamped from
-       matchMedia('(display-mode: standalone)'). That gate is the reason
-       Breach shipped invisible on an ordinary desktop or mobile browser
-       visit: reported directly, from someone who had just watched it not
-       happen either way. The owner reversed the scoping rather than have it
-       be a second, quieter version of the exact "nobody on a fast
-       connection ever sees this" problem the no-skip-gate paragraph below
-       already describes solving once — an overlay restricted to installed
-       users is an overlay almost nobody sees at all. theme.js no longer
-       stamps data-standalone (nothing reads it any more); main.jsx's
-       teardown runs unconditionally to match.
+       The element id stayed "boot-sonar" through this pass, exactly as it
+       stayed through the Breach pass before it: theme.js's comment,
+       main.jsx's teardown and tests/sonar.spec.mjs all key off that literal
+       id, and none of that had to change. Only what plays inside it did.
+       "Sonar" — the ring-and-mark treatment — is still what SonarLoader.jsx
+       shows for the Lobby → Draft Room transition, share buttons and the
+       chat GIF search, so the name is not stale everywhere, only here.
 
-       There is also no skip-gate for a fast boot, and carrying that forward
-       is a deliberate choice rather than an oversight. The overlay used to
-       delay 300ms so a fast load never painted it at all; the owner measured
-       that production traffic on a fast connection never once saw it that
-       way — only Fast 4G and slower did — and removed the gate. Breach
-       inherits that reversal rather than reintroducing the thing it undid.
+       Breach is gone. It was a shark leaping through a waterline over 4000ms;
+       this is the design package's own cold launch — three drops falling
+       through deep water and landing at centre, an impact glow, two ripples
+       and four beads out of the splash, and the droplet expanding as the mark
+       grows up under it. 2700ms, then the frame holds dead still until the
+       app is ready.
+
+       Revised once, on the owner's report that the timing was still off. The
+       first cut had four specks converging on a droplet that simply became
+       the mark: no impact, no consequence, and a mark that rose from scale
+       .82 over 580ms, which is a fade more than a growth. This one lands
+       something, and the mark grows from .4 over 800ms out of the place it
+       landed — see the `form` variant in juke-mark.js, which moved with it.
+
+       THE MARK IS NOT DRAWN HERE ANY MORE. <juke-mark variant="form"> is a
+       custom element from /juke-mark.js, shipped unedited from the design
+       package, and everything about the shark — the rise, the teeth lighting
+       left to right, the eye flicker — lives inside its shadow root where
+       this stylesheet cannot reach it. That is the point of it: it cannot
+       collide with anything here. What this file owns is the water it swims
+       up through.
+
+       Which creates one rule worth stating plainly, because it is invisible
+       when it breaks. THE COMPOSITION IS TIMED IN TWO FILES and neither may
+       be re-cut alone. The water and the drop sequence live here; the mark's
+       rise, its teeth and its eyes live in juke-mark.js's `form` variant,
+       inside a shadow root nothing here can reach. They agree today: the
+       drops land at ~620ms and the mark starts its rise at 660ms, out of the
+       droplet that starts at 620ms. Retime one and the mark arrives out of
+       nothing. If the reveal ever needs a different length, that is a change
+       to the design package rather than a number to nudge here.
+
+       There used to be a --total custom property here that claimed to retime
+       the water from one place. It was already dead when this was written —
+       nothing referenced var(--total), because every layer carries its own
+       literal duration, copied verbatim from the reference so the tuned set
+       stays tuned. A knob that turns nothing is worse than no knob, so it is
+       gone rather than kept for tidiness.
 
        Inline rather than in index.css, because Tailwind's stylesheet is a Vite
        artefact: a production build injects it as a <link>, but under `vite dev`
@@ -157,501 +209,184 @@
        is not testable. Self-contained is the only version that behaves.
 
        An inline <style> is legal here; an inline <script> would not be.
-       _headers sets script-src 'self' with style-src 'unsafe-inline', so the
-       teardown lives in main.jsx - a module served from origin - and nothing in
-       this block is script-shaped.
+       _headers says script-src 'self'. The two things this overlay needs a
+       script for before first paint — the same-session gate and the
+       reduced-motion variant swap — are in /splash-boot.js for that reason,
+       not in an inline block here.
 
-       Three of the keyframes below - sonar-ring, sonar-label and sonar-fade -
-       get a second, identical copy in web/tailwind.config.js, because
-       SonarLoader.jsx uses all three too. That duplication is deliberate
-       rather than drift: this copy has to be readable before any bundle is.
-       They are global @keyframes under one name each, so if the two ever
-       disagree, whichever stylesheet the document loads later wins for the
-       overlay *and* for the components. Change one, change the other.
-       sonar-boot-failsafe and the four breach* keyframes have no Tailwind
-       counterpart; they belong to this overlay alone. sonar-focus, which
-       used to be the fifth shared keyframe, is gone from this file — nothing
-       here uses it any more now that the mark is breachMark instead, and it
-       stays exactly where it always has in tailwind.config.js
-       for SonarLoader.jsx's own benefit. -->
+       The per-element inline styles in the markup below are deliberate and
+       are copied verbatim from "01 Cold Launch Splash.dc.html". The design
+       package's own implementation note asks for exactly that, on the
+       grounds that the caustic, shaft, mote, speck and droplet timings are
+       tuned against each other rather than independently meaningful. Only
+       the keyframes and the structural rules are lifted out here, because
+       those are the parts a stylesheet can own without splitting a tuned
+       set across two files. -->
   <style>
+    /* The flash-guard, and it has to be INLINE.
+
+       This moved here from index.css, where it was correct about everything
+       except the one thing that decides whether it works. Its comment there
+       read "it has to be here and not only on the overlay: this rule ships in
+       the stylesheet Vite <link>s from <head>, which is painted before <body>
+       is parsed" — true of where the rule sits in the document and false of
+       when it can be APPLIED, because that stylesheet is an external file and
+       has to be fetched first. Until it lands there is no author background on
+       <html> at all, and the browser paints its own.
+
+       Reported from an iPhone with a screen recording: sampled every 50ms, the
+       cold launch is a PURE WHITE SCREEN from 2200ms to 2350ms and only then
+       the navy ground. 150ms of white in the middle of a dark-brand launch,
+       immediately before the reveal.
+
+       Desktop never showed it, and that is the reason it survived rather than
+       a reason it was not there: Chrome keeps presenting the previous page
+       until the new document has something to show, so the white frame exists
+       and is simply never put on screen. iOS Safari paints it.
+
+       Inline in <head> is the only position that cannot be late — no fetch,
+       applied as the parser reads it. #0a1119 is the overlay gradient's
+       midpoint stop, so #boot-sonar arriving on top of it is not a visible
+       step; `body` keeps obsidian below, which is the page's real ground once
+       the overlay has gone. There is no second copy in index.css: that one was
+       moved, not duplicated. */
+    html { background-color: #0a1119; }
+
     #boot-sonar {
-      /* Breach II: a single --total rather than Breach I's two-variable
-         --breach-total/--breach-start-delay pair. --wave1/--wave2/--ripple
-         are calc()s off --total alone, exactly as the second handoff
-         specifies — "derived delays, computed from --total, never
-         hard-coded" is the fix for the sync drift that caused the earlier
-         glitching, and layering this file's old start-delay convention back
-         on top of that would reintroduce the same class of drift the
-         handoff exists to close out. Retiming is one number again. */
-      --total: 4000ms;
-      --wave1: calc(var(--total) * .06);
-      --wave2: calc(var(--total) * .41);
-      --ripple: calc(var(--total) * .55);
       position: fixed; inset: 0; z-index: 9999;
-      display: flex; flex-direction: column;
-      /* stretch, not center — .breach-scene has no explicit width of its own
-         any more specifically so this default fills it edge to edge, which
-         is what lets breach-water and breach-underwater reach the true
-         browser width via a plain left:0/right:0 rather than a 100vw hack.
-         100vw was tried and rejected: this project already has one full-bleed
-         band elsewhere in the app that learned the hard way that vw units
-         count the scrollbar and overflow sideways on whichever machine shows
-         one, and #boot-sonar sits behind a real, potentially-scrolling page
-         for its whole lifetime. left:0/right:0 against an actually-full-width
-         parent has no such gutter to miscount. The wordmark below opts back
-         out with its own align-self, since it still wants its natural,
-         centred width rather than the stretch this now hands out by
-         default. */
-      align-items: stretch; justify-content: center; gap: 30px;
-      background: #0B0E14; overflow: hidden;
-      /* opacity: 1, not 0-animating-to-1 — this used to fade in over 200ms
-         (sonar-boot-in), and that was a real bug, not just a cosmetic one.
-         #boot-sonar is the first child of body, position:fixed over the
-         actual homepage markup sitting right behind it in the same
-         document — prerendered, real, already in the DOM before a single
-         line of JS has run (see scripts/prerender.mjs). An element's own
-         `opacity` is not the same question as its background colour's
-         alpha: #0B0E14 has none, but CSS opacity applies to the whole
-         subtree's compositing regardless, so for that entire 200ms the
-         real marketing page was visibly bleeding through a panel that
-         looked like it was supposed to already be hiding it. Reported
-         directly from production, where it is unmissable, because
-         `vite dev` never prerenders #root at all — there was nothing behind
-         the fade to see locally, which is exactly why this survived the
-         first round of testing. Content still gets its own entrance — the
-         mark, water and droplets all start moving immediately at 0% of
-         --total rather than waiting out a container fade that no longer
-         exists — only the container's own fade is gone, because the
-         container was never supposed to be see-through in the first place.
-         If a soft entrance is wanted back, it has to be a second, solid
-         element crossfading over this one, never this
-         element's own opacity. */
-      opacity: 1;
-      /* One animation now instead of two: the failsafe, and it is not
-         optional.
+      display: grid; place-items: center;
+      /* The layers below are absolutely positioned against this element and
+         several of them deliberately overhang it — the light shafts start at
+         -25% and run 150% tall. Without this they would paint over the page
+         and, worse, extend the scrollable area of a document that is about
+         to be handed to the user. */
+      overflow: hidden;
 
-         The teardown that normally removes this element is the last statement
-         in main.jsx, so it runs only if that module runs. CLAUDE.md documents
-         the exact deploy shape where it does not: Vite content-hashes the
-         bundle into its filename, so a browser holding the previous
-         index.html asks for an `assets/index-<hash>.js` that no longer exists
-         and gets a 404. That has already happened once here. Without this
-         rule the same event leaves a fixed, fully opaque, z-index 9999 panel
-         over the whole site — opacity: 1 is this element's resting state,
-         not an animation's end point, so there is nothing to fall back out
-         of on its own — it stays there for ever.
+      /* Package 01, item 2, verbatim. <html> carries the same colour (see
+         index.css) so there is no white flash in the frames before this
+         element exists. */
+      /* Portrait first, landscape overridden below — the reference splits the
+         ground by aspect ratio rather than by width, so a phone held sideways
+         gets the wide composition rather than the tall one. */
+      background: radial-gradient(120% 80% at 50% 18%, #12202e 0%, #0a1119 45%, #05080d 100%);
 
-         A page that looks like it is loading for ever is a worse failure than
-         one that looks broken, because nobody reports it as a bug. Eight
-         seconds is far past any real load and far short of a visitor giving
-         up. `forwards` rather than `both`: this element's own opacity is 1
-         from its very first frame now (see above), so there is no earlier
-         state left for a backwards fill to reach into.
+      /* Never reached on a healthy load: main.jsx removes the element within
+         a frame or two of React's first paint. This is only for the load that
+         never finishes — and visibility, not just opacity, because a
+         transparent element still answers a hit test, which is the half of
+         that failure that swallows every click on the page. */
+      animation: splash-boot-failsafe 600ms ease-in 8s forwards;
 
-         visibility, not just opacity — a transparent element still answers a
-         hit test, which is the half of this failure that swallows clicks. */
-      animation: sonar-boot-failsafe 600ms ease-in 8s forwards;
-      /* Declared here on the base rule rather than beside the opacity change in
-         [data-sonar-out] below, so the fade-out has somewhere settled to start
-         from. main.jsx pins the animated opacity and drops the animation before
-         it sets that attribute - see the teardown for why the order matters. */
-      transition: opacity 220ms ease-out;
+      /* Declared on the base rule rather than beside the opacity change in
+         [data-sonar-out], so the fade-out has somewhere settled to start
+         from. main.jsx pins the animated opacity and drops the animation
+         before it sets that attribute — see the teardown for why the order
+         matters. 260ms is the design package's own dismissal figure. */
+      transition: opacity 260ms ease-out;
     }
     #boot-sonar[data-sonar-out] { opacity: 0; animation: none; }
 
-    /* Never reached on a healthy load: main.jsx removes the element within a
-       frame or two of React's first paint, long before 8s. This is only for
-       the load that never finishes. */
-    @keyframes sonar-boot-failsafe {
+    @keyframes splash-boot-failsafe {
       from { opacity: 1; }
       to   { opacity: 0; visibility: hidden; }
     }
 
     /* There is no light-theme override here, deliberately. index.css pins
-       `body` to obsidian unconditionally - there is no [data-theme] guard on it
-       - so an #F7F7F6 overlay would tear down onto a dark page and flash
+       `body` to obsidian unconditionally — there is no [data-theme] guard on
+       it — so a light overlay would tear down onto a dark page and flash
        light-to-dark at exactly the moment this element exists to smooth over.
-       The overlay is obsidian because the page underneath always is. If body
+       The overlay is deep navy because the page underneath always is. If body
        ever becomes theme-aware, this is the block that has to follow it. */
 
-    /* Sonar's own idle ring, reused rather than reinvented for the case
-       Breach has no answer for on its own: a fixed one-shot has nothing left
-       to show if the JS bundle still hasn't run by the time it finishes.
-       Silent for the whole breach sequence (delayed past --total), then
-       picking up the ordinary infinite sweep exactly where the settled mark
-       holds below — so on the fast path, where main.jsx tears the overlay
-       down soon after --total, a ring is only just leaving opacity 0 when
-       the whole element starts fading with it, and is not perceptible. Only
-       a boot slow enough to still be here past --total ever actually
-       watches one complete a sweep. */
-    #boot-sonar i {
-      position: absolute; width: 150px; height: 150px; border-radius: 50%;
-      animation: sonar-ring 2100ms ease-out infinite both;
-      animation-delay: var(--total);
-    }
-    /* purple-400 rather than the base purple — unchanged from Sonar's own
-       ring, and the reasoning is the same reasoning the ripple below reuses:
-       composited on obsidian, #7B1FA2 at .75 measures 1.79:1 against 4.37 and
-       3.28 for the two teals; even at full alpha it only reaches 2.35, so no
-       alpha rescues it. purple-400 #9A3FC0 is already a token in
-       tailwind.config.js and at .9 measures 3.07.
+    /* The layer primitives, from the reference file. `.l` and `.shaft` carry
+       will-change:transform because they are the two that actually move every
+       frame for the whole life of the overlay.
 
-       Keep this in step with the RINGS array in SonarLoader.jsx, which
-       carries the same three colours for the panel tier. */
-    #boot-sonar i:nth-of-type(1) { border: 1px solid rgba(0,229,255,.55); }
-    #boot-sonar i:nth-of-type(2) { border: 1px solid rgba(0,229,255,.45); animation-delay: calc(var(--total) + 700ms); }
-    #boot-sonar i:nth-of-type(3) { border: 1px solid rgba(154,63,192,.9); animation-delay: calc(var(--total) + 1400ms); }
+       NO filter:blur() and NO mix-blend-mode on any of these any more. The
+       version this replaces had both on the caustics and the shafts, and the
+       design package's own note is explicit that the softness belongs in the
+       gradient: "no blur or blend effects — keep these as plain shape layers
+       for performance". That is not a stylistic preference here. A blurred,
+       screen-blended full-viewport layer is a main-thread paint on every
+       frame, and this overlay's whole problem has been that the main thread
+       is busy exactly while it plays. */
+    #boot-sonar .l { position: absolute; inset: 0; pointer-events: none; will-change: transform; }
+    #boot-sonar .shaft { position: absolute; top: -25%; height: 150%; pointer-events: none; will-change: transform; }
+    #boot-sonar .mote { position: absolute; border-radius: 50%; pointer-events: none; }
+    #boot-sonar #vig { position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 0 120px 40px rgba(2,4,8,.85); }
 
-    /* Breach II's own reference frame, height only — width is deliberately
-       absent so #boot-sonar's align-items: stretch fills it edge to edge.
-       That reversed a first version of this file, which gave the scene an
-       explicit 480px so it would read as "a moment" rather than a hairline
-       across a 1440px monitor — a reasonable-sounding call that was still
-       this file overriding what both Breach II prompts actually ask for:
-       "full-width" (desktop) and "full-bleed" as the thing 70% is explicitly
-       relative to (mobile). Reported back directly after the first push: the
-       water was still boxed to the scene, not the browser.
+    /* The mark's width is a percentage of the viewport, never a pixel size,
+       which is what holds the composition from a phone to an ultrawide. 52%
+       and 32% are the design package's own two figures.
 
-       Full width does not mean the mark, ripple and droplets move — they
-       stay exactly where they were, because every one of them is positioned
-       by left:50% plus a fixed pixel margin, and left:50% of a horizontally
-       centred parent lands on the viewport's own centre whether that parent
-       is 480px or 3440px wide. Only the two elements that actually ask for
-       left:0/right:0 - breach-underwater and breach-water - are stretch's
-       intended beneficiaries, and they need no changes of their own to get
-       it; they already read the scene's full width, which is now the real
-       one.
+       BY ASPECT RATIO, not by width, which is what the reference does and is
+       a real difference from the 640px hinge this replaces: a phone held
+       sideways is 844px wide and was getting the tall composition's 52%.
+       The handoff prose says 640px and the reference file says aspect ratio;
+       the reference is the stated source of truth and is also the one that is
+       right about a landscape phone.
 
-       height stays explicit at 520px (desktop) / 604px (mobile, below)
-       because it is what the water's own top:58% and the whole flex block's
-       vertical centring are actually measured against — none of that changed
-       here, only the cross-axis did. position:relative is what puts the
-       whole scene above the idle rings in paint order, same as the wordmark
-       — a positioned element draws over a non-positioned one, so the rings
-       pass behind the lockup rather than across its face. overflow:hidden
-       matches the handoff's own outer wrapper and is still a backstop for
-       the mark's own travel (down to 190px below rest, up to 118px above
-       it), not something the width change needed to touch — nothing was
-       ever asked to overflow a stretched box, only a 480px one. */
-    /* Reported directly against the live site, next to the other splash
-       that shows this same lockup (SonarLoader.jsx's tier="screen", used
-       for the Lobby -> Draft Room transition): that one holds the mark and
-       the wordmark 30px apart in one flex column, no third element between
-       them, so JUKE sits right under the mark. This one held the wordmark
-       roughly 260px below the shark, because the flex column holding the
-       wordmark measures from breach-scene's own bottom edge, and
-       breach-scene is a full 520px (604 on phone) tall to give the water
-       animation room - most of which is not "the water animation" by the
-       time it plays out. breach-underwater's own comment already states
-       where its gradient finishes fading to the container's flat
-       background colour: 58% of breach-scene's height (the waterline) plus
-       130px (90 on phone). Past that point the box is pixel-identical to
-       its own background for the rest of its height, on purpose, which is
-       what makes it safe to crop there - cropping a solid colour to itself
-       changes nothing you can see. Checked against every keyframe that
-       moves inside breach-scene, not just the gradient: the ripple
-       (breachRipple) is a 240px circle centred at 46%, scaling to 2x while
-       fading to opacity 0 in the same stretch, so its own faint tail
-       reaches this line at the same moment it is already indistinguishable
-       from off; the droplets (breachDroplet) translate upward, away from
-       this line, never past the waterline they start at.
-
-       breach-crop is that crop: a plain height in pixels, not a percentage
-       - a % height resolves against breach-crop's own containing block
-       (#boot-sonar, the full viewport), not against breach-scene sitting
-       inside it, so it cannot read the 58% the way this comment does.
-       432px is 520 * 0.58 + 130, rounded; 440px (below) is 604 * 0.58 + 90.
-       Retime either card's own height or gradient distance and this needs
-       the same arithmetic re-run - it is not derived live because nothing
-       here shares a custom property with breach-underwater's own
-       hard-coded gradient to derive it from, the same reason the mark's
-       own 150px top has never been a calc() off anything either.
-
-       breach-scene keeps its declared height and everything inside it
-       keeps the same top:58%/46%/etc. it always had, unchanged and
-       unmoved - overflow:hidden on the wrapper only stops the now-
-       invisible remainder from claiming layout space the wordmark is
-       waiting on, exactly the way overflow:hidden on breach-scene itself
-       already stops the mark's own entrance travel from doing the same
-       thing one level in. */
-    #boot-sonar .breach-crop {
-      overflow: hidden;
-      height: 432px;
-    }
-    #boot-sonar .breach-scene {
-      position: relative; overflow: hidden; height: 520px;
+       container-type: inline-size is load-bearing rather than decoration.
+       Every size in the drop sequence is in cqw — 2.6cqw is 2.6% of THE MARK,
+       at every viewport — so the drops, ripples and droplet scale with the
+       artwork instead of with the screen. Converting them to px is called out
+       in the handoff as the thing not to do. */
+    #boot-sonar #markwrap { position: relative; width: 52%; container-type: inline-size; }
+    @media (min-aspect-ratio: 1/1) {
+      #boot-sonar { background: radial-gradient(120% 90% at 50% 14%, #12202e 0%, #0a1119 46%, #05080d 100%); }
+      #boot-sonar #markwrap { width: 32%; }
     }
 
-    /* An <img>, not a background-image — Breach II's own asset reference,
-       juke-mark-v2.svg, kept as a plain file the way the handoff gives it
-       rather than inlined, so this stays a one-line swap if the mark is
-       revised again. No alt text needed - #boot-sonar carries
-       aria-hidden="true" on the whole overlay - but the attribute is still
-       present empty, matching how every other decorative mark in this file
-       is written.
+    /* ---- the water, verbatim from the design package ---- */
+    @keyframes shaftSway { 0%,100% { transform: rotate(11deg) translateX(0); opacity: .5 } 50% { transform: rotate(14deg) translateX(18px); opacity: .95 } }
+    @keyframes causticDrift { 0%,100% { transform: translate3d(-3%,0,0) scale(1.05) } 50% { transform: translate3d(4%,2%,0) scale(1.14) } }
+    @keyframes causticDrift2 { 0%,100% { transform: translate3d(3%,1%,0) scale(1.12) } 50% { transform: translate3d(-4%,-2%,0) scale(1.02) } }
+    @keyframes mote { 0% { transform: translate(0,0); opacity: 0 } 14% { opacity: .6 } 86% { opacity: .5 } 100% { transform: translate(16px,-130px); opacity: 0 } }
 
-       There is only one copy of the mark now, where Breach I carried two (an
-       animated one and a motionless understudy crossfaded in at the end).
-       That existed because breachMark's 100% keyframe fades the shark to
-       opacity 0, which needed covering on the slow path where nothing tears
-       the overlay down for several more seconds. Breach II's own keyframe
-       still ends at opacity 0, but not until a slow, 12%-of-total dissolve
-       from 88% to 100% — by the time it is gone, --total has already
-       elapsed and main.jsx's hold is already at or past that mark on any
-       normal load, so there is no longer a "blank dark screen" state for a
-       second element to cover. If a slow-load frame is ever wanted back, add
-       it back the same way — never by feeding this element a shorter, fake
-       version of breachMark. */
-    #boot-sonar .breach-mark {
-      position: absolute; left: 50%; top: 150px; margin-left: -110px;
-      width: 220px; height: 137px; z-index: 1;
-      will-change: transform, opacity;
-      animation: breachMark var(--total) cubic-bezier(.33,0,.5,1) both;
-    }
+    /* ---- the reveal, verbatim from the design package ----
+       Three drops fall under gravity and squash on impact, an impact glow and
+       two ripples spread from the point they land, four beads arc out of it,
+       and the droplet expands as the mark grows up underneath — the handoff's
+       own sentence is that the handoff should read as the droplet BECOMING
+       the mark. The four specks and single blob this replaces had no impact
+       and no consequence: things arrived at the centre and the mark appeared. */
+    @keyframes dropFall { 0% { transform: translate(var(--sx), var(--sy)) scale(.9,1.15); opacity: 0 } 10% { opacity: 1 } 90% { transform: translate(calc(var(--sx) * .05),-5px) scale(.78,1.5); opacity: 1 } 100% { transform: translate(0,0) scale(1.55,.5); opacity: 1 } }
+    @keyframes dropMerge { from { transform: scale(1.55,.5); opacity: 1 } to { transform: scale(.9,1.15); opacity: 0 } }
+    @keyframes ripple { 0% { transform: scale(.2); opacity: 0 } 6% { opacity: .75 } 100% { transform: scale(3.4); opacity: 0 } }
+    @keyframes splash { 0% { transform: translate(0,0) scale(1); opacity: 0 } 12% { opacity: 1 } 55% { transform: translate(calc(var(--sx) * .75),var(--sy)) scale(.8); opacity: .9 } 100% { transform: translate(var(--sx),calc(var(--sy) * -.35)) scale(.35); opacity: 0 } }
+    @keyframes impactGlow { 0% { transform: scale(.4); opacity: 0 } 30% { opacity: .55 } 100% { transform: scale(2.6); opacity: 0 } }
+    @keyframes blobForm { 0% { transform: scale(.3); opacity: 0 } 22% { transform: scale(1); opacity: 1 } 50% { transform: scale(1.25); opacity: .95 } 100% { transform: scale(2.6); opacity: 0 } }
 
-    /* The waterline is two layers now, not a line plus a soft radial wash.
-       breach-underwater is a static gradient band - #0e2b33 fading to this
-       file's own #0B0E14 over 130px and then staying there, so past that
-       130px it is pixel-identical to the container's own background and
-       costs nothing to extend all the way to the bottom of the scene. That
-       reads as "there is actually water below this line" in a way the old
-       wash (a soft glow floating with nothing under it) did not, which is
-       the whole reason Breach II changes it: measured directly against
-       recordings of Breach I, a glow with nothing solid beneath it read as
-       a smear rather than a surface, the same failure the old comment here
-       already named for the line itself.
+    /* Reduced motion: the design package asks for the static mark on the same
+       ground for a 600ms hold. splash-boot.js swaps the element to
+       variant="static" — it has to be a script, because juke-mark.js's own
+       animations are inside a shadow root this stylesheet cannot reach, and
+       that file ships unedited.
 
-       breach-water is the bright line on top of that band. width is 100%
-       here and 70% under the phone breakpoint below, both centred by auto
-       margins against the full-width left:0/right:0 box - no separate
-       flex-centring wrapper needed, since 100% collapses that centring to a
-       no-op on desktop anyway. */
-    #boot-sonar .breach-underwater {
-      position: absolute; left: 0; right: 0; top: 58%; bottom: 0; z-index: 2;
-      background: linear-gradient(180deg, #0e2b33, #0B0E14 130px);
-    }
-    #boot-sonar .breach-water {
-      position: absolute; left: 0; right: 0; top: 58%; z-index: 3; pointer-events: none;
-      width: 100%; height: 1px; margin: 0 auto;
-      background: #00E5FF;
-      box-shadow: 0 0 24px 3px rgba(0,229,255,.7);
-      will-change: transform, opacity;
-      animation: breachWaterPulse var(--total) ease-out both;
-    }
-
-    /* Six droplets, two waves of three, each a static zero-size rotate
-       wrapper (breach-drop) holding one animated dot (breach-drop-dot) -
-       never rotate and translateY on the same animated element. breachDroplet
-       is translateY-only, so it moves straight "up" along whatever direction
-       the wrapper's own rotation already points; flattening the two onto one
-       element sends every droplet the same direction regardless of its
-       intended angle, which the handoff calls out as the most likely source
-       of visible glitching, and matches what this file's own two prior
-       recordings actually showed.
-
-       breach-drops is the zero-height row both waves hang from, positioned
-       once at the waterline rather than repeating top:58% on all six
-       wrappers. :nth-child counts against it rather than against
-       .breach-scene's other children, which is why the droplets need this
-       wrapper and the ripple below does not. */
-    #boot-sonar .breach-drops {
-      position: absolute; left: 0; right: 0; top: 58%; height: 0; z-index: 4; pointer-events: none;
-    }
-    #boot-sonar .breach-drop {
-      position: absolute; left: 50%; top: 0; width: 0; height: 0;
-    }
-    #boot-sonar .breach-drop-dot {
-      position: absolute; border-radius: 50%;
-      will-change: transform, opacity;
-      animation: breachDroplet var(--total) cubic-bezier(.3,0,.6,1) both;
-    }
-    #boot-sonar .breach-drop:nth-child(1) { transform: rotate(-62deg); }
-    #boot-sonar .breach-drop:nth-child(2) { transform: rotate(-20deg); }
-    #boot-sonar .breach-drop:nth-child(3) { transform: rotate(22deg); }
-    #boot-sonar .breach-drop:nth-child(4) { transform: rotate(64deg); }
-    #boot-sonar .breach-drop:nth-child(5) { transform: rotate(-48deg); }
-    #boot-sonar .breach-drop:nth-child(6) { transform: rotate(30deg); }
-    /* Wave 1 fires with the water's first pulse (the shark breaking the
-       surface on the way up); wave 2 with its second (the re-entry). */
-    #boot-sonar .breach-drop:nth-child(-n+4) .breach-drop-dot { animation-delay: var(--wave1); }
-    #boot-sonar .breach-drop:nth-child(n+5)  .breach-drop-dot { animation-delay: var(--wave2); }
-    #boot-sonar .breach-drop:nth-child(1) .breach-drop-dot { left: -2px;   top: -4px; width: 5px; height: 9px;  background: #7CE9FA; }
-    #boot-sonar .breach-drop:nth-child(2) .breach-drop-dot { left: -3px;   top: -6px; width: 6px; height: 10px; background: #00E5FF; }
-    #boot-sonar .breach-drop:nth-child(3) .breach-drop-dot { left: -3px;   top: -6px; width: 6px; height: 10px; background: #7CE9FA; }
-    #boot-sonar .breach-drop:nth-child(4) .breach-drop-dot { left: -2px;   top: -4px; width: 5px; height: 9px;  background: #00E5FF; }
-    #boot-sonar .breach-drop:nth-child(5) .breach-drop-dot { left: -2px;   top: -4px; width: 5px; height: 9px;  background: #00E5FF; }
-    #boot-sonar .breach-drop:nth-child(6) .breach-drop-dot { left: -2px;   top: -4px; width: 5px; height: 10px; background: #7CE9FA; }
-
-    /* The closing ripple: rgba(154,63,192,.9), not the handoff's own
-       rgba(168,85,247,.5). Measured against #0B0E14, the handoff's exact
-       value comes out 2.04:1 — under this project's own 3:1 bar for a
-       decorative ring, the identical failure mode the purple-400 note above
-       already measured once for the idle rings, and the identical deviation
-       Breach I already made here for the identical reason - this is a
-       property of the colour against this background, not of Breach I's
-       choreography, so a new size and position for the ring do not reopen
-       the question. purple-400 at the same .9 alpha the idle rings use:
-       3.07:1, and no colour jump at the moment the ripple hands off to the
-       rings sitting right beside it. */
-    #boot-sonar .breach-ripple {
-      position: absolute; left: 50%; top: 46%;
-      width: 240px; height: 240px; margin-left: -120px; margin-top: -120px;
-      border-radius: 50%; border: 1px solid rgba(154,63,192,.9);
-      z-index: 3;
-      will-change: transform, opacity;
-      animation: breachRipple var(--total) ease-out both;
-      animation-delay: var(--ripple);
-    }
-
-    /* The phone card, at the handoff's own 604px reference height rather
-       than a rescale of the desktop number - the two prompts give genuinely
-       different proportions (a taller card; a waterline at 70% width instead
-       of full-bleed; a mark positioned lower in its frame), not the same
-       scene shrunk down. There is no width to override here any more:
-       breach-scene has none at either breakpoint (see its own comment), so
-       it stretches to the real, narrower phone viewport the same way it
-       stretches to a desktop one, and breach-water's 70% below is 70% of
-       that actual width - not of a fixed 296px reference card, which is the
-       same correction as the desktop side of this change and the more
-       faithful reading of "70% instead of full-bleed" besides: a phone's own
-       screen is the thing being measured against, not a stand-in for one.
-       600px rather than a device-specific width because this is a
-       full-viewport overlay, not a component with its own container query -
-       it only has the viewport to key off, and 600px sits between the widest
-       phone this project tests against (iPhone 13, 390px) and the narrowest
-       desktop viewport in that same suite (1440px), so it cannot land inside
-       either. */
-    @media (max-width: 600px) {
-      #boot-sonar .breach-crop { height: 440px; } /* 604 * 0.58 + 90, see breach-crop's own comment */
-      #boot-sonar .breach-scene { height: 604px; }
-      #boot-sonar .breach-mark { top: 220px; margin-left: -95px; width: 190px; height: 118px; }
-      #boot-sonar .breach-underwater { background: linear-gradient(180deg, #0e2b33, #0B0E14 90px); }
-      #boot-sonar .breach-water { width: 70%; }
-      #boot-sonar .breach-ripple { width: 200px; height: 200px; margin-left: -100px; margin-top: -100px; }
-      #boot-sonar .breach-drop:nth-child(1) .breach-drop-dot,
-      #boot-sonar .breach-drop:nth-child(4) .breach-drop-dot,
-      #boot-sonar .breach-drop:nth-child(5) .breach-drop-dot { left: -2px; top: -4px; width: 4px; height: 8px; }
-      #boot-sonar .breach-drop:nth-child(2) .breach-drop-dot,
-      #boot-sonar .breach-drop:nth-child(3) .breach-drop-dot { left: -2.5px; top: -5px; width: 5px; height: 9px; }
-      #boot-sonar .breach-drop:nth-child(6) .breach-drop-dot { left: -2px; top: -4px; width: 4px; height: 9px; }
-    }
-
-    /* The wordmark at the stacked lockup's own proportions: Archivo 900,
-       uppercase, -0.045em, sized at the mark width over 2.4 - the ratio
-       JukeLogo's variant="stacked" already computes (212 / 2.4 = 88). The 30px
-       gap on the flex parent is size * 0.34, from the same component. Archivo
-       is already requested in this file's Google Fonts link.
-
-       That request carries display=swap, so on a slow load this word can paint
-       in the fallback face first and swap when Archivo lands. Accepted rather
-       than worked around: it is one centred word, so the swap changes glyphs
-       without moving anything else on screen, and the alternatives both cost
-       more than they buy - font-display:optional would pin the whole first load
-       to system-ui and never swap, and dropping the wordmark would throw away
-       the one thing this screen exists to say. */
-    #boot-sonar b {
-      position: relative; font: 900 88px/0.9 'Archivo', system-ui, sans-serif;
-      letter-spacing: -.045em; text-transform: uppercase; color: #F2F5FA;
-      /* #boot-sonar's own align-items is stretch now, for breach-scene's
-         benefit (see that comment) — this opts back out to its own natural
-         width, centred, which is the one thing align-items: center used to
-         give every flex child for free. */
-      align-self: center;
-      /* .65 * --total, not a number the handoff states — the wordmark is not
-         part of either Breach II prompt at all, so there is no value to copy
-         and this is this file's own placement. The mark reaches full rest at
-         62% and holds there until 88%, when its own 12%-of-total dissolve
-         begins (see breach-mark and breachMark below); .65 lands the word
-         just after that settle, giving it a beat as the only thing moving
-         before it finishes, and its own 500ms puts it fully in by 82.5% -
-         comfortably inside the hold, before the mark starts fading under it.
-         calc() off --total rather than a literal for the same reason as
-         everything else on this element: a retime is one number. */
-      animation: sonar-label 500ms ease-out calc(var(--total) * .65) both;
-    }
-
-    @keyframes sonar-ring {
-      0%   { transform: scale(.3); opacity: 0; }
-      12%  { opacity: .65; }
-      100% { transform: scale(2.2); opacity: 0; }
-    }
-    @keyframes sonar-label {
-      0%   { opacity: 0; transform: translateY(8px); }
-      100% { opacity: 1; transform: translateY(0); }
-    }
-    /* Opacity only - no blur, no travel. This is the reduced-motion substitute
-       for sonar-label and for breach-mark itself (see the media query below),
-       which is why it states its own 0%: a keyframe that declared only a `to`
-       would take its implied start from whatever the element already
-       computes - opacity 1 for both of these - and animate 1 to 1, fading
-       nothing at all. */
-    @keyframes sonar-fade { 0% { opacity: 0; } 100% { opacity: 1; } }
-
-    /* Exact motion, from the Breach II handoff verbatim — identical to
-       Breach I's own breachMark/breachDroplet/breachWaterPulse/breachRipple,
-       which is worth stating plainly since so much else about this file
-       changed: the second handoff hardened how the delays are computed and
-       revised the ripple's own delay fraction, not these four shapes. The
-       percentages are duration-independent — --total above is the only
-       number that needs to change to retime the whole sequence; see its own
-       comment and the calc()s on --wave1/--wave2/--ripple. */
-    @keyframes breachMark {
-      0%   { transform: translate(-30px,190px) rotate(-16deg) scale(.92); }
-      8%   { transform: translate(-18px,60px) rotate(-10deg) scale(.96); }
-      22%  { transform: translate(6px,-118px) rotate(8deg) scale(1); }
-      34%  { transform: translate(14px,-20px) rotate(16deg) scale(1); }
-      42%  { transform: translate(10px,74px) rotate(10deg) scale(1); }
-      54%  { transform: translate(0,-10px) rotate(-2deg) scale(1.02); }
-      62%  { transform: translate(0,0) rotate(0deg) scale(1); opacity: 1; }
-      88%  { transform: translate(0,0) rotate(0deg) scale(1); opacity: 1; }
-      100% { transform: translate(0,-14px) rotate(0deg) scale(.98); opacity: 0; }
-    }
-    @keyframes breachDroplet {
-      0%   { transform: translateY(0) scale(0); opacity: 0; }
-      2%   { transform: translateY(-8px) scale(1); opacity: 1; }
-      12%  { transform: translateY(-54px) scale(.45); opacity: 0; }
-      100% { transform: translateY(-54px) scale(.45); opacity: 0; }
-    }
-    @keyframes breachWaterPulse {
-      0%   { transform: scaleY(1); opacity: .55; }
-      7%   { transform: scaleY(3); opacity: 1; }
-      16%  { transform: scaleY(1); opacity: .6; }
-      40%  { transform: scaleY(1); opacity: .6; }
-      45%  { transform: scaleY(4); opacity: 1; }
-      56%  { transform: scaleY(1); opacity: .7; }
-      88%  { opacity: .55; }
-      100% { opacity: 0; }
-    }
-    @keyframes breachRipple {
-      0%   { transform: scale(.25); opacity: 0; }
-      28%  { opacity: .5; }
-      62%  { transform: scale(2); opacity: 0; }
-      100% { opacity: 0; }
-    }
-    /* The rings go, and so does the launch, the splash and the ripple —
-       everything that was travel or scale under motion becomes a single
-       settled mark. style.css already draws this line for .to-top ("the fade
-       stays - it is an opacity change, not motion") and this follows it:
-       breach-mark fades straight in at its resting position - no transform
-       of its own, since breachMark is skipped outright and rest is what its
-       base styles already draw - and nothing else plays. There is no second,
-       motionless copy to crossfade from any more (see breach-mark's own
-       comment above for why Breach II dropped it), which actually simplifies
-       this block from what Breach I needed: one mark, one fade, same as the
-       wordmark beside it. */
+       What CSS still owns is everything outside that shadow root: the water,
+       the specks and the droplet. The ambient layers keep their opacity and
+       lose only their motion, so the frame is still the designed picture
+       rather than a flat navy rectangle — a still of the composition, which
+       is what "skip the animation" should mean here. The specks and the
+       droplet are removed outright instead, because both animate from
+       opacity 0 and holding either one at its first frame paints a stray dot
+       over the centre of the mark. */
     @media (prefers-reduced-motion: reduce) {
-      #boot-sonar i { display: none; }
-      #boot-sonar .breach-water, #boot-sonar .breach-underwater,
-      #boot-sonar .breach-drops, #boot-sonar .breach-ripple { display: none; }
-      #boot-sonar .breach-mark { animation: sonar-fade 300ms ease-out 300ms both; }
-      #boot-sonar b { animation: sonar-fade 300ms ease-out 420ms both; }
+      #boot-sonar [data-water] { animation: none !important; }
+      /* [data-anim] needs no rule any more. Those layers ship at opacity:0
+         with no animation and only splash-boot.js's start pass gives them
+         one, and that pass returns early under reduced motion — so they are
+         invisible by construction rather than by a display:none override.
+         The rule that used to be here is gone rather than kept as belt and
+         braces: a second, silent way for a layer to be hidden is how the
+         next person spends an hour on a layer that is behaving correctly. */
+      #boot-sonar { animation-delay: 3s; }
     }
   </style>
 </head>
 <body>
 
-  <!-- Breach, the cold-load overlay. It is markup rather than a component
+  <!-- Deepwater, the cold-load overlay. It is markup rather than a component
        because it has to cover React's own boot: everything below this element
        is a blocking classic script, and Vite's module bundle runs after all of
        them, so React cannot draw its own loading state. main.jsx removes this
@@ -668,44 +403,91 @@
        silently never come down - a fixed element at z-index 9999 that swallows
        every click on the page. The teardown lives in main.jsx.
 
-       The <b> is the wordmark, not a caption, and the string is exactly `Juke`.
-       This is a brand moment - the shark and nothing else under it - and
-       carries no line under it. A visitor who arrived from a pasted link needs
-       to know whose product this is; what the product does is the homepage's
-       job and it is one second behind. Naming the category here would also pin
-       the brand to the one room that exists today, against this project's own
-       rule that Juke is the brand and The Draft Room is one of several planned
-       rooms. The design mockup this animation was built from labelled the
-       overlay "MOCK DRAFT" - dropped rather than shipped, for the same reason
-       this comment already gave the Sonar version of this screen: do not add
-       a tagline here.
+       There is no wordmark. The overlay this replaced carried a <b>Juke</b>
+       under the shark and argued for it at length - a visitor who arrived from
+       a pasted link needs to know whose product this is. The design package
+       drops it, and the argument survives the drop: the mark IS the wordmark
+       now. The old one was a goalpost monogram that read as a plain U on its
+       own, which is exactly why it needed type under it; a shark silhouette
+       does not. Do not add a tagline here either - that decision has been made
+       twice now and for the same reason both times.
 
-       breach-underwater/-water/-drops/-ripple are the splash; breach-mark is
-       the shark, now the only copy of it - see its own comment in the
-       <style> above for why Breach II no longer needs a second, motionless
-       one crossfaded in at the end. The three <i> rings are Sonar's own idle
-       loop, silent until the mark settles, for the boot slow enough to still
-       be waiting past --total. -->
-  <div id="boot-sonar" aria-hidden="true">
-    <i></i><i></i><i></i>
-    <div class="breach-crop">
-      <div class="breach-scene">
-        <img class="breach-mark" src="/juke-mark-v2.svg" alt="">
-        <div class="breach-underwater"></div>
-        <span class="breach-water"></span>
-        <div class="breach-drops">
-          <span class="breach-drop"><span class="breach-drop-dot"></span></span>
-          <span class="breach-drop"><span class="breach-drop-dot"></span></span>
-          <span class="breach-drop"><span class="breach-drop-dot"></span></span>
-          <span class="breach-drop"><span class="breach-drop-dot"></span></span>
-          <span class="breach-drop"><span class="breach-drop-dot"></span></span>
-          <span class="breach-drop"><span class="breach-drop-dot"></span></span>
-        </div>
-        <span class="breach-ripple"></span>
-      </div>
+       The layers are the design package's own, in its own order: two caustic
+       layers, three light shafts, four motes, then the mark wrapper - three
+       drops, the impact glow, two ripples, four splash beads, the droplet and
+       the mark - and the vignette. Their inline styles are copied verbatim on
+       purpose; see the <style> block in <head> for why.
+
+       data-anim is the design file's own attribute, not an addition: a finite
+       layer's timing lives THERE rather than in its `animation` property, and
+       splash-boot.js applies the lot in one pass. That is what lets the whole
+       composition share a zero, and lets that zero be a frame the viewer can
+       actually see.
+
+       data-water IS an addition, and the only one. The ambient layers carry
+       their animation inline and run from parse, so the reduced-motion rule
+       in <head> needs some hook to still them - an inline style is not
+       something a stylesheet can reach. -->
+  <div id="boot-sonar" role="status" aria-label="Loading Juke">
+    <!-- Ambient water. These carry their animation inline and run from the
+         moment they are parsed, exactly as the design package has them: they
+         are not part of the 2700ms reveal and are meant to be mid-cycle on
+         frame 0. data-water is this project's own hook so the reduced-motion
+         rule can still them; an inline style is not something a stylesheet
+         can reach. -->
+    <div data-water class="l" style="background-image:radial-gradient(55% 34% at 28% 14%, rgba(140,190,255,.20), transparent 70%),radial-gradient(42% 26% at 68% 8%, rgba(180,215,255,.16), transparent 72%),radial-gradient(38% 22% at 46% 26%, rgba(120,170,240,.13), transparent 74%);animation:causticDrift 17s ease-in-out infinite"></div>
+    <div data-water class="l" style="background-image:radial-gradient(46% 30% at 74% 20%, rgba(150,200,255,.14), transparent 72%),radial-gradient(36% 20% at 18% 30%, rgba(190,220,255,.11), transparent 74%);animation:causticDrift2 23s ease-in-out infinite"></div>
+    <div data-water class="shaft" style="left:12%;width:14vmin;background:radial-gradient(50% 52% at 50% 26%, rgba(165,205,255,.16), rgba(165,205,255,0) 100%);animation:shaftSway 14s ease-in-out infinite"></div>
+    <div data-water class="shaft" style="left:44%;width:22vmin;background:radial-gradient(50% 52% at 50% 26%, rgba(150,195,255,.13), rgba(165,205,255,0) 100%);animation:shaftSway 19s -6s ease-in-out infinite"></div>
+    <div data-water class="shaft" style="left:74%;width:11vmin;background:radial-gradient(50% 52% at 50% 26%, rgba(190,220,255,.12), rgba(165,205,255,0) 100%);animation:shaftSway 11s -3s ease-in-out infinite"></div>
+    <div data-water class="mote" style="left:16%;top:64%;width:3px;height:3px;background:rgba(205,230,255,.75);animation:mote 15s -2s linear infinite"></div>
+    <div data-water class="mote" style="left:33%;top:80%;width:2px;height:2px;background:rgba(205,230,255,.6);animation:mote 19s -7s linear infinite"></div>
+    <div data-water class="mote" style="left:58%;top:72%;width:3px;height:3px;background:rgba(215,235,255,.5);animation:mote 22s -12s linear infinite"></div>
+    <div data-water class="mote" style="left:78%;top:86%;width:2px;height:2px;background:rgba(205,230,255,.6);animation:mote 20s -9s linear infinite"></div>
+
+    <!-- The reveal. EVERY ONE OF THESE STARTS AT opacity:0 WITH NO ANIMATION,
+         and carries its timing in data-anim instead. splash-boot.js applies
+         them all in one pass and calls mark.replay() at the same moment — see
+         its own note, and item 3 of the design package's handoff, which asks
+         for exactly this and says starting the layers before the mark is
+         mounted is the failure mode to avoid.
+
+         It is also what fixes the fault the owner reported twice: a CSS
+         animation begins at its first rendering opportunity, which on a real
+         machine can be a second or more before the browser presents anything,
+         and the opening beats were being spent unseen. Holding them until we
+         choose the moment is a better answer than the restart this replaces.
+
+         #markwrap is container-type:inline-size and every size here is cqw, so
+         the whole drop sequence scales with the mark rather than with the
+         viewport. Do not convert them to px — the package says so and the
+         reason is that a 2.6cqw drop is 2.6% of the mark at every size. -->
+    <div id="markwrap">
+      <div data-anim="dropFall .58s cubic-bezier(.5,0,.9,.55) both, dropMerge .22s .58s forwards" style="position:absolute;left:50%;top:50%;width:2.6cqw;height:2.6cqw;margin:-1.3cqw 0 0 -1.3cqw;border-radius:50% 50% 50% 50% / 40% 40% 60% 60%;background:#EDF3FF;opacity:0;--sx:0cqw;--sy:-46cqw"></div>
+      <div data-anim="dropFall .5s .1s cubic-bezier(.5,0,.9,.55) both, dropMerge .2s .6s forwards" style="position:absolute;left:50%;top:50%;width:1.5cqw;height:1.5cqw;margin:-.75cqw 0 0 -.75cqw;border-radius:50%;background:#DDE9FF;opacity:0;--sx:3.6cqw;--sy:-36cqw"></div>
+      <div data-anim="dropFall .42s .2s cubic-bezier(.5,0,.9,.55) both, dropMerge .2s .62s forwards" style="position:absolute;left:50%;top:50%;width:1.1cqw;height:1.1cqw;margin:-.55cqw 0 0 -.55cqw;border-radius:50%;background:#CFE2FF;opacity:0;--sx:-3cqw;--sy:-27cqw"></div>
+      <div data-anim="impactGlow .7s .56s ease-out both" style="position:absolute;left:50%;top:50%;width:20cqw;height:20cqw;margin:-10cqw 0 0 -10cqw;border-radius:50%;background:radial-gradient(circle, rgba(200,228,255,.9), rgba(200,228,255,0) 70%);opacity:0;pointer-events:none"></div>
+      <div data-anim="ripple .95s .58s cubic-bezier(.15,.6,.3,1) both" style="position:absolute;left:50%;top:50%;width:12cqw;height:12cqw;margin:-6cqw 0 0 -6cqw;border-radius:50%;border:.35cqw solid rgba(205,230,255,.85);opacity:0"></div>
+      <div data-anim="ripple .85s .76s cubic-bezier(.15,.6,.3,1) both" style="position:absolute;left:50%;top:50%;width:12cqw;height:12cqw;margin:-6cqw 0 0 -6cqw;border-radius:50%;border:.25cqw solid rgba(205,230,255,.5);opacity:0"></div>
+      <div data-anim="splash .55s .6s cubic-bezier(.3,.5,.6,1) both" style="position:absolute;left:50%;top:50%;width:.9cqw;height:.9cqw;margin:-.45cqw 0 0 -.45cqw;border-radius:50%;background:#EDF3FF;opacity:0;--sx:-8cqw;--sy:-9cqw"></div>
+      <div data-anim="splash .5s .61s cubic-bezier(.3,.5,.6,1) both" style="position:absolute;left:50%;top:50%;width:.75cqw;height:.75cqw;margin:-.375cqw 0 0 -.375cqw;border-radius:50%;background:#EDF3FF;opacity:0;--sx:7cqw;--sy:-10.5cqw"></div>
+      <div data-anim="splash .48s .6s cubic-bezier(.3,.5,.6,1) both" style="position:absolute;left:50%;top:50%;width:.6cqw;height:.6cqw;margin:-.3cqw 0 0 -.3cqw;border-radius:50%;background:#DDE9FF;opacity:0;--sx:-3.5cqw;--sy:-12cqw"></div>
+      <div data-anim="splash .52s .62s cubic-bezier(.3,.5,.6,1) both" style="position:absolute;left:50%;top:50%;width:.6cqw;height:.6cqw;margin:-.3cqw 0 0 -.3cqw;border-radius:50%;background:#DDE9FF;opacity:0;--sx:10cqw;--sy:-6.5cqw"></div>
+      <div data-anim="blobForm .7s .62s cubic-bezier(.3,.6,.25,1) both" style="position:absolute;left:50%;top:50%;width:10cqw;height:9.6cqw;margin:-4.8cqw 0 0 -5cqw;border-radius:48% 48% 44% 44%;background:#EDF3FF;opacity:0"></div>
+      <juke-mark variant="form"></juke-mark>
     </div>
-    <b>Juke</b>
+    <div id="vig"></div>
   </div>
+  <!-- Parser-blocking, and here rather than in <head> on purpose. Both
+       questions this script answers - does the splash play at all, and does
+       it play animated - are questions ABOUT the element above, and in
+       <head> that element does not exist yet. Deferring the answers to
+       DOMContentLoaded would be worse than not answering: the first paint
+       would show the full animated reveal and then correct itself, which is
+       the flash both branches exist to prevent. A parser-blocking script
+       immediately after the markup is the only position where the element is
+       real and nothing has painted. -->
+  <script src="/splash-boot.js?v=202609050305"></script>
 
   <!-- The shield <symbol> that used to live here is gone. It was 2.7KB of
        traced path data on every page load, cloned by <use> into the two
@@ -714,8 +496,8 @@
        React header took over. It was also the goalpost's predecessor, which
        is to say two brand generations behind what the app actually shows.
 
-       The two <img> tags that replaced it name /juke-mark.svg, the same file
-       the React header loads, so they cost no extra request. Nothing in
+       The two <img> tags that replaced it name /juke-shark-mark.svg, the
+       same file the React header loads, so they cost no extra request. Nothing in
        app.js, theme.js or back-to-top.js ever referenced #jukeMark, .mark,
        .mark-body or .mark-accent - checked before removing it, because the
        rule about this file is that an unguarded lookup against missing
@@ -750,7 +532,7 @@
         </div>
 
         <a class="shell-brand" href="#/" aria-label="Juke home">
-          <img class="mark sm" src="/juke-mark.svg" width="51" height="32"
+          <img class="mark sm" src="/juke-shark-mark.svg" width="51" height="32"
                style="width:51px;height:32px;min-width:51px"
                alt="" aria-hidden="true">
           <span class="wordmark">JUKE</span>
@@ -792,7 +574,7 @@
                stroke-linecap="round" stroke-linejoin="round">
             <path d="M15 5 8 12l7 7"/>
           </svg>
-          <img class="mark" src="/juke-mark.svg" width="58" height="36"
+          <img class="mark" src="/juke-shark-mark.svg" width="58" height="36"
                style="width:58px;height:36px;min-width:58px"
                alt="" aria-hidden="true">
         </button>
@@ -1227,7 +1009,7 @@
     <form method="dialog"><button class="primary">Got it</button></form>
   </dialog>
 
-  <!-- Every one of these carries the same ?v=202609011104 as the stylesheet. See the note
+  <!-- Every one of these carries the same ?v=202609050305 as the stylesheet. See the note
        beside it in <head>: bump them together or don't bump them at all.
        Root-relative for the same reason theme.js and style.css are above.
 
@@ -1258,10 +1040,10 @@
        real data, deferred-load or not. -->
   <!-- The socket to a shared room. Loaded always, connected never unless a
        manager asks for it: a solo draft touches nothing. -->
-  <script src="/live.js?v=202609011104"></script>
+  <script src="/live.js?v=202609050305"></script>
   <!-- Before app.js, which calls backToTop() on the last line of its setup. -->
-  <script src="/back-to-top.js?v=202609011104"></script>
-  <script src="/app.js?v=202609011104"></script>
+  <script src="/back-to-top.js?v=202609050305"></script>
+  <script src="/app.js?v=202609050305"></script>
 
   <!-- The React homepage. A module script, so it runs after the classic
        scripts above regardless of source order — modules always behave as

@@ -18,8 +18,8 @@ import PlayerProfileModal from './PlayerProfileModal.jsx'
 import DraftSettingsModal from './DraftSettingsModal.jsx'
 import DraftEntryScreen from './DraftEntryScreen.jsx'
 import DraftLobby from './DraftLobby.jsx'
-import SonarLoader from './SonarLoader.jsx'
-import LobbyBar from './LobbyBar.jsx'
+import DraftRoomLoader from './DraftRoomLoader.jsx'
+import ShellHeader from './shell/ShellHeader.jsx'
 import MobileAppTabBar from './MobileAppTabBar.jsx'
 import MobileDraftTabBar from './MobileDraftTabBar.jsx'
 import PickClockBand from './PickClockBand.jsx'
@@ -27,7 +27,7 @@ import { POS_LIST } from './draftRoomPositions.js'
 import { useMinWidth, usePhoneWidth } from '../hooks/useBreakpoint.js'
 import { useDraftNotifications } from '../hooks/useDraftNotifications.js'
 import DraftRoomPhone from './phone/DraftRoomPhone.jsx'
-import MockDraftsPhone from './phone/MockDraftsPhone.jsx'
+import DraftRoomEntry from './DraftRoomEntry.jsx'
 import EarlyAccessModal from './EarlyAccessModal.jsx'
 
 // The Board tab's own dock height per tray position — fixed pixels. This
@@ -162,7 +162,22 @@ export default function DraftRoom() {
   // — the live-draft-only effects below (autopick, etc.) all gate on
   // `active` meaning specifically "on the live draft route", and widening
   // it would let them fire while looking at the locker instead.
-  const draftsActive = useHashActive('#/drafts')
+  /* #/rooms/draft, not #/drafts, as of design_handoff_v3_alive.
+     The handoff splits what this route used to be into two screens: the
+     Draft Room's own entry -- start a mock, settings, insights, recent --
+     which is a room and lives under #/rooms with the other five, and a
+     separate archive of every draft you have run, which is what the nav's
+     Drafts tab means now and which App renders at #/drafts.
+
+     This branch is the first of those, so it moves to the room's address.
+     Nothing else about it changes: it is still the route that forces the
+     Lobby regardless of `enteredRoom`, which is the whole reason it exists
+     -- pressing "Back to the locker" on a finished draft and then Start
+     has to reach a clean choice rather than the board you just left. Every
+     "back to the locker" link moved with it for exactly that reason: the
+     archive has no Start button on it, by design, so sending a finished
+     draft there would end that flow. */
+  const draftsActive = useHashActive('#/rooms/draft')
 
   const [search, setSearch] = useState('')
   const [posFilter, setPosFilter] = useState('ALL')
@@ -199,6 +214,31 @@ export default function DraftRoom() {
      id meaning "and open this report". Desktop never reads it — the
      dashboard is unconditionally what #/drafts is there. */
   const [lockerView, setLockerView] = useState(null)
+  /* #/rooms/draft?report=<id> opens that entry's own frozen report.
+
+     The archive (#/drafts, DraftsScreen.jsx) is a different screen in a
+     different React tree, so a row there cannot set this state directly --
+     and the two must not each hold their own idea of "which report is
+     open". The hash is the one channel both can see, which is the same
+     answer #/draft?room=ABC1 already gives for an invite.
+
+     It reads on every hashchange rather than only at mount, because
+     DraftRoom does not unmount between routes: arriving from the archive
+     is a hashchange, not a mount, and a mount-only read would open the
+     screen with whatever report was last looked at. Cleared on any hash
+     without the param for the same reason -- a stale id here is the
+     `view`/`soloAutopick` leak this file already documents, one state
+     along. */
+  useEffect(() => {
+    const read = () => {
+      const q = window.location.hash.split('?')[1] || ''
+      const id = new URLSearchParams(q).get('report')
+      setLockerView(id || null)
+    }
+    window.addEventListener('hashchange', read)
+    read()
+    return () => window.removeEventListener('hashchange', read)
+  }, [])
   const sportsModalRef = useRef(null)
   /* Deleting a locker entry changes nothing the engine broadcasts — it is a
      localStorage rewrite — so there is no "juke:header" to ride and this
@@ -210,8 +250,32 @@ export default function DraftRoom() {
   // be the same modal (Edit setup -> Invite tab), and collapsing them back
   // into one flag would silently re-bury this behind Edit setup again.
   const [friendsModalOpen, setFriendsModalOpen] = useState(false)
-  // The seat, shared between the form's dropdown and the lobby board.
-  const [lobbySlot, setLobbySlot] = useState(0)
+  /* The seat, shared between the form's dropdown, the lobby board and the
+     Draft Settings screen's own Draft order section.
+
+     Read off the engine rather than held here, and that is a fix rather than
+     a style preference. It was `useState(0)`, which made the seat the one
+     thing about a draft that was written down twice: DraftOrder.jsx has
+     always set it through engine.setMySlot(), which writes state.mySlot, and
+     beginDraft() then called startDraft({ mySlot: lobbySlot }) — so
+     startDraft's own `state.mySlot = opts.mySlot` overwrote the chosen seat
+     with this component's stale 0 on the way in. Pick seat 6 in Draft
+     Settings, press Start, land in seat 1. Reported off the phone, where the
+     settings screen is the only way to the seat at all; it was never
+     phone-specific, it was specific to choosing the seat on that screen,
+     which the desktop lobby's own dropdown happens to bypass.
+
+     state.mySlot was already the pre-commit seat as far as the engine is
+     concerned — draftOrder() reads it to decide which row says "You", which
+     is why the settings list highlighted the right chair while the draft
+     started in the wrong one. Two right answers, one of them not being asked.
+
+     setMySlot() calls render(), which fires "juke:header", which useJukeTick
+     above re-renders on — so this is live without a second copy to keep in
+     step. It also refuses a seat outside the league, which the useState
+     never did. */
+  const lobbySlot = engine ? engine.mySlot() : 0
+  const setLobbySlot = (seat) => { if (engine) engine.setMySlot(seat) }
   // Three screens, not two: Settings & Locker (league config, nothing
   // drafted yet, no board) -> choose a seat (the live page's own shell,
   // board in claimable mode) -> the live draft itself, gated by `started`
@@ -233,18 +297,61 @@ export default function DraftRoom() {
   // its job, not a real wait, but the brief's requirement is unconditional
   // ("every surface, always"), not "only when slow".
   //
-  // The floor used to be 400ms, which is the same mistake #boot-sonar's own
-  // MIN_VISIBLE_MS made once already (there: 900ms, "chosen off the mark
-  // alone") — short enough that dataReady() being already true (the common
-  // case) meant this screen was never actually seen, just flashed. Reported
-  // directly: the Sonar ring never got the chance to complete a sweep, let
-  // alone loop, before the board appeared underneath it. 2100 is
-  // SonarLoader's own RING_MS — one full ring cycle — the same number and
-  // the same reasoning #boot-sonar's floor already uses, because this is
-  // the same component doing the same job in a second place.
+  // The floor is 1600ms: one full turn of the loader's own 1.6s loop.
+  //
+  // It shipped at 500 — the design package's stated minimum — and that was
+  // wrong on the real screen. Reported by the owner off the deployed site:
+  // "way too short and you almost can't make out what's on the screen before
+  // you get sent into the draft room."
+  //
+  // The argument that produced 500 is worth keeping because of how it failed.
+  // It went: 400 was too short historically because SonarLoader's ring is a
+  // sweep with a beginning, so a screen gone before one cycle completed read
+  // as a flash; 2100 was RING_MS, one full sweep, so the thing always finished
+  // what it started; and DraftRoomLoader has no sweep to complete, because its
+  // teeth run on negative delays stepped 55ms apart and it is mid-loop on its
+  // first painted frame. All of that is true. It looks the same held for 500ms
+  // as for 5000.
+  //
+  // And it answers the wrong question. "Does it look stuttery" and "can a
+  // person see it" are different quantities, and only the first one is about
+  // the animation. Dwell time is about the reader. At a 500ms floor the layer
+  // is on screen for 500 plus a 220ms fade-out, and the first 160 of that is
+  // still fading IN — so roughly a third of a second at full opacity, for a
+  // screen carrying a mark, a heading and a sub-line. That is not enough to
+  // read, and no property of the loop's seamlessness changes it.
+  //
+  // 1600 is one complete cycle: the teeth sweep left to right once and the
+  // eyes flicker once, so the whole gesture plays through rather than being
+  // sampled. That is a reason rather than a taste — it is the shortest hold
+  // that shows the composition entire. It also lands between the 2100 nobody
+  // complained about and the 500 that was reported, nearer the former.
+  //
+  // The package's 500 is a MINIMUM and this does not contradict it. What it
+  // forbids is going lower.
+  //
+  // 2400 now, on the same report and the same reasoning one step further:
+  // asked for slightly longer alongside a larger mark. It is one and a half
+  // turns of the 1.6s loop, and landing off a cycle boundary costs nothing
+  // here — this is a FLOOR, so the actual end is max(floor, ready) and ready
+  // is arbitrary, which means the layer already leaves mid-loop on any wait
+  // that outlasts the floor. Cycle alignment was never achievable and was
+  // never what 1600 bought; what it bought was dwell, and this buys more of
+  // it. On screen that is 2400 plus the 220ms fade against 1820 before.
   const [starting, setStarting] = useState(false)
   const startingSinceRef = useRef(0)
-  const START_TRANSITION_MIN_MS = 2100
+  const START_TRANSITION_MIN_MS = 2400
+  // The layer stays mounted through its own 220ms fade-out, so the board is
+  // not revealed by a hard cut. `leaving` is what separates "the draft is
+  // ready" from "the loader has finished getting out of the way" — without it
+  // the element unmounts on the first of those and the fade never plays.
+  const [leaving, setLeaving] = useState(false)
+  // 15s, from the package: past this the wait has stopped being a wait. The
+  // poll below has no other exit — it is an rAF loop on a condition that a
+  // wedged engine never satisfies — so without this the screen is a permanent
+  // full-viewport layer at z-index 60 with no way out but a reload.
+  const START_TRANSITION_MAX_MS = 15000
+  const [startTimedOut, setStartTimedOut] = useState(false)
   // The one thing that can refuse the Start button, said beside it rather
   // than folded away — the rule the legacy setup screen already followed.
   const problem = engine ? engine.setupProblem() : ''
@@ -407,14 +514,29 @@ export default function DraftRoom() {
   useEffect(() => {
     if (!starting || !engine) return
     let raf
+    let fade
     const check = () => {
       const ready = !!engine.headerInfo().started && engine.dataReady()
       const elapsed = performance.now() - startingSinceRef.current
-      if (ready && elapsed >= START_TRANSITION_MIN_MS) { setStarting(false); return }
+      if (ready && elapsed >= START_TRANSITION_MIN_MS) {
+        // Fade the layer out over 220ms and only then unmount it. Setting
+        // `starting` false here directly is what produced the hard cut this
+        // replaces; the flag that actually ends the transition is the timer.
+        setLeaving(true)
+        fade = setTimeout(() => { setStarting(false); setLeaving(false) }, 220)
+        return
+      }
+      if (elapsed >= START_TRANSITION_MAX_MS) { setStartTimedOut(true); return }
       raf = requestAnimationFrame(check)
     }
     raf = requestAnimationFrame(check)
-    return () => { if (raf) cancelAnimationFrame(raf) }
+    return () => {
+      if (raf) cancelAnimationFrame(raf)
+      // The fade timer has to be cleared too. This effect re-runs on `engine`,
+      // which moves on every juke:header tick, so a surviving timer from a
+      // previous run would drop `starting` mid-transition on a later one.
+      if (fade) clearTimeout(fade)
+    }
   }, [starting, engine])
   // A real invite link (#/draft-room?room=CODE) joins the room over the
   // socket the moment app.js boots — see joinRoom() in app.js — entirely
@@ -593,10 +715,26 @@ export default function DraftRoom() {
   // against that exact hex (#1E2733, tailwind.config.js's slate.DEFAULT),
   // not "obsidian", which is the boot overlay's own void-page ground.
   if (starting) {
+    /* Design package 03. The layer draws its own ground (#151D2B) and its own
+       centring, so there is no wrapper here any more — the <div> this replaced
+       existed to supply bg-slate and a flex column, and a second box around it
+       would only be somewhere for a future className to go wrong.
+
+       The fade is on this element rather than inside the component so that the
+       component stays usable inline, where a caller wants it to appear with
+       whatever it is sitting in rather than to animate itself in. 160ms in and
+       220ms out, both from the package; `leaving` is set 220ms before the
+       unmount so the transition has time to run. */
     return (
-      <div className="fixed inset-0 z-[60] flex flex-col bg-slate text-white">
-        <SonarLoader tier="screen" surface="app" srLabel="Setting up your draft" style={{ height: '100%' }} />
-      </div>
+      <DraftRoomLoader
+        label={startTimedOut ? 'This is taking longer than it should' : 'Entering draft room'}
+        sub={startTimedOut || !league ? '' : `Seating ${league.teams} teams`}
+        error={startTimedOut ? 'This is taking longer than it should' : ''}
+        className={
+          'transition-opacity motion-reduce:transition-none ' +
+          (leaving ? 'opacity-0 duration-[220ms] ease-out' : 'animate-[sonar-fade_160ms_ease-out_both]')
+        }
+      />
     )
   }
 
@@ -639,6 +777,15 @@ export default function DraftRoom() {
   const armFreshDraft = () => {
     setSoloAutopick(false)
     startingSinceRef.current = performance.now()
+    // Both transition flags are per-attempt and both have to be cleared on the
+    // way IN, for exactly the reason this function exists: DraftRoom does not
+    // unmount between drafts, so anything left set survives into the next one.
+    // A stuck `startTimedOut` would open the following draft on the timeout
+    // message, and a stuck `leaving` would start it already faded out — the
+    // same shape as the `view`/`soloAutopick` leaks this function was written
+    // for, one state pair along.
+    setStartTimedOut(false)
+    setLeaving(false)
     setStarting(true)
   }
 
@@ -694,6 +841,36 @@ export default function DraftRoom() {
     engine.startDraft({ mySlot: seat, clockLength: engine.clockLength() })
   }
 
+  /* The Practice-a-scenario grid's launch path (PracticeScenarios.jsx).
+     Its own function for the same reason startAtSeat above is one: it is
+     never bound to a click directly — the card calls it with a scenario
+     object — so it can take a real argument without an ordinary
+     SyntheticEvent ever arriving in that position.
+
+     Order matters here in a way the two paths above do not have to worry
+     about. engine.startScenario() can REFUSE (a config setupProblem() will
+     not run, or a room that owns the league), and it puts the league back
+     when it does — so the route change and the loader have to wait for the
+     answer rather than lead it, or a refused card would leave a reader on
+     a covered screen with a draft that never started. Returns the engine's
+     own { ok, problem } so the card that was pressed shows the sentence. */
+  const startScenarioDraft = (scenario) => {
+    if (!engine || !engine.startScenario) return { ok: false, problem: 'Still loading the board.' }
+    if (roomActive) return { ok: false, problem: 'Scenarios are for solo mocks. Leave the room to run one.' }
+    armFreshDraft()
+    const result = engine.startScenario(scenario)
+    if (!result || result.ok !== true) {
+      // Nothing started, so nothing may be covering the screen — the loader
+      // this raised a line ago has no draft to wait for and would sit at its
+      // 15s ceiling before admitting it.
+      setStarting(false)
+      return result || { ok: false, problem: 'That scenario could not be started.' }
+    }
+    location.hash = '#/draft-room'
+    setEnteredRoom(true)
+    return result
+  }
+
   // The Lobby's direct multiplayer action — createRoom() is the exact call
   // RoomPanel.jsx's own "Create a room" button already makes; this just
   // reaches it without an Edit setup -> Invite detour first. Deliberately
@@ -744,13 +921,33 @@ export default function DraftRoom() {
        z-40 would trap this whole overlay beneath it. */
     return (
       <div className="fixed inset-0 z-[60] flex flex-col bg-slate text-white">
-        {/* Not on the phone's Mock Drafts screen: that screen carries its
-            own back chevron, its own title and its own "Draft settings"
-            button, so LobbyBar above it is a second header with a second
-            gear opening the identical modal — the duplicate-affordance
-            problem, stacked. It stays for the dashboard, which has no
-            header of its own at any width. */}
-        {!(isPhone && !lockerView) && <LobbyBar onOpenSettings={() => setSettingsOpen(true)} />}
+        {/* Both screens under this route get the site header, and the
+            version that gated it on `lockerView` was wrong.
+
+            The reasoning behind that gate was that the entry screen
+            carries its own back chevron and title, so a header above it
+            would be a second one. 3cg and 3cu say otherwise: they draw the
+            full JUKE / Home / Drafts / Rooms bar AND the "‹ Rooms" chevron
+            underneath it. They are not alternatives — the chevron goes
+            back one level, the header goes anywhere. Reported as "header
+            completely missing from the Draft Room page", which is exactly
+            what it was: this route hides #view-home, so with no header
+            rendered here there was none on the page at all.
+
+            It is ShellHeader rather than the LobbyBar that used to sit
+            here, which was the last of the pre-handoff marketing header
+            left anywhere: a "How It Works / The Rooms" nav with a
+            dropdown, on one screen, disagreeing with the three tabs every
+            other screen shows.
+
+            What LobbyBar carried that this does not is the settings gear.
+            The entry screen's own "Draft settings" button is the way in
+            now, and it is the only one — the dashboard behind "Your
+            insights" is analytics and nothing else.
+
+            active="rooms" because the Draft Room is a room and this is
+            reached through #/rooms/draft. */}
+        <ShellHeader active="rooms" />
 
         {settingsOpen && (
           <DraftSettingsModal
@@ -784,16 +981,21 @@ export default function DraftRoom() {
             leave the desktop dashboard with padding for a bar that is
             `sm:hidden`. */}
         <div className="min-h-0 flex-1 overflow-y-auto">
-          {/* Two Lobbies, and which one a phone gets is a real product
-              split rather than a responsive layout. See MockDraftsPhone's
-              own file comment: the dashboard is twelve analytics cells and
-              a history table, which stacks into one very long column on a
-              390px screen with the button the whole screen exists to offer
-              somewhere past the fourth chart. Nothing is lost — "Your
-              insights" on that screen opens this exact component, and a
-              history row opens this exact component's own report path. */}
-          {isPhone && !lockerView ? (
-            <MockDraftsPhone
+          {/* Two Lobbies, and which one you get is no longer a question of
+             width. It was: the dashboard is twelve analytics cells and a
+             history table, which stacks into one very long column on a
+             390px screen with the button the whole screen exists to offer
+             somewhere past the fourth chart — so a phone got the launcher
+             and a desk got the dashboard, and that was right.
+
+             design_handoff_v3_alive's screen c is that same launcher at
+             1280px (3cg), with the dashboard behind "Your insights" where a
+             phone already had it. So the entry is what this route shows at
+             every width, and `lockerView` alone decides. Nothing is lost:
+             "Your insights" opens this exact component and a history row
+             opens its own report path, both unchanged. */}
+          {!lockerView ? (
+            <DraftRoomEntry
               engine={engine}
               tick={tick}
               problem={problem}
@@ -803,8 +1005,11 @@ export default function DraftRoom() {
               onDiscard={() => engine.restart()}
               onOpenSettings={() => setSettingsOpen(true)}
               onOpenAnalytics={() => setLockerView('dashboard')}
+              onDraftWithFriends={handleDraftWithFriends}
+              roomActive={roomActive}
               onAnalyze={(id) => setLockerView(id)}
               onDelete={(id) => { engine.deleteHistoryDraft(id); forceTick() }}
+              onLaunchScenario={startScenarioDraft}
               onSignupSport={(sport) =>
                 sportsModalRef.current?.open(
                   `Juke is football only today. Leave an email and we'll tell you when ${sport} opens.`,
@@ -820,16 +1025,36 @@ export default function DraftRoom() {
                the launcher's own CTA from working, same rule LobbyBar used to
                enforce before this screen owned the action itself. */
             <DraftLocker
-              onStartNew={handleStartNew}
               onRunAtSeat={startAtSeat}
-              problem={problem}
-              lobbySlot={lobbySlot}
               roomActive={roomActive}
-              onSetLobbySlot={setLobbySlot}
-              onOpenSettings={() => setSettingsOpen(true)}
-              onDraftWithFriends={handleDraftWithFriends}
               initialAnalyzeId={typeof lockerView === 'string' && lockerView !== 'dashboard' ? lockerView : null}
-              onBackToList={isPhone ? () => setLockerView(null) : undefined}
+              /* Every width now, for the same reason the branch above
+                 stopped asking: the dashboard is reached FROM the entry
+                 screen on a desktop too, so it needs the way back.
+
+                 It clears the hash as well as the state, and that is not
+                 tidiness. #/rooms/draft?report=<id> exists so this screen
+                 and the archive cannot each hold their own idea of which
+                 report is open — and leaving the id in the address while
+                 the view has gone back to the entry is exactly that
+                 disagreement, with this component on the wrong side of it.
+                 Reloading would reopen a report the reader had closed.
+
+                 replaceState, not `location.hash = ...`: assigning the hash
+                 pushes a history entry, so Back would return to the report
+                 the reader just dismissed. It also fires no hashchange,
+                 which is right — the state is already set here, and the
+                 effect above would only set it to the same value again. */
+              onBackToList={() => {
+                setLockerView(null)
+                if (/[?&]report=/.test(window.location.hash)) {
+                  history.replaceState(
+                    null,
+                    '',
+                    window.location.pathname + window.location.search + '#/rooms/draft',
+                  )
+                }
+              }}
             />
           )}
         </div>
@@ -955,6 +1180,12 @@ export default function DraftRoom() {
                kept seeing "Autopick: Off" here regardless. */
             autopick={autopick}
             onOpenSettings={() => setSettingsOpen(true)}
+            /* Only in a room — off-room there is nobody to invite, and a
+               control that opens a "create a room" panel from inside a
+               draft you are about to start solo is a different action
+               wearing this one's label. See DraftEntryScreen's own note
+               for why this screen needs it at all. */
+            onInvite={roomActive ? () => setFriendsModalOpen(true) : undefined}
             onClaimSeat={(seat) => {
               // In a room the room decides; off-room this is just my chair.
               if (roomActive) engine.claimSeat(seat)
@@ -962,6 +1193,20 @@ export default function DraftRoom() {
             }}
           />
         </div>
+
+        {/* The same modal the Lobby renders, mounted here too rather than
+            moved: both screens can be the one a host is looking at when
+            they want the link, and the Lobby's own copy is what surfaces it
+            the moment a room is created. onCreated is not passed — a room
+            already exists by the time this branch can render at all, so
+            there is no creation for it to suppress the auto-enter of, and
+            onEnter is what this screen's own Start button already does. */}
+        {friendsModalOpen && (
+          <DraftWithFriendsModal
+            onClose={() => setFriendsModalOpen(false)}
+            onEnter={() => setFriendsModalOpen(false)}
+          />
+        )}
       </div>
     )
   }
@@ -1264,6 +1509,7 @@ export default function DraftRoom() {
           league={league}
           picks={picks}
           board={board}
+          tick={tick}
           mySlot={mySlot}
           onClock={onClock}
           overall={overall}
@@ -1599,6 +1845,11 @@ export default function DraftRoom() {
                   the segmented control above is itself lg:hidden, so
                   boardPane is meaningless at desktop width and the grid
                   must never hide because of it there. */}
+              {/* followLive: the board tracks the live pick, and stops
+                  the moment the reader scrolls it themselves. There is no
+                  crosshair on this board, which is why DraftBoardGrid
+                  re-arms following on its own once the live cell is
+                  scrolled back into view — see its own note. */}
               <div className={(boardPane === 'board' ? 'flex' : 'hidden') + ' min-h-0 flex-1 flex-col lg:flex'}>
                 <DraftBoardGrid
                   shortNameOf={engine.shortName}
@@ -1616,6 +1867,7 @@ export default function DraftRoom() {
                   trayPos={tray}
                   onTrayUp={() => moveTray(1)}
                   onTrayDown={() => moveTray(-1)}
+                  followLive
                 />
               </div>
 

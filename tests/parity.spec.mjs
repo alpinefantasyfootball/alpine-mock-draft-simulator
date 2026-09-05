@@ -93,11 +93,16 @@ async function homeAt(browser, contextOpts) {
   const rooms = await page.evaluate(() =>
     (window.JukeEngine && window.JukeEngine.rooms ? window.JukeEngine.rooms() : [])
       .map((r) => ({ name: r.name, live: !!r.live })));
-  // A way in, by destination rather than by label. #/drafts is the Lobby,
-  // which is where every "enter the Draft Room" control on this page points
-  // — see ROOMS in app.js for why it is not #/draft-room.
+  /* A way in, by destination rather than by label. #/rooms/draft is the
+     Draft Room's own entry, which is where every "start a mock" control on
+     this page points — see ROOMS in app.js for why it is not #/draft-room,
+     and DraftRoom.jsx's own draftsActive for why it moved off #/drafts
+     (that address is the drafts ARCHIVE now, which has no Start on it).
+
+     Matched by prefix rather than exactly, because the archive's own rows
+     append a ?report= id to the same route. */
   const waysIn = await page.evaluate(() =>
-    [...document.querySelectorAll('#view-home a[href="#/drafts"]')]
+    [...document.querySelectorAll('#view-home a[href^="#/rooms/draft"]')]
       .filter((a) => a.getBoundingClientRect().height > 0).length);
   await context.close();
   return { text, rooms, waysIn, joined: text.join(" · ") };
@@ -184,24 +189,57 @@ test("neither homepage contradicts the other about what Juke is", async ({ brows
    guesswork — c7f1c1b tracked down two of these against the live page
    after the daily scheduled run went red, and 20852fd's casing changes
    before it. Folding them in keeps that verification rather than
-   discarding it with the mechanism it happened to live in. */
+   discarding it with the mechanism it happened to live in.
+
+   Four lines were retired by design_handoff_v3_alive, not lost: HomeAlive
+   replaced Hero outright, so "Master the Draft. / Dominate the Season."
+   became "Know the move / before your league.", the hero's sub-copy became
+   the "Plug in your league" line, "Explore The Rooms" became a real nav
+   destination rather than a scroll link, and the footer line moved to
+   "FREE · NO ACCOUNT NEEDED · RUNS IN YOUR BROWSER". Each is REPLACED here
+   rather than deleted — a list that only ever shrinks stops being the
+   thing this test is for, which is that a page cannot quietly lose the
+   sentences it is built on. Everything below the rooms grid (TakeAPick,
+   ShowYourWorking, ClosingCta) is untouched and its copy still asserted.
+
+   The two lists still differ, and for a narrower reason than before. The
+   homepage is one responsive tree now rather than a phone launcher and a
+   desktop page, so every line in PHONE_REQUIRED is also on desktop; what
+   desktop still has that a phone does not is those three sections below,
+   which remain `hidden sm:block`. */
+
 const DESKTOP_REQUIRED = [
   "Agility Through Analytics",
-  "Master the Draft.",
-  "Dominate the Season.",
-  "Enter the Draft Room",
-  "Explore The Rooms",
-  "Test your strategy in the Draft Room completely free. Waivers, trades and week-to-week tools are in build.",
-  "Free Draft Room • No Account Needed",
-  "Open the Draft Room.",
-  "No setup, no league import. Pick your scoring and start.",
+  // HomeAlive's hero — what replaced Hero's own headline and sub-copy.
+  "Know the move",
+  "before your league.",
+  "Plug in your league from any major platform.",
+  "Keep your drafts on every device",
+  "FREE · NO ACCOUNT NEEDED · RUNS IN YOUR BROWSER",
+  /* Three lines used to sit here -- "Enter the Draft Room", "Open the
+     Draft Room." and "No setup, no league import. Pick your scoring and
+     start." -- all of them ClosingCta's. The owner has taken TakeAPick,
+     ShowYourWorking and ClosingCta off the homepage, so they are gone
+     from the page rather than lost from it.
+
+     Removed rather than replaced, which is the opposite of what the note
+     above says was done for the Hero's four. The difference is that those
+     four were REPLACED by other copy doing the same job, and these three
+     are not: nothing on the page says them any more, because that part of
+     the page is not there. All three components still exist unrendered in
+     web/src/components -- so if any comes back, its copy comes back here
+     with it. */
 ];
 
 const PHONE_REQUIRED = [
   "Agility through analytics",
+  "Know the move",
   "Mock Draft",
+  "Connect",
+  "Or draft with friends",
+  "Keep your drafts on every device",
   "The Rooms",
-  "Draft games",
+  "FREE · NO ACCOUNT NEEDED · RUNS IN YOUR BROWSER",
 ];
 
 test("each homepage carries its own agreed copy", async ({ browser }) => {

@@ -1,0 +1,160 @@
+# Ship the worker when the worker changes.
+#
+# The site deploys itself: Cloudflare Pages builds from `main` on every
+# push. The worker does not, and that gap has caused four incidents this
+# project has written down — the D1 cache that was merged and doing nothing
+# while the route answered normally; the verifyToken bug that rejected
+# every login; a window where the browser drew a linear draft while the
+# server still snaked, which reads as the room freezing; and the users-row
+# foreign key that failed every account write while the read beside it
+# answered 200. Every one of them looked like working code, because
+# "merged but not deployed" is indistinguishable from "deployed and
+# healthy" from anywhere except the thing itself.
+#
+# ---- The paths list is the part to get right ----
+#
+# `worker/**` is not sufficient and that is the whole subtlety here.
+# draft-room.js imports `../room.js`, and room.js requires
+# `./draft-engine.js` — both live at the repo root, and both are bundled
+# into the worker. draft-engine.js is also the file every browser runs.
+#
+# So a change to it that deployed the site and not the worker would leave
+# the two halves disagreeing about what is legal, which is precisely the
+# fork this project has already shipped once: picks quietly rejected from
+# round two on, presenting as a frozen room. If either of those two files
+# moves, the worker ships with it.
+#
+# ---- What this deliberately does not do ----
+#
+# **It does not apply D1 migrations.** `wrangler deploy` and
+# `wrangler d1 migrations apply --remote` are different kinds of action: a
+# bad worker deploy is rolled back from the dashboard in a click, and a bad
+# migration is a schema change on live data. Four migrations exist in this
+# project's whole life, so automating them buys little and risks a lot.
+# They stay a deliberate, manual step:
+#
+#     wrangler d1 migrations apply juke_db --remote -c worker/wrangler.toml
+#
+# **It does not touch secrets.** CLERK_SECRET_KEY, GIPHY_KEY and TANK01_KEY
+# are set with `wrangler secret put` and live in the worker's own store;
+# `wrangler deploy` leaves them alone. Nothing here can read or overwrite
+# them, which is the intended arrangement rather than a limitation.
+name: Deploy the worker
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "worker/**"
+      # Bundled into the worker from the repo root — see the note above on
+      # why leaving these out is the dangerous version of this file.
+      - "room.js"
+      - "draft-engine.js"
+      - ".github/workflows/deploy-worker.yml"
+  # For a deploy that is not a push: a secret that has just been set, a
+  # rollback, or the first run after this file lands.
+  workflow_dispatch:
+
+# One deploy at a time. Two pushes landing together would otherwise race,
+# and the loser would be whichever finished second rather than whichever
+# was newer.
+concurrency:
+  group: deploy-worker
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      # 22 for WebSocket and fetch as globals, which test-sockets.mjs needs
+      # and says so in its own header. Same pin as every other workflow here.
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: worker/package-lock.json
+
+      # wrangler bundles the worker itself, but it does not fetch what the
+      # worker imports: auth.js does `import { verifyToken } from
+      # "@clerk/backend"`, and without node_modules that is an unresolved
+      # module and the build fails outright. This is the one place in the
+      # project where the worker needs an install — the site's own build has
+      # its own, and nothing else here has a dependency at all.
+      #
+      # It went missing from the first version of this file because a local
+      # dry-run compiled perfectly: worker/node_modules was simply already
+      # there. The first real run on a clean runner is what said otherwise,
+      # which is the whole argument for the dry-run step below running
+      # before the deploy rather than after it.
+      #
+      # `npm ci`, not `npm install`: the lockfile is committed and CI should
+      # build what it pins rather than resolving a fresh tree.
+      - name: Install the worker's dependencies
+        run: npm ci --prefix worker
+
+      # Compiles the bundle without an account, which is the quickest check
+      # that it is still valid — worker/README.md names this exact command.
+      # Deliberately BEFORE the credential guard: an unconfigured repository
+      # still gets a real answer about whether the worker builds, which is
+      # most of what a pull request wants to know anyway. And deliberately
+      # before the deploy: a bundle that cannot compile must never reach a
+      # `wrangler deploy`, which is exactly what this step caught on its own
+      # first run.
+      - name: Check the bundle compiles
+        run: npx --yes wrangler@4 deploy --dry-run --outdir=/tmp/worker-build -c worker/wrangler.toml
+
+      # The secret is read into an env var and tested there rather than
+      # interpolated into the script — a secret pasted into a `run:` line is
+      # one careless `set -x` away from the log, and GitHub's masking is a
+      # safety net rather than a reason to rely on it.
+      - name: Are the credentials configured
+        id: guard
+        env:
+          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -n "$TOKEN" ] && [ -n "$ACCOUNT" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Not a failure. A fresh clone, a fork, and this repository before
+      # anybody has added the two secrets all land here, and none of them is
+      # broken — the same "answer no to a missing binding" contract store.js
+      # keeps for D1 and the two proxied keys, applied to CI. A red run on
+      # every push until somebody pastes a token is how a workflow stops
+      # being read.
+      - name: Say why nothing was deployed
+        if: steps.guard.outputs.configured != 'true'
+        run: |
+          echo "::notice title=Worker not deployed::The bundle compiles, but CLOUDFLARE_API_TOKEN and/or CLOUDFLARE_ACCOUNT_ID are not set for this repository, so there is nothing to deploy with."
+          echo "Add both under Settings -> Secrets and variables -> Actions."
+          echo "The token needs one permission: Account -> Workers Scripts -> Edit."
+          echo "Until then the worker ships by hand:  npx wrangler deploy -c worker/wrangler.toml"
+
+      - name: Deploy
+        if: steps.guard.outputs.configured == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx --yes wrangler@4 deploy -c worker/wrangler.toml
+
+      # Ask the thing itself, which is the rule this project keeps arriving
+      # at: a deploy that reported success and a worker that actually serves
+      # the new code are different claims, and every incident in the header
+      # comment above was the gap between them. 109 assertions over real
+      # sockets against the deployed worker.
+      #
+      # It runs AFTER the deploy and cannot undo one — a failure here means
+      # the new code is live and broken, which is worth being told loudly
+      # rather than worth hiding. Roll back from the Cloudflare dashboard,
+      # which keeps every previous version.
+      - name: Verify against the deployed worker
+        if: steps.guard.outputs.configured == 'true'
+        env:
+          JUKE_WORKER: wss://juke-draft-room.jukeff.workers.dev
+        run: node worker/test-sockets.mjs

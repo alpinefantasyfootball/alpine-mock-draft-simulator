@@ -236,7 +236,27 @@ check("renaming rewrites what was already said",
    Stored against a message id and reported as a count plus whether it was
    you. The count is the point; who reacted is nobody's business, because
    telling anyone would mean handing out member ids. */
-const target = lastState(bob).chat.filter((m) => !m.system)[0];
+/* Waited for, not read off whatever happened to have arrived.
+
+   This was a snapshot taken at whatever moment the previous assertion
+   finished. Locally the message is always there by then; from a GitHub
+   runner, further from the Durable Object, it sometimes is not. The check
+   below used `target?.id` and so degraded politely to a recorded failure —
+   and the next line dereferenced `target.id` unguarded and took the whole
+   suite down with a TypeError, losing a hundred passing assertions to one
+   slow message.
+
+   That is this project's own "a null-returning read needs a caller that
+   reads null" rule, in the harness rather than the app. It surfaced only
+   once the deploy workflow began running this against production from a
+   machine that is not mine. Every other wait in this file already goes
+   through until(); this was the one that did not.
+
+   The fallback id is what keeps a timeout reporting rather than crashing:
+   the reaction assertions below then fail on their own terms, in a run
+   that still gets to the end and says what else was fine. */
+const target = (await until("a stored message reaches bob",
+                            () => lastState(bob)?.chat?.filter((m) => !m.system)[0])) || { id: -1 };
 check("a stored message carries an id", typeof target?.id, "number");
 
 bob.send(JSON.stringify({ type: "react", id: target.id, emoji: "\u{1F525}" }));
@@ -426,10 +446,26 @@ check("and answers a repeat", newsAgain.status, 200);
 
 /* Only meaningful with a key configured: without one the route returns before
    it ever reaches the cache, which is correct and is why this is conditional
-   rather than an unconditional assertion that would fail on a fresh checkout. */
+   rather than an unconditional assertion that would fail on a fresh checkout.
+
+   "not miss", not "hit", and the difference is the whole point of the test.
+   There are two caches in front of the provider — the edge cache
+   (x-juke-cache: hit) and D1 (db) — and only "miss" means the provider was
+   actually called. What this exists to prove is that a player opened
+   repeatedly costs one upstream call rather than fifty, and "db" proves
+   that exactly as well as "hit" does.
+
+   Asserting "hit" held locally and failed against the deployed worker,
+   measured: miss -> db -> hit, three asks to reach the edge cache rather
+   than two, because the edge write does not land in time for the request
+   immediately behind it. That is a property of a real edge and not a
+   fault, and it matters now in a way it did not before — the deploy
+   workflow runs this suite against production after every deploy, so an
+   assertion that only holds against miniflare would have made every
+   automated deploy report red. */
 if (firstBody.configured) {
-  check("a repeated ask is served from cache",
-        newsAgain.headers.get("x-juke-cache"), "hit");
+  check("a repeated ask does not reach the provider again",
+        newsAgain.headers.get("x-juke-cache") !== "miss", true);
 }
 
 const newsOther = await fetch(`${HTTP}/news?player=CACHETEST1`,

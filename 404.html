@@ -11,22 +11,22 @@
        /a/b/c gets this page rendered *at that address* — a relative "style.css"
        would then resolve to /a/b/style.css and 404 as well, leaving an unstyled
        page as the answer to a missing one. -->
-  <script src="/theme.js?v=202609011104"></script>
+  <script src="/theme.js?v=202609050305"></script>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Gabarito:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
   <!-- Same ?v= as index.html, and bumped with it by the nightly workflow,
        which now lists this file alongside the other two. -->
-  <link rel="stylesheet" href="/style.css?v=202609011104">
+  <link rel="stylesheet" href="/style.css?v=202609050305">
 
   <!-- The SVG first, because that is what a modern tab actually draws; the
        PNGs and the .ico behind it for the ones that cannot. All absolute, per
        the rule at the top of this file. -->
-  <link rel="icon" href="/juke-favicon.svg" type="image/svg+xml">
-  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
-  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+  <link rel="icon" href="/juke-icon-tile.svg" type="image/svg+xml">
+  <link rel="icon" type="image/png" sizes="32x32" href="/juke-icon-tile-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/juke-icon-tile-16.png">
   <link rel="icon" href="/favicon.ico" sizes="any">
 
   <style>
@@ -75,9 +75,9 @@
        two of them and a swap, rather than one that is invisible under one
        theme. Dark is the default because :root is. */
     .nf-mark { width: 86px; height: 54px; }
-    .nf-mark-light { display: none; }
-    :root[data-theme="light"] .nf-mark-dark  { display: none; }
-    :root[data-theme="light"] .nf-mark-light { display: inline-block; }
+    /* No dark/light pair any more: design package 02's mark carries its own
+       negatives (#1A222D, not a canvas colour) and reads on either ground, so
+       one <img> replaces the two that used to swap on [data-theme]. */
   </style>
 </head>
 <body>
@@ -93,8 +93,7 @@
 
          Absolute paths, per the rule at the top: this page is served at
          whatever address missed. -->
-    <img class="nf-mark nf-mark-dark"  src="/juke-mark.svg"       width="86" height="54" alt="" aria-hidden="true">
-    <img class="nf-mark nf-mark-light" src="/juke-mark-light.svg" width="86" height="54" alt="" aria-hidden="true">
+    <img class="nf-mark" src="/juke-shark-mark.svg" width="86" height="54" alt="" aria-hidden="true">
 
     <span class="nf-code">404</span>
     <h1>There is nothing at this address</h1>
@@ -103,7 +102,12 @@
 
     <div class="nf-acts">
       <a class="nf-go" href="/">Go to Juke</a>
-      <a class="nf-alt" href="/#/draft">Open the Draft Room</a>
+      <!-- #/drafts, not #/draft. The latter is the retired route: applyRoute()
+           still redirects it, so this link "worked", but it worked by landing
+           on a redirect written for old bookmarks rather than by pointing at
+           the room. The one page whose entire job is recovering from a bad
+           address should not itself carry one. -->
+      <a class="nf-alt" href="/#/drafts">Open the Draft Room</a>
     </div>
   </main>
 

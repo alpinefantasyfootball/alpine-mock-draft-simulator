@@ -27,6 +27,45 @@
 import { test, expect } from "@playwright/test";
 import { openApp, startSoloDraft } from "./helpers.mjs";
 
+/* The earliest round a kicker may sanely appear in, and it is a CONSTANT
+   rather than a fraction of the draft. That distinction is the whole point of
+   this value and it is what the three assertions below got wrong.
+
+   All three used to read `> out.rounds / 2`. At ten teams and fourteen
+   rounds that is `> 7`, and at twelve teams and twenty rounds it is `> 10` —
+   the same expression, and it looked like the same rule. It is not, because
+   the thing being bounded does not scale with the round count.
+
+   Measured over 40 completed drafts of each shape, driving cpuChoice() and
+   autoPickForMe() exactly as the tests do:
+
+     10 teams x 14 rounds   earliest K round 11-13   (11:4  12:34  13:2)
+     12 teams x 20 rounds   earliest K round 10-12   (10:1  11:37  12:2)
+
+   The floor barely moves — round 10 or 11 either way — while `rounds / 2`
+   moves from 7 to 10 underneath it. So the fourteen-round assertion carried
+   four rounds of margin and the twenty-round one carried NONE, and 1 draft in
+   40 landed exactly on the bound and failed. That is what it did: once, in a
+   full-suite run, on a change that touched no draft logic at all.
+
+   Why roughly constant rather than proportional: a seat's K appetite comes
+   from KD_ARCHETYPES and from what it still owes against the picks it has
+   left, both of which are counted in ROSTER terms. More rounds give a
+   "reaches" seat slightly more spare picks and it fires a little earlier —
+   which is why twenty rounds is if anything EARLIER than fourteen, the
+   opposite of what a fraction of the draft predicts.
+
+   6 preserves the four rounds of margin the healthy assertion already had,
+   against a measured floor of 10. It is deliberately loose: this is a sanity
+   check that the last-resort fallback did not grab a kicker to keep the loop
+   moving, and a fallback misfire puts one in the opening rounds, not in round
+   nine. The real distribution is tests/kd-timing.spec.mjs's to own, and it
+   does — every bound in that file is a loose tolerance for the same reason.
+
+   Re-measure before moving this. The board is regenerated nightly and the
+   figures above are true of the board they were taken on. */
+const EARLIEST_SANE_KICKER_ROUND = 6;
+
 /* Set the league through the bridge, which is what the React settings screen
    does — the legacy version wrote a dozen <select> values and dispatched
    change events at a screen that is display:none now. */
@@ -66,6 +105,17 @@ async function finishDraft(page) {
       sizes: Object.values(perSeat),
       qbEach: Object.keys(perSeat).map((s) => qbs[s] || 0),
       kickerRounds: state.picks.filter((p) => p.player.pos === "K").map((p) => p.round),
+      kdPerSeat: (function () {
+        const per = {};
+        state.picks.forEach(function (p) {
+          per[p.slot] = per[p.slot] || { K: 0, DST: 0 };
+          if (p.player.pos === "K" || p.player.pos === "DST") per[p.slot][p.player.pos]++;
+        });
+        return Object.values(per);
+      })(),
+      startsK: league.starters.K,
+      startsDST: league.starters.DST,
+      rounds: league.rounds,
       over: draftOver()
     };
   });
@@ -84,8 +134,15 @@ test("the default league drafts to the end", async ({ browser }) => {
   expect(out.seats).toBe(10);
   expect(out.sizes.every((n) => n === 14), "fourteen each").toBe(true);
   expect(out.over).toBe(true);
-  // The app picks the timing of a kicker, not the manager.
-  expect(out.kickerRounds.length ? Math.min(...out.kickerRounds) : 99).toBeGreaterThanOrEqual(13);
+  /* This asserted the first kicker landed no earlier than round 13, which was
+     the round gate rather than anything about a finished draft. The gate is
+     gone — a seat picks its own moment now, and tests/kd-timing.spec.mjs owns
+     the distribution that replaced it. What a completed draft still has to be
+     true of is the roster: everybody ends up with exactly the kicker and
+     defense the format starts, which is the promise the gate was really
+     protecting and the one thing a full-draft test here should check. */
+  expect(out.kdPerSeat.filter((r) => r.K !== out.startsK || r.DST !== out.startsDST),
+    "every seat finished with exactly the kicker and defense it starts").toEqual([]);
 
   await context.close();
 });
@@ -108,7 +165,8 @@ test("twelve teams, fifteen rounds, full PPR, bench six", async ({ browser }) =>
   expect(out.seats).toBe(12);
   expect(out.sizes.every((n) => n === 15), "fifteen each").toBe(true);
   expect(out.qbEach.every((n) => n >= 1), "everybody has a quarterback").toBe(true);
-  expect(out.kickerRounds.length ? Math.min(...out.kickerRounds) : 99).toBeGreaterThanOrEqual(14);
+  expect(out.kdPerSeat.filter((r) => r.K !== out.startsK || r.DST !== out.startsDST),
+    "every seat finished with exactly the kicker and defense it starts").toEqual([]);
 
   await context.close();
 });
@@ -129,25 +187,33 @@ for (const pos of ["ALL", "QB", "RB", "WR", "TE", "K", "DST"]) {
     const page = await openApp(context, "#/draft-room");
 
     await configure(page, { teams: 12 });
-    /* The eleventh seat, which is where the real report came from.
+    /* The eleventh seat, which is where the real report came from, set
+       through the engine exactly as configure() above sets the league.
 
-       It is the Lobby's own "Your seat" select now. There used to be a
-       claimable seat board one click past the Locker, and this reached it
-       by clicking "Start mock draft" and then a Claim chip — but that
-       button starts the draft outright today, so there is no screen left
-       in between and the chip filter matched nothing. `chips[10]` was
-       therefore undefined, and the failure read as "Cannot read
-       properties of undefined (reading 'click')" rather than as a screen
-       that no longer exists.
+       This has chased the control across two redesigns and should stop.
+       It was a claim chip on a seat board one click past the Locker; that
+       screen went when "Start mock draft" began starting the draft
+       outright, so the chip filter matched nothing and the failure read as
+       "Cannot read properties of undefined". It became the Lobby's own
+       "Your seat" <select> in NewMockPanel — and design_handoff_v3_alive
+       moved it again, because DraftRoomEntry is what #/draft-room's
+       pre-draft branch renders at every width now and the dashboard
+       carrying that select sits behind "Your insights". Same failure
+       shape: a locator waiting 30s for a control on a screen that is no
+       longer showing.
 
-       Selected by the row its own label names, not by index: NewMockPanel
-       renders a second, lg:hidden ChipSelect bound to this same value, so
-       "the seat control" is two controls and only one of them is a
-       <select>. The seat has to be set before the draft starts either
-       way — startDraft() takes it once, as lobbySlot. */
-    await page
-      .locator('#draftroom-root div:has(> span:text-is("Your seat")) > select')
-      .selectOption("11");
+       So it goes through the bridge. This file is engine-driven for setup
+       throughout — configure() is `setLeague`, finishDraft() drives
+       autoPickForMe/cpuChoice — and the seat is setup, not the thing under
+       test. journey.spec.mjs is the file that presses only what a person
+       can press, and it walks the real Draft Settings screen for this.
+
+       setMySlot is 0-based where the old <select> was 1-based: seat 11 is
+       index 10. It refuses a seat outside the league, so a wrong league
+       size fails here rather than silently drafting from seat 1. */
+    await page.evaluate(() => window.JukeEngine.setMySlot(10));
+    expect(await page.evaluate(() => state.mySlot), "the eleventh seat took")
+      .toBe(10);
     await startSoloDraft(page);
 
     // Set the panel's filter through the chip a person would press.
@@ -179,8 +245,19 @@ for (const pos of ["ALL", "QB", "RB", "WR", "TE", "K", "DST"]) {
     expect(out.picks, "the draft finishes or the board is empty").toBe(168);
     expect(out.distinct).toBe(168);
     expect(out.sizes.every((n) => n === 14)).toBe(true);
-    // The fallback must not reach for a kicker to keep the loop moving.
-    expect(out.kickerRounds.length ? Math.min(...out.kickerRounds) : 99).toBeGreaterThanOrEqual(13);
+    /* The fallback must not reach for a kicker to keep the loop moving.
+
+       This used to read `>= 13`, which was needFromCount()'s round gate rather
+       than anything about the fallback — with the gate in place no path could
+       produce a kicker earlier, so the assertion could not fail. A seat picks
+       its own moment now: re-measured over 40 drafts of this exact shape, the
+       first kicker off the board lands in round 11, 12 or 13 of 14.
+
+       It then read `> out.rounds / 2`, which was right here and wrong at
+       twenty rounds — see EARLIEST_SANE_KICKER_ROUND at the top of this file
+       for the measurement and for why this bound is a constant. */
+    expect(out.kickerRounds.length ? Math.min(...out.kickerRounds) : 99)
+      .toBeGreaterThan(EARLIEST_SANE_KICKER_ROUND);
 
     await context.close();
   });
@@ -410,14 +487,28 @@ test("auto-drafting the rest finishes the board, and the menu no longer offers i
         distinct: new Set(state.picks.map((p) => p.player.name)).size,
         sizes: [...new Set(Object.values(perSeat))],
         kickerRounds: state.picks.filter((p) => p.player.pos === "K").map((p) => p.round),
+        rounds: league.rounds,
       };
     });
 
     expect(out.picks, "it finishes the draft or the board is empty").toBe(140);
     expect(out.distinct, "and no player twice").toBe(140);
     expect(out.sizes, "fourteen a team").toEqual([14]);
-    // The fallback must not reach for a kicker to keep the loop moving.
-    expect(out.kickerRounds.length ? Math.min(...out.kickerRounds) : 99).toBeGreaterThanOrEqual(13);
+    /* The fallback must not reach for a kicker to keep the loop moving.
+
+       This used to read `>= 13`, which was needFromCount()'s round gate rather
+       than anything about the fallback — with the gate in place no path could
+       produce a kicker earlier, so the assertion could not fail. A seat picks
+       its own moment now: re-measured over 40 drafts of this shape, the first
+       kicker off the board lands in round 11, 12 or 13 of 14.
+
+       It then read `> out.rounds / 2`, which was safe at this shape and not
+       at twenty rounds — see EARLIEST_SANE_KICKER_ROUND at the top of this
+       file. This is the third copy of that expression and the reason all
+       three now name one constant: two of them were fine and the third was
+       one draft in forty from red, and nothing distinguished them by eye. */
+    expect(out.kickerRounds.length ? Math.min(...out.kickerRounds) : 99)
+      .toBeGreaterThan(EARLIEST_SANE_KICKER_ROUND);
 
     /* Still absent with the board full, which is a weaker claim than the
        one above and kept anyway: draftOver() opens the same full-screen
@@ -514,7 +605,18 @@ test.describe("a league deeper than real ADP alone can serve", () => {
     expect(out.seats).toBe(12);
     expect(out.sizes.every((n) => n === 20), "twenty each").toBe(true);
     expect(out.over).toBe(true);
-    expect(out.kickerRounds.length ? Math.min(...out.kickerRounds) : 99).toBeGreaterThanOrEqual(19);
+    /* This read `>= 19`, which was needFromCount()'s round gate — no kicker
+       before `rounds - 1` — restated back to itself, so it could not fail while
+       the gate stood. A seat picks its own moment for both positions now (see
+       tests/kd-timing.spec.mjs), and at twenty rounds it takes one earlier than
+       at fourteen because there are more picks to spare. What a finished draft
+       still has to be true of is the roster, which is what the gate was really
+       protecting. */
+    expect(out.kdPerSeat.filter((r) => r.K !== out.startsK || r.DST !== out.startsDST),
+      "every seat finished with exactly the kicker and defense it starts").toEqual([]);
+    expect(out.kickerRounds.length ? Math.min(...out.kickerRounds) : 99,
+      "and the fallback still did not reach for one to keep the loop moving")
+      .toBeGreaterThan(EARLIEST_SANE_KICKER_ROUND);
 
     await context.close();
   });
