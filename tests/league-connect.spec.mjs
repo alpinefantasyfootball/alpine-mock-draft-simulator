@@ -33,7 +33,7 @@
    the real components underneath. */
 
 import { test, expect } from "@playwright/test";
-import { openApp } from "./helpers.mjs";
+import { openApp, SITE } from "./helpers.mjs";
 
 const LEAGUE = { leagueId: "lg1", name: "Dynasty Degens", season: "2026", totalTeams: 12 };
 
@@ -67,11 +67,23 @@ test.describe("a connected league", () => {
        under every connect control on the site — four platforms, named as a
        list of equals, with one built. The replacement says which is which,
        and it is one shared constant so it cannot drift back into a claim in
-       six places at once. */
+       six places at once.
+
+       Asserted as a property rather than as the caption's exact words,
+       because those words move every time a platform ships: this went from
+       "Sleeper now · ESPN, Yahoo, CBS soon" to "Sleeper and ESPN now ·
+       Yahoo, CBS soon" the day ESPN landed, and a literal here would have
+       gone red for the feature working. What must stay true is the split —
+       something is named as available and something as not — and that the
+       undifferentiated list never comes back. */
     const body = await text(page);
     expect(body).not.toContain("Sleeper · ESPN · Yahoo · CBS");
     expect(body).not.toContain("Sleeper, ESPN, Yahoo or CBS");
-    expect(body).toContain("Sleeper now");
+    expect(body, "says what is available now").toMatch(/\bnow\b/);
+    expect(body, "and what is not yet").toMatch(/\bsoon\b/);
+    /* Sleeper is on the live side of that split, and naming it here is what
+       stops the caption degrading into "· soon" with nothing before it. */
+    expect(body).toMatch(/Sleeper[^·]*\bnow\b/);
 
     await page.close();
   });
@@ -94,7 +106,7 @@ test.describe("a connected league", () => {
   test("with a league connected, the site stops asking for one", async ({ context }) => {
     const page = await context.newPage();
     await stubAccount(page, [LEAGUE]);
-    await page.goto(`${(await import("./helpers.mjs")).SITE}/index.html#/rooms`);
+    await page.goto(`${SITE}/index.html#/rooms`);
     await page.waitForSelector("#view-home h1");
     // The lobby reads the league through useLeague(), which resolves a tick
     // after mount — wait for the answer rather than for a duration.
@@ -132,7 +144,7 @@ test.describe("a connected league", () => {
   test("the homepage names the league instead of advertising a connect", async ({ context }) => {
     const page = await context.newPage();
     await stubAccount(page, [LEAGUE]);
-    await page.goto(`${(await import("./helpers.mjs")).SITE}/index.html#/`);
+    await page.goto(`${SITE}/index.html#/`);
     await page.waitForSelector("#view-home h1");
     await page.waitForFunction(
       () => document.getElementById("view-home").innerText.includes("Dynasty Degens"),
@@ -145,6 +157,183 @@ test.describe("a connected league", () => {
     // list of four platforms under it, whether or not one was connected.
     expect(body).toContain("YOUR LEAGUE");
     expect(body).toContain("Connected · read-only");
+
+    await page.close();
+  });
+});
+
+/* ---- Switching between connected leagues ----
+
+   `connected_leagues` has been keyed (clerk_id, provider, league_id) since
+   0005 and listLeagues() has always returned every row; useLeague() took
+   `[0]` and nothing could reach the rest. Reported by somebody wanting to
+   beta-test a real ESPN league alongside a Sleeper test league.
+
+   ---- What these can and cannot reach ----
+
+   LeagueSwitcher (the header menu) and the You screen's list both sit
+   inside Clerk's <SignedIn>, so a keyless build renders neither — the same
+   gap this file's own header note describes for the connect dialog, and
+   the reason those two were driven by hand.
+
+   What IS reachable is the contract underneath both of them, which is
+   where the bug actually lived: the active league is the HEAD of the list,
+   and every surface reads it from one shared place. A menu that switched a
+   league without that would move a highlight and change nothing. */
+
+/* The stub above, with a `selectLeague` that behaves like the worker: PATCH
+   answers the whole list back, reordered most-recently-selected first. Kept
+   beside stubAccount rather than folded into it, so the tests that never
+   switch keep the smaller fixture. */
+function stubSwitchable(page, rows) {
+  return page.addInitScript((seed) => {
+    window.JukeAuth = { isSignedIn: true, userId: "u1", getToken: () => Promise.resolve("t") };
+    let order = seed.slice();
+    const install = () => {
+      const L = window.Live || (window.Live = {});
+      L.listLeagues = () => Promise.resolve({ ok: true, leagues: order.slice() });
+      L.selectLeague = (token, leagueId, provider) => {
+        const hit = order.find((l) => l.leagueId === leagueId && l.provider === provider);
+        if (!hit) return Promise.resolve({ ok: false, reason: "not-connected", leagues: [] });
+        // What 0006's ORDER BY does, in one line.
+        order = [hit].concat(order.filter((l) => l !== hit));
+        return Promise.resolve({ ok: true, leagues: order.slice() });
+      };
+    };
+    install();
+    window.addEventListener("juke:data-loaded", install);
+    document.addEventListener("DOMContentLoaded", install);
+  }, rows);
+}
+
+const SLEEPER_LG = {
+  provider: "sleeper", leagueId: "L1", name: "Sleeper Test", season: "2026", totalTeams: 10,
+};
+const ESPN_LG = {
+  provider: "espn", leagueId: "L2", name: "Real ESPN League", season: "2026", totalTeams: 12,
+};
+
+const home = (page) => page.goto(SITE + "/index.html#/");
+const named = (name) => () =>
+  document.getElementById("view-home").innerText.includes(name);
+
+test.describe("more than one connected league", () => {
+  test("the app draws the head of the list", async ({ context }) => {
+    const page = await context.newPage();
+    await stubSwitchable(page, [ESPN_LG, SLEEPER_LG]);
+    await home(page);
+    await page.waitForSelector("#view-home h1");
+    await page.waitForFunction(named("Real ESPN League"), null, { timeout: 15000 });
+
+    const body = await page.locator("#view-home").innerText();
+    /* Two leagues connected and exactly one named. WHICH one is the whole
+       assertion: the head. A build reading the last entry — or the
+       most-recently-CONNECTED rather than the most-recently-SELECTED —
+       names the other one and fails here. */
+    expect(body, "the active league is named").toContain("Real ESPN League");
+    expect(body, "and the other one is not").not.toContain("Sleeper Test");
+
+    await page.close();
+  });
+
+  test("switching moves the head, and the page follows", async ({ context }) => {
+    const page = await context.newPage();
+    await stubSwitchable(page, [ESPN_LG, SLEEPER_LG]);
+    await home(page);
+    await page.waitForSelector("#view-home h1");
+    await page.waitForFunction(named("Real ESPN League"), null, { timeout: 15000 });
+
+    /* Driving Live.selectLeague rather than the menu, because the menu is
+       behind Clerk. What this proves is the half the menu depends on and
+       cannot fake: the worker's new order becomes the shared state and
+       every surface repaints from it.
+
+       `juke:league` is the announcement useLeague() listens for — the
+       channel anything outside the React tree uses to say the answer
+       changed. */
+    await page.evaluate(async () => {
+      await window.Live.selectLeague("t", "L1", "sleeper");
+      window.dispatchEvent(new Event("juke:league"));
+    });
+    await page.waitForFunction(named("Sleeper Test"), null, { timeout: 15000 });
+
+    const body = await page.locator("#view-home").innerText();
+    expect(body, "the switched-to league is named").toContain("Sleeper Test");
+    expect(body, "and the one it replaced is not").not.toContain("Real ESPN League");
+
+    await page.close();
+  });
+
+  test("a switch made on another device arrives here", async ({ context }) => {
+    const page = await context.newPage();
+    await stubSwitchable(page, [ESPN_LG, SLEEPER_LG]);
+    await home(page);
+    await page.waitForSelector("#view-home h1");
+    await page.waitForFunction(named("Real ESPN League"), null, { timeout: 15000 });
+
+    /* Why the active league is a column in D1 rather than a localStorage
+       key: it has to follow somebody to their phone, which is the same
+       argument useLeague() already makes about the connection itself. So a
+       switch made elsewhere arrives on the next read, with nothing local
+       overriding it.
+
+       Simulated by reordering the server's answer without this page having
+       touched anything. A device-local active league passes every other
+       test in this block and fails this one. */
+    await page.evaluate(() => {
+      const listed = window.Live.listLeagues;
+      window.Live.listLeagues = () =>
+        listed("t").then((res) => ({ ok: true, leagues: res.leagues.slice().reverse() }));
+      window.dispatchEvent(new Event("juke:league"));
+    });
+    await page.waitForFunction(named("Sleeper Test"), null, { timeout: 15000 });
+
+    const body = await page.locator("#view-home").innerText();
+    expect(body, "the other device's choice won").toContain("Sleeper Test");
+    expect(body, "and this one let go of its own").not.toContain("Real ESPN League");
+
+    await page.close();
+  });
+
+  test("Live.selectLeague sends a PATCH, and tells a refusal from an outage", async ({ context }) => {
+    const page = await context.newPage();
+    await stubAccount(page, [SLEEPER_LG]);
+    await home(page);
+    await page.waitForSelector("#view-home h1");
+    // live.js is deferred. This waits for the REAL selectLeague — stubAccount
+    // replaces only listLeagues, so what is exercised below is live.js's own.
+    await page.waitForFunction(
+      () => window.Live && window.Live.selectLeague,
+      null,
+      { timeout: 15000 },
+    );
+
+    const seen = [];
+    await page.route("**/me/leagues", async (route) => {
+      seen.push({ method: route.request().method(), body: route.request().postData() });
+      // The worker's answer for "this account has not connected that
+      // league": selectLeague()'s WHERE is scoped by clerk_id, so nothing
+      // matched. 409 rather than 404 — the league may well exist.
+      await route.fulfill({
+        status: 409,
+        contentType: "application/json",
+        headers: { "access-control-allow-origin": "*" },
+        body: JSON.stringify({ ok: false, error: "not-connected" }),
+      });
+    });
+
+    const refused = await page.evaluate(() => window.Live.selectLeague("t", "L9", "espn"));
+
+    expect(seen.length, "one request").toBe(1);
+    expect(seen[0].method, "PATCH — switching connects nothing and fetches nothing").toBe("PATCH");
+    expect(JSON.parse(seen[0].body)).toEqual({ leagueId: "L9", provider: "espn" });
+
+    /* Told apart from an outage on purpose, the same way the connect flow
+       tells not-found from offline: a refusal wants a re-read and an outage
+       wants a retry, and collapsing them means telling somebody their
+       league is gone because the worker blinked. */
+    expect(refused.ok).toBe(false);
+    expect(refused.reason).toBe("not-connected");
 
     await page.close();
   });

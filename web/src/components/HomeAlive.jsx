@@ -4,7 +4,7 @@ import KickoffPill from './shell/KickoffPill.jsx'
 import RoomsGridAlive from './RoomsGridAlive.jsx'
 import { useAccountUiReady } from '../hooks/useAccountUiReady.js'
 import { useLeague } from '../hooks/useLeague.js'
-import { LINE as PLATFORM_LINE } from './shell/leaguePlatforms.js'
+import { LINE as PLATFORM_LINE, LIVE_NAMES as PLATFORM_NAMES } from './shell/leaguePlatforms.js'
 
 /* The homepage above the fold — design_handoff_v3_alive 2ag/3ag.
 
@@ -207,8 +207,8 @@ function AccountCard() {
         Keep your drafts on every device
       </div>
       <p className="mb-3.5 mt-1.5 text-[14px] leading-[1.5] text-voidInk-body sm:mb-[18px] sm:mt-2 sm:text-[15px]">
-        An account saves your mocks and unlocks league connect — Sleeper today, more to come.
-        Mocks still run fine without one.
+        An account saves your mocks and unlocks league connect — {PLATFORM_NAMES} today, more
+        to come. Mocks still run fine without one.
       </p>
       <div className="flex gap-2 sm:gap-2.5">
         {ready ? (

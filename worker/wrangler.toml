@@ -51,22 +51,30 @@ migrations_dir = "migrations"
 binding = "MEDIA"
 bucket_name = "juke-chat-media"
 
-# The pool sync is NOT scheduled yet, deliberately, and this comment is the
-# note explaining why rather than a leftover.
+# The pool sync, armed — and this comment is the note it asked for.
 #
-#   [triggers]
-#   crons = ["30 11 * * *"]
+# It stayed commented out because "nothing reads the players table yet ...
+# uncomment it in the change that adds the first consumer, so the cost and
+# the thing paying for it land together". ESPN is that consumer:
+# resolveSleeperIds() joins an ESPN roster to Sleeper ids through this
+# table, and without a filled pool a connected ESPN league renders ten
+# empty rosters.
 #
-# Half past, when it is turned on, because scripts/build_players.py runs at
-# 11:00 UTC and there is no reason for the two to fetch Sleeper in the same
-# minute. They are independent — this one failing does not touch the
-# generated files.
+# Half past, because scripts/build_players.py runs at 11:00 UTC and there is
+# no reason for the two to fetch Sleeper in the same minute. They are
+# independent — this one failing does not touch the generated files.
 #
-# It stays commented because **nothing reads the players table yet.** Arming
-# it today buys a nightly 5MB fetch, a full parse and ~11,000 upserts to fill
-# a cache with no reader, and that parse is the one thing in this worker most
-# likely to trip a CPU limit. Uncomment it in the change that adds the first
-# consumer, so the cost and the thing paying for it land together.
+# The cost is what that note said it was: a nightly 5MB fetch, a full parse
+# and ~4,400 upserts (the pool is filtered to fantasy positions, so it is not
+# the ~11,000 the note estimated). The parse is still the thing in this
+# worker most likely to trip a CPU limit, and syncPlayerPool() logs rather
+# than throws for that reason.
+#
+# A fresh deployment does not wait for it: espnSnapshotRoute() fills the pool
+# off the response path the first time it finds it empty, so the feature
+# heals within a couple of minutes rather than at 11:30 tomorrow.
+[triggers]
+crons = ["30 11 * * *"]
 
 # The site stays on GitHub Pages. This worker is only the room, so the
 # static app keeps working with no backend at all — which is the point:

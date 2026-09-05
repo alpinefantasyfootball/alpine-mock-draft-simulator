@@ -1,8 +1,9 @@
 import { forwardRef, useImperativeHandle, useRef, useState } from 'react'
 import { X, Check, Lock } from 'lucide-react'
-import { PLATFORMS } from './leaguePlatforms.js'
+import { PLATFORMS, LIVE_PLATFORMS } from './leaguePlatforms.js'
 
-/* Connect a league: which platform, then a username, then which league.
+/* Connect a league: which platform, then one identifying thing, then which
+   of the results is yours.
 
    ---- The platform step exists because the site claims four ----
 
@@ -13,18 +14,35 @@ import { PLATFORMS } from './leaguePlatforms.js'
    for, and it is exactly that — the reader is told the product reads their
    ESPN league and then asked for a credential from somewhere else.
 
-   So the platform is chosen, all four are listed, and the three that are
+   So the platform is chosen, all four are listed, and the ones that are
    not built are visibly locked rather than absent. See leaguePlatforms.js
    for why they are listed at all.
 
-   **The step is not skipped when only one platform is live.** It is one
-   press, and what it buys is that nobody is ever asked for a Sleeper
-   username without having said "Sleeper" first — which is the whole
-   complaint. It also stops being a step nobody notices the day a second
-   platform ships, rather than being a screen somebody has to remember to
-   add back.
+   **The step was kept when only one platform was live**, on the argument
+   that it "stops being a step nobody notices the day a second platform
+   ships, rather than being a screen somebody has to remember to add back".
+   ESPN is that day, and the step needed no change at all — which is the
+   cheapest possible confirmation that keeping it was right.
 
-   ---- Why a username and not a login ----
+   ---- Two platforms, two different middles, one ending ----
+
+   Sleeper: who are you → here are your leagues → pick one.
+   ESPN:    which league → here are its teams → pick yours.
+
+   They are not the same question and the dialog does not pretend they are.
+   ESPN publishes nothing that maps a person to their leagues, so there is
+   no username step to be had; and having resolved the league it still has
+   to ask which team is the reader's, because there is no account to infer
+   it from and every screen saying "your roster" needs the answer.
+
+   What they share is the shape — one field, then one list — which is why
+   this is one component with `isEspn` branches rather than two dialogs.
+   Two dialogs would drift the first time the confirmation copy changed.
+
+   ---- Why a username or an id, and never a login ----
+
+   Neither platform is asked for a password, and in both cases that is a
+   property of the API rather than a policy this file keeps.
 
    Sleeper's public API needs no key and has no OAuth, and it has no write
    endpoints at all. A username is enough to read the leagues behind it,
@@ -52,17 +70,30 @@ import { PLATFORMS } from './leaguePlatforms.js'
    different things from the reader — retype versus retry — so live.js
    reports `not-found` separately from `offline` and this says the
    different thing. Collapsing them is how a form tells somebody their name
-   is wrong when the network is down. */
+   is wrong when the network is down.
+
+   ESPN adds a third, and it is the one that most needs saying: `private`
+   means the league exists and its owner has not made it viewable. That is
+   the only failure in this dialog with a fix the reader can carry out, so
+   it names the fix — League Settings, visibility — rather than reporting
+   that the number did not work, which would send them to re-check a number
+   that was right. */
 
 const ConnectLeagueModal = forwardRef(function ConnectLeagueModal({ onConnected }, ref) {
   const dialogRef = useRef(null)
   const [username, setUsername] = useState('')
-  // platform | idle | looking | picking | connecting | done | not-found | error
+  // platform | idle | looking | picking | connecting | done
+  // | not-found | private | error
   const [status, setStatus] = useState('platform')
   const [platform, setPlatform] = useState(null)
   const [leagues, setLeagues] = useState([])
   const [sleeperUser, setSleeperUser] = useState(null)
   const [chosen, setChosen] = useState(null)
+  /* ESPN resolves ONE league from the id, and then asks a question Sleeper
+     never has to: which of these teams is yours. There is no account here
+     to infer it from, and without it every screen that says "your roster"
+     has nothing to key on. */
+  const [espnLeague, setEspnLeague] = useState(null)
 
   useImperativeHandle(ref, () => ({
     open() {
@@ -70,6 +101,7 @@ const ConnectLeagueModal = forwardRef(function ConnectLeagueModal({ onConnected 
       setLeagues([])
       setSleeperUser(null)
       setChosen(null)
+      setEspnLeague(null)
       setPlatform(null)
       // Always the first step, never the one it was left on: this dialog
       // is one element reused for every open, which is the same reason
@@ -88,14 +120,38 @@ const ConnectLeagueModal = forwardRef(function ConnectLeagueModal({ onConnected 
     return auth && auth.getToken ? auth.getToken() : Promise.resolve(null)
   }
 
+  const isEspn = platform && platform.key === 'espn'
+
+  /* One field, two questions.
+
+     Sleeper asks who you are and answers with your leagues. ESPN has no
+     such lookup at all — it addresses a league by the number in its own
+     URL — so the same input takes a league id and answers with one league
+     and its teams. Both then converge on "pick one", which is why this is
+     one step rather than two flows drawn side by side. */
   const lookup = async (e) => {
     e.preventDefault()
-    const name = username.trim()
-    if (!name) return
+    const typed = username.trim()
+    if (!typed) return
     setStatus('looking')
-
     const l = live()
-    const res = l && l.sleeperLookup ? await l.sleeperLookup(name) : { ok: false, reason: 'offline' }
+
+    if (isEspn) {
+      const res = l && l.espnLookup ? await l.espnLookup(typed) : { ok: false, reason: 'offline' }
+      if (!res.ok) {
+        // Three different things to tell somebody, and only one of them is
+        // "check the number" — see worker/espn.js for what ESPN answers.
+        setStatus(res.reason === 'private' ? 'private'
+                : res.reason === 'not-found' ? 'not-found'
+                : 'error')
+        return
+      }
+      setEspnLeague(res.league)
+      setStatus('picking')
+      return
+    }
+
+    const res = l && l.sleeperLookup ? await l.sleeperLookup(typed) : { ok: false, reason: 'offline' }
     if (!res.ok) {
       setStatus(res.reason === 'not-found' ? 'not-found' : 'error')
       return
@@ -111,12 +167,20 @@ const ConnectLeagueModal = forwardRef(function ConnectLeagueModal({ onConnected 
     if (!chosen) return
     setStatus('connecting')
     const l = live()
+    /* What identifies the reader inside the league differs by platform:
+       Sleeper knows them from the username lookup, ESPN only from the team
+       they just picked. Both land in the same `ownerId` column, because
+       both answer the same question — which of these rosters is theirs. */
     const res = l && l.connectLeague
-      ? await l.connectLeague(await token(), chosen.leagueId, sleeperUser && sleeperUser.userId)
+      ? isEspn
+        ? await l.connectLeague(await token(), espnLeague.leagueId, chosen.teamId, 'espn')
+        : await l.connectLeague(await token(), chosen.leagueId, sleeperUser && sleeperUser.userId, 'sleeper')
       : { ok: false, reason: 'offline' }
 
     if (!res.ok) {
-      setStatus('error')
+      // A league that stopped being public between the lookup and the
+      // connect is worth naming rather than reporting as a generic failure.
+      setStatus(res.reason === 'private' ? 'private' : 'error')
       return
     }
     setStatus('done')
@@ -124,6 +188,13 @@ const ConnectLeagueModal = forwardRef(function ConnectLeagueModal({ onConnected 
     // Long enough to read the confirmation, short enough not to be a wait.
     setTimeout(() => close(), 900)
   }
+
+  /* The picking step renders one list. Sleeper fills it with leagues and
+     ESPN with the chosen league's teams — different things to choose, the
+     same question being asked, so one renderer rather than two lists side
+     by side that drift the first time a row gains a field. */
+  const rows = isEspn ? (espnLeague ? espnLeague.teams : []) : leagues
+  const rowKey = (r) => (isEspn ? r.teamId : r.leagueId)
 
   const label = 'font-mono text-[11px] tracking-[0.14em] text-teal'
 
@@ -145,8 +216,12 @@ const ConnectLeagueModal = forwardRef(function ConnectLeagueModal({ onConnected 
               {status === 'platform'
                 ? 'Where is your league?'
                 : status === 'picking' || status === 'connecting' || status === 'done'
-                  ? 'Which league?'
-                  : `Your ${platform ? platform.name : 'Sleeper'} username`}
+                  // ESPN has already resolved the league; what is being
+                  // chosen at this step is which team in it is yours.
+                  ? (isEspn ? 'Which team is yours?' : 'Which league?')
+                  : isEspn
+                    ? 'Your ESPN league ID'
+                    : `Your ${platform ? platform.name : 'Sleeper'} username`}
             </h3>
           </div>
           <button
@@ -199,12 +274,22 @@ const ConnectLeagueModal = forwardRef(function ConnectLeagueModal({ onConnected 
             </ul>
 
             {/* Said once, plainly, rather than left for somebody to infer
-                from three dimmed rows. The locked platforms carry no
-                "soon" badge of their own for the reason the sport chips
-                do not either: a lock says "not this one" and a badge says
-                "we have committed to a date". */}
+                from the dimmed rows. The locked platforms carry no "soon"
+                badge of their own for the reason the sport chips do not
+                either: a lock says "not this one" and a badge says "we have
+                committed to a date".
+
+                Derived, because the hand-written version of this sentence
+                read "Sleeper is the one Juke reads today" and was still
+                saying it the moment ESPN shipped — the stale-copy failure
+                this project keeps finding, in the dialog whose whole job is
+                to be accurate about which platforms work. */}
             <p className="mt-3.5 text-[13px] leading-[1.4] text-voidInk-body">
-              Sleeper is the one Juke reads today. The others are not connected yet.
+              {LIVE_PLATFORMS.length === PLATFORMS.length
+                ? 'Juke reads all of these.'
+                : `${LIVE_PLATFORMS.map((p) => p.name).join(' and ')} ${
+                    LIVE_PLATFORMS.length > 1 ? 'are' : 'is'
+                  } what Juke reads today. The others are not connected yet.`}
             </p>
           </>
         ) : status === 'done' ? (
@@ -215,20 +300,32 @@ const ConnectLeagueModal = forwardRef(function ConnectLeagueModal({ onConnected 
         ) : status === 'picking' || status === 'connecting' ? (
           <>
             <p className="mt-2 text-[14px] leading-[1.5] text-voidInk-body">
-              Signed in as <b className="font-semibold text-white">{sleeperUser?.name}</b>. Juke
-              reads this league and never writes to it.
+              {isEspn ? (
+                <>
+                  <b className="font-semibold text-white">{espnLeague?.name}</b>
+                  {espnLeague?.season ? ` · ${espnLeague.season}` : ''} · Juke reads this league
+                  and never writes to it.
+                </>
+              ) : (
+                <>
+                  Signed in as <b className="font-semibold text-white">{sleeperUser?.name}</b>. Juke
+                  reads this league and never writes to it.
+                </>
+              )}
             </p>
 
-            {leagues.length === 0 ? (
+            {rows.length === 0 ? (
               <p className="mt-4 rounded-xl border border-dashed border-flow-pillEdge px-4 py-5 text-center text-[14px] text-voidInk-body">
-                No leagues on that account this season.
+                {isEspn
+                  ? 'That league has no teams in it yet.'
+                  : 'No leagues on that account this season.'}
               </p>
             ) : (
               <ul className="mt-4 flex max-h-[46vh] flex-col gap-2 overflow-y-auto">
-                {leagues.map((lg) => {
-                  const on = chosen && chosen.leagueId === lg.leagueId
+                {rows.map((lg) => {
+                  const on = chosen && rowKey(chosen) === rowKey(lg)
                   return (
-                    <li key={lg.leagueId}>
+                    <li key={rowKey(lg)}>
                       <button
                         type="button"
                         role="radio"
@@ -245,9 +342,14 @@ const ConnectLeagueModal = forwardRef(function ConnectLeagueModal({ onConnected 
                           <span className="block truncate text-[15px] font-semibold text-white">
                             {lg.name}
                           </span>
-                          <span className="mt-0.5 block font-mono text-[11px] tracking-[0.1em] text-ink-muted">
-                            {lg.season}
-                            {lg.totalTeams ? ` · ${lg.totalTeams} TEAMS` : ''}
+                          <span className="mt-0.5 block truncate font-mono text-[11px] tracking-[0.1em] text-ink-muted">
+                            {isEspn
+                              // A team's manager is the thing that tells two
+                              // similarly-named teams apart, and it is the
+                              // only way somebody picks their own out of ten.
+                              ? [lg.abbrev, lg.manager].filter(Boolean).join(' · ').toUpperCase()
+                                || 'TEAM ' + lg.teamId
+                              : `${lg.season}${lg.totalTeams ? ` · ${lg.totalTeams} TEAMS` : ''}`}
                           </span>
                         </span>
                         {on ? <Check className="h-5 w-5 shrink-0 text-teal" /> : null}
@@ -265,7 +367,7 @@ const ConnectLeagueModal = forwardRef(function ConnectLeagueModal({ onConnected 
               className="mt-5 w-full rounded-full px-5 py-3 text-[15px] font-bold text-surface-page transition-transform duration-150 hover:scale-[1.01] disabled:opacity-40"
               style={{ background: 'linear-gradient(100deg,#44D4E2,#82A1F6)' }}
             >
-              {status === 'connecting' ? 'Connecting…' : 'Connect league'}
+              {status === 'connecting' ? 'Connecting…' : isEspn ? 'Connect this team' : 'Connect league'}
             </button>
           </>
         ) : (
@@ -284,8 +386,18 @@ const ConnectLeagueModal = forwardRef(function ConnectLeagueModal({ onConnected 
             </button>
 
             <p className="mt-1.5 text-[14px] leading-[1.5] text-voidInk-body">
-              We read your leagues from Sleeper. No password, and nothing is ever written back —
-              Sleeper&apos;s public API has no way to change your league even if we wanted to.
+              {isEspn ? (
+                <>
+                  The number in your league&apos;s own URL — <span className="font-mono text-[13px] text-white">
+                  leagueId=</span> on fantasy.espn.com. The league has to be public for Juke to read
+                  it, and nothing is ever written back.
+                </>
+              ) : (
+                <>
+                  We read your leagues from Sleeper. No password, and nothing is ever written back —
+                  Sleeper&apos;s public API has no way to change your league even if we wanted to.
+                </>
+              )}
             </p>
 
             <input
@@ -294,9 +406,13 @@ const ConnectLeagueModal = forwardRef(function ConnectLeagueModal({ onConnected 
                 setUsername(e.target.value)
                 if (status !== 'idle') setStatus('idle')
               }}
-              autoComplete="username"
+              autoComplete={isEspn ? 'off' : 'username'}
               spellCheck={false}
-              placeholder="sleeper username"
+              /* numeric on a phone for ESPN: the value is a league id, and
+                 a text keyboard for a ten-digit number is a small tax paid
+                 on every character. */
+              inputMode={isEspn ? 'numeric' : 'text'}
+              placeholder={isEspn ? '65142363' : 'sleeper username'}
               /* 16px, because anything smaller makes iOS zoom the page in
                  on focus and not zoom back out — the floor CLAUDE.md keeps
                  for every field in this app. */
@@ -305,13 +421,22 @@ const ConnectLeagueModal = forwardRef(function ConnectLeagueModal({ onConnected 
 
             {status === 'not-found' ? (
               <p className="mt-2 text-[13px] text-flow-rose">
-                No Sleeper account with that username. Check the spelling — it is the username, not
-                a display name.
+                {isEspn
+                  ? 'No ESPN league with that ID. It is the number after leagueId= in the URL.'
+                  : 'No Sleeper account with that username. Check the spelling — it is the username, not a display name.'}
+              </p>
+            ) : null}
+            {/* The one failure with a fix the reader can carry out, so it
+                says what the fix is rather than "could not read it". */}
+            {status === 'private' ? (
+              <p className="mt-2 text-[13px] text-flow-rose">
+                That league is private, so ESPN will not let Juke read it. In the ESPN app, open
+                League Settings and set visibility to public, then try again.
               </p>
             ) : null}
             {status === 'error' ? (
               <p className="mt-2 text-[13px] text-flow-rose">
-                Could not reach Sleeper just now. Try again in a moment.
+                Could not reach {isEspn ? 'ESPN' : 'Sleeper'} just now. Try again in a moment.
               </p>
             ) : null}
 
@@ -321,7 +446,7 @@ const ConnectLeagueModal = forwardRef(function ConnectLeagueModal({ onConnected 
               className="mt-4 w-full rounded-full px-5 py-3 text-[15px] font-bold text-surface-page transition-transform duration-150 hover:scale-[1.01] disabled:opacity-40"
               style={{ background: 'linear-gradient(100deg,#44D4E2,#82A1F6)' }}
             >
-              {status === 'looking' ? 'Looking…' : 'Find my leagues'}
+              {status === 'looking' ? 'Looking…' : isEspn ? 'Find my league' : 'Find my leagues'}
             </button>
           </form>
         )}

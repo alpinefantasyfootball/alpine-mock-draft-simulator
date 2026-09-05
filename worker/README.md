@@ -77,7 +77,9 @@ what it tells you.
 | `draft-room.js` | The Durable Object. Sockets, storage, the alarm — and nothing else. |
 | `store.js` | The D1 cache: the player pool and the headlines. Every function answers "no" to a missing binding rather than throwing. Also the account-owned rows — `touchUser()`, the saved draft, the locker — which are not a cache and are the one thing in here that cannot be rebuilt from a feed. |
 | `auth.js` | `verifiedUser()`: is this `Authorization: Bearer` header a session Clerk actually issued. The one place the worker decides who is asking. |
-| `migrations/` | The SQL. `0001_init.sql` creates `players`, `player_news` and `news_lookups`; `0002_signup.sql` the waitlist; `0003_accounts.sql` and `0004_drafts.sql` the account, its saved draft and its locker. |
+| `espn.js` | ESPN, read-only. The second provider, and the only one whose rosters need translating — see the ESPN section. |
+| `names.js` | One normaliser, shared by the pool sync and the ESPN crosswalk. Its twin is `build_players.py`'s, and `scripts/test_engine.py` asserts they agree. |
+| `migrations/` | The SQL. `0001_init.sql` creates `players`, `player_news` and `news_lookups`; `0002_signup.sql` the waitlist; `0003_accounts.sql` and `0004_drafts.sql` the account, its saved draft and its locker; `0005_leagues.sql` a connected league, `0006_active_league.sql` which of several is showing, and `0007_player_name_key.sql` the key the ESPN crosswalk joins on. |
 | `wrangler.toml` | Bindings, the DO migration and the cron. One class, `DraftRoom`; one database, `juke_db`. |
 | `../room.js` | Who is sitting where, what has been picked, how long is left. Pure. |
 | `../draft-engine.js` | The rules of a snake draft. Pure. |
@@ -357,6 +359,139 @@ the same way `cleanGif()` refuses a GIF that is not giphy.com's own — a
 crafted message could otherwise name any URL on the internet and have every
 other client's browser fetch it.
 
+## ESPN
+
+The second platform a league can be connected from, and the first one whose
+rosters have to be translated before anything else can read them.
+
+`espn.js` answers the same two questions `sleeper.js` does, in the same two
+shapes, so nothing downstream knows which platform a league came from:
+
+| Route | Answers |
+|---|---|
+| `GET /espn/league?league=<id>[&season=]` | the league, and its teams |
+| `GET /espn/snapshot?league=<id>[&season=]` | rosters, records, points |
+
+Neither needs a token — a public ESPN league is public, and asking us for it
+teaches a caller nothing `lm-api-reads.fantasy.espn.com` would not — and both
+sit behind `originAllowed()` for the reason the Sleeper pair does.
+
+### What ESPN answers, measured
+
+5 September 2026, against the live API rather than assumed:
+
+```
+200  a public league
+401  a league that exists and is not public
+404  no such league        (12345678, 999999, 2000000000)
+400  not a valid id at all ("Invalid parameter for 'leagueId'")
+```
+
+`401` and `404` are reported separately all the way to the dialog, because
+they are different things to tell somebody: *make it public* against *check
+the number*. Collapsing them sends a reader to re-type a number that was
+right. `private` is the only failure in this flow with a fix the reader can
+carry out, which is why it names League Settings rather than saying the id
+did not work.
+
+### There is no username step, and there cannot be
+
+ESPN publishes nothing that maps a person to their leagues. So the flow is
+*which league → which of these teams is yours*, where Sleeper's is *who are
+you → which of your leagues*. The second question is not optional: without
+it there is no `ownerId`, and every screen that says "your roster" has
+nothing to key on.
+
+The team the reader picks is checked against the league's own teams before
+it is stored — an `ownerId` naming a team that is not in the league renders
+as a connected league with nothing in it.
+
+### The crosswalk, and why it is a name join
+
+A snapshot's `players` and `starters` are **Sleeper ids in every provider**,
+because that is what `players.js` and `stats.js` are keyed by. Sleeper gets
+that for free; ESPN has to earn it.
+
+**Not `espn_id`.** Sleeper publishes the field and it covers **112 of the 452
+non-DST players on Juke's board — 24.8%** (measured 5 September 2026). The
+misses are systematic: Ja'Marr Chase, Trevor Lawrence, DeVonta Smith, Jaylen
+Waddle, Travis Etienne and Kyle Pitts are all absent, the backfill having
+apparently stopped around the 2021 draft class. Defenses carry none. So the
+id join is worst exactly where a league's value is concentrated, and it fails
+silently — a roster that quietly drops its best six players still renders.
+
+**So it is a name join**, the shape `link_nflverse()` already measures at 240
+of 241. Measured against ten real rosters (141 players):
+
+```
+defense, by club          13
+name + position + club   109
+name + position           17
+unmatched                  2      Kenneth Gainwell, Bam Knight
+```
+
+**139 of 141.** Both misses are nicknames the two feeds spell differently,
+and both are reported rather than guessed — `unmatched` and `unmatchedCount`
+ride on the snapshot, because a roster one player short looks exactly like a
+roster.
+
+**A defense joins on the club and never on the name.** ESPN says "Patriots
+D/ST" and the pipeline says "New England Defense"; neither normalises to the
+other and no fuzzy match should be asked to bridge them, because there is an
+exact answer sitting there — **Sleeper's `player_id` for a defense IS the club
+abbreviation** (`SEA`, `HOU`). It needs no database at all, which is why a
+defense still resolves when the pool is empty.
+
+**The suffix rule is what makes the rest work.** An exact name match finds
+114 of 128 skill players, and twelve of the fourteen misses are suffixes
+alone: ESPN writes "Marvin Harrison Jr.", "Brian Thomas Jr.", "Kenneth Walker
+III", "Kyle Pitts Sr."; Sleeper stores none of them that way. `names.js`
+strips them, and `0007_player_name_key.sql` stores the result so the join is
+one indexed lookup rather than a fold over 4,388 rows per snapshot.
+
+**`names.js` is one normaliser in two languages**, and `scripts/test_engine.py`
+asserts it against `build_players.py`'s own on sixteen real spellings. A
+drift there does not throw — it stops matching, which reads as a short
+roster.
+
+### The pool sync is armed now, and this is what pays for it
+
+`wrangler.toml`'s cron was commented out with a note saying to turn it on "in
+the change that adds the first consumer, so the cost and the thing paying for
+it land together". `resolveSleeperIds()` is that consumer: without a filled
+`players` table an ESPN league renders ten empty rosters.
+
+**A fresh deployment does not wait until 11:30.** `espnSnapshotRoute()` fills
+the pool off the response path the first time it finds it empty — the same
+`after(ctx, …)` pattern `touchUser()` uses — and the snapshot carries
+`crosswalkReady: false` so the screen can say "still reading your league"
+rather than reporting an empty one. Verified locally: first call
+`crosswalkReady false` with 128 unmatched and only the defenses resolved,
+pool filled to 4,388 rows within seconds, second call `crosswalkReady true`
+with 139 of 141 resolved. A snapshot taken before the pool existed is
+deliberately **not** cached.
+
+### Testing it
+
+```bash
+node worker/test-espn.mjs        # offline: the whole mapping, no network
+```
+
+Drives `espn.js` against a canned payload with the awkward rows in it — a
+suffixed name, a defense, a bench slot, an IR slot, a club that has changed,
+a player nobody can resolve, and a pool that has never synced. `ESPN_BASE`
+points the routes at a stub the same way `SLEEPER_BASE` and `TANK01_BASE`
+already do.
+
+**What it cannot cover is whether ESPN's response still looks like that
+fixture.** Nothing offline can. The shape was read off a real public league
+first and is re-checked by hand against one:
+
+```bash
+curl -H "Origin: http://localhost:8765" \
+  "http://127.0.0.1:8787/espn/league?league=<a public league id>"
+```
+
 ## The cache database
 
 D1, bound as `DB`, created as `juke_db`. Two tables that matter and one that
@@ -418,8 +553,9 @@ physically hold an article body cannot quietly start holding one.
 ### The pool sync
 
 `[triggers] crons = ["30 11 * * *"]`, half an hour after the Python pipeline, on
-`scheduled()`. Measured on a real run: **4385 rows**, all 32 team defenses named
-correctly. It upserts and never deletes — a player who has left the league is a
+`scheduled()` — **armed as of the ESPN change above**, which is the first thing
+that ever read this table. Measured on a real run: **4385 rows**, all 32 team
+defenses named correctly (4,388 on the 5 September 2026 pool). It upserts and never deletes — a player who has left the league is a
 row whose `last_updated` stopped moving, not a row to remove — so a
 half-succeeded fetch cannot empty the table.
 

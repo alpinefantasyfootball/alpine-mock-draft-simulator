@@ -6376,9 +6376,11 @@ Juke to have an opinion that has not been built yet. Both lines say so now.
 
 `tests/league-connect.spec.mjs` covers everything downstream of a connection
 that a keyless build can observe, stubbing `window.JukeAuth` and
-`window.Live.listLeagues` — three of its four tests were confirmed red
+`window.Live.listLeagues` — three of its first four tests were confirmed red
 against the code as it stood, with the fourth (the guest state) green
 throughout, which is what stops "hide it from everybody" passing the suite.
+(It carries eight now; the other four are the league switcher's, and the
+section below says what they do and do not reach.)
 
 **The dialog itself is not covered.** Every `ConnectLeagueCta` sits inside
 Clerk's `<SignedIn>`, and a test build has no publishable key, so those four
@@ -6389,6 +6391,342 @@ done is worth keeping: a one-line temporary edit rendering `LeagueChip` in
 `ShellHeader`'s keyless branch, which puts the whole flow on screen without a
 key, then reverted. **This is the widest gap in the account surface's test
 coverage and it is the same one `verifyToken` lived in.**
+
+## Pivoting between connected leagues
+
+Reported 5 September 2026: a Sleeper test league was connected and there was
+no way to add a real one beside it and move between them. The table had been
+ready for this since the day it was written and nothing above it was.
+
+**`0005_leagues.sql` keyed `connected_leagues` (clerk_id, provider,
+league_id) and said in its own comment that "the header's league switcher
+implies more than one".** `listLeagues()` returned every row. `useLeague()`
+took `res.leagues[0]`, and the header chip drew a hardcoded `S` on it. So an
+account could hold several leagues, the worker would list them all, and the
+app rendered exactly one with no way to reach the others — and connecting a
+second silently changed which one that was, because the ordering was
+`connected_at DESC`.
+
+**Nothing was broken and no check could have caught it.** Every league in the
+list was drawn correctly; there was simply no control for the ones that were
+not first. That is the dead-control failure with the control missing
+entirely rather than inert — the same shape as the rail's "My Team" row and
+as "Draft with friends" being absent from the phone launcher, and it is
+found the same way: by somebody trying to do the thing.
+
+### Active is most-recently-selected, not a flag
+
+`0006_active_league.sql` adds `selected_at INTEGER`, backfilled from
+`connected_at`, and `listLeagues()` orders by
+`COALESCE(selected_at, connected_at) DESC`. The head of that list is the
+active league **by construction**, which is the whole design: there is no
+`activeId` anywhere — not in D1, not in `useLeague`'s state, not in a
+component — so there is nothing that can disagree with the ordering.
+
+The obvious alternatives both make exclusivity something code has to
+maintain. `active INTEGER` on this table, or `active_league_id` on `users`,
+means setting one league is also clearing the others: two writes that must
+not interleave, and a disconnect of the active league leaves an account with
+none selected until something notices. Most-recently-selected needs none of
+it — a switch is one `UPDATE`, and **disconnecting the active league
+promotes whatever was selected before it with no repair step at all.**
+Verified against sqlite directly, including that a select scoped by
+`clerk_id` changes zero rows for a league the account never connected and
+zero for another account's league, which is what makes 409 the honest
+answer.
+
+**The COALESCE is not defensive noise.** `putLeague()` deliberately writes no
+0006 column, so rows inserted by a worker that predates the migration carry
+`selected_at NULL` and still order correctly.
+
+### The unmigrated-database window is real, and it is the deploy gap
+
+`listLeagues()` tries the 0006 ordering, and on an exception retries the
+0005 one. That looks like belt and braces and is not: **the site deploys
+itself from git and the worker does not**, so worker code carrying the new
+query will at some point be live against a database that has not had
+`wrangler d1 migrations apply` run on it. Measured — the new query really
+does throw `no such column: selected_at` on a pre-0006 table, so without the
+retry the exception is caught by the existing handler and reported as *an
+account with no leagues at all*: a signed-in manager with two connected
+leagues offered "Connect a league" on every screen.
+
+This is the same gap CLAUDE.md already records twice — the D1 cache that was
+merged and doing nothing, and the auth fix that was live in git and not
+deployed — and the same instruction applies: **ask the database, not the
+response.** What is different here is that the fallback makes the window
+survivable rather than merely visible.
+
+**`PATCH` is the verb, and the preflight has to name it.** POST means
+"connect this league" and re-reads the label from Sleeper to do it;
+switching fetches nothing and validates nothing upstream. PATCH is not a
+CORS-simple method, so a browser always preflights it — and a preflight that
+does not list it means the request never leaves the page: **no log line, no
+error at the worker, and a menu that does nothing.** `test-auth.mjs` asserts
+the preflight names PATCH for exactly that reason, and it was confirmed red
+by removing it. It also asserts PATCH is behind the same origin check and
+`requireUser()` as the verbs that were already there, because a new verb on
+an authenticated route is a new door.
+
+### The switch is optimistic and settles back on failure
+
+A menu that waits a round trip before closing reads as a menu that did not
+take the press, so the reorder is applied before the request goes out. What
+it must not do is keep an order the account will not come back to — that is
+the "claims a backup it does not have" failure with a league name on it, and
+the reader finds out on their next page load. So a failure puts the previous
+order back and says so, with the menu left open.
+
+Confirmed on the real screen: with `selectLeague` failing, the chip stays on
+the league that is actually active, the homepage card stays with it, the
+checked row is the true one, and the message reads "Could not switch just
+now — still on the league above."
+
+**The success path takes the server's list, not the optimistic one.** PATCH
+answers with the whole ordering because the server owns it; reusing the
+local array would be a second opinion about which league is active.
+
+### One badge colour, and the letter is what differs
+
+Each platform getting its own tint is the obvious version and it is not
+worth what it costs. Every value in the palette is spoken for, and the three
+that are not — `flow.gold`, `flow.lavender`, `flow.blue` — are **room**
+identities: gold is the League Room, lavender is Trade. Using one here would
+make a colour mean two things in one app, which is the drift
+`draftRoomPositions.js` was rewritten to end.
+
+The letter identifies the platform and every surface that draws more than
+the badge draws the platform's name in text beside it, so a colour would be
+a third way of saying something already said twice. `platformFor()` also
+answers for a provider this build does not know about, because the database
+is shared with whatever worker is deployed.
+
+### Disconnect shipped with it, and had to
+
+`Live.disconnectLeague` had existed since connect shipped with **nothing
+calling it**. That was survivable while the app drew one league: a second
+connect replaced the first on screen, so there was never a league you could
+see and not get rid of. The switcher ends that — leagues accumulate and all
+of them are visible — so shipping the accumulation without the removal would
+leave somebody who connected the wrong league permanently looking at it.
+
+It is **not** optimistic, unlike the switch: a switch is reversible by
+switching back, and a disconnect that appeared to work and had not would
+have somebody believing a league was gone from their account. Two presses on
+the row rather than a dialog, and the armed state names the league, because
+a row that just says "Sure?" is one mis-scroll away from removing the wrong
+one.
+
+### ESPN is a real adapter, and the free crosswalk does not exist
+
+**Built, as of the section below.** What follows is the measurement that
+scoped it, kept because it is the reason the adapter is shaped the way it is.
+
+Measured 5 September 2026, because the obvious first move is to read
+`espn_id` off Sleeper's own player master and join on it. **It covers 112 of
+the 452 non-DST players on Juke's board — 24.8% — and the misses are
+systematic rather than random.** Ja'Marr Chase, Trevor Lawrence, DeVonta
+Smith, Jaylen Waddle, Travis Etienne and Kyle Pitts are all absent: Sleeper
+appears to have stopped backfilling the field around the 2021 draft class,
+so the coverage is worst exactly where a fantasy league's value is
+concentrated. Team defenses carry none at all. The same 24.8% holds across
+Sleeper's whole active pool, so it is not an artifact of which players Juke
+keeps.
+
+**So an ESPN adapter needs a name/position/team join** — the shape
+`link_nflverse()` already uses and measures at 240 of 241 — and not an id
+lookup. That is the load-bearing fact for scoping it, and it is written down
+here so nobody re-derives the cheap version and ships a board that silently
+drops the best players in the league. `leagueSnapshot()`'s own comment
+("these ids... map straight onto Juke's own projections with no crosswalk...
+That identity is the whole reason a connected league is worth anything
+here") is a statement about Sleeper specifically and must not be read as a
+property of connected leagues in general.
+
+The `provider` column, `platformFor()`'s unknown-provider fallback and the
+switcher's per-provider badge were all in place for it, and none of them
+needed changing when it landed — which is the cheapest possible confirmation
+that the switcher's shape was right.
+
+### What could not be tested, again
+
+`LeagueSwitcher` and the You screen's list both sit inside Clerk's
+`<SignedIn>`, so a keyless build renders neither — the same gap the connect
+dialog lives in. Both were driven by hand against the built site with the
+one-line temporary exposure this file already describes, and reverted:
+the menu, a successful switch propagating to a second component, a failed
+switch reverting, the two-press disconnect, promoting the next league when
+the active one goes, and falling back to the Connect CTA when the last one
+does.
+
+**What the suite covers is the contract underneath both of them**, which is
+where the defect actually was: the active league is the head of the list and
+every surface reads it from one shared place. A menu that switched without
+that would move a highlight and change nothing. Confirmed red by making the
+active league the list's last entry instead of its first — three of the four
+new tests fail, and the fourth (the PATCH transport) correctly does not.
+
+## ESPN is the second platform, and the roster is the whole of the work
+
+Asked for on 5 September 2026 alongside the league switcher, to beta-test a
+real ESPN league against the in-season rooms. `worker/espn.js` reads it, and
+everything about the connection — the dialog, the store, the header chip, the
+League Room — was already provider-shaped from the switcher's own change.
+
+**The league is addressed by the number in its URL, and that changes the
+flow rather than a label.** ESPN publishes nothing that maps a person to
+their leagues, so there is no username step to be had. Sleeper asks *who are
+you → which of your leagues*; ESPN asks *which league → which of these teams
+is yours*. The second question is not a nicety: without it there is no
+`ownerId`, and every screen saying "your roster" has nothing to key on.
+
+**Only a public league can be read, and the refusals are told apart.**
+Measured against the live API rather than assumed:
+
+```
+200  a public league
+401  a league that exists and is not public
+404  no such league        (12345678, 999999, 2000000000)
+400  not a valid id at all
+```
+
+`private` is the only failure in this flow with a fix the reader can carry
+out, so the dialog names the fix — League Settings, visibility — instead of
+saying the number did not work, which would send them to re-check a number
+that was right. That is the same line `not-found` and `offline` already draw
+for Sleeper, with a third case that matters more than either.
+
+### The crosswalk, and the id join that does not exist
+
+A snapshot's `players` and `starters` are Sleeper ids in **every** provider,
+because that is what `players.js` and `stats.js` are keyed by.
+`leagueSnapshot()`'s own comment in `sleeper.js` — "these ids map straight
+onto Juke's own projections with no crosswalk... that identity is the whole
+reason a connected league is worth anything here" — is a statement about
+Sleeper and must not be read as a property of connected leagues in general.
+
+**The obvious id join covers a quarter of the board.** Sleeper publishes
+`espn_id` and it is present for **112 of the 452 non-DST players on Juke's
+own board — 24.8%**, measured 5 September 2026. The same 24.8% holds across
+Sleeper's whole active pool, so it is not an artifact of which players Juke
+keeps. And the misses are systematic rather than random: **Ja'Marr Chase,
+Trevor Lawrence, DeVonta Smith, Jaylen Waddle, Travis Etienne and Kyle Pitts
+are all absent**, the backfill having apparently stopped around the 2021
+draft class. Team defenses carry none at all.
+
+So the cheap join is worst exactly where a fantasy league's value is
+concentrated, and it fails the way this file's own rules most warn about: a
+roster that silently drops its best six players still renders.
+
+**It is a name join, which this project already trusts and measures.** The
+shape `link_nflverse()` uses at 240 of 241. Measured against the ten real
+rosters of a live ESPN league — 141 rostered players:
+
+```
+defense, by club          13
+name + position + club   109
+name + position           17
+unmatched                  2      Kenneth Gainwell, Bam Knight
+```
+
+**139 of 141**, and both misses are nicknames the two feeds spell
+differently. They are reported and never guessed: `unmatched` and
+`unmatchedCount` ride on the snapshot, for the reason `unmatched.txt` exists
+— a roster one player short looks exactly like a roster.
+
+**A defense joins on the club and never on the name.** ESPN says "Patriots
+D/ST" and the pipeline says "New England Defense". Neither normalises to the
+other, and no fuzzy match should be asked to bridge them, because there is an
+exact answer sitting there: **Sleeper's `player_id` for a defense IS the club
+abbreviation** — `SEA`, `HOU`. It is checked first, needs no database, and is
+the reason a defense still resolves when the pool is empty.
+
+### The suffix rule is the load-bearing half
+
+An exact (case-insensitive) name match finds **114 of 128** skill players, and
+**twelve of the fourteen misses are suffixes alone**: ESPN writes "Marvin
+Harrison Jr.", "Brian Thomas Jr.", "Travis Etienne Jr.", "Michael Pittman
+Jr.", "Kenneth Walker III", "Chris Godwin Jr.", "Kyle Pitts Sr."; Sleeper
+stores none of them that way.
+
+So an exact-name column would have dropped a tenth of every roster,
+concentrated at the top of the draft. `0007_player_name_key.sql` stores the
+**normalised** name instead, which makes the join one indexed lookup rather
+than a fold over 4,388 rows per snapshot — and makes it right.
+
+**`normalise()` now exists in two languages and they must not drift.**
+`build_players.py` writes nothing here; `worker/names.js` writes the stored
+key and `espn.js` reads it. A drift between them does not throw — it stops
+matching. `scripts/test_engine.py` asserts the two agree on sixteen real
+spellings, and it is the only suite in the project with both languages in
+it. Confirmed red by removing the suffix rule from the JavaScript side
+alone: six names diverge and it names each one.
+
+**`ON CONFLICT` had to learn the new column too.** Without `name_key =
+excluded.name_key` in the upsert, a pool that synced before 0007 keeps its
+NULL key for ever — every row conflicts on `player_id` from the second sync
+onward, so the column would only ever fill for players who were new to the
+league. The crosswalk would have worked, on rookies.
+
+### The pool sync is armed, and this is the consumer it was waiting for
+
+`wrangler.toml` carried the cron commented out with a note: it stays off
+"because **nothing reads the players table yet** ... uncomment it in the
+change that adds the first consumer, so the cost and the thing paying for it
+land together." `resolveSleeperIds()` is that consumer, and the note was
+right to make somebody come back to it — the cost is a nightly 5MB fetch and
+a full parse, which `syncPlayerPool()` already logs rather than throws for.
+
+**A fresh deployment does not wait until 11:30 for the feature to work.**
+`espnSnapshotRoute()` fills the pool off the response path the first time it
+finds it empty — the `after(ctx, …)` pattern `touchUser()` already uses — and
+the snapshot carries `crosswalkReady: false` so a screen can say "still
+reading your league" rather than reporting an empty one. **null from the
+resolver is not an empty Map**, and collapsing the two is what would draw ten
+empty rosters as though that were the answer.
+
+Verified locally, in order: first call `crosswalkReady false`, 128 unmatched,
+only the defenses resolved; pool filled to 4,388 rows within seconds; second
+call `crosswalkReady true`, 139 of 141 resolved. A snapshot taken before the
+pool existed is deliberately not cached — it is the one the sync is in the
+middle of fixing.
+
+### What was verified against the real league, and what could not be
+
+Driven end to end against a real public league (`D-Town Boogie`, 10 teams)
+through a local `wrangler dev`: the lookup with real team and manager names,
+the snapshot with real records and points-for, and the resolved ids checked
+back against `players.js` — a roster reading Ja'Marr Chase, Bucky Irving,
+Jaxon Smith-Njigba, Drake Maye, TreVeyon Henderson, Ka'imi Fairbairn, Mike
+Evans, Houston Defense and Brenton Strange, with Aaron Jones Sr. on the bench
+resolving through the suffix rule. Every failure path too: private, missing,
+malformed, no Origin, wrong Origin.
+
+**The connect POST itself could not be.** It is behind `requireUser()`, which
+needs a token Clerk actually signed — the same gap `verifyToken` lived in and
+the one this project cannot close offline. The dialog was driven by hand to
+the point of pressing Connect, with the one-line keyless exposure this file
+already describes.
+
+**And the rosters this was built for do not exist yet.** That league's 2026
+draft is 9 September 2026; `draftDetail.drafted` is false and every 2026
+roster is empty. The measurements above are its **2025** rosters against the
+**2026** board, which is the wrong pairing and the only one available — it
+overstates the misses, because four of the five players the join could not
+place are simply not on this year's board. Re-measure after the draft; that
+is the honest number and this one is the pessimistic stand-in.
+
+### Rejected: reading a private league
+
+There is a well-known cookie pair (`espn_s2`, `SWID`) that makes ESPN serve a
+private league, and asking a manager to paste them would work. It is not
+built and should not be. They are session credentials for somebody's whole
+ESPN account, not a scoped read token — storing them would make this the one
+place in the project holding a credential that can act as a person, and
+"Connecting is read-only. Juke never edits your league" would stop being a
+property of the API and become a promise somebody has to keep. The public-
+league requirement is a real limit, it is stated on the platform row, and it
+is the honest version.
 
 ## Copy goes stale the day a feature ships, and nothing fails when it does
 
