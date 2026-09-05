@@ -6519,6 +6519,9 @@ one.
 
 ### ESPN is a real adapter, and the free crosswalk does not exist
 
+**Built, as of the section below.** What follows is the measurement that
+scoped it, kept because it is the reason the adapter is shaped the way it is.
+
 Measured 5 September 2026, because the obvious first move is to read
 `espn_id` off Sleeper's own player master and join on it. **It covers 112 of
 the 452 non-DST players on Juke's board — 24.8% — and the misses are
@@ -6541,7 +6544,9 @@ here") is a statement about Sleeper specifically and must not be read as a
 property of connected leagues in general.
 
 The `provider` column, `platformFor()`'s unknown-provider fallback and the
-switcher's per-provider badge are all in place for it. Nothing else is.
+switcher's per-provider badge were all in place for it, and none of them
+needed changing when it landed — which is the cheapest possible confirmation
+that the switcher's shape was right.
 
 ### What could not be tested, again
 
@@ -6560,6 +6565,168 @@ every surface reads it from one shared place. A menu that switched without
 that would move a highlight and change nothing. Confirmed red by making the
 active league the list's last entry instead of its first — three of the four
 new tests fail, and the fourth (the PATCH transport) correctly does not.
+
+## ESPN is the second platform, and the roster is the whole of the work
+
+Asked for on 5 September 2026 alongside the league switcher, to beta-test a
+real ESPN league against the in-season rooms. `worker/espn.js` reads it, and
+everything about the connection — the dialog, the store, the header chip, the
+League Room — was already provider-shaped from the switcher's own change.
+
+**The league is addressed by the number in its URL, and that changes the
+flow rather than a label.** ESPN publishes nothing that maps a person to
+their leagues, so there is no username step to be had. Sleeper asks *who are
+you → which of your leagues*; ESPN asks *which league → which of these teams
+is yours*. The second question is not a nicety: without it there is no
+`ownerId`, and every screen saying "your roster" has nothing to key on.
+
+**Only a public league can be read, and the refusals are told apart.**
+Measured against the live API rather than assumed:
+
+```
+200  a public league
+401  a league that exists and is not public
+404  no such league        (12345678, 999999, 2000000000)
+400  not a valid id at all
+```
+
+`private` is the only failure in this flow with a fix the reader can carry
+out, so the dialog names the fix — League Settings, visibility — instead of
+saying the number did not work, which would send them to re-check a number
+that was right. That is the same line `not-found` and `offline` already draw
+for Sleeper, with a third case that matters more than either.
+
+### The crosswalk, and the id join that does not exist
+
+A snapshot's `players` and `starters` are Sleeper ids in **every** provider,
+because that is what `players.js` and `stats.js` are keyed by.
+`leagueSnapshot()`'s own comment in `sleeper.js` — "these ids map straight
+onto Juke's own projections with no crosswalk... that identity is the whole
+reason a connected league is worth anything here" — is a statement about
+Sleeper and must not be read as a property of connected leagues in general.
+
+**The obvious id join covers a quarter of the board.** Sleeper publishes
+`espn_id` and it is present for **112 of the 452 non-DST players on Juke's
+own board — 24.8%**, measured 5 September 2026. The same 24.8% holds across
+Sleeper's whole active pool, so it is not an artifact of which players Juke
+keeps. And the misses are systematic rather than random: **Ja'Marr Chase,
+Trevor Lawrence, DeVonta Smith, Jaylen Waddle, Travis Etienne and Kyle Pitts
+are all absent**, the backfill having apparently stopped around the 2021
+draft class. Team defenses carry none at all.
+
+So the cheap join is worst exactly where a fantasy league's value is
+concentrated, and it fails the way this file's own rules most warn about: a
+roster that silently drops its best six players still renders.
+
+**It is a name join, which this project already trusts and measures.** The
+shape `link_nflverse()` uses at 240 of 241. Measured against the ten real
+rosters of a live ESPN league — 141 rostered players:
+
+```
+defense, by club          13
+name + position + club   109
+name + position           17
+unmatched                  2      Kenneth Gainwell, Bam Knight
+```
+
+**139 of 141**, and both misses are nicknames the two feeds spell
+differently. They are reported and never guessed: `unmatched` and
+`unmatchedCount` ride on the snapshot, for the reason `unmatched.txt` exists
+— a roster one player short looks exactly like a roster.
+
+**A defense joins on the club and never on the name.** ESPN says "Patriots
+D/ST" and the pipeline says "New England Defense". Neither normalises to the
+other, and no fuzzy match should be asked to bridge them, because there is an
+exact answer sitting there: **Sleeper's `player_id` for a defense IS the club
+abbreviation** — `SEA`, `HOU`. It is checked first, needs no database, and is
+the reason a defense still resolves when the pool is empty.
+
+### The suffix rule is the load-bearing half
+
+An exact (case-insensitive) name match finds **114 of 128** skill players, and
+**twelve of the fourteen misses are suffixes alone**: ESPN writes "Marvin
+Harrison Jr.", "Brian Thomas Jr.", "Travis Etienne Jr.", "Michael Pittman
+Jr.", "Kenneth Walker III", "Chris Godwin Jr.", "Kyle Pitts Sr."; Sleeper
+stores none of them that way.
+
+So an exact-name column would have dropped a tenth of every roster,
+concentrated at the top of the draft. `0007_player_name_key.sql` stores the
+**normalised** name instead, which makes the join one indexed lookup rather
+than a fold over 4,388 rows per snapshot — and makes it right.
+
+**`normalise()` now exists in two languages and they must not drift.**
+`build_players.py` writes nothing here; `worker/names.js` writes the stored
+key and `espn.js` reads it. A drift between them does not throw — it stops
+matching. `scripts/test_engine.py` asserts the two agree on sixteen real
+spellings, and it is the only suite in the project with both languages in
+it. Confirmed red by removing the suffix rule from the JavaScript side
+alone: six names diverge and it names each one.
+
+**`ON CONFLICT` had to learn the new column too.** Without `name_key =
+excluded.name_key` in the upsert, a pool that synced before 0007 keeps its
+NULL key for ever — every row conflicts on `player_id` from the second sync
+onward, so the column would only ever fill for players who were new to the
+league. The crosswalk would have worked, on rookies.
+
+### The pool sync is armed, and this is the consumer it was waiting for
+
+`wrangler.toml` carried the cron commented out with a note: it stays off
+"because **nothing reads the players table yet** ... uncomment it in the
+change that adds the first consumer, so the cost and the thing paying for it
+land together." `resolveSleeperIds()` is that consumer, and the note was
+right to make somebody come back to it — the cost is a nightly 5MB fetch and
+a full parse, which `syncPlayerPool()` already logs rather than throws for.
+
+**A fresh deployment does not wait until 11:30 for the feature to work.**
+`espnSnapshotRoute()` fills the pool off the response path the first time it
+finds it empty — the `after(ctx, …)` pattern `touchUser()` already uses — and
+the snapshot carries `crosswalkReady: false` so a screen can say "still
+reading your league" rather than reporting an empty one. **null from the
+resolver is not an empty Map**, and collapsing the two is what would draw ten
+empty rosters as though that were the answer.
+
+Verified locally, in order: first call `crosswalkReady false`, 128 unmatched,
+only the defenses resolved; pool filled to 4,388 rows within seconds; second
+call `crosswalkReady true`, 139 of 141 resolved. A snapshot taken before the
+pool existed is deliberately not cached — it is the one the sync is in the
+middle of fixing.
+
+### What was verified against the real league, and what could not be
+
+Driven end to end against a real public league (`D-Town Boogie`, 10 teams)
+through a local `wrangler dev`: the lookup with real team and manager names,
+the snapshot with real records and points-for, and the resolved ids checked
+back against `players.js` — a roster reading Ja'Marr Chase, Bucky Irving,
+Jaxon Smith-Njigba, Drake Maye, TreVeyon Henderson, Ka'imi Fairbairn, Mike
+Evans, Houston Defense and Brenton Strange, with Aaron Jones Sr. on the bench
+resolving through the suffix rule. Every failure path too: private, missing,
+malformed, no Origin, wrong Origin.
+
+**The connect POST itself could not be.** It is behind `requireUser()`, which
+needs a token Clerk actually signed — the same gap `verifyToken` lived in and
+the one this project cannot close offline. The dialog was driven by hand to
+the point of pressing Connect, with the one-line keyless exposure this file
+already describes.
+
+**And the rosters this was built for do not exist yet.** That league's 2026
+draft is 9 September 2026; `draftDetail.drafted` is false and every 2026
+roster is empty. The measurements above are its **2025** rosters against the
+**2026** board, which is the wrong pairing and the only one available — it
+overstates the misses, because four of the five players the join could not
+place are simply not on this year's board. Re-measure after the draft; that
+is the honest number and this one is the pessimistic stand-in.
+
+### Rejected: reading a private league
+
+There is a well-known cookie pair (`espn_s2`, `SWID`) that makes ESPN serve a
+private league, and asking a manager to paste them would work. It is not
+built and should not be. They are session credentials for somebody's whole
+ESPN account, not a scoped read token — storing them would make this the one
+place in the project holding a credential that can act as a person, and
+"Connecting is read-only. Juke never edits your league" would stop being a
+property of the API and become a promise somebody has to keep. The public-
+league requirement is a real limit, it is stated on the platform row, and it
+is the honest version.
 
 ## Copy goes stale the day a feature ships, and nothing fails when it does
 

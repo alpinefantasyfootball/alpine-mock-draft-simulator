@@ -601,16 +601,53 @@
         .catch(() => syncResult(false, "offline", { user: null, leagues: [] }));
     },
 
+    /* Look an ESPN league up by the id in its own URL.
+
+       There is no username step here and there cannot be: ESPN publishes
+       nothing that maps a person to their leagues, so the reader supplies
+       the number from fantasy.espn.com/football/team?leagueId=NNN and picks
+       their team out of the answer. See worker/espn.js.
+
+       Four reasons rather than two, because the reader's fix differs:
+       `private` is a setting they can change, `not-found` is a number to
+       re-read, `offline` is a retry, and `upstream` is ours. */
+    espnLookup: function (leagueId, season) {
+      const id = String(leagueId || "").trim();
+      if (!id) return Promise.resolve(syncResult(false, "bad-request", { league: null }));
+      const http = WORKER.replace(/^ws/, "http");
+      const q = "?league=" + encodeURIComponent(id) +
+                (season ? "&season=" + encodeURIComponent(season) : "");
+      return fetch(http + "/espn/league" + q)
+        .then(function (r) {
+          if (!r.ok) return syncResult(false, reasonForStatus(r.status), { league: null });
+          return r.json()
+            .then((body) => (body && body.league)
+              ? syncResult(true, null, { league: body.league, season: body.season })
+              // The worker reports which of the four it was; a shape it did
+              // not name is still a refusal rather than an empty league.
+              : syncResult(false, (body && body.reason) || "not-found", { league: null }))
+            .catch(() => syncResult(false, "bad-response", { league: null }));
+        })
+        .catch(() => syncResult(false, "offline", { league: null }));
+    },
+
     // A league's current state — rosters, records, points. Cached at the
     // edge for a couple of minutes, so calling this on every navigation is
     // cheap and calling it in a loop is not a problem for Sleeper.
-    leagueSnapshot: function (leagueId) {
+    leagueSnapshot: function (leagueId, provider) {
       const id = String(leagueId || "");
       if (!id) return Promise.resolve(syncResult(false, "bad-request", { snapshot: null }));
       const http = WORKER.replace(/^ws/, "http");
-      return fetch(http + "/sleeper/snapshot?league=" + encodeURIComponent(id))
+      /* Which platform's route. Defaulted rather than required, because
+         every caller predates ESPN and a connection stored before the
+         provider column meant anything is a Sleeper one. */
+      const path = provider === "espn" ? "/espn/snapshot?league=" : "/sleeper/snapshot?league=";
+      return fetch(http + path + encodeURIComponent(id))
         .then(function (r) {
           if (r.status === 404) return syncResult(false, "not-found", { snapshot: null });
+          // 403 here is an ESPN league that has stopped being public — a
+          // thing the reader can fix, and so worth telling apart.
+          if (r.status === 403) return syncResult(false, "private", { snapshot: null });
           if (!r.ok) return syncResult(false, reasonForStatus(r.status), { snapshot: null });
           return r.json()
             .then((body) => syncResult(true, null, { snapshot: body || null }))
@@ -634,16 +671,23 @@
         .catch(() => syncResult(false, "offline", { leagues: [] }));
     },
 
-    connectLeague: function (token, leagueId, ownerId) {
+    connectLeague: function (token, leagueId, ownerId, provider) {
       if (!token) return Promise.resolve(syncResult(false, "signed-out", { league: null }));
       const http = WORKER.replace(/^ws/, "http");
       return fetch(http + "/me/leagues", {
         method: "POST",
         headers: { "content-type": "application/json", "authorization": "Bearer " + token },
-        body: JSON.stringify({ leagueId: String(leagueId || ""), ownerId: ownerId || null })
+        body: JSON.stringify({
+          leagueId: String(leagueId || ""),
+          ownerId: ownerId || null,
+          // Absent means Sleeper, which is what every connect meant before
+          // there was a second platform.
+          provider: provider || "sleeper"
+        })
       })
         .then(function (r) {
           if (r.status === 404) return syncResult(false, "not-found", { league: null });
+          if (r.status === 403) return syncResult(false, "private", { league: null });
           if (!r.ok) return syncResult(false, reasonForStatus(r.status), { league: null });
           return r.json()
             .then((body) => (body && body.ok)

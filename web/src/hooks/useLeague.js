@@ -337,7 +337,7 @@ export function useLeague() {
 
    Answers null while loading and on failure alike, with `reason` for the
    difference — the same contract as everything else here. */
-export function useLeagueSnapshot(leagueId) {
+export function useLeagueSnapshot(leagueId, provider) {
   const [snapshot, setSnapshot] = useState(null)
   const [status, setStatus] = useState('loading')
   const [reason, setReason] = useState(null)
@@ -354,7 +354,7 @@ export function useLeagueSnapshot(leagueId) {
     }
 
     setStatus('loading')
-    window.Live.leagueSnapshot(leagueId).then((res) => {
+    window.Live.leagueSnapshot(leagueId, provider).then((res) => {
       if (!alive) return
       setSnapshot(res.ok ? res.snapshot : null)
       setStatus(res.ok ? 'ready' : 'error')
@@ -362,7 +362,10 @@ export function useLeagueSnapshot(leagueId) {
     })
 
     return () => { alive = false }
-  }, [leagueId])
+    // provider is in the key because the same numeric id is a different
+    // league on a different platform — re-fetching on it is what stops a
+    // switch between two leagues drawing the first one's rosters.
+  }, [leagueId, provider])
 
   return { snapshot, status, reason }
 }

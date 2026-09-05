@@ -1,0 +1,39 @@
+-- 0007_player_name_key.sql — the column a cross-provider join is made on.
+--
+-- The players table has held Sleeper's pool since 0001 with no reader at
+-- all. ESPN is the first, and it arrives needing something 0001 could not
+-- have known it would: a way to find a Sleeper player id from a NAME, because
+-- ESPN's roster carries ESPN's own ids and Sleeper's published `espn_id`
+-- covers 24.8% of Juke's board (measured 5 September 2026, and the misses are
+-- every star drafted since 2021).
+--
+-- ---- Why a stored key rather than normalising at read time ----
+--
+-- SQLite has no normalise(), so matching on a normalised name without this
+-- column means reading every candidate row and folding them in JavaScript —
+-- 4,388 rows per league snapshot to resolve about 140 players.
+--
+-- With it the join is `WHERE name_key IN (...)`: one indexed lookup, bounded
+-- by the size of the roster rather than the size of the league.
+--
+-- ---- And an exact name would not do ----
+--
+-- Measured against a real ESPN league's rosters: an exact (case-insensitive)
+-- name match finds 114 of 128 skill players, and **twelve of the fourteen
+-- misses are suffixes** — ESPN writes "Marvin Harrison Jr.", "Brian Thomas
+-- Jr.", "Kenneth Walker III", "Kyle Pitts Sr."; Sleeper stores none of them
+-- that way. So the exact-match version of this column would silently drop a
+-- tenth of every roster, concentrated at the top of the draft. The key is
+-- worth having precisely because it is not the name.
+--
+-- Nullable, and filled by the next pool sync rather than backfilled here:
+-- the value is derived from `name` by worker/names.js, which SQL cannot call.
+-- resolveSleeperIds() treats a NULL key as a row that cannot be matched,
+-- which is what an unsynced pool should look like — see its own note on
+-- telling "the pool is empty" from "this player is not in it".
+ALTER TABLE players ADD COLUMN name_key TEXT;
+
+-- The join's only query. Not unique: two players genuinely share a normalised
+-- name (a father and son, a suffix stripped off both), and the position and
+-- club are what separate them at read time.
+CREATE INDEX IF NOT EXISTS idx_players_name_key ON players (name_key);

@@ -3,7 +3,7 @@ import { SignInButton, SignUpButton, SignedIn, SignedOut, useClerk, useUser } fr
 import AppShell from './shell/AppShell.jsx'
 import ConnectLeagueCta from './shell/ConnectLeagueCta.jsx'
 import { useLeague } from '../hooks/useLeague.js'
-import { LINE as PLATFORM_LINE, platformFor } from './shell/leaguePlatforms.js'
+import { LINE as PLATFORM_LINE, LIVE_NAMES as PLATFORM_NAMES, platformFor } from './shell/leaguePlatforms.js'
 import { useAccountUiReady } from '../hooks/useAccountUiReady.js'
 import { useEngine, useJukeTick } from '../hooks/useJukeEngine.js'
 
@@ -104,7 +104,8 @@ function GuestCard() {
         You&apos;re drafting as a guest
       </div>
       <p className="mb-3.5 mt-1.5 text-[14px] leading-[1.5] text-voidInk-body">
-        An account keeps your mocks and lets you connect a league. Sleeper today, more to come.
+        An account keeps your mocks and lets you connect a league. {PLATFORM_NAMES} today, more
+        to come.
       </p>
       <div className="flex gap-2">
         {ready ? (

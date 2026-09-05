@@ -32,7 +32,7 @@ import {
   syncPlayerPool, cachedNews, storeNews, usableNews, storeSignup, touchUser, deleteUserData,
   getSavedDraft, putSavedDraft, deleteSavedDraft,
   listDraftHistory, putHistoryEntry, deleteHistoryEntry,
-  listLeagues, putLeague, deleteLeague, selectLeague
+  listLeagues, putLeague, deleteLeague, selectLeague, resolveSleeperIds
 } from "./store.js";
 
 /* Sleeper, read-only. Kept out of store.js for the same reason auth.js is:
@@ -40,6 +40,11 @@ import {
    and nothing else, and the two meet in a route handler rather than
    reaching into each other. */
 import { lookupUser, leagueSnapshot, nflState, SNAPSHOT_TTL, SLEEPER_API } from "./sleeper.js";
+import {
+  lookupLeague as espnLookupLeague,
+  leagueSnapshot as espnLeagueSnapshot,
+  ESPN_API
+} from "./espn.js";
 
 /* Clerk session verification — see that file's own header for the shape.
    Kept separate from store.js on purpose: that file owns D1 and nothing
@@ -1178,6 +1183,125 @@ async function sleeperSnapshotRoute(request, env) {
   return new Response(body, { headers });
 }
 
+/* ---- ESPN ----
+
+   Two routes mirroring the Sleeper pair above, and one thing that is not a
+   mirror: a snapshot here has to translate ESPN's player ids into Sleeper's
+   before anybody downstream sees it. See espn.js's crosswalk note for why
+   that cannot be an id join, and store.js's resolveSleeperIds() for the
+   half that reads the pool.
+
+   Neither route needs a token. A public ESPN league is public — asking us
+   for it teaches a caller nothing lm-api-reads.fantasy.espn.com would not
+   have told them directly — and the origin check is what stops this being a
+   general-purpose proxy. Same reasoning the Sleeper pair is written under. */
+
+function espnSeason(url, state) {
+  /* The season Sleeper says it is in, not one derived from the clock.
+
+     Two providers, one notion of "now": deriving ESPN's season separately
+     would let the app ask ESPN about 2027 while every other screen is on
+     2026, which is the "written down twice" failure with a year in it. The
+     caller can override for somebody connecting an old league. */
+  return (url.searchParams.get("season") || (state && state.season) || "").slice(0, 8);
+}
+
+async function espnLookupRoute(request, env) {
+  if (!originAllowed(request)) {
+    return new Response(JSON.stringify({ error: "forbidden" }), {
+      status: 403, headers: { "content-type": "application/json" }
+    });
+  }
+
+  const headers = Object.assign({ "content-type": "application/json" }, corsFor(request));
+  const url = new URL(request.url);
+
+  /* ESPN league ids are integers and its own API answers 400 for anything
+     it cannot parse as one — so this refuses the same shape ESPN does,
+     before spending a request finding out. */
+  const leagueId = (url.searchParams.get("league") || "").trim().slice(0, 24);
+  if (!/^[0-9]{1,12}$/.test(leagueId)) {
+    return new Response(JSON.stringify({ error: "bad-request" }), { status: 400, headers });
+  }
+
+  const state = await nflState(env.SLEEPER_BASE || SLEEPER_API);
+  const season = espnSeason(url, state);
+  if (!season) {
+    return new Response(JSON.stringify({ error: "upstream" }), { status: 503, headers });
+  }
+
+  const found = await espnLookupLeague(leagueId, season, env.ESPN_BASE || ESPN_API);
+  return new Response(JSON.stringify(Object.assign({ season }, found)), { headers });
+}
+
+async function espnSnapshotRoute(request, env, ctx) {
+  if (!originAllowed(request)) {
+    return new Response(JSON.stringify({ error: "forbidden" }), {
+      status: 403, headers: { "content-type": "application/json" }
+    });
+  }
+
+  const headers = Object.assign({ "content-type": "application/json" }, corsFor(request));
+  const url = new URL(request.url);
+  const leagueId = (url.searchParams.get("league") || "").trim().slice(0, 24);
+  if (!/^[0-9]{1,12}$/.test(leagueId)) {
+    return new Response(JSON.stringify({ error: "bad-request" }), { status: 400, headers });
+  }
+
+  const state = await nflState(env.SLEEPER_BASE || SLEEPER_API);
+  const season = espnSeason(url, state);
+  if (!season) {
+    return new Response(JSON.stringify({ error: "upstream" }), { status: 503, headers });
+  }
+
+  // Same construction as the Sleeper snapshot's key, and the season is part
+  // of it: the same league id is a different league year to year.
+  const cache = caches.default;
+  const key = new Request(
+    "https://juke.internal/espn/snapshot?league=" + leagueId + "&season=" + season,
+    { method: "GET" }
+  );
+  const hit = await cache.match(key);
+  if (hit) return new Response(await hit.text(), { headers });
+
+  const resolve = (wanted) => resolveSleeperIds(env, wanted);
+  const out = await espnLeagueSnapshot(leagueId, season, env.ESPN_BASE || ESPN_API, resolve);
+
+  if (!out.snapshot) {
+    /* Not cached, and the reason is passed through rather than flattened
+       to a 404: "this league is private" is the one failure here the reader
+       can actually act on, and telling them to check the number instead
+       would send them to re-read a number that was right. */
+    const status = out.reason === "private" ? 403 : out.reason === "not-found" ? 404 : 503;
+    return new Response(JSON.stringify({ error: out.reason }), { status, headers });
+  }
+
+  /* The pool is what the crosswalk reads, and nothing else has ever read
+     it — so on a fresh deployment it is empty until the nightly cron first
+     runs, and every roster would come back empty with no explanation.
+
+     Filled off the response path, the same way touchUser() records a visit:
+     the reader gets this snapshot as it is, and the next one two minutes
+     later has a crosswalk behind it. `crosswalkReady` is what lets the
+     screen say "still reading your league" rather than drawing ten empty
+     rosters as though that were the answer. */
+  if (!out.snapshot.crosswalkReady) {
+    after(ctx, syncPlayerPool(env).then((n) => {
+      if (n) console.log("player pool filled on demand:", n);
+    }));
+  }
+
+  const body = JSON.stringify(out.snapshot);
+  /* A snapshot taken before the pool existed is not worth keeping for two
+     minutes: it is the one the sync above is in the middle of fixing. */
+  if (out.snapshot.crosswalkReady) {
+    await cache.put(key, new Response(body, {
+      headers: { "content-type": "application/json", "cache-control": "public, max-age=" + SNAPSHOT_TTL }
+    }));
+  }
+  return new Response(body, { headers });
+}
+
 /* The connection itself, which is the one part that needs an account.
 
    That is the handoff's own rule — "Connect-league always routes through
@@ -1265,30 +1389,76 @@ async function meLeaguesRoute(request, env) {
     return new Response(JSON.stringify({ error: "bad-request" }), { status: 400, headers });
   }
 
-  /* The label is re-read from Sleeper rather than taken from the client.
+  /* Which platform, defaulting to the one that was the only one.
+
+     Every connect posted before ESPN existed carried no provider at all, so
+     the default is not a convenience — it is what keeps those requests
+     meaning what they meant. Checked against the list rather than stored as
+     sent, because this value is a primary key column and a caller could
+     otherwise invent a provider nothing can ever read back. */
+  const provider = String((body && body.provider) || "sleeper").slice(0, 16);
+  if (provider !== "sleeper" && provider !== "espn") {
+    return new Response(JSON.stringify({ error: "bad-request" }), { status: 400, headers });
+  }
+
+  /* The label is re-read from the platform rather than taken from the client.
 
      What the browser posted is what its own picker was showing, which came
      from us a moment ago — but trusting it would let a caller store any
      string as a league name, and that string is then drawn in the header of
-     every page they load. Asking Sleeper again costs one cached call and
-     means the name in the chip is the league's own.
+     every page they load. Asking again costs one cached call and means the
+     name in the chip is the league's own.
 
      It also validates the id: a league that does not resolve cannot be
      connected, which is a better failure than a chip pointing at nothing. */
-  const snapshot = await leagueSnapshot(leagueId, env.SLEEPER_BASE || SLEEPER_API);
-  if (!snapshot) {
-    return new Response(JSON.stringify({ ok: false, error: "not-found" }), { status: 404, headers });
+  let league = null;
+  let failure = "not-found";
+
+  if (provider === "espn") {
+    const state = await nflState(env.SLEEPER_BASE || SLEEPER_API);
+    const season = String((body && body.season) || (state && state.season) || "").slice(0, 8);
+    if (!season) {
+      return new Response(JSON.stringify({ ok: false, error: "upstream" }), { status: 503, headers });
+    }
+    const found = await espnLookupLeague(leagueId, season, env.ESPN_BASE || ESPN_API);
+    if (found.league) {
+      /* ESPN has no account to infer the reader's team from, so the dialog
+         asks and posts it. Checked against the league's own teams rather
+         than stored as sent: an ownerId naming a team that is not in this
+         league is a roster no screen can ever find, which renders as a
+         connected league with nothing in it. */
+      const teamId = String((body && body.ownerId) || "").slice(0, 16);
+      const known = found.league.teams.some((t) => t.teamId === teamId);
+      league = {
+        provider: "espn",
+        leagueId: found.league.leagueId,
+        ownerId: known ? teamId : null,
+        name: found.league.name,
+        season: found.league.season,
+        totalTeams: found.league.totalTeams
+      };
+    } else {
+      failure = found.reason || "not-found";
+    }
+  } else {
+    const snapshot = await leagueSnapshot(leagueId, env.SLEEPER_BASE || SLEEPER_API);
+    if (snapshot) {
+      league = {
+        provider: "sleeper",
+        leagueId: snapshot.leagueId,
+        ownerId: String((body && body.ownerId) || "").slice(0, 40) || null,
+        name: snapshot.name,
+        season: snapshot.season,
+        totalTeams: snapshot.totalTeams
+      };
+    }
   }
 
-  const ownerId = String((body && body.ownerId) || "").slice(0, 40) || null;
-  const league = {
-    provider: "sleeper",
-    leagueId: snapshot.leagueId,
-    ownerId,
-    name: snapshot.name,
-    season: snapshot.season,
-    totalTeams: snapshot.totalTeams
-  };
+  if (!league) {
+    // 403 for a private ESPN league: it exists, and the reader can fix it.
+    const status = failure === "private" ? 403 : 404;
+    return new Response(JSON.stringify({ ok: false, error: failure }), { status, headers });
+  }
   const ok = await putLeague(env, user.id, league);
 
   /* A league somebody just connected is the one they want to look at.
@@ -1469,6 +1639,30 @@ export default {
         }, corsFor(request)) });
       }
       return sleeperSnapshotRoute(request, env);
+    }
+
+    /* ESPN's two, mirroring Sleeper's. `ctx` reaches the snapshot because
+       it may fill the player pool off the response path — see that route. */
+    if (url.pathname === "/espn/league") {
+      if (request.method === "OPTIONS") {
+        return new Response(null, { headers: Object.assign({
+          "access-control-allow-methods": "GET",
+          "access-control-allow-headers": "content-type",
+          "access-control-max-age": "86400"
+        }, corsFor(request)) });
+      }
+      return espnLookupRoute(request, env);
+    }
+
+    if (url.pathname === "/espn/snapshot") {
+      if (request.method === "OPTIONS") {
+        return new Response(null, { headers: Object.assign({
+          "access-control-allow-methods": "GET",
+          "access-control-allow-headers": "content-type",
+          "access-control-max-age": "86400"
+        }, corsFor(request)) });
+      }
+      return espnSnapshotRoute(request, env, ctx);
     }
 
     if (url.pathname === "/me/leagues") {

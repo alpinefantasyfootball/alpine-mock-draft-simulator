@@ -103,6 +103,7 @@ export default function RoomPage({ slug }) {
      that is never live. */
   const { snapshot, status: snapStatus, reason: snapReason } = useLeagueSnapshot(
     live ? league.leagueId : null,
+    live ? league.provider : null,
   )
 
   // The lobby only links slugs that exist, so this is a hand-typed or stale

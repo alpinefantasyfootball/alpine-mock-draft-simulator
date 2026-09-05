@@ -67,11 +67,23 @@ test.describe("a connected league", () => {
        under every connect control on the site — four platforms, named as a
        list of equals, with one built. The replacement says which is which,
        and it is one shared constant so it cannot drift back into a claim in
-       six places at once. */
+       six places at once.
+
+       Asserted as a property rather than as the caption's exact words,
+       because those words move every time a platform ships: this went from
+       "Sleeper now · ESPN, Yahoo, CBS soon" to "Sleeper and ESPN now ·
+       Yahoo, CBS soon" the day ESPN landed, and a literal here would have
+       gone red for the feature working. What must stay true is the split —
+       something is named as available and something as not — and that the
+       undifferentiated list never comes back. */
     const body = await text(page);
     expect(body).not.toContain("Sleeper · ESPN · Yahoo · CBS");
     expect(body).not.toContain("Sleeper, ESPN, Yahoo or CBS");
-    expect(body).toContain("Sleeper now");
+    expect(body, "says what is available now").toMatch(/\bnow\b/);
+    expect(body, "and what is not yet").toMatch(/\bsoon\b/);
+    /* Sleeper is on the live side of that split, and naming it here is what
+       stops the caption degrading into "· soon" with nothing before it. */
+    expect(body).toMatch(/Sleeper[^·]*\bnow\b/);
 
     await page.close();
   });

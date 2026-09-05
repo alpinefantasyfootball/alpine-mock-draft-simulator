@@ -41,6 +41,8 @@ export function nowSeconds() {
    The player pool
    ---------------------------------------------------------- */
 
+import { normalise } from "./names.js";
+
 const SLEEPER_POOL = "https://api.sleeper.app/v1/players/nfl";
 
 /* The same escape hatch TANK01_BASE already is, for the same reason.
@@ -152,22 +154,31 @@ function poolRows(pool, stamp) {
       name,
       pos || null,
       p.team ? String(p.team).toUpperCase().slice(0, 8) : null,
-      stamp
+      stamp,
+      // 0007's join key. Derived here rather than at read time because
+      // SQLite cannot call normalise() — see that migration for why an
+      // exact name will not do the job.
+      normalise(name) || null
     ]);
   }
   return rows;
 }
 
 function upsertPlayers(env, group) {
-  const values = group.map(() => "(?, ?, ?, ?, ?)").join(", ");
+  const values = group.map(() => "(?, ?, ?, ?, ?, ?)").join(", ");
   return env.DB.prepare(
-    "INSERT INTO players (player_id, name, position, team, last_updated) VALUES " +
+    "INSERT INTO players (player_id, name, position, team, last_updated, name_key) VALUES " +
     values +
     " ON CONFLICT(player_id) DO UPDATE SET" +
     "   name = excluded.name," +
     "   position = excluded.position," +
     "   team = excluded.team," +
-    "   last_updated = excluded.last_updated"
+    "   last_updated = excluded.last_updated," +
+    // Without this a pool that synced before 0007 keeps its NULL key for
+    // ever: every row conflicts on player_id from the second sync onward,
+    // so the column would only ever fill for players who are new to the
+    // league. The crosswalk would work, on rookies.
+    "   name_key = excluded.name_key"
   ).bind(...group.flat());
 }
 
@@ -704,6 +715,118 @@ export async function deleteUserData(env, clerkId) {
 function chunk(list, size) {
   const out = [];
   for (let i = 0; i < list.length; i += size) out.push(list.slice(i, i + size));
+  return out;
+}
+
+/* ---------- The cross-provider player crosswalk ----------
+
+   ESPN (and Yahoo, and CBS, when they arrive) hand back rosters of THEIR
+   player ids. Everything downstream of a snapshot — the board, the
+   projections, every room — is keyed by Sleeper's. This is the join, and
+   the pool cached above is what makes it possible: it is the first reader
+   that table has ever had.
+
+   ---- Three tiers, in order of how much they can be trusted ----
+
+   Same shape as link_source_ids() and link_nflverse() in the pipeline, and
+   for the same reason: a crosswalk that misses quietly is worse than no
+   crosswalk, because a wrong match does not look wrong on the page.
+
+     1. name key + position + club — all three agree.
+     2. name key + position — he has changed club since one side last
+        looked, which is the ordinary case in September.
+     3. nothing — reported, never guessed.
+
+   A defense never reaches here: Sleeper's player_id for one IS the club
+   abbreviation, so espn.js resolves it from the club alone.
+
+   ---- Ambiguity is dropped, not picked ----
+
+   Two Sleeper players can share a name key at one position (a suffix
+   stripped off a father and a son). Where club separates them, tier 1 does
+   it. Where it does not, picking one is a coin flip that puts another
+   man's projections on somebody's roster, so both are dropped and the name
+   is reported — which is exactly what the pipeline does with a Tank01
+   collision. */
+
+const RESOLVE_CHUNK = 90;
+
+/* Answers a Map from `name_key|POS` to a Sleeper player id.
+
+   **null, not an empty Map, when the pool has never synced.** Those are
+   different facts and only one is worth telling somebody about: an empty
+   Map means "none of these players exist", which would render as a league
+   of empty rosters, and the pool being unfilled means "ask again in a
+   minute". A caller that cannot tell them apart will draw the first when
+   it should be saying the second — the same line `configured: false` draws
+   for the news route. */
+export async function resolveSleeperIds(env, wanted) {
+  if (!env.DB) return null;
+  if (!wanted || !wanted.length) return new Map();
+
+  const keys = [...new Set(wanted.map((w) => normalise(w.name)).filter(Boolean))];
+  if (!keys.length) return new Map();
+
+  const rows = [];
+  try {
+    for (let i = 0; i < keys.length; i += RESOLVE_CHUNK) {
+      const group = keys.slice(i, i + RESOLVE_CHUNK);
+      const res = await env.DB.prepare(
+        "SELECT player_id, position, team, name_key FROM players" +
+        " WHERE name_key IN (" + group.map(() => "?").join(", ") + ")"
+      ).bind(...group).all();
+      rows.push(...(res.results || []));
+    }
+  } catch (err) {
+    // A missing table or a missing 0007 column. Either way there is no
+    // crosswalk to be had, and null says so rather than claiming the
+    // players do not exist.
+    console.error("crosswalk read failed:", err && err.message);
+    return null;
+  }
+
+  /* An empty result is ambiguous in exactly the way this function refuses
+     to be: nobody matched, or the pool has never been filled. One extra
+     count settles it, and only on the path where it matters. */
+  if (!rows.length) {
+    try {
+      const probe = await env.DB.prepare("SELECT COUNT(*) AS n FROM players").first();
+      if (!probe || !probe.n) return null;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  /* Sleeper stores a defense's position as DEF and the rest of this
+     project calls it DST. Translated here, at the one place the two
+     vocabularies meet, rather than at every caller. */
+  const posOf = (p) => (String(p || "").toUpperCase() === "DEF" ? "DST" : String(p || "").toUpperCase());
+
+  const byKeyPosTeam = new Map();
+  const byKeyPos = new Map();
+  const seen = new Map();
+  rows.forEach((r) => {
+    const pos = posOf(r.position);
+    const kp = r.name_key + "|" + pos;
+    const kpt = kp + "|" + String(r.team || "").toUpperCase();
+    if (!byKeyPosTeam.has(kpt)) byKeyPosTeam.set(kpt, r.player_id);
+    // Count how many distinct players share the looser key, so an
+    // ambiguous one can be refused rather than resolved by luck.
+    seen.set(kp, (seen.get(kp) || 0) + 1);
+    if (!byKeyPos.has(kp)) byKeyPos.set(kp, r.player_id);
+  });
+
+  const out = new Map();
+  wanted.forEach((w) => {
+    const key = normalise(w.name);
+    if (!key || !w.pos) return;
+    const kp = key + "|" + w.pos;
+    const exact = byKeyPosTeam.get(kp + "|" + String(w.team || "").toUpperCase());
+    if (exact) { out.set(kp, exact); return; }
+    // Only when he is the sole candidate at that name and position.
+    if (seen.get(kp) === 1) out.set(kp, byKeyPos.get(kp));
+  });
+
   return out;
 }
 

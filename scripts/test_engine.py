@@ -20,6 +20,12 @@ import subprocess
 import sys
 import tempfile
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__))))
+# build_players.py's own normalise(), not a copy of it: this check asserts
+# that worker/names.js agrees with THE pipeline, so importing is the whole
+# point. build_players.py runs nothing at import time.
+from build_players import normalise
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ENGINE = os.path.join(ROOT, "draft-engine.js")
 ROOM = os.path.join(ROOT, "room.js")
@@ -674,6 +680,105 @@ console.log("OK");
 """
 
 
+# ---------------------------------------------------------------------------
+# worker/names.js against build_players.py's own normalise()
+# ---------------------------------------------------------------------------
+
+NAMES_JS = os.path.join(ROOT, "worker", "names.js")
+
+# The names that actually decide whether the two agree. Every one of them is
+# a real spelling from a real feed rather than an invented edge case:
+#
+#   * the suffixes ESPN writes and Sleeper does not -- twelve of the fourteen
+#     misses in the measurement that made this join possible at all;
+#   * the punctuation two feeds disagree about (a curly apostrophe against a
+#     straight one is the difference between a match and a miss);
+#   * an accent, which is the one place the two languages take a genuinely
+#     different route -- Python strips combining marks by category and
+#     JavaScript by codepoint range.
+NAME_CASES = [
+    "Marvin Harrison Jr.",
+    "Brian Thomas Jr.",
+    "Kenneth Walker III",
+    "Kyle Pitts Sr.",
+    "Michael Pittman Jr.",
+    "Amon-Ra St. Brown",
+    "Ja'Marr Chase",
+    "Ja’Marr Chase",
+    "D'Andre Swift",
+    "Equanimeous St. Brown",
+    "Patriots D/ST",
+    "Houston Texans",
+    "José Borderón",
+    "Robert Griffin III",
+    "  spaced   out  ",
+    "",
+]
+
+NAMES_HARNESS = r"""
+import { normalise } from NAMES_PATH;
+const cases = CASES_JSON;
+console.log(JSON.stringify(cases.map(normalise)));
+"""
+
+
+def check_names(runtime_name, runtime_path):
+    """worker/names.js must answer exactly what build_players.py answers.
+
+    The two exist because a crosswalk needs both sides to agree: the pipeline
+    writes a Sleeper pool row's key in Python, the worker resolves an ESPN
+    roster against it in JavaScript, and a normaliser that drifted between
+    them would not throw. It would simply stop matching -- and a roster that
+    comes up a few players short looks exactly like a roster.
+
+    That is the same failure link_nflverse() avoids by reusing index_sleeper()
+    rather than writing a second one. Here the reuse is impossible, so the
+    agreement is asserted instead.
+    """
+    if not os.path.exists(NAMES_JS):
+        print("x   worker/names.js is missing")
+        return 1
+
+    # file:// rather than a bare path: on Windows an absolute path starts
+    # "C:/", and an ESM specifier reads that as a URL scheme it does not
+    # know. The engine harness above sidesteps this by reading the file
+    # rather than importing it.
+    url = "file:///" + NAMES_JS.replace("\\", "/").lstrip("/")
+    harness = (NAMES_HARNESS
+               .replace("NAMES_PATH", json.dumps(url))
+               .replace("CASES_JSON", json.dumps(NAME_CASES)))
+
+    with tempfile.TemporaryDirectory() as tmp:
+        script = os.path.join(tmp, "names.mjs")
+        with open(script, "w", encoding="utf-8") as handle:
+            handle.write(harness)
+        cmd = [runtime_path, script]
+        if runtime_name == "deno":
+            cmd = [runtime_path, "run", "--allow-read", script]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+
+    if result.returncode != 0:
+        print("x   worker/names.js would not run:\n" + (result.stderr or "").rstrip())
+        return 1
+
+    try:
+        got = json.loads(result.stdout.strip().splitlines()[-1])
+    except (ValueError, IndexError):
+        print("x   worker/names.js printed something unreadable: " + repr(result.stdout))
+        return 1
+
+    want = [normalise(n) for n in NAME_CASES]
+    bad = 0
+    for raw, a, b in zip(NAME_CASES, got, want):
+        if a != b:
+            bad += 1
+            print("x   normalise(%r): names.js %r, build_players.py %r" % (raw, a, b))
+    if not bad:
+        print("ok  worker/names.js agrees with build_players.py on %d names"
+              % len(NAME_CASES))
+    return bad
+
+
 def main():
     name, path = find_runtime()
     if not name:
@@ -705,7 +810,12 @@ def main():
         print(result.stdout.rstrip())
     if result.stderr:
         print(result.stderr.rstrip(), file=sys.stderr)
-    return result.returncode
+
+    # The cross-language half. Runs whatever the engine harness did, because
+    # a drifted normaliser is a silent miss rather than a crash and there is
+    # no other suite in this project with both languages in it.
+    bad = check_names(name, path)
+    return result.returncode or (1 if bad else 0)
 
 
 if __name__ == "__main__":

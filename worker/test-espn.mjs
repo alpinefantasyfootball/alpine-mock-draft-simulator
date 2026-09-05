@@ -1,0 +1,187 @@
+/* The ESPN adapter, without ESPN.
+ *
+ *   node worker/test-espn.mjs
+ *
+ * No network, no wrangler, no account. espn.js takes its base URL and its
+ * crosswalk as parameters for exactly this reason — the same seam
+ * SLEEPER_BASE and TANK01_BASE already cut for their own feeds — so the
+ * whole of the mapping can be driven against a canned payload with the
+ * awkward rows in it on purpose.
+ *
+ * What this covers is the half that cannot be checked against the live API:
+ * a private league, a league that is not there, a defense, a bench slot, a
+ * player nobody can resolve, and a pool that has never synced. Every one of
+ * those either cannot be produced on demand from a real league or would
+ * mean breaking somebody's real one to see it.
+ *
+ * What it deliberately does NOT cover is whether ESPN's response looks like
+ * the fixture below. Nothing offline can know that, which is why the shape
+ * was read off a real public league first and is re-checked by hand against
+ * one — see CLAUDE.md's ESPN section for the measurement.
+ */
+
+import { leagueSnapshot, lookupLeague, normalise } from "./espn.js";
+
+let failures = 0;
+function check(what, got, want) {
+  const a = JSON.stringify(got);
+  const b = JSON.stringify(want);
+  if (a === b) {
+    console.log("ok  " + what);
+  } else {
+    failures++;
+    console.log("x   " + what + "\n      expected " + b + "\n      received " + a);
+  }
+}
+
+/* ---- A fixture with every case that matters in it ----
+
+   Two teams. Between them: a suffixed name Sleeper stores unsuffixed, a
+   defense, a player on a bench slot, a player on IR, a player who has
+   changed club since the pool was built, and one nobody can resolve. */
+const LEAGUE = {
+  id: 777,
+  seasonId: 2026,
+  scoringPeriodId: 0,          // preseason — not a week
+  settings: {
+    name: "Fixture League",
+    size: 2,
+    acquisitionSettings: { acquisitionBudget: 100 },
+    scheduleSettings: { playoffTeamCount: 4 },
+  },
+  members: [
+    { id: "{AAA}", firstName: "Ada", lastName: "Lovelace" },
+    { id: "{BBB}", firstName: "Alan", lastName: "Turing" },
+  ],
+  teams: [
+    {
+      id: 1, abbrev: "ADA", name: "Ada's Analytics", primaryOwner: "{AAA}", logo: null,
+      record: { overall: { wins: 3, losses: 1, ties: 0, pointsFor: 412.5, pointsAgainst: 388.1 } },
+      roster: { entries: [
+        // Suffixed on ESPN, unsuffixed in the pool. The case an exact-name
+        // query drops, and the reason name_key exists.
+        { lineupSlotId: 2, playerPoolEntry: { player: { id: 1, fullName: "Marvin Harrison Jr.", defaultPositionId: 3, proTeamId: 22 } } },
+        // A defense: resolves from the club alone, never from the name.
+        { lineupSlotId: 16, playerPoolEntry: { player: { id: 2, fullName: "Texans D/ST", defaultPositionId: 16, proTeamId: 34 } } },
+        // Bench.
+        { lineupSlotId: 20, playerPoolEntry: { player: { id: 3, fullName: "Bench Guy", defaultPositionId: 2, proTeamId: 12 } } },
+        // Injured reserve — also not a starter.
+        { lineupSlotId: 21, playerPoolEntry: { player: { id: 4, fullName: "Hurt Guy", defaultPositionId: 4, proTeamId: 12 } } },
+      ] },
+    },
+    {
+      id: 2, abbrev: "ALN", name: "Turing Machines", primaryOwner: "{BBB}", logo: null,
+      record: { overall: { wins: 1, losses: 3, ties: 0, pointsFor: 388.1, pointsAgainst: 412.5 } },
+      roster: { entries: [
+        // Club has moved since the pool was built: tier 2 has to catch him.
+        { lineupSlotId: 0, playerPoolEntry: { player: { id: 5, fullName: "Traded Player", defaultPositionId: 1, proTeamId: 9 } } },
+        // Nobody. Must be reported, never guessed at.
+        { lineupSlotId: 4, playerPoolEntry: { player: { id: 6, fullName: "Nobody At All", defaultPositionId: 4, proTeamId: 3 } } },
+      ] },
+    },
+  ],
+};
+
+/* Stands in for D1. Keyed the way resolveSleeperIds() keys its answer, and
+   deliberately holding the pool's spelling rather than ESPN's. */
+const POOL = new Map([
+  ["marvinharrison|WR", "11628"],
+  ["tradedplayer|QB", "4881"],
+  ["benchguy|RB", "5555"],
+  ["hurtguy|TE", "6666"],
+]);
+const resolve = async (wanted) => {
+  const out = new Map();
+  wanted.forEach((w) => {
+    const k = normalise(w.name) + "|" + w.pos;
+    if (POOL.has(k)) out.set(k, POOL.get(k));
+  });
+  return out;
+};
+
+// Serves the fixture at whatever path espn.js asks for.
+function stub(status, body) {
+  return {
+    base: "https://stub.invalid",
+    fetch: async () => ({ ok: status === 200, status, json: async () => body }),
+  };
+}
+const realFetch = globalThis.fetch;
+function withFetch(status, body, fn) {
+  globalThis.fetch = async () => ({ ok: status === 200, status, json: async () => body });
+  return fn().finally(() => { globalThis.fetch = realFetch; });
+}
+
+console.log("--- the crosswalk ---");
+await withFetch(200, LEAGUE, async () => {
+  const { snapshot, reason } = await leagueSnapshot("777", "2026", "https://stub.invalid", resolve);
+
+  check("a readable league has no reason", reason, null);
+  check("the crosswalk was available", snapshot.crosswalkReady, true);
+
+  const ada = snapshot.teams[0];
+  check("a suffixed ESPN name resolves to the unsuffixed pool id",
+        ada.players.includes("11628"), true);
+  check("a defense resolves to its club abbreviation, which IS its Sleeper id",
+        ada.players.includes("HOU"), true);
+  check("bench and IR are on the roster", ada.players.length, 4);
+  check("and neither is a starter", ada.starters.sort(), ["11628", "HOU"]);
+
+  const alan = snapshot.teams[1];
+  check("a player whose club has changed still resolves on name and position",
+        alan.players, ["4881"]);
+  check("an unresolvable player is dropped from the roster", alan.players.includes("6666"), false);
+  check("and reported by name", snapshot.unmatched, ["Nobody At All (TE CHI)"]);
+  check("with a count beside it", snapshot.unmatchedCount, 1);
+
+  check("scoringPeriodId 0 is not week 0", snapshot.week, null);
+  check("the league's own settings come through",
+        [snapshot.name, snapshot.totalTeams, snapshot.waiverBudget, snapshot.playoffTeams],
+        ["Fixture League", 2, 100, 4]);
+  check("a manager's name is read from members, not left as a GUID",
+        snapshot.teams.map((t) => t.manager), ["Ada Lovelace", "Alan Turing"]);
+  check("the record comes through", [ada.wins, ada.losses, ada.pointsFor], [3, 1, 412.5]);
+});
+
+console.log("\n--- a pool that has never synced ---");
+await withFetch(200, LEAGUE, async () => {
+  /* null from resolve() is "there is no crosswalk", which is a different
+     fact from "nobody matched" — and the only one with a fix. A snapshot
+     that could not tell them apart would report an empty league. */
+  const { snapshot } = await leagueSnapshot("777", "2026", "https://stub.invalid", async () => null);
+  check("says so rather than reporting an empty league", snapshot.crosswalkReady, false);
+  check("and the defense still resolves, because it needs no pool",
+        snapshot.teams[0].players, ["HOU"]);
+});
+
+console.log("\n--- the failures are told apart ---");
+for (const [status, want] of [[401, "private"], [403, "private"], [404, "not-found"], [400, "not-found"], [500, "offline"]]) {
+  await withFetch(status, null, async () => {
+    const snap = await leagueSnapshot("777", "2026", "https://stub.invalid", resolve);
+    const look = await lookupLeague("777", "2026", "https://stub.invalid");
+    check(`HTTP ${status} on a snapshot reads as ${want}`, snap.reason, want);
+    check(`HTTP ${status} on a lookup reads as ${want}`, look.reason, want);
+  });
+}
+
+console.log("\n--- the lookup's own answer ---");
+await withFetch(200, LEAGUE, async () => {
+  const { league } = await lookupLeague("777", "2026", "https://stub.invalid");
+  check("names the league", [league.name, league.season, league.totalTeams], ["Fixture League", "2026", 2]);
+  check("and lists its teams, which is the question Sleeper never has to ask",
+        league.teams.map((t) => [t.teamId, t.name, t.manager]),
+        [["1", "Ada's Analytics", "Ada Lovelace"], ["2", "Turing Machines", "Alan Turing"]]);
+});
+
+console.log("\n--- normalise agrees with build_players.py ---");
+[
+  ["Marvin Harrison Jr.", "marvinharrison"],
+  ["Kenneth Walker III", "kennethwalker"],
+  ["Kyle Pitts Sr.", "kylepitts"],
+  ["Amon-Ra St. Brown", "amonrastbrown"],
+  ["Ja’Marr Chase", "jamarrchase"],
+  ["D'Andre Swift", "dandreswift"],
+].forEach(([raw, want]) => check(`normalise(${JSON.stringify(raw)})`, normalise(raw), want));
+
+console.log(failures ? `\nFAIL — ${failures} failing` : "\nOK — the ESPN adapter, offline");
+process.exit(failures ? 1 : 0);
