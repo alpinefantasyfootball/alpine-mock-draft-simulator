@@ -257,7 +257,7 @@ export default function HomePhone() {
             <Sparkles className="h-3.5 w-3.5 not-italic" aria-hidden="true" />
             Agility through analytics
           </p>
-          <h1 className="mt-2 font-display text-[42px] font-extrabold italic uppercase leading-[0.92] tracking-[-0.01em]">
+          <h1 className="mt-2 font-display text-[42px] font-extrabold italic uppercase leading-[0.92] tracking-normal">
             <span className="text-white">Start a</span>
             <br />
             <span className="text-mint">mock draft.</span>

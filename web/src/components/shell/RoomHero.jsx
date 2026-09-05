@@ -4,7 +4,7 @@ import KickoffPill from './KickoffPill.jsx'
    "Room hero (shared by c/d/e/h/i)".
 
    Back chevron, a mono eyebrow in the room's own accent, an italic
-   Barlow Condensed H1, and one line of sub-copy. The ground is the room's
+   font-display H1, and one line of sub-copy. The ground is the room's
    accent at 13% alpha fading out by 70%, over `flow.hero`.
 
    ---- Why the accent arrives as a prop and not a class ----

@@ -118,6 +118,7 @@ the Stack section above, not a one-time migration hiccup.
 | `web/index.html` | The real homepage entry Vite builds from. Loads the legacy files above as root-relative classic scripts, alongside Vite's own hashed module bundle for React. The Draft Room markup lives here too, hidden — see the Stack section. |
 | `web/src/components/phone/` | The phone-only screens, mounted below `sm` (`usePhoneWidth()`): the draft room, the floating nav pill. Each is a different screen from its desktop counterpart rather than a narrower one — see "The mobile pass" below for why that is a product decision and what it costs. **Two have left**: the homepage (`HomeAlive.jsx`) and the Mock Drafts Lobby (`DraftRoomEntry.jsx`) are one responsive screen at every width now — see "Flow v3" below for why that handoff reverses the split for those two specifically and not for the draft room. |
 | `web/src/components/settings/` | The Draft Settings screen's own controls, the scoring-rule editor and the draft-order list. Split out of `DraftSettingsModal.jsx` when that file became the whole settings screen rather than a three-tab modal. |
+| `web/src/components/PracticeScenarios.jsx` | The Mock Drafts lobby's "Practice a scenario" grid — four preset drafts that launch with their settings already chosen. Draws only; `practiceScenarios.js` beside it decides which four, and `engine.startScenario()` is what turns a card into a draft. |
 | `web/src/clerkConfig.js` | The publishable key (from `VITE_CLERK_PUBLISHABLE_KEY`, public by design) and the one appearance object every Clerk component is themed by. Two hand-tuned copies of "make Clerk look like Juke" would drift the first time either changed. |
 | `web/src/components/AuthBridge.jsx` | Writes `window.JukeAuth` and fires `juke:auth`, so `app.js` — a classic script, where Clerk's hooks cannot reach — can read who is signed in. `window.JukeEngine` pointing the other way. Renders nothing. |
 | `web/src/hooks/useAccountUiReady.js` | "Is it safe to render Clerk's components yet": a key exists *and* we are past the first client pass. Both halves fail silently on their own — see the Accounts section. |
@@ -3777,6 +3778,76 @@ be grafting a Tailwind-side idiom onto a codebase that has never used one
 for a button, which is a bigger and different change than "match the
 button that does the same job" asks for.
 
+### The display face is Gabarito now, and it is a third wider
+
+Barlow Condensed retired 4 September 2026, the same way orange did: an
+owner's preference outranking an argument that was correct on the day it was
+made. Half of that argument survives and half does not, so it is corrected in
+place at `--font-display` rather than left standing.
+
+**What survives is why the face moved off Poppins at all** — Poppins was
+Sleeper's, type is the fastest identity signal there is, and Gabarito is no
+more Sleeper's face than Barlow was. **What does not survive is "condensed,
+because a scoreboard and a jersey nameplate are condensed caps."** Gabarito is
+a rounded geometric. Measured in the browser at 800 weight and the same pixel
+size, against Barlow Condensed actually loaded rather than a fallback:
+
+```
+cap height   96%      x-height   94%      width   133%
+```
+
+Slightly shorter and **a third wider** — the exact opposite trade to the
+Poppins swap, which came out *taller and narrower* and therefore needed no
+re-measuring anywhere. Every heading on the site now wants a third more
+horizontal room than it did.
+
+**So every fixed-width box holding display type has to be re-checked, and one
+failed.** `.pick-no` is a 38px column carrying a pick code, and the widest a
+default league produces is `14.01`; 38 was measured against the narrow face.
+It is 44 now. `.hero h1` already steps down under 620px and still fits. The
+React side is fluid at every H1, which is why nothing there needed a number —
+but the next fixed width added under `font-display` needs this paragraph read
+first.
+
+**The tracking came off with it.** Seven negative `letter-spacing` values in
+`style.css`, every one on a `var(--font-display)` rule, were cut for a
+condensed face: `-0.03em` is now `-0.005em` and `-0.02em`/`-0.01em` are `0`.
+Two Tailwind call sites moved with them (`tracking-[-0.01em]` →
+`tracking-normal` on the two H1s that carried it); the other three negative
+`tracking-[...]` values in `web/src` are on `font-body` and were left alone.
+
+**"Arial Narrow" is gone from the stack and that is not tidying.** It was
+there so a Barlow Condensed that failed to load landed on something of
+roughly the same width. A narrow fallback under a face that is not narrow
+reflows every heading on the one load the fallback exists for.
+
+**Gabarito ships no italic, at any weight**, and roughly a dozen font-display
+headings across the app are styled `italic` — so every one of them is a
+browser-synthesized oblique now. That reads worse than it is: `web/index.html`
+had only just added `ital,wght@0,600;0,700;1,700;1,800` to *stop* exactly
+that, and before then every one of those headings had been synthesized for
+the whole life of the project. Asking Google for an `ital` axis Gabarito does
+not have would fetch nothing and change nothing. Checked on screen at 375px
+and 1440px before accepting it.
+
+**The face is named in exactly two places and must stay that way** —
+`--font-display` in `style.css` and `fontFamily.display` in
+`tailwind.config.js`. Two copies of "what the display face is" fail silently:
+the legacy pages and the React app simply render in different fonts and
+nothing errors. Every comment that named the old face by name was rewritten
+with it, because "a comment naming a face is the same drift as a rule naming
+one" and there were seven of them.
+
+**And the two legal pages were never being stamped.** `docs/privacy.html` and
+`docs/terms.html` load `style.css`, `theme.js` and `back-to-top.js` by a `?v=`
+address, and the nightly's sed list has always been `web/index.html`,
+`404.html` and the how-it-works page — so those three assets sat frozen at
+`202608222306` on those two pages while the rest of the site moved. A
+returning visitor got August's stylesheet under HTML that had changed under
+it. Found by this swap, where those pages would have requested Gabarito and
+styled it with a `--font-display` that still said Barlow. Both are in the sed
+list now.
+
 ## The shark
 
 The goalpost monogram is gone. The mark is a shark, and **no colour token
@@ -5344,6 +5415,131 @@ mounts it. It is keyed on `engine` rather than `[]` for a second reason:
 `analyze` is a const further down the same function, in its temporal dead
 zone on exactly the render that early return takes.
 
+## Practice a scenario
+
+`design_handoff_practice_scenarios` (option 1c) — the 2x2 grid of preset
+drafts under "Draft with friends" on the Mock Drafts lobby. It fills the
+region that screen ran out of content for: at 1280px it was four controls and
+then roughly 500px of nothing, with the drafts list in the other column.
+
+**The whole module is one sentence: pressing a card starts a real mock under
+that card's settings.** `engine.startScenario()` is the one function that does
+it, and it is `startFromHistoryLeague()`'s sibling on purpose — apply the
+config to the ONE real `league` through `setLeague()`, then call the ordinary
+`startDraft()`. A scenario room is not a mode; it is a mock draft that arrived
+with its settings already chosen.
+
+### The handoff asked for a one-off override and it cannot be one here
+
+Requirement 3 is that a scenario "must NOT overwrite the user's saved default
+Draft settings". That is written for an app where draft settings are a saved
+per-user record. In Juke they are `league`, which IS the shape of the draft
+while it runs and which nothing persists between sessions — every reload
+starts at the ten-team default, so there is no saved default to protect.
+
+**Restoring the league after launching would break the draft it just
+started.** `resumeDraft()` refuses any save whose `settingsFingerprint()`
+disagrees with the live league, by design, because resuming into different
+settings would corrupt the board. So a scenario draft left half-finished would
+come back unresumable, with an alert naming settings the manager never chose.
+The settings become the league, exactly as a history preset's already do, and
+the launcher's own line under the Start button says what they now are.
+
+The one place a snapshot IS taken is the **refusal** path, where there is no
+draft for a restore to disagree with: `startScenario()` applies the config,
+asks `setupProblem()`, and puts every value back if the answer is no.
+`startDraft()` checks that too — but only after the league has been rewritten,
+which would leave a manager on the lobby with settings they did not choose and
+a Start button that will not press.
+
+### Two things the handoff specifies that the engine cannot do
+
+Both are called out rather than quietly built, because a card that states a
+rule the draft does not apply is the dead-control failure in its worst form —
+the reader would believe it.
+
+- **`rules.noQbBeforeRound`** ("Late-round QB · No QB before Rd 8", the
+  signed-in "Your weak spot" card). There is no scenario constraint in
+  `draft-engine.js`, `engine.draftPlayer()` has no refusal for one, and
+  `autoPickForMe()` would take the very player the card forbade. Enforcing it
+  is a real feature across the Players tab, the Decide screen, the phone tree
+  and the queue — not a lobby module. So that card names the weakness and
+  prints the measurement behind it (`historyStats().weakestSpot`, the same
+  number the Locker's own Weakest Spot card shows) and launches a real draft
+  under the manager's own settings.
+- **`guidedTips`** ("tips on every pick"). There is nothing to switch on:
+  `JukeValueAssistant` renders a real recommendation above the player list on
+  every turn of every draft, unconditionally. The claim on the card is true
+  without a flag, and a flag that turns on something already on is a control
+  that does nothing.
+
+### rounds is a roster, not a number
+
+`league.rounds` is derived from `rosterSize()` whenever the roster moves,
+because a round count that disagrees with the roster is what `setupProblem()`
+refuses. So a scenario asking for 15 rounds is asking for a bench one deeper,
+and `startScenario()` solves for the bench **through `rosterSize()` itself**
+rather than restating "starters + flex + superflex" a second time.
+
+A config may legitimately carry no round count at all — the signed-in "New
+format" card omits it, because `superflex` is a scoring preset that adds a
+starting slot and therefore a round, and only `setLeague()` knows that. The
+subline drops an absent fact rather than printing it; the first version
+interpolated it unguarded and put **"undefined rounds"** on a live card.
+
+### Which four cards, and the floor under the derived set
+
+`web/src/components/practiceScenarios.js` decides and
+`PracticeScenarios.jsx` draws — the same split `oneThatGotAway()` already has
+with the dashboard that prints it. Guest gets four curated presets. Signed in
+with three or more graded mocks gets four built from real history: a seat
+never drafted from, the weakest starting spot, the connected league's own team
+count (or a scoring format the history has never run, when nothing is
+connected), and a 30-second clock on the usual settings. Under three mocks it
+is the guest set with the signed-in footer, which is the handoff's own
+fallback and right for the obvious reason: a card reading "your weak spot" off
+two drafts is a claim two drafts cannot support.
+
+**`state.scenario` is an id and nothing else.** The settings a card chose are
+already in `league`; a second copy on `state` would be the written-down-twice
+failure with a draft's shape in it. It is saved with the draft, restored on
+resume, and recorded on the history entry — which is the whole reason it
+exists, because "you have never tried this" is unanswerable unless finishing a
+scenario writes down which one it was. `startDraft()` clears it on the way in,
+beside `state.picks`, for that clear's own reason: one door in, several ways
+out, and a tag surviving into the next draft would label a draft no card
+started.
+
+**The accent colours are the repo's tokens, not the handoff's hexes.** Its
+teal/blue/pink/amber are each within a step of `mint`, `flow.blue`,
+`POS_CHALK.QB` and `flow.gold`, and its README says in the same breath to
+match the lobby's own chip palette. A second value one step off an existing
+one is how a colour ends up meaning two things on two screens.
+
+### Editing a league after a finished draft recorded it twice
+
+Found by the launcher and not caused by it. `draftOver()` is
+`picks.length >= teams * rounds`, so editing the league moves the finish line
+under a draft that is already over: step the team count from 10 to 12 and it
+goes false, step it back and it goes true — a rising edge, which
+`checkDraftFinished()` reads as "the draft just ended" and records a **second**
+history entry for the draft that finished minutes ago.
+
+**The duplicate is worse than a duplicate.** `recordHistory()` stamps
+`teams: league.teams`, so the copy claims a team count that draft never ran
+at, and the Locker then shows a twelve-team mock nobody drafted.
+
+Reachable from the Draft Settings screen since that screen could change a team
+count — finish a mock, "Back to the locker" (which leaves `state.started`
+true), open Draft settings, step teams. The launcher only surfaced it because
+its refusal path calls `setLeague()` twice by design. `setLeague()` now calls
+`noteDraftPhase()` before its `render()`, which is what `resumeDraft()` and
+`openHistoryDraft()` already do for the same reason in the same order: a
+change that re-establishes what "over" means has to re-seed the edge.
+
+`tests/practice-scenarios.spec.mjs` covers all of it, and the two bug-fix
+tests were confirmed red with each fix removed and the other four still green.
+
 ## Flow v3: the rooms became places, and the shell became one shell
 
 `design_handoff_v3_alive` — 36 screens, nine of them × two auth states ×
@@ -6379,6 +6575,40 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   bundle for the change before believing a red run: the built JS names what
   it contains, exactly as the deployed stylesheet does.
 
+- **And the mirror of that: do not rebuild INTO `web/dist` while a run is
+  using it.** The suite serves that directory, so `npm run build` mid-run
+  replaces the content-hashed bundle with a new name and deletes the old,
+  and `copy-legacy-assets` rewrites `app.js` underneath whatever page is
+  fetching it. Any test that loads a page in that window gets a file that
+  is missing or half-written.
+
+  Measured 4 September 2026, on a 151-test run that reported **3 failed,
+  148 passed**. One was a genuinely stale assertion. The other two were
+  both this, and neither looked like it:
+
+  - `grade.spec.mjs`'s "the app's own advice beats a deliberately unbuilt
+    roster" — a statistical test with aggregate thresholds, so a red reads
+    as "the advice got worse". It was `openApp()` timing out at
+    `waitForFunction(() => typeof state === "object" …)`: **`app.js` never
+    defined its globals**, because it was being rewritten as the page asked
+    for it.
+  - `phone.spec.mjs`'s bottom-sheet test — `readHeight()` returned null,
+    which reads as "the sheet is not rendering". React had not mounted,
+    because the bundle it named had just been deleted.
+
+  Both passed on a re-run with nothing changed. The grade one was then
+  baselined in both directions on an idle machine — `main`'s `app.js`
+  passed, the branch's `app.js` passed — which is what says the run was the
+  problem rather than the change. **A red on a statistical test is the one
+  most worth baselining before believing**, because it is the one whose
+  failure message is most easily read as a real result.
+
+  This is the same shape as everything else in this section: a real,
+  reproducible symptom whose cause was the harness. What makes it worth its
+  own entry is that the harness was disturbed by *this* session rather than
+  by a leftover process — so the usual check ("what is holding the port,
+  what is it serving") comes back perfectly healthy.
+
 - Room over sockets: `cd worker && wrangler dev --port 8787 --local`, then
   `node worker/test-sockets.mjs` in another terminal. Seventy-six assertions
   against the real Durable Object runtime, no Cloudflare account needed.
@@ -6576,7 +6806,7 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   5800ms of navigation start (2400–3400 since Deepwater; the diagnosis below is
   about the proxy either way), and it came back `removedAt: null` — the overlay
   still on screen nine seconds in, on a build whose teardown had not been
-  touched. Nothing was wrong with it. `web/index.html` links Barlow Condensed
+  touched. Nothing was wrong with it. `web/index.html` links the display face
   from `fonts.googleapis.com`, that link is render-blocking, and in a container
   where outbound HTTPS goes through an agent proxy whose CA the browser does
   not trust, the TLS handshake hangs and resets — twice, six seconds each. So

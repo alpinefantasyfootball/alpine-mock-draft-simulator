@@ -1361,6 +1361,21 @@ const state = {
      minutes, and coming back to a draft still on autopilot is a nasty
      surprise. */
   autoMe: false,
+  /* Which Practice-a-scenario card started this draft, or null for one
+     started from the plain Start button. An id and nothing else — the
+     settings a scenario chose are already in `league`, which is the one
+     real copy of them, and a second copy here would be the written-down-
+     twice failure with a draft's shape in it.
+
+     It is saved with the draft and recorded on the history entry, which
+     is the whole reason it exists: the signed-in scenario set is built
+     from what you have already run, and "you have never tried this" is
+     unanswerable if nothing wrote down what you tried. Cleared by
+     startDraft() on the way in, alongside state.picks, for the reason
+     that clear already exists — one door in, several ways out, and a
+     scenario tag surviving into the next draft would label a draft the
+     card never started. */
+  scenario: null,
   // Players you want, in the order you want them. Names rather than objects
   // for the same reason picks are: the board is rebuilt from the generated
   // data on every restart, so a held reference would go stale while a name
@@ -7523,7 +7538,14 @@ function saveDraft() {
     // When the draft actually began, not when it was last saved (savedAt,
     // above) — the Locker's in-progress band wants "Started 14 min ago",
     // which has to survive every autosave between now and a resume.
-    startedAt: state.startedAt
+    startedAt: state.startedAt,
+    // Which Practice-a-scenario card started this, if one did. Saved so a
+    // resumed scenario draft is still recorded as one when it finishes —
+    // without it, walking away from a scenario mock and coming back to it
+    // silently untags the only draft the signed-in scenario set can learn
+    // from. Absent on every save written before scenarios existed, which
+    // reads as null on the way back in.
+    scenario: state.scenario || null
   };
   try {
     localStorage.setItem(SAVE_KEY, JSON.stringify(data));
@@ -7584,6 +7606,11 @@ function resumeDraft(data) {
   state.clockLength = data.clockLength;
   state.paused = !!data.paused;
   state.seed = data.seed;
+  // null rather than undefined for a save written before scenarios existed —
+  // the same "absent is not a value" rule readSave() already applies to
+  // superflex, and startDraft() clears this field rather than leaving it, so
+  // a resume is the one path that has to put it back.
+  state.scenario = data.scenario || null;
   state.started = true;
   // A save written before startedAt existed has no such key — falls back to
   // now rather than a wrong "started 47 years ago", and self-heals the
@@ -7992,6 +8019,13 @@ function recordHistory() {
     rosterVorp: mine ? rosterVorpOf(mine) : null,
     roomAvgRosterVorp: roomAvgRosterVorp,
     weakestSpot: mine ? weakestStartingSpot(mine.lineup) : null,
+    /* Which Practice-a-scenario card started this draft, or null. The
+       signed-in scenario set is derived from what you have already run —
+       "never tried", "your weak spot" — and the whole of that is
+       unanswerable unless finishing a scenario writes down which one it
+       was. Undefined on every entry from before this existed, which reads
+       the same as null everywhere it is asked. */
+    scenario: state.scenario || null,
     // The whole Draft Insights report, frozen right here — see
     // freezeReport()'s own comment for why a reopened report used to
     // disagree with this very entry's own `grade` a few lines up. Absent
@@ -8075,7 +8109,12 @@ function historySummary(entry) {
     // how to render rather than papered over here.
     grade: entry.grade || null,
     teams: entry.teams || entry.league.teams,
-    rosterVorp: typeof entry.rosterVorp === "number" ? entry.rosterVorp : null
+    rosterVorp: typeof entry.rosterVorp === "number" ? entry.rosterVorp : null,
+    // The scenario card this draft was started from, if any — PracticeScenarios
+    // reads it to know what you have already practised. Null for every draft
+    // started from the plain Start button, and for every entry recorded before
+    // scenarios existed.
+    scenario: entry.scenario || null
   };
 }
 
@@ -8605,6 +8644,106 @@ function startFromHistoryLeague(id) {
   Object.assign(league, JSON.parse(JSON.stringify(entry.league)));
   if (league.superflex === undefined) league.superflex = 0;
   return window.JukeEngine.startDraft({ mySlot: entry.mySlot, clockLength: entry.clockLength });
+}
+
+/* ---- Practice a scenario ----
+
+   The Mock Drafts lobby's 2x2 grid of preset drafts (PracticeScenarios.jsx).
+   Pressing a card starts a real mock under that card's settings, and this is
+   the one function that turns a card into a draft.
+
+   It is startFromHistoryLeague()'s sibling and deliberately built the same
+   way: apply the settings to the ONE real `league` through setLeague(), then
+   call the ordinary startDraft(). Nothing here holds a second idea of what a
+   league is, and nothing here re-derives a round count, a replacement level
+   or a legality rule that the engine already answers.
+
+   ---- The handoff asked for a one-off override and this is not one ----
+
+   Its requirement 3 is that a scenario "must NOT overwrite the user's saved
+   default Draft settings". That is written for an app where draft settings
+   are a saved per-user record; in Juke they are `league`, which IS the shape
+   of the draft while it runs, and which no code path persists between
+   sessions — every reload starts at the ten-team default.
+
+   Restoring the previous league after launching a scenario is not merely
+   unnecessary here, it breaks the draft it just started: resumeDraft()
+   refuses any save whose settingsFingerprint() disagrees with the live
+   league, by design, because resuming into different settings would corrupt
+   the board. So a scenario draft left half-finished would come back
+   unresumable, with an alert naming settings the manager never chose.
+
+   So the scenario's settings become the league, exactly as a history preset's
+   already do, and the launcher's own settings line under the Start button
+   says what they now are. The one place a snapshot IS taken is the refusal
+   path below, where there is no draft for a restore to disagree with.
+
+   ---- rounds, expressed as the roster it actually is ----
+
+   `league.rounds` is not a free number: setLeague() derives it from
+   rosterSize() whenever the roster moves, because a round count that
+   disagrees with the roster is what setupProblem() refuses. So a scenario
+   asking for 15 rounds is asking for a bench one deeper, and the bench is
+   solved for through rosterSize() itself rather than by restating
+   "starters + flex + superflex" a second time here.
+
+   Returns { ok, problem } rather than a bare boolean: a refusal has a
+   sentence attached and the card is the thing that has to show it. */
+function startScenario(scenario) {
+  if (!scenario || !scenario.config) return { ok: false, problem: "That scenario has no settings." };
+  // A room's league belongs to the room — every other control that can
+  // rewrite league shape refuses here for the same reason (see startAtSeat's
+  // own note in DraftRoom.jsx), and a scenario is a whole league at once.
+  if (hasRoom()) return { ok: false, problem: "Scenarios are for solo mocks. Leave the room to run one." };
+
+  const cfg = scenario.config;
+  const before = { league: JSON.parse(JSON.stringify(league)), mySlot: state.mySlot, clockLength: state.clockLength };
+  const restore = function () {
+    Object.assign(league, JSON.parse(JSON.stringify(before.league)));
+    state.mySlot = before.mySlot;
+    state.clockLength = before.clockLength;
+    mirrorToLegacy();
+    render();
+  };
+
+  // Through the bridge's own setter, not Object.assign: that one mirrors to
+  // the legacy <select>s (which readSetup() re-reads on the next trip home),
+  // applies a scoring preset's lineup, derives `rounds`, and clamps the seat.
+  // Four side effects, none of which a caller should be reproducing.
+  const patch = {};
+  if (cfg.teams) patch.teams = cfg.teams;
+  if (cfg.scoring) patch.scoring = cfg.scoring;
+  if (Object.keys(patch).length) window.JukeEngine.setLeague(patch);
+
+  if (cfg.rounds) {
+    // Everything in a roster that is not bench — asked of rosterSize() so
+    // this stays the inverse of the real formula rather than a copy of it.
+    const fixed = rosterSize() - league.bench;
+    const bench = cfg.rounds - fixed;
+    if (bench >= 0) window.JukeEngine.setLeague({ bench: bench });
+  }
+
+  // Seats are 1-based in a scenario config, because that is how the card
+  // reads them out loud ("Seat 12"); state.mySlot is 0-based everywhere else.
+  const seat = (cfg.seat === "random" || cfg.seat === undefined || cfg.seat === null)
+    ? Math.floor(Math.random() * league.teams)
+    : Math.min(Math.max(0, Number(cfg.seat) - 1), league.teams - 1);
+  const clock = typeof cfg.clockSeconds === "number" ? cfg.clockSeconds : state.clockLength;
+
+  /* Ask before starting, and put the league back if the answer is no.
+
+     startDraft() checks setupProblem() itself and returns false — but by
+     then the league has already been rewritten, so a refused scenario would
+     leave a manager on the lobby with settings they did not choose and a
+     Start button that will not press. Checking here is what makes the
+     refusal free. */
+  const problem = setupProblem();
+  if (problem) { restore(); return { ok: false, problem: problem }; }
+
+  state.mySlot = seat;
+  const ok = window.JukeEngine.startDraft({ mySlot: seat, clockLength: clock, scenario: scenario.id || null });
+  if (!ok) { restore(); return { ok: false, problem: setupProblem() || "That scenario could not be started." }; }
+  return { ok: true };
 }
 
 // The Locker's "In progress" card. Null once there's nothing to resume, or
@@ -10940,6 +11079,31 @@ window.JukeEngine = {
     // — silently, since nothing on that screen reads the legacy controls.
     mirrorToLegacy();
 
+    /* Re-seed the finished/unfinished edge before drawing, for the same
+       reason resumeDraft() and openHistoryDraft() already do it — and this
+       one was a live bug rather than a precaution.
+
+       draftOver() is `state.picks.length >= teams * rounds`, so editing the
+       league moves the finish line under a draft that is already over.
+       Finish a mock, press "Back to the locker" (which leaves state.started
+       true, per startDraft()'s own note), open Draft settings and step the
+       team count from 10 to 12: draftOver() goes false on that render, and
+       stepping it back to 10 makes it true again — a rising edge, which
+       checkDraftFinished() reads as "the draft just ended" and records a
+       SECOND history entry for the draft that finished minutes ago.
+
+       Reproduced in the browser: two identical entries from two calls to
+       this function and no drafting in between. The duplicate is worse than
+       a duplicate, because recordHistory() stamps `teams: league.teams` —
+       so the copy claims a team count that draft never ran at, and the
+       Locker then shows a 12-team mock nobody drafted.
+
+       Found while building the scenario launcher, whose refusal path calls
+       this twice by design (apply, then put it back). It was never a
+       scenario bug: the Draft Settings screen has been able to do it since
+       that screen could change a team count. */
+    noteDraftPhase();
+
     /* And draw the result. setClockLength() has always done this and this one
        never did, so the settings modal's own redraw() re-rendered the modal
        while everything behind it kept the old league: changing the team count
@@ -11029,6 +11193,12 @@ window.JukeEngine = {
   syncStatus: syncStatus,
   // The launcher's presets — see startFromHistoryLeague()'s own comment.
   startFromHistoryLeague: startFromHistoryLeague,
+  /* The Mock Drafts lobby's Practice-a-scenario cards. One call turns a
+     card into a real draft under that card's settings — see
+     startScenario()'s own comment, including why the handoff's "one-off
+     override" requirement is answered the way it is. Returns
+     { ok, problem }; the card shows the sentence. */
+  startScenario: startScenario,
   // The Locker's completed drafts had a way to open one and no way to
   // remove one — this is the plain filter-and-rewrite clearSave() already
   // does for the single in-progress save, extended to one entry among many.
@@ -11107,6 +11277,12 @@ window.JukeEngine = {
     // Not inherited either: a draft abandoned while paused would otherwise
     // start its replacement paused, with a clock that never counts.
     state.paused   = false;
+    // Nor is the scenario tag. Every other caller passes no `scenario` at
+    // all, so pressing Start plainly after a Practice-a-scenario draft
+    // clears it — which is the point: an id left behind would record the
+    // next draft in history as one a card started, and the signed-in
+    // scenario set is built off exactly that field.
+    state.scenario = opts.scenario || null;
     state.mySlot      = opts.mySlot;
     state.clockLength = opts.clockLength;
     state.started     = true;

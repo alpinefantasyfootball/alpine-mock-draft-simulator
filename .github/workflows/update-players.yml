@@ -80,10 +80,20 @@ jobs:
           # 404.html is in this list for the same reason the other two are: it
           # loads style.css and theme.js by the same versioned address. It is
           # the easiest one to forget, because nobody visits it on purpose.
+          #
+          # docs/privacy.html and docs/terms.html join it as of 4 September
+          # 2026, having been missing since they were written. Both load
+          # style.css, theme.js and back-to-top.js by a stamped address and
+          # neither was ever bumped, so all three sat frozen at 202608222306
+          # while the rest of the site moved — a returning visitor got August's
+          # stylesheet on a page whose HTML had changed under it, which is this
+          # project's own "a rebuild nobody sees" failure with a two-week lead.
+          # Found by the Gabarito swap, where those two pages would have
+          # requested the new face and styled it with the old --font-display.
           STAMP=$(date -u +%Y%m%d%H%M)
-          sed -i -E "s/\?v=[0-9A-Za-z._-]+/?v=$STAMP/g" \
-            web/index.html 404.html docs/draft-room-how-it-works.html
-          git add web/index.html 404.html docs/draft-room-how-it-works.html
+          STAMPED="web/index.html 404.html docs/draft-room-how-it-works.html docs/privacy.html docs/terms.html"
+          sed -i -E "s/\?v=[0-9A-Za-z._-]+/?v=$STAMP/g" $STAMPED
+          git add $STAMPED
 
           git commit -m "Update player data ($(date -u +%Y-%m-%d))"
           git push

@@ -223,15 +223,24 @@ export default {
         glass: '16px',
       },
       fontFamily: {
-        // Poppins was never actually requested from Google Fonts (only
-        // Barlow Condensed/Inter/Archivo are, per index.html) — a stale
-        // leftover from before the 18 Aug rebrand, which swapped display
-        // faces on the legacy style.css side specifically because Poppins
-        // matched Sleeper, but never touched this file. Every font-display
-        // heading and the grade glyph itself fell back to system-ui the
-        // entire time. Barlow Condensed is already loaded; this costs no
-        // extra network request, it just points at the font that's there.
-        display: ['"Barlow Condensed"', '"Arial Narrow"', 'system-ui', 'sans-serif'],
+        // The display face, and it has to be the same string style.css's
+        // --font-display carries — two copies of "what the display face
+        // is" is the written-down-twice failure with a typeface in it, and
+        // it fails silently: the legacy pages and the React app simply
+        // render in different fonts and nothing errors.
+        //
+        // It was Poppins here long after the 18 Aug rebrand moved the
+        // legacy side off it, so every font-display heading and the grade
+        // glyph fell back to system-ui the entire time — a face that was
+        // never requested cannot be the face on screen. Then Barlow
+        // Condensed, matching style.css. Gabarito as of 4 September 2026,
+        // matching it again; see style.css's own note for what changed
+        // about the argument and what did not.
+        //
+        // No narrow fallback: Gabarito is not a narrow face, so falling
+        // back to one would reflow every heading on the one load the
+        // fallback exists for.
+        display: ['Gabarito', 'system-ui', 'sans-serif'],
         // Hanken Grotesk as of the sitewide font-consistency pass that
         // followed the homepage cosmetic revision — was Inter, and Inter
         // was barely load-bearing when it was: the homepage never applied

@@ -37,14 +37,21 @@ import { useEffect, useRef, useState } from 'react'
    reported, so the seconds field is the fix. It does not fit on a phone.
 
    Measured rather than estimated, and the estimate was wrong: below `sm`
-   this shares the hero's eyebrow row, which at 375px is 335px wide with 194
-   taken by the eyebrow. With seconds the pill measures 150, so the pair
-   comes to 344 in 335 — nine pixels over, with the eyebrow unwrapped and
+   this shares the hero's eyebrow row, which at 375px is 335px wide with the
+   eyebrow taking most of it. With seconds the pill measures 150, so the pair
+   came to 344 in 335 — nine pixels over, with the eyebrow unwrapped and
    the PAGE reporting no sideways overflow at all, because the hero's own
    `overflow-hidden` was quietly clipping the end of the countdown. That is
    the leak this project's truncation rule is about: an element that
    overflows and can neither scroll nor ellipsise, hidden from a sweep by an
    ancestor that swallows it.
+
+   **The eyebrow's 194px in that sum is a number about a typeface, and the
+   typeface changed.** Gabarito set the identical string at 243, which put
+   the pill off the edge of a 375px phone — the same clip, from the other
+   side of the same row. HomeAlive.jsx carries the fix and the new figures;
+   what belongs here is the warning that this pill's width is only half of
+   that arithmetic and the other half is not its to control.
 
    So the two forms are rendered as two spans off one instant — no second
    timer, no drift — and CSS picks. Above `sm` the pill lives in the header

@@ -841,6 +841,36 @@ export default function DraftRoom() {
     engine.startDraft({ mySlot: seat, clockLength: engine.clockLength() })
   }
 
+  /* The Practice-a-scenario grid's launch path (PracticeScenarios.jsx).
+     Its own function for the same reason startAtSeat above is one: it is
+     never bound to a click directly — the card calls it with a scenario
+     object — so it can take a real argument without an ordinary
+     SyntheticEvent ever arriving in that position.
+
+     Order matters here in a way the two paths above do not have to worry
+     about. engine.startScenario() can REFUSE (a config setupProblem() will
+     not run, or a room that owns the league), and it puts the league back
+     when it does — so the route change and the loader have to wait for the
+     answer rather than lead it, or a refused card would leave a reader on
+     a covered screen with a draft that never started. Returns the engine's
+     own { ok, problem } so the card that was pressed shows the sentence. */
+  const startScenarioDraft = (scenario) => {
+    if (!engine || !engine.startScenario) return { ok: false, problem: 'Still loading the board.' }
+    if (roomActive) return { ok: false, problem: 'Scenarios are for solo mocks. Leave the room to run one.' }
+    armFreshDraft()
+    const result = engine.startScenario(scenario)
+    if (!result || result.ok !== true) {
+      // Nothing started, so nothing may be covering the screen — the loader
+      // this raised a line ago has no draft to wait for and would sit at its
+      // 15s ceiling before admitting it.
+      setStarting(false)
+      return result || { ok: false, problem: 'That scenario could not be started.' }
+    }
+    location.hash = '#/draft-room'
+    setEnteredRoom(true)
+    return result
+  }
+
   // The Lobby's direct multiplayer action — createRoom() is the exact call
   // RoomPanel.jsx's own "Create a room" button already makes; this just
   // reaches it without an Edit setup -> Invite detour first. Deliberately
@@ -979,6 +1009,7 @@ export default function DraftRoom() {
               roomActive={roomActive}
               onAnalyze={(id) => setLockerView(id)}
               onDelete={(id) => { engine.deleteHistoryDraft(id); forceTick() }}
+              onLaunchScenario={startScenarioDraft}
               onSignupSport={(sport) =>
                 sportsModalRef.current?.open(
                   `Juke is football only today. Leave an email and we'll tell you when ${sport} opens.`,
