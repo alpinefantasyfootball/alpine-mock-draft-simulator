@@ -32,7 +32,7 @@ import {
   syncPlayerPool, cachedNews, storeNews, usableNews, storeSignup, touchUser, deleteUserData,
   getSavedDraft, putSavedDraft, deleteSavedDraft,
   listDraftHistory, putHistoryEntry, deleteHistoryEntry,
-  listLeagues, putLeague, deleteLeague
+  listLeagues, putLeague, deleteLeague, selectLeague
 } from "./store.js";
 
 /* Sleeper, read-only. Kept out of store.js for the same reason auth.js is:
@@ -1194,6 +1194,50 @@ async function meLeaguesRoute(request, env) {
     return new Response(JSON.stringify({ leagues: await listLeagues(env, user.id) }), { headers });
   }
 
+  /* PATCH — switch which connected league is the active one.
+
+     A separate verb from POST because it is a different request. POST
+     means "connect this league", and it re-reads the label from Sleeper
+     and validates the id upstream to do it. Switching is about a league
+     this account has already connected: there is nothing to fetch, nothing
+     to validate against Sleeper, and asking it again would put an upstream
+     round trip behind a menu press.
+
+     The id is not checked against Sleeper's shape here for the same
+     reason. selectLeague()'s WHERE is scoped by clerk_id, so the only ids
+     that can do anything are ones this account already connected — which
+     were validated on the way in — and a provider that is not Sleeper is a
+     row this table is designed to hold. */
+  if (request.method === "PATCH") {
+    const text = await request.text();
+    if (!text || text.length > 4096) {
+      return new Response(JSON.stringify({ error: "bad-request" }), { status: 400, headers });
+    }
+    let patch;
+    try {
+      patch = JSON.parse(text);
+    } catch (err) {
+      return new Response(JSON.stringify({ error: "bad-json" }), { status: 400, headers });
+    }
+
+    const wantId = String((patch && patch.leagueId) || "").slice(0, 40);
+    const wantProvider = String((patch && patch.provider) || "sleeper").slice(0, 16);
+    if (!/^[A-Za-z0-9_-]{1,40}$/.test(wantId) || !/^[a-z]{1,16}$/.test(wantProvider)) {
+      return new Response(JSON.stringify({ error: "bad-request" }), { status: 400, headers });
+    }
+
+    const switched = await selectLeague(env, user.id, wantProvider, wantId);
+    if (!switched) {
+      /* Nothing matched, or 0006 has not been applied. Both mean the
+         switch did not take, and answering ok would leave the page showing
+         a league that is not the one it would come back to. 409 rather
+         than 404: the league may well exist, it is this account's
+         connection to it that does not. */
+      return new Response(JSON.stringify({ ok: false, error: "not-connected" }), { status: 409, headers });
+    }
+    return new Response(JSON.stringify({ ok: true, leagues: await listLeagues(env, user.id) }), { headers });
+  }
+
   if (request.method === "DELETE") {
     const url = new URL(request.url);
     const provider = (url.searchParams.get("provider") || "sleeper").slice(0, 16);
@@ -1246,6 +1290,21 @@ async function meLeaguesRoute(request, env) {
     totalTeams: snapshot.totalTeams
   };
   const ok = await putLeague(env, user.id, league);
+
+  /* A league somebody just connected is the one they want to look at.
+
+     Not merely convenient: without it, connecting a second league would
+     store it and leave the app showing the first, so the connect flow
+     would end in a confirmation followed by no visible change — the exact
+     complaint useLeague.js was rewritten to fix, arriving from a new
+     direction.
+
+     It is deliberately not part of putLeague(): that function writes no
+     0006 column, so a connect against an unmigrated database still stores
+     the league and only this fails. Which is why the answer below ignores
+     it — under the pre-0006 ordering a freshly connected league is already
+     the head, so the switch failing changes nothing a reader can see. */
+  if (ok) await selectLeague(env, user.id, league.provider, league.leagueId);
 
   return new Response(
     JSON.stringify(ok ? { ok: true, league } : { ok: false, error: "store-failed" }),
@@ -1415,7 +1474,7 @@ export default {
     if (url.pathname === "/me/leagues") {
       if (request.method === "OPTIONS") {
         return new Response(null, { headers: Object.assign({
-          "access-control-allow-methods": "GET, POST, DELETE",
+          "access-control-allow-methods": "GET, POST, PATCH, DELETE",
           "access-control-allow-headers": "authorization, content-type",
           "access-control-max-age": "86400"
         }, corsFor(request)) });

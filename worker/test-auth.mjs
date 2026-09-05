@@ -111,6 +111,50 @@ for (const path of ["/me/draft", "/me/history"]) {
         (await authed(path, { Origin: LOCAL_ORIGIN, Authorization: "Bearer not-a-real-token" })).status, 401);
 }
 
+/* ---- /me/leagues, including the verb that switches ----
+
+   This route was never in the loop above, and PATCH is a new way into an
+   authenticated route — a new verb is a new door, and it has to be behind
+   the same origin check and the same requireUser() as the three that were
+   already there. A method that falls past both is not a smaller bug than a
+   missing token check; it IS a missing token check.
+
+   PATCH specifically, because it is the one that can move somebody's
+   active league. GET leaks a list, POST and DELETE were already covered by
+   the shape of this file; PATCH is the one that did not exist when the
+   loop was written. */
+for (const method of ["GET", "PATCH"]) {
+  const body = method === "PATCH"
+    ? { method, body: JSON.stringify({ leagueId: "L1", provider: "sleeper" }) }
+    : { method };
+
+  check(`/me/leagues ${method} with no Origin is refused outright`,
+        (await authed("/me/leagues", { "content-type": "application/json" }, body)).status, 403);
+
+  check(`/me/leagues ${method} with a valid origin but no token is unauthorized`,
+        (await authed("/me/leagues", { Origin: LOCAL_ORIGIN, "content-type": "application/json" }, body)).status, 401);
+
+  check(`/me/leagues ${method} with a garbage Bearer token is unauthorized, not a 500`,
+        (await authed("/me/leagues", {
+          Origin: LOCAL_ORIGIN,
+          "content-type": "application/json",
+          Authorization: "Bearer not-a-real-token",
+        }, body)).status, 401);
+}
+
+/* PATCH is not a CORS-simple method, so a browser always preflights it —
+   and a preflight that does not name it means the switch never leaves the
+   page at all. That failure is invisible from the worker's side: no
+   request arrives, nothing is logged, and the menu simply does nothing.
+   Asserted here because it cannot be asserted from a test that only ever
+   speaks to the worker directly, the way this file otherwise does. */
+const leaguePreflight = await fetch(BASE + "/me/leagues", {
+  method: "OPTIONS",
+  headers: { Origin: LOCAL_ORIGIN, "access-control-request-method": "PATCH" },
+});
+check("OPTIONS on /me/leagues names PATCH among the allowed methods",
+      (leaguePreflight.headers.get("access-control-allow-methods") || "").includes("PATCH"), true);
+
 // OPTIONS preflight has to answer before verifiedUser() ever runs — a
 // browser sends it with no Authorization header at all, so gating it
 // behind the same auth check this route uses for GET/POST/DELETE would

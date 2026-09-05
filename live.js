@@ -654,6 +654,43 @@
         .catch(() => syncResult(false, "offline", { league: null }));
     },
 
+    /* Switch which connected league is the active one.
+
+       Answers the whole list back rather than an ok, because the caller's
+       next act is to redraw from it: the server decides the order, and a
+       client that reordered its own copy to match would be a second
+       opinion about which league is active — the "written down twice"
+       failure with a menu on top of it.
+
+       "not-connected" is its own reason for the same purpose the connect
+       flow tells not-found from offline: a switch refused because this
+       account never connected that league wants a re-read, and one refused
+       because the worker is unreachable wants a retry. */
+    selectLeague: function (token, leagueId, provider) {
+      if (!token) return Promise.resolve(syncResult(false, "signed-out", { leagues: [] }));
+      const http = WORKER.replace(/^ws/, "http");
+      return fetch(http + "/me/leagues", {
+        method: "PATCH",
+        headers: { "content-type": "application/json", "authorization": "Bearer " + token },
+        body: JSON.stringify({
+          leagueId: String(leagueId || ""),
+          provider: provider || "sleeper"
+        })
+      })
+        .then(function (r) {
+          if (r.status === 409) return syncResult(false, "not-connected", { leagues: [] });
+          if (!r.ok) return syncResult(false, reasonForStatus(r.status), { leagues: [] });
+          return r.json()
+            .then((body) => (body && body.ok)
+              ? syncResult(true, null, {
+                  leagues: Array.isArray(body.leagues) ? body.leagues : []
+                })
+              : syncResult(false, "store-failed", { leagues: [] }))
+            .catch(() => syncResult(false, "bad-response", { leagues: [] }));
+        })
+        .catch(() => syncResult(false, "offline", { leagues: [] }));
+    },
+
     disconnectLeague: function (token, leagueId, provider) {
       if (!token) return Promise.resolve(syncResult(false, "signed-out"));
       const http = WORKER.replace(/^ws/, "http");

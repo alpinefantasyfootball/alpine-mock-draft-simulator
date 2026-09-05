@@ -720,23 +720,58 @@ function chunk(list, size) {
    Same guards as every function above: a missing DB binding is a normal
    condition, and a failure is a value rather than a throw. */
 
+/* An account's leagues, the active one first.
+
+   "Active" is most-recently-selected (0006), which makes the head of this
+   list the league every screen draws — the header chip, the League Room,
+   the You screen's card. Selecting is one UPDATE and nothing has to be
+   cleared; see the migration for why that beats a flag.
+
+   ---- The fallback is not defensive tidiness ----
+
+   The site deploys itself from git and the worker does not, so worker code
+   carrying this query can be live against a database that has not had 0006
+   applied. Without the retry that is not a degraded feature: the exception
+   is caught below and reported as an account with no leagues at all, so a
+   signed-in manager with two connected leagues is offered "Connect a
+   league" on every screen. Falling back to the 0005 ordering costs one
+   failed statement and keeps the product working exactly as it did.
+
+   The order of the two matters: the new query is tried first, so an
+   applied migration never pays for the old one. */
+const LEAGUE_COLS =
+  "SELECT provider, league_id, owner_id, name, season, total_teams, connected_at";
+
 export async function listLeagues(env, clerkId) {
   if (!env.DB) return [];
 
+  const read = (sql) => env.DB.prepare(sql).bind(clerkId).all();
+  const shape = (res) => (res.results || []).map((r) => ({
+    provider: r.provider,
+    leagueId: r.league_id,
+    ownerId: r.owner_id,
+    name: r.name,
+    season: r.season,
+    totalTeams: r.total_teams,
+    connectedAt: r.connected_at,
+  }));
+
   try {
-    const res = await env.DB.prepare(
-      "SELECT provider, league_id, owner_id, name, season, total_teams, connected_at" +
-      " FROM connected_leagues WHERE clerk_id = ? ORDER BY connected_at DESC"
-    ).bind(clerkId).all();
-    return (res.results || []).map((r) => ({
-      provider: r.provider,
-      leagueId: r.league_id,
-      ownerId: r.owner_id,
-      name: r.name,
-      season: r.season,
-      totalTeams: r.total_teams,
-      connectedAt: r.connected_at,
-    }));
+    return shape(await read(
+      LEAGUE_COLS + " FROM connected_leagues WHERE clerk_id = ?" +
+      " ORDER BY COALESCE(selected_at, connected_at) DESC, connected_at DESC"
+    ));
+  } catch (err) {
+    /* Either the table is missing — an account with no leagues, which is
+       what the second attempt concludes too — or the column is, which is
+       an unmigrated 0006 and the one case the retry exists for. */
+    console.error("leagues read failed, retrying pre-0006:", err && err.message);
+  }
+
+  try {
+    return shape(await read(
+      LEAGUE_COLS + " FROM connected_leagues WHERE clerk_id = ? ORDER BY connected_at DESC"
+    ));
   } catch (err) {
     // A missing table reads exactly like an account with no leagues, which
     // is why the write below is what tells the two apart — the same trap
@@ -789,6 +824,46 @@ export async function putLeague(env, clerkId, league) {
     return true;
   } catch (err) {
     console.error("league write failed:", err && err.message);
+    return false;
+  }
+}
+
+/* Make one of this account's leagues the active one.
+
+   The whole of switching. Everything reads the head of listLeagues(), so
+   moving a row to the front of that ordering is the entire operation —
+   there is no flag to clear on the others and no second write that has to
+   land with this one.
+
+   ---- It cannot select somebody else's league ----
+
+   The WHERE is scoped by clerk_id, so a caller naming a league id they
+   have not connected updates nothing, and `changes` says so. That is
+   reported as a failure rather than shrugged off the way deleteLeague()
+   shrugs off deleting nothing: disconnecting a league that is already gone
+   is the state the caller asked for, but selecting a league that is not
+   theirs is a request that did not happen, and answering "ok" would leave
+   the app claiming a switch that never took.
+
+   ---- False here is survivable, and that is deliberate ----
+
+   putLeague() does not write this column, so a connect against an
+   unmigrated database still stores the league and this call is what fails.
+   The route treats that as a connect that worked, because it did: under
+   the pre-0006 ordering the league just connected is already the head. */
+export async function selectLeague(env, clerkId, provider, leagueId) {
+  if (!env.DB) return false;
+
+  try {
+    const res = await env.DB.prepare(
+      "UPDATE connected_leagues SET selected_at = ?" +
+      " WHERE clerk_id = ? AND provider = ? AND league_id = ?"
+    ).bind(nowSeconds(), clerkId, provider, leagueId).run();
+    return Boolean(res.meta && res.meta.changes);
+  } catch (err) {
+    // An unmigrated 0006, or no such table. Both are "the switch did not
+    // persist", and listLeagues() is what keeps the app coherent either way.
+    console.error("league select failed:", err && err.message);
     return false;
   }
 }

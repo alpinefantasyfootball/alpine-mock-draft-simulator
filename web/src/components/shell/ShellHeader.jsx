@@ -4,6 +4,7 @@ import { useAccountUiReady } from '../../hooks/useAccountUiReady.js'
 import { CLERK_APPEARANCE } from '../../clerkConfig.js'
 import KickoffPill from './KickoffPill.jsx'
 import ConnectLeagueCta from './ConnectLeagueCta.jsx'
+import LeagueSwitcher from './LeagueSwitcher.jsx'
 import { useLeague } from '../../hooks/useLeague.js'
 
 /* The sitewide header, guest and connected — design_handoff_v3_alive's
@@ -91,41 +92,43 @@ function GuestAuth() {
   )
 }
 
-/* The handoff's league chip — "Dynasty Degens · Wk 3" — and what stands in
-   its place before one is connected.
+/* What stands in the league chip's place before one is connected.
+
+   ---- "No caret yet" is retired, and the argument that made it right ----
+
+   This comment used to say the handoff's caret was deliberately not drawn,
+   because "there is nothing to switch between until a second league can be
+   connected — an affordance for a menu that does not open is the dead
+   control this project keeps finding." That was correct about a dead
+   control and wrong about the premise: a second league could always be
+   connected. connected_leagues has been keyed
+   (clerk_id, provider, league_id) since 0005, listLeagues() has always
+   returned every row, and useLeague() took `[0]` — so the app held several
+   and drew one. The missing thing was the menu, not the data.
+
+   Corrected in place rather than left standing, which is the rule this
+   project follows for prose that has stopped being true. The caret is real
+   now and LeagueSwitcher owns it.
+
+   ---- What is left here ----
+
+   The connected half moved. This is the case where there is nothing to
+   switch between at all: a Connect call to action, which is a different
+   control doing a different job rather than a state of the switcher.
 
    Three states rather than two, which is why this reads `status` and not
    just `league`: "loading" draws nothing at all, because a chip reading
    "Connect a league" for one tick on every page load tells somebody who
    HAS one that they have been disconnected. Nothing, then the truth,
-   beats the wrong thing followed by the right one.
+   beats the wrong thing followed by the right one. */
 
-   No caret yet. The handoff draws one because it is a switcher, and there
-   is nothing to switch between until a second league can be connected —
-   an affordance for a menu that does not open is the dead control this
-   project keeps finding. It goes to the You screen, which is where
-   leagues are managed. */
 function LeagueChip() {
-  const { status, league } = useLeague()
+  const { status } = useLeague()
 
-  if (status === 'loading') return null
-
-  if (status === 'connected' && league) {
-    return (
-      <a
-        href="#/you"
-        className="hidden items-center gap-2 rounded-full border border-flow-pillEdge px-3 py-[7px] text-[13px] font-semibold text-voidInk-primary transition-colors duration-150 hover:border-teal/50 sm:inline-flex"
-      >
-        <span
-          className="grid h-[18px] w-[18px] shrink-0 place-items-center rounded font-display text-[11px] font-extrabold text-surface-page"
-          style={{ background: '#00E5FF' }}
-        >
-          S
-        </span>
-        <span className="max-w-[22ch] truncate">{league.name}</span>
-      </a>
-    )
-  }
+  // "loading" draws nothing, and that is the three-state rule: offering
+  // Connect for a beat to somebody who has a league reads as having been
+  // disconnected.
+  if (status !== 'none') return null
 
   return (
     <ConnectLeagueCta variant="chip">
@@ -185,6 +188,7 @@ export default function ShellHeader({ active = null }) {
                 <GuestAuth />
               </SignedOut>
               <SignedIn>
+                <LeagueSwitcher />
                 <LeagueChip />
                 {/* Clerk's own avatar rather than the handoff's gradient
                     circle, and the reason is sign-out: UserButton's menu is

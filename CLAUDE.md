@@ -6376,9 +6376,11 @@ Juke to have an opinion that has not been built yet. Both lines say so now.
 
 `tests/league-connect.spec.mjs` covers everything downstream of a connection
 that a keyless build can observe, stubbing `window.JukeAuth` and
-`window.Live.listLeagues` — three of its four tests were confirmed red
+`window.Live.listLeagues` — three of its first four tests were confirmed red
 against the code as it stood, with the fourth (the guest state) green
 throughout, which is what stops "hide it from everybody" passing the suite.
+(It carries eight now; the other four are the league switcher's, and the
+section below says what they do and do not reach.)
 
 **The dialog itself is not covered.** Every `ConnectLeagueCta` sits inside
 Clerk's `<SignedIn>`, and a test build has no publishable key, so those four
@@ -6389,6 +6391,175 @@ done is worth keeping: a one-line temporary edit rendering `LeagueChip` in
 `ShellHeader`'s keyless branch, which puts the whole flow on screen without a
 key, then reverted. **This is the widest gap in the account surface's test
 coverage and it is the same one `verifyToken` lived in.**
+
+## Pivoting between connected leagues
+
+Reported 5 September 2026: a Sleeper test league was connected and there was
+no way to add a real one beside it and move between them. The table had been
+ready for this since the day it was written and nothing above it was.
+
+**`0005_leagues.sql` keyed `connected_leagues` (clerk_id, provider,
+league_id) and said in its own comment that "the header's league switcher
+implies more than one".** `listLeagues()` returned every row. `useLeague()`
+took `res.leagues[0]`, and the header chip drew a hardcoded `S` on it. So an
+account could hold several leagues, the worker would list them all, and the
+app rendered exactly one with no way to reach the others — and connecting a
+second silently changed which one that was, because the ordering was
+`connected_at DESC`.
+
+**Nothing was broken and no check could have caught it.** Every league in the
+list was drawn correctly; there was simply no control for the ones that were
+not first. That is the dead-control failure with the control missing
+entirely rather than inert — the same shape as the rail's "My Team" row and
+as "Draft with friends" being absent from the phone launcher, and it is
+found the same way: by somebody trying to do the thing.
+
+### Active is most-recently-selected, not a flag
+
+`0006_active_league.sql` adds `selected_at INTEGER`, backfilled from
+`connected_at`, and `listLeagues()` orders by
+`COALESCE(selected_at, connected_at) DESC`. The head of that list is the
+active league **by construction**, which is the whole design: there is no
+`activeId` anywhere — not in D1, not in `useLeague`'s state, not in a
+component — so there is nothing that can disagree with the ordering.
+
+The obvious alternatives both make exclusivity something code has to
+maintain. `active INTEGER` on this table, or `active_league_id` on `users`,
+means setting one league is also clearing the others: two writes that must
+not interleave, and a disconnect of the active league leaves an account with
+none selected until something notices. Most-recently-selected needs none of
+it — a switch is one `UPDATE`, and **disconnecting the active league
+promotes whatever was selected before it with no repair step at all.**
+Verified against sqlite directly, including that a select scoped by
+`clerk_id` changes zero rows for a league the account never connected and
+zero for another account's league, which is what makes 409 the honest
+answer.
+
+**The COALESCE is not defensive noise.** `putLeague()` deliberately writes no
+0006 column, so rows inserted by a worker that predates the migration carry
+`selected_at NULL` and still order correctly.
+
+### The unmigrated-database window is real, and it is the deploy gap
+
+`listLeagues()` tries the 0006 ordering, and on an exception retries the
+0005 one. That looks like belt and braces and is not: **the site deploys
+itself from git and the worker does not**, so worker code carrying the new
+query will at some point be live against a database that has not had
+`wrangler d1 migrations apply` run on it. Measured — the new query really
+does throw `no such column: selected_at` on a pre-0006 table, so without the
+retry the exception is caught by the existing handler and reported as *an
+account with no leagues at all*: a signed-in manager with two connected
+leagues offered "Connect a league" on every screen.
+
+This is the same gap CLAUDE.md already records twice — the D1 cache that was
+merged and doing nothing, and the auth fix that was live in git and not
+deployed — and the same instruction applies: **ask the database, not the
+response.** What is different here is that the fallback makes the window
+survivable rather than merely visible.
+
+**`PATCH` is the verb, and the preflight has to name it.** POST means
+"connect this league" and re-reads the label from Sleeper to do it;
+switching fetches nothing and validates nothing upstream. PATCH is not a
+CORS-simple method, so a browser always preflights it — and a preflight that
+does not list it means the request never leaves the page: **no log line, no
+error at the worker, and a menu that does nothing.** `test-auth.mjs` asserts
+the preflight names PATCH for exactly that reason, and it was confirmed red
+by removing it. It also asserts PATCH is behind the same origin check and
+`requireUser()` as the verbs that were already there, because a new verb on
+an authenticated route is a new door.
+
+### The switch is optimistic and settles back on failure
+
+A menu that waits a round trip before closing reads as a menu that did not
+take the press, so the reorder is applied before the request goes out. What
+it must not do is keep an order the account will not come back to — that is
+the "claims a backup it does not have" failure with a league name on it, and
+the reader finds out on their next page load. So a failure puts the previous
+order back and says so, with the menu left open.
+
+Confirmed on the real screen: with `selectLeague` failing, the chip stays on
+the league that is actually active, the homepage card stays with it, the
+checked row is the true one, and the message reads "Could not switch just
+now — still on the league above."
+
+**The success path takes the server's list, not the optimistic one.** PATCH
+answers with the whole ordering because the server owns it; reusing the
+local array would be a second opinion about which league is active.
+
+### One badge colour, and the letter is what differs
+
+Each platform getting its own tint is the obvious version and it is not
+worth what it costs. Every value in the palette is spoken for, and the three
+that are not — `flow.gold`, `flow.lavender`, `flow.blue` — are **room**
+identities: gold is the League Room, lavender is Trade. Using one here would
+make a colour mean two things in one app, which is the drift
+`draftRoomPositions.js` was rewritten to end.
+
+The letter identifies the platform and every surface that draws more than
+the badge draws the platform's name in text beside it, so a colour would be
+a third way of saying something already said twice. `platformFor()` also
+answers for a provider this build does not know about, because the database
+is shared with whatever worker is deployed.
+
+### Disconnect shipped with it, and had to
+
+`Live.disconnectLeague` had existed since connect shipped with **nothing
+calling it**. That was survivable while the app drew one league: a second
+connect replaced the first on screen, so there was never a league you could
+see and not get rid of. The switcher ends that — leagues accumulate and all
+of them are visible — so shipping the accumulation without the removal would
+leave somebody who connected the wrong league permanently looking at it.
+
+It is **not** optimistic, unlike the switch: a switch is reversible by
+switching back, and a disconnect that appeared to work and had not would
+have somebody believing a league was gone from their account. Two presses on
+the row rather than a dialog, and the armed state names the league, because
+a row that just says "Sure?" is one mis-scroll away from removing the wrong
+one.
+
+### ESPN is a real adapter, and the free crosswalk does not exist
+
+Measured 5 September 2026, because the obvious first move is to read
+`espn_id` off Sleeper's own player master and join on it. **It covers 112 of
+the 452 non-DST players on Juke's board — 24.8% — and the misses are
+systematic rather than random.** Ja'Marr Chase, Trevor Lawrence, DeVonta
+Smith, Jaylen Waddle, Travis Etienne and Kyle Pitts are all absent: Sleeper
+appears to have stopped backfilling the field around the 2021 draft class,
+so the coverage is worst exactly where a fantasy league's value is
+concentrated. Team defenses carry none at all. The same 24.8% holds across
+Sleeper's whole active pool, so it is not an artifact of which players Juke
+keeps.
+
+**So an ESPN adapter needs a name/position/team join** — the shape
+`link_nflverse()` already uses and measures at 240 of 241 — and not an id
+lookup. That is the load-bearing fact for scoping it, and it is written down
+here so nobody re-derives the cheap version and ships a board that silently
+drops the best players in the league. `leagueSnapshot()`'s own comment
+("these ids... map straight onto Juke's own projections with no crosswalk...
+That identity is the whole reason a connected league is worth anything
+here") is a statement about Sleeper specifically and must not be read as a
+property of connected leagues in general.
+
+The `provider` column, `platformFor()`'s unknown-provider fallback and the
+switcher's per-provider badge are all in place for it. Nothing else is.
+
+### What could not be tested, again
+
+`LeagueSwitcher` and the You screen's list both sit inside Clerk's
+`<SignedIn>`, so a keyless build renders neither — the same gap the connect
+dialog lives in. Both were driven by hand against the built site with the
+one-line temporary exposure this file already describes, and reverted:
+the menu, a successful switch propagating to a second component, a failed
+switch reverting, the two-press disconnect, promoting the next league when
+the active one goes, and falling back to the Connect CTA when the last one
+does.
+
+**What the suite covers is the contract underneath both of them**, which is
+where the defect actually was: the active league is the head of the list and
+every surface reads it from one shared place. A menu that switched without
+that would move a highlight and change nothing. Confirmed red by making the
+active league the list's last entry instead of its first — three of the four
+new tests fail, and the fourth (the PATCH transport) correctly does not.
 
 ## Copy goes stale the day a feature ships, and nothing fails when it does
 

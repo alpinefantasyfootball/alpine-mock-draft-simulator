@@ -32,3 +32,36 @@ export const PLATFORMS = [
 export const LIVE_PLATFORMS = PLATFORMS.filter((p) => p.live)
 
 export const LINE = 'Sleeper now · ESPN, Yahoo, CBS soon'
+
+/* The badge a connected league wears, by provider.
+
+   The header chip used to draw a hardcoded "S" on a teal square, which was
+   right while Sleeper was the only thing that could be connected and stops
+   being right the moment an account holds two leagues from two places —
+   which is the whole point of the switcher this exists for.
+
+   ---- One colour, and the letter is what differs ----
+
+   The obvious version gives each platform its own tint. It is not worth
+   what it costs: every value in the palette is already spoken for, and the
+   three that are not (`flow.gold`, `flow.lavender`, `flow.blue`) are room
+   identities — gold is the League Room, lavender is Trade. Reusing one
+   here would make a colour mean two things in one app, which this project
+   has a standing rule against and has already paid for once.
+
+   The letter identifies the platform, and every surface that draws more
+   than the badge draws the platform's name in text beside it. So a second
+   colour would be a third way of saying something already said twice.
+
+   ---- An unknown provider still draws ----
+
+   A row can arrive from a provider this build does not know about: the
+   database is shared with whatever is deployed, and the worker is deployed
+   separately from the site. `?` and the raw key is a worse label than
+   "ESPN" and a much better one than a crash. */
+export function platformFor(key) {
+  const found = PLATFORMS.find((p) => p.key === key)
+  if (found) return { key: found.key, name: found.name, mark: found.name.slice(0, 1) }
+  const raw = String(key || '')
+  return { key: raw, name: raw ? raw.toUpperCase() : 'League', mark: raw.slice(0, 1).toUpperCase() || '?' }
+}

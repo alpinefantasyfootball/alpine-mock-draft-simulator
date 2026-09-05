@@ -1,8 +1,9 @@
+import { useState } from 'react'
 import { SignInButton, SignUpButton, SignedIn, SignedOut, useClerk, useUser } from '@clerk/clerk-react'
 import AppShell from './shell/AppShell.jsx'
 import ConnectLeagueCta from './shell/ConnectLeagueCta.jsx'
 import { useLeague } from '../hooks/useLeague.js'
-import { LINE as PLATFORM_LINE } from './shell/leaguePlatforms.js'
+import { LINE as PLATFORM_LINE, platformFor } from './shell/leaguePlatforms.js'
 import { useAccountUiReady } from '../hooks/useAccountUiReady.js'
 import { useEngine, useJukeTick } from '../hooks/useJukeEngine.js'
 
@@ -168,7 +169,7 @@ function SignOutRow() {
 }
 
 /* The one section on this screen that is about a league rather than an
-   account.
+   account — and the phone's whole league switcher.
 
    It drew an "Add a league" row unconditionally, with a comment explaining
    that there was nothing connected to show above it. That stopped being
@@ -181,54 +182,158 @@ function SignOutRow() {
    league was last read. Season and team count are real and come back with
    the league itself, so those are what the row says.
 
-   Still one league. listLeagues() returns an array and useLeague() takes
-   the first, so a second connect replaces rather than adds — which is why
-   the ask below is only offered when there is nothing connected, rather
+   ---- "Still one league" is retired ----
+
+   This comment used to end: "listLeagues() returns an array and useLeague()
+   takes the first, so a second connect replaces rather than adds — which is
+   why the ask below is only offered when there is nothing connected, rather
    than sitting under the row promising an addition that would quietly be a
-   replacement. */
+   replacement."
+
+   The first clause was true of the hook and never of the data: a second
+   connect always added a row, and only the reading of it replaced anything.
+   Corrected in place rather than left standing. Every connected league is
+   listed now, the active one is marked and selectable, and "Add a league"
+   sits under them permanently — it does add.
+
+   ---- This is the phone's switcher, not a copy of the header's ----
+
+   LeagueSwitcher is `sm:block`, so below 640px this section is the only
+   way to change league. It is deliberately a different screen rather than
+   a narrower menu: a menu is for a quick pivot and this is for managing —
+   which is why disconnect lives here and nowhere else.
+
+   ---- Disconnect confirms in place ----
+
+   Two presses on the same row rather than a dialog. A `<dialog>` for one
+   irreversible-ish action on a list row is more chrome than the action is
+   worth, and `window.confirm` is a browser modal in an app that has none.
+   The armed state names the league it will disconnect, because a row that
+   just says "Sure?" is one mis-scroll away from removing the wrong one. */
 function ConnectedLeagues() {
-  const { status, league } = useLeague()
+  const { status, leagues, league, select, remove } = useLeague()
+  const [busy, setBusy] = useState(false)
+  const [failed, setFailed] = useState(null)
+  const [arming, setArming] = useState(null)
 
   // Nothing at all until the answer is in: an "add a league" row that is
   // replaced by a league a beat later reads as the connection having only
   // just happened.
   if (status === 'loading') return null
 
-  if (status === 'connected' && league) {
-    return (
-      <div className="flex w-full items-center gap-3 rounded-[14px] border border-line-hairline px-4 py-3 text-left">
-        <span
-          className="grid h-8 w-8 shrink-0 place-items-center rounded-lg font-display text-[13px] font-extrabold text-surface-page"
-          style={{ background: '#00E5FF' }}
-        >
-          S
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-[14px] font-semibold text-voidInk-primary">
-            {league.name}
-          </span>
-          <span className="mt-0.5 block truncate text-[12px] text-ink-muted">
-            Sleeper
-            {league.season ? ` · ${league.season}` : ''}
-            {league.totalTeams ? ` · ${league.totalTeams} teams` : ''}
-            {' · read-only'}
-          </span>
-        </span>
-        <a href="#/rooms/league" className="shrink-0 text-[13px] font-semibold text-teal">
-          Open
-        </a>
-      </div>
-    )
+  const keyOf = (lg) => lg.provider + ':' + lg.leagueId
+
+  const act = async (fn, lg) => {
+    setFailed(null)
+    setBusy(true)
+    const res = await fn(lg)
+    setBusy(false)
+    setArming(null)
+    if (!res.ok) setFailed(res.reason || 'error')
   }
 
   return (
-    <ConnectLeagueCta variant="row">
-      <span className="flex items-center gap-2.5">
-        <span className="text-teal" aria-hidden="true">✨</span>
-        Add a league &mdash; {PLATFORM_LINE}
-      </span>
-      <span className="text-ink-muted" aria-hidden="true">›</span>
-    </ConnectLeagueCta>
+    <>
+      {leagues.map((lg) => {
+        const on = league && lg.provider === league.provider && lg.leagueId === league.leagueId
+        const plat = platformFor(lg.provider)
+        const armed = arming === keyOf(lg)
+        return (
+          <div
+            key={keyOf(lg)}
+            className={
+              'flex w-full items-center gap-3 rounded-[14px] border px-4 py-3 text-left ' +
+              (on ? 'border-teal/60' : 'border-line-hairline')
+            }
+          >
+            <span
+              className="grid h-8 w-8 shrink-0 place-items-center rounded-lg font-display text-[13px] font-extrabold text-surface-page"
+              style={{ background: '#00E5FF' }}
+            >
+              {plat.mark}
+            </span>
+
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[14px] font-semibold text-voidInk-primary">
+                {lg.name}
+              </span>
+              <span className="mt-0.5 block truncate text-[12px] text-ink-muted">
+                {plat.name}
+                {lg.season ? ` · ${lg.season}` : ''}
+                {lg.totalTeams ? ` · ${lg.totalTeams} teams` : ''}
+                {' · read-only'}
+              </span>
+            </span>
+
+            {armed ? (
+              /* The armed state replaces the row's actions rather than
+                 sitting beside them, so there is no reachable "Open" or
+                 "Use" while a disconnect is one press away. */
+              <span className="flex shrink-0 items-center gap-3">
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => act(remove, lg)}
+                  className="text-[13px] font-semibold text-flow-rose disabled:opacity-50"
+                >
+                  Disconnect
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setArming(null)}
+                  className="text-[13px] text-ink-muted"
+                >
+                  Cancel
+                </button>
+              </span>
+            ) : (
+              <span className="flex shrink-0 items-center gap-3">
+                {on ? (
+                  <a href="#/rooms/league" className="text-[13px] font-semibold text-teal">
+                    Open
+                  </a>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => act(select, lg)}
+                    className="text-[13px] font-semibold text-teal disabled:opacity-50"
+                  >
+                    Use
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => { setFailed(null); setArming(keyOf(lg)) }}
+                  aria-label={`Disconnect ${lg.name}`}
+                  className="text-[13px] text-ink-muted transition-colors hover:text-voidInk-primary"
+                >
+                  &times;
+                </button>
+              </span>
+            )}
+          </div>
+        )
+      })}
+
+      {failed ? (
+        <p className="px-1 text-[12px] leading-[1.4] text-flow-rose">
+          {failed === 'not-connected'
+            ? 'That league is no longer connected to this account.'
+            : 'Could not reach your account just now. Nothing changed.'}
+        </p>
+      ) : null}
+
+      {/* Offered whether or not something is connected, which is the half
+          of this that changed: it adds rather than replaces. */}
+      <ConnectLeagueCta variant="row">
+        <span className="flex items-center gap-2.5">
+          <span className="text-teal" aria-hidden="true">✨</span>
+          {leagues.length ? 'Add another league' : 'Add a league'} &mdash; {PLATFORM_LINE}
+        </span>
+        <span className="text-ink-muted" aria-hidden="true">›</span>
+      </ConnectLeagueCta>
+    </>
   )
 }
 
