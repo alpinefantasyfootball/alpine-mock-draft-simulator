@@ -1,10 +1,11 @@
 FFC rows that did not join to a Sleeper player
-Generated 2026-09-04 14:39 UTC
+Generated 2026-09-05 13:37 UTC
 Across every scoring format, each name listed once.
 Add an entry to MANUAL_MATCHES in build_players.py to fix one.
 
-(none)
-
+Travis Hunter | WR | JAX | ADP 164.8
+Travis Hunter | WR | JAX | ADP 161.9
+Travis Hunter | WR | JAX | ADP 168.8
 
 
 Players with no id at another source
@@ -24,24 +25,24 @@ Lions | DEF | DET | no Tank01 id
 Steelers | DEF | PIT | no Tank01 id
 Chargers | DEF | LAC | no Tank01 id
 Jaguars | DEF | JAX | no Tank01 id
-Jets | DEF | NYJ | no Tank01 id
 Ravens | DEF | BAL | no Tank01 id
-49ers | DEF | SF | no Tank01 id
 Packers | DEF | GB | no Tank01 id
 Bills | DEF | BUF | no Tank01 id
+49ers | DEF | SF | no Tank01 id
 Falcons | DEF | ATL | no Tank01 id
 Browns | DEF | CLE | no Tank01 id
 Cowboys | DEF | DAL | no Tank01 id
 Giants | DEF | NYG | no Tank01 id
+Jets | DEF | NYJ | no Tank01 id
 Buccaneers | DEF | TB | no Tank01 id
 Bears | DEF | CHI | no Tank01 id
 Chiefs | DEF | KC | no Tank01 id
-Titans | DEF | TEN | no Tank01 id
 Bengals | DEF | CIN | no Tank01 id
+Titans | DEF | TEN | no Tank01 id
 Saints | DEF | NO | no Tank01 id
 Alex Kessman | K | CAR | no Tank01 id
-Colts | DEF | IND | no Tank01 id
 Commanders | DEF | WAS | no Tank01 id
+Colts | DEF | IND | no Tank01 id
 Cardinals | DEF | ARI | no Tank01 id
 Raiders | DEF | LV | no Tank01 id
 Panthers | DEF | CAR | no Tank01 id
@@ -53,8 +54,8 @@ Michael Warren | RB | DET | no Tank01 id
 Tavien Feaster | RB | ARI | no Tank01 id
 Bronson Kaufusi | TE | GB | no Tank01 id
 Clayton Thorson | QB | NYG | no Tank01 id
-DeaMonte Trayanum | RB | NYJ | no Tank01 id
 Jack Doyle | TE | IND | no Tank01 id
+DeaMonte Trayanum | RB | NYJ | no Tank01 id
 
 
 Sleeper stats we are not storing
@@ -118,10 +119,10 @@ fum
 fum_rec_ez_tds
 fum_rec_td
 fum_ret_yd
+idp_blk_kick
 idp_ff
 idp_fum_rec
 idp_fum_ret_yd
-idp_int
 idp_pass_def
 idp_qb_hit
 idp_sack
@@ -223,7 +224,7 @@ every season we store. Sleeper stays authoritative: this changes no
 stored number and never should. It is here so that when the two
 start disagreeing, somebody finds out from this file.
 
-445 of 484 players joined to an nflverse record.
+442 of 481 players joined to an nflverse record.
 
 No nflverse record for:
 Seahawks | DEF | SEA | no nflverse id
@@ -237,34 +238,34 @@ Lions | DEF | DET | no nflverse id
 Steelers | DEF | PIT | no nflverse id
 Chargers | DEF | LAC | no nflverse id
 Jaguars | DEF | JAX | no nflverse id
-Jets | DEF | NYJ | no nflverse id
 Ravens | DEF | BAL | no nflverse id
-49ers | DEF | SF | no nflverse id
 Packers | DEF | GB | no nflverse id
 Bills | DEF | BUF | no nflverse id
+49ers | DEF | SF | no nflverse id
 Falcons | DEF | ATL | no nflverse id
 Browns | DEF | CLE | no nflverse id
 Cowboys | DEF | DAL | no nflverse id
 Giants | DEF | NYG | no nflverse id
+Jets | DEF | NYJ | no nflverse id
 Buccaneers | DEF | TB | no nflverse id
 Bears | DEF | CHI | no nflverse id
 Chiefs | DEF | KC | no nflverse id
-Titans | DEF | TEN | no nflverse id
 Bengals | DEF | CIN | no nflverse id
+Titans | DEF | TEN | no nflverse id
 Saints | DEF | NO | no nflverse id
-Colts | DEF | IND | no nflverse id
 Commanders | DEF | WAS | no nflverse id
+Colts | DEF | IND | no nflverse id
 Cardinals | DEF | ARI | no nflverse id
 Raiders | DEF | LV | no nflverse id
 Panthers | DEF | CAR | no nflverse id
 Dolphins | DEF | MIA | no nflverse id
+Irv Charles | WR | SEA | no nflverse id
+Chase Roberts | WR | LV | no nflverse id
 Michael Warren | RB | DET | no nflverse id
 Garrett Greene | QB | TB | no nflverse id
-Dominic Richardson | RB | NYJ | no nflverse id
 Michael Woods | WR | DEN | no nflverse id
-Mitch Van Vooren | WR | DAL | no nflverse id
-DeaMonte Trayanum | RB | NYJ | no nflverse id
 Matt Hibner | TE | BAL | no nflverse id
+DeaMonte Trayanum | RB | NYJ | no nflverse id
 
 Two differences are known, applied rather than reported, and
 must not be `fixed' by taking their column:
@@ -287,16 +288,16 @@ season    compared  disagree    rate
 2018           490        76   15.5%
 2019           627        54    8.6%
 2020           780        15    1.9%
-2021           981        14    1.4%
-2022          1236        39    3.2%
-2023          1560        11    0.7%
-2024          1949         7    0.4%
-2025          2335         5    0.2%
+2021           976        14    1.4%
+2022          1232        39    3.2%
+2023          1544        11    0.7%
+2024          1941         7    0.4%
+2025          2317         5    0.2%
 
 stat  compared   agree   agree%
-cfd       911     848    93.1%
-ct        713     713   100.0%
-cy        972     968    99.6%
+cfd       900     837    93.0%
+ct        710     710   100.0%
+cy        963     959    99.6%
 f19        17      17   100.0%
 f29       132     129    97.7%
 f39       134     134   100.0%
@@ -311,12 +312,12 @@ pfd       251     214    85.3%
 pi        219     219   100.0%
 pt        234     233    99.6%
 py        270     267    98.9%
-ra        830     825    99.4%
-rc        969     967    99.8%
-rfd       686     629    91.7%
-rt        468     468   100.0%
-ry        816     809    99.1%
-tg        987     974    98.7%
+ra        826     821    99.4%
+rc        960     958    99.8%
+rfd       683     626    91.7%
+rt        467     467   100.0%
+ry        813     806    99.1%
+tg        979     966    98.7%
 xp        134     133    99.3%
 xpx        95      95   100.0%
 
