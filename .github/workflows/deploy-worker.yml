@@ -62,11 +62,24 @@ concurrency:
   group: deploy-worker
   cancel-in-progress: false
 
+# The only workflow here that declared no permissions block, so it inherited
+# the repository default for the whole GITHUB_TOKEN -- the widest token in the
+# set, handed to the job that ships the worker. It reads the repo and deploys
+# with CLOUDFLARE_API_TOKEN; it never writes back through git.
+permissions:
+  contents: read
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          # Nothing here pushes, so the checkout does not need to leave a
+          # credential behind in .git/config for the rest of the job.
+          # update-players, update_data and archive-weekly-actuals DO push
+          # and deliberately keep theirs.
+          persist-credentials: false
 
       # 22 for WebSocket and fetch as globals, which test-sockets.mjs needs
       # and says so in its own header. Same pin as every other workflow here.
