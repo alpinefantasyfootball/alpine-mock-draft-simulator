@@ -115,29 +115,47 @@
 
        A font preload is HIGH priority in Chrome by default, so these two
        were being fetched ahead of /style.css — which is render-blocking and
-       is what the first paint is genuinely waiting on. Measured against
-       production, medians of 7 fresh contexts, 4x CPU and ~1.6 Mbps/150ms:
-       style.css landed LAST of fourteen requests at 1731ms with the paint
-       57ms behind it, while these two took 49 KB of the link ahead of it.
+       is what the first paint is genuinely waiting on. style.css lands LAST
+       of fourteen requests at 1731ms with the paint 57ms behind it, while
+       these two take 49 KB of the link ahead of it.
+
+       ---- This shipped claiming 100ms. It is worth about 20. ----
+
+       That number came from a harness that compared an intercepted arm
+       against a non-intercepted one. Playwright's route.fetch() runs OUTSIDE
+       the CDP network throttle, so an intercepted document ignores it: the
+       same page, identical bytes, measured 1796ms direct and 1680ms through
+       page.route(). The -116ms artifact was larger than the effect and
+       pointed the same way. Measured against the real deploy with nothing
+       intercepted, medians of 9:
 
                             FCP     style.css    fonts land   faces fetched
-         as it was         1796ms      1732ms        1394ms         2
-         fetchpriority     1696ms      1630ms        1540ms         2
-         no preload at all 1440ms      1387ms        2831ms         1
+         before            1796ms      1732ms        1394ms         2
+         deployed          1776ms      1713ms        1612ms         2
 
-       Do NOT "improve" this by deleting the preloads, which is the bigger
-       number and the wrong change. The @font-face rules are in index.css,
-       compiled into the React bundle that does not land until 1077ms, so
-       with no preload nothing can DISCOVER these faces until then — they
-       arrive at 2831ms, which is past the reveal, which is exactly when text
-       first becomes visible, and only one of the two is fetched at all. That
-       spends 256ms of paint on a visible font swap in the first thing
+       So this is inside the noise. It is kept because demoting something the
+       first paint provably does not need is right either way and costs
+       nothing — CLS unmoved at 0.0396, both faces still fetched, and they
+       still land a full second before the splash lifts. It is NOT kept
+       because it is fast.
+
+       Two things not to try, both measured rather than reasoned about:
+
+       DELETING these is a real ~240ms and still wrong. The @font-face rules
+       are in index.css, compiled into the React bundle that does not land
+       until 1077ms, so with no preload nothing can DISCOVER these faces
+       until then — they arrive at 2831ms, past the reveal, which is exactly
+       when text first becomes visible, and only one of the two is fetched at
+       all. That spends the 240ms on a visible swap in the first thing
        anybody reads.
 
-       low keeps the early discovery, stops them outranking the stylesheet,
-       and still lands them at 1540ms — a full second before the splash
-       lifts, so no swap is reachable. CLS measured 0.0396 in every
-       condition, identical to four decimals. -->
+       MOVING @font-face into <head> to get early discovery without the
+       preload buys EXACTLY ZERO, measured as three real builds on three
+       servers. @font-face does not fetch anything, it only declares; a face
+       is requested when text needs it, and the preload is what forces that
+       early. Move the declaration and the preload still drives the fetch;
+       drop the preload and you are back to the paragraph above. -->
+
   <link rel="preload" as="font" type="font/woff2" fetchpriority="low" href="/fonts/archivo-variable-latin.woff2" crossorigin>
   <link rel="preload" as="font" type="font/woff2" fetchpriority="low" href="/fonts/ibm-plex-mono-500-latin.woff2" crossorigin>
   <!-- ?v=202609061351 on every local file below, and it has to be bumped on any deploy

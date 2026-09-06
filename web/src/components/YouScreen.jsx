@@ -213,7 +213,7 @@ function SignOutRow() {
    The armed state names the league it will disconnect, because a row that
    just says "Sure?" is one mis-scroll away from removing the wrong one. */
 function ConnectedLeagues() {
-  const { status, leagues, league, select, remove } = useLeague()
+  const { status, leagues, league, select, remove, retry } = useLeague()
   const [busy, setBusy] = useState(false)
   const [failed, setFailed] = useState(null)
   const [arming, setArming] = useState(null)
@@ -222,6 +222,31 @@ function ConnectedLeagues() {
   // replaced by a league a beat later reads as the connection having only
   // just happened.
   if (status === 'loading') return null
+
+  /* "error" may not fall through to the list below, and this is the case
+     that makes the fourth state worth having on this screen specifically.
+     `leagues` is empty when the read failed, so the list would render as
+     nothing plus a connect row — which states, on the page somebody opens
+     to manage their leagues, that they have none. That is a wrong claim
+     rather than a missing one, and it is the loudest possible place to
+     make it. */
+  if (status === 'error') {
+    return (
+      <div className="rounded-[14px] border border-line-hairline px-4 py-3">
+        <p className="text-[13px] leading-[1.5] text-voidInk-body">
+          Could not reach your account just now, so this list may be incomplete. Nothing has been
+          disconnected.
+        </p>
+        <button
+          type="button"
+          onClick={retry}
+          className="mt-2 text-[13px] font-semibold text-teal"
+        >
+          Try again
+        </button>
+      </div>
+    )
+  }
 
   const keyOf = (lg) => lg.provider + ':' + lg.leagueId
 

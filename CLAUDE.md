@@ -351,28 +351,62 @@ of font is pulled straight past the one stylesheet the paint is blocked on —
 and at first paint there is no text on screen to need it, because the splash
 overlay is deliberately wordless.
 
-Measured, same profile and method:
+The first measurement of this said `fetchpriority="low"` was worth **−100 ms**
+and shipped on that number. **It is worth about −20 ms and the rest was the
+harness.** Corrected below, with the artifact written up in its own section
+because it will fool the next person exactly as it fooled this one.
 
-| | FCP | Δ | `style.css` ends | fonts land | faces fetched |
-|---|---:|---:|---:|---:|---:|
-| shipped | 1796 ms | — | 1732 ms | 1394 ms | 2 |
-| **`fetchpriority="low"`** | **1696 ms** | **−100 ms** | 1630 ms | **1540 ms** | 2 |
-| preloads deleted | 1440 ms | −356 ms | 1387 ms | **2831 ms** | **1** |
+Measured against the deployed site with **nothing intercepted**, medians of 9:
 
-**Deleting them is the bigger number and the wrong change.** The `@font-face`
-rules live in `web/src/index.css`, which is compiled into the React CSS bundle
-and does not land until 1077 ms — so without a preload nothing can even
-*discover* the faces until then. The last column is the tell: with the
-preloads gone the fonts arrive at 2831 ms, which is **past the splash's own
-2.7 s hold**, i.e. precisely when text first becomes visible, and only one of
-the two faces is fetched at all. That trades 256 ms of paint for a visible
-swap on the first screen anybody reads.
+| | FCP | `style.css` ends | fonts land | faces |
+|---|---:|---:|---:|---:|
+| before the change | 1796 ms | 1732 ms | 1394 ms | 2 |
+| **`fetchpriority="low"`, deployed** | **1776 ms** | 1713 ms | 1612 ms | 2 |
 
-`fetchpriority="low"` keeps early discovery, stops the fonts outranking the
-stylesheet, and still lands them at 1540 ms — over a second before the splash
-lifts, so no swap can be seen. **CLS was 0.0396 in every condition measured**,
-identical to four decimals, which is worth stating precisely because it is
-what a font preload is supposed to be buying and here it buys none of it.
+**−20 ms, which is inside the noise.** The attribute demonstrably *works* —
+the faces moved 218 ms later, which is exactly what demoting them should do —
+it simply does not buy the paint anything. It is kept because deprioritising
+something the first paint provably does not need is right regardless of
+whether it measures, and it costs nothing: CLS unmoved at 0.0396, both faces
+still fetched, and they still land a full second before the splash lifts.
+
+**Deleting the preloads is the one option with a real number behind it, and
+it is still the wrong change.** Adjusted for the artifact it is worth about
+**−240 ms** rather than the −356 ms first measured. The `@font-face` rules
+live in `web/src/index.css`, compiled into the React CSS bundle that does not
+land until 1077 ms, so without a preload nothing can even *discover* the faces
+until then: they arrive at **2831 ms**, past the splash's own 2.7 s hold —
+precisely when text first becomes visible — and **only one of the two is
+fetched at all.** That spends 240 ms of paint on a visible swap in the first
+thing anybody reads.
+
+### Tried and rejected: moving `@font-face` into `<head>`
+
+The obvious way to have both — declare the faces inline in `<head>` so they
+are discovered at parse time instead of at 1077 ms, and then the preloads are
+unnecessary rather than merely demoted. It was built as three real builds and
+measured on three static servers with no interception anywhere, medians of 9:
+
+| variant | FCP | Δ | fonts land | faces |
+|---|---:|---:|---:|---:|
+| main, as it is | 4308 ms | — | 2469 ms | 2 |
+| inline `@font-face`, **no** preload | 4192 ms | −116 ms | **5556 ms** | **1** |
+| inline `@font-face`, preload kept | 4308 ms | **0 ms** | 2445 ms | 2 |
+
+(Absolute numbers are localhost behind a serial `http.server` and are much
+worse than production; only the deltas mean anything.)
+
+**The third row is the answer and it is exactly zero.** Relocating the
+declaration changes nothing at all while a preload exists, because
+**`@font-face` does not fetch anything — it only declares.** A face is
+requested when text actually needs it, and the preload is the thing forcing
+that to happen early. Move the declaration and the preload still drives the
+fetch; remove the preload and the second row is what you get, which is the
+deletion trade again with a longer fuse.
+
+So there is no free lunch here, and the assumption that produced this
+experiment — "early discovery is what the preload is buying" — was wrong.
+**A preload buys an early *fetch*, and a declaration buys neither.**
 
 ### Where the ceilings are, and which ones are measured
 
@@ -384,11 +418,15 @@ Ranked by what a measurement supports, not by what sounds alarming.
    correction above. A cost every visitor pays at every scale, not a capacity
    problem that arrives later. **Bytes, not parsing**: compile and execute is
    57 ms, so the lever is shipping less of it rather than splitting it.
-1. **The first paint is a priority problem worth 100 ms**, and the fix is two
-   attributes rather than a refactor — `fetchpriority="low"` on the font
-   preloads that currently outrank the stylesheet the paint is blocked on.
-   Measured above. Small, cheap, and *not* the same problem as the item
-   before it, which is exactly what a size-based guess got wrong.
+1. **The first paint is gated by `style.css`, and nothing cheap moves it.**
+   The stylesheet lands last of fourteen and the paint follows 57 ms later.
+   Three cheap fixes were measured and the honest total is about 20 ms:
+   `fetchpriority="low"` on the font preloads is shipped and inside the noise,
+   relocating `@font-face` is exactly zero, and deleting the preloads is a
+   real 240 ms bought with a visible font swap. **What is left is the payload
+   itself** — the stylesheet is 57 KB and it is queued behind ~200 KB of
+   things that do not block rendering. That is a real lever and nobody has
+   costed it. Do not reach for another attribute; the attributes are spent.
 2. **Room creation and `/media` are unrated.** Both say so in their own
    comments. The DO limits 40 actions per socket per 10s *once a socket
    exists*, and nothing limits opening one or posting a file. `/media` caps a
@@ -6487,6 +6525,91 @@ unconditional sentence, written before accounts synced anything, still
 promising an account under rows that were already in one. Reported with a
 screenshot of exactly that.
 
+### A state machine that runs backwards un-renders whatever was on screen
+
+Reported 6 September 2026 from the deployed site, with a screenshot: the
+hero's whole right-hand column **flashes on load and then disappears**, and
+the header's league chip never draws at all.
+
+**Two blank surfaces, one cause.** `ConnectCard` returns null on
+`status === 'loading'` and `LeagueChip` returns null on anything but `'none'`
+— both correct, because that state means *we have not asked yet*. What was
+wrong is that every failure path in `refreshLeagues()` settled **back** to
+`'loading'`:
+
+```
+1. page loads, Clerk has not resolved -> settle("none")   -> the card RENDERS
+2. Clerk resolves, juke:auth fires, GET /me/leagues goes out
+3. it fails -> settle("loading")                          -> the card UNMOUNTS
+4. nothing retried                                        -> permanent
+```
+
+So the machine went from a settled answer to "we do not know", and the state
+it chose is the one every caller draws as nothing. **The failure was
+invisible and terminal at the same time, which is the worst pair
+available** — and a card that was on screen a moment ago vanishing reads as a
+broken page rather than as an unreachable worker.
+
+**The reasoning that produced it was right and is unchanged.** Saying
+`'none'` there would offer Connect to somebody who has already connected, and
+pressing it would reconnect a league they never disconnected. A failure is
+genuinely not "no league". What was missing is that **a state meaning "we
+could not find out" has to be renderable** — the same rule this file already
+states where it says a page claiming a backup it does not have is worse than
+one claiming nothing, and which the Locker's storage strip already follows.
+
+`'error'` is the fourth status. `ConnectCard` draws an honest card with a
+Retry, `YouScreen` says the list may be incomplete rather than rendering an
+empty one under a heading about managing leagues, and `LeagueChip` still
+draws nothing — right for a chip with no room to explain itself, and it
+needed no change because `status !== 'none'` covers a new negative state for
+free. **The other seven surfaces needed no change either, because they ask
+`status === 'connected'`** — a positive test treats a new negative state
+correctly by construction, which is worth knowing before adding an eighth.
+
+**It retries itself, bounded, and then stops.** Three tries over ~23s, plus a
+re-read when the tab comes back and the state is `error`. Bounded because an
+unreachable worker must not be polled forever by a tab nobody is watching,
+and `retryLeagues()` is a separate entry point from `refreshLeagues()` for a
+reason that is easy to get wrong: **the automatic retry calls the latter, so
+a backoff that reset its own budget on every attempt would be an unbounded
+poll wearing a backoff's clothes.**
+
+### The store left `useLeague.js` so it could be tested at all
+
+`web/src/lib/leagueStore.js` is the state machine and imports **nothing**;
+`useLeague.js` is the React subscription over it and re-exports the whole
+public API, so no consumer's import changed.
+
+**The split is about CI, not tidiness, and the constraint is worth stating.**
+Every surface that can show the bug above sits inside Clerk's `<SignedIn>`,
+and a build with no publishable key renders the signed-out fallback — which
+this file already records as the widest gap in the account surface's
+coverage. That was confirmed rather than assumed: a Playwright spec written
+against the real page found **no `[data-league-card]` at all**. So the page
+cannot be driven into the broken state, and the machine had to be reachable
+on its own.
+
+With React imported it still was not, because **`tests.yml` installs no npm
+dependencies anywhere** — every other step in it is stdlib Python or
+dependency-free Node. A test reaching this through the hook would have needed
+a full `web/node_modules` install for one file. `scripts/test_league_state.mjs`
+runs in a second with none, and is in CI.
+
+**A first attempt added the CI step with a comment saying it ran "after the
+install step above". There is no install step above.** Caught by reading the
+workflow rather than by the run, which would have failed on a runner and not
+here. Same class as every stale claim this file keeps correcting: a sentence
+that was true of the arrangement in somebody's head.
+
+**Verifying the rendering is by hand and there is no way around it.** The
+temporary-exposure technique this file already describes — force
+`ConnectCard` into the keyless branch, build, stub `window.JukeAuth` and a
+failing `window.Live.listLeagues`, look, revert. Measured that way: the card
+comes back **372×518 where it was 0**, and swapping the stub to a working
+response recovered it to the real league card **on the backoff alone, with no
+press and no reload**.
+
 ### "Is anybody signed in" is not `useAuth()`'s question to answer here
 
 `useAccountUiReady()` above answers *may I render Clerk's components*.
@@ -7801,6 +7924,41 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   And a temporary spec that measures anything should assert what it is looking
   at before it looks: fetch the served HTML, pull the bundle name out of it, and
   print whether that bundle contains a symbol the change introduces.
+
+- **Playwright's `page.route()` is worth −116ms of first paint all by itself,
+  and that is the tooling wearing a FIX's clothes.** Every other harness
+  artifact in this file produced a false *negative* — a symptom that looked
+  like a bug and was not. This one produces a false *positive*: a change that
+  looks like an improvement, gets merged, gets deployed, and gets written up
+  as a measured fact. It did all four on 6 September 2026, inside two hours,
+  in a file whose entire subject is not doing that.
+
+  `route.fetch()` runs **outside** the CDP network emulation, so an
+  intercepted document ignores the throttle. Measured on the deployed page
+  with **identical bytes** in all three arms:
+
+  ```
+  direct                             FCP 1796ms   htmlEnd 329ms
+  route.fetch + fulfill, untouched   FCP 1680ms   htmlEnd  54ms
+  same, with a replace() matching nothing  FCP 1684ms   htmlEnd  53ms
+  ```
+
+  The HTML lands in 54ms instead of 329, and everything downstream shifts
+  with it. `htmlEnd` was in the resource timings the whole time and nobody
+  looked at it.
+
+  **The rule is one line: never compare an intercepted arm against a
+  non-intercepted one.** The `fetchpriority` experiment had `shipped` running
+  direct while both counterfactuals ran through `page.route`, so the artifact
+  was larger than the effect and pointed the same way. Intercept every arm
+  identically and it cancels — or, better, build the variants for real and
+  serve them side by side, which is what the `@font-face` experiment did once
+  this was known.
+
+  **And verify a shipped perf change against the deploy, directly.** The
+  counterfactual proves how the *browser* behaves given the markup; it does
+  not prove the origin serves that markup or that the real request ordering
+  matches. Production said −20ms where the harness had said −100ms.
 
 - **A proxied sandbox makes a render-blocking `<link>` look like a broken
   loader.** `sonar.spec.mjs` held `#boot-sonar` to leaving between 4800ms and
