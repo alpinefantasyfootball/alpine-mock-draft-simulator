@@ -3075,6 +3075,14 @@ The design pass was open for **one hour** and came back `CONFLICTING`, four
 hunks in `index.html` and three in the how-it-works page, every one of them a
 version string and nothing else.
 
+**And it cost more than a resolution, which took three weeks to notice.** A
+conflicting PR produces no merge ref, so no `pull_request` workflow can run
+against it — that same hour is the hour the Testing section spent recording
+as "a pull request opened after its last push has no checks", which is a real
+observation with the wrong cause attached. **A collision here does not just
+block the merge; it silently turns the checks off**, and a PR with no checks
+reads as one that passed rather than one that never ran.
+
 The resolution is the branch's stamp, being the newer of the two, but **prove
 that before taking it rather than after**:
 
@@ -7857,11 +7865,33 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   browser suite is still deliberately out of `tests.yml`. Three things follow
   that have each cost something:
 
-  - **A pull request opened after its last push has no checks at all.** The
-    workflow fires on the `pull_request` event, so a branch pushed first and
-    turned into a PR afterwards shows `no checks reported` and sits there
-    looking reviewed. The design pass was open for an hour that way, with 996
-    lines of CSS and 598 of JavaScript that nothing had run.
+  - **A conflicting pull request has no checks at all, and it looks exactly
+    like a reviewed one.** This entry used to say the cause was *ordering* —
+    that a branch pushed first and turned into a PR afterwards shows
+    `no checks reported` — and that is wrong. Corrected in place 6 September
+    2026, with the measurement that settles it: **PR #164 was a branch pushed
+    first, and its run was created three seconds after the PR opened**
+    (16:12:21Z → 16:12:24Z). `tests.yml` declares a bare `on: pull_request:`,
+    which defaults to `[opened, synchronize, reopened]`, and its `on:` block
+    has never changed since the file was written.
+
+    **The observation was real and the diagnosis was not.** The design pass
+    (PR #53) genuinely sat from 13:06Z to 13:57Z with nothing run against
+    996 lines of CSS and 598 of JavaScript. What was actually wrong is
+    recorded four thousand lines up this same file, under the nightly's `?v=`
+    conflicts: **that PR came back `CONFLICTING`**, because the 11:00 UTC
+    rebuild had rewritten the same two files. A `pull_request` workflow runs
+    against the merge ref, a conflicting PR has no merge ref to produce, and
+    so no run is scheduled. The check fired at 13:57:44Z — twenty-two seconds
+    after `c34d3143`, the merge of `origin/main` that resolved it — and the
+    PR merged a minute later.
+
+    So the file held both halves and drew a line between the wrong two. **A
+    PR showing no checks is a question about its mergeable state**, and the
+    fix is to merge main into the branch, which this file's own `?v=` section
+    already tells you to do for an unrelated reason. The retired version of
+    this rule taught a superstition — open the PR before pushing — that is
+    both unnecessary and, for a branch that does not exist yet, impossible.
   - **`update-players.yml` is unproven by any pull request.** It runs on
     `schedule` and `workflow_dispatch` only, so a change to it is not
     exercised until 11:00 UTC or until somebody presses the button.
