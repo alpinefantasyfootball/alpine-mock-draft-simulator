@@ -112,7 +112,9 @@ the Stack section above, not a one-time migration hiccup.
 | `draft-engine.js` | The rules of a snake draft — turn order, legality, the CPU wobble. No DOM, no globals, no dependencies, so a server can run the identical file. |
 | `room.js` | One shared draft: seats, picks, the clock. Pure, and time is always passed in rather than read. Loaded by the worker only; the page consumes the view it sends. Not copied into `web/dist/` — nothing client-side ever references it. |
 | `live.js` | The client end of a room: one socket, the invite code, and the messages. Knows nothing about the board or how anything is drawn. |
-| `worker/` | The Cloudflare Durable Object behind an invite link, plus the two proxied routes whose keys may not be in the page (`/giphy`, `/news`) and its `wrangler.toml`. Deployed to `juke-draft-room.jukeff.workers.dev`; **a change here needs `npm --prefix worker run deploy`** — which migrates first, and the site deploys itself from git while the worker does not. See `worker/README.md`. |
+| `worker/` | The Cloudflare Durable Object behind an invite link, plus every proxied route whose key or quota may not be in the page (`/giphy`, `/news`, `/media`, the two league adapters) and its `wrangler.toml`. Deployed to `juke-draft-room.jukeff.workers.dev`. **`.github/workflows/deploy-worker.yml` ships it on a push to `main`** touching anything under `worker/`, or `room.js`, or `draft-engine.js` — the code half of the deploy gap is closed; **D1 migrations are still manual and deliberately so**. `npm --prefix worker run deploy` is the by-hand path and migrates first. See `worker/README.md` and the system section above. |
+| `worker/espn.js`, `worker/sleeper.js` | The two league adapters. Each turns one platform's shape into the one vocabulary the app reads — Sleeper-id-keyed rosters and `pre_draft`/`drafting`/`complete`. A third platform is a third file here, not a fourth vocabulary in the UI. |
+| `worker/names.js` | `normalise()`, the JavaScript half of the name crosswalk. **It exists in two languages and they must not drift** — `build_players.py` has the other one, and `test_engine.py` is the only suite that asserts they agree. A drift does not throw; it stops matching. |
 | `worker/store.js` | The D1 cache: Sleeper's pool and Tank01 headlines. A cache and never a source of truth, and a missing binding is a normal condition rather than a fault. |
 | `worker/migrations/` | D1 schema, applied with `wrangler d1 migrations apply`. The database is not to be shaped by hand — see the note on three variants of one schema. |
 | `web/index.html` | The real homepage entry Vite builds from. Loads the legacy files above as root-relative classic scripts, alongside Vite's own hashed module bundle for React. The Draft Room markup lives here too, hidden — see the Stack section. |
@@ -154,13 +156,242 @@ the Stack section above, not a one-time migration hiccup.
 | `scripts/test_archive_week.mjs` | Offline check for `archive_week.mjs`'s raw-stat mapping and the points it produces, against a synthetic, hand-computable stat line — the one part of that script this project can test without live Sleeper access. |
 | `.github/workflows/archive-weekly-actuals.yml` | Runs `archive_week.mjs` weekly (Tuesdays, 14:00 UTC), after Monday Night Football and Sleeper's own box-score finalization. |
 
+## The system, and what it is built to hold
+
+Written 6 September 2026, because this file had a table of what every file
+*is* and nothing that said how they compose or where the limits are. Every
+number below was measured rather than recalled, and each carries its date for
+the reason the Juke score section already gives: the board is regenerated
+nightly and the bundle is rebuilt on every push, so a figure without a date is
+a figure nobody can check.
+
+**The shape in one sentence: a static site with three optional servers behind
+it, and a solo mock draft touches none of them.** That is the load-bearing
+property and it is a product decision before it is an architectural one.
+`saveDraft()`, `recordHistory()` and every localStorage path run identically
+signed out and offline, so each server below is something that *adds* rather
+than something that *permits*. Anything that makes a solo draft depend on a
+server is out — the Multi-user section already states this, and it is repeated
+here because it is the constraint the whole architecture is arranged around.
+
+### Four planes, and only one is on the critical path
+
+| Plane | What it is | What it costs a solo drafter | Fails how |
+|---|---|---|---|
+| **The page** | Cloudflare Pages, built from `main` on every push. Vite's hashed module bundle plus the legacy classic scripts. | Everything. This is the product. | Nothing to fail — a CDN serving files. |
+| **The room** | One Durable Object per invite code, at `/room/<code>`. Seats, picks, the clock, the chat log. | Nothing. Never contacted. | Picks stop landing; the page says so. |
+| **The account** | D1 behind `/me/*`, with Clerk for identity. Saved draft, locker, connected leagues. | Nothing. Never contacted. | Falsy everywhere; `syncStatus()` reports it. |
+| **The pipeline** | GitHub Actions writing `players.js`, `stats.js`, `unmatched.txt`, the weekly archive and the expected-points CSVs. | Nothing at run time — its output is committed. | Yesterday's board. |
+
+**The worker is one script serving two unrelated jobs**, which is worth
+knowing before reading it. `worker/draft-room.js` is both the Durable Object
+class *and* the plain HTTP router in front of it. The DO is reached only by
+`/room/<code>`; every other route below is an ordinary stateless fetch
+handler that lives in the same file because it needs the same CORS refusal
+and the same secrets.
+
+### The HTTP surface
+
+Fifteen routes. This list did not exist anywhere before now, which is the gap
+that most justified writing this section: a file table says what a file is and
+says nothing about the interface somebody has to keep compatible.
+
+| Route | Methods | Guard | Answers |
+|---|---|---|---|
+| `/room/<code>` | `GET` (upgrade) | none — the code is the capability | a WebSocket, or the room's view as JSON |
+| `/me` | `GET` | `originAllowed()` + `verifiedUser()` | `{ signedIn }`, and records the visit |
+| `/me/draft` | `GET` `POST` `DELETE` | `requireUser()` | the one in-progress draft |
+| `/me/history` | `GET` `POST` `DELETE` | `requireUser()` | the locker; `POST` writes exactly one entry |
+| `/me/leagues` | `GET` `POST` `PATCH` `DELETE` | `requireUser()` | connected leagues, most-recently-selected first |
+| `/sleeper/lookup` | `GET` | `originAllowed()` | a manager's leagues, by username |
+| `/sleeper/snapshot` | `GET` | `originAllowed()` | one league's rosters, Sleeper-id keyed |
+| `/espn/league` | `GET` | `originAllowed()` | a public league's teams and managers |
+| `/espn/snapshot` | `GET` | `originAllowed()` | the same, crosswalked to Sleeper ids |
+| `/news` | `GET` | `originAllowed()` | headlines by provider id, D1-cached |
+| `/giphy` | `GET` | `originAllowed()` | a proxied GIF search |
+| `/media` | `POST` | `originAllowed()` | an R2 upload; returns the key's URL |
+| `/media/<key>` | `GET` | **none, by design** | the object, `immutable` for a year |
+| `/signup` | `POST` | `originAllowed()` | email capture into D1 |
+| `/webhooks/clerk` | `POST` | **signature, not origin** | account deletion |
+
+**Three guard tiers, and which one a route gets is a decision rather than a
+default.** This is the security model in one place, and it was previously
+inferable only by reading the router top to bottom:
+
+- **`requireUser()`** — everything under `/me/`. Verifies a Clerk token and
+  answers 401 for a missing, malformed, expired or forged one alike. The
+  origin check is inside it.
+- **`/me` itself is the deliberate exception and answers `signedIn: false`
+  rather than 401.** "Am I logged in" is a question with two fine answers,
+  where a route that can lose or leak somebody's draft needs the harder line.
+  It calls `verifiedUser()` directly for that reason rather than going through
+  `requireUser()`, which would turn a normal signed-out visit into an error.
+- **`originAllowed()`** — everything that spends a key, a quota or a byte of
+  R2 without being account-scoped. It runs **before the secret is read**,
+  because CORS tells a browser whether it may *read* a response and does
+  nothing about the request being made: `curl` with a made-up Origin drank the
+  GIPHY quota happily.
+- **Neither, deliberately, twice.** `/webhooks/clerk` cannot take an origin
+  check, because Clerk posts from its own servers with no Origin header — and
+  a valid signature is the stronger claim anyway. `/media/<key>` takes none
+  because the key is 16 random bytes: nobody can list the bucket over that
+  route and nobody can guess a key, so an unlisted URL there is exactly as
+  private as an unlisted one on any other chat host.
+
+**A new verb on an existing route is a new door, and the preflight has to name
+it.** `PATCH` is not CORS-simple, so a browser always preflights it — and a
+preflight that does not list it means the request never leaves the page: no
+log line, no error at the worker, and a menu that does nothing.
+`test-auth.mjs` asserts the preflight names `PATCH` for exactly that reason,
+and it was confirmed red by removing it.
+
+### The socket protocol
+
+Fourteen verbs in, three kinds of message out. The asymmetry is the design:
+**a client sends an intent and the room broadcasts a state**, so no client
+ever tells another client anything.
+
+- **In:** `claim-seat`, `swap-seats`, `rename`, `start`, `pause`, `pick`,
+  `auto`, `chat`, `react`, `typing`, `voice`, `photo`, `poll-create`,
+  `poll-vote`.
+- **Out:** `state` — the whole room view, projected per member; `typing` —
+  relayed and never stored; and `rejected` — sent to one socket and causing no
+  broadcast, which is the fact that deadlocked a draft at pick 86. See the
+  rate-limit chain under Multi-user drafting.
+
+**`viewFor()` is a projection and not a serialization**, which is what keeps
+member ids off the wire: a reaction is stored as `{ emoji: [memberId, …] }`
+and leaves as `{ emoji, count, you }`, so a client that has never been told
+another member's id cannot impersonate them by echoing it back. Polls follow
+the same rule through `pollView()`.
+
+### What the first load actually costs
+
+Measured 6 September 2026 against `https://jukeff.com` itself, every asset
+requested with a cache-busting query so the answer comes from the origin.
+
+**Served figures are brotli, and quoting a local `gzip -c` here would
+overstate what a visitor pays.** Cloudflare negotiates `br`, and on this
+content it is meaningfully better: `players.js` is 33 KB gzipped on disk and
+**20 KB** as actually served. Raw figures are the working tree and so do not
+correspond exactly — the nightly rebuilds `players.js` and `stats.js`, so the
+served copies are always a little off whatever is on disk.
+
+| Asset | Raw (tree) | Served (br) | When |
+|---|---:|---:|---|
+| `app.js` | 585 KB | **195 KB** | **render-blocking** |
+| `style.css` | 196 KB | **57 KB** | **render-blocking** |
+| `live.js` | 40 KB | **12 KB** | **render-blocking** |
+| `theme.js` + `juke-mark.js` + `splash-boot.js` + `back-to-top.js` | ~25 KB | **15 KB** | **render-blocking** |
+| React bundle | 849 KB | 235 KB | module, deferred |
+| React CSS | 95 KB | 16 KB | deferred |
+| `stats.js` | 787 KB | 168 KB | preloaded, parsed at the reveal gate |
+| `players.js` | 173 KB | 20 KB | same |
+| `draft-engine.js` | 14 KB | 5 KB | same |
+
+**About 650 KB of JavaScript and 73 KB of CSS on a first load, of which
+279 KB blocks the first paint** — 222 KB of script plus the 57 KB stylesheet.
+`app.js` is 11,916 lines and 336 functions in one scope, one classic
+`<script src>`, no splitting and no `defer`.
+
+**The deferred half is solved and the blocking half never had the same lens
+turned on it.** "Downloading is not executing" deferred `players.js`,
+`stats.js` and `draft-engine.js` and measured the result — long tasks
+overlapping the reveal fell from 1989ms to 90ms at 6x throttling. Nothing has
+ever measured what `app.js` itself costs before first paint, which makes it
+the largest unexamined number in this project.
+
+### Where the ceilings are, and which ones are measured
+
+Ranked by what a measurement supports, not by what sounds alarming.
+
+1. **The first paint, and it is the only one that bites today.** 279 KB
+   blocking is a cost every visitor pays at every scale — not a capacity
+   problem that arrives later, a problem now that never gets worse. The
+   payload is measured above; what it costs in seconds on a real phone is
+   not, and that is the measurement to take first.
+2. **Room creation and `/media` are unrated.** Both say so in their own
+   comments. The DO limits 40 actions per socket per 10s *once a socket
+   exists*, and nothing limits opening one or posting a file. `/media` caps a
+   request at 8 MB and has nothing above it, which is the one thing standing
+   between an open upload endpoint and an unbounded R2 bill. Both belong on a
+   Cloudflare rate limiting rule — configuration, not code.
+3. **The host's browser is the CPU**, so CPU seats stall if the host closes
+   the tab. Deliberate: the alternative is shipping a megabyte of board to a
+   Durable Object. Documented under Multi-user drafting, and visible rather
+   than silent, which is the trade that makes it acceptable.
+4. **The browser half has no error tracking.** `[observability] enabled = true`
+   in `wrangler.toml` covers the worker; the page has nothing. The React
+   `#418`/`#423` hydration errors were on **every load of the site for the
+   whole life of accounts** and were found by somebody opening a console. That
+   is what this gap produces — not an outage, a permanent silent tax nobody is
+   told about.
+
+**What is genuinely fine, so nobody spends effort here.** Pages is a CDN and
+the site is static; a Durable Object is one per room and shards by
+construction; D1 is touched only by `/me/*` and the news cache, at human
+rates, with every read and write behind a fallback ladder. None of that is the
+constraint — and treating "scale" as a server question here would aim the work
+at the half that already works, which is the same error as measuring a
+player's worth in rank places.
+
+### Two things this section deliberately is not
+
+**A second architecture document.** This file is the one durable reference and
+a competing one would drift first — the written-down-twice rule, pointed at
+the documentation itself. Anything true about the system belongs here.
+
+**A plan.** Everything above is a description with dates on it. The ranked
+list is where the numbers point, not a decision anybody has made, and this
+project's own record is that three of six proposals die on contact once
+somebody measures them.
+
+
 ## Data
 
-Three free feeds, no keys: **Sleeper** (players, injuries, stats back to 2018,
-weekly logs, projections, depth charts), **Fantasy Football Calculator**
-(ADP, one set per scoring format, written to `players.js` as `ADP_SETS`), and
+**Four** free feeds, no keys: **Sleeper** (players, injuries, stats back to
+2018, weekly logs, projections, depth charts), **Fantasy Football Calculator**
+(ADP, one set per scoring format, written to `players.js` as `ADP_SETS`),
 **nflverse** (nflfastR's play-by-play derivatives, used to check Sleeper and
-never to replace it — see "The second feed" below).
+never to replace it — see "The second feed" below), and **ffopportunity**
+(expected fantasy points, below). A fifth, **Tank01**, is the only keyed one
+and is optional throughout — see "Latest news".
+
+### ffopportunity is the fourth feed, and it is input rather than output
+
+Added to this list 6 September 2026, having been in the repository since 28
+August and named nowhere: the sentence above said "three" while
+`scripts/fetch_ffopportunity.py`, `.github/workflows/update_data.yml` and
+43 MB of committed CSV all existed. That is the stale-copy failure this file
+already has a rule about, landing on the Data section's own first sentence.
+
+**It is the ffverse's expected-points model, taken precomputed.** The
+repository republishes its output as release assets under a rolling
+`latest-data` tag — one `ep_weekly_<season>.csv` per season, about 5.4 MB
+each. This is the xFP input nothing in Sleeper or nflverse carries, and
+computing it here would mean maintaining a play-by-play model this project has
+no business maintaining.
+
+**The join is free.** The key in the data is `player_id`, which is a `gsis_id`
+— the identifier `link_nflverse()` already resolves for the board — so there
+is no new crosswalk and no second normaliser to drift.
+
+**Three things about it that differ from every other feed here.**
+
+- **It is fetched weekly, not nightly** — Tuesdays at 06:00 UTC, after
+  ffopportunity's own refresh has had the weekend's games. History does not
+  change, so only the newest season is fetched; a backfill is a one-off
+  `--seasons` run rather than a weekly download.
+- **It lands in `src/data/`, which is served to nobody.** Not in
+  `LEGACY_FILES`, not in `web/public/`, not in `web/dist`. So
+  `update_data.yml` deliberately does **not** bump `?v=` — there is no cached
+  address to move, and bumping one would be a rebuild-nobody-sees in reverse.
+  It is pipeline input consumed by `build_players.py`, not an asset.
+- **43 MB of it is committed.** That is a deliberate trade — the pipeline is
+  standard library only and a fetch at build time would make the nightly
+  depend on a fourth server being up — and it is the largest thing in the
+  repository by a wide margin. Worth knowing before cloning on a slow
+  connection.
 
 ### `data/baselines/2026/preseason/` is frozen, not generated
 
@@ -2872,15 +3103,37 @@ commits and two days of it read exactly like changes that never merged.
 `git log --oneline main..origin/main` says what is missing. Check that before
 concluding anything is stuck.
 
-**The site deploys itself and the worker does not, and that gap is invisible.**
+**The site deploys itself and the worker did not, and that gap was invisible.**
 Cloudflare Pages builds from git on every push, so a merge is a deploy. The
-worker is not in that build: it ships only when somebody runs
+worker was not in that build: it shipped only when somebody ran
 `wrangler deploy -c worker/wrangler.toml`. The D1 cache was merged, correct,
 and doing nothing at all because of it — the route answered normally, the edge
 cache even reported `miss` then `hit`, and the only thing that gave it away was
 querying the database and finding zero rows after a miss that should have
 written some. **Ask the database, not the response**: a worker change that is
 merged but not deployed looks exactly like one that is working.
+
+**Corrected in place, 6 September 2026: the code half of that gap closed on 2
+September.** `.github/workflows/deploy-worker.yml` (`cd1dc99`) ships the worker
+on any push to `main` touching `worker/**`, `room.js` or `draft-engine.js` —
+and the paths list is the part that matters, because `draft-room.js` imports
+`room.js` which requires `draft-engine.js`, both at the repo root and both
+bundled into the worker. `worker/**` alone would have left the two halves
+disagreeing about what is legal, which is the fork this project has already
+shipped once.
+
+**Two halves of it are still open and the instruction survives for both.**
+**D1 migrations are not applied by that workflow, on purpose** — a bad deploy
+is a click to roll back and a bad migration is a schema change on live data —
+so a schema-dependent change is still merged-but-not-live until somebody runs
+`wrangler d1 migrations apply juke_db --remote -c worker/wrangler.toml`. And
+secrets are still `wrangler secret put`. So the sentence to keep is the one
+about evidence rather than the one about the workflow: **anything downstream
+of a deploy has to be asked directly, because "merged" and "live" are
+indistinguishable from the response.** The four incidents this gap produced —
+the silent D1 cache, `verifyToken` rejecting every login, the linear-versus-
+snake room fork, and the users-row foreign key — are all still the reason the
+rule exists, and only one class of them is now prevented by tooling.
 
 **Nothing in the *output directory* is unpublished.** Pages serves that
 directory as it finds it and has no ignore list, so anything in it is live on
@@ -5011,12 +5264,19 @@ three the old way. **Pass the league object wherever the ORDER matters.**
 deploy skew wearing a feature's clothes.** `draft-engine.js` is the one file
 the browser and the server both run, so the two have to agree about what is
 legal or two managers take the same player milliseconds apart and the room
-forks. The site deploys itself from git and **the worker does not** — it ships
-only when somebody runs `wrangler deploy -c worker/wrangler.toml` — so in the
-window between the draft types merging and that command being run, the server
-was still snaking while a client drew linear. That failure is not a broken
-page: it is picks quietly rejected from round two on, which reads as the room
-freezing.
+forks. The site deployed itself from git and **the worker did not** — it
+shipped only when somebody ran `wrangler deploy -c worker/wrangler.toml` — so
+in the window between the draft types merging and that command being run, the
+server was still snaking while a client drew linear. That failure is not a
+broken page: it is picks quietly rejected from round two on, which reads as the
+room freezing.
+
+**This exact case is what `deploy-worker.yml`'s paths list was written for**,
+and it is why that list names `draft-engine.js` and `room.js` rather than
+`worker/**` alone — see the correction under "The site deploys itself". The
+window is now the length of a workflow run rather than the length of somebody
+remembering, which shortens it and does not remove it: the site's Pages build
+and the worker's deploy still start together and finish independently.
 
 So `roomShapeProblem()` refused the two orders it could not yet guarantee and
 said so on screen, and it was deleted the moment the worker carrying the new
@@ -5995,11 +6255,21 @@ Four ways to get this wrong, all of which have happened:
   publishable key in at build time, so it needs a fresh deployment; saving it
   does not create one.
 
-**And the worker still does not deploy itself.** The site rebuilds from `main`
-on every push and the worker only ships on `wrangler deploy -c
-worker/wrangler.toml` — so an auth fix can be merged, live in git, and doing
-nothing at all. Same gap this file already records for D1, and the same
-instruction: ask the thing itself, not the response.
+**And the worker did not deploy itself when this was written.** The site
+rebuilt from `main` on every push and the worker only shipped on
+`wrangler deploy -c worker/wrangler.toml` — so an auth fix could be merged,
+live in git, and doing nothing at all. That is exactly what happened here, and
+it is why `verifyToken` refused every valid login for as long as it did.
+
+**It ships on a push now** (see the correction under "The site deploys
+itself"), so this particular shape is prevented. **The instruction is
+unchanged and the reason is the secrets**: `CLERK_SECRET_KEY` is set with
+`wrangler secret put` and no workflow touches it, so a key that is wrong, unset
+or set on the wrong product is still invisible from the response — the page
+looks signed in either way, because that half is Clerk's client and it works
+without the worker agreeing. The cheapest honest check remains the network tab:
+`/me/draft` and `/me/history` returning 200 while signed in. Ask the thing
+itself, not the response.
 
 ### A production instance is a different instance, with its own domain
 
@@ -8698,3 +8968,76 @@ hold different `juke.member` ids and the room treats them as two people. Two
 tabs on the same origin share the id and the worker correctly treats them as
 one manager with two sockets, which tests nothing about a second person — and
 overwriting the id in one tab breaks the other the next time it reconnects.
+
+### Voice notes, photos and polls, which were built and never written down
+
+Added to this file 6 September 2026. All three have been in `room.js` and
+`worker/draft-room.js` for some time and appeared in no section of it — the
+word "voice" did not occur in this document once, and the R2 bucket behind two
+of them did not either. That is the same stale-copy failure as the Data
+section's own first sentence, in the other direction: not a claim that went
+false, a subsystem that arrived and was never claimed at all.
+
+**Every one of them is a chat-log entry, not a parallel structure.** A voice
+note, a photo and a poll each `push` onto `state.chat` with an `at`, so
+`chatStream()` interleaves them with messages and picks by time the way it
+already does, and `trimChat()`'s bounds apply to them unchanged. A parallel
+list would have to be merged back in, which is the version that goes wrong the
+first time somebody sorts one of them differently.
+
+**A media URL is a claim, exactly as a GIF address is.** It arrives from
+another manager and ends up in an `<audio>` or `<img>` src, so `cleanMediaUrl()`
+accepts only our own media route, parsed with `URL` rather than matched as a
+substring — the same rule and the same reasoning as `cleanGif()`.
+
+**But the allowed host cannot be a constant here, and that is the one real
+difference from GIPHY.** GIPHY's host is a fixed third party this file can
+hardcode; ours is wherever this deployment's worker answers, and
+`wrangler dev --local` and the real deploy do not share it. So the caller
+passes the hosts that count as ours — the worker adapter passes its real one,
+a test passes a stub — which is the same shape as the room being handed `now`
+rather than reading a clock, and for the same reason: a pure module may not
+know which deployment it is in.
+
+**The byte caps are the bound that actually holds; the labels are not.**
+`MEDIA_KINDS` in the worker caps voice at 2 MB and a photo at 8 MB, both
+derived rather than picked — two minutes of Chrome's default 128 kbps Opus is
+about 1.9 MB, and a 12-megapixel phone JPEG straight off the sensor is 3–6 MB
+with no resize step in this feature yet. `VOICE_SECONDS_MAX` and
+`PHOTO_DIM_MAX` clamp what a client *says* about a file, and a client can lie
+about both — what it cannot do is lie the file past the upload route's cap.
+**When a client-supplied number and a server-enforced one describe the same
+thing, only one of them is a limit.**
+
+**The object key is the access control, and there is nothing else.** Sixteen
+random bytes, `/media/<key>` carries no origin check at all, and nothing can
+list the bucket over that route. An unlisted URL there is exactly as private
+as an unlisted one on any other chat host — which is a real and stated
+position rather than an oversight, and the reason the route can also serve
+`immutable` for a year: nothing ever overwrites a key once written.
+
+**A poll's votes are member ids and never leave as them.** `pollView()` is the
+projection and it follows `reactsFor()` deliberately — read that one first. An
+anonymous poll still reports how many chose an option and never who, which is
+a different claim from hiding the counts and is the one worth getting right.
+
+**`durationMs`, never an absolute `endsAt` from the client.** The room is
+handed `now` by its caller and reads no clock of its own, so a client trusted
+with its own end time could park a poll open forever by lying about it. A
+relative "how long from now" is the one shape that stays honest whoever's
+clock sent it — the same argument as `room.js` taking `now` as a parameter,
+one level in.
+
+**Eight choices, and the number is derived twice over.** More than eight stops
+being something a phone-width chat bubble lays out at a glance, and every
+choice is a voter-id array competing for the same bounded-bytes log a long
+voice or photo URL already competes with. Same shape of limit as `REACTIONS`,
+at a different number because a poll author writes the options and a reactor
+picks from a fixed set.
+
+**What is still missing, and it is the same hole `/media` shares with room
+creation: neither is rate-limited.** The upload route says so in its own
+comment — the origin check and the size cap are what it owns, and anything
+about *traffic patterns* belongs on a Cloudflare rate limiting rule that can
+see across requests. Until that rule exists, the only thing between an open
+upload endpoint and an unbounded R2 bill is 8 MB a request.
