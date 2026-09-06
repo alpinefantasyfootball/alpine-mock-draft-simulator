@@ -76,8 +76,15 @@ bucket_name = "juke-chat-media"
 [triggers]
 crons = ["30 11 * * *"]
 
-# The site stays on GitHub Pages. This worker is only the room, so the
-# static app keeps working with no backend at all — which is the point:
-# a solo mock draft must not depend on anything being up.
+# The site moved to Cloudflare Pages on 18 August 2026; this comment said
+# "stays on GitHub Pages" until 6 September and is corrected in place rather
+# than left standing. The point it was making is unchanged and is the reason
+# it is kept at all: this worker is only the room and the account, so the
+# static app keeps working with no backend at all — a solo mock draft must
+# not depend on anything being up.
+#
+# Observability is Workers' own log retention, and it covers this half only.
+# The browser has no error reporting of any kind; see CLAUDE.md's system
+# section on what that gap has already cost.
 [observability]
 enabled = true
