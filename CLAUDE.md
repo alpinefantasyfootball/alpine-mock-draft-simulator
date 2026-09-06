@@ -351,28 +351,62 @@ of font is pulled straight past the one stylesheet the paint is blocked on —
 and at first paint there is no text on screen to need it, because the splash
 overlay is deliberately wordless.
 
-Measured, same profile and method:
+The first measurement of this said `fetchpriority="low"` was worth **−100 ms**
+and shipped on that number. **It is worth about −20 ms and the rest was the
+harness.** Corrected below, with the artifact written up in its own section
+because it will fool the next person exactly as it fooled this one.
 
-| | FCP | Δ | `style.css` ends | fonts land | faces fetched |
-|---|---:|---:|---:|---:|---:|
-| shipped | 1796 ms | — | 1732 ms | 1394 ms | 2 |
-| **`fetchpriority="low"`** | **1696 ms** | **−100 ms** | 1630 ms | **1540 ms** | 2 |
-| preloads deleted | 1440 ms | −356 ms | 1387 ms | **2831 ms** | **1** |
+Measured against the deployed site with **nothing intercepted**, medians of 9:
 
-**Deleting them is the bigger number and the wrong change.** The `@font-face`
-rules live in `web/src/index.css`, which is compiled into the React CSS bundle
-and does not land until 1077 ms — so without a preload nothing can even
-*discover* the faces until then. The last column is the tell: with the
-preloads gone the fonts arrive at 2831 ms, which is **past the splash's own
-2.7 s hold**, i.e. precisely when text first becomes visible, and only one of
-the two faces is fetched at all. That trades 256 ms of paint for a visible
-swap on the first screen anybody reads.
+| | FCP | `style.css` ends | fonts land | faces |
+|---|---:|---:|---:|---:|
+| before the change | 1796 ms | 1732 ms | 1394 ms | 2 |
+| **`fetchpriority="low"`, deployed** | **1776 ms** | 1713 ms | 1612 ms | 2 |
 
-`fetchpriority="low"` keeps early discovery, stops the fonts outranking the
-stylesheet, and still lands them at 1540 ms — over a second before the splash
-lifts, so no swap can be seen. **CLS was 0.0396 in every condition measured**,
-identical to four decimals, which is worth stating precisely because it is
-what a font preload is supposed to be buying and here it buys none of it.
+**−20 ms, which is inside the noise.** The attribute demonstrably *works* —
+the faces moved 218 ms later, which is exactly what demoting them should do —
+it simply does not buy the paint anything. It is kept because deprioritising
+something the first paint provably does not need is right regardless of
+whether it measures, and it costs nothing: CLS unmoved at 0.0396, both faces
+still fetched, and they still land a full second before the splash lifts.
+
+**Deleting the preloads is the one option with a real number behind it, and
+it is still the wrong change.** Adjusted for the artifact it is worth about
+**−240 ms** rather than the −356 ms first measured. The `@font-face` rules
+live in `web/src/index.css`, compiled into the React CSS bundle that does not
+land until 1077 ms, so without a preload nothing can even *discover* the faces
+until then: they arrive at **2831 ms**, past the splash's own 2.7 s hold —
+precisely when text first becomes visible — and **only one of the two is
+fetched at all.** That spends 240 ms of paint on a visible swap in the first
+thing anybody reads.
+
+### Tried and rejected: moving `@font-face` into `<head>`
+
+The obvious way to have both — declare the faces inline in `<head>` so they
+are discovered at parse time instead of at 1077 ms, and then the preloads are
+unnecessary rather than merely demoted. It was built as three real builds and
+measured on three static servers with no interception anywhere, medians of 9:
+
+| variant | FCP | Δ | fonts land | faces |
+|---|---:|---:|---:|---:|
+| main, as it is | 4308 ms | — | 2469 ms | 2 |
+| inline `@font-face`, **no** preload | 4192 ms | −116 ms | **5556 ms** | **1** |
+| inline `@font-face`, preload kept | 4308 ms | **0 ms** | 2445 ms | 2 |
+
+(Absolute numbers are localhost behind a serial `http.server` and are much
+worse than production; only the deltas mean anything.)
+
+**The third row is the answer and it is exactly zero.** Relocating the
+declaration changes nothing at all while a preload exists, because
+**`@font-face` does not fetch anything — it only declares.** A face is
+requested when text actually needs it, and the preload is the thing forcing
+that to happen early. Move the declaration and the preload still drives the
+fetch; remove the preload and the second row is what you get, which is the
+deletion trade again with a longer fuse.
+
+So there is no free lunch here, and the assumption that produced this
+experiment — "early discovery is what the preload is buying" — was wrong.
+**A preload buys an early *fetch*, and a declaration buys neither.**
 
 ### Where the ceilings are, and which ones are measured
 
@@ -384,11 +418,15 @@ Ranked by what a measurement supports, not by what sounds alarming.
    correction above. A cost every visitor pays at every scale, not a capacity
    problem that arrives later. **Bytes, not parsing**: compile and execute is
    57 ms, so the lever is shipping less of it rather than splitting it.
-1. **The first paint is a priority problem worth 100 ms**, and the fix is two
-   attributes rather than a refactor — `fetchpriority="low"` on the font
-   preloads that currently outrank the stylesheet the paint is blocked on.
-   Measured above. Small, cheap, and *not* the same problem as the item
-   before it, which is exactly what a size-based guess got wrong.
+1. **The first paint is gated by `style.css`, and nothing cheap moves it.**
+   The stylesheet lands last of fourteen and the paint follows 57 ms later.
+   Three cheap fixes were measured and the honest total is about 20 ms:
+   `fetchpriority="low"` on the font preloads is shipped and inside the noise,
+   relocating `@font-face` is exactly zero, and deleting the preloads is a
+   real 240 ms bought with a visible font swap. **What is left is the payload
+   itself** — the stylesheet is 57 KB and it is queued behind ~200 KB of
+   things that do not block rendering. That is a real lever and nobody has
+   costed it. Do not reach for another attribute; the attributes are spent.
 2. **Room creation and `/media` are unrated.** Both say so in their own
    comments. The DO limits 40 actions per socket per 10s *once a socket
    exists*, and nothing limits opening one or posting a file. `/media` caps a
@@ -7801,6 +7839,41 @@ A cached stylesheet once let the logo expand to fill the entire screen.
   And a temporary spec that measures anything should assert what it is looking
   at before it looks: fetch the served HTML, pull the bundle name out of it, and
   print whether that bundle contains a symbol the change introduces.
+
+- **Playwright's `page.route()` is worth −116ms of first paint all by itself,
+  and that is the tooling wearing a FIX's clothes.** Every other harness
+  artifact in this file produced a false *negative* — a symptom that looked
+  like a bug and was not. This one produces a false *positive*: a change that
+  looks like an improvement, gets merged, gets deployed, and gets written up
+  as a measured fact. It did all four on 6 September 2026, inside two hours,
+  in a file whose entire subject is not doing that.
+
+  `route.fetch()` runs **outside** the CDP network emulation, so an
+  intercepted document ignores the throttle. Measured on the deployed page
+  with **identical bytes** in all three arms:
+
+  ```
+  direct                             FCP 1796ms   htmlEnd 329ms
+  route.fetch + fulfill, untouched   FCP 1680ms   htmlEnd  54ms
+  same, with a replace() matching nothing  FCP 1684ms   htmlEnd  53ms
+  ```
+
+  The HTML lands in 54ms instead of 329, and everything downstream shifts
+  with it. `htmlEnd` was in the resource timings the whole time and nobody
+  looked at it.
+
+  **The rule is one line: never compare an intercepted arm against a
+  non-intercepted one.** The `fetchpriority` experiment had `shipped` running
+  direct while both counterfactuals ran through `page.route`, so the artifact
+  was larger than the effect and pointed the same way. Intercept every arm
+  identically and it cancels — or, better, build the variants for real and
+  serve them side by side, which is what the `@font-face` experiment did once
+  this was known.
+
+  **And verify a shipped perf change against the deploy, directly.** The
+  counterfactual proves how the *browser* behaves given the markup; it does
+  not prove the origin serves that markup or that the real request ordering
+  matches. Production said −20ms where the harness had said −100ms.
 
 - **A proxied sandbox makes a render-blocking `<link>` look like a broken
   loader.** `sonar.spec.mjs` held `#boot-sonar` to leaving between 4800ms and
