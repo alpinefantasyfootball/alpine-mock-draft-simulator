@@ -79,6 +79,12 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Nothing here pushes, so the checkout does not need to leave a
+          # credential behind in .git/config for the rest of the job.
+          # update-players, update_data and archive-weekly-actuals DO push
+          # and deliberately keep theirs.
+          persist-credentials: false
 
       - uses: actions/setup-node@v7
         with:
