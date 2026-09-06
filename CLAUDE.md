@@ -279,37 +279,116 @@ served copies are always a little off whatever is on disk.
 
 | Asset | Raw (tree) | Served (br) | When |
 |---|---:|---:|---|
-| `app.js` | 585 KB | **195 KB** | **render-blocking** |
-| `style.css` | 196 KB | **57 KB** | **render-blocking** |
-| `live.js` | 40 KB | **12 KB** | **render-blocking** |
-| `theme.js` + `juke-mark.js` + `splash-boot.js` + `back-to-top.js` | ~25 KB | **15 KB** | **render-blocking** |
+| `app.js` | 585 KB | **195 KB** | parser-blocking at the END of `<body>` — **not** render-blocking, see below |
+| `style.css` | 196 KB | **57 KB** | **render-blocking, and it is the gate** |
+| `live.js` | 40 KB | **12 KB** | parser-blocking, end of `<body>` |
+| `theme.js` + `juke-mark.js` + `splash-boot.js` + `back-to-top.js` | ~25 KB | **15 KB** | parser-blocking; the first two are in `<head>` |
 | React bundle | 849 KB | 235 KB | module, deferred |
 | React CSS | 95 KB | 16 KB | deferred |
 | `stats.js` | 787 KB | 168 KB | preloaded, parsed at the reveal gate |
 | `players.js` | 173 KB | 20 KB | same |
 | `draft-engine.js` | 14 KB | 5 KB | same |
 
-**About 650 KB of JavaScript and 73 KB of CSS on a first load, of which
-279 KB blocks the first paint** — 222 KB of script plus the 57 KB stylesheet.
-`app.js` is 11,916 lines and 336 functions in one scope, one classic
-`<script src>`, no splitting and no `defer`.
+**About 650 KB of JavaScript and 73 KB of CSS on a first load.**
 
-**The deferred half is solved and the blocking half never had the same lens
-turned on it.** "Downloading is not executing" deferred `players.js`,
-`stats.js` and `draft-engine.js` and measured the result — long tasks
-overlapping the reveal fell from 1989ms to 90ms at 6x throttling. Nothing has
-ever measured what `app.js` itself costs before first paint, which makes it
-the largest unexamined number in this project.
+### `app.js` is not render-blocking, and this section said it was
+
+**Corrected in place, 6 September 2026, hours after the sentence was
+written.** The first version of this table marked `app.js`, `live.js` and the
+four small scripts "render-blocking" and totalled them at "279 KB blocks the
+first paint". That word was chosen from the file's *size* and never from its
+*position*, which is the whole question: **the tag is at line 1046, the end of
+`<body>`, after `#boot-sonar` and after the prerendered `#root`.** A classic
+script blocks the parser at its own position, and everything paintable here is
+above it.
+
+Measured against production, medians of 7 fresh contexts per condition, on a
+phone profile (4x CPU, ~1.6 Mbps, 150ms RTT):
+
+| | shipped | `app.js` aborted | `app.js` with `defer` |
+|---|---:|---:|---:|
+| FCP | 1804 ms | 1612 ms | 1696 ms |
+| DOMContentLoaded | 3911 ms | 2978 ms | 3844 ms |
+| `app.js` bytes land | 3727 ms | — | 3641 ms |
+
+**Its bytes arrive 1,923 ms AFTER the first paint.** The browser paints the
+overlay while still waiting on it, exactly as the position predicts.
+
+- **FCP cost: 192 ms, and it is bandwidth contention rather than blocking.**
+  On desktop it is −4 ms, which is nothing.
+- **DOMContentLoaded cost: 933 ms** — five times the paint cost, and the
+  number that actually matters for this file.
+- **Compile and execute: ~57 ms** at 4x. **The cost is bytes, not parsing**,
+  which is the opposite of what "split the 11,916-line file" assumes.
+- **`defer` is not the fix**: 108 ms of FCP, 67 ms of DCL, because the bytes
+  still have to arrive. It did keep `window.JukeEngine` intact in 7 of 7 runs,
+  so the ordering is safe — it simply buys almost nothing.
+
+**The lesson is the one this file keeps arriving at.** "It is the biggest
+file, so it must be the paint problem" is a size argument standing in for a
+measurement, the same shape as `posRank` standing in for value. The
+instruction that follows is narrow and worth keeping: **`app.js` is a
+time-to-interactive problem and very nearly not a first-paint problem at
+all.** Do not spend a refactor on the wrong one.
+
+### `style.css` is the gate, and it lands last of fourteen
+
+The paint waits on the stylesheet, which finishes at 1731 ms with FCP 57 ms
+behind it. Everything that completes before it, in order:
+
+```
+ 370  theme.js          909  cloudflare beacon
+ 410  fonts css2        971  ibm-plex-mono.woff2   <- preload, HIGH priority
+ 531  email-decode     1002  back-to-top.js
+ 653  splash-boot.js   1077  React CSS
+ 676  shark svg        1132  live.js
+ 714  juke-mark.js     1394  archivo.woff2         <- preload, HIGH priority
+                       1731  style.css             <- the paint is waiting here
+```
+
+**Chrome fetches `<link rel="preload" as="font">` at high priority**, so 49 KB
+of font is pulled straight past the one stylesheet the paint is blocked on —
+and at first paint there is no text on screen to need it, because the splash
+overlay is deliberately wordless.
+
+Measured, same profile and method:
+
+| | FCP | Δ | `style.css` ends | fonts land | faces fetched |
+|---|---:|---:|---:|---:|---:|
+| shipped | 1796 ms | — | 1732 ms | 1394 ms | 2 |
+| **`fetchpriority="low"`** | **1696 ms** | **−100 ms** | 1630 ms | **1540 ms** | 2 |
+| preloads deleted | 1440 ms | −356 ms | 1387 ms | **2831 ms** | **1** |
+
+**Deleting them is the bigger number and the wrong change.** The `@font-face`
+rules live in `web/src/index.css`, which is compiled into the React CSS bundle
+and does not land until 1077 ms — so without a preload nothing can even
+*discover* the faces until then. The last column is the tell: with the
+preloads gone the fonts arrive at 2831 ms, which is **past the splash's own
+2.7 s hold**, i.e. precisely when text first becomes visible, and only one of
+the two faces is fetched at all. That trades 256 ms of paint for a visible
+swap on the first screen anybody reads.
+
+`fetchpriority="low"` keeps early discovery, stops the fonts outranking the
+stylesheet, and still lands them at 1540 ms — over a second before the splash
+lifts, so no swap can be seen. **CLS was 0.0396 in every condition measured**,
+identical to four decimals, which is worth stating precisely because it is
+what a font preload is supposed to be buying and here it buys none of it.
 
 ### Where the ceilings are, and which ones are measured
 
 Ranked by what a measurement supports, not by what sounds alarming.
 
-1. **The first paint, and it is the only one that bites today.** 279 KB
-   blocking is a cost every visitor pays at every scale — not a capacity
-   problem that arrives later, a problem now that never gets worse. The
-   payload is measured above; what it costs in seconds on a real phone is
-   not, and that is the measurement to take first.
+1. **Time to interactive, which is where `app.js` actually lands.** It costs
+   **933 ms of DOMContentLoaded** on a phone and 192 ms of first paint, and
+   the split between those two numbers is the whole point — see the
+   correction above. A cost every visitor pays at every scale, not a capacity
+   problem that arrives later. **Bytes, not parsing**: compile and execute is
+   57 ms, so the lever is shipping less of it rather than splitting it.
+1. **The first paint is a priority problem worth 100 ms**, and the fix is two
+   attributes rather than a refactor — `fetchpriority="low"` on the font
+   preloads that currently outrank the stylesheet the paint is blocked on.
+   Measured above. Small, cheap, and *not* the same problem as the item
+   before it, which is exactly what a size-based guess got wrong.
 2. **Room creation and `/media` are unrated.** Both say so in their own
    comments. The DO limits 40 actions per socket per 10s *once a socket
    exists*, and nothing limits opening one or posting a file. `/media` caps a
