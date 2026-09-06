@@ -116,7 +116,7 @@ function GuestAuth() {
    switch between at all: a Connect call to action, which is a different
    control doing a different job rather than a state of the switcher.
 
-   Three states rather than two, which is why this reads `status` and not
+   Four states rather than two, which is why this reads `status` and not
    just `league`: "loading" draws nothing at all, because a chip reading
    "Connect a league" for one tick on every page load tells somebody who
    HAS one that they have been disconnected. Nothing, then the truth,
@@ -125,9 +125,15 @@ function GuestAuth() {
 function LeagueChip() {
   const { status } = useLeague()
 
-  // "loading" draws nothing, and that is the three-state rule: offering
-  // Connect for a beat to somebody who has a league reads as having been
-  // disconnected.
+  /* Only "none" draws. "loading" and "error" both draw nothing, and the
+     `!==` is what makes that true for free — offering Connect to somebody
+     whose league we simply could not verify is the same wrong claim as
+     offering it for a beat on every load, so the state added on 6
+     September 2026 needed no change here.
+
+     This is the one surface where drawing nothing on an error is right
+     rather than a bug: a header chip has no room to explain itself, and
+     ConnectCard on the same page is where that explanation lives. */
   if (status !== 'none') return null
 
   return (

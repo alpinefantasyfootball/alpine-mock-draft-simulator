@@ -69,3 +69,16 @@ jobs:
       # moving parts to be flaky.
       - name: Sleeper parse and join
         run: node worker/test-sleeper.mjs
+
+      # The connected-league state machine. It is here rather than in the
+      # browser suite for a reason that is not speed: every surface that can
+      # show its failure sits inside Clerk's <SignedIn>, and a build with no
+      # publishable key renders the signed-out fallback instead -- confirmed
+      # rather than assumed, by a Playwright spec against the real page that
+      # found no card at all. CLAUDE.md records that as the widest gap in
+      # this area's coverage.
+      #
+      # web/src/lib/leagueStore.js imports nothing, which is what lets this
+      # run with no npm install -- like every other step in this job.
+      - name: Connected-league state machine
+        run: node scripts/test_league_state.mjs

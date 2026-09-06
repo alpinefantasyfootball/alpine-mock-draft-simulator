@@ -6525,6 +6525,91 @@ unconditional sentence, written before accounts synced anything, still
 promising an account under rows that were already in one. Reported with a
 screenshot of exactly that.
 
+### A state machine that runs backwards un-renders whatever was on screen
+
+Reported 6 September 2026 from the deployed site, with a screenshot: the
+hero's whole right-hand column **flashes on load and then disappears**, and
+the header's league chip never draws at all.
+
+**Two blank surfaces, one cause.** `ConnectCard` returns null on
+`status === 'loading'` and `LeagueChip` returns null on anything but `'none'`
+— both correct, because that state means *we have not asked yet*. What was
+wrong is that every failure path in `refreshLeagues()` settled **back** to
+`'loading'`:
+
+```
+1. page loads, Clerk has not resolved -> settle("none")   -> the card RENDERS
+2. Clerk resolves, juke:auth fires, GET /me/leagues goes out
+3. it fails -> settle("loading")                          -> the card UNMOUNTS
+4. nothing retried                                        -> permanent
+```
+
+So the machine went from a settled answer to "we do not know", and the state
+it chose is the one every caller draws as nothing. **The failure was
+invisible and terminal at the same time, which is the worst pair
+available** — and a card that was on screen a moment ago vanishing reads as a
+broken page rather than as an unreachable worker.
+
+**The reasoning that produced it was right and is unchanged.** Saying
+`'none'` there would offer Connect to somebody who has already connected, and
+pressing it would reconnect a league they never disconnected. A failure is
+genuinely not "no league". What was missing is that **a state meaning "we
+could not find out" has to be renderable** — the same rule this file already
+states where it says a page claiming a backup it does not have is worse than
+one claiming nothing, and which the Locker's storage strip already follows.
+
+`'error'` is the fourth status. `ConnectCard` draws an honest card with a
+Retry, `YouScreen` says the list may be incomplete rather than rendering an
+empty one under a heading about managing leagues, and `LeagueChip` still
+draws nothing — right for a chip with no room to explain itself, and it
+needed no change because `status !== 'none'` covers a new negative state for
+free. **The other seven surfaces needed no change either, because they ask
+`status === 'connected'`** — a positive test treats a new negative state
+correctly by construction, which is worth knowing before adding an eighth.
+
+**It retries itself, bounded, and then stops.** Three tries over ~23s, plus a
+re-read when the tab comes back and the state is `error`. Bounded because an
+unreachable worker must not be polled forever by a tab nobody is watching,
+and `retryLeagues()` is a separate entry point from `refreshLeagues()` for a
+reason that is easy to get wrong: **the automatic retry calls the latter, so
+a backoff that reset its own budget on every attempt would be an unbounded
+poll wearing a backoff's clothes.**
+
+### The store left `useLeague.js` so it could be tested at all
+
+`web/src/lib/leagueStore.js` is the state machine and imports **nothing**;
+`useLeague.js` is the React subscription over it and re-exports the whole
+public API, so no consumer's import changed.
+
+**The split is about CI, not tidiness, and the constraint is worth stating.**
+Every surface that can show the bug above sits inside Clerk's `<SignedIn>`,
+and a build with no publishable key renders the signed-out fallback — which
+this file already records as the widest gap in the account surface's
+coverage. That was confirmed rather than assumed: a Playwright spec written
+against the real page found **no `[data-league-card]` at all**. So the page
+cannot be driven into the broken state, and the machine had to be reachable
+on its own.
+
+With React imported it still was not, because **`tests.yml` installs no npm
+dependencies anywhere** — every other step in it is stdlib Python or
+dependency-free Node. A test reaching this through the hook would have needed
+a full `web/node_modules` install for one file. `scripts/test_league_state.mjs`
+runs in a second with none, and is in CI.
+
+**A first attempt added the CI step with a comment saying it ran "after the
+install step above". There is no install step above.** Caught by reading the
+workflow rather than by the run, which would have failed on a runner and not
+here. Same class as every stale claim this file keeps correcting: a sentence
+that was true of the arrangement in somebody's head.
+
+**Verifying the rendering is by hand and there is no way around it.** The
+temporary-exposure technique this file already describes — force
+`ConnectCard` into the keyless branch, build, stub `window.JukeAuth` and a
+failing `window.Live.listLeagues`, look, revert. Measured that way: the card
+comes back **372×518 where it was 0**, and swapping the stub to a working
+response recovered it to the real league card **on the backoff alone, with no
+press and no reload**.
+
 ### "Is anybody signed in" is not `useAuth()`'s question to answer here
 
 `useAccountUiReady()` above answers *may I render Clerk's components*.

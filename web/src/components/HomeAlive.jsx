@@ -123,16 +123,61 @@ function TrustStrip() {
    card during the first tick would flash it at a reader who has a league
    — the same wrong-then-right the header's chip already avoids. */
 function ConnectCard() {
-  const { status, league } = useLeague()
+  const { status, league, retry } = useLeague()
 
   // Neither card until the answer is in. This one occupies the slot the
   // handoff gives to a decided move, so a wrong guess here is the loudest
   // thing on the screen for as long as it is up.
+  //
+  // "loading" is the only state that draws nothing, and it is brief by
+  // construction. It used to cover failures too, which is what made this
+  // whole column flash on load and then vanish for good — see the write-up
+  // at the top of useLeague.js.
   if (status === 'loading') return null
+
+  /* Asked, and could not find out. Deliberately NOT the Connect card
+     below: offering Connect to somebody who already has a league would
+     have them reconnect one they never disconnected, which is the reason
+     this state exists rather than collapsing into "none". So it says what
+     happened and offers the only action that can help.
+
+     It retries itself three times before this is ever seen, and again
+     whenever the tab comes back, so anybody looking at this has a real
+     problem rather than a blip. */
+  if (status === 'error') {
+    return (
+      <div data-league-card className="rounded-[18px] border border-line-hairline bg-[#151920] p-[18px] sm:rounded-[22px] sm:p-[26px]">
+        <span className="font-mono text-[11px] tracking-[0.14em] text-ink-muted">YOUR LEAGUE</span>
+        <div className="mt-2 font-display text-[22px] font-bold text-white sm:mt-2.5 sm:text-[28px]">
+          Couldn&rsquo;t check your league
+        </div>
+        <p className="mb-3.5 mt-1.5 text-[14px] leading-[1.5] text-voidInk-body sm:mb-[18px] sm:mt-2 sm:text-[15px]">
+          Your account is fine and nothing has been disconnected — we just could not reach it to
+          find out which league is yours. Mock drafts are unaffected and need no account.
+        </p>
+        <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+          <button
+            type="button"
+            onClick={retry}
+            className="inline-flex items-center justify-center whitespace-nowrap rounded-full border border-line-hairline px-5 py-3 text-[14px] font-bold text-white transition-colors duration-150 hover:border-teal/50"
+          >
+            Try again
+          </button>
+          <a
+            href="#/rooms/draft"
+            className="text-[12px] text-ink-muted underline-offset-2 hover:underline"
+          >
+            Start a mock draft
+          </a>
+        </div>
+        <TrustStrip />
+      </div>
+    )
+  }
 
   if (status === 'connected' && league) {
     return (
-      <div className="rounded-[18px] border border-line-hairline bg-[#151920] p-[18px] sm:rounded-[22px] sm:p-[26px]">
+      <div data-league-card className="rounded-[18px] border border-line-hairline bg-[#151920] p-[18px] sm:rounded-[22px] sm:p-[26px]">
         <span className="font-mono text-[11px] tracking-[0.14em] text-teal">YOUR LEAGUE</span>
         <div className="mt-2 truncate font-display text-[22px] font-bold text-white sm:mt-2.5 sm:text-[28px]">
           {league.name}
@@ -161,7 +206,7 @@ function ConnectCard() {
   }
 
   return (
-    <div className="rounded-[18px] border border-line-hairline bg-[#151920] p-[18px] sm:rounded-[22px] sm:p-[26px]">
+    <div data-league-card className="rounded-[18px] border border-line-hairline bg-[#151920] p-[18px] sm:rounded-[22px] sm:p-[26px]">
       <span className="font-mono text-[11px] tracking-[0.14em] text-teal">YOUR NEXT MOVE</span>
       <div className="mt-2 font-display text-[22px] font-bold text-white sm:mt-2.5 sm:text-[28px]">
         Connect your league
